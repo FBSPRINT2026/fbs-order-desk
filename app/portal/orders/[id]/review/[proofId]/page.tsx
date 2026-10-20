@@ -96,7 +96,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
 
               {g.imprints.map((d, di) => {
                 const des = d.design_id ? designs[d.design_id] : null, pic = des ? dUrl[des.id] : "";
-                const sz = printSize(d, des), max = maxes[0]?.[di] || null, inks = inkNames(d.inks);
+                const sz = printSize(d, des), max = maxes[0]?.[di] || null, inks = d.visualOnly ? [] : inkNames(d.inks);
                 // the art on the shirt color, with its measurements (px per inch fits the panel)
                 const s = sz.w && sz.h ? Math.min(380 / sz.w, 220 / sz.h) : sz.w ? 380 / sz.w : 0;
                 const aw = s ? sz.w * s : 300, ah = s && sz.h ? sz.h * s : 220, top = 36;
@@ -107,18 +107,19 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
                     <div className={"ar-cl" + (dark ? " dark" : "")} style={{ background: hex }}>
                       {max && s > 0 && <div className="ar-area" style={{ top, width: max.w * s, height: max.h * s }}><span>largest that fits{max.on ? ` the ${max.on}` : ""}: {max.w}&quot; × {max.h}&quot;</span></div>}
                       {pic ? <img src={pic} alt={des ? `D-${des.number}` : ""} style={{ top, width: aw, height: ah }} /> : <div className="ar-none">No logo on this print yet</div>}
-                      {pic && sz.w > 0 && <div className="ar-dw" style={{ top: top + ah + 6, width: aw }}>{sz.w.toFixed(2)}&quot;</div>}
-                      {pic && sz.h > 0 && <div className="ar-dh" style={{ top, height: ah, left: `calc(50% + ${aw / 2 + 12}px)` }}>{sz.h.toFixed(2)}&quot;</div>}
+                      {pic && sz.w > 0 && !d.visualOnly && <div className="ar-dw" style={{ top: top + ah + 6, width: aw }}>{sz.w.toFixed(2)}&quot;</div>}
+                      {pic && sz.h > 0 && !d.visualOnly && <div className="ar-dh" style={{ top, height: ah, left: `calc(50% + ${aw / 2 + 12}px)` }}>{sz.h.toFixed(2)}&quot;</div>}
                     </div>
                     <div className="ar-ps">
                       <div className="ar-loc">{d.location || "Print"}</div>
-                      <div className="muted">{METHODS[d.method] || d.method} · {colors}</div>
-                      <dl>
+                      {/* a visual-only mockup (a reorder production confirms on the run): the picture, none of our guesses */}
+                      <div className="muted">{METHODS[d.method] || d.method}{d.visualOnly ? " · printed to match your previous order" : ` · ${colors}`}</div>
+                      {!d.visualOnly && <dl>
                         {sz.label && <><dt>Size</dt><dd>{sz.w ? `${+sz.w.toFixed(2)}" wide` : ""}{sz.h ? ` × ${+sz.h.toFixed(2)}" tall` : ""}</dd></>}
                         <dt>Placement</dt><dd>{d.drop ? `${d.drop}" below the collar` : "Standard (about 3\" below the collar)"}</dd>
                         {inks.length > 0 && <><dt>{d.method === "embroidery" ? "Thread" : "Ink"}</dt><dd>{inks.map((k) => <span className="ar-ink" key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b>{WILFLEX_HEX[k] ? <small>Wilflex RFU</small> : isPmsInk(k) ? <small>PMS match</small> : null}</span>)}</dd></>}
                         {des && <><dt>Art</dt><dd>D-{des.number}{des.name ? ` · ${des.name}` : ""}</dd></>}
-                      </dl>
+                      </dl>}
                       {max?.on && shownOn && max.on !== shownOn && <div className="ar-ann">Shown on the {shownOn}. One screen prints every size, so it&apos;s sized to fit the {max.on} too.</div>}
                     </div>
                   </div>

@@ -152,19 +152,23 @@ export default function ProductionDetailsPage() {
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
                     {prints.map(({ lead: im, gs, ims }) => {
                       const f = form[im.id] || formOf(im);
+                      // a visual-only print: nothing guessed is shown (only what the old job says: its color count), so the
+                      // press sets what really ran (Oct 20, Nick)
+                      const vis = !!im.visualOnly, gs0 = vis ? { size: "", inks: "", drop: "" } : { size: im.size, inks: im.inks, drop: im.drop };
                       const garment = [...new Set(gs.flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
                       return (
                         <div key={im.id} className="pdd-print">
                           <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
                           <div className="pdd-fields">
                             <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups, one set of screens` : ""}</span></div>
-                            {im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
+                            {vis && <div className="pdd-why faint">Visual mockup only: set what ran on press. The old job says {im.colors} color{im.colors === 1 ? "" : "s"}.</div>}
+                            {!vis && im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
                             <div className="pdd-grid">
-                              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={im.size ? `Guess: ${im.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
-                              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={im.inks ? `Guess: ${im.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
+                              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={gs0.size ? `Guess: ${gs0.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
+                              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={gs0.inks ? `Guess: ${gs0.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
                               <label className="field"><span>Colors</span><input type="number" min={1} max={20} value={f.colors} onChange={(e) => set(im.id, { colors: +e.target.value || 1 })} /></label>
                               <label className="field"><span>Underbase</span><select value={f.underbase} onChange={(e) => set(im.id, { underbase: e.target.value as DetailsInput["underbase"] })}><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select></label>
-                              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={im.drop ? `Guess: ${im.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
+                              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={gs0.drop ? `Guess: ${gs0.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
                               <label className="check pdd-chk"><input type="checkbox" checked={f.screensOnFile} onChange={(e) => set(im.id, { screensOnFile: e.target.checked })} />Screens on file</label>
                               <label className="field pdd-full"><span>Press notes (optional)</span><input type="text" value={f.notes} placeholder="Mesh, flash, ink order, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
                             </div>

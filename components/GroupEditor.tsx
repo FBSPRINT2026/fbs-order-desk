@@ -702,11 +702,13 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
           <span className="pr-how">{METHODS[d.method]}</span>
           {each && <span className="pr-each">each <b>{each}</b></span>}
         </div>
-        <div className="pr-specs">
-          {colors && <span>{colors}</span>}
-          {d.inks && <span className="pr-ink">{d.inks}</span>}
-          {size && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
-          <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>
+        {d.visualOnly && !d.confirmed && <div className="pr-stamp" title="A reorder: the mockup is visual only; production sets the colors, inks and size on the print run">Visual mockup · production confirming details on print run</div>}
+        {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
+        <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
+          {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
+          {d.inks && !(d.visualOnly && !d.confirmed) && <span className="pr-ink">{d.inks}</span>}
+          {size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
+          {!(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}

@@ -18,6 +18,8 @@ export default function ImprintSpecs({ list, sep = " · " }: { list: Imprint[]; 
           d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "",
           d.inks, d.size, d.drop ? `${d.drop}" drop` : "",
         ].filter(Boolean).join(" · ");
+        // a visual-only mockup (Oct 20, Nick): the customer sees just the mockup, none of our guessed details
+        if (d.visualOnly) return <Fragment key={d.id || i}>{pre}{head} <span className="imp-reorder" title="A reorder: printed to match your previous order">REORDER</span><span className="imp-reorder-specs"> Printed to match your previous order</span></Fragment>;
         return (
           <Fragment key={d.id || i}>{pre}{head} <span className="imp-reorder" title="A reorder: printed to match your previous order">REORDER</span><span className="imp-reorder-specs"> Matches previous order{specs ? ` · ${specs}` : ""}</span> <span className="imp-reorder-st">Awaiting production team confirmation of specs</span></Fragment>
         );

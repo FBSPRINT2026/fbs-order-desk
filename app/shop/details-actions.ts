@@ -44,7 +44,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
       if (im.size) im.sizeFrom = "film";
       const note = clip(p.notes, 240);
       if (note) im.notes = [im.notes, `Press: ${note}`].filter(Boolean).join(". ").slice(0, 300);
-      delete im.confirm;
+      delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || "inks left blank", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
       const changed = [before.size !== im.size && "size", before.inks !== im.inks && "inks", before.colors !== im.colors && "colors"].filter(Boolean);

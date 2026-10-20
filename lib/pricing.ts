@@ -76,6 +76,9 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
    *  regular PMS 186, or a match on an ink that isn't named as a PMS */ pmsCharge?: Record<string, boolean>;
   /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
   /** screens set by hand (else colors + underbase) */ screens?: number;
+  /** a reorder's mockup is visual only (Oct 20, Nick): the print details wait for production to confirm on the print
+   *  run; greyed out with a stamp for staff, and the customer sees just the mockup (no guessed colors, inks or size) */
+  visualOnly?: boolean;
   /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean;
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through

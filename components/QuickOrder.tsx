@@ -35,7 +35,7 @@ type Made = { id: string; number: number; label: string; pcs: number; url: strin
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ under?: Record<string, "ub" | "none">; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -227,15 +227,21 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
       // the old job's files go in the new order's Production files only as you said (art, mockup, production file);
       // "Not needed" ones stay out
-      // the old job's screens: an underbase or not (Oct 20, Nick: "#32668 should be 7 screens with the underbase… set it
-      // as a 6 color front with 1 screen being an underbase… maybe something you ask in the resolution center")
+      // what you know about each print (Oct 20, Nick: "ask me what I know… do you know how many colors this printed as or
+      // how wide it was? …I know it printed as 6 colors plus underbase"), and the mockup: visual only (the details wait
+      // for production on the print run; nothing guessed goes to the customer) or with the details
       for (const { gi, ii, im } of targets) {
-        const u = ans.under?.[im.location];
-        if (!u || im.method !== "screen") continue;
-        const n = Math.max(1, im.colors || 1);
-        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi !== ii ? y : u === "ub" ? { ...y, colors: Math.max(1, n - 1), underbase: true, notes: [y.notes, `${jobLabel || "The old job"}: ${n} screens = ${Math.max(1, n - 1)} colors + underbase (you said)`].filter(Boolean).join(". ").slice(0, 300) } : { ...y, underbase: false, notes: [y.notes, `${jobLabel || "The old job"}: ${n} screens, no underbase (you said)`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+        const k = ans.know?.[im.location];
+        const vis = ans.mode === "visual";
+        const patch: Partial<typeof im> = {};
+        if (k && im.method === "screen") Object.assign(patch, { colors: Math.max(1, k.colors), underbase: k.ub });
+        if (vis) patch.visualOnly = true;
+        if (!Object.keys(patch).length) continue;
+        const note2 = k ? `You said: printed ${k.colors} color${k.colors === 1 ? "" : "s"}${k.ub ? " + underbase" : ", no underbase"}` : "";
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi !== ii ? y : { ...y, ...patch, notes: [y.notes, note2].filter(Boolean).join(". ").slice(0, 300) })) })) };
       }
-      for (const [loc, u] of Object.entries(ans.under || {})) { const p = targets.find((t) => t.im.location === loc); if (p) did.push(u === "ub" ? `${loc}: ${p.im.colors} screens = ${Math.max(1, p.im.colors - 1)} colors + underbase` : `${loc}: ${p.im.colors} colors, no underbase`); }
+      for (const [loc, k] of Object.entries(ans.know || {})) if (k) did.push(`${loc}: ${k.colors} color${k.colors === 1 ? "" : "s"}${k.ub ? " + underbase" : ", no underbase"} (you said)`);
+      if (ans.mode === "visual") did.push("Visual mockup only: the print details wait for production to confirm on the print run (the customer sees just the mockup)");
       // where each print goes and how wide, as you said
       for (const { gi, ii, im } of targets) {
         const pl = ans.place?.[`${gi}:${ii}`];
@@ -494,8 +500,10 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const [at, setAt] = useState(0);
   const [split, setSplit] = useState<Record<string, boolean>>({});
   // per location with a multi-color screen print: were the old job's screens counting an underbase?
-  const ubLocs = !help.archivedId ? [] : [...new Map(help.prints.filter((p) => (p.method || "screen") === "screen" && p.colors >= 2).map((p) => [p.location, p])).values()];
-  const [under, setUnder] = useState<Record<string, "ub" | "none">>({});
+  // what you know about each print location (an old Printavo job): colors and underbase, or "don't know", and the width
+  const knowLocs = !help.archivedId ? [] : [...new Map(help.prints.filter((p) => (p.method || "screen") === "screen").map((p) => [p.location, p])).values()];
+  const [know, setKnow] = useState<Record<string, { colors: number; ub: boolean } | null>>({});
+  const [mode, setMode] = useState<"visual" | "details">("visual");
   // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
   const [kindOf, setKindOf] = useState<Record<string, string>>({});
   const [noteOf, setNoteOf] = useState<Record<string, string>>({});
@@ -527,7 +535,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
-  const unanswered = olds0.filter((x) => !as[x.key]).length + ubLocs.filter((p) => !under[p.location]).length;
+  const unanswered = olds0.filter((x) => !as[x.key]).length + knowLocs.filter((p) => !(p.location in know)).length;
   const finish = (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>();
     for (const p of help.prints) {
@@ -542,7 +550,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
       return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? (aiKind(x.path) || guessProdKind(x.name)), note: (noteOf[x.key] || "").trim() };
     });
-    help.resolve({ picks: out, under, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
+    help.resolve({ picks: out, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -595,7 +603,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         {isArt && (
           <div className="arc-place">
             <select value={(p0 && place[p0.key]?.location) || ""} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-            <label><input type="number" min={1} max={16} step={0.25} value={(p0 && place[p0.key]?.size) || ""} placeholder="std" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide</label>
+            {!help.archivedId && <label><input type="number" min={1} max={16} step={0.25} value={(p0 && place[p0.key]?.size) || ""} placeholder="std" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide</label>}
           </div>
         )}
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
@@ -609,21 +617,30 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     <div className="ap arc" role="group" aria-label="What are these files">
       <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
       <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
-      {help.prints.some((p) => p.colors > 0) && help.job.startsWith("#") && <p className="ap-why arc-colors">{help.job.replace(/^(#\d+).*/, "$1")} printed {[...new Map(help.prints.map((p) => [p.location, p.colors])).entries()].map(([l, n]) => `${l} in ${n} color${n === 1 ? "" : "s"}`).join(", ")}: the new order keeps that. The ink colors aren&apos;t on file; the mockup shows our guess and production confirms the inks (and the count) before printing.</p>}
-      {ubLocs.length > 0 && (
+      {knowLocs.length > 0 && (
         <div className="arc-ub">
-          {ubLocs.map((p) => {
-            const dark = help.prints.some((q) => q.location === p.location && q.dark), v = under[p.location];
+          <b className="arc-ub-h">What do you know about how it printed?</b>
+          {knowLocs.map((p) => {
+            const dark = help.prints.some((q) => q.location === p.location && q.dark), v = know[p.location], set = p.location in know;
+            const ps = help.prints.filter((q) => q.location === p.location), w = place[ps[0].key]?.size || "";
+            const setW = (val: string) => setPlace((x) => { const y = { ...x }; for (const q of ps) y[q.key] = { ...y[q.key], size: val }; return y; });
             return (
               <div key={p.location} className="arc-ub-r">
-                <span>{help.job.replace(/^(#\d+).*/, "$1")} printed the <b>{p.location}</b> with <b>{p.colors} screens</b>. Was one a white underbase?{dark ? <i className="faint"> (likely: there are dark shirts)</i> : null}</span>
-                <span className="arc-chips" role="radiogroup" aria-label={`${p.location} screens`}>
-                  <button type="button" role="radio" aria-checked={v === "ub"} className={"chip" + (v === "ub" ? " on" : "")} onClick={() => setUnder((x) => ({ ...x, [p.location]: "ub" }))}>{Math.max(1, p.colors - 1)} colors + underbase</button>
-                  <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => setUnder((x) => ({ ...x, [p.location]: "none" }))}>{p.colors} colors, no underbase</button>
+                <span className="arc-ub-l"><b>{p.location}</b> <span className="faint">{help.job.replace(/^(#\d+).*/, "$1")} says {p.colors} color{p.colors === 1 ? "" : "s"}</span></span>
+                <span className="arc-chips" role="radiogroup" aria-label={`${p.location} colors`}>
+                  <button type="button" role="radio" aria-checked={set && v === null} className={"chip" + (set && v === null ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: null }))}>Don&apos;t know: guess {p.colors}</button>
+                  <button type="button" role="radio" aria-checked={!!v} className={"chip" + (v ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))}>I know</button>
+                  {v && <><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> + underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></>}
                 </span>
+                <label className="arc-ub-w">Width <input type="number" min={1} max={16} step={0.25} value={w} placeholder="?" onChange={(e) => setW(e.target.value)} aria-label="Printed width in inches" /> in <span className="faint">{w ? "" : "(blank: don't know)"}</span></label>
               </div>
             );
           })}
+          <div className="arc-ub-r arc-mode" role="radiogroup" aria-label="The mockup">
+            <span className="arc-ub-l"><b>The mockup</b></span>
+            <label className="check"><input type="radio" name="arcmode" checked={mode === "visual"} onChange={() => setMode("visual")} /> Visual only: production confirms the details on the print run <span className="faint">(the customer sees just the mockup, no guessed details)</span></label>
+            <label className="check"><input type="radio" name="arcmode" checked={mode === "details"} onChange={() => setMode("details")} /> With these details</label>
+          </div>
         </div>
       )}
       {olds.length > 0 && (() => {

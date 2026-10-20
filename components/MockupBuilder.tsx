@@ -494,7 +494,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // a reorder still waiting for production (Oct 20, Nick: "I don't want you to make any assumptions… leave the art
           // untouched until production confirms it"): the art as it is, no ink names put on the print; production sets
           // how it printed here (Combine colors, halftones) or on Production Details
-          if (!saved && keepCount(im)) {
+          if (!saved && im.visualOnly && !im.confirmed) {
             setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map: {}, unite: true, plan: plan!, off } }));
             return;
           }
@@ -2169,7 +2169,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
-                    {p.d && keepCount(im) && !im.inkMap && <div className="mk-plan mk-wait"><b>Reorder: the inks wait for production.</b> The mockup shows the art as it is. Production sets how it printed (combine colors, halftones), here or on Production Details.</div>}
+                    {p.d && im.visualOnly && !im.confirmed && <div className="mk-plan mk-wait"><b>Visual mockup only · production confirming details on the print run.</b> The art shows as it is; production sets how it printed (inks, combine colors, halftones), here or on Production Details.</div>}
                     {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
                     {p.d && im.method === "screen" && !portal && (
                       <div className="mk-hit">

@@ -8,6 +8,8 @@ import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
 import type { ReactNode } from "react";
+/** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
+const MATCH_PREV = "Printed to match your previous order";
 
 /**
  * The invoice / quote PDF and the work order (Oct 15, Nick: "completely reimagine both. The work order will be the
@@ -127,12 +129,13 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                       <div className="pp" key={d.id}>
                         <div className="t disp">{(d.location || "Print").toUpperCase()}</div>
                         <div className="s">{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b></div>
-                        {inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
-                        <div className="s">{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</div>
+                        {!d.visualOnly && inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
+                        <div className="s">{d.visualOnly ? <b>Inks, size and placement: set on press (reorder)</b> : <>{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</>}</div>
                         {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {d.printStyle === "fashion" ? <b>FASHION HIT: no underbase</b> : sc.under ? "underbase" : "no underbase"}</div>}
                         {(d.printStyle === "fashion" || d.softHand) && <div className="s hitf">{d.printStyle === "fashion" && <span className="flag">FASHION HIT</span>}{d.softHand && <span className="flag">SOFT HAND</span>}</div>}
                         {d.method === "embroidery" && d.stitches ? <div className="s">{d.stitches.toLocaleString()} stitches</div> : null}
-                        {(d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING</div>}
+                        {d.visualOnly && <div className="warn">VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS</div>}
+                        {!d.visualOnly && (d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING</div>}
                         <div className="s f">Close-up on page {pg + 1 + di} ›</div>
                       </div>
                     );
@@ -188,12 +191,14 @@ function LineRows({ l, sizes, hex, single }: { l: Group["lines"][number]; sizes:
 function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }: { d: Imprint; di: number; n: number; p: DocData; gi: number; allLight: boolean; colors: string; qty: number; page: number; total: number; footL: string }) {
   const { o, groups } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
-  const sz = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
+  const sz0 = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
+  // visual only: no guessed size or inks on the press sheet; the press writes what ran
+  const sz = d.visualOnly ? { ...sz0, label: "" } : sz0;
   const hex = p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
-  const inks = inkNames(d.inks);
+  const inks = d.visualOnly ? [] : inkNames(d.inks);
   const fills = d.method === "embroidery" ? ["Machine", "Hoop", "Backing", "Trims"] : d.method === "dtf" ? ["Press temp", "Time", "Pressure", "Peel"] : ["Press", "Platen", "Flash / cure", "Off-contact"];
   const specs: [string, string][] = d.method === "embroidery"
     ? [["Size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Stitches", d.stitches ? d.stitches.toLocaleString() : "—"], ["Threads", String(d.colors || inks.length || "—")]]
@@ -299,10 +304,10 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                   <div className="lbl">Prints</div>
                   {g.imprints.length === 0 && <div className="pf-pr">No prints on this group.</div>}
                   {g.imprints.map((d) => {
-                    const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), ink = inkNames(d.inks);
+                    const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), ink = d.visualOnly ? [] : inkNames(d.inks);
                     return (
                       <div className="pf-pr" key={d.id}>
-                        <b>{d.location}</b> · {printHow(d)}{sz.label ? <> · <b>{sz.label}</b></> : null}
+                        <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · <b>{sz.label}</b></> : null}</>}
                         {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
                       </div>
                     );
@@ -353,8 +358,9 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
   const PW = 6.6, PH = 5.7;
   const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
-  const inks = inkNames(d.inks);
-  const specs: [string, string][] = [
+  const inks = d.visualOnly ? [] : inkNames(d.inks);
+  // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
+  const specs: [string, string][] = d.visualOnly ? [["Location", d.location || "—"], ["Print", MATCH_PREV]] : [
     ["Location", d.location || "—"], ["Print size", sz.label || "—"], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
     ["Print", printHow(d)],
   ];
@@ -447,13 +453,13 @@ export function InvoiceDoc(p: DocData) {
                         <b>{[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc.wholesale && <span className="faint"> (your garments)</span>}
                         <div className="chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span className="chip" key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                         {i === lines.length - 1 && g.imprints.map((d) => {
-                          const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = inkNames(d.inks);
-                          const how = printHow(d);
+                          const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = d.visualOnly ? [] : inkNames(d.inks);
+                          const how = d.visualOnly ? MATCH_PREV : printHow(d);
                           // the print on one line, its inks as small swatches under it (Oct 16, Nick: the ink names wrapped
                           // across the line and looked messy)
                           return (
                             <div className="prl" key={d.id}>
-                              <div><b>{d.location}</b> · {how}{sz.label ? ` · ${sz.label}` : ""}</div>
+                              <div><b>{d.location}</b> · {how}{sz.label && !d.visualOnly ? ` · ${sz.label}` : ""}</div>
                               {ink.length > 0 && <div className="prl-inks">{ink.map((n) => { const hx = colorHex(n); return <span className="prl-ink" key={n}><i style={{ background: hx || "transparent" }} />{n}</span>; })}</div>}
                             </div>
                           );
