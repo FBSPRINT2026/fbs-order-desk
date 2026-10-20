@@ -141,7 +141,10 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
         for (const st of gs) { const u = st.s[ch] > 0.02 ? Math.round(Math.min(1, st.s[ch]) * 255) : 0; cg.addColorStop(st.t, `rgb(${u},${u},${u})`); }
         x.fillStyle = cg;
       } else x.fillStyle = `rgb(${t},${t},${t})`;
-      x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero");
+      // a clipping mask (Illustrator): fill only inside its outline
+      const cl = v.shapes[j].clip;
+      if (cl?.length) { x.save(); for (const c of cl) x.clip(new Path2D(vpathD(c.ops)), c.evenodd ? "evenodd" : "nonzero"); x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero"); x.restore(); }
+      else x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero");
     }
     const d = x.getImageData(0, 0, w, h).data;
     for (let i = 0; i < n; i++) { const a = d[i * 4 + 3]; if (a && px.data[i * 4 + 3]) out[i] = Math.round((d[i * 4] * a) / 255); }

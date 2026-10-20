@@ -65,7 +65,7 @@ export function parseEps(text: string): VArt {
   const tk = tokens(text.slice(a + 14, b));
 
   let ctm: M = [1, 0, 0, 1, 0, 0], fill: string | null = "#000000";
-  const saved: { ctm: M; fill: string | null }[] = [];
+  const saved: { ctm: M; fill: string | null; clip: { ops: string; eo: boolean } | null; clips: { ops: string; evenodd: boolean }[] }[] = [];
   const stack: (number | string | number[])[] = [];
   let path = "", arrOpen: number[] | null = null;
   const shapes: VShape[] = [];
@@ -78,6 +78,8 @@ export function parseEps(text: string): VArt {
   const IMAGE = new Set(["image", "imagemask", "colorimage", "doimage", "xs", "show", "ashow", "widthshow", "glyphshow"]);
   // gradients: the clip path they fill, the last dictionary read (the shading), Illustrator's level-3 blocks
   let clip: { ops: string; eo: boolean } | null = null, lastDict: PSVal | null = null;
+  // every clipping mask in force (a clip inside a clip narrows it), for filled shapes
+  let clips: { ops: string; evenodd: boolean }[] = [];
   const blocks: string[] = [];
   const artXY = (x: number, y: number): [number, number] => { const px = ctm[0] * x + ctm[2] * y + ctm[4], py = ctm[1] * x + ctm[3] * y + ctm[5]; return [px - llx, ury - py]; };
 
@@ -104,7 +106,7 @@ export function parseEps(text: string): VArt {
       case "li": { const [x, y] = nums(2); path += `${pt(x, y)} l\n`; break; }
       case "cv": { const [x1, y1, x2, y2, x3, y3] = nums(6); path += `${pt(x1, y1)} ${pt(x2, y2)} ${pt(x3, y3)} c\n`; break; }
       case "cp": path += "h\n"; break;
-      case "clp": case "eclp": if (path) clip = { ops: path, eo: t === "eclp" }; path = ""; stack.length = 0; break;
+      case "clp": case "eclp": if (path) { clip = { ops: path, eo: t === "eclp" }; clips = [...clips, { ops: path, evenodd: t === "eclp" }]; } path = ""; stack.length = 0; break;
       case "np": case "N": path = ""; stack.length = 0; break;
       case "sh": case "shfill": {
         const sh = lastDict && typeof lastDict === "object" && !Array.isArray(lastDict) && !(lastDict instanceof Uint8Array) ? readShading(lastDict as { [k: string]: PSVal }) : null;
@@ -124,7 +126,7 @@ export function parseEps(text: string): VArt {
       case "f": case "ef": {
         if (path) {
           if (!fill) why ||= "uses a color it can't read (a spot-color swatch?)";
-          else shapes.push({ fill, evenodd: t === "ef", ops: path });
+          else shapes.push({ fill, evenodd: t === "ef", ops: path, ...(clips.length ? { clip: clips } : {}) });
         }
         path = ""; stack.length = 0; break;
       }
@@ -134,8 +136,9 @@ export function parseEps(text: string): VArt {
       case "ct": { const m = stack.pop(); if (Array.isArray(m) && m.length === 6) ctm = mul(ctm, m as M); break; }
       case "scale": { const [sx, sy] = nums(2); ctm = mul(ctm, [sx, 0, 0, sy, 0, 0]); break; }
       case "translate": { const [tx, ty] = nums(2); ctm = mul(ctm, [1, 0, 0, 1, tx, ty]); break; }
-      case "gsave": case "pgsv": saved.push({ ctm, fill }); break;
-      case "grestore": case "pgrs": { const s = saved.pop(); if (s) { ctm = s.ctm; fill = s.fill; } break; }
+      // the clip belongs to the graphics state: a clipping mask ends at its grestore
+      case "gsave": case "pgsv": saved.push({ ctm, fill, clip, clips }); break;
+      case "grestore": case "pgrs": { const s = saved.pop(); if (s) { ctm = s.ctm; fill = s.fill; clip = s.clip; clips = s.clips; } break; }
       case "cs": case "setcolorspace": stack.length = 0; break;
       case "sc": case "scn": case "setcolor": {
         // 4 numbers = CMYK, 3 = RGB, 1 = a tint of a spot color (not read yet)
@@ -169,7 +172,11 @@ export function vartSvg(v: VArt): string {
         : `<radialGradient id="g${i}" gradientUnits="userSpaceOnUse" fx="${f(g.x0)}" fy="${f(g.y0)}" fr="${f(g.r0)}" cx="${f(g.x1)}" cy="${f(g.y1)}" r="${f(g.r1)}">${stops}</radialGradient>`;
       fill = `url(#g${i})`;
     }
-    return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""} d="${d(s.ops)}"/>`;
+    // a clipping mask: the shape only shows inside its outline
+    let cp = "";
+    // nested masks: each clipPath is itself clipped by the one before it, so the shape shows only where all overlap
+    (s.clip || []).forEach((c, k) => { defs += `<clipPath id="c${i}_${k}"${k ? ` clip-path="url(#c${i}_${k - 1})"` : ""}><path${c.evenodd ? ' clip-rule="evenodd"' : ""} d="${d(c.ops)}"/></clipPath>`; cp = ` clip-path="url(#c${i}_${k})"`; });
+    return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""}${cp} d="${d(s.ops)}"/>`;
   }).join("");
   // a distress layer knocks the art out where it's solid (the shirt shows through)
   if (v.distress?.length) {

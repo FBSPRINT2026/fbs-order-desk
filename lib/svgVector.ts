@@ -10,7 +10,9 @@
 export type VGrad = { kind: "linear" | "radial"; x0: number; y0: number; x1: number; y1: number; r0?: number; r1?: number; stops: { t: number; hex: string }[] };
 export type VShape = { fill: string; evenodd: boolean; ops: string; /** the spot swatch it was filled with (PDF / .ai art), e.g. "PANTONE 186 C" */ ink?: string;
   /** filled with a gradient (then `fill` is its middle color, for anything that only knows flat colors) */
-  grad?: VGrad };
+  grad?: VGrad;
+  /** only shows inside these outlines, all of them (Illustrator clipping masks, nested; Oct 20: a ribbon drawn as a green box clipped to the ribbon shape) */
+  clip?: { ops: string; evenodd: boolean }[] };
 export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[];
   /** a customer mockup: what was left out to get the art off the shirt (PDF / .ai) */
   mockup?: string;
