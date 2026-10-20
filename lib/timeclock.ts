@@ -27,6 +27,8 @@ export type TimeSettings = {
   geo: { lat: number | null; lng: number | null; radiusM: number };
   /** overtime pay = rate × this (Nick, Oct 20: time and a half, for payroll and contract labor alike) */
   otRate: number;
+  /** list a 6-hour day with no lunch punched as something to fix (off for now, Oct 20) */
+  lunchCheck?: boolean;
   /** flag anyone still clocked in after this many hours (a forgotten clock-out) */
   longShiftHours: number;
   departments: string[];

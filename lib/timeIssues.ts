@@ -45,8 +45,9 @@ export function timeIssues(s: TimeSettings, employees: Employee[], punches: Punc
         out.push({ key: `odd:${e.id}:${i.at}`, employee_id: e.id, name, first, day, kind: "odd", text: `${first} ${dayWord(day, today)}: ${i.text.charAt(0).toLowerCase() + i.text.slice(1)} (${timeLabel(i.at)})` });
       }
     }
-    // no lunch on a finished day: exactly one in and one out, 6 hours or more
-    for (const [day, d] of Object.entries(c.days)) {
+    // no lunch on a finished day: exactly one in and one out, 6 hours or more. Off for now (Oct 20, Nick: "for now
+    // ignore the no lunch taken"); Time Clock settings `lunchCheck: true` turns it back on
+    if (s.lunchCheck) for (const [day, d] of Object.entries(c.days)) {
       if (day >= today || d.worked < 360 || d.breaks > 0) continue;
       const dayPs = withLunch(mine.filter((p) => localDay(p.at) === day));
       if (dayPs.length !== 2 || dayPs[0].kind !== "in" || dayPs[1].kind !== "out") continue;
