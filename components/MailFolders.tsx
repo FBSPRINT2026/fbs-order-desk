@@ -15,8 +15,8 @@ import { createClient } from "@/lib/supabase/client";
  */
 export type { Convo, Folder, FullMsg, MsgRow };
 
-export async function box<T>(params: Record<string, string | number>): Promise<T> {
-  const r = await fetch(`/api/mail/box?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`, { cache: "no-store" });
+export async function box<T>(params: Record<string, string | number>, signal?: AbortSignal): Promise<T> {
+  const r = await fetch(`/api/mail/box?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`, { cache: "no-store", signal });
   const j = await r.json().catch(() => ({ error: "The mail server didn't answer." }));
   if (!r.ok) throw new Error(j.error || "Something went wrong.");
   return j as T;

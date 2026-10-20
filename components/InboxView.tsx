@@ -103,6 +103,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [olderBusy, setOlderBusy] = useState(false);
   // searched over EWS (Oct 14): the whole mailbox, every year, at once — no "last 45 days" / "search older mail"
   const [searchAll, setSearchAll] = useState(false);
+  const searchRun = useRef<{ n: number; ac: AbortController | null }>({ n: 0, ac: null });
   /** `who`: a person or customer picked from the suggestions (their addresses); `term` is then their name, for the heading */
   const runSearch = async (term: string, who?: string[], about?: { words: string; cust?: string }) => {
     if (term.trim().length < 2) return;
@@ -110,10 +111,34 @@ export default function InboxView({ mode }: { mode: Mode }) {
     // where Back goes (Oct 15, Nick: "a quick back button to get back to where you were, Inbox or Sent")
     if (view.kind !== "search") setBefore(view);
     setView({ kind: "search", q: term.trim(), ...(who?.length ? { who } : {}), ...(about ? { about: about.words, cust: about.cust } : {}) }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
-    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}), ...(about ? { about: about.words } : {}) }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
-    catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
+    // only the newest search answers: a new search (or Enter again) drops the one still running (Oct 20)
+    searchRun.current.ac?.abort();
+    const ac = new AbortController(), n = ++searchRun.current.n;
+    searchRun.current.ac = ac;
+    const current = () => searchRun.current.n === n;
+    const params = { do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}), ...(about ? { about: about.words } : {}) };
+    // fast first (Oct 20, Nick: "the search function on my email is very slow"): our own copy of the mailbox answers
+    // in a moment and shows right away; the mailbox's own search (every year, the words inside; 15–30 s the first
+    // time a word is searched) replaces it when it's done
+    let done = false, shown = false;
+    void mailBox<{ convos: Convo[]; ews?: boolean }>({ ...params, quick: 1 }, ac.signal).then((r) => {
+      if (!current() || done || !r.ews || !r.convos.length) return;
+      shown = true; setConvos(r.convos); setSearchAll(true); setSNote("Still searching the rest of your mailbox…");
+    }).catch(() => null);
+    try {
+      const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>(params, ac.signal);
+      if (!current()) return;
+      done = true; setConvos(r.convos); setSearchAll(!!r.all); setSNote(r.all && r.partial ? "Some folders didn't answer, so there may be more." : "");
+    }
+    catch (e) {
+      if (!current()) return;
+      done = true;
+      const msg = e instanceof Error ? e.message : String(e);
+      // the quick answer stays up when the mailbox's search fails
+      if (shown) setSNote(`The mailbox search didn't finish (${msg}), so there may be more.`); else { setConvos([]); setSNote(msg); }
+    }
   };
-  const backFromSearch = () => { setQ(""); setSugOpen(false); setCSel(null); setPicked(false); if (before.kind === "folder") void openFolder(before.path); else setView({ kind: "inbox" }); };
+  const backFromSearch = () => { searchRun.current.ac?.abort(); searchRun.current.n++; setQ(""); setSugOpen(false); setCSel(null); setPicked(false); if (before.kind === "folder") void openFolder(before.path); else setView({ kind: "inbox" }); };
   const beforeName = before.kind === "folder" ? folderLabel(folders?.find((f) => f.path === before.path) || { name: before.path.split("/").pop() || before.path, special: "" }) : "Inbox";
   // past the 45 days: searched live on request, added to the list
   const searchOlder = async (term: string) => {

@@ -299,4 +299,43 @@ export async function cachedSearch(admin: SupabaseClient, accountId: string, me:
   return out;
 }
 
+/**
+ * The quick first answer to a search (Oct 20, Nick: "the search function on my email is very slow"): from our own copy
+ * of the mailbox only — the 45-day cache (who, subject and the words inside) and the kept headers going back years —
+ * in well under a second (trigram indexes on `hay`). The page shows these at once while the mailbox's own search
+ * (EWS: 14–27 s the first time a word is searched) finishes, then shows the mailbox's answer.
+ * `who`: only emails from / to / cc those addresses (or "@domain"); `words` may then be empty (everything with them).
+ */
+export async function mirrorSearch(admin: SupabaseClient, accountId: string, me: string, q: string, addrs: string[], who: string[] = []) {
+  const words = q.toLowerCase().split(/\s+/).map((w) => w.replace(/[%_,()]/g, "")).filter((w) => w.length >= 2).slice(0, 6);
+  const keys = [...new Set([...who, ...addrs].map((a) => a.toLowerCase().replace(/[%_,()"]/g, "")).filter((a) => a.length >= 3))].slice(0, 12);
+  if (!words.length && !keys.length) return [] as MsgRow[];
+  const idxCols = "folder, uid, message_id, in_reply_to, subject, from_email, from_name, to_list, cc_list, to_text, sent_at, size";
+  const cache = () => admin.from("mail_cache").select(ROW_COLS).eq("account_id", accountId).is("gone_at", null).order("sent_at", { ascending: false }).limit(200);
+  const index = () => admin.from("mail_index").select(idxCols).eq("account_id", accountId).order("sent_at", { ascending: false }).limit(250);
+  const anyKey = keys.map((a) => `hay.ilike.%${a}%`).join(",");
+  const none = Promise.resolve({ data: [] as unknown[] });
+  // a person picked: their emails (about a project: the emails with those words, then only theirs); else the words,
+  // and a customer's addresses when the words are their name
+  const byKeys = keys.length && (!who.length || !words.length);
+  let cw = cache(), iw = index();
+  for (const w of words) { cw = cw.ilike("hay", `%${w}%`); iw = iw.ilike("hay", `%${w}%`); }
+  const [c1, c2, i1, i2] = await Promise.all([
+    words.length ? cw : none,
+    byKeys ? cache().or(anyKey) : none,
+    words.length ? iw : none,
+    byKeys ? index().or(anyKey) : none,
+  ]);
+  type IdxRow = Omit<CacheRow, "seen" | "flagged">;
+  const rows: MsgRow[] = [], seen = new Set<string>();
+  const add = (m: MsgRow) => { const k = m.messageId || `${m.folder}:${m.uid}`; if (seen.has(k)) return; seen.add(k); rows.push(m); };
+  // the cache first: it's kept current (moved / gone emails), the kept headers may still show an email's old folder
+  for (const r of [...((c1.data || []) as unknown as CacheRow[]), ...((c2.data || []) as unknown as CacheRow[])]) add(rowOf(r, me));
+  for (const r of [...((i1.data || []) as unknown as IdxRow[]), ...((i2.data || []) as unknown as IdxRow[])]) add(rowOf({ ...(r as CacheRow), seen: true, flagged: false }, me));
+  // never junk, deleted or drafts (as the mailbox search leaves them out)
+  const hidden = (f: string) => /(^|\/)(junk( e-?mail)?|deleted items|trash|drafts|@saneblackhole)$/i.test(f);
+  const mine = (m: MsgRow) => !who.length || [m.from, ...(m.to || []), ...(m.cc || [])].some((x) => { const a = String(x || "").toLowerCase(); return who.some((w) => (w.startsWith("@") ? a.endsWith(w) : a === w)); });
+  return rows.filter((m) => !hidden(m.folder) && mine(m));
+}
+
 export type { Convo };

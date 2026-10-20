@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cfgOf } from "@/lib/mail/config";
 import { mailboxToRead, VIEWING_NO } from "@/lib/mail/viewing";
 import { customerAddrs, getAttachment, getMessage, groupConvos, listFolders, listMessages, listOlder, markSeen, moveMessage, searchConversations, withBox } from "@/lib/mail/folders";
-import { keepBody, cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
+import { keepBody, cachedList, cachedMessage, cachedSearch, folderCached, mirrorSearch } from "@/lib/mail/cache";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { ewsAttachment, ewsMessage } from "@/lib/mail/ews";
@@ -20,6 +20,7 @@ export const maxDuration = 60;
  *   GET ?do=message&path=…&uid=n          one email (marks it read)
  *   GET ?do=attachment&path=…&uid=n&i=k   download an attachment
  *   GET ?do=search&q=…                    conversations found (received and sent, in order)
+ *   GET ?do=search&q=…&quick=1            the same from our own copy only (instant), shown while the mailbox searches
  *   POST { do: "move", path, uid, to }    to "archive", a SaneBox key (later, news, receipts, cc, blackhole), "trash" or a folder path
  *   POST { do: "reply", path, uid, body, all? }
  */
@@ -44,6 +45,26 @@ export async function GET(req: Request) {
     // a mailbox EWS works on (Oct 14): the folder list, a folder, search and opening an email all go through EWS — no
     // IMAP connection limit. If EWS has a problem, the IMAP way below still answers.
     const ews = await ewsReady(admin, acct);
+    // search, the quick first answer (Oct 20, Nick: "the search function on my email is very slow"): our own copy of
+    // the mailbox (lib/mail/cache.ts mirrorSearch), asked alongside the mailbox's search below, shown while that one
+    // finishes. Only where the mailbox search is EWS (the IMAP way already answers from the cache).
+    if (what === "search" && q.get("quick") === "1") {
+      if (!ews || q.get("older") === "1") return NextResponse.json({ convos: [], quick: true, ews: false });
+      const t0 = Date.now();
+      const who = (q.get("who") || "").split(",").map((e) => e.trim().toLowerCase()).filter((e) => /^([^\s@"]+)?@[^\s@"]+\.[a-z]{2,}$/.test(e)).slice(0, 12);
+      const about = (q.get("about") || "").replace(/[^a-z0-9' ]+/gi, " ").trim().slice(0, 80);
+      const term = who.length ? about : (q.get("q") || "").trim();
+      let extra: string[] = [];
+      if (!who.length && term.length >= 2) {
+        const addrs = [...(await customerAddrs(admin, term))];
+        const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|comcast|att|sbcglobal)\./i;
+        extra = [...new Set([...addrs.filter((a) => FREE.test(a)), ...addrs.filter((a) => !FREE.test(a)).map((a) => "@" + a.split("@")[1])])];
+      }
+      const rows = await mirrorSearch(admin, acct.id, me, term, extra, who);
+      const convos = groupConvos(rows, me);
+      console.info(`mail search quick "${(q.get("q") || "").slice(0, 40)}": ${convos.length} conversations, ${Date.now() - t0}ms`);
+      return NextResponse.json({ convos, quick: true, ews: true });
+    }
     if (ews) {
       try {
         if (what === "folders") return NextResponse.json({ folders: await ewsFolders(acct), ews: true });
