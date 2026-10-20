@@ -1,4 +1,5 @@
 "use client";
+import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
 import ProofSide from "@/components/ProofSide";
 import JobLabor from "@/components/team/JobLabor";
@@ -483,7 +484,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
   async function delArt(a: ArtFile) {
-    await sb.storage.from("proofs").remove([a.file_path]);
+    // only a file this order owns leaves storage (an old Printavo job's file or a logo stays for everyone else)
+    const mine = ownedFiles(o?.id || "", [a.file_path]);
+    if (mine.length) await sb.storage.from("proofs").remove(mine);
     await sb.from("art_files").delete().eq("id", a.id);
     loadSide();
   }
@@ -573,7 +576,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o) return;
     if (timer.current) clearTimeout(timer.current);
     latest.current = null;
-    const paths = [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)];
+    const paths = ownedFiles(o.id, [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)]);
     if (paths.length) await sb.storage.from("proofs").remove(paths);
     const { error } = await sb.from("orders").delete().eq("id", o.id);
     if (error) return say("Couldn't delete: " + error.message);

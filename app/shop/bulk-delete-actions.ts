@@ -1,4 +1,5 @@
 "use server";
+import { ownedFiles } from "@/lib/ownedFiles";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -31,10 +32,11 @@ export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; delet
     const gids = go.map((o) => o.id);
     // their files (proofs and production files), as the order page's own Delete does
     const [{ data: pr }, { data: af }] = await Promise.all([
-      admin.from("proofs").select("file_path").in("order_id", gids),
-      admin.from("art_files").select("file_path").in("order_id", gids),
+      admin.from("proofs").select("file_path, order_id").in("order_id", gids),
+      admin.from("art_files").select("file_path, order_id").in("order_id", gids),
     ]);
-    const paths = [...((pr || []) as { file_path: string }[]), ...((af || []) as { file_path: string }[])].map((x) => x.file_path).filter(Boolean);
+    // only files an order owns (not the Printavo archive's copies, logos, mockups or email attachments it pointed at)
+    const paths = gids.flatMap((id) => ownedFiles(id, [...((pr || []) as { file_path: string; order_id?: string }[]), ...((af || []) as { file_path: string; order_id?: string }[])].filter((x) => x.order_id === id).map((x) => x.file_path)));
     for (let i = 0; i < paths.length; i += 100) await admin.storage.from("proofs").remove(paths.slice(i, i + 100));
     const { error } = await admin.from("orders").delete().in("id", gids);
     if (error) return { ok: false, error: error.message };
