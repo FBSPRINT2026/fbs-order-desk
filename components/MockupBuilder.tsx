@@ -97,6 +97,8 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 type BrandInk = { name: string; ink: string; hex: string; group?: string };
 type Brand = { label: string; colors: BrandInk[]; groups: { key: string; label: string; colors: BrandInk[] }[] };
 const BrandCtx = createContext<Brand>({ label: "", colors: [], groups: [] });
+/** a reorder's print still awaiting production, with the old job's color count: that count stays (Oct 20) */
+const keepCount = (x: { colors?: number; confirm?: { ink?: boolean } | null; confirmed?: unknown }) => !!x.confirm?.ink && !x.confirmed && (x.colors || 0) > 0;
 const nearestBrand = (hex: string, b: { colors: BrandInk[] }) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
 
 /** portal = the customer's own builder: their account only, no order, saved through the portal's server actions. */
@@ -484,12 +486,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const kept = [...new Set(chosen)].filter((n) => n && n !== "none");
           const names = saved ? kept : useAsked ? asked : kept;
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: saved ? Math.max(1, names.length) : useAsked ? asked.length : plan!.colors } : x)));
+          // a reorder awaiting production keeps the color count the old job printed (Printavo's 7/0 is a fact; the inks
+          // painted here are our guess, and production confirms both: Oct 20, Nick)
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : saved ? Math.max(1, names.length) : useAsked ? asked.length : plan!.colors } : x)));
           return;
         }
         const sources = detectColors(img);
         setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan!, off } }));
-        setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
+        setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: keepCount(x) ? x.colors : plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
       } catch { /* preview not loadable */ }
     });
   }, [imprints, designs, urls, keepBg, keepInside, (lines[active] || lines[0])?.color]); // eslint-disable-line react-hooks/exhaustive-deps

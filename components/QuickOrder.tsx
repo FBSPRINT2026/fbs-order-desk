@@ -594,6 +594,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     <div className="ap arc" role="group" aria-label="What are these files">
       <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
       <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
+      {help.prints.some((p) => p.colors > 0) && help.job.startsWith("#") && <p className="ap-why arc-colors">{help.job.replace(/^(#\d+).*/, "$1")} printed {[...new Map(help.prints.map((p) => [p.location, p.colors])).entries()].map(([l, n]) => `${l} in ${n} color${n === 1 ? "" : "s"}`).join(", ")}: the new order keeps that. The ink colors aren&apos;t on file; the mockup shows our guess and production confirms the inks (and the count) before printing.</p>}
       {olds.length > 0 && (() => {
         const i = Math.min(at, olds.length - 1), it = olds[i];
         return (
