@@ -1,3 +1,4 @@
+import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
@@ -678,6 +679,12 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
   const short = g.lines.filter((l) => l.qty_shipped < l.qty_ordered);
   let body = `📦 ${sname} shipped your goods for #${o.number}${g.lines[0].ship_date ? ` on ${day(g.lines[0].ship_date)}` : ""}: ${boxes} box${boxes === 1 ? "" : "es"}${methods ? ` (${methods})` : ""}, ${pcs} piece${pcs === 1 ? "" : "s"}. Tracking updates here automatically.`;
   if (short.length) body += `\n\n⚠️ ${sname} shipped ${pcs} of ${ordered} pieces. Not shipped yet: ${short.slice(0, 8).map((l) => `${l.style} ${l.color} ${l.size} (${l.qty_ordered - l.qty_shipped})`).join(", ")}${short.length > 8 ? "…" : ""}. Please check with ${sname} whether these are backordered.`;
+  if (!AUTO_CUSTOMER_CONTACT) {
+    // automated contact with customers is off (lib/customerContact.ts): the order's history, and the shop when short
+    await admin.from("order_events").insert({ order_id: orderId, kind: "goods_alert", detail: `${body} (not sent to the customer: automatic customer contact is off)`.slice(0, 1000), actor: "manifest" });
+    if (short.length && SHOP_NOTIFY_EMAIL) { const subject = `Part of the goods for #${o.number} didn't ship`; await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `[Goods] ${subject}`, html: emailLayout(shop, subject, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) }).catch(() => false); }
+    return;
+  }
   await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "staff", author_email: "", author_name: shop, body });
   if (short.length) {
     const { data: c } = o.customer_id ? await admin.from("customers").select("email").eq("id", o.customer_id).maybeSingle() : { data: null };

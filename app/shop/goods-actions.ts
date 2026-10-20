@@ -1,4 +1,5 @@
 "use server";
+import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
@@ -90,7 +91,9 @@ export async function staffGoodsInfo(orderId: string, g: { supplier: string; sup
     const { data: o } = await admin.from("orders").select("number").eq("id", orderId).maybeSingle();
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const parts = [supplier ? `coming from ${supplierLabel(supplier)}` : "supplier not known yet", po && `order/PO ${po}`, ship && `ships ${new Date(ship + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`].filter(Boolean);
-    await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "staff", author_email: email, author_name: mergeSettings(s?.data).shop.name, body: `📦 Goods for #${o?.number ?? ""}: ${parts.join(" · ")}.` });
+    // posted on the customer's goods thread only when automatic customer contact is on (lib/customerContact.ts)
+    if (AUTO_CUSTOMER_CONTACT) await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "staff", author_email: email, author_name: mergeSettings(s?.data).shop.name, body: `📦 Goods for #${o?.number ?? ""}: ${parts.join(" · ")}.` });
+    else await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: `Goods: ${parts.join(" · ")}`, actor: email });
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

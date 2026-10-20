@@ -4,6 +4,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings } from "@/lib/pricing";
 import { carrierOf, supplierLabel, TRACK } from "@/lib/goods";
+import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 
 /**
  * Customer supplied goods, watched automatically:
@@ -72,6 +73,12 @@ type Ctx = { admin: SupabaseClient; shop: string; leadDays: number };
 
 /** Post in the goods conversation, and email the customer and/or the shop. */
 async function tell(ctx: Ctx, o: { id: string; number: number; customer_id: string | null }, body: string, subject: string, opts: { customer?: boolean; shop?: boolean }) {
+  // automated contact with customers is off (lib/customerContact.ts): the order's history and the shop email instead
+  if (!AUTO_CUSTOMER_CONTACT) {
+    await ctx.admin.from("order_events").insert({ order_id: o.id, kind: "goods_alert", detail: `${subject} (not sent to the customer: automatic customer contact is off). ${body}`.slice(0, 1000), actor: "tracking" });
+    if ((opts.shop || opts.customer) && SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `[Goods] ${subject}`, html: emailLayout(ctx.shop, subject, `${body}<br><br><i>Not sent to the customer (automatic customer contact is off). Tell them yourself if needed.</i>`, "Open order", `${siteUrl()}/shop/orders/${o.id}`) }).catch(() => false);
+    return;
+  }
   await ctx.admin.from("messages").insert({ order_id: o.id, topic: "goods", author_type: "staff", author_email: "", author_name: ctx.shop, body });
   if (opts.customer && o.customer_id) {
     const { data: c } = await ctx.admin.from("customers").select("email").eq("id", o.customer_id).maybeSingle();

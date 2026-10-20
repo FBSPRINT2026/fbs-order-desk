@@ -1,3 +1,4 @@
+import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 import "server-only";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -284,7 +285,9 @@ export async function placeOrder(input: CheckoutInput): Promise<{ ok: true; toke
       order.items = b.items;
       saved.push(order);
     }
-    await sendConfirmation(st, saved).catch(() => false);
+    // the order confirmation email: off while automatic customer contact is off (lib/customerContact.ts); the shopper
+    // sees the confirmation on the page and can look their orders up
+    if (AUTO_CUSTOMER_CONTACT) await sendConfirmation(st, saved).catch(() => false);
     return { ok: true, token: saved[0].token, code: orderCode(st, saved[0].number), total, orders: saved.map((o) => ({ token: o.token, code: orderCode(st, o.number) })) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." };
