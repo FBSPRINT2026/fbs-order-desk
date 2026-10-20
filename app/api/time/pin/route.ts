@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const { data: st } = await v.supabase.from("staff").select("role").eq("email", v.email).maybeSingle();
-  if (!["owner", "admin"].includes((st?.role as string) || "")) return NextResponse.json({ error: "Only an owner or admin can set PINs." }, { status: 403 });
+  const { data: st } = await v.supabase.from("staff").select("role, sees_pay").eq("email", v.email).maybeSingle();
+  // owners, admins and whoever runs the time clock ("Runs the time clock", Oct 20)
+  if (!["owner", "admin"].includes((st?.role as string) || "") && !(st as { sees_pay?: boolean } | null)?.sees_pay) return NextResponse.json({ error: "Only the people who run the time clock can set PINs." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const id = String(b.employee_id || ""), pin = String(b.pin ?? "");
   const admin = createAdminClient();

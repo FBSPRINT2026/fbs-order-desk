@@ -17,6 +17,7 @@ import { ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
+import TimeBubble from "@/components/time/TimeBubble";
 import { useSticky } from "@/lib/useSticky";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -352,6 +353,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       </div>
       </div>
     </aside>
+    {/* time clock issues for the people who run it: a little bubble at the top right (Oct 20, Nick) */}
+    <TimeBubble />
     </>
   );
 }

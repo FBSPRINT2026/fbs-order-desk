@@ -10,6 +10,7 @@ import TimeEmployees from "@/components/time/TimeEmployees";
 import TimeOffPanel from "@/components/time/TimeOffPanel";
 import TimeSettingsPanel from "@/components/time/TimeSettingsPanel";
 import TimeImport from "@/components/time/TimeImport";
+import TimePayroll from "@/components/time/TimePayroll";
 import type { TimeData } from "@/components/time/types";
 
 /**
@@ -17,13 +18,13 @@ import type { TimeData } from "@/components/time/types";
  * the weekly schedule, employees and their PINs, time off, and the clock's settings. Punches come from the wall
  * clock (/clock), phones (staff logins, near the shop), or a manager adding one by hand.
  */
-const TABS = [["today", "Today"], ["cards", "Timecards"], ["schedule", "Schedule"], ["employees", "Employees"], ["off", "Time Off"], ["settings", "Settings"], ["import", "Import"]] as const;
+const TABS = [["today", "Today"], ["cards", "Timecards"], ["payroll", "Payroll Report"], ["schedule", "Schedule"], ["employees", "Employees"], ["off", "Time Off"], ["settings", "Settings"], ["import", "Import"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export default function TimePage() {
   const sp = useSearchParams(), router = useRouter();
   const tab = (sp.get("tab") as Tab) || "today";
-  const [me, setMe] = useState(""), [role, setRole] = useState("");
+  const [me, setMe] = useState(""), [role, setRole] = useState(""), [pay, setPay] = useState(false);
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [settings, setSettings] = useState<TimeSettings>(mergeTime({}));
 
@@ -32,19 +33,19 @@ export default function TimePage() {
     const { data: { user } } = await sb.auth.getUser();
     const email = (user?.email || "").toLowerCase();
     const [{ data: st }, { data: emps }, { data: s }] = await Promise.all([
-      sb.from("staff").select("role").eq("email", email).maybeSingle(),
+      sb.from("staff").select("role, sees_pay").eq("email", email).maybeSingle(),
       sb.from("employees").select("*").order("last_name").order("first_name"),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
-    setMe(email); setRole((st?.role as string) || "");
+    setMe(email); setRole((st?.role as string) || ""); setPay(!!(st as { sees_pay?: boolean } | null)?.sees_pay);
     setEmployees((emps || []) as Employee[]);
     setSettings(mergeTime((s?.data as { time?: unknown } | null)?.time));
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
   const go = (t: Tab) => { const p = new URLSearchParams(sp.toString()); if (t === "today") p.delete("tab"); else p.set("tab", t); router.replace(`/shop/time${p.size ? "?" + p : ""}`, { scroll: false }); };
-  const d: TimeData | null = useMemo(() => (employees ? { me, role, employees, settings, reload } : null), [me, role, employees, settings, reload]);
-  const boss = role === "owner" || role === "admin";
+  const d: TimeData | null = useMemo(() => (employees ? { me, role, seesPay: pay, employees, settings, reload } : null), [me, role, pay, employees, settings, reload]);
+  const boss = role === "owner" || role === "admin" || pay;
 
   return (
     <>
@@ -54,16 +55,17 @@ export default function TimePage() {
           <a className="btn" href="/clock" target="_blank" rel="noreferrer">Open Wall Clock</a>
         </div>
       </div>
-      <div className="aa-sub tm-tabs" role="tablist">
-        {TABS.filter(([k]) => boss || (k !== "settings" && k !== "import")).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}
+      <div className="aa-sub tm-tabs" role="tablist" data-toolbar>
+        {TABS.filter(([k]) => (k === "import" ? role === "owner" || role === "admin" : boss || (k !== "settings" && k !== "payroll"))).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}
       </div>
       {!d ? <div className="empty">Loading…</div>
         : tab === "cards" ? <TimeCards d={d} />
+        : tab === "payroll" && boss ? <TimePayroll d={d} />
         : tab === "schedule" ? <TimeSchedule d={d} />
         : tab === "employees" ? <TimeEmployees d={d} />
         : tab === "off" ? <TimeOffPanel d={d} />
         : tab === "settings" && boss ? <TimeSettingsPanel d={d} />
-        : tab === "import" && boss ? <TimeImport d={d} />
+        : tab === "import" && (role === "owner" || role === "admin") ? <TimeImport d={d} />
         : <TimeToday d={d} />}
     </>
   );

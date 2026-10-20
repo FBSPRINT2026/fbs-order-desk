@@ -6,7 +6,7 @@
 export const TZ = "America/Chicago";
 
 export type Punch = { id: string; employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; at: string; source: string; photo_path?: string | null; note?: string; original_at?: string | null; edited_by?: string | null; voided?: boolean; lat?: number | null; lng?: number | null };
-export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string; code?: number | null; lang?: string };
+export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string; code?: number | null; lang?: string; /** how they're paid: QuickBooks payroll (W-2) or contract labor (1099) */ paid_by?: "payroll" | "contract" };
 export type Shift = { id: string; employee_id: string; starts_at: string; ends_at: string; station: string; note: string; published: boolean };
 export type TimeOff = { id: string; employee_id: string; starts_on: string; ends_on: string; hours: number; kind: "pto" | "sick" | "holiday" | "unpaid"; status: "requested" | "approved" | "denied"; note: string };
 
@@ -25,6 +25,8 @@ export type TimeSettings = {
   /** staff with a login can punch from their phone, only near the shop */
   phone: boolean;
   geo: { lat: number | null; lng: number | null; radiusM: number };
+  /** overtime pay = rate × this (Nick, Oct 20: time and a half, for payroll and contract labor alike) */
+  otRate: number;
   /** flag anyone still clocked in after this many hours (a forgotten clock-out) */
   longShiftHours: number;
   departments: string[];
@@ -33,7 +35,7 @@ export type TimeSettings = {
   stations: string[];
 };
 export const DEFAULT_TIME: TimeSettings = {
-  period: "weekly", anchor: "2026-09-28", otWeekly: 40, rounding: 0, graceMin: 5, photo: true, phone: true,
+  period: "weekly", anchor: "2026-09-28", otWeekly: 40, otRate: 1.5, rounding: 0, graceMin: 5, photo: true, phone: true,
   geo: { lat: null, lng: null, radiusM: 200 }, longShiftHours: 12, departments: ["Screen Printing", "Embroidery", "Fulfillment", "Shipping & Receiving", "Office"],
   tasks: ["Setup", "Printing", "Embroidery", "DTF / Heat Press", "Screen Prep", "Folding & Bagging", "Quality Check", "Packing & Shipping", "Cleanup"],
   stations: ["Press 1", "Press 2", "Press 3", "Embroidery", "Heat Press", "Packing Table"],
@@ -194,6 +196,26 @@ export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[]
     issues: issues.filter((i) => localDay(i.at) >= start && localDay(i.at) <= end),
     state: stateOf(last), since: last && last.kind !== "out" ? last.at : null,
   };
+}
+
+/* ---------- pay for a period (the payroll report) ---------- */
+
+export const r2 = (n: number) => Math.round(n * 100) / 100;
+/** periods in a year, for a salary's share of one pay period */
+export const periodsPerYear = (s: TimeSettings) => (s.period === "weekly" ? 52 : s.period === "biweekly" ? 26 : 24);
+export type PayLine = { regHours: number; otHours: number; offHours: number; rate: number | null; salary: number | null; regPay: number | null; otPay: number | null; offPay: number | null; total: number | null };
+/**
+ * One person's pay for a period, the way Nick figures it (Oct 20): hours rounded to hundredths, then regular hours ×
+ * rate, overtime hours × rate × otRate (1.5), paid time off × rate. Salaried people get their salary's share of the
+ * period (salary ÷ 26 every two weeks) and no overtime. No rate = hours only.
+ */
+export function payFor(s: TimeSettings, c: Pick<Card, "regular" | "overtime" | "pto" | "sick" | "holiday">, pay: { rate: number | null; salary: number | null } | undefined, payType: Employee["pay_type"]): PayLine {
+  const regHours = r2(c.regular / 60), otHours = r2(c.overtime / 60), offHours = r2((c.pto + c.sick + c.holiday) / 60);
+  const rate = pay?.rate != null && +pay.rate > 0 ? +pay.rate : null, salary = pay?.salary != null && +pay.salary > 0 ? +pay.salary : null;
+  if (payType === "salary" && salary) { const per = r2(salary / periodsPerYear(s)); return { regHours, otHours, offHours, rate, salary, regPay: per, otPay: 0, offPay: 0, total: per }; }
+  if (rate == null) return { regHours, otHours, offHours, rate, salary, regPay: null, otPay: null, offPay: null, total: null };
+  const regPay = r2(regHours * rate), otPay = r2(otHours * rate * (s.otRate || 1.5)), offPay = r2(offHours * rate);
+  return { regHours, otHours, offHours, rate, salary, regPay, otPay, offPay, total: r2(regPay + otPay + offPay) };
 }
 
 /** "7:45" style hours from minutes. */

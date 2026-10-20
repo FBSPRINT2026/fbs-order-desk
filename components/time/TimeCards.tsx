@@ -3,7 +3,10 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KIND_LABEL, withLunch, addDays, dayLabel, daysBetween, dec, fullName, hm, localDay, localMinutes, localToIso, periodOf, timeLabel, timecard, type Punch, type TimeOff } from "@/lib/timeclock";
 import { useSticky } from "@/lib/useSticky";
+import { useSearchParams } from "next/navigation";
 import { isBoss, seesPay, type TimeData } from "./types";
+import TimeAsk from "./TimeAsk";
+import { clearIssueCache } from "./TimeBubble";
 
 /**
  * Timecards for a pay period: regular, overtime (over the weekly limit), breaks and time off per person, each day's
@@ -16,7 +19,10 @@ export default function TimeCards({ d }: { d: TimeData }) {
   const [offs, setOffs] = useState<TimeOff[]>([]);
   const [pay, setPay] = useState<Record<string, { rate: number | null; salary: number | null }>>({});
   const [approved, setApproved] = useState<{ approved_at: string | null; approved_by: string | null } | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  // ?who=<employee> (from the issue bubble's "Time card"): opens that person, on the period with today in it
+  const who = useSearchParams().get("who");
+  const [open, setOpen] = useState<string | null>(who);
+  useEffect(() => { if (who) setOpen(who); }, [who]);
   const [edit, setEdit] = useState<{ emp: string; punch?: Punch; day: string; kind?: Punch["kind"] } | null>(null);
   // Summary (hours per person) or Punches (every in and out, day by day, for everyone)
   const [view, setView] = useSticky<"summary" | "punches">("time.cardsView", "summary");
@@ -65,6 +71,7 @@ export default function TimeCards({ d }: { d: TimeData }) {
 
   return (
     <div className="tmx">
+      {boss && <TimeAsk onChanged={() => { clearIssueCache(); load(); }} />}
       <div className="tmx-bar">
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm" onClick={() => setStart(addDays(period.start, -1))} aria-label="Previous period">←</button>
@@ -123,13 +130,13 @@ export default function TimeCards({ d }: { d: TimeData }) {
         )}
       </section>
       )}
-      {edit && <PunchEditor d={d} emp={edit.emp} day={edit.day} punch={edit.punch} kind0={edit.kind} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      {edit && <PunchEditor d={d} emp={edit.emp} day={edit.day} punch={edit.punch} kind0={edit.kind} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); clearIssueCache(); load(); }} />}
     </div>
   );
 }
 
 /** Fix a punch: change its time (the original is kept), void it, or add a missed one. */
-function PunchEditor({ d, emp, day, punch, kind0, onClose, onSaved }: { d: TimeData; emp: string; day: string; punch?: Punch; kind0?: Punch["kind"]; onClose: () => void; onSaved: () => void }) {
+export function PunchEditor({ d, emp, day, punch, kind0, onClose, onSaved }: { d: TimeData; emp: string; day: string; punch?: Punch; kind0?: Punch["kind"]; onClose: () => void; onSaved: () => void }) {
   const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const [date, setDate] = useState(punch ? localDay(punch.at) : day);
   const [time, setTime] = useState(punch ? toHHMM(localMinutes(punch.at)) : kind0 === "out" ? "16:00" : "08:00");
@@ -191,7 +198,7 @@ function pairsOf(ps: LP[]): Seg[] {
  * the time they were on the clock, their ins and outs (tap one to fix it), and the day's hours. A day with no
  * clock-out shows it in red; hours past the weekly overtime line are marked.
  */
-function PunchList({ e, c, days, punches, otWeekly, onEdit, bare }: { e: { id: string; first_name: string; last_name: string; department: string }; c: ReturnType<typeof timecard>; days: string[]; punches: Punch[]; otWeekly: number; onEdit: (p: Punch | undefined, day: string, kind?: Punch["kind"]) => void; bare?: boolean }) {
+export function PunchList({ e, c, days, punches, otWeekly, onEdit, bare }: { e: { id: string; first_name: string; last_name: string; department: string }; c: ReturnType<typeof timecard>; days: string[]; punches: Punch[]; otWeekly: number; onEdit: (p: Punch | undefined, day: string, kind?: Punch["kind"]) => void; bare?: boolean }) {
   const today = localDay(new Date()), nowMin = localMinutes(new Date());
   const mine = withLunch(punches.filter((p) => p.employee_id === e.id && !p.voided)).sort((a, b) => a.at.localeCompare(b.at));
   const byDay = days.map((day) => ({ day, segs: pairsOf(mine.filter((p) => localDay(p.at) === day)) }));

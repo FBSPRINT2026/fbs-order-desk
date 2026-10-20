@@ -8,14 +8,15 @@ export const dynamic = "force-dynamic";
 async function boss() {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return null;
-  const { data } = await v.supabase.from("staff").select("role").eq("email", v.email).maybeSingle();
-  return ["owner", "admin"].includes((data?.role as string) || "") ? v : null;
+  const { data } = await v.supabase.from("staff").select("role, sees_pay").eq("email", v.email).maybeSingle();
+  // owners, admins and whoever runs the time clock ("Runs the time clock", Oct 20)
+  return ["owner", "admin"].includes((data?.role as string) || "") || (data as { sees_pay?: boolean } | null)?.sees_pay ? v : null;
 }
 
 /** The ZKTeco clocks: when each last checked in, who's enrolled on it, its latest scans and anything not matched. */
 export async function GET() {
   const v = await boss();
-  if (!v) return NextResponse.json({ error: "Owners and admins only." }, { status: 403 });
+  if (!v) return NextResponse.json({ error: "Only the people who run the time clock." }, { status: 403 });
   const admin = createAdminClient();
   const { data: devs } = await admin.from("timeclock_devices").select("id, name, active, serial, info, last_seen_at, created_at").eq("kind", "zk").order("created_at");
   const out = [];
@@ -35,7 +36,7 @@ export async function GET() {
 /** Turn a clock on or off, send it our employee list, or bring over scans waiting on an employee ID. */
 export async function POST(req: Request) {
   const v = await boss();
-  if (!v) return NextResponse.json({ error: "Owners and admins only." }, { status: 403 });
+  if (!v) return NextResponse.json({ error: "Only the people who run the time clock." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const id = String(b.id || "");
   const admin = createAdminClient();

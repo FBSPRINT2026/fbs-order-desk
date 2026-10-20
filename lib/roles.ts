@@ -31,7 +31,7 @@ export const PERMS = [
   { k: "pressDefaults", group: "Production", label: "Can change press defaults and equipment status" },
   { k: "inkStock", group: "Production", label: "Can choose which stock inks we carry, and add or edit them (Ink Room)" },
   { k: "employees", group: "Production", label: "Can open Employees" },
-  { k: "pay", group: "Production", label: "Can see employee pay rates (labor cost and overtime cost; changing pay stays owner / admin)" },
+  { k: "pay", group: "Production", label: "Runs the time clock: sees and changes employee pay, fixes timecards, adds employees, payroll report (Oct 20, Nick)" },
   { k: "shipping", group: "Shop tools", label: "Can open the Shipping Center" },
   { k: "receiving", group: "Shop tools", label: "Can open Goods & Receiving" },
   { k: "timeclock", group: "Shop tools", label: "Can open the Time Clock" },
