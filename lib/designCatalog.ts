@@ -24,7 +24,8 @@ export type CatalogRules = {
   /** design keys not shown */ hidden?: string[];
   /** design key → its cover picture in storage (chosen in the browser from the mockups; "-" = none of them would do) */ covers?: Record<string, string>;
 };
-export type CatalogJob = { ref: string; src: "printavo" | "portal"; id: string; number: string; date: string; title: string; qty: number; status: string };
+export type CatalogJob = { ref: string; src: "printavo" | "portal"; id: string; number: string; date: string; title: string; qty: number; status: string;
+  /** a split order (one order, several designs): the other designs on it */ split?: string[] };
 export type CatalogVersion = {
   key: string; n: number; label: string; style: string; brand: string; garment: string; color: string;
   first: string; last: string; times: number; pieces: number; prints: string[];
@@ -55,7 +56,9 @@ const TITLE_SMALL = new Set(["a", "an", "and", "the", "of", "to", "in", "for", "
 const titleCase = (s: string) => s.toLowerCase().split(" ").map((w, i) => (i > 0 && TITLE_SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 
 type Raw = { job: CatalogJob; lines: { style: string; brand: string; garment: string; color: string; pieces: number; thumb: string; full: string }[]; prints: string[]; /** the print's own mockup (Printavo imprint mockups: the art, never a purchase order) */ cover?: { thumb: string; full: string };
-  /** every full-size picture or PDF on the job (mockups, photos, and sometimes the purchase order) */ pics: string[] };
+  /** every full-size picture or PDF on the job (mockups, photos, and sometimes the purchase order) */ pics: string[];
+  /** each line's own words (a Printavo line's description, "In Every Season" / "TYJ Pullover"), to find the designs
+   *  of a split order; `at` is the line's place in `lines` (-1: a line without a garment, counted only) */ named?: { text: string; pieces: number; at: number }[] };
 const isPic = (p: string) => /\.(png|jpe?g|webp|gif|pdf)$/i.test(p);
 
 export async function buildCatalog(admin: SupabaseClient, customerId: string): Promise<Catalog> {
@@ -70,12 +73,14 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
   for (const a of (arch || []) as { id: string; visual_id: string; nickname: string; order_date: string; qty: number; status_name: string; data: { groups?: PvGroup[] }; files: Record<string, string> | null }[]) {
     const files = a.files || {};
     const groups = a.data?.groups || [];
+    const kept = groups.flatMap((g) => g.lines || []).filter((l) => (String(l.itemNumber || "").trim() || String(l.color || "").trim()) && ((l.items || 0) > 0 || l.itemNumber));
     raws.push({
+      named: groups.flatMap((g) => g.lines || []).filter((l) => (l.items || 0) > 0 && String(l.description || "").trim()).map((l) => ({ text: String(l.description || ""), pieces: +l.items || 0, at: kept.indexOf(l) })),
       job: { ref: `p:${a.id}`, src: "printavo", id: a.id, number: String(a.visual_id), date: String(a.order_date || ""), title: String(a.nickname || "").trim(), qty: +a.qty || 0, status: a.status_name || "" },
-      lines: groups.flatMap((g) => (g.lines || []).filter((l) => (String(l.itemNumber || "").trim() || String(l.color || "").trim()) && ((l.items || 0) > 0 || l.itemNumber)).map((l) => {
+      lines: kept.map((l) => {
         const m = (l.mockups || [])[0];
         return { style: String(l.itemNumber || "").trim().toUpperCase(), brand: String(l.brand || "").trim(), garment: String(l.description || "").replace(/^[^-]+-\s*/, "").trim(), color: String(l.color || "").trim(), pieces: +l.items || 0, thumb: (m && files[m.thumb]) || "", full: (m && files[m.full]) || "" };
-      })),
+      }),
       prints: groups.flatMap((g) => (g.imprints || []).map((im) => `${String(im.details || "").replace(/\s+/g, " ").trim()}`)).filter(Boolean).slice(0, 4),
       cover: (() => { const m = groups.flatMap((g) => (g.imprints || []).flatMap((im) => im.mockups || [])).find((x) => files[x.thumb]); return m ? { thumb: files[m.thumb], full: files[m.full] || files[m.thumb] } : undefined; })(),
       pics: [...new Set(groups.flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).map((m) => files[m.full] || "").filter((x) => x && isPic(x)))],
@@ -106,10 +111,10 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
   const keyOfJob = (r: Raw) => (rules.jobs && r.job.ref in rules.jobs ? rules.jobs[r.job.ref] : designKey(r.job.title));
   const merged = (k: string) => { let x = k; for (let i = 0; i < 6 && rules.merge?.[x]; i++) x = rules.merge[x]; return x; };
   const byKey = new Map<string, Raw[]>();
-  const other: CatalogJob[] = [];
+  const otherRaws: Raw[] = [];
   for (const r of raws) {
     const k = merged(keyOfJob(r));
-    if (!k || k.split(" ").every((w) => w.length < 2)) { other.push(r.job); continue; }
+    if (!k || k.split(" ").every((w) => w.length < 2)) { otherRaws.push(r); continue; }
     byKey.set(k, [...(byKey.get(k) || []), r]);
   }
   // the same design under a longer or shorter name ("makes a way" / "he makes a way"): the shorter one joins the
@@ -121,6 +126,46 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     const into = keys.find((k) => k !== short && byKey.has(k) && sw.every((w) => k.split(" ").includes(w)) && k.split(" ").length - sw.length <= 2);
     if (into) { byKey.set(into, [...(byKey.get(into) || []), ...(byKey.get(short) || [])]); byKey.delete(short); }
   }
+
+  // split orders (Oct 20, Nick: #32838 "Bucee's RUSH" is In Every Season, Jesus Changes Everything and TYJ Pullovers
+  // on one order): a line whose own words name a design ("In Every Season", "TYJ Pullover" = Thank You Jesus by its
+  // initials) puts that part of the order on that design too, marked as a split
+  const known = [...byKey.keys()];
+  const initials = new Map(known.filter((k) => k.split(" ").length >= 3).map((k) => [k.split(" ").map((w) => w[0]).join(""), k] as const));
+  const lineKey = (text: string) => {
+    const lk = designKey(text); if (!lk) return "";
+    const m = merged(lk); if (byKey.has(m)) return m;
+    const ws = lk.split(" ");
+    for (const w of ws) if (w.length >= 3 && initials.has(w)) return initials.get(w)!;
+    return known.filter((k) => byKey.has(k) && k.split(" ").length >= 2 && k.split(" ").every((w) => ws.includes(w))).sort((a, b) => b.length - a.length)[0] || "";
+  };
+  const placed: { r: Raw; from: string }[] = [...[...byKey.entries()].flatMap(([k, rs]) => rs.map((r) => ({ r, from: k }))), ...otherRaws.map((r) => ({ r, from: "" }))];
+  for (const { r, from } of placed) {
+    if (!r.named?.length || r.job.ref.includes("#")) continue;
+    const parts = new Map<string, { at: Set<number>; pieces: number }>();
+    for (const n of r.named) { const k = lineKey(n.text); if (!k) continue; const p = parts.get(k) || { at: new Set<number>(), pieces: 0 }; if (n.at >= 0) p.at.add(n.at); p.pieces += n.pieces; parts.set(k, p); }
+    const others = [...parts.keys()].filter((k) => k !== from);
+    if (!others.length) continue;
+    if (!from && parts.size === 1) {
+      // no design in the order's name, one in its lines: the whole order is that design
+      const k = others[0]; byKey.set(k, [...(byKey.get(k) || []), r]); otherRaws.splice(otherRaws.indexOf(r), 1); continue;
+    }
+    // a split: one part per design (the order's own design keeps the lines no other design took)
+    const taken = new Set(others.flatMap((k) => [...parts.get(k)!.at]));
+    const all = [...(from ? [from] : []), ...others];
+    const out: { k: string; r: Raw }[] = all.map((k) => {
+      const own = k === from;
+      const lines = r.lines.filter((_, i) => (own ? !taken.has(i) : parts.get(k)!.at.has(i)));
+      const qty = own ? Math.max(0, r.job.qty - others.reduce((n, o) => n + parts.get(o)!.pieces, 0)) || lines.reduce((n, l) => n + l.pieces, 0) : parts.get(k)!.pieces;
+      const ref = `${r.job.ref}#${k}`;
+      const to = rules.jobs && ref in rules.jobs ? merged(rules.jobs[ref]) : k;
+      return { k: to, r: { ...r, job: { ...r.job, ref, qty, split: all.filter((x) => x !== k) }, lines, named: undefined } };
+    });
+    if (from) byKey.set(from, (byKey.get(from) || []).filter((x) => x !== r)); else otherRaws.splice(otherRaws.indexOf(r), 1);
+    for (const { k, r: pr } of out) { if (!k) otherRaws.push(pr); else byKey.set(k, [...(byKey.get(k) || []), pr]); }
+  }
+  for (const [k, rs] of byKey) if (!rs.length) byKey.delete(k);
+  const other = otherRaws.map((r) => r.job);
 
   // pictures: one signing call for everything
   const covers = rules.covers || {};
@@ -176,6 +221,9 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     });
   }
   designs.sort((a, b) => b.last.localeCompare(a.last) || b.orders - a.orders);
+  // a split order names the other designs on it
+  const nameOf = new Map(designs.map((d) => [d.key, d.name] as const));
+  for (const d of designs) for (const j of [...d.jobs, ...d.versions.flatMap((v) => v.jobs)]) if (j.split) j.split = j.split.map((k) => nameOf.get(k) || titleCase(k));
   return { designs, other: other.sort((a, b) => b.date.localeCompare(a.date)), rules, customer: cust?.company || cust?.name || "", hidden: hidden.sort((a, b) => a.name.localeCompare(b.name)) };
 }
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th"}`;

@@ -10075,3 +10075,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .dc-tp-row{display:flex;gap:8px;flex-wrap:wrap}
 .dc-tp-row input{flex:1 1 240px;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:8px;font:inherit}
 .dc-tp-sub{font-size:12px;font-weight:700;margin-bottom:6px}
+/* Designs: split orders (one order, several designs), Oct 20 */
+.dc-split{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#FFF4D6;color:#8A5A00;font-size:11px;font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.dc-card .dc-split{margin:2px 0 0;align-self:flex-start}
+.dc-job.split{border-style:dashed}

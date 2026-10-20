@@ -104,6 +104,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
                 <span className="dc-name">{d.name}</span>
                 <span className="dc-meta">{d.orders} order{d.orders === 1 ? "" : "s"} · {n0(d.pieces)} pcs</span>
                 <span className="dc-meta">{d.versions.length} version{d.versions.length === 1 ? "" : "s"} · last {fmtDate(d.last)}</span>
+                {d.jobs.some((j) => j.split?.length) && <span className="dc-split" title="Some of its orders also had other designs on them">{(() => { const n = d.jobs.filter((j) => j.split?.length).length; return `${n} split order${n === 1 ? "" : "s"}`; })()}</span>}
               </button>
             ))}
           </div>
@@ -164,7 +165,7 @@ function DesignDetail({ d, all, customerId, busy, change, back, setCover }: { d:
               {v.garment && <div className="faint dc-ver-g">{v.garment}</div>}
               <div className="dc-ver-m">Printed {v.times}× · {n0(v.pieces)} pcs · first {fmtDate(v.first)}{v.last !== v.first ? ` · last ${fmtDate(v.last)}` : ""}</div>
               {v.prints.length > 0 && <div className="dc-ver-p">{v.prints.map((p, i) => <span key={i}>{p}</span>)}</div>}
-              <div className="dc-ver-jobs">{[...v.jobs].reverse().map((j) => <Link key={j.ref} href={jobHref(j)} className="dc-job" title={j.title}>#{j.number} · {fmtDate(j.date)} · {n0(j.pieces || j.qty)}</Link>)}</div>
+              <div className="dc-ver-jobs">{[...v.jobs].reverse().map((j) => <Link key={j.ref} href={jobHref(j)} className={"dc-job" + (j.split?.length ? " split" : "")} title={j.split?.length ? `${j.title}\nSplit order: also ${j.split.join(", ")}` : j.title}>#{j.number} · {fmtDate(j.date)} · {n0(j.pieces || j.qty)}{j.split?.length ? " · split" : ""}</Link>)}</div>
             </div>
           </li>
         ))}
@@ -305,7 +306,7 @@ function JobRow({ j, all, here, busy, change }: { j: CatalogJob; all: CatalogDes
   return (
     <div className="dc-jr">
       <Link href={jobHref(j)}>#{j.number}</Link>
-      <span className="dc-jr-t">{j.title || "(no name)"}</span>
+      <span className="dc-jr-t">{j.title || "(no name)"}{j.split?.length ? <span className="dc-split" title={`One order, several designs: this part is ${n0(j.qty)} pcs`}>Split · also {j.split.join(", ")}</span> : null}</span>
       <span className="faint">{fmtDate(j.date)} · {n0(j.qty)} pcs{j.src === "printavo" ? " · Printavo" : ""}</span>
       <select value="" disabled={busy} aria-label="Move to another design" onChange={(e) => { if (e.target.value !== "") void change({ op: "move", ref: j.ref, into: e.target.value === "-" ? "" : e.target.value }); }}>
         <option value="">{here ? "Move to…" : "Add to a design…"}</option>
