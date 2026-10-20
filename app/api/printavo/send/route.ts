@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { matchPrintavoNumber, pushLineMockups, refreshFromPrintavo, resyncDetails, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
+import { attachFiles, matchPrintavoNumber, refreshFromPrintavo, resyncDetails, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
 import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,8 @@ export async function POST(req: Request) {
     if (b.action === "renumber") return NextResponse.json(await matchPrintavoNumber(createAdminClient(), orderId, g.email));
     // what changed in Printavo since it was sent (quantities, prices, fees, number, status)
     // our mockups onto the Printavo product lines that have none (what the customer's invoice page shows)
-    if (b.action === "mockups") { const r = await pushLineMockups(createAdminClient(), orderId); return NextResponse.json({ ...r, pv: await refreshFromPrintavo(createAdminClient(), orderId) }); }
+    // (and the art as production files, and the mockups on the first print: whatever isn't there yet)
+    if (b.action === "mockups") { const r = await attachFiles(createAdminClient(), orderId); return NextResponse.json({ ...r, pv: await refreshFromPrintavo(createAdminClient(), orderId) }); }
     // an order sent before the send included them: the prints in the line descriptions and the addresses
     if (b.action === "resync") return NextResponse.json({ ...(await resyncDetails(createAdminClient(), orderId)), pv: await refreshFromPrintavo(createAdminClient(), orderId) });
     if (b.action === "refresh") return NextResponse.json({ pv: await refreshFromPrintavo(createAdminClient(), orderId) });

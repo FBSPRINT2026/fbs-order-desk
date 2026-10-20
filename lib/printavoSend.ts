@@ -147,26 +147,10 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const claim = await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: new Date().toISOString(), by: inp.by, error: null } }).eq("id", inp.orderId).is("printavo_id", null).select("id");
   if (!claim.data?.length) throw new PrintavoError("Already in Printavo.");
 
+  const started = Date.now();
   const calc = calcOrder(o, settings);
   const groups = orderGroups(o);
   const taxed = !o.tax_exempt;
-  const sign = async (paths: string[]) => {
-    if (!paths.length) return [] as string[];
-    const { data } = await admin.storage.from("proofs").createSignedUrls(paths, 60 * 60 * 24 * 3);
-    return (data || []).map((x) => x.signedUrl || "");
-  };
-  // our mockups, by group (the title starts with the group's name), else on the first group
-  // the current mockups (Oct 16: Mockup Creator saves are mockups; proofs are only what the customer was sent)
-  const { data: proofs } = await admin.from("mockups").select("title, file_path, created_at").eq("order_id", inp.orderId).is("archived_at", null).order("created_at");
-  const proofUrls = await sign((proofs || []).map((p) => p.file_path as string));
-  const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
-  const mockFor = (gi: number) => (proofs || []).map((p, i) => ({ gi: named(String(p.title || "")), u: proofUrls[i] }))
-    .filter((p) => p.u && (p.gi === gi || (p.gi < 0 && gi === 0))).map((p) => ({ publicImageUrl: p.u }));
-  // on the product line too: Printavo's public invoice shows line item mockups to the customer, not imprint ones
-  const lineMock = (gi: number, l: { style?: string; color?: string }) => {
-    const own = (proofs || []).map((p, i) => ({ t: String(p.title || ""), u: proofUrls[i] })).filter((p) => p.u && named(p.t) === gi && (!l.style || p.t.includes(l.style)) && (!l.color || p.t.includes(l.color)));
-    return own.length ? own.map((p) => ({ publicImageUrl: p.u })) : mockFor(gi);
-  };
   // types of work, matched by name (Screen Printing, Embroidery, DTF...)
   // and the line items' categories (Screen Printing, Embroidery, Heat Press): Printavo's reports and syncs go by them
   type Named = { id: string; name: string; archived?: boolean };
@@ -190,7 +174,9 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
         for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) { const k = PV_SIZE[z] || "size_other"; counts[k] = (counts[k] || 0) + q; } }
         const cat = catFor(g.imprints[0]?.method || "screen");
         return {
-          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}), mockups: lineMock(gi, l),
+          // mockups go on after the quote is made (attachFiles): inside quoteCreate Printavo fetches every picture before
+          // answering, and with big ones it gave up with HTTP 503 (Oct 20, #40072)
+          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}),
           // the prints under the garment on the last line (Oct 16, Nick: the customer can't see Printavo's imprints):
           // "Full Front · 3 colors · White, PMS Cool Gray 5 C, PMS 199 C · 11.5" wide"
           description: lineDescription(g, l, li === lastLine),
@@ -204,7 +190,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
         const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** REORDER - PRODUCTION DETAILS NEEDED: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why}). Confirm in the portal: link in the production note.`
           : d.confirmed ? `Specs confirmed by production (${d.confirmed.by}, ${new Date(d.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${d.confirmed.from ? `, from ${d.confirmed.from}` : ""}).` : "";
         const details = [imprintLabel(d), unconf, d.notes].filter(Boolean).join("\n").slice(0, 1000);
-        return { details, ...(t ? { typeOfWork: { id: t.id } } : {}), ...(ii === 0 ? { mockups: mockFor(gi) } : {}) };
+        return { details, ...(t ? { typeOfWork: { id: t.id } } : {}) };
       }),
     };
   }).filter((g) => g.lineItems.length);
@@ -228,12 +214,6 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
   // no card surcharge (Oct 16, Nick): it's added in Printavo only for a customer paying by card, and comes back here then
 
-  // production files: the customer's files and mockup copies on the order, and each print's art
-  const { data: af } = await admin.from("art_files").select("file_path").eq("order_id", inp.orderId);
-  const designIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean)))] as string[];
-  const { data: ds } = designIds.length ? await admin.from("designs").select("file_path").in("id", designIds) : { data: [] };
-  const fileUrls = await sign([...(af || []).map((x) => x.file_path as string), ...((ds || []).map((x) => x.file_path as string).filter(Boolean))]).then((u) => u.filter(Boolean));
-
   const { billingAddress, shippingAddress } = orderAddresses(o, cust);
   const discount = o.discount_type === "amt" ? +(o.discount_amt || 0) : +(o.discount_pct || 0);
   const input = {
@@ -255,7 +235,8 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     // the customer's billing and shipping addresses (Oct 16, Nick: they came over blank)
     ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}),
     lineItemGroups, fees,
-    productionFiles: [...fileUrls.map((u) => ({ publicFileUrl: u })), { publicFileUrl: orderLink(number) }],
+    // the art and order files go on after the quote is made (attachFiles), like the mockups
+    productionFiles: [{ publicFileUrl: orderLink(number) }],
   };
   type Made = { id: string; visualId: string; publicUrl: string; url: string; total: number; status: { name: string } };
   let made: Made | null = null, warn = "";
@@ -286,7 +267,12 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // Printavo numbers it from its own counter: give it our number so both systems match (#40003 is #40003)
   let visualId = String(made.visualId || ""), numberError = "", total = made.total;
   try { const m = await matchPrintavoNumber(admin, inp.orderId, inp.by); visualId = m.visualId; total = m.total; } catch (e) { numberError = e instanceof Error ? e.message : String(e); }
-  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total, cardFee: 0 };
+  // then the mockups and the art, one at a time (a slow or refused picture doesn't lose the quote)
+  let files: Awaited<ReturnType<typeof attachFiles>> | null = null, filesError = "";
+  try { files = await attachFiles(admin, inp.orderId, started + 95_000); } catch (e) { filesError = e instanceof Error ? e.message : String(e); }
+  const filesNote = filesError ? `Mockups and art weren't added (${filesError}). Use "Add mockups & art" to try again.`
+    : files && (files.failed.length || files.left) ? `${files.added} mockup${files.added === 1 ? "" : "s"} / file${files.added === 1 ? "" : "s"} added; ${files.failed.length + files.left} didn't go on${files.failed.length ? ` (${files.failed[0]})` : ""}. Use "Add mockups & art" to try again.` : "";
+  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: [warn, filesNote].filter(Boolean).join(" "), filesAdded: files?.added || 0, sentTotal: total, ourTotal: calc.total, cardFee: 0 };
 }
 
 type PvNow = { __typename: "Invoice" | "Quote"; visualId: string; total: number; status: { name: string } | null };
@@ -454,6 +440,70 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   }
   await admin.from("orders").update({ ...cardPatch, ...statusPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
+}
+
+/**
+ * Our mockups and art onto an order already made in Printavo, one write at a time: each product line's own mockup (the
+ * customer's invoice page shows line mockups), every mockup of the group on its first print, and the order's files and
+ * each print's art as production files. Anything already there is skipped, so it can run again. Stops starting new
+ * writes at `until` (the rest is counted in `left`). Oct 20: sent inside quoteCreate, Printavo fetched every picture
+ * (about 19 MB for #40072) before answering and gave up with HTTP 503.
+ */
+export async function attachFiles(admin: SupabaseClient, orderId: string, until = Date.now() + 95_000) {
+  const { data: o } = await admin.from("orders").select("number, printavo_id, groups, lines").eq("id", orderId).maybeSingle();
+  if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
+  const number = o.number as number;
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
+  const p = await getOrder(String(o.printavo_id));
+  const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
+  const sign = async (paths: string[]) => {
+    if (!paths.length) return [] as string[];
+    const { data } = await admin.storage.from("proofs").createSignedUrls(paths, 60 * 60 * 24 * 3);
+    return (data || []).map((x) => x.signedUrl || "");
+  };
+  // our mockups, by group (the title starts with the group's name), else on the first group
+  const { data: proofs } = await admin.from("mockups").select("title, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at");
+  const urls = await sign((proofs || []).map((x) => x.file_path as string));
+  const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
+  const mocks = (proofs || []).map((x, i) => ({ t: String(x.title || ""), u: urls[i] })).filter((x) => x.u);
+  const groupMocks = (gi: number) => mocks.filter((x) => named(x.t) === gi || (named(x.t) < 0 && gi === 0));
+  const lineMocks = (gi: number, style?: string, color?: string) => {
+    const own = mocks.filter((x) => named(x.t) === gi && (!style || x.t.includes(style)) && (!color || x.t.includes(color)));
+    return own.length ? own : groupMocks(gi);
+  };
+  const jobs: { what: string; q: string; v: Record<string, unknown> }[] = [];
+  let pgi = 0;
+  for (const [gi, g] of groups.entries()) {
+    const ours = sentLines(g);
+    if (!ours.length) continue;
+    const pg = p.groups[pgi++];
+    if (!pg) break;
+    for (const [li, l] of ours.entries()) {
+      const pl = pg.lines[li];
+      if (!pl || pl.mockups.length) continue;
+      for (const m of lineMocks(gi, l.style, l.color).slice(0, 4)) jobs.push({ what: `mockup on ${l.style || "line"} ${l.color || ""}`.trim(), q: `mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, v: { id: pl.id, u: m.u } });
+    }
+    const pi = pg.imprints[0];
+    if (pi && !pi.mockups.length) for (const m of groupMocks(gi).slice(0, 6)) jobs.push({ what: "mockup on the print", q: `mutation($id:ID!,$u:String!){ imprintMockupCreate(imprintId:$id, publicImageUrl:$u){ id } }`, v: { id: pi.id, u: m.u } });
+  }
+  // production files: the order's files and each print's art (skipped when a file of that name is already there)
+  const { data: af } = await admin.from("art_files").select("file_path").eq("order_id", orderId);
+  const designIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean)))] as string[];
+  const { data: ds } = designIds.length ? await admin.from("designs").select("file_path").in("id", designIds) : { data: [] };
+  const paths = [...new Set([...(af || []).map((x) => x.file_path as string), ...(ds || []).map((x) => x.file_path as string)].filter(Boolean))];
+  const base = (u: string) => decodeURIComponent((u.split("?")[0].split("/").pop() || "")).toLowerCase();
+  const have = new Set(p.files.flatMap((f) => [base(f.name || ""), base(f.full)]).filter(Boolean));
+  const fileUrls = await sign(paths);
+  paths.forEach((path, i) => { if (fileUrls[i] && !have.has(base(path))) jobs.push({ what: path.split("/").pop() || "file", q: `mutation($p:ID!,$u:String!){ productionFileCreate(parentId:$p, publicFileUrl:$u){ id } }`, v: { p: String(o.printavo_id), u: fileUrls[i] } }); });
+  let added = 0, left = 0;
+  const failed: string[] = [];
+  for (const j of jobs) {
+    if (Date.now() > until) { left++; continue; }
+    try { await transitionWrite(j.q, j.v, number); added++; }
+    catch (e) { failed.push(`${j.what}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)); }
+  }
+  await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Added to Printavo: ${added} mockup${added === 1 ? "" : "s"} / file${added === 1 ? "" : "s"}${failed.length ? `; ${failed.length} refused` : ""}${left ? `; ${left} left for next time` : ""}` });
+  return { added, failed, left, total: jobs.length };
 }
 
 /**

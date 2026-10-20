@@ -174,7 +174,7 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
         </span>
       </div>
       {err && <div className="err">{err}</div>}
-      {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add our mockup in Printavo</button></div>}
+      {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add mockups &amp; art</button></div>}
       {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><span className="row" style={{ gap: 6 }}><button type="button" className="btn ghost sm" title="Keep ours; hidden until Printavo changes this again" onClick={() => ignore(c)}>Ignore</button>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</span></li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
     </div>

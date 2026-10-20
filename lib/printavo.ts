@@ -1,4 +1,5 @@
 import "server-only";
+import { SUPABASE_URL } from "@/lib/config";
 import type { PvAddress, PvFile, PvGroup, PvLine, PvMessage, PvOrder, PvTransaction } from "@/lib/archive";
 
 /**
@@ -41,7 +42,7 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
 }
 
 /** The only Printavo changes the portal makes: what "Send to Printavo" needs for a 40,000-series order. */
-const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate", "lineItemMockupCreate", "lineItemUpdate", "productionFileCreate"]);
+const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate", "lineItemMockupCreate", "imprintMockupCreate", "lineItemUpdate", "productionFileCreate"]);
 /**
  * Sends one change to Printavo for a 40,000-series order (40,000-49,999: entered here during the move, produced from
  * Printavo until Nov 2). Anything else is refused before it leaves our server. Not retried: a write that may have
@@ -60,8 +61,10 @@ export async function transitionWrite<T = Record<string, unknown>>(query: string
     throw new PrintavoError("Blocked: only the order number and addresses can be changed in Printavo.");
   // a product line: only its description (the prints under the garment); position is required by Printavo's input
   // a production file: only our own link back to the order (app/pv)
-  if (m[1] === "productionFileCreate" && !/^https:\/\/[^/]+\/pv\/\d+\/[\w.-]+$/.test(String(variables.u || "")))
-    throw new PrintavoError("Blocked: only the link to the order can be added to Printavo's files.");
+  // a production file: our own link back to the order (app/pv), or this order's art / files (a signed link to our storage,
+  // what the send used to put inside quoteCreate; Oct 20 they go on one at a time after it)
+  if (m[1] === "productionFileCreate" && !/^https:\/\/[^/]+\/pv\/\d+\/[\w.-]+$/.test(String(variables.u || "")) && !String(variables.u || "").startsWith(`${SUPABASE_URL}/storage/v1/object/sign/proofs/`))
+    throw new PrintavoError("Blocked: only the order's own files can be added to Printavo's files.");
   if (m[1] === "lineItemUpdate" && Object.keys((variables.input || {}) as object).some((k) => !["position", "description"].includes(k)))
     throw new PrintavoError("Blocked: only a line's description can be changed in Printavo.");
   return request<T>(query, variables, false);
