@@ -296,13 +296,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
 
   // the email showing: the one picked, else the first in the list (after sending, the next one)
   const [q, setQ] = useState("");
-  const listed = q.trim() ? shown.filter((r) => `${who(r.x)} ${r.x.from_email} ${r.x.subject} ${r.x.meta?.triage?.summary || ""}`.toLowerCase().includes(q.trim().toLowerCase())) : shown;
+  // the words of the email too, signature and all (Oct 20, Nick: "if I search Brooke, this doesn't come up": she only
+  // signs the Little Groupies emails, sent from info@)
+  const bodyOf = (x: { body?: string | null }) => String(x.body || "").slice(0, 4000);
+  const listed = q.trim() ? shown.filter((r) => `${who(r.x)} ${r.x.from_email} ${r.x.subject} ${r.x.meta?.triage?.summary || ""} ${bodyOf(r.x)}`.toLowerCase().includes(q.trim().toLowerCase())) : shown;
   // the people in the Inbox now, for the search suggestions
   const senders = useMemo(() => { const m = new Map<string, { name: string; email: string }>(); for (const i of ol || []) if (i.from_email && !m.has(i.from_email.toLowerCase())) m.set(i.from_email.toLowerCase(), { name: personName(i.from_name) || "", email: i.from_email }); return [...m.values()]; }, [ol]);
   const bkN = (k: Bk) => (ol || []).filter((i) => k === "all" || bucketOf(i) === k).length;
   const olShown = (ol || []).filter((i) => bk === "all" || bucketOf(i) === bk).filter((i) => {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
-    return !t || `${i.from_name} ${i.from_email} ${i.subject} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") : ""}`.toLowerCase().includes(t);
+    return !t || `${i.from_name} ${i.from_email} ${i.subject} ${i.summary || ""} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") + " " + bodyOf(r.x) : ""}`.toLowerCase().includes(t);
   });
   // conversations (Oct 12, Nick: "three emails from Methodist… should just be one email with the conversation
   // underneath it"): the Inbox grouped by conversation (lib/mail/convo), newest first; a conversation's row opens its
