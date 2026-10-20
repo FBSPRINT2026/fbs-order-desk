@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { accountForUser } from "@/lib/mail/config";
 import { ewsOpen, ewsReady, ewsSearch } from "@/lib/mail/ewsBox";
 import { customerPeople } from "@/lib/designMail";
+import { namesForPaths } from "@/lib/printavoFileMeta";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,11 +28,26 @@ export async function GET(req: Request) {
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const sp = new URL(req.url).searchParams;
   const cid = sp.get("customer") || "";
+  const admin0 = createAdminClient();
+  // every file on the old Printavo job (mockups, production files, line and print pictures; not Printavo's 100 px
+  // thumbnails), with their real names: shown first, to say what each one is (Oct 20, Nick: "there should be the
+  // mockups, there should be production files… all I want you to do is ask me what those are")
+  let old: { name: string; path: string; url: string; type: string }[] = [];
+  const arch = sp.get("archived") || "";
+  if (arch) {
+    const { data: row } = await admin0.from("archived_orders").select("files, customer_id").eq("id", arch).maybeSingle();
+    if (row && (!cid || row.customer_id === cid)) {
+      const paths = [...new Set(Object.entries((row.files || {}) as Record<string, string>).filter(([k, v]) => typeof v === "string" && v.startsWith("printavo/") && !/resize=width:\d+/.test(k)).map(([, v]) => v))];
+      const names = await namesForPaths(admin0, paths).catch(() => ({} as Record<string, { name: string }>));
+      const { data: signed } = paths.length ? await admin0.storage.from("proofs").createSignedUrls(paths, 1800) : { data: [] };
+      old = paths.map((p, i) => ({ path: p, name: names[p]?.name || p.split("/").pop()!.replace(/^[a-z0-9]+-/i, ""), url: signed?.[i]?.signedUrl || "", type: /\.pdf$/i.test(p) ? "application/pdf" : /\.(png|jpe?g|gif|webp)$/i.test(p) ? "image" : "file" })).filter((x) => x.url);
+    }
+  }
   const q = (sp.get("q") || "").replace(/^#\d+\s*/, "").replace(/\(Printavo\)/i, "").trim();
-  if (!cid || !q) return NextResponse.json({ found: [] });
+  if (!cid || !q) return NextResponse.json({ found: [], old });
   const admin = createAdminClient();
   const words = [...new Set(q.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)))].slice(0, 3);
-  if (!words.length) return NextResponse.json({ found: [] });
+  if (!words.length) return NextResponse.json({ found: [], old });
   const found: Cand[] = [];
 
   // 1. their logo library
@@ -80,5 +96,5 @@ export async function GET(req: Request) {
       }
     }
   }
-  return NextResponse.json({ found: found.slice(0, 30) });
+  return NextResponse.json({ found: found.slice(0, 30), old });
 }

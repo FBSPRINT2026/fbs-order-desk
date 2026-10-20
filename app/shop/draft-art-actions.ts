@@ -126,3 +126,29 @@ export async function setDraft(kind: "logo" | "mockup", id: string, keep: boolea
     return error ? { ok: false as const, error: error.message } : { ok: true as const };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * Cancel on the Create order window (Oct 20, Nick: "a button that says cancel… and then it just deletes everything you
+ * did or tried to start doing… nothing saved, nothing should go to the files"): the logos it made for the order it was
+ * making (drafts, on no order or mockup) are taken off (archived, so they show nowhere: not in the customer's file,
+ * not in Draft art).
+ */
+export async function discardDraftArt(ids: string[]) {
+  try {
+    const v = await staff();
+    const admin = createAdminClient();
+    const want = [...new Set(ids.filter((x) => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)))].slice(0, 40);
+    if (!want.length) return { ok: true as const, n: 0 };
+    const { data: ds } = await admin.from("designs").select("id").in("id", want).eq("draft", true).is("archived_at", null);
+    const off: string[] = [];
+    for (const d of ds || []) {
+      const { count: n1 } = await admin.from("orders").select("id", { count: "exact", head: true }).contains("groups", JSON.stringify([{ imprints: [{ design_id: d.id }] }]));
+      const { count: n2 } = await admin.from("mockups").select("id", { count: "exact", head: true }).contains("design_ids", [d.id]);
+      if (!(n1 || 0) && !(n2 || 0)) off.push(d.id as string);
+    }
+    if (off.length) await admin.from("designs").update({ archived_at: new Date().toISOString(), notes: `Discarded: the Create order window was cancelled by ${v.email || "staff"}` }).in("id", off);
+    return { ok: true as const, n: off.length };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+}

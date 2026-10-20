@@ -10208,3 +10208,29 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 /* Email search suggestions sit in the list, above the matching emails, instead of covering them (Oct 20, Nick) */
 .ibx2-find{flex-wrap:wrap}
 .ibx2-find .msug{position:static;flex:1 0 100%;order:9;margin:6px 0 4px;box-shadow:none;max-height:min(34vh,300px)}
+/* Create order window: Cancel (nothing saved) and the "what are these?" Resolution Center (Oct 20) */
+.qo{position:relative}
+.qo-x{position:absolute;top:10px;right:12px;width:30px;height:30px;border:0;border-radius:8px;background:none;color:var(--ink-3);font-size:22px;line-height:1;cursor:pointer}
+.qo-x:hover{background:var(--bg-2,#f4f6fa);color:var(--ink)}
+.ap-cancel{color:#b42318}
+.arc{display:flex;flex-direction:column;gap:12px}
+.arc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;max-height:min(56vh,560px);overflow:auto;padding:2px}
+.arc-grid.sm{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));max-height:min(40vh,380px)}
+.arc-card{display:flex;flex-direction:column;gap:6px;padding:8px;border:2px solid var(--line);border-radius:12px;min-width:0}
+.arc-card.set{border-color:var(--ink-3);opacity:.8}
+.arc-card.art{border-color:var(--brand,#1F6FD1);opacity:1}
+.arc-pic{display:grid;place-items:center;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#fff;font-size:12px;border:1px solid var(--line)}
+.arc-pic.clear{background:repeating-conic-gradient(#eef0f3 0 25%,#fff 0 50%) 0 0/14px 14px}
+.arc-pic img{max-width:94%;max-height:94%;object-fit:contain}
+.arc-name{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arc-chips{display:flex;flex-wrap:wrap;gap:5px}
+.arc-chips .chip{font-size:12px;padding:3px 9px}
+.arc-bg{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.arc-else{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:8px}
+.arc-else summary{cursor:pointer;font-size:13px;color:var(--brand,#1F6FD1)}
+.arc-else[open]{display:flex}
+.arc-else[open]>*+*{margin-top:8px}
+.arc-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px}
+.qo.wide{width:min(960px,100%)}
+.qo>h3{padding-right:34px}
+.arc-chips .chip.on{background:var(--brand,#1F6FD1);border-color:var(--brand,#1F6FD1);color:#fff}
