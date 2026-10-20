@@ -391,7 +391,7 @@ async function drawFile(url: string, name: string, type: string): Promise<Drawn 
   const c = pdfish ? await pdfPicture(await b.arrayBuffer(), 1400).catch(() => null) : /^image\/(png|jpe?g|gif|webp)/i.test(b.type) || /\.(png|jpe?g|gif|webp)$/i.test(name) ? await drawPic(URL.createObjectURL(b), 1400) : null;
   if (!c) return { cut: null, cutUrl: "", asIs: null, asIsUrl: "", raw: new File([b], name, { type: b.type }) };
   const asIs = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
-  knockOutBackground(c);
+  knockOutBackground(c, 28, true);
   const cut = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
   return { cut, cutUrl: cut ? URL.createObjectURL(cut) : "", asIs, asIsUrl: asIs ? URL.createObjectURL(asIs) : "", raw: b };
 }

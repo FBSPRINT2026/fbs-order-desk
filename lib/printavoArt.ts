@@ -329,7 +329,7 @@ export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ f
  * Clears a flat background from the edges in (flood fill, so the same color inside the art stays): the four corners
  * must agree on one color. Returns false when there's no flat background to take off.
  */
-export function knockOutBackground(c: HTMLCanvasElement, tol = 28): boolean {
+export function knockOutBackground(c: HTMLCanvasElement, tol = 28, /** also the same color inside the art: between letters and legs, not just from the edges in (Oct 20, Nick: "it didn't remove the non-contiguous ones") */ everywhere = false): boolean {
   const w = c.width, h = c.height, x = c.getContext("2d")!, img = x.getImageData(0, 0, w, h), d = img.data;
   const at = (px: number, py: number) => (py * w + px) * 4;
   const cs = [at(1, 1), at(w - 2, 1), at(1, h - 2), at(w - 2, h - 2)];
@@ -347,6 +347,19 @@ export function knockOutBackground(c: HTMLCanvasElement, tol = 28): boolean {
     if (px > 0) push(px - 1, py); if (px < w - 1) push(px + 1, py); if (py > 0) push(px, py - 1); if (py < h - 1) push(px, py + 1);
   }
   if (n < w * h * 0.1) return false;
+  if (everywhere) {
+    // every other pixel of the background's color, wherever it is
+    for (let k = 0; k < w * h; k++) if (d[k * 4 + 3] && near(k * 4)) d[k * 4 + 3] = 0;
+    // the soft edge where the art meets the background: half-way colors fade instead of leaving a gray rim
+    const dist = (i: number) => Math.abs(d[i] - r0) + Math.abs(d[i + 1] - g0) + Math.abs(d[i + 2] - b0);
+    const a0 = new Uint8Array(w * h); for (let k = 0; k < w * h; k++) a0[k] = d[k * 4 + 3];
+    for (let py = 1; py < h - 1; py++) for (let px = 1; px < w - 1; px++) {
+      const k = py * w + px; if (!a0[k]) continue;
+      if (a0[k - 1] && a0[k + 1] && a0[k - w] && a0[k + w]) continue;
+      const dd = dist(k * 4);
+      if (dd < tol * 3) d[k * 4 + 3] = Math.round(255 * Math.max(0, Math.min(1, (dd - tol) / (tol * 2))));
+    }
+  }
   x.putImageData(img, 0, 0);
   return true;
 }
