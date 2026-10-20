@@ -36,7 +36,7 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
   "Front Bottom Right": { view: "front", dx: -4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
-  "Full Back": { view: "back", dx: 0, drop: 4, top: true, defW: 12, maxW: 12, maxH: 14 },
+  "Full Back": { view: "back", dx: 0, drop: 4, top: true, defW: 12, maxW: 13, maxH: 18 },
   "Medium Back": { view: "back", dx: 0, drop: 4, defW: 8, maxW: 8, maxH: 8 },
   "Upper Back (Yoke)": { view: "back", dx: 0, drop: 2, defW: 3.5, maxW: 4, maxH: 4 },
   "Across Shoulders": { view: "back", dx: 0, drop: 2.5, defW: 12, maxW: 14, maxH: 4 },

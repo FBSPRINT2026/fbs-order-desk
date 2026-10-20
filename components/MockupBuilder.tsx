@@ -901,7 +901,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (side === "sleeve" || !line) return null;
     const v = side as View;
     const af = adjusted(fitFor(line, v), line, v);
-    const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, af) : basePlacement("Full Back", 12, 14 / 12, null, scale, v, af);
+    const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, af) : basePlacement("Full Back", 13, 18 / 13, null, scale, v, af);
     return { src: photo(line, v), hex: shirtHex(line), area: b.area, label: `${v === "front" ? "Front" : "Back"} of the ${[line.color, line.style].filter(Boolean).join(" ") || "shirt"}` };
   };
   /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */
@@ -2117,7 +2117,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
-                    {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {paints[im.id].plan!.why}</div>}
+                    {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
                     {p.d && im.method === "screen" && !portal && (
                       <div className="mk-hit">
                         <span className="mk-hit-seg" role="radiogroup" aria-label="Underbase or fashion hit">
@@ -2495,6 +2495,10 @@ function BrandPick({ groups, onPick, onClose, modal = false }: { groups: { label
   );
 }
 
+/** "How it prints" counting only the inks still printing (a color set to Removed drops out of the count) */
+const printWhy = (plan: { method: string; why: string }, printing: number) =>
+  plan.method === "spot" && /^Screen print, \d+ solid colors?\.$/.test(plan.why) && printing > 0 ? `Screen print, ${printing} solid color${printing === 1 ? "" : "s"}.` : plan.why;
+
 function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [], distress }: {
   /** the logo's distress layer (Oct 16, Nick: "set that to distress instead of color… it would knock out"): on = the
    *  shirt shows through it; off = printed clean (when there's a clean picture) */
@@ -2522,7 +2526,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
           </select>
         </div>
       )}
-      {rows.map((r) => {
+      {rows.filter((r) => !(r.cur?.name === "none" && open !== key(r))).map((r) => {
         const cur = r.cur, k = key(r), folded = !!cur && open !== k;
         const swatches = <span className="mk-srcs">{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>;
         if (folded) return (
@@ -2548,6 +2552,17 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
           </div>
         );
       })}
+      {/* removed colors drop out of the list (Oct 20, Nick); one line to bring them back */}
+      {rows.some((r) => r.cur?.name === "none" && open !== key(r)) && (
+        <div className="mk-removed">
+          <span className="faint">Removed:</span>
+          {rows.filter((r) => r.cur?.name === "none" && open !== key(r)).map((r) => (
+            <button key={key(r)} type="button" className="mk-removed-chip" title="Bring this color back (as uploaded)" onClick={() => pick(r, null)}>
+              {r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} />)}<span>Bring back</span>
+            </button>
+          ))}
+        </div>
+      )}
       {(brandGroups.length > 0 || onMatchAll) && (
         <div className="bs-foot">
           {brandGroups.length > 0 && (
