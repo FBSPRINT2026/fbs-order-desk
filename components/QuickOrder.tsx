@@ -28,7 +28,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "skip" };
-type Help = { job: string; print: string; customerId: string; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
+type Help = { job: string; print: string; customerId: string; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
@@ -103,6 +103,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     }
     // an old Printavo job: its art from the job's files and the film
     let films: { id: string; name: string }[] = [];
+    const why: string[] = [];
     if (d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
       step(`${of}Pulling the art from ${jobLabel || "the old job"}…`);
       try {
@@ -110,8 +111,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         d = r.draft; films = r.films;
         const got = d.groups.flatMap((x) => x.imprints).filter((im) => im.design_id).length;
         did.push(got ? `Art pulled from ${jobLabel || "the old job"}${films.length ? `, size from the film ${films.map((f) => f.name).join(", ")}` : ""}` : "No art could be pulled from the old job: add it on the order");
-        for (const n of r.notes) did.push(n);
-      } catch (e) { did.push(`The art couldn't be pulled (${e instanceof Error ? e.message : String(e)})`); }
+        for (const n of r.notes) { did.push(n); why.push(n); }
+      } catch (e) { const m = `The art couldn't be pulled (${e instanceof Error ? e.message : String(e)})`; did.push(m); why.push(m); }
     }
     // a print still without art: stop and ask (Oct 20, Nick: "give us some sort of error… I tried to bring in the art
     // but I couldn't do it… and then some sort of help me out. Every time we create an order from a Printavo invoice
@@ -121,7 +122,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (im.design_id || /sleeve/i.test(im.location) || !g.customer?.id || d.kind !== "reorder") continue;
       note("Couldn't bring in the art for this print: waiting for you");
       const files = [...(grp.pvRef || []), ...(grp.pvArt || [])];
-      const picked = await new Promise<HelpPick>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", print: `${im.location}${im.colors ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, files, resolve }));
+      const picked = await new Promise<HelpPick>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", print: `${im.location}${im.colors ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, files, why, resolve }));
       setHelp(null);
       if (picked.kind === "skip") { did.push(`${im.location}: made without art for now (add it on the order: Upload logo)`); continue; }
       note("Saving the art as their logo…");
@@ -191,14 +192,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
             {m.did.length > 0 && <ul className="qo-did">{m.did.map((x, i) => <li key={i}>{x}</li>)}</ul>}
             {m.ask.length > 0 && <details className="qo-ask"><summary>{m.ask.length} question{m.ask.length === 1 ? "" : "s"} for the customer (saved in the order&apos;s notes)</summary><ul>{m.ask.map((q, i) => <li key={i}>{q}</li>)}</ul></details>}
-            {done && <a className="btn primary sm" href={m.url} target="_blank" rel="noreferrer">{m.mockup ? "Make the mockup & view order" : "View order"}</a>}
+            {done && made.length > 1 && <a className="qo-open" href={m.url} target="_blank" rel="noreferrer">{m.mockup ? "Make the mockup & open #" : "Open #"}{m.number} ›</a>}
           </div>
         ))}
         {err && <div className="err">{err}</div>}
         {done && (
-          <div className="dla-acts">
+          <div className="dla-acts qo-foot">
             {!made.length && <button type="button" className="btn ghost" onClick={onReview}>Check the details by hand</button>}
             <button type="button" className="btn" onClick={onClose}>Back to the email</button>
+            {made.length === 1 && <a className="btn primary" href={made[0].url} target="_blank" rel="noreferrer" onClick={onClose}>{made[0].mockup ? "Make the mockup & view order" : "View order"}</a>}
           </div>
         )}
       </div>
@@ -275,7 +277,8 @@ function ArtHelp({ help }: { help: Help }) {
   return (
     <div className="qo-help arc" role="group" aria-label="Printavo Art Resolution Center">
       <div className="arc-h"><b>Printavo Art Resolution Center</b><span className="faint">{help.job} · {help.print}</span></div>
-      <span>I couldn&apos;t bring this print&apos;s art in by myself. Old Printavo jobs keep their art in all kinds of ways: let&apos;s sort it out. Click a picture, or talk it through with me below.</span>
+      <span>I couldn&apos;t bring this print&apos;s art in by myself. Old Printavo jobs keep their art in all kinds of ways: let&apos;s sort it out. Click a picture, upload the art from your computer, or talk it through with me below.</span>
+      {help.why.length > 0 && <ul className="arc-why">{help.why.map((w, i) => <li key={i}>{w}</li>)}</ul>}
       <div className="qo-help-grid">
         {pics.map((p) => (
           <div key={p.i} className="qo-help-it arc-it">
