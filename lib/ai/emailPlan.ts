@@ -99,7 +99,9 @@ ${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
     }, required: ["orders"] } },
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const raw = (r.data.orders || []).slice(0, 12);
+  // the AI sometimes hands a list back as text (Oct 20: "F.map is not a function"): read it as a list, or none
+  const list = <T,>(x: unknown): T[] => { if (Array.isArray(x)) return x as T[]; if (typeof x === "string") { try { const j = JSON.parse(x); if (Array.isArray(j)) return j as T[]; } catch { /* not a list */ } const nums = x.match(/\d+/g); return (nums || []).map(Number) as unknown as T[]; } return []; };
+  const raw = list<NonNullable<typeof r.data.orders>[number]>(r.data.orders).filter((x) => x && typeof x === "object").slice(0, 12);
   const used = new Set<string>();
   const parts: EOPart[] = raw.map((x, i) => {
     const d = x.design && designs[x.design - 1] ? designs[x.design - 1] : null;
@@ -107,7 +109,7 @@ ${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
     // the past order: in the design's orders (else any of theirs) by its number; a Printavo job is "a:<id>" when read
     const job = num ? (d?.jobs.find((j) => j.number === num) || (cat?.designs || []).flatMap((z) => z.jobs).find((j) => j.number === num)) : undefined;
     const ref = job ? `${job.src === "printavo" ? "a" : "o"}:${job.id}` : null;
-    const fs = (x.files || []).map((n) => real[n - 1]).filter(Boolean);
+    const fs = list<number>(x.files).map((n) => real[Math.floor(+n) - 1]).filter(Boolean);
     let k = slug(d?.name || x.label || `order ${i + 1}`); while (used.has(k)) k += "-2"; used.add(k);
     const pieces = fs.reduce((n, f) => n + pcsOf(f.name), 0);
     return {
