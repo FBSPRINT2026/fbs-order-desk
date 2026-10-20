@@ -254,7 +254,9 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   const plan = groups.map((g, gi) => {
     const mk = p.mockups[gi] || [];
     const extra: string[][] = [];
-    for (let i = 1; i < mk.length; i += 2) extra.push(mk.slice(i, i + 2));
+    // every mockup on its own page, the full width of the page, all the same size (Oct 20, Nick: "I'd like the shirt
+    // images to be larger")
+    for (let i = 0; i < mk.length; i++) extra.push([mk[i]]);
     return { mk, extra, prints: g.imprints.length };
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
@@ -285,10 +287,22 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 <div><div className="lbl">Job</div><b>{o.nickname || "—"}</b>{o.po_number && <div className="faint">PO {o.po_number}</div>}</div>
                 <div><div className="lbl">In hands</div><b>{due || "To be set"}</b><div className="faint">{DELIVERY[o.delivery_method] || "Pickup"}</div></div>
               </div>
-              <div className="pf-hero">
-                {mk[0] ? <img src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>Mockup coming</div>}
-                {mk[0] && capOf(0) && <span>{capOf(0)}</span>}
+              {/* the prints at a glance on the shirt color; the mockups follow, full size */}
+              <div className={"pf-tiles" + (g.imprints.length > 2 ? " many" : "")}>
+                {g.imprints.map((d) => {
+                  const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "", sz = printSize(d, des);
+                  return (
+                    <div className="pf-tile" key={d.id}>
+                      <div className={"pf-tile-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
+                        {pic ? <PaintedArt src={pic} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} /> : <span>Art coming</span>}
+                      </div>
+                      <div className="pf-tile-l"><b>{d.location}</b>{sz.label ? ` · ${sz.label}` : ""}</div>
+                    </div>
+                  );
+                })}
+                {g.imprints.length === 0 && (mk[0] ? <div className="pf-tile"><div className="pf-tile-art"><img src={mk[0]} alt="Mockup" /></div></div> : <div className="pf-tile"><div className="pf-tile-art" style={{ background: hex }}><span>Mockup coming</span></div></div>)}
               </div>
+              {mk.length > 0 && <div className="pf-next">Mockups on the next page{mk.length > 1 ? "s" : ""}, one garment per page · each print up close after that</div>}
               <div className="pf-sum">
                 <div>
                   <div className="lbl">Prints</div>
@@ -319,8 +333,8 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
             </section>
             {extra.map((pair, xi) => (
               <section className="sheet pf" key={"m" + xi}>
-                <div className="p2h"><div className="t disp">Mockups{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
-                {pair.map((u, ui) => { const i = 1 + xi * 2 + ui; return <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" />{capOf(i) && <span>{capOf(i)}</span>}</div>; })}
+                <div className="p2h"><div className="t disp">{capOf(xi) || "Mockup"}{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
+                {pair.map((u, ui) => { const i = xi + ui; return <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>; })}
                 {foot()}
               </section>
             ))}

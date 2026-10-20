@@ -195,9 +195,17 @@ export const DOC_CSS = `
 .pdoc .sheet.pf{height:11in;overflow:hidden}
 /* every mockup picture the same size, on the cover and the mockup pages (Oct 20, Nick: "the images are all different sizes") */
 .pdoc .pf-hero{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-.pdoc .pf-hero img,.pdoc .pf-mk img{flex:none;width:100%;height:3.2in;object-fit:contain}
+.pdoc .pf-hero img,.pdoc .pf-mk img{flex:none;width:100%;height:auto;max-height:8.6in;object-fit:contain}
+.pdoc .pf-mk span{font-size:13pt;font-weight:700;color:var(--ink)}
 .pdoc .pf-hero span,.pdoc .pf-mk span{font-size:10.5pt;color:var(--ink2);font-weight:600}
 .pdoc .pf-hero .none{width:100%;flex:1;border-radius:12px;display:grid;place-items:center;color:rgba(0,0,0,.5);font-size:13pt}
+.pdoc .pf-tiles{flex:1 1 0;min-height:0;display:flex;gap:16px;align-items:stretch;justify-content:center;margin:4px 0}
+.pdoc .pf-tile{flex:1 1 0;min-width:0;max-width:3.8in;display:flex;flex-direction:column;gap:5px}
+.pdoc .pf-tile-art{flex:1 1 0;min-height:0;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:.22in;color:rgba(0,0,0,.5)}
+.pdoc .pf-tile-art img{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain}
+.pdoc .pf-tile-art.dark{color:rgba(255,255,255,.7)}
+.pdoc .pf-tile-l{font-size:11pt;text-align:center}
+.pdoc .pf-next{font-size:9.5pt;color:var(--ink3);text-align:center;margin:2px 0 4px}
 .pdoc .pf-sum{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .pdoc .pf-pr{font-size:11pt;margin-top:5px;line-height:1.35}
 .pdoc .pf-pr .faint{font-size:9.5pt;margin-left:20px}
