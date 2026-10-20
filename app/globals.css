@@ -10036,3 +10036,21 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .dc-d-f{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line-2);padding-top:10px;font-size:13px}
 .dc-d-f .spacer{flex:1}
 @media (max-width:640px){.dc-jr{grid-template-columns:60px minmax(0,1fr);}.dc-jr .faint,.dc-jr select{grid-column:2}}
+/* Create order from an email: new order or a reorder of which job (Oct 20) */
+.osp{width:min(560px,100%)}
+.osp-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.osp-big{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;font:inherit;color:inherit}
+.osp-big b{font-size:15px}
+.osp-big span{font-size:12.5px;color:var(--ink-2)}
+.osp-big em,.osp-job em{font-style:normal;font-size:11px;font-weight:700;color:var(--brand,#1F6FD1)}
+.osp-big:hover,.osp-job:hover{border-color:var(--brand,#1F6FD1);background:var(--bg-2,#f6f8fb)}
+.osp-big.sug{border-color:var(--brand,#1F6FD1);box-shadow:inset 0 0 0 1px var(--brand,#1F6FD1)}
+.osp-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:12.5px;font-weight:700;color:var(--ink-3)}
+.osp-q{flex:0 1 200px;min-width:0;padding:5px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;font-weight:400}
+.osp-list{display:flex;flex-direction:column;gap:6px;max-height:min(46vh,380px);overflow:auto;padding-right:2px}
+.osp-job{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:2px 10px;text-align:left;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;font:inherit;color:inherit}
+.osp-job b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.osp-job .faint{font-size:12px;white-space:nowrap}
+.osp-job em{grid-column:1/-1}
+.osp-job.hit{border-color:var(--brand,#1F6FD1)}
+@media (max-width:560px){.osp-two{grid-template-columns:1fr}.osp-job{grid-template-columns:1fr}.osp-job .faint{white-space:normal}}

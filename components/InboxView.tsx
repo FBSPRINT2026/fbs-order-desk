@@ -25,6 +25,7 @@ import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, 
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
+import OrderStartPick from "@/components/OrderStartPick";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
 
@@ -1096,6 +1097,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const openAi = () => { setListen((n) => n + 1); if (stacked) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } };
   const hideAi = stacked ? undefined : () => { setAiOpen(false); setPeek(false); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
+  // Create order asks first: new order, or a reorder of which job (Oct 20, Nick)
+  const [pickOpen, setPickOpen] = useState(false);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
   useEffect(() => { if (autoOrder) { startOrder(); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -1203,7 +1206,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             more: (close) => <>
               <PSec label="Actions">
                 {view === "order" ? <PTile icon={TbIcon.back} label="Back to the email" onClick={() => { close(); setView("mail"); }} />
-                  : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); startOrder(); }} />}
+                  : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); if (ordering) startOrder(); else setPickOpen(true); }} />}
                 <PTile icon={TbIcon.goods} label="Order goods" href={orderGoodsHref(x.id)} onClick={close} />
                 {x.customer_id ? <PTile icon={TbIcon.person} label="Customer" href={`/shop/customers/${x.customer_id}`} onClick={close} />
                   : <PTile icon={TbIcon.person} label="Match to customer" onClick={() => { close(); setMatchKey((k) => k + 1); }} />}
@@ -1224,7 +1227,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           }} ai={x.direction === "in" ? <>{/* the design's running history (Oct 14, Nick) */}<HistoryLink customer={x.customer_id} text={x.subject || ""} text2={x.meta?.triage?.summary || ""} className="eh-hist" />{/* phones: the AI card's buttons (Oct 14, Nick: "New Order, Reorder, Order goods, then the microphone") */}
             {view !== "order" && (ordering ? <button type="button" className="tb-b primary eh-ai-go" onClick={() => startOrder()}>{TbIcon.order}<span className="tb-l">Back to the order</span></button> : <>
               <button type="button" className={"tb-b eh-ai-go" + (!reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(reorder ? { told: "This is a new order, not a reorder of a past job." } : undefined)}>{TbIcon.order}<span className="tb-l">New order</span></button>
-              <button type="button" className={"tb-b eh-ai-go" + (reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(!reorder ? { told: "This is a reorder of a past job: find the job it repeats." } : undefined)}>{TbIcon.repeat}<span className="tb-l">Reorder</span></button>
+              <button type="button" className={"tb-b eh-ai-go" + (reorder ? " primary" : "")} disabled={!!busy} onClick={() => setPickOpen(true)}>{TbIcon.repeat}<span className="tb-l">Reorder</span></button>
             </>)}
             {view !== "order" && <a className="tb-b eh-ai-go" href={orderGoodsHref(x.id)}>{TbIcon.goods}<span className="tb-l">Order goods</span></a>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
           fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
@@ -1263,7 +1266,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             <TbRow line={2}>
             {/* Actions */}
             <TbGroup label="Actions">
-              {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
+              {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => (ordering ? startOrder() : setPickOpen(true))} title="New order or reorder: pick, then the AI reads the email and its attachments and fills in the order for you to check" />}
               <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
               {x.customer_id
                 ? <TbBtn icon={TbIcon.person} label="Customer" title="Customer profile: open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
@@ -1300,6 +1303,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {made && <div className="ibx2-made eh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
         {err && <div className="pv-err eh-err">{err}</div>}
 
+        {pickOpen && <OrderStartPick activityId={orderFrom?.id || x.id} text={`${x.subject || ""} ${x.meta?.triage?.summary || ""}`} guess={reorder ? "reorder" : intents.includes("new_order") ? "new" : ""} onClose={() => setPickOpen(false)} onPick={(st) => { setPickOpen(false); startOrder(st); }} />}
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
           <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={orderFrom?.id || x.id} start={orderStart || undefined}
             onClose={() => { setOrdering(false); setView("mail"); }}
