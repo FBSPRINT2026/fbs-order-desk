@@ -40,13 +40,23 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
 
+  // a search looks through every job on the account, not just the recent ones (Oct 20, Nick: "bottles only returns
+  // three… it should pull up all the orders for that style on that account")
+  const [found, setFound] = useState<PastJob[] | null>(null), [looking, setLooking] = useState(false);
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) { setFound(null); return; }
+    let live = true; setLooking(true);
+    const h = setTimeout(() => { fetch(`/api/inbox/order/jobs?${new URLSearchParams({ activity: activityId, q: t })}`).then((r) => r.json()).then((j) => { if (live) { setFound(Array.isArray(j?.jobs) ? j.jobs : []); setLooking(false); } }).catch(() => { if (live) setLooking(false); }); }, 300);
+    return () => { live = false; clearTimeout(h); };
+  }, [q, activityId]);
   const list = useMemo(() => {
     const w = words(text), t = q.trim().toLowerCase();
-    return (past || [])
+    return (found || past || [])
       .map((p) => { const pw = words(p.label.replace(/^#\d+\s*/, "")); let hit = 0; pw.forEach((x) => { if (w.has(x)) hit++; }); return { p, hit }; })
-      .filter(({ p }) => !t || p.label.toLowerCase().includes(t))
+      .filter(({ p }) => !!found || !t || p.label.toLowerCase().includes(t))
       .sort((a, b) => b.hit - a.hit || b.p.date.localeCompare(a.p.date));
-  }, [past, text, q]);
+  }, [past, found, text, q]);
 
   return (
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Create order" onClick={onClose}>
@@ -85,7 +95,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
         </div>
         <div className="osp-h">
           <span>Or a reorder of this job:</span>
-          {(past?.length || 0) > 6 && <input className="osp-q" placeholder="Find a job" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a past job" />}
+          <input className="osp-q" placeholder={looking ? "Searching…" : "Find any job: name or #"} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a past job" />
         </div>
         {past === null ? <p className="faint">Loading their past jobs…</p> : err ? <p className="err">{err}</p> : list.length === 0 ? <p className="faint">{q ? "No job matches." : "No past jobs on file for this customer."}</p> : (
           <div className="osp-list">

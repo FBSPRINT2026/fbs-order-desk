@@ -266,11 +266,27 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
  * to the art. Null when the PDF has shirt photos (a mockup) or nothing on a clear background.
  */
 export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ file: File; ratio: number } | null> {
-  const page = await openPage(buf);
+  const doc = await openDoc(buf);
+  // a sheet of labels (Little Groupies' "onesies_labels.pdf": 300 small pages of barcodes) is never the print art
+  if (doc.numPages > 20) return null;
+  const page = await doc.getPage(1);
   const vp1 = page.getViewport({ scale: 1 });
+  if (Math.max(vp1.width, vp1.height) < 300 && doc.numPages > 2) return null;
   const scale = Math.min(3000 / Math.max(vp1.width, vp1.height), 8);
-  const { canvas: c, photos } = await drawWithoutPhotos(page, scale);
-  if (photos.length) return null;
+  const { canvas: c0, photos } = await drawWithoutPhotos(page, scale);
+  let c = c0;
+  if (photos.length) {
+    // the art saved as one picture filling the page on a flat background (Oct 20, Little Groupies "The Bottles": the
+    // design on gray): the background is taken off from the edges in, so the art comes out on clear
+    const vp = page.getViewport({ scale });
+    const big = photos.some((r) => r.x1 - r.x0 > vp.width * 0.85 && r.y1 - r.y0 > vp.height * 0.85);
+    if (photos.length > 1 || !big) return null;
+    const full = document.createElement("canvas");
+    full.width = Math.round(vp.width); full.height = Math.round(vp.height);
+    await page.render({ canvasContext: full.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+    if (!knockOutBackground(full)) return null;
+    c = full;
+  }
   const w = c.width, h = c.height, d = c.getContext("2d")!.getImageData(0, 0, w, h).data;
   let clear = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
@@ -284,4 +300,30 @@ export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ f
   cc.getContext("2d")!.drawImage(c, x0, y0, cc.width, cc.height, 0, 0, cc.width, cc.height);
   const blob = await new Promise<Blob | null>((res) => cc.toBlob(res, "image/png"));
   return blob ? { file: new File([blob], `${name}.png`, { type: "image/png" }), ratio: cc.height / cc.width } : null;
+}
+
+/**
+ * Clears a flat background from the edges in (flood fill, so the same color inside the art stays): the four corners
+ * must agree on one color. Returns false when there's no flat background to take off.
+ */
+export function knockOutBackground(c: HTMLCanvasElement, tol = 28): boolean {
+  const w = c.width, h = c.height, x = c.getContext("2d")!, img = x.getImageData(0, 0, w, h), d = img.data;
+  const at = (px: number, py: number) => (py * w + px) * 4;
+  const cs = [at(1, 1), at(w - 2, 1), at(1, h - 2), at(w - 2, h - 2)];
+  const [r0, g0, b0] = [d[cs[0]], d[cs[0] + 1], d[cs[0] + 2]];
+  const near = (i: number) => Math.abs(d[i] - r0) + Math.abs(d[i + 1] - g0) + Math.abs(d[i + 2] - b0) <= tol;
+  if (!cs.every(near)) return false;
+  const seen = new Uint8Array(w * h), stack: number[] = [];
+  const push = (px: number, py: number) => { const k = py * w + px; if (seen[k]) return; seen[k] = 1; if (near(k * 4)) stack.push(k); };
+  for (let i = 0; i < w; i++) { push(i, 0); push(i, h - 1); }
+  for (let j = 0; j < h; j++) { push(0, j); push(w - 1, j); }
+  let n = 0;
+  while (stack.length) {
+    const k = stack.pop()!; d[k * 4 + 3] = 0; n++;
+    const px = k % w, py = (k - px) / w;
+    if (px > 0) push(px - 1, py); if (px < w - 1) push(px + 1, py); if (py > 0) push(px, py - 1); if (py < h - 1) push(px, py + 1);
+  }
+  if (n < w * h * 0.1) return false;
+  x.putImageData(img, 0, 0);
+  return true;
 }
