@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { brandHitFor, brandSizeFor } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
-import { Suspense, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -24,6 +24,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
+import { PMS_COATED } from "@/lib/pms";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -2366,18 +2367,50 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
 }
 
 /** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
+/**
+ * A typed ink: a stock ink or brand ink by name ("royal" → Royal), or any Pantone from the full coated chart by number
+ * ("241", "pms 241", "Pantone 241 C" → PMS 241 C). Null when it isn't one we know (then it's kept as typed, with a picked color).
+ */
+function resolveInk(text: string, brand: Brand): { name: string; hex: string } | null {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (!t) return null;
+  const lc = t.toLowerCase().replace(/^wilflex\s+/, "");
+  for (const g of brand.groups) for (const b of g.colors) if (b.ink.toLowerCase() === lc || b.name.toLowerCase() === lc) return { name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888" };
+  const named = [...Object.keys(WILFLEX_HEX), ...Object.keys(PMS_HEX)].find((n) => n.toLowerCase() === lc);
+  if (named) return { name: named, hex: colorHex(named) };
+  const num = t.replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "").trim();
+  if (!num) return null;
+  const key = `PMS ${num.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`;
+  return PMS_COATED[key] ? { name: key, hex: PMS_COATED[key] } : null;
+}
+let inkNamesCache: string[] | null = null;
+const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
+
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
   const brand = useContext(BrandCtx);
+  const listId = useId();
   const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name] || brand.groups.some((g) => g.colors.some((b) => b.ink === value.name)));
   const [customMode, setCustom] = useState(false);
+  const [text, setText] = useState(value?.name || "");
+  // a reset from outside (↺, another pick) shows in the box
+  useEffect(() => { if (value?.name && value.name !== text && resolveInk(text, brand)?.name !== value.name) setText(value.name); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [value?.name]);
   // any PMS from the full chart (or a typed one) shows as its name + color instead of the short list
   const custom = customMode || (!!value && !known);
   if (custom) {
+    // Oct 20, Nick: "how could I key in a customer's Pantone… it needs to be Pantone 241 and you're picking up 375"
+    const hit = resolveInk(text, brand);
     return (
-      <span className="row" style={{ gap: 4, flex: 1 }}>
-        <input type="text" aria-label="PMS number or ink name" placeholder="PMS 7621 C" value={value?.name || ""} onChange={(e) => onChange({ name: e.target.value, hex: value?.hex || "#888888" })} style={{ flex: 1, minWidth: 0 }} />
-        <input type="color" aria-label="Screen color" value={value?.hex || "#888888"} onChange={(e) => onChange({ name: value?.name || "Custom", hex: e.target.value })} style={{ width: 34, padding: 0, height: 30 }} />
-        <button type="button" className="btn icon ghost" title="Back to the list" onClick={() => { setCustom(false); onChange(null); }}>▾</button>
+      <span className="ink-type">
+        <span className="sw" style={{ background: hit?.hex || value?.hex || "#888888" }} />
+        <input type="text" list={listId} aria-label="PMS number or ink name" placeholder="Type a PMS # or ink: 241, Royal…" autoFocus={customMode} value={text}
+          onChange={(e) => { const t = e.target.value; setText(t); if (!t.trim()) return; onChange(resolveInk(t, brand) || { name: t.trim(), hex: value?.hex || "#888888" }); }} />
+        <datalist id={listId}>
+          {brand.groups.flatMap((g) => g.colors).map((b) => <option key={"b:" + b.ink} value={b.ink}>{b.name !== b.ink ? b.name : undefined}</option>)}
+          {allInkNames().map((k) => <option key={k} value={k} />)}
+        </datalist>
+        {!hit && text.trim() && <input type="color" aria-label="Screen color" title="Not on the Pantone chart: pick the color to show" value={value?.hex || "#888888"} onChange={(e) => onChange({ name: value?.name || text.trim() || "Custom", hex: e.target.value })} style={{ width: 30, padding: 0, height: 28 }} />}
+        <button type="button" className="btn icon ghost" title="Back to the list" onClick={() => { setCustom(false); setText(""); onChange(null); }}>▾</button>
+        {text.trim() && <span className={"ink-type-note" + (hit ? "" : " warn")}>{hit ? (hit.name.toLowerCase() !== text.trim().toLowerCase() ? `= ${hit.name}` : "") : "Not on the chart: pick its color"}</span>}
       </span>
     );
   }
@@ -2385,16 +2418,16 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
     <select aria-label="Ink color" value={value?.name || ""} style={{ flex: 1, minWidth: 0 }}
       onChange={(e) => {
         const n = e.target.value;
-        if (n === "__custom") { setCustom(true); onChange({ name: "", hex: "#888888" }); return; }
+        if (n === "__custom") { setCustom(true); setText(""); return; }
         if (!n) return onChange(null);
         onChange({ name: n, hex: n === "none" ? "" : colorHex(n) });
       }}>
       <option value="">Keep as uploaded</option>
+      <option value="__custom">Type a PMS # or any ink…</option>
       <option value="none">Remove (shirt shows through)</option>
       {brand.groups.filter((g) => g.colors.length).map((g) => <optgroup key={"g:" + g.key} label={g.label}>{g.colors.map((b) => <option key={"b:" + g.key + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>)}
-      <optgroup label="Wilflex RFU">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
-      <optgroup label="PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
-      <option value="__custom">Other PMS / custom…</option>
+      <optgroup label="Our stock inks (Wilflex RFU)">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
+      <optgroup label="Common PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
     </select>
   );
 }
