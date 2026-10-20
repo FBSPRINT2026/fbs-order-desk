@@ -73,6 +73,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
   const [missing, setMissing] = useState(false);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
+  // a duplicate just made (?reprint=1): offer the reprint screen fee once
+  const [reprintAsk, setReprintAsk] = useState(false);
+  useEffect(() => { try { const u = new URL(window.location.href); if (u.searchParams.get("reprint") === "1") { setReprintAsk(true); u.searchParams.delete("reprint"); window.history.replaceState(window.history.state, "", u.toString()); } } catch { /* */ } }, []);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [proofs, setProofs] = useState<(Proof & { url?: string })[]>([]);
@@ -510,16 +513,31 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
+  // Duplicate = a reorder of this order (Oct 20, Nick: "make a duplicate… a complete copy… keeps all the details",
+  // "it needs to keep that art… that's how we're going to… have it in our system as, oh look, Terrible Toddler, it's
+  // been ordered these 5 times"): every group kept whole, with its designs, our mockups and their history, the same
+  // job name; the sizes and price are updated on the copy. A wholesale copy offers the reprint screen fee.
   async function duplicate() {
     if (!o) return;
     await save();
+    const copyGroup = (g: Group): Group => { const c = JSON.parse(JSON.stringify(g)) as Group; return { ...c, id: uid(), fromGroup: g.id, lines: c.lines.map((l) => ({ ...l, id: uid() })), imprints: c.imprints.map((d) => ({ ...d, id: uid() })) }; };
+    const groups = o.groups.map(copyGroup);
     const { data, error } = await sb.from("orders").insert({
-      customer_id: o.customer_id, nickname: (o.nickname || "Job") + " (copy)", groups: o.groups.map(cloneGroup), fees: o.fees, po_number: "",
+      customer_id: o.customer_id, nickname: o.nickname || "Job", groups, fees: o.fees, po_number: "",
       delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, price_type: o.price_type,
       discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: o.notes, total: o.total, qty: o.qty,
     }).select("id").single();
     if (error || !data) return say("Couldn't duplicate: " + error?.message);
-    router.push(`/shop/orders/${data.id}`);
+    // our mockups come with it: the latest of each group, so the copy shows them and nothing is made again
+    const { data: olds } = await sb.from("mockups").select("customer_id, group_id, title, file_path, design_ids, snapshot, created_at").eq("order_id", o.id).is("archived_at", null).order("created_at", { ascending: false });
+    const { data: u } = await sb.auth.getUser();
+    for (const g of groups) {
+      const m = (olds || []).find((x) => x.group_id === g.fromGroup);
+      if (m) await sb.from("mockups").insert({ customer_id: m.customer_id, order_id: data.id, group_id: g.id, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: u.user?.email || "", snapshot: m.snapshot });
+    }
+    await sb.from("order_events").insert({ order_id: data.id, kind: "reorder", detail: `Duplicate of #${o.number}`, actor: u.user?.email || "" });
+    const reprint = o.price_type === "wholesale" && groups.some((g) => g.imprints.some((im) => im.method === "screen" && !(im.remake ?? g.remake)));
+    router.push(`/shop/orders/${data.id}${reprint ? "?reprint=1" : ""}`);
   }
 
   // Delete asks first, showing the art that goes with the order (Oct 17, Nick: "when we delete an order can we delete
@@ -768,6 +786,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {reprintAsk && o.price_type === "wholesale" && (() => {
+        // a duplicate / reorder of a wholesale order still at new screens: offer the reprint fee (kept on its reorders)
+        const ims = o.groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
+        const wl = settings.wholesale;
+        if (!ims.length || wl.remakeFee == null || wl.remakeFee >= wl.screenFee) return null;
+        const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
+        return (
+          <div className="eo-fee">
+            <span>This copy is priced as <b>new screens</b> ({n} screen{n === 1 ? "" : "s"} at {money(wl.screenFee)}). It&apos;s a reorder: charge the <b>reprint fee, {money(wl.remakeFee)} a screen</b>? It stays that way on this design&apos;s reorders.</span>
+            <button type="button" className="btn sm primary" onClick={() => { patch((d) => { for (const g of d.groups) for (const im of g.imprints) if (im.method === "screen") im.remake = true; }); setReprintAsk(false); }}>Yes, reprint fee {money(wl.remakeFee)}</button>
+            <button type="button" className="btn sm ghost" onClick={() => setReprintAsk(false)}>No, keep {money(wl.screenFee)}</button>
+          </div>
+        );
+      })()}
       {/* moving off Printavo: a 40,000-series order waits until its customer has been moved (checklist done) */}
       {cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) && <NotMovedBanner customerId={cust.id} name={custLabel(cust)} what="this order"
         onMoved={async () => { const { data } = await sb.from("customers").select("*").eq("id", cust.id).maybeSingle(); if (data) setCustomers((cs) => cs.map((x) => (x.id === cust.id ? (data as Customer) : x))); }} />}
