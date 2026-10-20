@@ -24,6 +24,17 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
 
+/** a PDF's first page as a picture, about `width` px wide on white (the designs catalog's covers, Oct 20) */
+export async function pdfPicture(buf: ArrayBuffer, width = 900): Promise<HTMLCanvasElement> {
+  const page = await openPage(buf);
+  const v1 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: Math.min(4, width / Math.max(1, v1.width)) });
+  const c = document.createElement("canvas");
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+  return c;
+}
+
 /**
  * Draws the page with the big photos skipped: a picture drawn wider than 30% of the page (the shirt photos) is left
  * out and its place on the page recorded. pdf.js's own scratch canvases (page sized) still go through.

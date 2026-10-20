@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = (await req.json().catch(() => ({}))) as { customer?: string; op?: string; key?: string; name?: string; into?: string; ref?: string };
+  const b = (await req.json().catch(() => ({}))) as { customer?: string; op?: string; key?: string; name?: string; into?: string; ref?: string; data?: string };
   const cid = String(b.customer || "");
   if (!cid) return NextResponse.json({ error: "Which customer?" }, { status: 400 });
   const admin = createAdminClient();
@@ -37,7 +37,29 @@ export async function POST(req: Request) {
     case "move": if (!b.ref) break; r.jobs![String(b.ref).slice(0, 120)] = into; break;
     case "hide": if (key && !r.hidden!.includes(key)) r.hidden!.push(key); break;
     case "show": r.hidden = r.hidden!.filter((k) => k !== key); break;
-    case "reset": delete r.names![key]; delete r.merge![key]; for (const [k, t] of Object.entries(r.merge!)) if (t === key) delete r.merge![k]; r.hidden = r.hidden!.filter((k) => k !== key); break;
+    case "cover": {
+      // the cover picked in the browser (a JPEG of the best mockup), or "none of them would do"; answered without
+      // rebuilding the catalog (it takes seconds)
+      if (!key) return NextResponse.json({ error: "Which design?" }, { status: 400 });
+      let path = "-";
+      const m = /^data:image\/jpeg;base64,(.+)$/.exec(String(b.data || ""));
+      if (m) {
+        const buf = Buffer.from(m[1], "base64");
+        if (buf.length > 3_000_000) return NextResponse.json({ error: "That picture is too big." }, { status: 400 });
+        path = `designs/${cid}/${key.replace(/[^a-z0-9]+/g, "-").slice(0, 60)}-${Date.now()}.jpg`;
+        const up = await admin.storage.from("proofs").upload(path, buf, { contentType: "image/jpeg", upsert: true });
+        if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
+      }
+      // read again just before saving: several covers are saved one after another
+      const { data: now } = await admin.from("customer_designs").select("rules").eq("customer_id", cid).maybeSingle();
+      const r2: CatalogRules = { ...((now?.rules || {}) as CatalogRules) };
+      r2.covers = { ...(r2.covers || {}), [key]: path };
+      const { error } = await admin.from("customer_designs").upsert({ customer_id: cid, rules: r2, updated_at: new Date().toISOString(), updated_by: v.email || "" });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const { data: su } = path === "-" ? { data: null } : await admin.storage.from("proofs").createSignedUrl(path, 3600);
+      return NextResponse.json({ ok: true, url: su?.signedUrl || "" });
+    }
+    case "reset": if (r.covers) delete r.covers[key]; delete r.names![key]; delete r.merge![key]; for (const [k, t] of Object.entries(r.merge!)) if (t === key) delete r.merge![k]; r.hidden = r.hidden!.filter((k) => k !== key); break;
     default: return NextResponse.json({ error: "What change?" }, { status: 400 });
   }
   const { error } = await admin.from("customer_designs").upsert({ customer_id: cid, rules: r, updated_at: new Date().toISOString(), updated_by: v.email || "" });

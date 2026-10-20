@@ -22,6 +22,7 @@ export type CatalogRules = {
   /** design key → the design it's part of (merged) */ merge?: Record<string, string>;
   /** job ref ("p:<archived id>" / "o:<order id>") → design key (moved by hand); "" = not a design (left out) */ jobs?: Record<string, string>;
   /** design keys not shown */ hidden?: string[];
+  /** design key → its cover picture in storage (chosen in the browser from the mockups; "-" = none of them would do) */ covers?: Record<string, string>;
 };
 export type CatalogJob = { ref: string; src: "printavo" | "portal"; id: string; number: string; date: string; title: string; qty: number; status: string };
 export type CatalogVersion = {
@@ -33,8 +34,10 @@ export type CatalogVersion = {
 export type CatalogDesign = {
   key: string; name: string; names: string[]; first: string; last: string; orders: number; pieces: number;
   thumb: string; versions: CatalogVersion[]; jobs: CatalogJob[];
+  /** the cover was chosen and saved; else `pics` are the files to choose it from (signed, newest first) */ coverSet: boolean; pics: string[];
 };
-export type Catalog = { designs: CatalogDesign[]; other: CatalogJob[]; rules: CatalogRules; customer: string };
+export type Catalog = { designs: CatalogDesign[]; other: CatalogJob[]; rules: CatalogRules; customer: string;
+  /** designs staff deleted (only the grouping: the orders are untouched), to bring back */ hidden: { key: string; name: string; orders: number }[] };
 
 const COLORS = "maroon|mauve|sand|black|white|navy|grey|gray|heather|natural|cream|ivory|pink|blue|red|green|olive|forest|royal|kelly|burgundy|berry|brown|tan|khaki|charcoal|ash|oatmeal|pepper|sage|butter|banana|ivory|chalky|mint|lavender|orchid|purple|violet|yellow|gold|orange|rust|teal|denim|espresso|bay|moss|seafoam|watermelon|crimson|flo|neon|light|dark|washed|vintage|comfort colors";
 const GARMENT = "t-?shirts?|tees?|shirts?|sweat-?shirts?|crew-?necks?|crews?|hood(ies|y)|hoodie|pull-?overs?|pulls?|long-?sleeves?|ls|youth|toddler|kids?|adult|tanks?|hats?|caps?|beanies?|totes?|bags?|sweats|joggers?|shorts";
@@ -51,7 +54,9 @@ export const designKey = (title: string) => designName(title).toLowerCase().repl
 const TITLE_SMALL = new Set(["a", "an", "and", "the", "of", "to", "in", "for", "on", "at", "or"]);
 const titleCase = (s: string) => s.toLowerCase().split(" ").map((w, i) => (i > 0 && TITLE_SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 
-type Raw = { job: CatalogJob; lines: { style: string; brand: string; garment: string; color: string; pieces: number; thumb: string; full: string }[]; prints: string[]; /** the print's own mockup (Printavo imprint mockups: the art, never a purchase order) */ cover?: { thumb: string; full: string } };
+type Raw = { job: CatalogJob; lines: { style: string; brand: string; garment: string; color: string; pieces: number; thumb: string; full: string }[]; prints: string[]; /** the print's own mockup (Printavo imprint mockups: the art, never a purchase order) */ cover?: { thumb: string; full: string };
+  /** every full-size picture or PDF on the job (mockups, photos, and sometimes the purchase order) */ pics: string[] };
+const isPic = (p: string) => /\.(png|jpe?g|webp|gif|pdf)$/i.test(p);
 
 export async function buildCatalog(admin: SupabaseClient, customerId: string): Promise<Catalog> {
   const [{ data: arch }, { data: ords }, { data: cust }, { data: rr }] = await Promise.all([
@@ -73,6 +78,7 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
       })),
       prints: groups.flatMap((g) => (g.imprints || []).map((im) => `${String(im.details || "").replace(/\s+/g, " ").trim()}`)).filter(Boolean).slice(0, 4),
       cover: (() => { const m = groups.flatMap((g) => (g.imprints || []).flatMap((im) => im.mockups || [])).find((x) => files[x.thumb]); return m ? { thumb: files[m.thumb], full: files[m.full] || files[m.thumb] } : undefined; })(),
+      pics: [...new Set(groups.flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).map((m) => files[m.full] || "").filter((x) => x && isPic(x)))],
     });
   }
   for (const o of (ords || []) as { id: string; number: number; nickname: string; created_at: string; status: string; groups: { name?: string; lines?: { style?: string; brand?: string; garment?: string; color?: string; sizes?: Record<string, number> }[]; imprints?: { location?: string; size?: string; inks?: string; method?: string }[]; mockupThumbs?: string[] }[] }[]) {
@@ -87,9 +93,11 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
         lines: p.gs.flatMap((g) => {
           const shown = (g.lines || []).filter((l) => l.style || l.color);
           return shown.map((l, li) => ({ style: String(l.style || "").trim().toUpperCase(), brand: String(l.brand || "").trim(), garment: String(l.garment || "").trim(), color: String(l.color || "").trim(),
-            pieces: Object.values(l.sizes || {}).reduce((x, y) => x + (+y || 0), 0), thumb: (g.mockupThumbs || [])[li] || "", full: (g.mockupThumbs || [])[li] || "" }));
+            pieces: Object.values(l.sizes || {}).reduce((x, y) => x + (+y || 0), 0), thumb: (g.mockupThumbs || [])[li] || "", full: ((g.mockupThumbs || [])[li] || "").replace(/-thumb\.png$/, ".png") }));
         }),
         prints: p.gs.flatMap((g) => (g.imprints || []).map((im) => [im.location, im.size, im.inks].filter(Boolean).join(" · "))).filter(Boolean).slice(0, 4),
+        // our own mockups (full size) are the best cover there is
+        pics: p.gs.flatMap((g) => (g.mockupThumbs || []).map((t) => t.replace(/-thumb\.png$/, ".png"))),
       });
     }
   }
@@ -115,7 +123,8 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
   }
 
   // pictures: one signing call for everything
-  const paths = [...new Set(raws.flatMap((r) => [...r.lines.flatMap((l) => [l.thumb, l.full]), r.cover?.thumb || "", r.cover?.full || ""]).filter(Boolean))];
+  const covers = rules.covers || {};
+  const paths = [...new Set([...raws.flatMap((r) => [...r.lines.flatMap((l) => [l.thumb, l.full]), r.cover?.thumb || "", r.cover?.full || "", ...r.pics]), ...Object.values(covers).filter((c) => c && c !== "-")].filter(Boolean))];
   const signed = new Map<string, string>();
   for (let i = 0; i < paths.length; i += 500) {
     const part = paths.slice(i, i + 500);
@@ -124,8 +133,9 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
   }
 
   const designs: CatalogDesign[] = [];
+  const hidden: Catalog["hidden"] = [];
   for (const [key, rs] of byKey) {
-    if (rules.hidden?.includes(key)) continue;
+    if (rules.hidden?.includes(key)) { hidden.push({ key, name: rules.names?.[key] || titleCase(designName(rs[0].job.title) || key), orders: rs.length }); continue; }
     rs.sort((a, b) => a.job.date.localeCompare(b.job.date));
     const vmap = new Map<string, CatalogVersion>();
     for (const r of rs) {
@@ -140,7 +150,8 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
         const j = v.jobs.find((x) => x.ref === r.job.ref)!; j.pieces += l.pieces;
         v.pieces += l.pieces; v.last = r.job.date;
         if (r.prints.length) v.prints = r.prints;
-        if (l.thumb && signed.get(l.thumb)) { v.thumb = signed.get(l.thumb)!; v.full = signed.get(l.full) || v.thumb; }
+        // the full picture when it is one (Printavo's thumbnails are 100 px); a PDF is drawn in the browser
+        if (l.thumb && signed.get(l.thumb)) { v.full = signed.get(l.full) || signed.get(l.thumb)!; v.thumb = /\.(png|jpe?g|webp|gif)$/i.test(l.full) && signed.get(l.full) ? signed.get(l.full)! : signed.get(l.thumb)!; }
         if (!v.brand && l.brand) v.brand = l.brand;
         if (!v.garment && l.garment) v.garment = l.garment;
       }
@@ -154,13 +165,17 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     // the cover: the newest print mockup (a Printavo imprint mockup is the art itself; a line's can be a purchase order
     // screenshot), else the newest version's picture
     const latestPic = [...rs].reverse().map((r) => (r.cover ? signed.get(r.cover.thumb) : "")).find(Boolean) || [...versions].sort((a, b) => b.last.localeCompare(a.last)).find((v) => v.thumb)?.thumb || "";
+    // the cover picked in the browser from the jobs' full-size files (newest job first)
+    const saved = covers[key];
+    const pics = [...new Set([...rs].reverse().flatMap((r) => r.pics).map((p) => signed.get(p) || "").filter(Boolean))].slice(0, 8);
     designs.push({
       key, name: rules.names?.[key] || titleCase(best), names: [...new Set(rs.map((r) => r.job.title.trim()))],
       first: rs[0].job.date, last: rs[rs.length - 1].job.date, orders: rs.length, pieces: rs.reduce((n, r) => n + (r.lines.reduce((m, l) => m + l.pieces, 0) || r.job.qty), 0),
-      thumb: latestPic, versions, jobs: rs.map((r) => r.job).reverse(),
+      thumb: saved ? (saved === "-" ? "" : signed.get(saved) || latestPic) : latestPic, versions, jobs: rs.map((r) => r.job).reverse(),
+      coverSet: !!saved && (saved === "-" || signed.has(saved)), pics,
     });
   }
   designs.sort((a, b) => b.last.localeCompare(a.last) || b.orders - a.orders);
-  return { designs, other: other.sort((a, b) => b.date.localeCompare(a.date)), rules, customer: cust?.company || cust?.name || "" };
+  return { designs, other: other.sort((a, b) => b.date.localeCompare(a.date)), rules, customer: cust?.company || cust?.name || "", hidden: hidden.sort((a, b) => a.name.localeCompare(b.name)) };
 }
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th"}`;

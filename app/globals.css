@@ -10054,3 +10054,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .osp-job em{grid-column:1/-1}
 .osp-job.hit{border-color:var(--brand,#1F6FD1)}
 @media (max-width:560px){.osp-two{grid-template-columns:1fr}.osp-job{grid-template-columns:1fr}.osp-job .faint{white-space:normal}}
+/* Designs: delete a design (the grouping only), Oct 20 */
+.dc-del{color:var(--danger)}
+.dc-ask{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0 10px;padding:10px 12px;border:1px solid var(--danger);border-radius:10px;background:color-mix(in srgb,var(--danger) 6%,var(--surface));font-size:13px}
+.dc-ask span{flex:1 1 320px}
