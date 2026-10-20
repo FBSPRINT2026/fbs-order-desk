@@ -51,7 +51,7 @@ export const designKey = (title: string) => designName(title).toLowerCase().repl
 const TITLE_SMALL = new Set(["a", "an", "and", "the", "of", "to", "in", "for", "on", "at", "or"]);
 const titleCase = (s: string) => s.toLowerCase().split(" ").map((w, i) => (i > 0 && TITLE_SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 
-type Raw = { job: CatalogJob; lines: { style: string; brand: string; garment: string; color: string; pieces: number; thumb: string; full: string }[]; prints: string[] };
+type Raw = { job: CatalogJob; lines: { style: string; brand: string; garment: string; color: string; pieces: number; thumb: string; full: string }[]; prints: string[]; /** the print's own mockup (Printavo imprint mockups: the art, never a purchase order) */ cover?: { thumb: string; full: string } };
 
 export async function buildCatalog(admin: SupabaseClient, customerId: string): Promise<Catalog> {
   const [{ data: arch }, { data: ords }, { data: cust }, { data: rr }] = await Promise.all([
@@ -72,6 +72,7 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
         return { style: String(l.itemNumber || "").trim().toUpperCase(), brand: String(l.brand || "").trim(), garment: String(l.description || "").replace(/^[^-]+-\s*/, "").trim(), color: String(l.color || "").trim(), pieces: +l.items || 0, thumb: (m && files[m.thumb]) || "", full: (m && files[m.full]) || "" };
       })),
       prints: groups.flatMap((g) => (g.imprints || []).map((im) => `${String(im.details || "").replace(/\s+/g, " ").trim()}`)).filter(Boolean).slice(0, 4),
+      cover: (() => { const m = groups.flatMap((g) => (g.imprints || []).flatMap((im) => im.mockups || [])).find((x) => files[x.thumb]); return m ? { thumb: files[m.thumb], full: files[m.full] || files[m.thumb] } : undefined; })(),
     });
   }
   for (const o of (ords || []) as { id: string; number: number; nickname: string; created_at: string; status: string; groups: { name?: string; lines?: { style?: string; brand?: string; garment?: string; color?: string; sizes?: Record<string, number> }[]; imprints?: { location?: string; size?: string; inks?: string; method?: string }[]; mockupThumbs?: string[] }[] }[]) {
@@ -114,7 +115,7 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
   }
 
   // pictures: one signing call for everything
-  const paths = [...new Set(raws.flatMap((r) => r.lines.flatMap((l) => [l.thumb, l.full])).filter(Boolean))];
+  const paths = [...new Set(raws.flatMap((r) => [...r.lines.flatMap((l) => [l.thumb, l.full]), r.cover?.thumb || "", r.cover?.full || ""]).filter(Boolean))];
   const signed = new Map<string, string>();
   for (let i = 0; i < paths.length; i += 500) {
     const part = paths.slice(i, i + 500);
@@ -150,7 +151,9 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     const counts = new Map<string, number>();
     for (const r of rs) { const n = designName(r.job.title); if (n) counts.set(n.toLowerCase(), (counts.get(n.toLowerCase()) || 0) + 1); }
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || key;
-    const latestPic = [...versions].sort((a, b) => b.last.localeCompare(a.last)).find((v) => v.thumb)?.thumb || "";
+    // the cover: the newest print mockup (a Printavo imprint mockup is the art itself; a line's can be a purchase order
+    // screenshot), else the newest version's picture
+    const latestPic = [...rs].reverse().map((r) => (r.cover ? signed.get(r.cover.thumb) : "")).find(Boolean) || [...versions].sort((a, b) => b.last.localeCompare(a.last)).find((v) => v.thumb)?.thumb || "";
     designs.push({
       key, name: rules.names?.[key] || titleCase(best), names: [...new Set(rs.map((r) => r.job.title.trim()))],
       first: rs[0].job.date, last: rs[rs.length - 1].job.date, orders: rs.length, pieces: rs.reduce((n, r) => n + (r.lines.reduce((m, l) => m + l.pieces, 0) || r.job.qty), 0),
