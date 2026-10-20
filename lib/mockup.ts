@@ -50,7 +50,12 @@ export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque
   /** a bag or tote (flat, no collar): its body on the photo (px) and pixels per inch from its real width */
   flat?: { cx: number; top: number; w: number; h: number; ppi: number };
   /** a shirt: its side seams across the body (px) and the bottom of the hem, as found on this photo */
-  body?: { l: number; r: number; hem: number } };
+  body?: { l: number; r: number; hem: number };
+  /** where prints are measured from (Oct 20, Nick: "start in the same spot from the bottom of the neckline every time"):
+   *  front = the bottom of the front neckline at the center, back = the top of the back neck at the center (px) */
+  neck?: number };
+/** the same points on the reference Gildan 5000 photos (bottom of the front collar rib; top of the back collar) */
+export const REF_NECK = { front: 156, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
@@ -140,13 +145,71 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
     const out = side === "right" ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
     return { x: tip.x - SLEEVE_UP * s * u.x + 2 * out.x, y: tip.y - SLEEVE_UP * s * u.y + 2 * out.y, rot: (-Math.atan(b) * 180) / Math.PI };
   };
+  // a sleeve that hangs beside the body (3/4 and long sleeves, raglans): its print goes the same distance above its own
+  // cuff (Oct 20, Nick: "the imprint always in the same spot relative to the top of the hem line on the sleeve"). The
+  // cuff is where the outline, coming down the outside of the sleeve, steps in sharply to the body (works whether the
+  // sleeve hangs free or touches the body)
+  const cuff = (side: "left" | "right", fromY: number) => {
+    const edge = side === "right" ? R : L, inward = (a: number, b: number) => (side === "right" ? a - b : b - a);
+    let hem = -1;
+    for (let y = Math.round(fromY + 40 * s); y < Math.round(T + 0.85 * (B - T)); y++) {
+      if (edge[y] < 0 || edge[y + 3] < 0) continue;
+      if (inward(edge[y], edge[y + 3]) > 25 * s) { hem = y; break; }
+    }
+    if (hem < 0) return null;
+    let best = side === "right" ? -1 : W + 1, by = hem;
+    for (let y = Math.round(hem - 40 * s); y <= hem; y++) if (y > 0 && edge[y] >= 0 && (side === "right" ? edge[y] > best : edge[y] < best)) { best = edge[y]; by = y; }
+    // a real hanging sleeve is still out at the side of the photo just above its cuff; a short sleeve's step is the
+    // underarm, where the outline is already back at the body
+    let tipX = side === "right" ? -1 : W + 1;
+    for (let y = T; y < Math.round(T + 0.5 * (B - T)); y++) if (edge[y] >= 0 && (side === "right" ? edge[y] > tipX : edge[y] < tipX)) tipX = edge[y];
+    if (Math.abs(best - tipX) > 60 * s) return null;
+    // the outer edge above the cuff: the sleeve's direction
+    let n2 = 0, my = 0, mx = 0, syy = 0, sxy = 0;
+    for (let y = Math.round(by - 150 * s); y <= Math.round(by - 15 * s); y++) { if (y < 0 || edge[y] < 0) continue; n2++; my += y; mx += edge[y]; syy += y * y; sxy += y * edge[y]; }
+    const b = n2 > 5 ? (sxy - (mx * my) / n2) / (syy - (my * my) / n2) : 0;
+    const len = Math.hypot(b, 1), u = { x: b / len, y: 1 / len };
+    const out = side === "right" ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
+    return { tipY: by, pt: { x: best - SLEEVE_UP * s * u.x + 2 * out.x, y: by - SLEEVE_UP * s * u.y + 2 * out.y, rot: (-Math.atan(b) * 180) / Math.PI } };
+  };
   let left = sleeve("left"), right = sleeve("right");
-  // sanity: a sleeve fold runs ~25-45°; if one side reads wrong, mirror the other side's angle
-  const ok = (r: number) => Math.abs(r) >= 22 && Math.abs(r) <= 48;
+  const lc = cuff("left", left.y), rc = cuff("right", right.y);
+  // a long hanging sleeve: its cuff is far below the short-sleeve "tip"
+  const longL = !!lc && lc.tipY > left.y + 120 * s, longR = !!rc && rc.tipY > right.y + 120 * s;
+  if (longL) left = lc!.pt;
+  if (longR) right = rc!.pt;
+  // sanity: a sleeve fold runs ~25-45° (a hanging sleeve can be nearly straight down); if one side reads wrong, mirror the other side's angle
+  const ok = (r: number) => (longL || longR ? Math.abs(r) <= 48 : Math.abs(r) >= 22 && Math.abs(r) <= 48);
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
   if (!ok(right.rot) && ok(left.rot)) right = { ...right, rot: -left.rot };
   if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
-  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B } };
+  // the neckline at the center (a narrow band down the middle of the shirt)
+  const band = (y: number) => { let r = 0, g = 0, bl = 0, n = 0; for (let X = Math.round(cx) - 8; X <= Math.round(cx) + 8; X++) { const p = y * W + X; if (bg[p]) continue; r += d[p * 4]; g += d[p * 4 + 1]; bl += d[p * 4 + 2]; n++; } return n >= 10 ? [r / n, g / n, bl / n] : null; };
+  let neck: number | undefined;
+  if (view === "back") {
+    // top of the back neck: the first of the shirt down the middle
+    for (let y = T; y < T + 200 * s && y < H; y++) if (band(y)) { neck = y; break; }
+  } else {
+    // bottom of the front neckline: below the last row down the middle that isn't the body's own color (the collar
+    // rib, the inside of the back, or the empty neck opening) and above the chest. When only the empty opening is seen
+    // (the rib is the shirt's own color, e.g. a black Gildan 5000), the rib's ~0.75" is added
+    const yb = Math.round(T + 0.3 * (B - T)); const acc = [0, 0, 0]; let m = 0;
+    for (let y = yb - 10; y <= yb + 10; y++) { const v = band(y); if (v) { acc[0] += v[0]; acc[1] += v[1]; acc[2] += v[2]; m++; } }
+    if (m) {
+      const body = acc.map((v) => v / m), off = (v: number[] | null) => !v || Math.hypot(v[0] - body[0], v[1] - body[1], v[2] - body[2]) > 24;
+      let last = -1;
+      const end = Math.min(H, T + 170 * s);
+      for (let y = T; y < end; y++) if (off(band(y))) last = y;
+      if (last >= 0) {
+        // ending on the empty neck opening (background) means the rib itself wasn't seen
+        let sawBg = false;
+        for (let y = last; y > last - 6 && y >= T; y--) if (!band(y)) sawBg = true;
+        const n0 = last + 1 + (sawBg ? 26 * s : 0);
+        if (n0 - T >= 10 * s && n0 - T <= 200 * s) neck = n0;
+      }
+    }
+  }
+  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}) };
 }
 
 /**
@@ -363,7 +426,8 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   // art sits in the middle of the print area; full front/back (or a set drop) start at the top instead
   const artY = dropIn != null || spot.top ? top : top + Math.max(0, (ah - h) / 2);
   // move from the reference photo onto this photo's shirt
-  const mx = (v: number) => (fit ? fit.cx + (v - CENTER_X) * k : v), my = (v: number) => (fit ? fit.top + (v - REF[spot.view].top) * k : v);
+  // down from this photo's neckline when it was found (the same distance on every shirt), else from the collar top
+  const mx = (v: number) => (fit ? fit.cx + (v - CENTER_X) * k : v), my = (v: number) => (fit ? (fit.neck != null ? fit.neck + (v - REF_NECK[spot.view]) * k : fit.top + (v - REF[spot.view].top) * k) : v);
   return { view: spot.view, x: mx(cx - w / 2), y: my(artY), w: w * k, h: h * k, rot: 0, clip: "" as "" | "left" | "right", area: { x: mx(cx - aw / 2), y: my(top), w: aw * k, h: ah * k }, k };
 }
 
@@ -382,7 +446,11 @@ export const SHIRT_COLORS: { group: string; colors: [string, string][] }[] = [
 const NAMED: Record<string, string> = Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h])));
 const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);
 /** a color name's color: exact, then without "heather"/(…), then any known color named inside it ("True Royal" → Royal) */
-export const guessHex = (color: string) => {
+export const guessHex = (color: string): string => {
+  // two-tone names ("White/ Royal", "White - Kelly", "Heather/Navy"): the body is the first color, the trim the second
+  // (Oct 20: a White/ Royal raglan's close-ups were drawn on royal blue)
+  const parts = (color || "").split(/\s*(?:\/|\s-\s)\s*/).filter(Boolean);
+  if (parts.length > 1) return guessHex(parts[0]);
   const c = (color || "").toLowerCase().trim().replace(/([a-z])([A-Z])/g, "$1 $2");
   const spaced = (color || "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().trim();
   return NAMED[c] || NAMED[spaced] || NAMED[spaced.replace(/\s*\(.*\)|heather\s*/g, "").trim()]

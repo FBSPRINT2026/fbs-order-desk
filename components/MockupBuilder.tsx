@@ -669,7 +669,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const adjusted = (fit: Fit | null | undefined, l: Line | undefined, v: View): Fit | null | undefined => {
     const a = fit && !fit.flat ? adjOf(l, v) : null;
     if (!a || !fit) return fit;
-    return { ...fit, cx: fit.cx + a.dx * fit.s, top: fit.top + a.dy * fit.s, s: fit.s * (a.k || 1) };
+    return { ...fit, cx: fit.cx + a.dx * fit.s, top: fit.top + a.dy * fit.s, ...(fit.neck != null ? { neck: fit.neck + a.dy * fit.s } : {}), s: fit.s * (a.k || 1) };
   };
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** move / resize one style's print areas on one side (photo pixels; k = how much bigger), and save it for next time */
@@ -819,7 +819,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
