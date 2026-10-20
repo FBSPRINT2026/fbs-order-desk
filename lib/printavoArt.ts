@@ -56,6 +56,9 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
         const ys = [dx, dx + dw].flatMap((x) => [dy, dy + dh].map((y) => m.b * x + m.d * y + m.f));
         const r = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
         const fullW = vp.width;
+        // a flat one-color picture filling the page is the artboard's background (Oct 20, Little Groupies "The Bottles":
+        // Illustrator saved a 4200 × 4800 plain gray picture under the vector art): left out, so the art is on clear
+        if (r.x1 - r.x0 > fullW * 0.85 && r.y1 - r.y0 > vp.height * 0.85 && isFlat(src)) return;
         if (known) {
           // drawn again sharper: skip only the shirt photos found on the first look (same place on the page). pdf.js
           // paints masked art (an Illustrator opacity mask: a flat color + a soft mask holding the design) as one big
@@ -79,6 +82,17 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
   });
   await page.render({ canvasContext: proxy, viewport: vp, background: "rgba(0,0,0,0)", ...(crop ? { transform: [1, 0, 0, 1, -crop.x0, -crop.y0] } : {}) }).promise;
   return { canvas: c, photos };
+}
+
+/** a picture that's one flat color (sampled small): an artboard background, not art or a photo */
+function isFlat(src: unknown) {
+  try {
+    const t = document.createElement("canvas"); t.width = 24; t.height = 24;
+    const x = t.getContext("2d")!; x.drawImage(src as CanvasImageSource, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    for (let i = 4; i < d.length; i += 4) if (Math.abs(d[i] - d[0]) + Math.abs(d[i + 1] - d[1]) + Math.abs(d[i + 2] - d[2]) > 12 || Math.abs(d[i + 3] - d[3]) > 12) return false;
+    return d[3] > 200;
+  } catch { return false; }
 }
 
 /** groups of opaque pixels (close bits joined), as boxes in canvas pixels */
