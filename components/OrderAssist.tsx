@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
-import { aiLookUp, aiOrderChat, aiOrderFromText, aiReorderCheck, applyReorderFix, orderChatThread } from "@/app/shop/ai-actions";
+import { aiLookUp, aiOrderChat, aiOrderFromText, applyReorderFix, orderChatThread, type aiReorderCheck } from "@/app/shop/ai-actions";
 import type { ChatMsg } from "@/lib/ai/orderChat";
 import { MicButton } from "@/components/SearchInput";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
@@ -92,7 +92,10 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
     // a new note: look up online what it points to first (team PMS colors…)
     let found: ReorderCheck["lookedUp"] | null | undefined;
     if (!onlyIfNone && told && told.trim() && told.trim() !== (c?.told || "")) { const lu = await aiLookUp(told, { orderId }).catch(() => null); found = lu?.ok ? lu.lookedUp : null; }
-    const r = await aiReorderCheck(orderId, onlyIfNone, onlyIfNone || told == null ? undefined : told, found);
+    // a plain request, not a server action: the AI takes up to a minute, and a server action would hold every other
+    // button on the order page that long (Delete stuck on "Looking at the order's art…", Oct 20)
+    const r = await fetch("/api/orders/reorder-check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: orderId, onlyIfNone, told: onlyIfNone || told == null ? undefined : told, lookedUp: found }) })
+      .then((x) => x.json()).catch(() => ({ ok: false, error: "Couldn't reach the server." })) as Awaited<ReturnType<typeof aiReorderCheck>>;
     setBusy("");
     if (!r.ok) return setNote(r.error || "The reorder check didn't work.");
     setC({ ...r.check, issues: list(r.check.issues), fixes: list(r.check.fixes), ...(r.check.lookedUp ? { lookedUp: { ...r.check.lookedUp, sources: list(r.check.lookedUp.sources) } } : {}) });
