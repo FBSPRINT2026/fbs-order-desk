@@ -58,6 +58,15 @@ type Bk = "all" | "customer" | "todo" | "event" | "fyi";
 const BK: { k: Bk; label: string }[] = [{ k: "all", label: "All" }, { k: "customer", label: "Customers" }, { k: "todo", label: "To-dos" }, { k: "event", label: "Events" }, { k: "fyi", label: "FYI" }];
 const bucketOf = (i: InboxItem): Bk => (i.activity_id ? "customer" : i.bucket === "todo" || i.bucket === "event" || i.bucket === "fyi" ? i.bucket : i.bucket === "ignore" ? "fyi" : "fyi");
 
+/** Conversation grouping is off for now (Oct 20, Nick: "turn off the conversation grouping… just have it read like
+ *  normal emails when they came in. I'll rethink it and we'll come back to it"): every email its own row, newest first.
+ *  Set CONVERSATIONS to true to group again. */
+const CONVERSATIONS = false;
+function byConvo<T>(xs: T[], keys: (x: T) => string[], at: (x: T) => string): T[][] {
+  if (CONVERSATIONS) return groupConvos(xs, keys, at);
+  return [...xs].sort((a, b) => at(b).localeCompare(at(a))).map((x) => [x]);
+}
+
 export default function InboxView({ mode }: { mode: Mode }) {
   const [st, setSt] = useState<Status | null>(null);
   const [acts, setActs] = useState<Act[] | null>(null), [sugs, setSugs] = useState<Sug[]>([]), [custs, setCusts] = useState<Map<string, Cust>>(new Map()), [orders, setOrders] = useState<Ord[]>([]);
@@ -297,16 +306,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // underneath it"): the Inbox grouped by conversation (lib/mail/convo), newest first; a conversation's row opens its
   // newest email, with the rest listed under it
   const inboxKeys = (i: InboxItem) => { const r = i.activity_id ? rowByAct.get(i.activity_id) : undefined; return convoKeys({ subject: i.subject, from_email: i.from_email, customer_id: r?.x.customer_id, thread_id: r?.x.thread_id, external_id: r?.x.external_id, references: r?.x.meta?.references }); };
-  const olGroups = groupConvos(olShown, inboxKeys, (i) => i.received_at || "");
+  const olGroups = byConvo(olShown, inboxKeys, (i) => i.received_at || "");
   const groupOf = new Map<string, InboxItem[]>(); for (const g of olGroups) for (const i of g) groupOf.set(i.id, g);
   // the whole Inbox's conversations too (a move takes the whole conversation, whatever tab it's on)
-  const allGroupOf = useMemo(() => { const m = new Map<string, InboxItem[]>(); for (const g of groupConvos(ol || [], inboxKeys, (i) => i.received_at || "")) for (const i of g) m.set(i.id, g); return m; }, [ol, rowByAct]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allGroupOf = useMemo(() => { const m = new Map<string, InboxItem[]>(); for (const g of byConvo(ol || [], inboxKeys, (i) => i.received_at || "")) for (const i of g) m.set(i.id, g); return m; }, [ol, rowByAct]); // eslint-disable-line react-hooks/exhaustive-deps
   // customer email as conversations too (with our replies, keyed by who they went to): the rest of the conversation
   // under the email that's open
   const actConvo = useMemo(() => {
     const m = new Map<string, Act[]>();
     const keyOf = (x: Act) => convoKeys({ subject: x.subject, from_email: x.direction === "out" ? (x.to_email || "").split(/[,;]/)[0].replace(/.*</, "").replace(/>.*/, "").trim() : x.from_email, customer_id: x.customer_id, thread_id: x.thread_id, external_id: x.external_id, references: x.meta?.references });
-    for (const g of groupConvos(acts || [], keyOf, (x) => x.occurred_at)) for (const x of g) m.set(x.id, g);
+    for (const g of byConvo(acts || [], keyOf, (x) => x.occurred_at)) for (const x of g) m.set(x.id, g);
     return m;
   }, [acts]);
   // Email opens on the brief (the AI's read of the whole Inbox) until an email is picked
@@ -427,7 +436,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const endSelect = () => { setSelMode(false); setChosen(new Set()); setBhAsk(0); };
   /** the selected conversations moved (Archive / News / Black Hole); `customers`: Black Hole the customers' too */
   const bulkMove = async (to: "archive" | "news" | "blackhole", customers = false) => {
-    const groups = groupConvos((ol || []).filter((i) => true), inboxKeys, (i) => i.received_at || "").filter((g) => chosen.has(g[0].id));
+    const groups = byConvo((ol || []).filter((i) => true), inboxKeys, (i) => i.received_at || "").filter((g) => chosen.has(g[0].id));
     const go = groups.filter((g) => to !== "blackhole" || customers || !g.some((y) => y.activity_id));
     setBhAsk(0); setBulk(to);
     let done = 0;
