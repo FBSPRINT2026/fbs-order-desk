@@ -68,7 +68,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
       return { e, color: e.color || COLORS[i % COLORS.length], card, week: wk.regular + wk.overtime, weekOt: wk.overtime, todays, shift, status, photo: lastPhoto ? photos[lastPhoto.id] : null };
     });
   }, [punches, shifts, photos, d.employees, d.settings, today, week.start]);
-  const issues = useMemo(() => (punches ? timeIssues(d.settings, d.employees, punches, addDays(today, -14), dismissed) : []), [punches, d.settings, d.employees, today, dismissed]);
+  const issues = useMemo(() => (punches ? timeIssues(d.settings, d.employees, punches, period.start, dismissed) : []), [punches, d.settings, d.employees, period.start, dismissed]);
   const groups = ([["in", "On the clock"], ["break", "At lunch or on break"], ["late", "Late"], ["done", "Done for today"], ["off", "Not in today"]] as const)
     .map(([k, l]) => ({ k, l, rows: rows.filter((r) => r.status === k).sort((a, b) => (a.e.last_name || a.e.first_name).localeCompare(b.e.last_name || b.e.first_name)) })).filter((g) => g.rows.length);
   const count = (k: string) => rows.filter((r) => r.status === k).length;
@@ -93,12 +93,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
         </div>
       </header>
       {boss && <TimeAsk onChanged={changed} />}
-      {boss && issues.length > 0 && (
-        <section className="tk-issues">
-          <div className="tk-sec-h"><h3>{issues.length === 1 ? "1 thing to fix" : `${issues.length} things to fix`}</h3><span className="faint">last two weeks</span></div>
-          <IssueList issues={issues} onFixed={changed} compact />
-        </section>
-      )}
+      {boss && <IssuesByPeriod d={d} current={period} onFixed={changed} />}
       <div className="tk-sec-h tk-board-h">
         <h3>The crew</h3>
         <span className="spacer" />
@@ -131,6 +126,53 @@ export default function TimeToday({ d }: { d: TimeData }) {
       {sel && <PersonSheet d={d} e={sel.e} punches={punches || []} start={period.start} end={period.end} onClose={() => setWho(null)} onChanged={changed} />}
       {adding && <EmployeeEditor d={d} e={{ first_name: "", last_name: "", email: "", phone: "", staff_email: null, department: "", title: "", pay_type: "hourly", paid_by: "payroll", color: "", active: true, hire_date: today, notes: "" }} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await d.reload(); }} />}
     </div>
+  );
+}
+
+/**
+ * Things to fix, one pay period at a time (Oct 20, Nick: "only show that pay period, or be able to go back and forth…
+ * on the Friday after this pay period, we've got to be able to go back and correct"). Opens on the current period; when
+ * the last period still has something to fix, a button says so and goes there.
+ */
+function IssuesByPeriod({ d, current, onFixed }: { d: TimeData; current: { start: string; end: string }; onFixed: () => void }) {
+  const [start, setStart] = useState(current.start);
+  const p = periodOf(d.settings, start);
+  const prev = periodOf(d.settings, addDays(current.start, -1));
+  const [list, setList] = useState<ReturnType<typeof timeIssues> | null>(null);
+  const [prevCount, setPrevCount] = useState(0);
+  const load = useCallback(async () => {
+    const sb = createClient();
+    const read = (a: string, b: string) => sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(addDays(a, -1), 0)).lt("at", localToIso(addDays(b, 2), 0)).order("at").limit(8000);
+    const onCur = p.start === current.start;
+    const [{ data: ps }, { data: dm }, pv] = await Promise.all([
+      read(p.start, p.end),
+      sb.from("time_issue_dismissals").select("key"),
+      onCur ? read(prev.start, prev.end) : Promise.resolve({ data: null }),
+    ]);
+    const dis = new Set(((dm || []) as { key: string }[]).map((x) => x.key));
+    setList(timeIssues(d.settings, d.employees, (ps || []) as Punch[], p.start, dis, new Date(), p.end));
+    // the last period's leftovers, shown as a button while looking at this one
+    if (onCur) setPrevCount(timeIssues(d.settings, d.employees, (pv.data || []) as Punch[], prev.start, dis, new Date(), prev.end).length);
+  }, [p.start, p.end, prev.start, prev.end, current.start, d.settings, d.employees]);
+  useEffect(() => { load(); const re = () => load(); window.addEventListener("fbs:time-changed", re); return () => window.removeEventListener("fbs:time-changed", re); }, [load]);
+  const isCur = p.start === current.start, isPrev = p.start === prev.start;
+  const n = list?.length || 0;
+  return (
+    <section className={"tk-issues" + (n ? "" : " ok")}>
+      <div className="tk-sec-h">
+        <h3>{list === null ? "Things to fix" : n === 0 ? "Nothing to fix" : n === 1 ? "1 thing to fix" : `${n} things to fix`}</h3>
+        <span className="spacer" />
+        <div className="tk-per">
+          <button type="button" className="btn sm" onClick={() => setStart(addDays(p.start, -1))} aria-label="Previous pay period">←</button>
+          <b>{dayLabel(p.start)} – {dayLabel(p.end)}</b>
+          <button type="button" className="btn sm" disabled={isCur} onClick={() => setStart(addDays(p.end, 1))} aria-label="Next pay period">→</button>
+          <span className="faint">{isCur ? "this pay period" : isPrev ? "last pay period" : ""}</span>
+        </div>
+        {isCur && prevCount > 0 && <button type="button" className="tk-prev" onClick={() => setStart(prev.start)}>Last pay period: {prevCount} to fix</button>}
+        {!isCur && <button type="button" className="linkbtn" onClick={() => setStart(current.start)}>Back to this period</button>}
+      </div>
+      {list === null ? <div className="faint" style={{ padding: "4px 0 6px" }}>Checking…</div> : n > 0 ? <IssueList issues={list} onFixed={onFixed} compact /> : <div className="faint" style={{ padding: "2px 0 6px", fontSize: 13 }}>Every punch in this pay period adds up.</div>}
+    </section>
   );
 }
 

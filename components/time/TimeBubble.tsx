@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { addDays, dayLabel, localDay, localToIso, mergeTime, type Employee, type Punch, type TimeSettings } from "@/lib/timeclock";
+import { addDays, dayLabel, localDay, localToIso, mergeTime, periodOf, type Employee, type Punch, type TimeSettings } from "@/lib/timeclock";
 import { timeIssues, type TimeIssue } from "@/lib/timeIssues";
 import { useRole } from "@/components/RoleContext";
 
@@ -21,7 +21,7 @@ type Loaded = { s: TimeSettings; emps: Employee[]; punches: Punch[]; dismissed: 
 export async function loadIssueData(force = false): Promise<Loaded> {
   if (!force) try { const c = JSON.parse(sessionStorage.getItem(CACHE) || "null") as Loaded | null; if (c && Date.now() - c.at < 5 * 60000) return c; } catch { /* no cache */ }
   const sb = createClient();
-  const from = addDays(localDay(new Date()), -15);
+  const from = addDays(localDay(new Date()), -30); // two pay periods
   const [{ data: s }, { data: es }, { data: ps }, { data: dm }] = await Promise.all([
     sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     sb.from("employees").select("id, first_name, last_name, active, department, code"),
@@ -32,7 +32,8 @@ export async function loadIssueData(force = false): Promise<Loaded> {
   try { sessionStorage.setItem(CACHE, JSON.stringify(out)); } catch { /* full */ }
   return out;
 }
-export const issuesFrom = (l: Loaded) => timeIssues(l.s, l.emps, l.punches, addDays(localDay(new Date()), -14), new Set(l.dismissed));
+/** this pay period and the last one (so the Friday after a period ends, its leftovers still show) */
+export const issuesFrom = (l: Loaded) => timeIssues(l.s, l.emps, l.punches, periodOf(l.s, addDays(periodOf(l.s, localDay(new Date())).start, -1)).start, new Set(l.dismissed));
 export const clearIssueCache = () => { try { sessionStorage.removeItem(CACHE); } catch { /* none */ } window.dispatchEvent(new Event("fbs:time-changed")); };
 
 const greet = () => { const h = +new Date().toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };

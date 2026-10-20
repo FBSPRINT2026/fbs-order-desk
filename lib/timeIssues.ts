@@ -20,16 +20,17 @@ export type TimeIssue = {
 const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m) % 60).padStart(2, "0")}`;
 const dayWord = (day: string, today: string) => (day === today ? "today" : day === addDays(today, -1) ? "yesterday" : `on ${dayLabel(day)}`);
 
-/** issues from `from` (shop day) through today; `dismissed` = keys someone marked as fine */
-export function timeIssues(s: TimeSettings, employees: Employee[], punches: Punch[], from: string, dismissed: Set<string> = new Set(), now = new Date()): TimeIssue[] {
+/** issues from `from` through `to` (shop days; `to` defaults to today, e.g. one pay period); `dismissed` = keys someone marked as fine */
+export function timeIssues(s: TimeSettings, employees: Employee[], punches: Punch[], from: string, dismissed: Set<string> = new Set(), now = new Date(), to?: string): TimeIssue[] {
   const today = localDay(now);
+  const end = to && to < today ? to : today;
   const out: TimeIssue[] = [];
   const ids = new Set([...employees.filter((e) => e.active).map((e) => e.id), ...punches.map((p) => p.employee_id)]);
   for (const e of employees) {
     if (!ids.has(e.id)) continue;
     const mine = punches.filter((p) => p.employee_id === e.id && !p.voided);
     if (!mine.length) continue;
-    const c = timecard(s, e.id, mine, [], from, today, now.toISOString());
+    const c = timecard(s, e.id, mine, [], from, end, now.toISOString());
     const name = fullName(e), first = e.first_name || name;
     for (const i of c.issues) {
       const day = localDay(i.at);

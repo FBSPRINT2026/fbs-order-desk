@@ -9929,3 +9929,10 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 @media (max-width:820px){.tb-wrap{bottom:calc(76px + env(safe-area-inset-bottom));right:12px}}
 @keyframes tb-up{from{opacity:0;transform:translateY(14px) scale(.96)}}
 .tb-hello,.tb-pop{animation-name:tb-up}
+/* things to fix, by pay period (Oct 20) */
+.tk-issues.ok{border-color:var(--line);background:var(--surface)}
+.tk-issues .tk-sec-h{flex-wrap:wrap}
+.tk-per{display:flex;align-items:center;gap:6px;font-size:13px}
+.tk-per b{white-space:nowrap}
+.tk-prev{border:1px solid color-mix(in srgb,var(--danger) 40%,var(--line));background:var(--danger-soft);color:var(--danger);border-radius:99px;padding:3px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.tk-issues .tb-list.compact{max-height:420px;overflow:auto}
