@@ -167,7 +167,7 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     const latestPic = [...rs].reverse().map((r) => (r.cover ? signed.get(r.cover.thumb) : "")).find(Boolean) || [...versions].sort((a, b) => b.last.localeCompare(a.last)).find((v) => v.thumb)?.thumb || "";
     // the cover picked in the browser from the jobs' full-size files (newest job first)
     const saved = covers[key];
-    const pics = [...new Set([...rs].reverse().flatMap((r) => r.pics).map((p) => signed.get(p) || "").filter(Boolean))].slice(0, 8);
+    const pics = [...new Set([...rs].reverse().flatMap((r) => r.pics).map((p) => signed.get(p) || "").filter(Boolean))].slice(0, 40);
     designs.push({
       key, name: rules.names?.[key] || titleCase(best), names: [...new Set(rs.map((r) => r.job.title.trim()))],
       first: rs[0].job.date, last: rs[rs.length - 1].job.date, orders: rs.length, pieces: rs.reduce((n, r) => n + (r.lines.reduce((m, l) => m + l.pieces, 0) || r.job.qty), 0),

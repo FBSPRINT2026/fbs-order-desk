@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
 import type { Catalog, CatalogDesign, CatalogJob } from "@/lib/designCatalog";
 import { coverJpeg, drawPic, isPdf, picRank } from "@/lib/pdfPic";
+import { pdfPicture } from "@/lib/printavoArt";
 
 /**
  * A customer's designs (Oct 20, Nick, Dear Heart Designs: "group orders by design… a master design and then all the
@@ -88,7 +89,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
       </div>
       <div className="panel-b">
         {err && <div className="err">{err}</div>}
-        {cur ? <DesignDetail d={cur} all={cat.designs} customerId={customerId} busy={busy} change={change} back={() => setOpen("")} /> : <>
+        {cur ? <DesignDetail d={cur} all={cat.designs} customerId={customerId} busy={busy} change={change} back={() => setOpen("")} setCover={(url) => setCat((c) => (c ? { ...c, designs: c.designs.map((x) => (x.key === cur.key ? { ...x, coverSet: true, thumb: url } : x)) } : c))} /> : <>
           <div className="dc-bar" data-toolbar>
             <input className="dc-q" placeholder="Find a design, garment or color" value={q} onChange={(e) => setQ(e.target.value)} />
             <div className="chips" role="radiogroup" aria-label="Sort">
@@ -124,7 +125,8 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
   );
 }
 
-function DesignDetail({ d, all, customerId, busy, change, back }: { d: CatalogDesign; all: CatalogDesign[]; customerId: string; busy: boolean; change: (b: Record<string, string>) => Promise<void>; back: () => void }) {
+function DesignDetail({ d, all, customerId, busy, change, back, setCover }: { d: CatalogDesign; all: CatalogDesign[]; customerId: string; busy: boolean; change: (b: Record<string, string>) => Promise<void>; back: () => void; setCover: (url: string) => void }) {
+  const [picking, setPicking] = useState(false);
   const [name, setName] = useState(d.name);
   const [into, setInto] = useState("");
   const [askDel, setAskDel] = useState(false);
@@ -135,6 +137,7 @@ function DesignDetail({ d, all, customerId, busy, change, back }: { d: CatalogDe
         <button type="button" className="btn sm ghost" onClick={back}>‹ All designs</button>
         <input className="dc-d-name" value={name} aria-label="Design name" onChange={(e) => setName(e.target.value)} onBlur={() => { if (name.trim() && name.trim() !== d.name) void change({ op: "rename", key: d.key, name: name.trim() }); }} />
         <Link className="btn sm" href={`/shop/history?${new URLSearchParams({ customer: customerId, q: d.name })}`}>Full history with emails ›</Link>
+        <button type="button" className={"btn sm" + (picking ? " primary" : "")} onClick={() => setPicking((x) => !x)} title="Pick the picture shown for this design">Thumbnail</button>
         <button type="button" className="btn sm ghost dc-del" disabled={busy} onClick={() => setAskDel(true)} title="Take this grouping off the designs (a placeholder, a one-off, a sample). The orders aren't touched.">Delete design</button>
       </div>
       {askDel && (
@@ -144,6 +147,7 @@ function DesignDetail({ d, all, customerId, busy, change, back }: { d: CatalogDe
           <button type="button" className="btn sm ghost" onClick={() => setAskDel(false)}>Cancel</button>
         </div>
       )}
+      {picking && <ThumbPicker d={d} customerId={customerId} onSet={(url) => { setCover(url); setPicking(false); }} onClose={() => setPicking(false)} />}
       <div className="dc-d-sum">
         <span><b>{d.orders}</b> order{d.orders === 1 ? "" : "s"}</span><span><b>{n0(d.pieces)}</b> pieces</span>
         <span>First {fmtDate(d.first)}</span><span>Last {fmtDate(d.last)}</span>
@@ -176,6 +180,72 @@ function DesignDetail({ d, all, customerId, busy, change, back }: { d: CatalogDe
           {all.filter((x) => x.key !== d.key).sort((a, b) => a.name.localeCompare(b.name)).map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
         </select>
         <button type="button" className="btn sm" disabled={!into || busy} onClick={() => { void change({ op: "merge", key: d.key, into }); back(); }}>Merge</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Thumbnail: every picture on the design's jobs (mockups, photos, art; PDFs drawn here), or one uploaded, to pick the
+ * design's thumbnail from (Oct 20, Nick: "give it all the possible images, and I can set the thumbnail").
+ */
+function ThumbPicker({ d, customerId, onSet, onClose }: { d: CatalogDesign; customerId: string; onSet: (url: string) => void; onClose: () => void }) {
+  const urls = useMemo(() => [...new Set([...d.pics, ...d.versions.map((v) => v.full).filter((u) => u && /\.(pdf|png|jpe?g|webp|gif)$/i.test(u.split("?")[0]))])], [d]);
+  const [pics, setPics] = useState<{ url: string; jpg: string; form: boolean }[]>([]);
+  const [left, setLeft] = useState(urls.length);
+  const [saving, setSaving] = useState(""), [err, setErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    setPics([]); setLeft(urls.length);
+    (async () => {
+      const q = [...urls];
+      const run = async () => {
+        while (live && q.length) {
+          const u = q.shift()!;
+          const c = await drawPic(u, 1000);
+          if (!live) return;
+          if (c) { const form = picRank(c) < 0; setPics((p) => [...p, { url: u, jpg: coverJpeg(c, 900), form }]); }
+          setLeft((n) => n - 1);
+        }
+      };
+      await Promise.all([run(), run(), run()]);
+    })();
+    return () => { live = false; };
+  }, [urls]);
+  async function save(jpg: string, key: string) {
+    setSaving(key); setErr("");
+    const r = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, op: "cover", key: d.key, data: jpg }) }).then((x) => x.json()).catch(() => null) as { ok?: boolean; url?: string; error?: string } | null;
+    setSaving("");
+    if (!r?.ok) return setErr(r?.error || "That didn't save.");
+    onSet(r.url || jpg);
+  }
+  async function upload(f: File | undefined) {
+    if (!f) return;
+    let c: HTMLCanvasElement | null = null;
+    if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) c = await pdfPicture(await f.arrayBuffer(), 1000).catch(() => null);
+    else { const u = URL.createObjectURL(f); c = await drawPic(u, 1000).finally(() => URL.revokeObjectURL(u)); }
+    if (!c) return setErr("That file couldn't be read. Use a picture (JPG, PNG) or a PDF.");
+    await save(coverJpeg(c, 900), "upload");
+  }
+  // order forms and S&S sheets last
+  const shown = [...pics].sort((a, b) => Number(a.form) - Number(b.form));
+  return (
+    <div className="dc-tp">
+      <div className="dc-tp-h">
+        <b>Pick the thumbnail</b>
+        <span className="faint">{left > 0 ? `Loading ${left} more picture${left === 1 ? "" : "s"} from the orders…` : `${pics.length} picture${pics.length === 1 ? "" : "s"} from the orders`}</span>
+        <label className="btn sm">Upload a picture<input type="file" accept="image/*,application/pdf" hidden onChange={(e) => void upload(e.target.files?.[0])} /></label>
+        <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
+      </div>
+      {err && <div className="err">{err}</div>}
+      <div className="dc-tp-grid">
+        {shown.map((p) => (
+          <button key={p.url} type="button" className={"dc-tp-it" + (p.form ? " form" : "")} disabled={!!saving} onClick={() => void save(p.jpg, p.url)} title={p.form ? "Looks like an order form" : "Use this as the thumbnail"}>
+            <img src={p.jpg} alt="" />
+            <span>{saving === p.url ? "Saving…" : p.form ? "Order form" : "Use this"}</span>
+          </button>
+        ))}
+        {urls.length === 0 && <span className="faint">No pictures on this design&apos;s orders. Upload one.</span>}
       </div>
     </div>
   );
