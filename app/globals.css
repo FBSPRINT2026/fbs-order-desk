@@ -10205,3 +10205,6 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .ap-w{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px}
 .ap-w input{width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;font:inherit}
 @media (max-width:560px){.ap-conf{flex-direction:column}.ap-pic.big{width:100%}}
+/* Email search suggestions sit in the list, above the matching emails, instead of covering them (Oct 20, Nick) */
+.ibx2-find{flex-wrap:wrap}
+.ibx2-find .msug{position:static;flex:1 0 100%;order:9;margin:6px 0 4px;box-shadow:none;max-height:min(34vh,300px)}
