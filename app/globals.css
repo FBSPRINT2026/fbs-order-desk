@@ -9956,3 +9956,9 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 }
 @container (max-width:620px){ .tb-b:not(.primary) .tb-l{display:block} .tb-b{flex-direction:column;justify-content:center;height:auto;min-height:46px;gap:3px;padding:4px 8px;font-size:11.5px;line-height:1.1} .tb-b svg{width:20px;height:20px} }
 @container (max-width:440px){ .tb-row .tb-b .tb-l,.tb-b:not(.primary) .tb-l{display:none} .tb-row .tb-b,.tb-b{min-height:38px;padding:0 8px} }
+/* Mockup Creator: with Print areas on, each garment's dashed box can be dragged and sized (saved per style; Oct 20) */
+.mk-area.edit{pointer-events:auto;cursor:move;background:rgba(10,123,166,.05);border-color:#0a7ba6;touch-action:none}
+.mk-area.edit:hover{background:rgba(10,123,166,.1)}
+.mk-area-h{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#0a7ba6;border:2px solid #fff;cursor:nwse-resize;box-shadow:0 1px 3px rgba(0,0,0,.3);touch-action:none}
+.mk-areanote{display:block;text-align:center;font-size:12px;margin:2px 8px 0;color:var(--ink-2)}
+.mk-areanote .linkbtn{font-size:12px}

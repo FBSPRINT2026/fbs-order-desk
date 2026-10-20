@@ -647,6 +647,59 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
   const fitFor = (l: Line | undefined, v: View) => { if (!l) return null; const u = photo(l, v); return u.startsWith("data:") ? null : fits[u] || null; };
+  /**
+   * Each style's own print-area spot (Oct 20, Nick: "when I click Print areas, let me drag that print areas grid around
+   * … it stays the same dependent on each individual shirt … so it knows moving forward: a PC55RS gets this spot").
+   * Some photos (a PC55RS with its low collar) don't line up with the reference tee by measurement alone. Dragging or
+   * resizing the dashed box on one garment moves only that style's prints, never the other garments in the group;
+   * saved on the garment (garments.mockup_fit, by side) in reference-photo pixels, and the box's size as a scale.
+   * The photo itself isn't moved: only where the prints sit on it.
+   */
+  type FitAdj = { dx: number; dy: number; k: number };
+  const [adjs, setAdjs] = useState<Record<string, Partial<Record<View, FitAdj | null>>>>({});
+  const adjOf = (l: Line | undefined, v: View): FitAdj | null => {
+    if (!l) return null;
+    const g = garmentFor(l); if (!g) return null;
+    const mine = adjs[g.id];
+    if (mine && v in mine) return mine[v] || null;
+    const saved = (g as Garment & { mockup_fit?: Partial<Record<View, FitAdj>> | null }).mockup_fit?.[v];
+    return saved && (saved.dx || saved.dy || (saved.k && saved.k !== 1)) ? saved : null;
+  };
+  /** the photo's fit with this style's hand adjustment (for placing prints; the photo's zoom uses the plain fit) */
+  const adjusted = (fit: Fit | null | undefined, l: Line | undefined, v: View): Fit | null | undefined => {
+    const a = fit && !fit.flat ? adjOf(l, v) : null;
+    if (!a || !fit) return fit;
+    return { ...fit, cx: fit.cx + a.dx * fit.s, top: fit.top + a.dy * fit.s, s: fit.s * (a.k || 1) };
+  };
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** move / resize one style's print areas on one side (photo pixels; k = how much bigger), and save it for next time */
+  const nudgeArea = (l: Line | undefined, v: View, dxPx: number, dyPx: number, kMul = 1) => {
+    const g = l && garmentFor(l), fit = l && fitFor(l, v);
+    if (!g || !fit || fit.flat) return;
+    const cur = adjOf(l, v) || { dx: 0, dy: 0, k: 1 };
+    const s0 = fit.s || 1;
+    const next: FitAdj = { dx: cur.dx + dxPx / s0, dy: cur.dy + dyPx / s0, k: Math.max(0.6, Math.min(1.6, (cur.k || 1) * kMul)) };
+    setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [v]: next } }));
+    queueSave(g.id, v, next);
+  };
+  const resetArea = (l: Line | undefined, v: View) => { const g = l && garmentFor(l); if (!g) return; setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [v]: null } })); queueSave(g.id, v, null); };
+  const pendingFit = useRef<Record<string, Partial<Record<View, FitAdj | null>>>>({});
+  const queueSave = (gid: string, v: View, a: FitAdj | null) => {
+    pendingFit.current[gid] = { ...(pendingFit.current[gid] || {}), [v]: a };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      const all = pendingFit.current; pendingFit.current = {};
+      const sb = createClient();
+      for (const [id, sides] of Object.entries(all)) {
+        const g = catalog.find((x) => x.id === id) as (Garment & { mockup_fit?: Partial<Record<View, FitAdj>> | null }) | undefined;
+        const merged: Partial<Record<View, FitAdj>> = { ...(g?.mockup_fit || {}) };
+        for (const [side, a] of Object.entries(sides)) { if (a) merged[side as View] = { dx: Math.round(a.dx * 10) / 10, dy: Math.round(a.dy * 10) / 10, k: Math.round((a.k || 1) * 1000) / 1000 }; else delete merged[side as View]; }
+        const val = Object.keys(merged).length ? merged : null;
+        const { error } = await sb.from("garments").update({ mockup_fit: val }).eq("id", id);
+        if (!error) setCatalog((c) => c.map((x) => (x.id === id ? ({ ...x, mockup_fit: val } as Garment) : x)));
+      }
+    }, 700);
+  };
   useEffect(() => {
     for (const l of lines) for (const v of ["front", "back"] as View[]) {
       const u = photo(l, v);
@@ -744,7 +797,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const bd = on ? bodyFor(on) : body;
     const wIn = printWidth(im, im.location, ratioOf(d), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, fit === undefined ? fitFor(on || line, view || viewsFor(im.location)[0]) : fit, bd);
+    const vv = view || viewsFor(im.location)[0];
+    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, on || line, vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
     const o0 = offsets[im.id] || { dx: 0, dy: 0 }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
@@ -846,7 +900,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const labShirt = (side: Side): LabShirt | null => {
     if (side === "sleeve" || !line) return null;
     const v = side as View;
-    const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, fitFor(line, v)) : basePlacement("Full Back", 12, 14 / 12, null, scale, v, fitFor(line, v));
+    const af = adjusted(fitFor(line, v), line, v);
+    const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, af) : basePlacement("Full Back", 12, 14 / 12, null, scale, v, af);
     return { src: photo(line, v), hex: shirtHex(line), area: b.area, label: `${v === "front" ? "Front" : "Back"} of the ${[line.color, line.style].filter(Boolean).join(" ") || "shirt"}` };
   };
   /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */
@@ -1563,7 +1618,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       g.drawImage(bg, nm.tx * BD_K, nm.ty * BD_K, W * nm.z, H * nm.z);
       // the print area, dashed, with its name and size (light lines on a dark shirt, dark on a light one)
       const bd = bodyFor(l), sp = spotFor(loc, bd);
-      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, fit, bd);
+      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, adjusted(fit, l, v), bd);
       const ax = (nm.tx + nm.z * b.area.x) * BD_K, ay = (nm.ty + nm.z * b.area.y) * BD_K, aw = b.area.w * nm.z * BD_K, ah = b.area.h * nm.z * BD_K;
       const hx = shirtHex(l).replace("#", ""), lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
       const ink = lum < 0.55 ? "rgba(255,255,255,0.85)" : "rgba(40,48,60,0.7)";
@@ -1608,7 +1663,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const toPhoto = (X: number, Y: number) => ({ x: (X / B.k - B.tx) / B.z, y: (Y / B.k - B.ty) / B.z });
     const tl = toPhoto(x0 * f, y0 * f), br = toPhoto((x1 + 1) * f, (y1 + 1) * f);
     const pw = br.x - tl.x, ph = br.y - tl.y, rr = ph / (pw || 1);
-    const fit = fitFor(l, v), sc = scaleOf(bdy);
+    const fit = adjusted(fitFor(l, v), l, v), sc = scaleOf(bdy);
     const start = imprints.find((x) => x.id === imId)?.location || (v === "back" ? "Full Back" : "Full Front");
     const ppiPhoto = basePlacement(start, 1, rr, null, sc, v, fit, bdy).w || PX_PER_IN * sc;
     let wIn = Math.round((pw / ppiPhoto) * 100) / 100;
@@ -1815,6 +1870,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
               <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), v)} cx={normOf(fitFor(line, v), v).z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
+                areaEdit={grid && !!line && !!garmentFor(line) && !!fitFor(line, v) && !fitFor(line, v)?.flat}
+                onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
+                areaNote={grid && line && adjOf(line, v) ? <span className="mk-areanote">Print area set by hand for {line.style}{lines.length > 1 ? " (this garment only)" : ""} · <button type="button" className="linkbtn" onClick={() => resetArea(line, v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
                 corner={<>
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
@@ -2157,7 +2215,9 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, areaEdit, onArea, areaNote }: {
+  /** the dashed print areas can be dragged (moves this style's prints) and resized from the corner */ areaEdit?: boolean;
+  onArea?: (dx: number, dy: number, kMul: number) => void; areaNote?: ReactNode;
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
   /** zoom and shift that make this photo's shirt fill the frame like the reference tee (normOf) */ norm?: { z: number; tx: number; ty: number };
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
@@ -2167,7 +2227,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size"; w: number; el?: HTMLElement } | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize"; w: number; el?: HTMLElement } | null>(null);
   const [sel, setSel] = useState("");
   const [tip, setTip] = useState("");
   const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2211,6 +2271,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           }
           const d = drag.current; if (!d) return;
           const f = k();
+          if (d.mode === "area") { onArea?.((e.clientX - d.x) / f, (e.clientY - d.y) / f, 1); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
+          if (d.mode === "areaSize") { const dw = (e.clientX - d.x) / f; if (d.w + dw > 40) { onArea?.(0, 0, (d.w + dw) / d.w); d.w += dw; } drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
           else { const dw = (e.clientX - d.x) / f; if (d.w + dw > 12) { onResize(d.id, d.w + dw); d.w += dw; } }
           drag.current = { ...d, x: e.clientX, y: e.clientY };
@@ -2221,14 +2283,18 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           if (pz) { if (pts.current.size < 2) { pinch.current = null; drag.current = null; onEnd?.(pz.id); } return; }
           const d = drag.current; drag.current = null;
           // only after a real drag: a plain click never changes the location
-          if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id);
+          if (d && onEnd && !d.mode.startsWith("area") && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id);
         }}
         onPointerCancel={(e) => { pts.current.delete(e.pointerId); if (pinch.current && pts.current.size < 2) { const id = pinch.current.id; pinch.current = null; onEnd?.(id); } drag.current = null; }}
-        onPointerLeave={(e) => { if (e.pointerType === "touch") return; const d = drag.current; drag.current = null; if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
+        onPointerLeave={(e) => { if (e.pointerType === "touch") return; const d = drag.current; drag.current = null; if (d && onEnd && !d.mode.startsWith("area") && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
         onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg") || (e.target as HTMLElement).classList.contains("mk-norm")) setSel(""); }}>
         <div className="mk-norm" style={norm && norm.z !== 1 ? { transform: `translate(${(norm.tx / PHOTO_W) * 100}%, ${(norm.ty / PHOTO_H) * 100}%) scale(${norm.z})` } : undefined}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
-        {grid && items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
+        {grid && items.map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit && !it.p.clip ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
+          title={areaEdit && !it.p.clip ? "Drag to line the print area up on this shirt (saved for this style). Drag the corner to size it." : undefined}
+          onPointerDown={areaEdit && !it.p.clip ? (e) => { if ((e.target as HTMLElement).closest(".mk-art")) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "area", w: 0 }; } : undefined}>
+          {areaEdit && !it.p.clip && <span className="mk-area-h" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "areaSize", w: it.p.area.w }; }} />}
+        </div>)}
         {/* the art itself, cut to the shirt outline */}
         <div className="mk-artlayer" style={mask ? { maskImage: `url(${mask})`, WebkitMaskImage: `url(${mask})` } : undefined}>
           {items.map((it) => it.url ? (
@@ -2294,6 +2360,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
         {corner}
       </div>
       <div className="mk-label" style={cx ? { transform: `translateX(${((cx / PHOTO_W) - 0.5) * 100}%)` } : undefined}>{label}</div>
+      {areaNote}
     </div>
   );
 }
