@@ -22,7 +22,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
     ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
   ]);
   // customers never see our blank costs
-  const catalog = ((g || []) as Garment[]).map((x) => ({ ...x, cost: 0, size_costs: {} }));
+  const catalog = ((g || []) as Garment[]).map((x) => ({ ...x, cost: 0, size_costs: {}, color_size_costs: {} }));
   const designs = (d || []) as Design[];
   const withPv = designs.filter((x) => x.preview_path);
   const urls: Record<string, string> = {};

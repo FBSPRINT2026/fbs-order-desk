@@ -111,6 +111,8 @@ export type GLine = {
   /** what that supplier charge is marked up by on this line (Settings → 2XL+ markup when the style was picked, e.g. 1.2);
    * stamped on the line so a change to the setting never reprices quotes already sent. None = 1 (lines from before Oct 16). */
   sizeUpMarkup?: number;
+  /** 2XL+ charge each typed by hand for a size (click the "+$" under the size; Oct 20, Nick): wins over everything else; blank = automatic */
+  sizeUpSet?: Partial<Record<Size, number>>;
   /** priced by the customer's program rate card (lib/programs.ts): the price put on this line and how it was worked out */
   prog?: { each: number; note: string };
   /** staff typed their own price over the program price: the program leaves this line alone */
@@ -159,7 +161,7 @@ export type Order = {
   approved_name: string | null; created_at: string; updated_at: string;
   price_type: PriceType; /** priced by the customer's program rate card (the chip next to Retail / Wholesale) */ use_program?: boolean; /** which of the customer's rate cards (programs.rate_cards id, "main" = the first) */ program_card?: string | null; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
-export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; /** the supplier's size chart: flat body width / length per size (inches) */ specs?: import("@/lib/garmentBody").GarmentSpecs | null; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }>; /** fiber content lines from the supplier ("100% polyester") */ fabric?: string; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
+export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; /** the supplier's size chart: flat body width / length per size (inches) */ specs?: import("@/lib/garmentBody").GarmentSpecs | null; size_costs?: Record<string, number>; /** each color's own cost by size (suppliers price colors differently; Oct 20) */ color_size_costs?: Record<string, Record<string, number>> | null; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }>; /** fiber content lines from the supplier ("100% polyester") */ fabric?: string; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; is_test?: boolean; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
@@ -440,9 +442,25 @@ export function mergeSettings(data: unknown): Settings {
 export const sizeUpEach = (l: { sizeUp?: Partial<Record<Size, number>>; sizeUpMarkup?: number; prog?: unknown }, sz: Size) =>
   Math.round(num(l.sizeUp?.[sz]) * (l.prog ? 1 : num(l.sizeUpMarkup) || 1) * 100) / 100;
 /** The supplier's extra cost for 2XL–5XL over the base size, and the markup to stamp on the line (Settings). */
-export function supplierSizeUp(gm: { size_costs?: Record<string, number> | null; cost?: number | string | null }, s?: Pick<Settings, "sizeUpMarkup"> | null) {
-  const sc = gm.size_costs || {}, up: Partial<Record<Size, number>> = {};
-  for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
+/**
+ * A color's own costs by size, when the supplier prices colors differently (Oct 20, Nick: the PC55RS White/Royal 4XL is
+ * $7.98 over a $4.44 base, but the cheapest color's $5.61 over $4.07 gave +$1.85). The color is matched loosely
+ * ("White / Royal" = "White/ Royal"). Base = the color's lowest regular-size (not 2XL+) cost.
+ */
+export function colorCosts(gm: { size_costs?: Record<string, number> | null; color_size_costs?: Record<string, Record<string, number>> | null; cost?: number | string | null }, color?: string | null): { base: number; sizes: Record<string, number> } {
+  const k = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const per = gm.color_size_costs || {};
+  const hit = color ? per[color] || Object.entries(per).find(([c]) => k(c) === k(color))?.[1] : undefined;
+  if (hit && Object.keys(hit).length) {
+    const reg = Object.entries(hit).filter(([z, v]) => !/^[2-6]XL$/.test(z) && +v > 0).map(([, v]) => +v);
+    const base = reg.length ? Math.min(...reg) : +(gm.cost || 0);
+    return { base, sizes: hit };
+  }
+  return { base: +(gm.cost || 0), sizes: gm.size_costs || {} };
+}
+export function supplierSizeUp(gm: { size_costs?: Record<string, number> | null; color_size_costs?: Record<string, Record<string, number>> | null; cost?: number | string | null }, s?: Pick<Settings, "sizeUpMarkup"> | null, color?: string | null) {
+  const { base, sizes: sc } = colorCosts(gm, color), up: Partial<Record<Size, number>> = {};
+  for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && base) up[z] = Math.max(0, Math.round((sc[z] - base) * 100) / 100);
   const has = Object.keys(up).length > 0;
   return { sizeUp: has ? up : undefined, sizeUpMarkup: has ? (s?.sizeUpMarkup ?? DEFAULT_SETTINGS.sizeUpMarkup ?? 1) : undefined };
 }
@@ -605,7 +623,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
-      const up = pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
+      const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
       upTotal += q * up;
     });

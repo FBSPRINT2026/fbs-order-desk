@@ -93,7 +93,7 @@ async function findStyle(q: string): Promise<SSStyle | null> {
   return null;
 }
 
-export type SSGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; specs?: GarmentSpecs | null };
+export type SSGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; color_size_costs: Record<string, Record<string, number>>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; specs?: GarmentSpecs | null };
 
 /**
  * A style's size chart from S&S (GET /v2/specs/?style=<styleID>): flat body width and body length per size, in
@@ -145,6 +145,15 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     if (+(p.unitWeight || 0) > 0) e.lbs.push(+p.unitWeight!);
     bySize.set(z, e);
   }
+  // each color's own price by size (colors can cost more than the style's usual price)
+  const color_size_costs: Record<string, Record<string, number>> = {};
+  for (const p of prods) {
+    const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()];
+    const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
+    const v = +(p.customerPrice || p.piecePrice || 0);
+    if (!z || !p.colorName || !(v > 0)) continue;
+    (color_size_costs[p.colorName] ||= {})[z] = Math.round(v * 100) / 100;
+  }
   const order = SIZES as readonly string[];
   const sizes = [...bySize.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const size_costs: Record<string, number> = {};
@@ -164,6 +173,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     cost: Number.isFinite(cost) ? cost : 0,
     sizes,
     size_costs,
+    color_size_costs,
     ss_style_id: st.styleID,
     color_images,
     specs: await ssSpecs(st.styleID, youth).catch(() => null).then((sp) => (Object.keys(weights).length ? { ...(sp || { sizes: {} }), weights } : sp)),

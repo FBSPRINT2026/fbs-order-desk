@@ -57,6 +57,6 @@ export async function GET(req: Request) {
 
 /** What a customer may see of a catalog garment: no costs. */
 function publicGarment(g: Record<string, unknown>) {
-  const { cost: _c, size_costs: _s, ...rest } = g;
-  return { ...rest, cost: 0, size_costs: {} };
+  const { cost: _c, size_costs: _s, color_size_costs: _cs, ...rest } = g;
+  return { ...rest, cost: 0, size_costs: {}, color_size_costs: {} };
 }

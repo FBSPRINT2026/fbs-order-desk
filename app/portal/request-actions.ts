@@ -207,7 +207,7 @@ export async function portalCatalog() {
   try {
     const { admin } = await me();
     const { data } = await admin.from("garments").select("*").order("style");
-    return ((data || []) as Record<string, unknown>[]).map((g) => ({ ...g, cost: 0, size_costs: {} }));
+    return ((data || []) as Record<string, unknown>[]).map((g) => ({ ...g, cost: 0, size_costs: {}, color_size_costs: {} }));
   } catch { return []; }
 }
 

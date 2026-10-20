@@ -89,7 +89,7 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
   });
 }
 
-export type SanMarGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; supplier: "sanmar"; supplier_style: string };
+export type SanMarGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; color_size_costs: Record<string, Record<string, number>>; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; supplier: "sanmar"; supplier_style: string };
 
 /** Look up a SanMar style ("PC61", "K500", "NKDC1963") and shape it like a catalog garment. Cost = our price. */
 export async function sanmarLookup(style: string): Promise<SanMarGarment | null> {
@@ -104,6 +104,9 @@ export async function sanmarLookup(style: string): Promise<SanMarGarment | null>
   const cost = (s: SanMarSku) => s.myPrice || s.casePrice || s.piecePrice;
   const size_costs: Record<string, number> = {};
   for (const z of sizes) { const cs = skus.filter((s) => s.size === z).map(cost).filter((x) => x > 0); if (cs.length) size_costs[z] = Math.min(...cs); }
+  // each color's own price by size (Oct 20: colors differ, e.g. PC55RS White/Royal 4XL $7.98 vs the cheapest color's $5.61)
+  const color_size_costs: Record<string, Record<string, number>> = {};
+  for (const sk of skus) { const c = nameOf(sk), v = cost(sk); if (!c || !sk.size || !(v > 0)) continue; const m = (color_size_costs[c] ||= {}); m[sk.size] = m[sk.size] ? Math.min(m[sk.size], v) : v; }
   const base = Math.min(...Object.values(size_costs).filter((x) => x > 0), Infinity);
   const color_images: SanMarGarment["color_images"] = {};
   for (const c of colors) { const s = skus.find((x) => nameOf(x) === c && (x.front || x.image)); if (s) color_images[c] = { front: s.front || s.image, back: s.back, side: "", hex: "" }; }
@@ -111,7 +114,7 @@ export async function sanmarLookup(style: string): Promise<SanMarGarment | null>
   return {
     style: t, brand: first.brand || "SanMar", description: first.title || first.description.replace(/<[^>]+>/g, " ").slice(0, 200),
     fabric: fabricLines([...new Set(skus.map((x) => x.description).filter(Boolean))].join("\n")), fabric_at: new Date().toISOString(),
-    colors, cost: isFinite(base) ? base : 0, sizes, size_costs, image: first.front || first.image, color_images, supplier: "sanmar", supplier_style: t,
+    colors, cost: isFinite(base) ? base : 0, sizes, size_costs, color_size_costs, image: first.front || first.image, color_images, supplier: "sanmar", supplier_style: t,
   };
 }
 

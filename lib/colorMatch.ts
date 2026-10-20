@@ -47,3 +47,36 @@ function matchOne(asked: string, options: string[]): { color: string; sure: bool
   const ranked = options.map((o) => ({ o, s: score(o) })).sort((p, q) => q.s - p.s);
   return ranked[0] && ranked[0].s >= 1.4 ? { color: ranked[0].o, sure: false } : null;
 }
+
+/**
+ * The color box's search (Oct 20, Nick: "I type white royal, it should find White and Royal… white - royal, white royal,
+ * white-royal… it doesn't have to be exact"). Spaces, dashes, slashes, "&" and dots are all the same; every word typed
+ * must start a word of the color, in any order (so "wh roy" finds "White/ Royal"). Best first: the same name, then the
+ * words in the order typed, then any order; fewer extra words first.
+ */
+export function rankColors(typed: string, options: string[]): string[] {
+  if (!words(typed).length) return options;
+  return rankScored(typed, options).map((x) => x.o);
+}
+function rankScored(typed: string, options: string[]) {
+  const tw = words(typed);
+  const scored: { o: string; s: number; extra: number }[] = [];
+  for (const o of options) {
+    const ow = words(o);
+    const pos = tw.map((t) => ow.findIndex((w) => w === t || w.startsWith(t)));
+    if (pos.some((p) => p < 0)) continue;
+    const exact = ow.join(" ") === tw.join(" ") ? 0 : 1;
+    const inOrder = pos.every((p, i) => i === 0 || p > pos[i - 1]) ? 0 : 1;
+    const whole = tw.every((t) => ow.includes(t)) ? 0 : 1;
+    scored.push({ o, s: exact * 100 + inOrder * 10 + whole, extra: ow.length - tw.length });
+  }
+  return scored.sort((a, b) => a.s - b.s || a.extra - b.extra || a.o.length - b.o.length);
+}
+/** the one color typing plainly means (best match, and nothing else as good), or null */
+export function plainlyMeans(typed: string, options: string[]): string | null {
+  if (!words(typed).length) return null;
+  const r = rankScored(typed, options);
+  if (!r.length) return null;
+  if (r.length > 1 && r[1].s === r[0].s && r[1].extra === r[0].extra) return null;
+  return r[0].o;
+}

@@ -1,8 +1,9 @@
 "use client";
-import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
 import { colorHex } from "@/lib/inkColors";
+import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -84,11 +85,11 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
       const hit = found || findStyle(style);
       if (hit) {
         // 2XL+ material charge = supplier's size price above the base price
-        Object.assign(l, supplierSizeUp(hit, settings));
-        // picking a catalog style always refreshes its details and blank cost
+        Object.assign(l, supplierSizeUp(hit, settings, l.color));
+        // picking a catalog style always refreshes its details and blank cost (this color's, when the supplier prices colors apart)
         l.garment = hit.description;
         l.brand = hit.brand;
-        if (!gc.wholesale) l.cost = +hit.cost || "";
+        if (!gc.wholesale) l.cost = +colorCosts(hit, l.color).base || +hit.cost || "";
         // the catalog decides which sizes this garment comes in
         const run = (hit.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
         if (run.length) {
@@ -115,6 +116,13 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
     if ((baby || tod) && !has(ADULT_SIZES)) return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : [])];
     return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   };
+  // one set of size columns for the whole group, so S sits under S on every garment even when one style has no XS
+  // (Oct 20, Nick: "the sizes line up across multiple garments"); a size a garment doesn't come in is an empty slot
+  const groupCols: string[] = (() => {
+    const all = new Set(g.lines.filter((l) => !l.oneSize).flatMap((l) => colsFor(l)));
+    const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as readonly string[];
+    return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
+  })();
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
@@ -206,7 +214,15 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
-                    <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => { x.lines[li].color = v; })} />
+                    <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
+                      const ln = x.lines[li], was = ln.color; ln.color = v;
+                      // a color with its own supplier prices: its 2XL+ charges, and its blank cost unless someone typed their own
+                      if (hit?.color_size_costs && !gc.wholesale && !ln.prog) {
+                        Object.assign(ln, supplierSizeUp(hit, settings, v));
+                        const auto = [+colorCosts(hit, was).base, +hit.cost].filter((n) => n > 0);
+                        if (ln.cost === "" || ln.cost == null || auto.includes(+ln.cost)) ln.cost = +colorCosts(hit, v).base || +hit.cost || "";
+                      }
+                    })} />
                   </div>
                   <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
                   {!gc.wholesale && !hidePrices && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
@@ -224,8 +240,10 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 {l.oneSize ? (
                   <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
                 ) : (
-                  <SizeRow cols={colsFor(l) as (keyof GLine["sizes"])[]} sizes={l.sizes || {}} onSet={setQty}
-                    up={(s) => (!gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])} />
+                  <SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(s) => !colsFor(l).includes(s)} sizes={l.sizes || {}} onSet={setQty}
+                    up={(s) => (l.sizeUpSet?.[s as Size] != null ? +l.sizeUpSet[s as Size]! : !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])}
+                    upSet={(s) => l.sizeUpSet?.[s as Size] != null}
+                    onUp={(s, v) => update((x) => { const ln = x.lines[li]; const m = { ...(ln.sizeUpSet || {}) }; if (v == null) delete m[s as Size]; else m[s as Size] = v; ln.sizeUpSet = Object.keys(m).length ? m : undefined; })} />
                 )}
               </div>
             );
@@ -574,8 +592,9 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState(false);
   const [active, setActive] = useState(0);
-  const q = value.trim().toLowerCase();
-  const list = typed && q ? colors.filter((c) => c.toLowerCase().includes(q)).sort((a, b) => +!a.toLowerCase().startsWith(q) - +!b.toLowerCase().startsWith(q)) : colors;
+  const q = value.trim();
+  // forgiving: "white royal", "white - royal", "white-royal" all find "White/ Royal" (rankColors, Oct 20)
+  const list = typed && q ? rankColors(q, colors) : colors;
   const pick = (c: string) => { onChange(c); setOpen(false); setTyped(false); };
   return (
     <div className="style-pick">
@@ -583,7 +602,8 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
         onChange={(e) => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(0); }}
         onFocus={() => { setTyped(false); setOpen(true); setActive(Math.max(0, colors.indexOf(value))); }}
         onClick={() => { if (!open) { setTyped(false); setOpen(true); } }}
-        onBlur={() => setTimeout(() => { setOpen(false); setTyped(false); }, 150)}
+        // typed and walked away: snap to the color it plainly means (the best match), so the line gets the real color name
+        onBlur={() => setTimeout(() => { const m = typed && q && !colors.includes(value) ? plainlyMeans(q, colors) : null; if (m) onChange(m); setOpen(false); setTyped(false); }, 150)}
         onKeyDown={(e) => {
           if (!open || !list.length) return;
           if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(list.length - 1, a + 1)); }
@@ -728,7 +748,10 @@ const SIZE_ADVANCE_MS = 900;
  * to move), and it slides to the next size with the keypad still up. Tap any size to jump to it; Enter / Next on
  * keypads that have one moves right away.
  */
-function SizeRow<K extends string>({ cols, sizes, onSet, up }: { cols: K[]; sizes: Partial<Record<K, number>>; onSet: (s: K, raw: string) => void; up: (s: K) => number | undefined }) {
+function SizeRow<K extends string>({ cols, sizes, onSet, up, off, upSet, onUp }: { cols: K[]; sizes: Partial<Record<K, number>>; onSet: (s: K, raw: string) => void; up: (s: K) => number | undefined;
+  /** a size this garment doesn't come in: an empty slot that keeps the columns lined up with the other garments */ off?: (s: K) => boolean;
+  /** the 2XL+ charge was typed by hand; onUp sets it (null = back to automatic) */ upSet?: (s: K) => boolean; onUp?: (s: K, v: number | null) => void }) {
+  const [editUp, setEditUp] = useState<K | null>(null);
   const [touch, setTouch] = useState(false);
   useEffect(() => { setTouch(typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches); }, []);
   const [at, setAt] = useState<number | null>(null);
@@ -749,16 +772,27 @@ function SizeRow<K extends string>({ cols, sizes, onSet, up }: { cols: K[]; size
     // the same box stays focused (the keypad stays up); select what's there so typing replaces it
     requestAnimationFrame(() => box.current?.select());
   };
-  const next = (from: number) => { stop(); if (from < cols.length - 1) go(from + 1); else { setAt(null); box.current?.blur(); } };
+  // the next size this garment comes in (an empty slot for another garment's size is skipped)
+  const next = (from: number) => { stop(); let i = from + 1; while (i < cols.length && off?.(cols[i]) && !sizes[cols[i]]) i++; if (i < cols.length) go(i); else { setAt(null); box.current?.blur(); } };
   const cells = cols.map((s, si) => {
     const u = up(s), q = sizes[s];
+    if (off?.(s) && !q) return <span key={s} className={"szc szc-off" + (s === "YXL" && si < cols.length - 1 ? " ysep" : "")} aria-hidden><span>{s}</span><i className="sz sz-off" /><small className="upc">{"\u00a0"}</small></span>;
+    const big = /^[2-6]XL$/.test(s);
+    // the 2XL+ charge each: click it to type your own (blank goes back to automatic)
+    const upEl = onUp && big
+      ? (editUp === s
+        ? <input className="upc-in" type="number" step="0.01" min="0" autoFocus defaultValue={u != null ? String(u) : ""} aria-label={`${s} extra charge each`}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditUp(null); }}
+            onBlur={(e) => { const t = e.target.value.trim(); onUp(s, t === "" ? null : Math.max(0, +t)); setEditUp(null); }} />
+        : <button type="button" className={"upc upc-btn" + (upSet?.(s) ? " set" : "")} onClick={(e) => { e.preventDefault(); setEditUp(s); }} title={upSet?.(s) ? "Typed by hand. Click to change; clear it to go back to automatic." : "Extra charge each for this size. Click to type your own."}>{u ? `+${u}` : "+ $"}</button>)
+      : <small className="upc">{u ? `+${u}` : "\u00a0"}</small>;
     return (
       <label key={s} className={"szc" + (s === "YXL" && si < cols.length - 1 ? " ysep" : "")}>
         <span>{s}</span>
         {touch
           ? <button type="button" className={"sz sz-tap" + (q ? " has" : "") + (at === si ? " on" : "")} aria-label={`${s} quantity`} onClick={() => { box.current?.focus(); go(si); }}>{q || ""}</button>
           : <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (q ? " has" : "")} value={q || ""} onChange={(e) => onSet(s, e.target.value)} />}
-        <small className="upc">{u ? `+${u}` : "\u00a0"}</small>
+        {upEl}
       </label>
     );
   });
