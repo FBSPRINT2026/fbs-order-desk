@@ -150,7 +150,10 @@ export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[]
     rec.first = rec.first && rec.first < p.at ? rec.first : p.at;
     rec.last = rec.last && rec.last > p.at ? rec.last : p.at;
     if (p.kind === "in") {
-      if (open || breakAt) flag({ kind: "double_in", at: p.at, text: "Clocked in again without clocking out" });
+      // still in from an earlier day: that day is missing its clock-out (today's clock-in is fine; Oct 20, Nick)
+      const was = open || breakAt;
+      if (was && localDay(was) < d) flag({ kind: "missing_out", at: was, text: "No clock-out" });
+      else if (was) flag({ kind: "double_in", at: p.at, text: "Clocked in again without clocking out" });
       open = p.at; openDay = d; breakAt = null;
     } else if (p.kind === "break_start") {
       if (!open) { flag({ kind: "missing_in", at: p.at, text: "Break started without a clock-in" }); continue; }
