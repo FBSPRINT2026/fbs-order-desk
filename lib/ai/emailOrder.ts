@@ -468,15 +468,43 @@ ${staffSays}` : ""}`;
       const ts = g.lines.map((l) => thumbOf.get(l) || "");
       if (ts.some(Boolean)) g.mockupThumbs = ts; else { delete g.mockupThumbs; delete g.mockupAt; }
     }
+    // garments the AI didn't tie to an old line but that ARE old lines (same style and color: Little Groupies' Bottles
+    // sheet, Oct 20: none tied, so the old job's 500 stayed and the sheet's 500 went in as a second group = 1,000):
+    // the sheet's quantities replace the old ones, and old lines the sheet doesn't list drop out
+    const ck = (c: string) => (c || "").toLowerCase().replace(/[^a-z]/g, "");
+    const sameColor = (a: string, b: string) => { const x = ck(a), y = ck(b); return !!x && !!y && (x === y || x.startsWith(y) || y.startsWith(x)); };
+    const sk = (st: string) => (st || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const claimed = new Set<GLine>();
+    const claimFor = (l: GLine) => {
+      for (const g of groups) for (const t of g.lines) {
+        if (claimed.has(t)) continue;
+        if (sameColor(t.color, l.color) && (!sk(t.style) || !sk(l.style) || sk(t.style) === sk(l.style))) return t;
+      }
+      return null;
+    };
+    const pgs = (p.groups || []).map((pg) => ({ ...pg, garments: (pg.garments || []).filter((x) => {
+      if (x.reorder_line || named.length) return true;
+      const [l] = proposalToGroups({ groups: [{ ...pg, prints: [], garments: [x] }] }).flatMap((g) => g.lines);
+      if (!l || !Object.keys(l.sizes).length) return true;
+      const t = claimFor(l);
+      if (!t) return true;
+      t.sizes = l.sizes; if (!t.style && l.style) t.style = l.style; claimed.add(t);
+      return false;
+    }) }));
+    if (!named.length && claimed.size) {
+      for (const g of groups) g.lines = g.lines.filter((l) => claimed.has(l));
+      groups = groups.filter((g) => g.lines.length);
+    }
     // a new style or color they added that wasn't on the old job goes in the first group; when its prints have their
     // own inks (Oct 20, Dear Heart: In Every Season on a new Mauve pullover in Burgundy ink, the tees in white), it's a
     // group of its own: the old job's prints, with those inks, and its mockup
-    for (const pg of p.groups || []) {
+    for (const pg of pgs) {
       const extra = proposalToGroups({ groups: [{ ...pg, prints: [], garments: (pg.garments || []).filter((x) => !x.reorder_line) }] }).flatMap((g) => g.lines).filter((l) => Object.keys(l.sizes).length);
       if (!extra.length || !groups[0]) continue;
       const inks = (pg.prints || []).map((pr) => String(pr.inks || "").trim());
       const base = groups[0];
-      const differs = inks.some((x, k) => x && x.toLowerCase() !== String(base.imprints[k]?.inks || "").trim().toLowerCase());
+      // only a real change of ink: an old job with no inks on file (Printavo) isn't "different" from what the AI read
+      const differs = inks.some((x, k) => { const was = String(base.imprints[k]?.inks || "").trim().toLowerCase(); return !!x && !!was && x.toLowerCase() !== was; });
       if (!differs) { base.lines.push(...extra); continue; }
       const ng: Group = { ...JSON.parse(JSON.stringify(base)) as Group, id: uid(), name: [base.name, extra.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ")].filter(Boolean).join(" · ").slice(0, 80), lines: extra };
       ng.imprints = ng.imprints.map((im, k) => ({ ...im, id: uid(), ...(inks[k] ? { inks: inks[k], notes: [im.notes, `New ink for this garment: ${inks[k]} (was ${base.imprints[k]?.inks || "not on file"})`].filter(Boolean).join(". ").slice(0, 300) } : {}) }));
