@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sanmarConfigured, sanmarLookup, sanmarProbe, sanmarSellableStyles, sanmarStyleSummary } from "@/lib/sanmar";
+import { sanmarConfigured, sanmarLookup, sanmarProbe, sanmarSellableStyles, sanmarSkus, sanmarStyleSummary } from "@/lib/sanmar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,9 @@ export async function GET(req: Request) {
   if (!ps || req.headers.get("x-sync-token") !== (ps as { token: string }).token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!sanmarConfigured()) return NextResponse.json({ error: "SanMar isn't connected" }, { status: 503 });
   if (new URL(req.url).searchParams.get("probe")) return NextResponse.json(await sanmarProbe());
+  // ?prices=PC55RS&color=royal: one style's prices per color/size as SanMar sends them (list, case, ours), for checking costs
+  const pq = new URL(req.url).searchParams.get("prices");
+  if (pq) { const cf = (new URL(req.url).searchParams.get("color") || "").toLowerCase(); const sk = await sanmarSkus(pq); return NextResponse.json(sk.filter((x) => !cf || x.color.toLowerCase().includes(cf)).map((x) => ({ color: x.color, catalogColor: x.catalogColor, size: x.size, piece: x.piecePrice, case: x.casePrice, mine: x.myPrice }))); }
   // re-pull SanMar garments already in the catalog (photos, colors, sizes, our prices)
   if (new URL(req.url).searchParams.get("garments")) {
     const { data: gs } = await admin.from("garments").select("id, style, supplier_style").eq("supplier", "sanmar");

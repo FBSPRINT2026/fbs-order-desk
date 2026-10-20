@@ -65,6 +65,7 @@ async function sanmarInfoRows(style: string): Promise<string[]> {
   return blocks(info, "listResponse");
 }
 
+const pkey = (color: string, size: string) => `${(color || "").toLowerCase().replace(/[^a-z0-9]+/g, "")}|${(size || "").toLowerCase().trim()}`;
 /** Every color/size of a style: names, photos and SanMar's prices (list + ours). */
 export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
   const st = style.trim();
@@ -74,14 +75,16 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
   const mine = new Map<string, number>();
   try {
     const pr = await soap("/SanMarWebService/SanMarPricingServicePort", "getPricing", `<arg0><style>${esc(st)}</style><color></color><size></size></arg0>${auth()}`);
-    for (const b of blocks(pr, "listResponse")) { const p = num(tag(b, "myPrice")) || num(tag(b, "casePrice")) || num(tag(b, "piecePrice")); if (p) mine.set(`${tag(b, "color")}|${tag(b, "size")}`.toLowerCase(), p); }
+    for (const b of blocks(pr, "listResponse")) { const p = num(tag(b, "myPrice")) || num(tag(b, "casePrice")) || num(tag(b, "piecePrice")); if (p) mine.set(pkey(tag(b, "color"), tag(b, "size")), p); }
   } catch { /* list prices still come back with the product info */ }
   return rows.map((b) => {
     const basic = blocks(b, "productBasicInfo")[0] || b, img = blocks(b, "productImageInfo")[0] || b, price = blocks(b, "productPriceInfo")[0] || b;
     const color = tag(basic, "color"), raw = tag(basic, "size");
     return {
       color, catalogColor: tag(basic, "catalogColor") || color, rawSize: raw, size: sizeFor(raw, isYouth(basic)),
-      piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(`${color}|${raw}`.toLowerCase()) || 0,
+      // our price is listed under SanMar's catalog color ("White/True Royal"), not always the display name ("White/ Royal"):
+      // without it a color fell back to the list price (Oct 20: PC55RS White/ Royal at $5.47 / $9.89 instead of ours)
+      piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(pkey(color, raw)) || mine.get(pkey(tag(basic, "catalogColor"), raw)) || 0,
       image: tag(img, "productImage"), // flat product shots first (like S&S), photos on a model only when there's no flat
       front: tag(img, "frontFlat") || tag(img, "colorProductImage") || tag(img, "frontModel"), back: tag(img, "backFlat") || tag(img, "backModel"), swatch: tag(img, "colorSwatchImage"),
       brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
