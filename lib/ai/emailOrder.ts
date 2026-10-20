@@ -12,6 +12,7 @@ import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, t
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
+import { loadMemories, memoryText } from "@/lib/ai/orderMemory";
 import { isPicture, looksLikeSignature, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
 /**
@@ -348,12 +349,14 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // one order of several: only the files that are for it (the same file sent again counts too)
   if (o.part) { const want = new Set(o.part.files); const names = new Set(o.part.names || []); const keep = atts.filter((f) => want.has(f.path) || names.has(f.name)); atts.length = 0; atts.push(...keep.slice(0, 12)); }
   const told = (o.told || "").trim().slice(0, 1500);
-  const [{ data: cust }, recent] = await Promise.all([
+  const [{ data: cust }, recent, mems] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     pastJobs(admin, a.customer_id as string | null),
+    loadMemories(admin, (a.customer_id as string) || null).catch(() => []),
   ]);
-  // a job staff picked or named goes first, so it's J1
-  let past = [...(told ? await jobsNamed(admin, told, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
+  // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
+  const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
+  let past = [...(told || memText ? await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")}`, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
   if (picked) past = [picked, ...past.filter((j) => j !== picked)];
   // facts the note points to that have to be looked up online ("we used the LA Lakers PMS colors")
@@ -404,7 +407,9 @@ ${convText}
 Subject: ${a.subject || ""}
 """
 ${String(a.body || "").slice(0, 12000)}
-"""${staffSays ? `
+"""${memText ? `
+
+${memText}` : ""}${staffSays ? `
 
 WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them; put looked-up ink colors on the prints' inks):
 ${staffSays}` : ""}`;

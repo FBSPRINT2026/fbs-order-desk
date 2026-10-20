@@ -1,4 +1,5 @@
 import "server-only";
+import { loadMemories, memoryText, saveMemory } from "@/lib/ai/orderMemory";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
@@ -85,6 +86,14 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     weeks[k].pcs += (o.groups || []).reduce((t, g) => t + (g.lines || []).reduce((u, l) => u + Object.values(l.sizes || {}).reduce((v, q) => v + (+q || 0), 0), 0), 0);
   }
   const { images, documents, listing } = await readFiles(admin, atts as never, sigs).catch(() => ({ images: [], documents: [], listing: [] as string[] }));
+  // what staff taught about this customer's orders; "remember …" / "from now on …" / "next time …" teaches it
+  // (Oct 20, Nick: "it learns and remembers")
+  let learned = "";
+  if (cid && /^\s*(please\s+)?(remember|from now on|next time)\b/i.test(msg)) {
+    const sv = await saveMemory(admin, { customerId: cid, text: msg, by, activityId: a.id || null, subject: String(a.subject || "") }).catch(() => null);
+    if (sv?.ok) learned = sv.text;
+  }
+  const mems = await loadMemories(admin, cid).catch(() => []);
 
   const prompt = [
     cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>, ${cust.price_type === "wholesale" ? "wholesale (they supply their own garments)" : "retail"}.${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`,
@@ -95,7 +104,9 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     `Attached files:\n${listing.join("\n") || "(none)"}`,
     `THE EMAIL (${String(a.occurred_at).slice(0, 10)}):\nSubject: ${a.subject || ""}\n"""\n${String(a.body || "").slice(0, 10000)}\n"""`,
     thread.length ? `The conversation with staff so far:\n${thread.slice(-16).map((m) => `${m.role === "staff" ? "Staff" : m.role === "event" ? "(What happened)" : "You"}: ${m.text}`).join("\n")}` : "",
+    memoryText(mems, String(cust?.company || cust?.name || "this customer")),
     `Staff now says: ${msg}`,
+    learned ? `(That's now saved: you'll remember it for this customer's next emails. Say so in your reply.)` : "",
     lookedUp?.text ? `Looked up online for that: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n\n");
 

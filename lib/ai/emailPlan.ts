@@ -6,6 +6,7 @@ import { newPart } from "@/lib/linkArt";
 import { emailConversation, signaturePaths } from "@/lib/ai/emailOrder";
 import { buildCatalog } from "@/lib/designCatalog";
 import type { EOPart } from "@/lib/emailOrderShared";
+import { loadMemories, memoryText } from "@/lib/ai/orderMemory";
 import type { Settings } from "@/lib/pricing";
 
 /**
@@ -52,7 +53,7 @@ export async function planEmail(admin: SupabaseClient, activityId: string, by: s
   }
   const sigs = await signaturePaths(admin, { id: C.id, from_email: (C.from_email as string) || null }, files, convo.map((e) => e.id)).catch(() => new Set<string>());
   const real = files.filter((f) => !sigs.has(f.path)).slice(0, 40);
-  const cat = cid ? await buildCatalog(admin, cid).catch(() => null) : null;
+  const [cat, mems] = await Promise.all([cid ? buildCatalog(admin, cid).catch(() => null) : Promise.resolve(null), loadMemories(admin, cid).catch(() => [])]);
   // the customer's designs with their recent orders and what each was printed on
   const designs = (cat?.designs || []).slice(0, 60);
   const designText = designs.map((d, i) => {
@@ -82,7 +83,9 @@ FILES IN THE CONVERSATION:
 ${fileText || "(none)"}
 
 THE CONVERSATION (oldest first):
-${convText}`,
+${convText}${mems.length ? `
+
+${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
     tool: { name: "orders", description: "The orders this conversation asks for.", input_schema: { type: "object", properties: {
       orders: { type: "array", items: { type: "object", properties: {
         label: { type: "string", description: 'Short name, e.g. "In Every Season (tees + pullovers)"' },

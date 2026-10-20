@@ -16,6 +16,7 @@ import { chatThread, orderChat } from "@/lib/ai/orderChat";
 import { emailChat, emailChatThread, noteEmail, type ActRow } from "@/lib/ai/emailChat";
 import { accountForUser } from "@/lib/mail/config";
 import { fixSignOff, writerNote } from "@/lib/mail/signoff";
+import { forgetMemory, loadMemories, saveMemory } from "@/lib/ai/orderMemory";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -389,4 +390,31 @@ export async function noteEmailChat(activityId: string, text: string, href?: str
     await noteEmail(admin, activityId, text, href);
     return { ok: true as const };
   } catch (e) { return fail(e); }
+}
+
+/** What the AI remembers about this email's customer's orders (lib/ai/orderMemory.ts), for the Create order panel. */
+export async function orderMemories(activityId: string) {
+  try {
+    const { admin } = await staff();
+    const { data: a } = await admin.from("activities").select("customer_id").eq("id", activityId).maybeSingle();
+    const cid = (a?.customer_id as string) || null;
+    if (!cid) return { ok: true as const, customer: "", memories: [] };
+    const [{ data: c }, ms] = await Promise.all([admin.from("customers").select("company, name").eq("id", cid).maybeSingle(), loadMemories(admin, cid)]);
+    return { ok: true as const, customer: String(c?.company || c?.name || ""), memories: ms };
+  } catch (e) { return fail(e); }
+}
+
+/** Remember what staff told the order reader for this customer's next emails ("all they want is a reorder of #40003"). */
+export async function rememberOrderNote(activityId: string, text: string) {
+  try {
+    const { admin, email } = await staff();
+    const { data: a } = await admin.from("activities").select("customer_id, subject").eq("id", activityId).maybeSingle();
+    if (!a?.customer_id) return { ok: false as const, error: "This email isn't matched to a customer yet." };
+    return await saveMemory(admin, { customerId: a.customer_id as string, text, by: email || "staff", activityId, subject: String(a.subject || "") });
+  } catch (e) { return fail(e); }
+}
+
+/** Forget one thing the AI remembered. */
+export async function forgetOrderMemory(id: string) {
+  try { const { admin } = await staff(); return await forgetMemory(admin, id); } catch (e) { return fail(e); }
 }

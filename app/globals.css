@@ -10095,3 +10095,9 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .eo-parts .chip.done{border-color:var(--ok);color:var(--ok)}
 .osp-ready{border-color:var(--ok)!important;box-shadow:inset 0 0 0 1px var(--ok)!important}
 .osp-ready b{color:var(--ok)}
+/* Create order: what the AI remembers about the customer (Oct 20) */
+.eo-remember{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);margin:4px 0}
+.eo-mem{margin:6px 0;font-size:12.5px}
+.eo-mem summary{cursor:pointer;color:var(--ink-2);font-weight:600}
+.eo-mem ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.eo-mem li span.faint{margin:0 8px;font-size:11.5px}

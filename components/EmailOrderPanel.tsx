@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
-import { aiLookUp } from "@/app/shop/ai-actions";
+import { aiLookUp, forgetOrderMemory, orderMemories, rememberOrderNote } from "@/app/shop/ai-actions";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
 import type { WhenDates } from "@/components/MachineSchedule";
@@ -43,6 +43,13 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
   // what staff tell the AI before it reads the email ("it's a reorder of 31174, the art is on the old job")
   const [told0, setTold] = useState(start?.told || ""), [tellOpen, setTellOpen] = useState(false);
   const told = told0;
+  // what the AI remembers about this customer's orders, and "remember this" on what staff tell it (Oct 20, Nick)
+  const [mem, setMem] = useState<{ customer: string; memories: { id: string; text: string; at: string }[] } | null>(null);
+  const [remember, setRemember] = useState(false);
+  const loadMem = () => { void orderMemories(activityId).then((r) => { if (r.ok) setMem({ customer: r.customer, memories: r.memories }); }).catch(() => null); };
+  useEffect(loadMem, [activityId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const keep = () => { if (remember && told.trim()) void rememberOrderNote(activityId, told).then((r) => { if (r.ok) loadMem(); }); setRemember(false); };
+  const rememberBox = mem?.customer ? <label className="eo-remember"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember this for {mem.customer}&apos;s next emails</label> : null;
   // a reorder: "I found this job, place a reorder?" → "Anything I should know?"
   const [askStep, setAskStep] = useState(false), [lookStep, setLookStep] = useState("");
   async function read(o: { job?: string | null; reorderOk?: boolean; told?: string } = {}) {
@@ -229,8 +236,9 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
           </div>
           <textarea id={`tell-${activityId}`} rows={3} value={told} onChange={(e) => setTold(e.target.value)}
             placeholder='e.g. "Same as last time but add 10 more 12M" · "We used the LA Lakers PMS colors, look them up"' />
+          {rememberBox}
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-            <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setAskStep(false); void read({ job: d.reorderOf, reorderOk: true }); }}>Build the reorder with this</button>
+            <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { keep(); setAskStep(false); void read({ job: d.reorderOf, reorderOk: true }); }}>Build the reorder with this</button>
             <button type="button" className="btn sm ghost" onClick={() => { setAskStep(false); patch((x) => { x.reorderOk = true; }); }}>Nothing else, build it</button>
           </div>
         </div>
@@ -249,13 +257,20 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
             <label htmlFor={`tell2-${activityId}`}>{d?.told ? "What you told the AI" : "Anything the AI should know first?"}</label>
             <textarea id={`tell2-${activityId}`} rows={2} value={told} onChange={(e) => setTold(e.target.value)}
               placeholder='e.g. "Reorder of 31174" · "Same as last time but navy" · "We used the LA Lakers PMS colors, look them up"' />
+            {rememberBox}
             <div className="row" style={{ gap: 6 }}>
-              <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setTellOpen(false); void read({ job: d?.reorderOf, reorderOk: d?.reorderOk }); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
+              <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { keep(); setTellOpen(false); void read({ job: d?.reorderOf, reorderOk: d?.reorderOk }); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
               {!d?.told && <button type="button" className="btn sm ghost" onClick={() => setTellOpen(false)}>Cancel</button>}
             </div>
           </div>
         );
       })()}
+      {mem && mem.memories.length > 0 && (
+        <details className="eo-mem">
+          <summary>✦ The AI remembers {mem.memories.length} thing{mem.memories.length === 1 ? "" : "s"} about {mem.customer}&apos;s orders</summary>
+          <ul>{mem.memories.map((m) => <li key={m.id}><span>{m.text}</span><span className="faint">{m.at.slice(0, 10)}</span><button type="button" className="eo-link" onClick={() => void forgetOrderMemory(m.id).then(loadMem)}>Forget</button></li>)}</ul>
+        </details>
+      )}
       {d && total > 0 && <div hidden><WhenCalc key={whenKey} when={{ groups: d.groups, onDates: setWhen }} /></div>}
       {d && mustMove && data.customer && <NotMovedBanner customerId={data.customer.id} name={data.customer.company || data.customer.name || ""} what="an order for them"
         onMoved={() => setData((x) => (x && x.customer ? { ...x, customer: { ...x.customer, moved_at: new Date().toISOString() } } : x))} />}
