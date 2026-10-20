@@ -461,15 +461,27 @@ export async function attachFiles(admin: SupabaseClient, orderId: string, until 
     const { data } = await admin.storage.from("proofs").createSignedUrls(paths, 60 * 60 * 24 * 3);
     return (data || []).map((x) => x.signedUrl || "");
   };
-  // our mockups, by group (the title starts with the group's name), else on the first group
-  const { data: proofs } = await admin.from("mockups").select("title, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at");
+  // our mockups, by the group they were made for (mockups.group_id; else the title starts with the group's name, else
+  // the first group). Each product line gets only its own garment's mockup (Oct 20, Nick: every line of #40072 got
+  // all three shirts; the groups had no name, so the title match failed and every line fell back to the whole group)
+  const { data: proofs } = await admin.from("mockups").select("title, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at");
   const urls = await sign((proofs || []).map((x) => x.file_path as string));
-  const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
-  const mocks = (proofs || []).map((x, i) => ({ t: String(x.title || ""), u: urls[i] })).filter((x) => x.u);
-  const groupMocks = (gi: number) => mocks.filter((x) => named(x.t) === gi || (named(x.t) < 0 && gi === 0));
+  const norm = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
+  const groupOf = (x: { t: string; g: string }) => {
+    const byId = groups.findIndex((g) => g.id === x.g);
+    if (byId >= 0) return byId;
+    const byName = groups.findIndex((g) => !!g.name && x.t.startsWith(g.name));
+    return byName >= 0 ? byName : 0;
+  };
+  const mocks = (proofs || []).map((x, i) => ({ t: String(x.title || ""), g: String(x.group_id || ""), u: urls[i] })).filter((x) => x.u);
+  const groupMocks = (gi: number) => mocks.filter((x) => groupOf(x) === gi);
+  // a line's own mockup: the title ends with its style and color ("Group 1 — Tultex 245 White/ Royal")
   const lineMocks = (gi: number, style?: string, color?: string) => {
-    const own = mocks.filter((x) => named(x.t) === gi && (!style || x.t.includes(style)) && (!color || x.t.includes(color)));
-    return own.length ? own : groupMocks(gi);
+    const want = norm(`${style || ""} ${color || ""}`);
+    const own = want ? groupMocks(gi).filter((x) => norm(x.t).endsWith(want)) : [];
+    if (own.length) return own.slice(-1);
+    // one garment in the group: its mockup(s); otherwise nothing rather than every shirt on every line
+    return groupMocks(gi).length === 1 ? groupMocks(gi) : [];
   };
   const jobs: { what: string; q: string; v: Record<string, unknown> }[] = [];
   let pgi = 0;
@@ -481,7 +493,7 @@ export async function attachFiles(admin: SupabaseClient, orderId: string, until 
     for (const [li, l] of ours.entries()) {
       const pl = pg.lines[li];
       if (!pl || pl.mockups.length) continue;
-      for (const m of lineMocks(gi, l.style, l.color).slice(0, 4)) jobs.push({ what: `mockup on ${l.style || "line"} ${l.color || ""}`.trim(), q: `mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, v: { id: pl.id, u: m.u } });
+      for (const m of lineMocks(gi, l.style, l.color)) jobs.push({ what: `mockup on ${l.style || "line"} ${l.color || ""}`.trim(), q: `mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, v: { id: pl.id, u: m.u } });
     }
     const pi = pg.imprints[0];
     if (pi && !pi.mockups.length) for (const m of groupMocks(gi).slice(0, 6)) jobs.push({ what: "mockup on the print", q: `mutation($id:ID!,$u:String!){ imprintMockupCreate(imprintId:$id, publicImageUrl:$u){ id } }`, v: { id: pi.id, u: m.u } });
@@ -504,39 +516,6 @@ export async function attachFiles(admin: SupabaseClient, orderId: string, until 
   }
   await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Added to Printavo: ${added} mockup${added === 1 ? "" : "s"} / file${added === 1 ? "" : "s"}${failed.length ? `; ${failed.length} refused` : ""}${left ? `; ${left} left for next time` : ""}` });
   return { added, failed, left, total: jobs.length };
-}
-
-/**
- * Puts our mockups on the Printavo product lines that have none (the customer's invoice page only shows line item
- * mockups). Adds pictures only; nothing else changes.
- */
-export async function pushLineMockups(admin: SupabaseClient, orderId: string) {
-  const { data: o } = await admin.from("orders").select("number, printavo_id, groups").eq("id", orderId).maybeSingle();
-  if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
-  const number = o.number as number;
-  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
-  const p = await getOrder(String(o.printavo_id));
-  const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
-  const { data: proofs } = await admin.from("mockups").select("title, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at");
-  if (!proofs?.length) throw new PrintavoError("This order has no mockup yet. Make one in the Mockup Creator first.");
-  const { data: su } = await admin.storage.from("proofs").createSignedUrls(proofs.map((x) => x.file_path as string), 60 * 60 * 24 * 3);
-  const urls = (su || []).map((x) => x.signedUrl || "");
-  const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
-  let added = 0;
-  for (const [gi, pg] of p.groups.entries()) {
-    for (const pl of pg.lines) {
-      if (pl.mockups.length) continue;
-      const pick = proofs.map((x, i) => ({ t: String(x.title || ""), u: urls[i] })).filter((x) => x.u);
-      const own = pick.filter((x) => named(x.t) === gi && (!pl.itemNumber || x.t.includes(pl.itemNumber)) && (!pl.color || x.t.includes(pl.color)));
-      const use = own.length ? own : pick.filter((x) => named(x.t) === gi || (named(x.t) < 0 && gi === 0));
-      for (const m of use.slice(0, 4)) {
-        await transitionWrite(`mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, { id: pl.id, u: m.u }, number);
-        added++;
-      }
-    }
-  }
-  await refreshFromPrintavo(admin, orderId).catch(() => null);
-  return { added };
 }
 
 /**
