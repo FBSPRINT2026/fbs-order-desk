@@ -10921,3 +10921,64 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .prod-sheet{display:grid;grid-template-columns:repeat(3,18px);grid-auto-rows:10px;gap:2px;position:relative;padding-bottom:16px}
 .prod-sheet i{background:#e7f3ea;border:1px solid #9cc7a6;border-radius:1px}
 .prod-sheet b{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:11px;color:#1e7a3a}
+/* a print's inks as chips (Oct 21, Nick: "the colors just seem to run on and on") */
+.pr-scr-l{min-width:54px}
+.pr-inkl{align-items:flex-start}
+.pr-inkl > .pr-scr-l{padding-top:3px}
+.pr-inkl > .pr-scr-v{flex-wrap:wrap;gap:6px 10px;flex:1 1 300px;min-width:0}
+.ink-chips{display:inline-flex;flex-wrap:wrap;gap:4px 5px}
+.ink-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 4px;border-radius:999px;background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.5}
+.ink-chip i{width:13px;height:13px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);flex:none}
+.ink-chip.pms{box-shadow:inset 0 0 0 1px var(--line)}
+.pr-pms{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.imp-scr + .imp-scr{margin-top:-6px}
+/* the group's mockups are buttons that open big (Oct 21, Nick) */
+button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
+.imp-mock .mk-more button{display:block;aspect-ratio:1;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;line-height:0;padding:0;cursor:zoom-in}
+.imp-mock .mk-more button:hover{border-color:var(--accent)}
+.mkz{position:fixed;inset:0;z-index:300;background:rgba(15,18,24,.62);display:grid;place-items:center;padding:24px}
+.mkz-in{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(920px,100%);max-height:calc(100vh - 48px);display:flex;flex-direction:column;overflow:hidden}
+.mkz-pic{position:relative;display:grid;place-items:center;background:#fff;min-height:0;flex:1;padding:16px}
+.mkz-pic img{max-width:100%;max-height:calc(100vh - 190px);object-fit:contain;display:block}
+.mkz-arr{position:absolute;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.92);font-size:28px;line-height:1;color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:0 0 4px}
+.mkz-arr:hover{border-color:var(--accent);color:var(--accent)}
+.mkz-arr.l{left:12px}.mkz-arr.r{right:12px}
+.mkz-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+.mkz-strip{display:flex;gap:6px;flex-wrap:wrap}
+.mkz-strip button{width:48px;height:48px;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;cursor:pointer;line-height:0}
+.mkz-strip button img{width:100%;height:100%;object-fit:contain}
+.mkz-strip button.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+/* garments: the style once, then one row per color with its sizes on the same line (Oct 21, Nick: order page cleanup) */
+.gl-sty{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr);gap:6px;max-width:760px}
+.gl-sty .a-st,.gl-sty .a-br,.gl-sty .a-de{grid-area:auto}
+.gl-sty input.pre{background:transparent;border-color:transparent;cursor:pointer}
+.gl-sty input.pre:hover{border-color:var(--line);background:var(--surface)}
+.gl-sty input.pre:focus{border-color:var(--accent);background:var(--surface);cursor:text}
+.gl-sty .a-de input{color:var(--ink-2)}
+.gl.same{padding-top:2px}
+.gl + .gl.same{border-top:1px dashed var(--line-2)}
+.gl-list .gl-row.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 88px 92px 30px;grid-template-areas:"co sz cs qt ea to x"}
+.gl-list.ws .gl-row.gl-r2,.gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 58px 88px 92px 30px;grid-template-areas:"co sz qt ea to x"}
+.gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 88px 92px 30px;grid-template-areas:"co sz cs qt ea to x"}
+.gl-row.grp-total.gl-r2 > .a-de{grid-area:1 / 1 / 2 / 3}
+.a-sz{grid-area:sz;min-width:0}
+.gl-head .a-sz{padding-left:2px}
+.gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:14px}
+.gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:22px}
+.gl-r2 .a-sz .os-note{padding-top:8px}
+@container (max-width: 700px){
+  .gl-list .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co cs qt ea to x" "sz sz sz sz sz sz"}
+  .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co qt ea to x" "sz sz sz sz sz"}
+  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:0}
+  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:8px}
+  .gl-head.gl-r2 .a-sz{display:none}
+  .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de cs qt ea to x"}
+  .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de qt ea to x"}
+  .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
+}
+@media (max-width:760px){
+  .ord .gl-list .gl-row.gl-r2:not(.grp-total):not(.gl-head){grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"co co co x" "sz sz sz sz" "cs qt ea to"}
+  .ord .gl-list.ws .gl-row.gl-r2:not(.grp-total):not(.gl-head){grid-template-areas:"co co co x" "sz sz sz sz" "qt ea to to"}
+  .gl-sty{grid-template-columns:1fr 1fr}
+  .gl-sty .a-de{grid-column:1 / -1}
+}

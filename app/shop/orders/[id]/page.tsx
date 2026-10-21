@@ -34,10 +34,11 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
+import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
 import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
-import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAssist";
+import { FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
@@ -842,6 +843,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
   const checks = checkOrder(o, calc, cust, proofs);
+  // Printavo's setup adjustment shows as part of setup in Totals (Oct 21, Nick: order page cleanup); it stays its own fee
+  const adjFee = o.fees.filter((f) => f.label === ADJUST).reduce((t, f) => t + (+f.amount || 0), 0);
   // where the job stands, for Order check (Oct 15, Nick: "we're on time, goods have been received, art looks good,
   // approved by customer… big bullet points")
   const status: StatusLine[] = (() => {
@@ -1149,7 +1152,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
-            <GroupEditor finishingAt={finPerGroup ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
+            <GroupEditor finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
@@ -1160,7 +1163,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
             <FillFromText orderId={o.id} hasContent={o.groups.some((g) => g.lines.some((l) => l.style || Object.keys(l.sizes || {}).length))} onApply={applyProposal} />
           </div>
-          {orderFinList.length > 0 && (
+          {/* one group: its finishing is inside the group (Oct 21, Nick: order page cleanup) */}
+          {orderFinList.length > 0 && o.groups.length > 1 && (
             <section className="panel fin-panel">
               <div className="panel-h"><h2>Finishing</h2>
                 <div className="chips" role="group" aria-label="Apply finishing to">
@@ -1220,9 +1224,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-b">
               <div className="totals">
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
-                <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
+                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>Setup (screens, digitizing)</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
-                {calc.fees - calc.shipping ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping)}</span></div> : null}
+                {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {(calc.hasShipping || o.delivery_method === "ship") && (
                   <div className="tr"><span className="row" style={{ gap: 8 }}>Shipping
                     {calc.hasShipping && <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={calc.freeShipping} onChange={(e) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.free = e.target.checked || undefined; })} /> Free shipping</label>}</span>
@@ -1245,7 +1249,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </div>
           </section>
           {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
-              right under Totals, above Order check (Nick, Oct 21) */}
+              right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
           {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
           {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (
@@ -1268,7 +1272,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               })}
               onSet={(amount) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.amount = amount; })} />
           )}
-          {/* Printavo: a side panel on the Order tab, above the goods (Oct 15, Nick) */}
+          {o.price_type === "wholesale" && o.type === "invoice" && (
+            <section className="panel">
+              <div className="panel-h"><h2>Customer supplied goods</h2></div>
+              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
+            </section>
+          )}
+          {/* Printavo: at the very bottom (Oct 21, Nick: "the Printavo sync will go away shortly… move it to the very bottom") */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
             <div className="panel-h"><h2>Printavo</h2></div>
             <div className="panel-b">
@@ -1276,13 +1286,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
             </div>
           </section>}
-          {o.price_type === "wholesale" && o.type === "invoice" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Customer supplied goods</h2></div>
-              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
-            </section>
-          )}
-          <ChecksPanel checks={checks} status={status} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
+          {/* Order check (ChecksPanel in OrderAssist): off for now; it joins Shop steps later (Oct 21, Nick). checks/status are still worked out for it */}
           </aside>
         </div>
 
@@ -1415,9 +1419,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-b">
               <div className="totals">
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
-                <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
+                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>Setup (screens, digitizing)</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
-                {calc.fees - calc.shipping ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping)}</span></div> : null}
+                {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {calc.hasShipping ? <div className="tr"><span>Shipping</span><span>{calc.freeShipping ? "Free" : money(calc.shipping)}</span></div> : null}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
                   <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"

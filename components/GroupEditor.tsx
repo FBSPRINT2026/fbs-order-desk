@@ -211,7 +211,25 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       </ScreensLine>
     );
   };
-  const inksSec = scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || !!g.specialtyInk || !!g.specialtyInkSet;
+  // a print's inks as chips, with its PMS matches and their charge on the same line (Oct 21, Nick: "the colors just seem
+  // to run on and on… the inks can go up underneath the imprints, just like we charge for screens")
+  const inkCtl = (d: Group["imprints"][number], chips = true) => {
+    const di = g.imprints.indexOf(d), inks = pmsInks(d), isScr = scrImps.includes(d);
+    const pms = isScr ? inks.filter((x) => x.auto) : [];
+    const typed = isScr && !inks.length && !!wpl.pmsFee;
+    if (!(chips && inks.length) && !pms.length && !typed) return null;
+    const n = typed ? num0(d.pms) : pms.filter((x) => x.charge).length;
+    const fee = n * (+(wpl.pmsFee || 0));
+    return (
+      <InkLine key={"ink" + d.id} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
+        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}</span> : null}
+        editable={pms.length > 0 || typed}>
+        {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
+          : pms.map((x) => <label key={x.name} className="check" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />{x.name}: standard, no charge</label>)}
+      </InkLine>
+    );
+  };
+  const inksSec = !!g.specialtyInk || !!g.specialtyInkSet;
   const hasFoot = inksSec || embImps.length > 0 || (finishingAt === "group" && finList.length > 0);
   // the group's money in one line under its prints (Oct 15, Nick: "move the total up")
   const priceLine = hidePrices ? null : (() => {
@@ -236,7 +254,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     ];
     return (
       <div className="grp-sum">
-        {gc.custom ? <span className="ink-warn">9+ colors: custom quote (priced at 8 here)</span> : null}
+        {gc.custom && !gc.lines.every((lc) => lc.hasOv) ? <span className="ink-warn">9+ colors: custom quote (priced at 8 here)</span> : null}
         {bits.map(([k, v, t]) => <span key={k} title={t || undefined}>{k} <b className="num">{money(v)}</b></span>)}
         <span className="grp-sum-t">Group total <b className="num">{money(gc.sub + gc.setup + gc.materials)}</b></span>
       </div>
@@ -254,8 +272,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       <div className="line-b">
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
-          <div className="gl-row gl-head">
-            <span className="a-st">Style #</span><span className="a-br">Brand</span><span className="a-co">Color</span><span className="a-de">Description</span>
+          <div className="gl-row gl-head gl-r2">
+            <span className="a-co">Color</span><span className="a-sz">Sizes</span>
             {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
@@ -264,9 +282,12 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
+            // the style once, then a row per color with its sizes on the same line (Oct 21, Nick: order page cleanup)
+            const prev = li > 0 ? g.lines[li - 1] : null;
+            const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
-              <div key={l.id} className="gl">
-                <div className="gl-row">
+              <div key={l.id} className={"gl" + (same ? " same" : "")}>
+                {!same && <div className="gl-sty">
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
                       onType={(v) => onStyle(li, v)}
@@ -275,6 +296,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                     {lookingUp && lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Pulling from S&amp;S…</div>}
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
+                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                </div>}
+                <div className="gl-row gl-r2">
                   <div className="a-co">
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
                       const ln = x.lines[li], was = ln.color; ln.color = v;
@@ -286,7 +310,16 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                       }
                     })} />
                   </div>
-                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                  <div className="a-sz">
+                    {l.oneSize ? (
+                      <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
+                    ) : (
+                      <SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(s) => !colsFor(l).includes(s)} sizes={l.sizes || {}} onSet={setQty}
+                        up={(s) => (l.sizeUpSet?.[s as Size] != null ? +l.sizeUpSet[s as Size]! : !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])}
+                        upSet={(s) => l.sizeUpSet?.[s as Size] != null}
+                        onUp={(s, v) => update((x) => { const ln = x.lines[li]; const m = { ...(ln.sizeUpSet || {}) }; if (v == null) delete m[s as Size]; else m[s as Size] = v; ln.sizeUpSet = Object.keys(m).length ? m : undefined; })} />
+                    )}
+                  </div>
                   {!gc.wholesale && !hidePrices && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c">
                     {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
@@ -301,19 +334,11 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
                 </div>
-                {l.oneSize ? (
-                  <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
-                ) : (
-                  <SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(s) => !colsFor(l).includes(s)} sizes={l.sizes || {}} onSet={setQty}
-                    up={(s) => (l.sizeUpSet?.[s as Size] != null ? +l.sizeUpSet[s as Size]! : !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])}
-                    upSet={(s) => l.sizeUpSet?.[s as Size] != null}
-                    onUp={(s, v) => update((x) => { const ln = x.lines[li]; const m = { ...(ln.sizeUpSet || {}) }; if (v == null) delete m[s as Size]; else m[s as Size] = v; ln.sizeUpSet = Object.keys(m).length ? m : undefined; })} />
-                )}
               </div>
             );
           })}
         </div>
-        <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
+        <div className={"gl-row grp-total gl-r2" + (gc.wholesale ? " ws" : "")}>
           {/* the add buttons on the totals line: one row, not two (Oct 15, Nick: "a lot of wasted space… vertically") */}
           <span className="a-de gl-foot"><span className="gl-adds">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
@@ -354,13 +379,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
           {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
             // the first mockup big, the rest small under it (Oct 20, Nick: six onesie colors stacked full size made the
             // group five screens long)
-            ? (() => {
-              const ps = [...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))];
-              return <>
-                <a href={thumbUrls![ps[0]]} target="_blank" rel="noreferrer" className="mk-big" title="Open the mockup"><img src={thumbUrls![ps[0]]} alt="Mockup" /></a>
-                {ps.length > 1 && <div className="mk-more">{ps.slice(1).map((p) => <a key={p} href={thumbUrls![p]} target="_blank" rel="noreferrer" title="Open the mockup"><img src={thumbUrls![p]} alt="Mockup" /></a>)}</div>}
-              </>;
-            })()
+            // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
+            ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
             : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
@@ -394,7 +414,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} d={d} extra={screenCtl(d)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} d={d} inksLine={inkCtl(d)} extra={screenCtl(d)} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -434,6 +454,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                 )}
                 </div>
                 {screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
+                {inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
                 {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (
                   <div className="imp-hit">
@@ -537,21 +558,6 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               <div className="sbx">
                 {inksSec ? <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Inks</span></div>
-                  {scrImps.flatMap((d) => {
-                    const di = g.imprints.indexOf(d);
-                    if (!inkNames(d.inks).length) return wpl.pmsFee ? [
-                      <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Print"}</span><span className="faint">PMS matches</span>
-                        <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} />
-                        {!hidePrices && <b className="num">{money(num0(d.pms) * (+(wpl.pmsFee || 0)))}</b>}
-                      </div>] : [];
-                    return pmsInks(d).filter((x) => x.auto).map((x) => (
-                      <div key={d.id + x.name} className="sbx-r">
-                        <span className="sbx-loc">{x.name}</span><span className="faint">PMS match</span>
-                        {!hidePrices && <b className={"num" + (x.charge ? "" : " sbx-off")}>{money(x.charge ? +(wpl.pmsFee || 0) : 0)}</b>}
-                        <label className="check sbx-end" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />Standard, no charge</label>
-                      </div>
-                    ));
-                  })}
                   {(g.specialtyInk || g.specialtyInkSet) && inkRate ? (
                     <div className="sbx-r">
                       <span className="sbx-loc">Poly / dyed</span>
@@ -770,6 +776,69 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 /** a print's logo on the order page: read only, set in the Mockup Creator (Oct 15, Nick: "grey out that section…
  *  see the logo a little larger"), beside the print's fields so it adds no row */
 /** a print's screens: what they come to, with a pencil to change underbase / remake (Oct 15, Nick) */
+/**
+ * A print's notes to read: the shop's own words, without where things came from ("From Printavo #32668. Art from …
+ * You said: printed 6 colors…": Oct 21, Nick: "that doesn't need to be there").
+ */
+const printNotes = (s: string | null | undefined) => shopNotes(s).split(/\n|(?<=\.)\s+(?=[A-Z*])/)
+  .map((x) => x.trim()).filter((x) => x && !/^(From Printavo #|Art from |Art uploaded when|Inks? (and size )?from Printavo|You said:|\*\*\*\s*REORDER|Confirm in the portal)/i.test(x)).join(" ");
+
+/** A print's inks: a swatch chip each (PMS matches marked), then the PMS charge; the pencil opens "standard, no charge". */
+function InkLine({ inks, charged, summary, editable, children }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode }) {
+  const [edit, setEdit] = useState(false);
+  return (
+    <div className="pr-scr pr-inkl">
+      <span className="pr-scr-l">Inks</span>
+      <span className="pr-scr-v">
+        {inks.length > 0 && <span className="ink-chips">{inks.map((k) => <span key={k.name} className={"ink-chip" + (charged(k.name) ? " pms" : "")} title={charged(k.name) ? "PMS match: charged" : undefined}><i style={{ background: colorHex(k.name) || "#d6d6d6" }} />{k.name}</span>)}</span>}
+        {summary}
+      </span>
+      {editable && <button type="button" className={"pr-scr-ed" + (edit ? " on" : "")} aria-label={edit ? "Done with the PMS charges" : "Change the PMS charges"} title={edit ? "Done" : "PMS charges"} onClick={() => setEdit(!edit)}>
+        {edit ? "Done" : <svg viewBox="0 0 24 24" aria-hidden><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>}
+      </button>}
+      {edit && <span className="pr-scr-opts">{children}</span>}
+    </div>
+  );
+}
+
+/**
+ * The group's mockups: the first big, the rest small under it (Oct 20); any of them opens big in a pop-up where the
+ * arrows, the arrow keys or the strip of colors flip between them (Oct 21, Nick: "when you click on them, they should
+ * blow up… it should toggle to them").
+ */
+function MockGallery({ urls }: { urls: string[] }) {
+  const [at, setAt] = useState<number | null>(null);
+  const n = urls.length;
+  const go = (d: number) => setAt((i) => (i == null ? i : (i + d + n) % n));
+  useEffect(() => {
+    if (at == null) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setAt(null); else if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  return <>
+    <button type="button" className="mk-big" title="See it bigger" onClick={() => setAt(0)}><img src={urls[0]} alt="Mockup" /></button>
+    {n > 1 && <div className="mk-more">{urls.slice(1).map((u, i) => <button type="button" key={u} title="See it bigger" onClick={() => setAt(i + 1)}><img src={u} alt="Mockup" /></button>)}</div>}
+    {at != null && (
+      <div className="mkz" role="dialog" aria-modal="true" aria-label="Mockup" onClick={() => setAt(null)}>
+        <div className="mkz-in" onClick={(e) => e.stopPropagation()}>
+          <div className="mkz-pic">
+            {n > 1 && <button type="button" className="mkz-arr l" aria-label="Previous" onClick={() => go(-1)}>‹</button>}
+            <img src={urls[at]} alt="Mockup" />
+            {n > 1 && <button type="button" className="mkz-arr r" aria-label="Next" onClick={() => go(1)}>›</button>}
+          </div>
+          <div className="mkz-bar">
+            {n > 1 && <div className="mkz-strip">{urls.map((u, i) => <button type="button" key={u} className={i === at ? "on" : ""} onClick={() => setAt(i)} aria-label={`Mockup ${i + 1}`}><img src={u} alt="" /></button>)}</div>}
+            <span className="spacer" />
+            <a className="btn sm ghost" href={urls[at]} target="_blank" rel="noreferrer">Open full size</a>
+            <button type="button" className="btn sm" onClick={() => setAt(null)}>Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>;
+}
+
 function ScreensLine({ summary, children }: { summary: React.ReactNode; children: React.ReactNode }) {
   const [edit, setEdit] = useState(false);
   return (
@@ -811,7 +880,8 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
   return out || url;
 }
 
-function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra }: { d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
+function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed }: { d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+  /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
@@ -854,19 +924,19 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
           {n > 0 && <span className="pr-n">{n}</span>}
           <b>{d.location || "Print"}</b>
           <span className="pr-how">{METHODS[d.method]}</span>
-          {each && <span className="pr-each">each <b>{each}</b></span>}
+          {each && <span className="pr-each" title={listed ? "The price list's price for this print. The garment prices were typed, so it's not charged separately." : undefined}>{listed ? "list" : "each"} <b>{each}</b></span>}
         </div>
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
-          {d.inks && !(d.visualOnly && !d.confirmed) && <span className="pr-ink">{d.inks}</span>}
           {size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
+        {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
-        {shopNotes(d.notes) && <div className="pr-notes">{shopNotes(d.notes)}</div>}
+        {printNotes(d.notes) && <div className="pr-notes">{printNotes(d.notes)}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Reorder details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Reorder Details</a> : null}</div>}
       </div>
     </div>
