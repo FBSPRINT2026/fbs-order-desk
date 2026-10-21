@@ -18,7 +18,7 @@ import type { PrintSpecs, SpecHistory } from "@/lib/ai/specHistory";
  *  1. The mockup: the old one is kept; a reorder never gets a new mockup.
  *  2. Pricing: staff check it once (an entry in the order's history).
  *  3. Print specs, each print saying where its specs came from: our guess (greyed), filled in by staff (still a
- *     guess), or confirmed by production. Production confirms here or on Production Details; that saves the specs on
+ *     guess), or confirmed by production. Production confirms here or on Reorder Details; that saves the specs on
  *     the customer's design (lib/designSpecs.ts), and the next reorder of the job takes them automatically.
  *     Specs production confirmed before for this customer can be used in one click.
  */
@@ -260,7 +260,7 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
                 </div>
               );
             })}
-            {!canConfirm && waiting.length > 0 && <div className="faint ro-note">Production confirms these on <Link href={`/shop/details?order=${o.id}`}>Production Details</Link>.</div>}
+            {!canConfirm && waiting.length > 0 && <div className="faint ro-note">Production confirms these on <Link href={`/shop/details?order=${o.id}`}>Reorder Details</Link>.</div>}
           </div>
         </div>
       </div>

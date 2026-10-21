@@ -342,7 +342,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                       ? <select aria-label="Number of colors" value={d.method === "embroidery" ? Math.min(d.colors, 15) : d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{(d.method === "embroidery" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => <option key={n} value={n}>{n}</option>)}{d.method === "screen" && <option value={FULL_COLOR}>Full color</option>}</select>
                       : <span className="faint" style={{ fontSize: 12 }}>Full color</span>}</div>
                   <div className="f-ink"><span className="imp-l">Ink or thread / PMS</span>
-                    <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Reorder - Production Details Needed: our best guess at the ink, production confirms it" : undefined}>
+                    <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Reorder Details Needed: our best guess at the ink, production confirms it" : undefined}>
                         <InkField list={d.method === "embroidery" ? THREAD_COLORS : INK_COLORS} placeholder={d.method === "embroidery" ? "Type a thread color" : "Type a color or PMS"} value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
                         <select aria-label={d.method === "embroidery" ? "Add a thread color" : "Add a Wilflex RFU ink"} tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
@@ -351,7 +351,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                   </div>
-                  <div className="f-size"><span className="imp-l">Print size</span><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder - Production Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
+                  <div className="f-size"><span className="imp-l">Print size</span><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
                       {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}</div>
                   <div className="f-drop"><span className="imp-l">Drop</span><label className="sz-dim">
                         <InchInput label="Drop in inches (blank = standard)" placeholder="Standard" num={d.drop || ""} onNum={(v) => update((x) => { x.imprints[di].drop = v; })} />
@@ -369,8 +369,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                   </div>
                 )}
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
-                    <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
-                    {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}
+                    <span><b>Reorder Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
+                    {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Reorder Details</a> : null}
                 </div>}
                 <div className="imp-art">
                       {!(onMockup && !g.mockupSkipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
@@ -757,7 +757,7 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {extra}
         {d.notes && <div className="pr-notes">{d.notes}</div>}
-        {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Production details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Production Details</a> : null}</div>}
+        {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Reorder details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Reorder Details</a> : null}</div>}
       </div>
     </div>
   );

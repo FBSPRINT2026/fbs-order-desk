@@ -234,7 +234,7 @@ export default function Dashboard() {
   const cur = buckets.find((b2) => b2.k === pk) || buckets[1];
   const stageOf = (j: Job) => (j.statusLabel ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />);
   const owedMine = owed.filter((b) => isMine(b.customer_id));
-  // Production Details Needed: an owner sees only their own customers' orders, always (Oct 15, Nick: "Amanda's dashboard
+  // Reorder Details Needed: an owner sees only their own customers' orders, always (Oct 15, Nick: "Amanda's dashboard
   // is still showing my reminders like Little Groupies"), plus any with no account owner yet; production sees them all
   const pdnMine = boss && me ? pdn.filter((o) => { const ow = owners[o.customer_id || ""] || ""; return !ow || ow === me; }) : pdn;
 
@@ -270,7 +270,7 @@ export default function Dashboard() {
 
   const detailsCard = (
     <section className="db-card db-orange db-pdn" id="dash-details">
-      <div className="db-card-h"><h2>Production Details Needed</h2><span className="db-n">{pdnMine.length}</span><span className="faint db-h-note">reorders of old Printavo jobs: confirm the print size and inks we used</span><span className="spacer" /><Link href="/shop/details" className="linkbtn">Production Details →</Link></div>
+      <div className="db-card-h"><h2>Reorder Details Needed</h2><span className="db-n">{pdnMine.length}</span><span className="faint db-h-note">reorders of old Printavo jobs: confirm the print size and inks we used</span><span className="spacer" /><Link href="/shop/details" className="linkbtn">Reorder Details →</Link></div>
       <div className="db-scroll sm">{list(pdnMine.length, (
         <table className="rv-tbl pd-tbl">
           <thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Prints</th><th className="r">Due</th></tr></thead>

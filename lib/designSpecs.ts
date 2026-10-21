@@ -4,7 +4,7 @@ import type { Group, Imprint } from "@/lib/pricing";
 /**
  * Confirmed print specs (Oct 14, Nick: "once production confirms, those notes are the Bible, set in stone… we only do
  * this once for each design"). A reorder of an old Printavo job comes in with guesses (Imprint.confirm). When
- * production confirms a print (Production Details, or the order's Reorder section), how it printed is saved on the
+ * production confirms a print (Reorder Details, or the order's Reorder section), how it printed is saved on the
  * customer's design (designs.specs):
  *  - `history`: every confirmation, never overwritten (a later one that differs is kept beside the earlier one);
  *  - each entry says which old job the order repeated (`job`, "Printavo #31174" / "#40012") and the order it was

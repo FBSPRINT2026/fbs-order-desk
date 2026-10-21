@@ -6,7 +6,7 @@ import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { addSpec, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 
 /**
- * Production Details: production (Jose) confirms, corrects or leaves blank what an old Printavo reorder guessed for
+ * Reorder Details: production (Jose) confirms, corrects or leaves blank what an old Printavo reorder guessed for
  * each print (size, inks, colors, underbase, drop, screens on file, press notes). The confirmed details go on the order
  * and on the customer's design, so the next reorder starts from them.
  */

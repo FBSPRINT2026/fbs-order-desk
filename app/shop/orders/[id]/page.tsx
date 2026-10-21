@@ -852,7 +852,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="stack">
             {/* the Reorder section (mockup, pricing check, print specs, AI spec history) is gone from the order page (Oct 20,
                 Nick: "get rid of this whole section… it's overbearing… we handled it in the resolution center"): the
-                Resolution Center asks, Production Details confirms, the print row's stamp says what's waiting */}
+                Resolution Center asks, Reorder Details confirms, the print row's stamp says what's waiting */}
           <div className="top2">
             <section className="panel">
               <div className="panel-h"><h2>Customer</h2>

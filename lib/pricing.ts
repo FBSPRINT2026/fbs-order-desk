@@ -93,7 +93,7 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** soft hand additive mixed into the inks */ softHand?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
-  /** production (Jose) confirmed this print's details on a reorder: who and when (Production Details); `from` = taken
+  /** production (Jose) confirmed this print's details on a reorder: who and when (Reorder Details); `from` = taken
    *  from what production confirmed on an earlier order ("#40071"), lib/designSpecs.ts */
   confirmed?: { by: string; at: string; from?: string };
   /** what the AI read off the customer's mockup (size, drop, on which garment size), to learn from staff changes */ aiPlace?: { size: string; drop: string; garment: string; kind: string }; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };

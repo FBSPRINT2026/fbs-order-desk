@@ -503,7 +503,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // read "3 colors · Kelly Green, Light Royal, none")
           // a reorder still waiting for production (Oct 20, Nick: "I don't want you to make any assumptions… leave the art
           // untouched until production confirms it"): the art as it is, no ink names put on the print; production sets
-          // how it printed here (Combine colors, halftones) or on Production Details
+          // how it printed here (Combine colors, halftones) or on Reorder Details
           if (!saved && im.visualOnly && !im.confirmed) {
             setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map: {}, unite: true, plan: plan!, off } }));
             return;

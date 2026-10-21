@@ -1,15 +1,15 @@
 import type { Group, Imprint } from "@/lib/pricing";
 
 /**
- * Reorder - Production Details Needed. A reorder of an old Printavo job comes in with our best guess at the print
+ * Reorder Details Needed. A reorder of an old Printavo job comes in with our best guess at the print
  * size and inks (off the film or the old mockup), flagged on the print (Imprint.confirm). Production (Jose) checks it
- * against what we printed before and confirms, corrects or leaves it blank (Production Details). Until then:
- *  - staff see "Reorder - Production Details Needed" on the order, in the order list and on the dashboards;
+ * against what we printed before and confirms, corrects or leaves it blank (Reorder Details). Until then:
+ *  - staff see "Reorder Details Needed" on the order, in the order list and on the dashboards;
  *  - the customer sees the print specs greyed out, marked REORDER (nothing is blocked);
  *  - the work order / Printavo say it on the print.
  * The flag lives on the imprints (orders.groups), so nothing new is needed in the database.
  */
-export const DETAILS_LABEL = "Reorder - Production Details Needed";
+export const DETAILS_LABEL = "Reorder Details Needed";
 export const DETAILS_SHORT = "Details needed";
 
 export const needsDetails = (im: Pick<Imprint, "confirm"> | null | undefined) => !!im?.confirm && (!!im.confirm.size || !!im.confirm.ink);

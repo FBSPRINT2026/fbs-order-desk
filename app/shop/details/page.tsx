@@ -9,7 +9,7 @@ import { DETAILS_LABEL, needsDetails, ordersNeedingDetails, type DetailsInput } 
 import { confirmDetails } from "../details-actions";
 
 /**
- * Production Details (Production → Production Details): reorders of old Printavo jobs waiting on production to say
+ * Reorder Details (Production → Reorder Details): reorders of old Printavo jobs waiting on production to say
  * how we printed them before. Each print comes in with our best guess (off the film or the old mockup); Jose
  * confirms it, corrects it, or leaves a field blank. Confirmed details go on the order and the customer's design.
  */
@@ -126,7 +126,7 @@ export default function ProductionDetailsPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Production</div><h1>Production Details</h1>
+        <div><div className="eyebrow">Production</div><h1>Reorder Details</h1>
           <p className="muted pdd-intro">Reorders of old Printavo jobs. The print size and inks are our best guess from the old film or mockup. Check them against what we printed before, fix anything that&apos;s off, and confirm. Leave a field blank if nobody knows.</p></div>
       </div>
       <div className="aa-sub pd-tabs pdd-tabs" role="tablist">
