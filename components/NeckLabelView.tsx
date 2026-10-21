@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { colorHex } from "@/lib/inkColors";
-import { drawNeckView, isDarkHex, isPicture, labelCanvas, labelFileFor, type NeckLabelSet } from "@/lib/neckLabels";
+import { TAG_GRAY, drawNeckView, isPicture, labelCanvas, labelFileFor, picturePath, type NeckLabelSet } from "@/lib/neckLabels";
 
 /** signed links for label art, kept for the page's life (an hour each) */
 const urlCache = new Map<string, Promise<string>>();
@@ -12,14 +12,15 @@ export function neckFileUrl(path: string): Promise<string> {
 }
 export const loadPic = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => rej(new Error("no picture")); im.src = src; });
 
-/** the ink the label prints in: the set's ink, else white on a dark shirt and black on a light one */
-export const labelInkHex = (set: NeckLabelSet, shirtHex: string) => (set.ink && colorHex(set.ink)) || (isDarkHex(shirtHex) ? "#f4f4f2" : "#1b1b1b");
+/** the ink the label prints in: the set's ink, else the shop's usual light gray on every shirt (Oct 21, Nick: "we
+ *  typically print the same color on both black and white… usually a light gray") */
+export const labelInkHex = (set: NeckLabelSet, _shirtHex?: string) => (set.ink && (colorHex(set.ink) || (/^#[0-9a-f]{6}$/i.test(set.ink) ? set.ink : ""))) || TAG_GRAY;
 
 /** the label for one size as it prints (null when the art isn't a picture we can draw) */
 export async function labelFor(set: NeckLabelSet, size: string, shirtHex: string): Promise<HTMLCanvasElement | null> {
   const f = labelFileFor(set, size);
   if (!f || !isPicture(f)) return null;
-  const u = await neckFileUrl(f.path);
+  const u = await neckFileUrl(picturePath(f));
   if (!u) return null;
   const img = await loadPic(u).catch(() => null);
   return img ? labelCanvas(img, set, size, labelInkHex(set, shirtHex)) : null;

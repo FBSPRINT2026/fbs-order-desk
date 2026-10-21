@@ -9,20 +9,24 @@
  */
 import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, YOUTH_SIZES, type Group } from "@/lib/pricing";
 
-export type NeckFile = { path: string; name: string; type: string };
+export type NeckFile = { path: string; name: string; type: string; /** a PNG of a PDF / AI / EPS made when it was uploaded (the file itself is kept as is) */ preview?: string };
 export type NeckLabelSet = {
   id: string;
   /** e.g. "Tee label" or "Peticolas 60/40" */
   name: string;
   /** the fabric content it's for ("60% cotton / 40% polyester"), blank for a generic one */
   content?: string;
-  /** one file per size, or one design with the size dropped in */
-  mode: "per_size" | "template";
+  /**
+   * "one" (Oct 21, Nick: "just make it simple… upload one tag… or all the tags"): one file for every size (`template`),
+   * with a file of its own for any size that has one (`files`). Older sets: a file per size, or one design with the
+   * size dropped in.
+   */
+  mode: "one" | "per_size" | "template";
   files?: Partial<Record<string, NeckFile>>;
   template?: NeckFile;
   /** where the size goes on the template (fractions of the art: x, y, w, h) */
   sizeBox?: { x: number; y: number; w: number; h: number };
-  /** the ink it's printed in (blank: white on dark shirts, black on light) */
+  /** the ink it's printed in (blank: light gray on every shirt, the shop's usual) */
   ink?: string;
   /** printed width, inches */
   widthIn?: number;
@@ -38,15 +42,19 @@ export const SIZE_GROUPS: { label: string; sizes: readonly string[] }[] = [
   { label: "Infant", sizes: BABY_SIZES },
 ];
 
-export const isPicture = (f?: NeckFile | null) => !!f && (/^image\/(png|jpe?g|webp|gif|svg\+xml)$/.test(f.type) || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name));
+export const isPicture = (f?: NeckFile | null) => !!f && (!!f.preview || /^image\/(png|jpe?g|webp|gif|svg\+xml)$/.test(f.type) || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name));
+/** the picture to draw: the PNG made from a PDF / AI / EPS, else the file */
+export const picturePath = (f: NeckFile) => f.preview || f.path;
+/** the shop's usual tag ink: one light gray on every shirt color */
+export const TAG_GRAY = "#c4c4c4";
 
 /** the file a size prints from (per size: its own; template: the design) */
 export const labelFileFor = (set: NeckLabelSet, size: string): NeckFile | null =>
-  set.mode === "template" ? set.template || null : set.files?.[size] || null;
+  set.mode === "one" ? set.files?.[size] || set.template || null : set.mode === "template" ? set.template || null : set.files?.[size] || null;
 
 /** sizes this set has art for (a template covers every size) */
 export const sizesWithArt = (set: NeckLabelSet): string[] =>
-  set.mode === "template" ? (set.template ? SIZE_GROUPS.flatMap((g) => [...g.sizes]) : []) : Object.keys(set.files || {}).filter((z) => set.files?.[z]);
+  set.mode === "template" || set.mode === "one" ? (set.template ? SIZE_GROUPS.flatMap((g) => [...g.sizes]) : []) : Object.keys(set.files || {}).filter((z) => set.files?.[z]);
 
 export const DEFAULT_BOX = { x: 0.3, y: 0.72, w: 0.4, h: 0.22 };
 
