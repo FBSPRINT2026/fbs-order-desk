@@ -411,7 +411,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
             {([["asPrinted", "On file (film folder)"], ["physical", "In the drawer"], ["new", "New film / new separations"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (film === k ? " on" : "")} onClick={() => setFilm(k)}>{l}</button>)}
             <button type="button" className="linkbtn" onClick={() => setFinder((x) => !x)}>{finder ? "Hide the film folder" : "Find it in the Dropbox film folder"}</button>
           </div>
-          {film && film !== "asPrinted" && <div className="jv-warn"><b>A screen popped?</b> {film === "new" ? "New film has never printed: reburn every screen of this print together." : "No digital copy: if a film is lost, reburn every screen of this print from new film."}</div>}
+          {film && film !== "asPrinted" && <div className="jv-warn"><b>Need to replace a screen?</b> {film === "new" ? "New film has never printed: reburn every screen of this print together." : "No digital copy: if a film is lost, reburn every screen of this print from new film."}</div>}
           {finder && <FilmFinder v={v} p={p} busy={busy ? "busy" : ""} post={post} orderId={orderId} />}
         </div>
       )}
@@ -499,7 +499,7 @@ function FilmPanel({ v, p, locked, busy, post, orderId, request }: { v: Producti
       </div>
       {st && st !== "asPrinted" && (
         <div className="jv-warn">
-          <b>A screen popped?</b> {st === "new" ? "This film has never been printed: don't remake one screen from it to go with old screens. Reburn every screen of this print together." : "There's no digital copy of this film: if one film is lost, reburn every screen of this print from new film."}
+          <b>Need to replace a screen?</b> {st === "new" ? "This film has never been printed: don't remake one screen from it to go with old screens. Reburn every screen of this print together." : "There's no digital copy of this film: if one film is lost, reburn every screen of this print from new film."}
         </div>
       )}
     </section>
