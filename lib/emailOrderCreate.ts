@@ -46,7 +46,7 @@ function dims(b: Buffer): { w: number; h: number } | null {
 export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved"; /** where it came from, when not an email (the AI Workbench) */ via?: string };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
-  const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, meta").eq("id", input.activityId).maybeSingle() : { data: null };
+  const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, body, meta").eq("id", input.activityId).maybeSingle() : { data: null };
   if (input.activityId && !a) return { ok: false, error: "Email not found." };
   if (a && !a.customer_id) return { ok: false, error: "Make the sender a customer first (the yellow box above)." };
   const d = input.draft;
@@ -187,12 +187,27 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   if (!a) return { ok: true, id: oid, number: o.number as number };
   // the email's suggested answer becomes the order confirmation (Nick, Oct 7): thanks, the link, what we have, approve?
-  const reply = confirmationReply({ number: o.number as number, id: oid, nickname: d.nickname, due: d.due_date, groups, subject: String(a.subject || ""), first: String(((a.meta as { from_name?: string } | null)?.from_name || "")).trim().split(/\s+/)[0] || "" });
+  const reply = confirmationReply({ number: o.number as number, id: oid, nickname: d.nickname, due: d.due_date, groups, subject: String(a.subject || ""), first: greetName(String(((a.meta as { from_name?: string } | null)?.from_name || "")), String((a as { body?: string | null }).body || "")) });
   const meta0 = (a.meta || {}) as { reply_options?: { options?: { label: string; subject: string; body: string }[] } };
   const others = (meta0.reply_options?.options || []).filter((x) => x.label !== reply.label).slice(0, 3);
   await admin.from("activities").update({ order_id: oid, meta: { ...meta0, reply_options: { at: new Date().toISOString(), options: [reply, ...others] } } }).eq("id", a.id);
   await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", d.part ? `email:${d.part.anchor || a.id}:order:${d.part.key}` : `email:${a.id}:order`);
   return { ok: true, id: oid, number: o.number as number };
+}
+
+/**
+ * Who to greet (Oct 20, Nick: the reply to Little Groupies started "Hi Little,"): the sender's first name, unless the
+ * sender is a company or a shared box ("Little Groupies", info@): then the name they signed with ("Thank you, Brooke").
+ */
+export function greetName(fromName: string, body: string) {
+  const first = fromName.trim().split(/\s+/)[0] || "";
+  const person = /^[A-Z][a-z]+$/.test(first) && fromName.trim().split(/\s+/).length <= 3 && !/\b(inc|llc|co|company|shop|store|team|info|sales|orders?|groupies|designs?|print|apparel|brewing|club|church|school)\b/i.test(fromName);
+  const lines = body.replace(/\r/g, "").split("\n").map((x) => x.trim());
+  const k = lines.findIndex((x) => /^(thanks|thank you|best|regards|best regards|kind regards|cheers|sincerely|thx|warmly)[,!.]?$/i.test(x));
+  const signed = k >= 0 ? lines.slice(k + 1).find((x) => x) || "" : "";
+  const sig = /^[A-Z][a-z]+(\s+[A-Z][a-z]+)?$/.test(signed) ? signed.split(/\s+/)[0] : "";
+  if (sig && (!person || sig.toLowerCase() !== first.toLowerCase())) return person && first ? (sig.toLowerCase() === first.toLowerCase() ? first : sig) : sig;
+  return person ? first : sig || "";
 }
 
 /** "Thanks for your order": the reply staff send once the order is made, with its link and a short summary */

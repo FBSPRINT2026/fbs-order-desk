@@ -58,6 +58,9 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   const [askSkip, setAskSkip] = useState(false);
+  // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
+  // you want to change all the items on this group to 2.25?")
+  const [askAll, setAskAll] = useState<null | { li: number; v: number }>(null);
   const [blockMsg, setBlockMsg] = useState("");
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
@@ -234,7 +237,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       value={sized ? lc?.qty ?? 0 : l.sizes?.OS || ""} placeholder="0"
                       onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); const osOnly = r.sizeRun?.length === 1 && r.sizeRun[0] === ONE_SIZE; r.oneSize = osOnly || v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
                   </div>
-                  <div className="a-ea r">{l.prog && <span className="prg-tag" title={l.prog.note}>Program</span>}<input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
+                  <div className="a-ea r">{l.prog && <span className="prg-tag" title={l.prog.note}>Program</span>}<input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
+                    onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
                 </div>
@@ -275,6 +280,15 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
         </div>
         <div className="imprints">
+          {askAll && (
+            <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Same price for the group" onClick={() => setAskAll(null)}>
+              <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+                <h3>Change every item in this group to ${askAll.v.toFixed(2)}?</h3>
+                <p className="dla-sub">{g.lines.length} items in this group. Just this one keeps the others as they are.</p>
+                <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setAskAll(null)}>Just this one</button><button type="button" className="btn primary" autoFocus onClick={() => { const v = askAll.v; setAskAll(null); update((x) => { x.lines.forEach((y) => { y.priceOverride = v; }); }); }}>Yes, all {g.lines.length}</button></div>
+              </div>
+            </div>
+          )}
           {locked && askSkip && (
             <div className="confirm-bar">
               <span>You haven&apos;t created a mockup for this group yet. Are you sure you want to fill in the imprints without one?</span>
@@ -682,8 +696,22 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
   const [zoom, setZoom] = useState(false);
   // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
   const pic = usePainted(cur ? urls[cur.id] || "" : "", d);
+  // a visual-only reorder print (Oct 20, Nick): the whole row greyed under a stamp; clicking it asks before anyone goes
+  // in to set the details (that's what production confirms and locks in)
+  const vis = !!d.visualOnly && !d.confirmed;
+  const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false);
   return (
-    <div className="pr">
+    <div className={"pr" + (vis && !opened ? " pr-vis" : "")}>
+      {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span>Visual mockup</span><small>Production confirming details on print run</small></button>}
+      {ask && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h3>Edit the print details?</h3>
+            <p className="dla-sub">This is a visual mockup: production sets the colors, inks and size on the print run. Editing them now locks in the production notes for this design.</p>
+            <div className="dla-acts"><button type="button" className="btn ghost" autoFocus onClick={() => setAsk(false)}>No</button><button type="button" className="btn primary" onClick={() => { setAsk(false); if (detailsHref) window.location.href = detailsHref; else setOpened(true); }}>Yes, edit the details</button></div>
+          </div>
+        </div>
+      )}
       <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => (pic ? setZoom(true) : onMockup())} title={pic ? "See it bigger" : "Pick the logo in the Mockup Creator"}>
         {pic ? <img src={pic} alt="" /> : <span>No logo</span>}
       </button>
@@ -702,7 +730,6 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
           <span className="pr-how">{METHODS[d.method]}</span>
           {each && <span className="pr-each">each <b>{each}</b></span>}
         </div>
-        {d.visualOnly && !d.confirmed && <div className="pr-stamp" title="A reorder: the mockup is visual only; production sets the colors, inks and size on the print run">Visual mockup · production confirming details on print run</div>}
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}

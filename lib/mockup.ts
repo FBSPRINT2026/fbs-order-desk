@@ -301,7 +301,8 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   // A onesie's length runs down to the snaps (a 12M is 19.5" long, 9.88" wide), so its length says nothing about where
   // the chest is: an infant's drop follows its width (Oct 20, Nick: The Bottles sat in the middle of the onesie; a Full
   // Front starts about 1.75" below the collar, not 3.2").
-  const dropK = b?.kind === "infant" ? k.kw : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
+  // (second pass, Oct 20: still ~2" low on the 12M Bottles; a onesie's full front starts about an inch below the collar)
+  const dropK = b?.kind === "infant" ? k.kw * 0.6 : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
   return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
 export const spotFor = (location: string, b?: Body | null): Loc => {

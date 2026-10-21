@@ -482,7 +482,12 @@ ${staffSays}` : ""}`;
       }
       return null;
     };
-    const pgs = (p.groups || []).map((pg) => ({ ...pg, garments: (pg.garments || []).filter((x) => {
+    // a sheet row without a style takes the style most of the sheet's rows have (Oct 20: Little Groupies' Black row had
+    // none and matched the old job's 3001B tee instead of the 100B onesie)
+    const styleCount = new Map<string, number>();
+    for (const pg of p.groups || []) for (const x of pg.garments || []) { const k0 = String(x.style || "").trim(); if (k0) styleCount.set(k0, (styleCount.get(k0) || 0) + 1); }
+    const usual = [...styleCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    const pgs = (p.groups || []).map((pg) => ({ ...pg, garments: (pg.garments || []).map((x) => (!String(x.style || "").trim() && usual ? { ...x, style: usual } : x)).filter((x) => {
       if (x.reorder_line || named.length) return true;
       const [l] = proposalToGroups({ groups: [{ ...pg, prints: [], garments: [x] }] }).flatMap((g) => g.lines);
       if (!l || !Object.keys(l.sizes).length) return true;

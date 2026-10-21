@@ -8,6 +8,7 @@ import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import { applyColors, checkColors } from "@/components/ColorCheck";
 import { LOCATIONS } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
+import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
@@ -33,9 +34,9 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -193,9 +194,25 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (pvAll) step(`${of}Asking you about the files on ${jobLabel || "the old job"}…`);
       note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
       const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), method: im.method, dark: grp.lines.some((l) => l.color && !LIGHTISH.test(l.color)), ...(im.design_id ? { design: im.design_id } : {}) }));
-      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, resolve }));
+      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
       setHelp(null);
       const made = new Map<File, string>();
+      // a picked file or upload saved as their logo (once per file)
+      const designFor = async (picked: HelpPick, im: (typeof targets)[number]["im"]): Promise<string | null> => {
+        if (picked.kind === "design") return picked.id;
+        if (picked.kind !== "file" && picked.kind !== "upload") return null;
+        const file = picked.file;
+        let id = made.get(file);
+        if (!id) {
+          // a print file (PDF, AI, EPS, SVG) keeps a picture of it, so the Mockup Creator can use it right away
+          const vector = picked.kind === "upload" && !/^image\/(png|jpe?g|gif|webp)$/i.test(file.type) && !/\.(png|jpe?g|gif|webp)$/i.test(file.name);
+          const preview = vector ? await makePreview(/\.ai$/i.test(file.name) ? new File([file], file.name, { type: "application/pdf" }) : file).catch(() => null) : null;
+          const dsg = await uploadDesign(createClient(), { draft: true, file, ...(preview ? { preview } : {}), customer_id: g.customer!.id, name: d!.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `For the reorder of ${jobLabel}`, method: im.method });
+          id = dsg.id; made.set(file, id); made0.current.add(id);
+          guard();
+        }
+        return id;
+      };
       for (const { gi, ii, im } of targets) {
         const picked = ans.picks[`${gi}:${ii}`] || (im.design_id ? { kind: "keep" as const } : { kind: "skip" as const });
         const setIm = (patch: Partial<typeof im>, note2: string) => { d = { ...d!, groups: d!.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi === ii ? { ...y, ...patch, notes: [y.notes, note2].filter(Boolean).join(". ").slice(0, 300) } : y)) })) }; };
@@ -211,19 +228,28 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         }
         note("Saving the art as their logo…");
         try {
-          const file = picked.file;
-          let id = made.get(file);
-          if (!id) {
-            // a print file (PDF, AI, EPS, SVG) keeps a picture of it, so the Mockup Creator can use it right away
-            const vector = picked.kind === "upload" && !/^image\/(png|jpe?g|gif|webp)$/i.test(file.type) && !/\.(png|jpe?g|gif|webp)$/i.test(file.name);
-            const preview = vector ? await makePreview(/\.ai$/i.test(file.name) ? new File([file], file.name, { type: "application/pdf" }) : file).catch(() => null) : null;
-            const dsg = await uploadDesign(createClient(), { draft: true, file, ...(preview ? { preview } : {}), customer_id: g.customer!.id, name: d.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `For the reorder of ${jobLabel}`, method: im.method });
-            id = dsg.id; made.set(file, id); made0.current.add(id);
-            guard();
-          }
+          const id = await designFor(picked, im);
+          if (!id) continue;
           setIm({ design_id: id }, picked.kind === "upload" ? "Art uploaded when the reorder was made" : `Art from ${picked.name}`);
           did.push(`${im.location}: art ${picked.kind === "upload" ? "uploaded by you" : `from ${picked.name}`}`);
         } catch (e) { if (e instanceof Cancelled) throw e; did.push(`${im.location}: the art couldn't be saved (${e instanceof Error ? e.message : String(e)}): add it on the order`); }
+      }
+      // art for only some of a group's items (Oct 20, Nick: "ask me if this is the front on all items or a specific
+      // item"): those lines become their own group with that art (the new groups go at the end, so the numbers above hold)
+      for (const sp of ans.splits || []) {
+        const [gi, ii] = sp.pk.split(":").map(Number);
+        const src = d.groups[gi], im = src?.imprints[ii];
+        if (!src || !im) continue;
+        const moving = src.lines.filter((l) => sp.lineIds.includes(l.id));
+        if (!moving.length || moving.length >= src.lines.length) continue;
+        let id: string | null = null;
+        try { id = await designFor(sp.pick, im); } catch (e) { if (e instanceof Cancelled) throw e; }
+        const ng: Group = { ...(JSON.parse(JSON.stringify(src)) as Group), id: uid(), lines: moving, pvRef: [], pvArt: [] };
+        ng.imprints = ng.imprints.map((x, k) => ({ ...x, id: uid(), ...(k === ii ? { design_id: id || (undefined as unknown as string) } : {}) }));
+        delete (ng as { mockupThumbs?: unknown }).mockupThumbs;
+        const rest = src.lines.filter((l) => !sp.lineIds.includes(l.id));
+        d = { ...d, groups: [...d.groups.map((x, xi) => (xi === gi ? { ...x, lines: rest, ...(x.mockupThumbs ? { mockupThumbs: undefined } : {}) } : x)), ng] };
+        did.push(`${im.location} on ${moving.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ")}: ${id ? "its own art" : "no art yet"} (a group of its own)`);
       }
       // the old job's files go in the new order's Production files only as you said (art, mockup, production file);
       // "Not needed" ones stay out
@@ -498,7 +524,12 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // one file at a time, 1 of N, back and forth (Oct 20, Nick: "we may reorder something and I don't remember
   // everything about this job… click through all the different arts")
   const [at, setAt] = useState(0);
-  const [split, setSplit] = useState<Record<string, boolean>>({});
+  // two steps (Oct 20, Nick: "ask at the end once you know everything… then click to the next screen"): what the files
+  // are, then how it printed and the mockup
+  const [stage, setStage] = useState<"files" | "details">("files");
+  // which items a file is the art for (Nick: "ask me if this is the front on all items or a specific item"): none = all
+  // (less what other files took)
+  const [lineSel, setLineSel] = useState<Record<string, string[]>>({});
   // per location with a multi-color screen print: were the old job's screens counting an underbase?
   // what you know about each print location (an old Printavo job): colors and underbase, or "don't know", and the width
   const knowLocs = !help.archivedId ? [] : [...new Map(help.prints.filter((p) => (p.method || "screen") === "screen").map((p) => [p.location, p])).values()];
@@ -525,24 +556,51 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const isPrintVal = (v: string) => v.startsWith("loc:") || help.prints.some((p) => p.key === v);
   const printsOf = (v: string) => (v.startsWith("loc:") ? help.prints.filter((p) => p.location === v.slice(4)) : help.prints.filter((p) => p.key === v));
   const locs = [...new Set(help.prints.filter((p) => !p.design).map((p) => p.location))];
-  const assign = (key: string, v: string) => setAs((a) => {
-    const n: Record<string, string> = {};
-    const mine = isPrintVal(v) ? new Set([v, ...(v.startsWith("loc:") ? printsOf(v).map((p) => p.key) : [])]) : new Set<string>();
-    for (const [k, x] of Object.entries(a)) if (!(k !== key && mine.has(x))) n[k] = x;
-    if (a[key] === v) delete n[key]; else n[key] = v;
-    return n;
+  const assign = (key: string, v: string) => {
+    const off = as[key] === v;
+    // a second file for the same print spot: it's for some of the items (picked next), the first keeps the rest
+    if (!off && v.startsWith("loc:") && Object.entries(as).some(([k, x]) => k !== key && x === v)) setLineSel((s0) => ({ ...s0, [key]: [] }));
+    else setLineSel((s0) => { const y = { ...s0 }; delete y[key]; return y; });
+    setAs((a) => {
+      const n: Record<string, string> = {};
+      const mine = isPrintVal(v) && !v.startsWith("loc:") ? new Set([v]) : new Set<string>();
+      for (const [k, x] of Object.entries(a)) if (!(k !== key && mine.has(x))) n[k] = x;
+      if (off) delete n[key]; else n[key] = v;
+      return n;
+    });
+  };
+  /** the lines at a print spot, and the ones a file is the art for there */
+  const linesAt = (loc: string) => { const gis = new Set(help.prints.filter((p) => p.location === loc).map((p) => +p.key.split(":")[0])); return help.lines.filter((l) => gis.has(l.gi)); };
+  const effLines = (key: string, loc: string) => {
+    const at0 = linesAt(loc).map((l) => l.id);
+    if (lineSel[key]) return lineSel[key].filter((x) => at0.includes(x));
+    const taken = new Set(Object.entries(lineSel).filter(([k]) => k !== key && as[k] === `loc:${loc}`).flatMap(([, ids]) => ids));
+    return at0.filter((x) => !taken.has(x));
+  };
+  const toggleLine = (key: string, loc: string, id: string) => setLineSel((s0) => {
+    const mine = s0[key] ?? effLines(key, loc), on = mine.includes(id);
+    const y: Record<string, string[]> = {};
+    for (const [k, ids] of Object.entries(s0)) if (k !== key) y[k] = on ? ids : ids.filter((x) => x !== id);
+    y[key] = on ? mine.filter((x) => x !== id) : [...mine, id];
+    return y;
   });
   const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
-  const unanswered = olds0.filter((x) => !as[x.key]).length + knowLocs.filter((p) => !(p.location in know)).length;
+  const filesLeft = olds0.filter((x) => !as[x.key]).length, knowLeft = knowLocs.filter((p) => !(p.location in know)).length;
+  const unanswered = filesLeft + knowLeft;
   const finish = (rest: "skip" | "production") => {
-    const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>();
+    const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>(), splits: NonNullable<HelpAns["splits"]> = [];
+    const pickOf = (it: Item) => { if (!once.has(it.key)) once.set(it.key, it.pick(!!bgOff[it.key])); return once.get(it.key) || null; };
     for (const p of help.prints) {
-      const it = artOf(p.key);
-      if (it && !once.has(it.key)) once.set(it.key, it.pick(!!bgOff[it.key]));
-      const pk = it ? once.get(it.key) || null : null;
-      out[p.key] = pk || (rest === "production" ? { kind: "production", note: prodNote.trim() } : { kind: "skip" });
+      const own = items.find((it) => as[it.key] === p.key);
+      const gl = help.lines.filter((l) => l.gi === +p.key.split(":")[0]).map((l) => l.id);
+      // the files for this spot, each with the lines it's the art for: the biggest share is this print's art, the rest
+      // become groups of their own
+      const ents = own ? [{ it: own, ids: gl }] : items.filter((it) => as[it.key] === `loc:${p.location}`).map((it) => ({ it, ids: effLines(it.key, p.location).filter((x) => gl.includes(x)) })).filter((e) => e.ids.length).sort((a, b) => b.ids.length - a.ids.length);
+      const main = ents[0];
+      out[p.key] = (main && pickOf(main.it)) || (rest === "production" ? { kind: "production", note: prodNote.trim() } : { kind: "skip" });
+      for (const e of ents.slice(1)) { const pk = pickOf(e.it); if (pk) splits.push({ pk: p.key, lineIds: e.ids, pick: pk }); }
     }
     // the old job's files for the new order's Production files: art, mockups and production files (one not answered
     // stays in, as before); "Not needed" ones out
@@ -550,7 +608,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
       return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? (aiKind(x.path) || guessProdKind(x.name)), note: (noteOf[x.key] || "").trim() };
     });
-    help.resolve({ picks: out, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
+    help.resolve({ picks: out, splits, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -574,9 +632,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
 
   const Card = (it: Item) => {
     const v = as[it.key] || "", bg = !!bgOff[it.key], pic = bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl;
-    const isArt = isPrintVal(v), p0 = isArt ? printsOf(v)[0] : undefined;
-    const setPl = (patch: Partial<{ location: string; size: string }>) => setPlace((x) => { const y = { ...x }; for (const p of printsOf(v)) y[p.key] = { ...y[p.key], ...patch }; return y; });
-    const perStyle = !!split[it.key] || (!!v && !v.startsWith("loc:") && isArt);
+    const isArt = isPrintVal(v);
+    const perStyle = !!v && !v.startsWith("loc:") && isArt;
     return (
       <div key={it.key} className={"arc-card" + (isArt ? " art" : v ? " set" : "")}>
         <span className={"arc-pic" + (bg && it.canCut ? " clear" : "")}>{pic ? <img src={pic} alt="" /> : <span className="faint">{it.ready ? (it.name.split(".").pop() || "file").toUpperCase() : "Opening…"}</span>}</span>
@@ -588,7 +645,19 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
-        {!it.only && !perStyle && help.prints.length > locs.length && <button type="button" className="ap-link arc-split" onClick={() => setSplit((x) => ({ ...x, [it.key]: true }))}>Different art for each style…</button>}
+        {v.startsWith("loc:") && linesAt(v.slice(4)).length > 1 && (() => {
+          const loc = v.slice(4), all0 = linesAt(loc), mine = effLines(it.key, loc), some = !!lineSel[it.key];
+          return (
+            <div className="arc-items">
+              <span className="arc-items-q">The {loc} on:</span>
+              <span className="arc-chips">
+                <button type="button" className={"chip" + (!some ? " on" : "")} onClick={() => setLineSel((s0) => { const y = { ...s0 }; delete y[it.key]; return y; })}>All items</button>
+                <button type="button" className={"chip" + (some ? " on" : "")} onClick={() => setLineSel((s0) => ({ ...s0, [it.key]: effLines(it.key, loc) }))}>Only some</button>
+              </span>
+              {some && <span className="arc-lines">{all0.map((l) => <label key={l.id} className="check"><input type="checkbox" checked={mine.includes(l.id)} onChange={() => toggleLine(it.key, loc, l.id)} /> {l.label}</label>)}</span>}
+            </div>
+          );
+        })()}
         {!v && (it.path && aiG[it.path]?.kind && aiG[it.path].kind !== "?" ? <span className="arc-hint">I think: <b>{prodKindLabel(aiG[it.path].kind)}</b>{aiG[it.path].why ? ` (${aiG[it.path].why})` : ""}. Right?</span> : it.hint ? <span className="arc-hint">{it.hint}?</span> : it.where === "old" && it.path && !aiG[it.path] ? <span className="arc-hint">Looking at it…</span> : null)}
         {it.where === "old" && v === "production" && (
           <label className="arc-kind">What it is
@@ -600,12 +669,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         )}
         {it.where === "old" && v && v !== "none" && <input className="arc-note" value={noteOf[it.key] || ""} onChange={(e) => setNoteOf((x) => ({ ...x, [it.key]: e.target.value }))} placeholder={v === "production" ? 'A note, e.g. "Amazon barcodes for The Bottles"' : "A note for production (optional)"} aria-label="Note on this file" />}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
-        {isArt && (
-          <div className="arc-place">
-            <select value={(p0 && place[p0.key]?.location) || ""} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-            {!help.archivedId && <label><input type="number" min={1} max={16} step={0.25} value={(p0 && place[p0.key]?.size) || ""} placeholder="std" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide</label>}
-          </div>
-        )}
+
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
       </div>
     );
@@ -615,35 +679,44 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
-      <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
-      <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
-      {knowLocs.length > 0 && (
-        <div className="arc-ub">
-          <b className="arc-ub-h">What do you know about how it printed?</b>
-          {knowLocs.map((p) => {
-            const dark = help.prints.some((q) => q.location === p.location && q.dark), v = know[p.location], set = p.location in know;
-            const ps = help.prints.filter((q) => q.location === p.location), w = place[ps[0].key]?.size || "";
-            const setW = (val: string) => setPlace((x) => { const y = { ...x }; for (const q of ps) y[q.key] = { ...y[q.key], size: val }; return y; });
-            return (
-              <div key={p.location} className="arc-ub-r">
-                <span className="arc-ub-l"><b>{p.location}</b> <span className="faint">{help.job.replace(/^(#\d+).*/, "$1")} says {p.colors} color{p.colors === 1 ? "" : "s"}</span></span>
-                <span className="arc-chips" role="radiogroup" aria-label={`${p.location} colors`}>
-                  <button type="button" role="radio" aria-checked={set && v === null} className={"chip" + (set && v === null ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: null }))}>Don&apos;t know: guess {p.colors}</button>
-                  <button type="button" role="radio" aria-checked={!!v} className={"chip" + (v ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))}>I know</button>
-                  {v && <><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> + underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></>}
-                </span>
-                <label className="arc-ub-w">Width <input type="number" min={1} max={16} step={0.25} value={w} placeholder="?" onChange={(e) => setW(e.target.value)} aria-label="Printed width in inches" /> in <span className="faint">{w ? "" : "(blank: don't know)"}</span></label>
+      <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
+      <p className="ap-why">{stage === "details" ? "Tell me what you know; leave a blank when you don't. Then the mockup." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
+      {stage === "details" && (() => {
+        const spots = [...new Map(help.prints.map((p) => [p.location, p])).values()];
+        return (
+          <div className="arc-ub arc-det">
+            <div className="arc-det-h"><span>Print</span><span>Colors</span><span>Print size</span></div>
+            {spots.map((p) => {
+              const ps = help.prints.filter((q) => q.location === p.location), pl = place[ps[0].key] || { location: p.location, size: "" };
+              const setPl = (patch: Partial<{ location: string; size: string }>) => setPlace((x) => { const y = { ...x }; for (const q of ps) y[q.key] = { ...(y[q.key] || { location: q.location, size: q.size }), ...patch }; return y; });
+              const dark = ps.some((q) => q.dark), v = know[p.location], set = p.location in know, asks = knowLocs.some((q) => q.location === p.location);
+              return (
+                <div key={p.location} className="arc-det-r">
+                  <select value={pl.location || p.location} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+                  {asks ? (
+                    <span className="arc-det-c">
+                      <span className="arc-chips" role="radiogroup" aria-label={`${p.location} colors`}>
+                        <button type="button" role="radio" aria-checked={set && v === null} className={"chip" + (set && v === null ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: null }))}>Don&apos;t know{p.colors ? ` (old job: ${p.colors})` : ""}</button>
+                        <button type="button" role="radio" aria-checked={!!v} className={"chip" + (v ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))}>I know</button>
+                      </span>
+                      {v && <span className="arc-det-k"><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> + underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></span>}
+                    </span>
+                  ) : <span className="faint">{p.colors ? `${p.colors} color${p.colors === 1 ? "" : "s"}` : ""}</span>}
+                  <span className="arc-det-s"><input type="number" min={1} max={16} step={0.25} value={pl.size || ""} placeholder="?" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide <span className="faint">{pl.size ? "" : "(blank: don't know)"}</span></span>
+                </div>
+              );
+            })}
+            {help.archivedId && (
+              <div className="arc-ub-r arc-mode" role="radiogroup" aria-label="The mockup">
+                <span className="arc-ub-l"><b>The mockup</b></span>
+                <label className="check"><input type="radio" name="arcmode" checked={mode === "visual"} onChange={() => setMode("visual")} /> Visual only: production confirms the details on the print run <span className="faint">(the customer sees just the mockup, no guessed details)</span></label>
+                <label className="check"><input type="radio" name="arcmode" checked={mode === "details"} onChange={() => setMode("details")} /> With these details</label>
               </div>
-            );
-          })}
-          <div className="arc-ub-r arc-mode" role="radiogroup" aria-label="The mockup">
-            <span className="arc-ub-l"><b>The mockup</b></span>
-            <label className="check"><input type="radio" name="arcmode" checked={mode === "visual"} onChange={() => setMode("visual")} /> Visual only: production confirms the details on the print run <span className="faint">(the customer sees just the mockup, no guessed details)</span></label>
-            <label className="check"><input type="radio" name="arcmode" checked={mode === "details"} onChange={() => setMode("details")} /> With these details</label>
+            )}
           </div>
-        </div>
-      )}
-      {olds.length > 0 && (() => {
+        );
+      })()}
+      {stage === "files" && olds.length > 0 && (() => {
         const i = Math.min(at, olds.length - 1), it = olds[i];
         return (
           <div className="arc-step">
@@ -662,8 +735,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           </div>
         );
       })()}
-      {opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
-      <details className="arc-else" open={elseOpen} onToggle={(e) => setElseOpen((e.target as HTMLDetailsElement).open)}>
+      {stage === "files" && opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
+      {stage === "files" && <details className="arc-else" open={elseOpen} onToggle={(e) => setElseOpen((e.target as HTMLDetailsElement).open)}>
         <summary>Not here? Their emails and logos{found ? ` (${found.length})` : ""}, the film folder, or upload it</summary>
         <div className="arc-tools">
           <label className="ap-link">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const k = `U${ups.length}`; setUps((x) => [...x, { file: f, url: /^image\//.test(f.type) ? URL.createObjectURL(f) : "" }]); const p = help.prints.find((q) => !artOf(q.key)); if (p) assign(k, p.key); e.target.value = ""; }} /></label>
@@ -680,7 +753,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           <input value={say} onChange={(e) => setSay(e.target.value)} placeholder="Ask the AI about these files" aria-label="Ask the AI about the art" />
         </form>
         {(thinking || aiSaid) && <p className="ap-ai"><span className="ap-ai-i" aria-hidden>✦</span><span>{thinking ? "Looking at the files…" : aiSaid}</span></p>}
-      </details>
+      </details>}
       {prodOpen && (
         <form className="ap-ask" onSubmit={(e) => { e.preventDefault(); finish("production"); }}>
           <input autoFocus value={prodNote} onChange={(e) => setProdNote(e.target.value)} placeholder='A note for production, e.g. "on the server under Little Groupies 2023"' aria-label="Note for production" />
@@ -693,7 +766,14 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           <button type="button" className="ap-link" onClick={() => setProdOpen((x) => !x)}>Hand to production</button>
           <button type="button" className="ap-link" onClick={() => finish("skip")}>Skip for now</button>
         </span>
-        {(() => { const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1)); return n > 1 && i < n - 1 ? <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button> : null; })() ?? <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Answer the questions (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
+        {stage === "details" && <button type="button" className="btn ghost" onClick={() => setStage("files")}>‹ Back to the files</button>}
+        {stage === "files"
+          ? (() => {
+            const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1));
+            if (n > 1 && i < n - 1) return <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button>;
+            return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => setStage("details")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Next: how it printed ›"}</button>;
+          })()
+          : <button type="button" className="btn primary" disabled={knowLeft > 0} onClick={() => finish("skip")}>{knowLeft > 0 ? `Answer the colors (${knowLeft} left)` : !given.length ? "Make it without art for now" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
       </div>
     </div>
   );
