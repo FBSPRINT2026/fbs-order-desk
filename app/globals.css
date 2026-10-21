@@ -7170,7 +7170,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .prg-past-t{width:100%;border-collapse:collapse;font-size:12.5px}
 .prg-past-t th,.prg-past-t td{padding:5px 8px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
 .prg-past-t .r{text-align:right;font-variant-numeric:tabular-nums}
-.prg-tag{display:block;font-size:10px;font-weight:700;color:var(--ok);text-align:right;line-height:1;margin-bottom:2px}
+.prg-tag{display:block;font-size:10px;font-weight:700;color:var(--ok);text-align:right;line-height:1;margin-bottom:2px;white-space:nowrap}
 .pre.prg{color:var(--ok)}
 /* the Program tab's AI box (Oct 14) */
 .pas{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:10px}

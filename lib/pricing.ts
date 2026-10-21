@@ -133,7 +133,8 @@ export type GLine = {
   /** 2XL+ charge each typed by hand for a size (click the "+$" under the size; Oct 20, Nick): wins over everything else; blank = automatic */
   sizeUpSet?: Partial<Record<Size, number>>;
   /** priced by the customer's program rate card (lib/programs.ts): the price put on this line and how it was worked out */
-  prog?: { each: number; note: string };
+  /** the program price; `base` + `adds` when finishing not in the program is added on top (5.50 + tag removal 1.00) */
+  prog?: { each: number; note: string; base?: number; adds?: string };
   /** staff typed their own price over the program price: the program leaves this line alone */
   progOff?: boolean;
 };

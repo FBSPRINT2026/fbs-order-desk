@@ -369,12 +369,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
         const extra = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
-        const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)` } : want0;
+        const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};
           // a design's flat price is everything in: no 2XL+ charge; else the card's
           for (const z of BIG_SIZES) if (plans[gi]?.flat) up[z] = 0; else if (prog!.card?.sizeUp?.[z] != null) up[z] = +prog!.card.sizeUp[z]!;
-          if (!l.prog || l.prog.each !== want.each || l.prog.note !== want.note) { l.prog = want; l.priceOverride = want.each; }
+          if (!l.prog || l.prog.each !== want.each || l.prog.note !== want.note || l.prog.base !== (want as { base?: number }).base) { l.prog = want; l.priceOverride = want.each; }
           if (JSON.stringify(l.sizeUp || {}) !== JSON.stringify(up)) l.sizeUp = up;
         } else if (l.prog) {
           delete l.prog; l.priceOverride = null;
