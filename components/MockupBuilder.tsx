@@ -2031,10 +2031,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {runSizes.length > 1 && (
             <div className="mk-sizes" role="group" aria-label="Show the mockup on">
               <span className="faint">Show on</span>
-              {runSizes.map((z) => {
+              <span className="chips">{runSizes.map((z) => {
                 const on = (shownSize && runSizes.includes(shownSize) ? shownSize : body.size) === z;
                 return <button key={z} type="button" className={"chip" + (on ? " on" : "")} aria-pressed={on} title={on ? "The mockup and proof show this size" : `See the same print on a ${z}`} onClick={() => setShownSize(z)}>{z}</button>;
-              })}
+              })}</span>
               <span className="faint mk-sizes-n">{capBody ? `Print sized for the ${capBody.size}` : "Same print size on every size"} · the size picked here is the mockup</span>
             </div>
           )}

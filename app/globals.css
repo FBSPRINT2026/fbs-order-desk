@@ -11095,14 +11095,14 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
    I liked these toolbars"): the order page's top is the kit. Tab bars and filter chips are its tab bar (white bar, the
    picked tab tinted blue with a blue underline, counts in little pills); number cards are its summary card (the color
    fade on top, colored labels over each number). Scoped to the shop (main.main): the customer portal is untouched. */
-main.main :is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips, .aa-sub, .set-tabs, .ibx2-tabs, .rv-seg, .md-seg, .jt-chips){display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;overflow:hidden;margin-bottom:0}
+main.main :is(.chips, .mk-hit-seg, .aa-sub, .set-tabs, .ibx2-tabs, .rv-seg, .md-seg, .jt-chips){display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;overflow:hidden;margin-bottom:0}
 main.main :is(.aa-shopnav .chips, .aa-sub, .set-tabs){width:100%}
-main.main :is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips, .ibx2-tabs, .jt-chips){width:fit-content;max-width:100%}
+main.main :is(.chips, .mk-hit-seg, .ibx2-tabs, .jt-chips){width:fit-content;max-width:100%}
 main.main .aa-sub,main.main .set-tabs{margin-bottom:14px}
-main.main :is(:is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips) > .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button){all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;padding:8px 14px;font-family:var(--body);font-size:13.5px;font-weight:700;color:var(--ink-3);white-space:nowrap;text-decoration:none;border-radius:0}
+main.main :is(:is(:is(.chips, .mk-hit-seg) > :is(.chip, button)), .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button){all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;padding:8px 14px;font-family:var(--body);font-size:13.5px;font-weight:700;color:var(--ink-3);white-space:nowrap;text-decoration:none;border-radius:0}
 main.main :is(.aa-shopnav .chips .chip, .aa-sub > button, .set-tabs a){flex:1 0 auto;padding:12px 14px}
-main.main :is(:is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips) > .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button):hover{color:var(--ink);background:transparent}
-main.main :is(:is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips) > .chip.on, .aa-sub > button.on, .set-tabs a.on, .ibx2-tabs > button.on, .rv-seg > button.on, .md-seg > button.on, .jt-chips > button.on){color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
+main.main :is(:is(:is(.chips, .mk-hit-seg) > :is(.chip, button)), .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button):hover{color:var(--ink);background:transparent}
+main.main :is(:is(:is(.chips, .mk-hit-seg) > :is(.chip, button)).on, .aa-sub > button.on, .set-tabs a.on, .ibx2-tabs > button.on, .rv-seg > button.on, .md-seg > button.on, .jt-chips > button.on){color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
 main.main :is(.chip .chip-n, .aa-sub > button :is(span, small), .ibx2-tabs > button span, .rv-seg > button :is(span, small), .jt-chips > button small){font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0}
 main.main :is(.chip.on .chip-n, .aa-sub > button.on :is(span, small), .ibx2-tabs > button.on span, .rv-seg > button.on :is(span, small), .jt-chips > button.on small){background:var(--fbs-blue);color:#fff}
 main.main .md-seg input[type=date]{border:0;background:var(--surface);padding:0 10px}
@@ -11149,7 +11149,7 @@ main.main .jt-chips > button.on small{background:var(--fbs-blue);color:#fff}
    underline, every count in a bubble (blue on the picked tab); the inbox's red "needs a reply" count stays red */
 main.main .ibx2-tabs > button{flex:0 0 auto;padding:9px 15px}
 main.main .ibx2-tabs > button span.hot{background:var(--danger);color:#fff}
-main.main :is(:is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips) > .chip, .ibx2-tabs > button, .jt-chips > button){gap:7px}
+main.main :is(:is(:is(.chips, .mk-hit-seg) > :is(.chip, button)), .ibx2-tabs > button, .jt-chips > button){gap:7px}
 main.main nav.aa-shopnav .chips{width:100%}
 /* one type in lists (Oct 21, Nick: "we got like 5 different fonts here… spilling over onto other lines… the invoice
    number aren't the same as the numbers under all the other ones"): every list in the page's font, numbers with even
@@ -11172,3 +11172,16 @@ main.main .aa-arch{font-family:var(--body)}
 main.main :where(*):not(h1, h1 *, h2, h2 *, code, pre, kbd, samp, svg, svg *, [style*="font-family"], [style*="font-family"] *, [data-font], [data-font] *){font-family:var(--body) !important}
 main.main :is(.sub, .faint, .muted, small){color:var(--ink-3)}
 main.main :is(b, strong){color:inherit}
+/* Email's folder bar is a section bar like the order page's (Oct 21, Nick: "all the toolbars on email look off") */
+main.main .mf-bar{background:var(--surface)!important;border:0!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2)!important;border-radius:14px!important;padding:0!important;gap:0!important;align-items:stretch}
+main.main .mf-bar .mf-chip{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:12px 14px!important;font-size:13.5px!important;font-weight:700!important;color:var(--ink-3)!important;display:inline-flex;align-items:center;gap:6px;flex:1 0 auto;justify-content:center;min-height:0!important}
+main.main .mf-bar .mf-chip:hover{color:var(--ink)!important}
+main.main .mf-bar .mf-chip.on,main.main .mf-bar .mf-dd.on>.mf-chip{color:var(--ink)!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)!important;font-weight:800!important;border-bottom:0!important}
+main.main .mf-bar .mf-chip b{font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3)}
+main.main .mf-bar .mf-chip.on b,main.main .mf-bar .mf-dd.on>.mf-chip b{background:var(--fbs-blue);color:#fff}
+main.main .mf-bar .mf-dd{display:flex;flex:1 0 auto}
+main.main .mf-bar .mf-dd > .mf-chip{width:100%}
+/* the inbox list's filter tabs fit its narrow column: one row, smaller */
+main.main .ibx2-tabs{width:100%;flex-wrap:nowrap}
+main.main .ibx2-tabs > button{flex:1 1 auto;padding:8px 6px;font-size:12.5px;gap:4px;min-width:0}
+main.main .ibx2-tabs > button span{min-width:16px;padding:0 5px;font-size:10.5px}
