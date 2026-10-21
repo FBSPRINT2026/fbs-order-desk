@@ -216,6 +216,45 @@ function PhotoSave({ job, file, onDone }: { job: { kind: "o" | "a"; id: string }
   );
 }
 
+/**
+ * Pictures from the texts (and emails) with this job's customer (Oct 21, Nick: "add from my messages… I'll text the
+ * client… I click into that text message chain and add the photos"). The phone's own Messages app can't be opened from
+ * a web page, but the texts are already here (the Mac bridge): the ones filed to this job first, then the rest.
+ */
+type TextPic = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean };
+function FromTexts({ job, onAdded, onClose }: { job: { kind: "o" | "a"; id: string }; onAdded: () => void; onClose: () => void }) {
+  const { t, locale } = useT();
+  const [items, setItems] = useState<TextPic[] | null>(null), [err, setErr] = useState(""), [all, setAll] = useState(false);
+  const [done, setDone] = useState<Set<string>>(new Set()), [busy, setBusy] = useState("");
+  useEffect(() => {
+    fetch(`/api/jobs/text-photos?kind=${job.kind}&id=${job.id}`).then((r) => r.json()).then((j) => { if (j.error) setErr(j.error); else setItems(j.items || []); }).catch(() => setErr(t("Couldn't load the messages.")));
+  }, [job.kind, job.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = (items || []).filter((x) => all || x.here);
+  return (
+    <div className="jm-texts">
+      <div className="jm-texts-h"><b>{t("Pictures in your texts")}</b><button type="button" className="jm-link" onClick={onClose}>{t("Close")}</button></div>
+      {err ? <p className="jm-err">{err}</p> : items === null ? <p className="jm-faint">{t("Loading…")}</p> : (
+        <>
+          {!list.length && <p className="jm-faint">{items.length ? t("None filed to this job.") : t("No pictures in the texts with this customer.")}</p>}
+          {items.length > 0 && <button type="button" className="jm-link" onClick={() => setAll((x) => !x)}>{all ? t("Only this job's") : t("Show all {0}", items.length)}</button>}
+          <div className="jm-texts-g">{list.map((x) => (
+            <button key={x.key} type="button" className={done.has(x.key) ? "on" : ""} disabled={!!busy || done.has(x.key)} onClick={async () => {
+              setBusy(x.key); setErr("");
+              const r = await fetch("/api/jobs/text-photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: job.kind, id: job.id, key: x.key }) }).then((y) => y.json()).catch(() => ({ error: t("Offline. Try again.") }));
+              setBusy("");
+              if (r.error && !/already/i.test(r.error)) { setErr(r.error); return; }
+              setDone((d) => new Set(d).add(x.key)); onAdded();
+            }}>
+              <img src={x.url} alt="" loading="lazy" />
+              <span>{done.has(x.key) ? `✓ ${t("Added")}` : busy === x.key ? t("Saving…") : `${x.fromMe ? t("We sent") : t("They sent")} · ${when(x.date, locale)}`}</span>
+            </button>
+          ))}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
   const { t, locale } = useT();
   const { items, load } = useJobFiles(job);
@@ -224,10 +263,13 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
   // pictures already on the phone (Oct 21, Nick: "upload photos directly from his iPhone without… email the photos")
   const lib = useRef<HTMLInputElement>(null);
   const [upl, setUpl] = useState(""), [err, setErr] = useState("");
+  const [msgs, setMsgs] = useState<[] | null>(null);
   const photos = (items || []).filter((x) => x.kind === "photo");
   return (
     <>
-      <button type="button" className="jm-cam" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
+      <button type="button" className="jm-cam" onClick={() => setMsgs((x) => (x ? null : []))}><Icon d={I.photo} />{t("Add from my messages")}</button>
+      {msgs && <FromTexts job={job} onAdded={load} onClose={() => setMsgs(null)} />}
+      <button type="button" className="jm-cam jm-lib" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
       <button type="button" className="jm-cam jm-lib" onClick={() => cam.current?.click()}><Icon d={I.photo} />{t("Take a photo")}</button>
       <input ref={lib} type="file" accept="image/*" multiple hidden onChange={async (e) => {
         const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;

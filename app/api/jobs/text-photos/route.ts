@@ -7,12 +7,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Samples or photos (Oct 21, Nick: "a button that says find photos… look at the messages to Brooke and go, okay, I sent
- * this one… how do we add that in?"). The pictures in the customer's texts (the Mac bridge, lib/texts.ts) and emails
- * kept in the portal, for the production mockup's step 7; one picked is copied to the job's production photos
- * (job_files, tag "Sample"). Owners, Jose and Claudia (the ones who can see texts). Read only, apart from that copy.
- *  GET ?from=<Printavo number this is a reorder of> → { items: [{ key, src, url, name, date, fromMe, body, job, here }] }
- *  POST { key, note } → copies it to the job's photos
+ * Pictures from the customer's texts and emails, for a job's production photos (Oct 21, Nick: "find photos… look at
+ * the messages to Brooke… I sent this one"; "add from my messages" on the phone). The texts come from the Mac bridge
+ * (lib/texts.ts), the emails are the ones kept in the portal; one picked is copied to the job's photos (job_files, tag
+ * "Sample"): a portal order (kind "o") or an old Printavo job (kind "a": photos of what we did last time go on the job
+ * they're of). Owners, Jose and Claudia (the ones who can see texts). Read only, apart from that copy.
+ *  GET ?kind=o|a&id → { items: [{ key, src, url, name, date, fromMe, body, job, here }] } (here = filed to this job)
+ *  POST { kind, id, key, note } → copies it to the job's photos
  */
 type TextRow = { id: string; from_me: boolean; body: string; sent_at: string; job_ref: string | null; files: { name: string; type: string; path: string; size?: number }[] | null };
 type ActRow = { id: string; direction: string; subject: string; occurred_at: string; meta: { attachments?: { name?: string; path?: string; size?: number; type?: string; signature?: boolean }[] } | null };
@@ -25,14 +26,13 @@ async function staff() {
 
 const isPic = (t?: string, n?: string) => /^image\//i.test(t || "") || /\.(jpe?g|png|heic|webp|gif)$/i.test(n || "");
 
-async function candidates(admin: ReturnType<typeof createAdminClient>, orderId: string, from: string) {
-  const { data: o } = await admin.from("orders").select("id, customer_id").eq("id", orderId).maybeSingle();
+type Ref = { kind: "o" | "a"; id: string };
+const refOf = (k: unknown, id: unknown): Ref | null => ((k === "o" || k === "a") && typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id) ? { kind: k, id } : null);
+
+async function candidates(admin: ReturnType<typeof createAdminClient>, r: Ref) {
+  const { data: o } = await admin.from(r.kind === "o" ? "orders" : "archived_orders").select("id, customer_id").eq("id", r.id).maybeSingle();
   if (!o?.customer_id) return null;
-  const here = new Set([`o:${orderId}`]);
-  if (/^\d+$/.test(from)) {
-    const { data: a } = await admin.from("archived_orders").select("id").eq("visual_id", from).maybeSingle();
-    if (a) here.add(`pv:${a.id}`);
-  }
+  const here = new Set([r.kind === "o" ? `o:${r.id}` : `pv:${r.id}`]);
   const [{ data: tx }, { data: acts }] = await Promise.all([
     admin.from("text_messages").select("id, from_me, body, sent_at, job_ref, files").eq("customer_id", o.customer_id).not("files", "is", null).order("sent_at", { ascending: false }).limit(400),
     admin.from("activities").select("id, direction, subject, occurred_at, meta").eq("customer_id", o.customer_id).not("meta->attachments", "is", null).order("occurred_at", { ascending: false }).limit(200),
@@ -52,13 +52,14 @@ async function candidates(admin: ReturnType<typeof createAdminClient>, orderId: 
   return { customer: o.customer_id as string, here, items };
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request) {
   if (!(await staff())) return NextResponse.json({ error: "Only the owners, Jose and Claudia can look through the customer's messages." }, { status: 403 });
-  const { id } = await ctx.params;
-  const from = (new URL(req.url).searchParams.get("from") || "").replace(/\D/g, "");
+  const sp = new URL(req.url).searchParams;
+  const r = refOf(sp.get("kind"), sp.get("id"));
+  if (!r) return NextResponse.json({ error: "Which job?" }, { status: 400 });
   const admin = createAdminClient();
-  const c = await candidates(admin, id, from);
-  if (!c) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+  const c = await candidates(admin, r);
+  if (!c) return NextResponse.json({ error: "That job isn't here." }, { status: 404 });
   // this job's first (and the job it's a reorder of), then the newest
   const list = [...c.items].sort((a, b) => Number(c.here.has(b.ref)) - Number(c.here.has(a.ref)) || b.date.localeCompare(a.date)).slice(0, 80);
   const paths = [...new Set(list.map((x) => x.path))];
@@ -78,26 +79,28 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   return NextResponse.json({ items: list.filter((x) => signed.get(x.path)).map((x) => ({ key: x.key, src: x.src, url: signed.get(x.path), name: x.name, date: x.date, fromMe: x.fromMe, body: x.body, job: jobs.get(x.ref) || "", here: c.here.has(x.ref) })) });
 }
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request) {
   const who = await staff();
   if (!who) return NextResponse.json({ error: "Only the owners, Jose and Claudia." }, { status: 403 });
-  const { id } = await ctx.params;
-  const b = (await req.json().catch(() => ({}))) as { key?: string; note?: string; from?: string };
+  const b = (await req.json().catch(() => ({}))) as { kind?: string; id?: string; key?: string; note?: string };
+  const r = refOf(b.kind, b.id);
+  if (!r) return NextResponse.json({ error: "Which job?" }, { status: 400 });
   const admin = createAdminClient();
-  const c = await candidates(admin, id, String(b.from || "").replace(/\D/g, ""));
-  if (!c) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+  const c = await candidates(admin, r);
+  if (!c) return NextResponse.json({ error: "That job isn't here." }, { status: 404 });
+  const col = r.kind === "o" ? "order_id" : "archived_order_id";
   // only one of this customer's own pictures
   const it = c.items.find((x) => x.key === b.key);
   if (!it) return NextResponse.json({ error: "That picture isn't in this customer's messages." }, { status: 404 });
-  const { data: had } = await admin.from("job_files").select("id").eq("order_id", id).eq("archived", false).eq("tag", "Sample").like("body", `%[${it.key.slice(0, 2)}${it.path.split("/").pop()}]%`).limit(1);
+  const { data: had } = await admin.from("job_files").select("id").eq(col, r.id).eq("archived", false).eq("tag", "Sample").like("body", `%[${it.key.slice(0, 2)}${it.path.split("/").pop()}]%`).limit(1);
   if (had?.length) return NextResponse.json({ error: "That one is already on the job." }, { status: 409 });
   const name = it.name.replace(/[^\w.-]+/g, "_").slice(-80) || "photo.jpg";
-  const path = `production/jobs/o-${id}/${Date.now()}-${name}`;
+  const path = `production/jobs/${r.kind}-${r.id}/${Date.now()}-${name}`;
   const cp = await admin.storage.from("proofs").copy(it.path, path);
   if (cp.error) return NextResponse.json({ error: `Couldn't copy the picture: ${cp.error.message}` }, { status: 500 });
   const when = new Date(it.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
   const body = `${String(b.note || "").trim().slice(0, 300) || `From a ${it.src === "text" ? "text" : "email"} ${it.fromMe ? "we sent" : "from the customer"}, ${when}`} [${it.key.slice(0, 2)}${it.path.split("/").pop()}]`;
-  const { data, error } = await admin.from("job_files").insert({ order_id: id, customer_id: c.customer, kind: "photo", tag: "Sample", body, file_path: path, file_name: name, file_type: it.type, size: null, ...who }).select("*").single();
+  const { data, error } = await admin.from("job_files").insert({ [col]: r.id, customer_id: c.customer, kind: "photo", tag: "Sample", body, file_path: path, file_name: name, file_type: it.type, size: null, ...who }).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ item: data });
 }

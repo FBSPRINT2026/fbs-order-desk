@@ -10857,3 +10857,4 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-phone-qr svg{width:100%;height:100%}
 .jv-smp-top{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
 .jv-smp-top .jv-phone{margin-top:0}
+.jv-smp-sec{display:flex;flex-direction:column;gap:6px;margin-top:8px}

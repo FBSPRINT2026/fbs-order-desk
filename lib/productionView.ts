@@ -44,6 +44,8 @@ export type ProductionView = {
   history: { kind: string; when: string; title: string; text: string }[];
   /** the shop's screen presses (layout, flashes, heads down today), for the press setup */ presses: Machine[];
   productionNotes: string;
+  /** the job this is a reorder of (an old Printavo job, or a portal order): "what we did last time" photos go on it */
+  prev: { kind: "a" | "o"; id: string; number: string; label: string } | null;
 };
 
 const SIGN = 3600;
@@ -176,8 +178,15 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
   const history: ProductionView["history"] = [];
   const re = (ev || []).find((e) => e.kind === "reorder");
   const pv = String(re?.detail || order.notes || "").match(/Printavo #(\d+)/);
+  let prev: ProductionView["prev"] = null;
+  const po = !pv ? String(re?.detail || "").match(/Reorder of #(\d+)/) : null;
+  if (po) {
+    const { data: q } = await admin.from("orders").select("id, number, nickname").eq("number", +po[1]).maybeSingle();
+    if (q) prev = { kind: "o", id: q.id as string, number: String(q.number), label: `#${q.number}${q.nickname ? ` ${q.nickname}` : ""}` };
+  }
   if (pv) {
-    const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, order_date, data").eq("visual_id", pv[1]).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, data").eq("visual_id", pv[1]).maybeSingle();
+    if (a) prev = { kind: "a", id: a.id as string, number: String(a.visual_id), label: `Printavo #${a.visual_id}` };
     if (a) for (const line of oldJobText(a).split("\n").filter(Boolean)) {
       const [k, ...r] = line.split(": ");
       history.push({ kind: k, when: `Printavo #${a.visual_id}`, title: "", text: r.join(": ") });
@@ -198,7 +207,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     })),
     prints, step, done, why,
     films: filmFiles.map((f) => ({ name: String(f.name || "").replace(/^Film:\s*/i, ""), path: f.file_path, url: signed.get(f.file_path) || "" })),
-    history, productionNotes: String(inn?.production_notes || ""),
+    history, productionNotes: String(inn?.production_notes || ""), prev,
     presses: await (async () => {
       const { data: eq } = await admin.from("production_equipment").select("*");
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
