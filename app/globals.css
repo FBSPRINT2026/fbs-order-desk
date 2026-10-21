@@ -10822,3 +10822,5 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .tagp-price{display:flex;align-items:center;gap:4px;margin-left:auto}
 .tagp-price input{width:70px;text-align:right}
 .tagp-art{font-size:12px}
+.jv-view.on-shirt{padding:22px}
+.jv-view.on-shirt canvas{box-shadow:none}

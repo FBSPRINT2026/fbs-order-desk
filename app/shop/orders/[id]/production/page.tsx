@@ -5,6 +5,7 @@ import { colorHex } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
+import { useShirtBg } from "@/lib/fabricTile";
 import { createClient } from "@/lib/supabase/client";
 import type { ProductionView, PvPrint } from "@/lib/productionView";
 import PressSetupCard, { planOnPress, type PsPlate, type PsRec } from "@/components/PressSetupCard";
@@ -301,14 +302,16 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     if (ok && p.screen && screens.length) await post({ op: "colors", print: p.id, screens, map: assign }, "save");
     if (ok && p.screen && skipDirty) await post({ op: "byColor", print: p.id, skip: skipNow }, "save");
   }
-  const shirtHex = shirt ? colorHex(shirt) || "#d9d9d9" : "";
+  // the art on the shirt color, like the Mockup Creator's close-ups (Oct 21, Nick): the picked shirt, else the first
+  const viewShirt = shirt || shirts[0]?.color || "";
+  const shirtBgCss = useShirtBg(viewShirt || "White");
   const viewer = (
     <div className="jv-cc-art">
-      <div className="jv-view">
-        {p.art ? <canvas ref={cv} aria-label="The art as it will print" style={{ display: view < 0 ? undefined : "none", background: shirtHex || undefined }} /> : view < 0 && <span className="faint">No art picture on this print.</span>}
+      <div className={"jv-view" + (view < 0 && viewShirt ? " on-shirt" : "")} style={view < 0 && viewShirt ? { background: shirtBgCss } : undefined}>
+        {p.art ? <canvas ref={cv} aria-label="The art as it will print" style={{ display: view < 0 ? undefined : "none" }} /> : view < 0 && <span className="faint">No art picture on this print.</span>}
         {view >= 0 && mockups[view] && <a href={mockups[view].full} target="_blank" rel="noreferrer" title="Open full size"><img src={mockups[view].full || mockups[view].thumb} alt={mockups[view].title} /></a>}
       </div>
-      <span className="faint">{view >= 0 && mockups[view] ? mockups[view].title.replace(/^.*? — /, "") : shirt ? `As it will print on ${shirt}${(skip[shirt] || []).length && byColor ? ` (no ${skip[shirt].join(", ")})` : ""}` : "As it will print"}</span>
+      <span className="faint">{view >= 0 && mockups[view] ? mockups[view].title.replace(/^.*? — /, "") : viewShirt ? `As it will print on ${viewShirt}${shirt && (skip[shirt] || []).length && byColor ? ` (no ${skip[shirt].join(", ")})` : ""}` : "As it will print"}</span>
       {mockups.length > 0 && (
         <div className="jv-strip" aria-label="Mockups">
           {p.art && <button type="button" className={"jv-strip-art" + (view < 0 ? " on" : "")} onClick={() => setView(-1)} title="The art as it will print">Art</button>}
