@@ -57,7 +57,9 @@ export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque
    *  front = the bottom of the front neckline at the center, back = the top of the back neck at the center (px) */
   neck?: number;
   /** the lines the neckline finder saw across the collar (px, top to bottom), for the AI to pick the seam from */
-  neckLines?: number[] };
+  neckLines?: number[];
+  /** the shirt's color on the photo (the middle of its body), when the supplier gives no color code */
+  hex?: string };
 /** the same points on the reference Gildan 5000 photos (bottom of the front collar rib; top of the back collar) */
 export const REF_NECK = { front: 186, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
@@ -326,7 +328,20 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
     neck = sf.pick ?? undefined;
     neckLines = sf.lines;
   }
-  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}) };
+  // the shirt's own color, from the middle of its body (the median, so a heather's flecks and folds don't sway it):
+  // for close-ups when the supplier gives no color code (SanMar's A4 Scarlet, Oct 21: the close-up came out grey)
+  const hex = (() => {
+    const rs: number[] = [], gs: number[] = [], bs: number[] = [];
+    const x0 = Math.round(cx - (R[yy] - L[yy]) * 0.2), x1 = Math.round(cx + (R[yy] - L[yy]) * 0.2);
+    for (let y = Math.round(T + 0.6 * (B - T)); y < T + 0.8 * (B - T); y += 3) for (let X = Math.max(0, x0); X < Math.min(W, x1); X += 3) {
+      const p = y * W + X; if (bg[p]) continue;
+      rs.push(d[p * 4]); gs.push(d[p * 4 + 1]); bs.push(d[p * 4 + 2]);
+    }
+    if (rs.length < 50) return undefined;
+    const med = (a: number[]) => a.sort((m, n) => m - n)[a.length >> 1];
+    return "#" + [med(rs), med(gs), med(bs)].map((v) => v.toString(16).padStart(2, "0")).join("");
+  })();
+  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}), ...(hex ? { hex } : {}) };
 }
 
 /**

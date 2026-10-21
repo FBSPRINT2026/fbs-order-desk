@@ -945,7 +945,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
