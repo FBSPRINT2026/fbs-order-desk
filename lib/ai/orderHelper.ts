@@ -46,7 +46,7 @@ export async function orderHelper(admin: SupabaseClient, s: Settings, a: {
         line: num, style: { type: "string" }, brand: { type: "string" }, color: { type: "string" },
         sizes: { type: "object", description: "Size → quantity (set_sizes, add_line), or size → extra charge each, null for automatic (set_size_charge)", additionalProperties: { type: ["number", "null"] } },
         mode: { type: "string", enum: ["replace", "add"] },
-        location: { type: "string" }, method: { type: "string", enum: ["screen", "embroidery", "dtf", "heat"] }, colors: num, inks: { type: "string" }, size: { type: "string" },
+        location: { type: "string" }, method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, colors: num, inks: { type: "string" }, size: { type: "string" },
         each: { type: ["number", "null"] }, label: { type: "string" }, amount: num, type: { type: "string", enum: ["pct", "amt"] }, value: num,
         nickname: { type: "string" }, due_date: { type: "string" }, po_number: { type: "string" }, notes_append: { type: "string" },
         group_name: { type: "object", properties: { group: num, name: { type: "string" } } },
@@ -66,7 +66,7 @@ Doing it:
 - Sizes: ${SIZES.join(", ")}. Adult S → S, Adult XL → XL, XXL / 2X → 2XL, Youth M → YM, Youth XL → YXL, etc. Skip totals, subtotals and grand totals; check your numbers add up to the totals shown.
 - Youth sizes go on a youth style, not the adult one: the youth line of the same color if the order has one; else add one with the youth style that goes with the adult style (the list above, or one you know for sure, like Gildan 5000 → 5000B); if you don't know it, ask.
 - Prices: set_price "each" is the whole price per piece (garment and prints); null puts it back on the price list. set_size_charge is the extra each for a big size ("make the 2XLs $2 more" → {"2XL": 2}); leave group/line out to change every line. A fee is a line on the invoice (setup, rush, art, shipping). Discount: pct or amt.
-- Prints: set_imprint with the group and location (${LOCATIONS.join(", ")}); method screen, embroidery, dtf or heat; colors a number; inks comma separated.
+- Prints: set_imprint with the group and location (${LOCATIONS.join(", ")}); method screen, embroidery or dtf (heat press transfers are dtf); colors a number; inks comma separated.
 - Job name, due date (YYYY-MM-DD), PO and notes: set_order; group_name renames a group.`,
     prompt,
   });

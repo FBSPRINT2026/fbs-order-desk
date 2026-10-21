@@ -41,7 +41,9 @@ import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAs
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, isShipFee, lineQty, colorCosts, supplierSizeUp } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
+import OrderHelper from "@/components/OrderHelper";
+import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
@@ -468,6 +470,151 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     say(`Added ${groups.length} group${groups.length === 1 ? "" : "s"} from the email. Check styles, colors and sizes.`);
   }
 
+  /* ---------- Ask AI (components/OrderHelper.tsx): the order as it is on screen, and the changes it sends back ---------- */
+  const helperUndo = useRef<Order | null>(null);
+  function helperSnapshot(): HelperOrder | null {
+    if (!o || !calc) return null;
+    const pl = priceList(settings, o.price_type || "retail");
+    const c = customers.find((x) => x.id === o.customer_id);
+    const big = ["2XL", "3XL", "4XL", "5XL", "6XL"];
+    return {
+      number: o.number, nickname: o.nickname || "", customer: c ? custLabel(c) : "", due_date: o.due_date, po_number: o.po_number || "", notes: o.notes || "",
+      price_type: o.price_type || "retail", fees: o.fees.map((f) => ({ label: f.label, amount: +f.amount || 0 })),
+      discount: o.discount_type === "amt" ? (o.discount_amt ? money(+o.discount_amt) : "") : o.discount_pct ? `${o.discount_pct}%` : "", total: calc.total,
+      groups: o.groups.map((g, gi) => ({
+        name: g.name || "",
+        lines: g.lines.map((l, li) => {
+          const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
+          const lc = calc.groups[gi]?.lines[li];
+          const sizeCharges: Record<string, number> = {};
+          for (const z of big) if ((l.sizeRun || []).includes(z) || l.sizes?.[z as Size]) {
+            const v = l.sizeUpSet?.[z as Size] != null ? +l.sizeUpSet[z as Size]! : o.price_type !== "wholesale" && l.sizeUp && l.sizeUp[z as Size] !== undefined ? sizeUpEach(l, z as Size) : +(pl.upcharges as Record<string, number | undefined>)[z]! || 0;
+            if (v) sizeCharges[z] = Math.round(v * 100) / 100;
+          }
+          return { style: l.style, brand: l.brand, color: l.color, description: l.garment, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +(v as number) > 0)) as Record<string, number>,
+            colors: gm?.colors, each: seesMoney && lc ? Math.round(lc.each * 100) / 100 : undefined, priceSetByHand: l.priceOverride != null, sizeCharges };
+        }),
+        imprints: g.imprints.map((d) => ({ location: d.location, method: d.method, colors: d.colors, inks: d.inks, size: d.size })),
+      })),
+    };
+  }
+  async function applyHelper(acts: HelperAction[]): Promise<string[]> {
+    if (!o) return [];
+    helperUndo.current = JSON.parse(JSON.stringify(o));
+    const done: string[] = [];
+    const cleanSizes = (sz: Record<string, unknown> | undefined) => Object.fromEntries(Object.entries(sz || {}).filter(([k, v]) => (SIZES as readonly string[]).includes(k) && Number.isFinite(+(v as number)) && +(v as number) > 0).map(([k, v]) => [k, Math.round(+(v as number))])) as GLine["sizes"];
+    const sizesText = (sz: GLine["sizes"]) => Object.entries(sz).map(([k, v]) => `${k} ${v}`).join(", ") || "no sizes";
+    // styles the order doesn't know yet: pulled from S&S / SanMar first
+    const found = new Map<string, Garment>();
+    for (const st of [...new Set(acts.flatMap((a) => ((a.kind === "add_line" || a.kind === "set_line") && a.style ? [String(a.style).trim().toUpperCase()] : [])))]) {
+      const hit = catalog.find((g) => g.style.toUpperCase() === st) || (await lookupStyle(st).catch(() => null));
+      if (hit) found.set(st, hit); else done.push(`${st}: couldn't find that style at S&S or SanMar (added without catalog details)`);
+    }
+    const fill = (l: GLine) => {
+      const gm = found.get(l.style.trim().toUpperCase()) || catalog.find((g) => g.style.toUpperCase() === l.style.trim().toUpperCase());
+      if (!gm) return;
+      l.brand = gm.brand; l.garment = gm.description;
+      if (o.price_type !== "wholesale") l.cost = +colorCosts(gm, l.color).base || +gm.cost || "";
+      Object.assign(l, supplierSizeUp(gm, settings, l.color));
+      const run = (gm.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
+      if (run.length) { l.sizeRun = run; l.oneSize = run.length === 1 && run[0] === "OS"; }
+      // the catalog's spelling of the color ("purple" → Purple)
+      const cc = (gm.colors || []).find((x) => x.toLowerCase().replace(/[^a-z0-9]/g, "") === l.color.toLowerCase().replace(/[^a-z0-9]/g, ""));
+      if (cc) l.color = cc;
+    };
+    patch((d) => {
+      const named = new Map<string, number>();
+      const groupOf = (ref: unknown): number => {
+        if (typeof ref === "number" && d.groups[ref]) return ref;
+        const name = String(ref ?? "").trim();
+        if (/^\d+$/.test(name) && d.groups[+name]) return +name;
+        const key = name.toLowerCase();
+        if (named.has(key)) return named.get(key)!;
+        let i = d.groups.findIndex((g) => (g.name || "").trim().toLowerCase() === key && key);
+        const blank = (g: Group) => !g.lines.some((l) => l.style || l.color || Object.keys(l.sizes || {}).length);
+        if (i < 0 && d.groups.length === 1 && blank(d.groups[0])) { i = 0; if (name) d.groups[0].name = name; }
+        if (i < 0) { const ng = newGroup(); ng.name = name || undefined; d.groups.push(ng); i = d.groups.length - 1; }
+        named.set(key, i);
+        return i;
+      };
+      const linesOf = (a: { group?: number; line?: number }) => (a.group != null && d.groups[a.group]
+        ? (a.line != null && d.groups[a.group].lines[a.line] ? [d.groups[a.group].lines[a.line]] : d.groups[a.group].lines)
+        : d.groups.flatMap((g) => g.lines)).filter((l) => l.style || lineQty(l));
+      const name = (l: GLine) => `${l.style || "line"}${l.color ? ` ${l.color}` : ""}`;
+      const removals: [number, number][] = [];
+      for (const a of acts) {
+        try {
+          if (a.kind === "set_sizes") {
+            const l = d.groups[a.group]?.lines[a.line]; if (!l) continue;
+            const sz = cleanSizes(a.sizes);
+            l.sizes = a.mode === "add" ? Object.fromEntries([...new Set([...Object.keys(l.sizes || {}), ...Object.keys(sz)])].map((k) => [k, (+(l.sizes?.[k as Size] || 0)) + (+(sz[k as Size] || 0))])) as GLine["sizes"] : sz;
+            done.push(`${name(l)}: ${sizesText(l.sizes)} (${lineQty(l)})`);
+          } else if (a.kind === "add_line") {
+            const g = d.groups[groupOf(a.group)];
+            const l: GLine = { ...newGLine(), style: String(a.style || "").trim().toUpperCase(), brand: a.brand || "", color: String(a.color || "").trim(), sizes: cleanSizes(a.sizes) };
+            fill(l);
+            // the new group's empty first line is used rather than left blank
+            const empty = g.lines.findIndex((x) => !x.style && !x.color && !lineQty(x));
+            if (empty >= 0) g.lines[empty] = l; else g.lines.push(l);
+            done.push(`Added ${name(l)}${l.garment ? ` (${l.garment})` : ""}: ${sizesText(l.sizes)} (${lineQty(l)})`);
+          } else if (a.kind === "set_line") {
+            const l = d.groups[a.group]?.lines[a.line]; if (!l) continue;
+            const was = name(l);
+            if (a.style) l.style = String(a.style).trim().toUpperCase();
+            if (a.color != null) l.color = String(a.color).trim();
+            if (a.style || a.color) fill(l);
+            done.push(`${was} → ${name(l)}`);
+          } else if (a.kind === "remove_line") {
+            if (d.groups[a.group]?.lines[a.line]) { removals.push([a.group, a.line]); done.push(`Removed ${name(d.groups[a.group].lines[a.line])}`); }
+          } else if (a.kind === "set_imprint") {
+            const g = d.groups[groupOf(a.group)];
+            const loc = String(a.location || "Full Front").trim();
+            let im = g.imprints.find((x) => x.location.toLowerCase() === loc.toLowerCase());
+            if (!im) { im = g.imprints.length === 1 && !g.imprints[0].design_id && !g.imprints[0].inks ? g.imprints[0] : undefined; if (im) im.location = loc; }
+            if (!im) { im = newImprint(loc); g.imprints.push(im); }
+            if (a.method && ["screen", "embroidery", "dtf"].includes(a.method)) im.method = a.method as Imprint["method"];
+            if (a.colors != null && +a.colors >= 1) im.colors = Math.min(20, Math.round(+a.colors));
+            if (a.inks != null) im.inks = String(a.inks);
+            if (a.size != null) im.size = String(a.size);
+            done.push(`${g.name || `Group ${d.groups.indexOf(g) + 1}`}: ${im.method} ${im.location}, ${im.colors} color${im.colors === 1 ? "" : "s"}${im.inks ? ` (${im.inks})` : ""}`);
+          } else if (a.kind === "set_size_charge") {
+            const ls = linesOf(a);
+            for (const l of ls) {
+              const m = { ...(l.sizeUpSet || {}) };
+              for (const [z, v] of Object.entries(a.sizes || {})) { if (!(SIZES as readonly string[]).includes(z)) continue; if (v == null) delete m[z as Size]; else m[z as Size] = Math.max(0, Math.round(+v * 100) / 100); }
+              l.sizeUpSet = Object.keys(m).length ? m : undefined;
+            }
+            done.push(`${Object.entries(a.sizes || {}).map(([z, v]) => (v == null ? `${z} back to automatic` : `${z} +${money(+v)} each`)).join(", ")} on ${ls.length === 1 ? name(ls[0]) : `${ls.length} lines`}`);
+          } else if (a.kind === "set_price") {
+            const ls = linesOf(a);
+            for (const l of ls) { l.priceOverride = a.each == null ? null : Math.max(0, Math.round(+a.each * 100) / 100); if (l.prog) l.progOff = a.each != null; }
+            done.push(`${a.each == null ? "Price list price" : `${money(+a.each)} each`} on ${ls.length === 1 ? name(ls[0]) : `${ls.length} lines`}`);
+          } else if (a.kind === "add_fee") {
+            d.fees.push({ label: String(a.label || "Fee").slice(0, 80), amount: Math.round(+a.amount * 100) / 100 || 0 });
+            done.push(`Fee: ${a.label} ${money(+a.amount || 0)}`);
+          } else if (a.kind === "set_discount") {
+            if (a.type === "amt") { d.discount_type = "amt"; d.discount_amt = Math.max(0, +a.value || 0); } else { d.discount_type = "pct"; d.discount_pct = Math.max(0, Math.min(100, +a.value || 0)); }
+            done.push(`Discount ${a.type === "amt" ? money(+a.value || 0) : `${+a.value || 0}%`}`);
+          } else if (a.kind === "set_order") {
+            if (a.nickname) { d.nickname = String(a.nickname).slice(0, 120); done.push(`Job name: ${d.nickname}`); }
+            if (a.due_date && /^\d{4}-\d{2}-\d{2}$/.test(a.due_date)) { d.due_date = a.due_date; done.push(`In-hands date: ${a.due_date}`); }
+            if (a.po_number) { d.po_number = String(a.po_number).slice(0, 60); done.push(`PO: ${d.po_number}`); }
+            if (a.notes_append) { d.notes = [d.notes, String(a.notes_append)].filter(Boolean).join("\n"); done.push("Added to the notes"); }
+            if (a.group_name && d.groups[a.group_name.group]) { d.groups[a.group_name.group].name = String(a.group_name.name).slice(0, 80); done.push(`Group renamed: ${a.group_name.name}`); }
+          }
+        } catch { /* one bad change doesn't stop the rest */ }
+      }
+      for (const [gi, li] of removals.sort((x, y) => y[0] - x[0] || y[1] - x[1])) { d.groups[gi].lines.splice(li, 1); if (!d.groups[gi].lines.length) d.groups[gi].lines.push(newGLine()); }
+    });
+    return done;
+  }
+  function undoHelper() {
+    const b = helperUndo.current; if (!b) return false;
+    helperUndo.current = null;
+    patch((d) => { Object.assign(d, JSON.parse(JSON.stringify(b))); });
+    return true;
+  }
+
   async function saveToCatalog(l: GLine) {
     const row = { style: l.style.trim(), brand: l.brand || "", description: l.garment, colors: l.color ? [l.color] : [], cost: +l.cost || 0 };
     const { data, error } = await sb.from("garments").insert(row).select("*").single();
@@ -732,6 +879,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
+          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} />
           {prodRole && <Link className="btn" href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>

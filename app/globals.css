@@ -10721,3 +10721,24 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .yth-g .chip small{color:var(--ink-3);font-weight:500}
 .yth-k{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .yth-k input{width:160px}
+/* Ask AI on the order page (components/OrderHelper.tsx; Oct 21) */
+.oh{display:flex;flex-direction:column;gap:10px;width:min(620px,100%);height:min(680px,calc(100vh - 32px));overflow:hidden}
+.oh-h{display:flex;align-items:center;gap:10px;font-size:15px}
+.oh-sp{flex:1}
+.oh .oh-x{position:static}
+.oh-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:2px}
+.oh-hint{font-size:13px;color:var(--ink-2)}
+.oh-hint ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.oh-me{align-self:flex-end;max-width:82%;background:var(--accent-soft);border-radius:12px 12px 4px 12px;padding:7px 11px;font-size:13.5px;white-space:pre-wrap}
+.oh-ai{align-self:flex-start;max-width:90%;background:var(--surface-2);border-radius:12px 12px 12px 4px;padding:8px 12px;font-size:13.5px}
+.oh-ai.err{background:var(--danger-soft);color:var(--danger)}
+.oh-text{white-space:pre-wrap}
+.oh-steps{margin:2px 0}
+.oh-done{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:2px}
+.oh-acts{margin-top:7px;display:flex;gap:6px}
+.oh-pics{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.oh-pics img{max-width:180px;max-height:110px;border-radius:6px;border:1px solid var(--line);background:#fff}
+.oh-pend span{position:relative}
+.oh-pend button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:13px;line-height:1;cursor:pointer}
+.oh-box{display:flex;gap:6px;align-items:flex-end}
+.oh-box textarea{flex:1;resize:none;font:inherit;font-size:13.5px}
