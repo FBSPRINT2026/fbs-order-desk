@@ -80,6 +80,11 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
    *  run; greyed out with a stamp for staff, and the customer sees just the mockup (no guessed colors, inks or size) */
   visualOnly?: boolean;
   /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean;
+  /** the film this print's screens are burned from (Oct 21, Nick: "we lost all our film files… if the film goes bad, we
+   *  have to reburn a job from scratch"). asPrinted = the exact film it printed from is on file, so one screen can be
+   *  remade on its own; physical = only the film in the drawer; new = fresh separations never printed, so a screen
+   *  that pops means reburning every screen of this print together. `checked` = production looked the film over. */
+  film?: { state: "asPrinted" | "physical" | "new"; files?: { path: string; name: string }[]; note?: string; by?: string; at?: string; checked?: { by: string; at: string } };
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through
    *  the same screen. Priced the same as with the underbase (two rounds on press) */ printStyle?: "fashion";

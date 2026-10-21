@@ -38,7 +38,7 @@ import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
-import { useCan, useSeesMoney } from "@/components/RoleContext";
+import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES, isShipFee, lineQty, colorCosts, supplierSizeUp } from "@/lib/pricing";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
@@ -75,6 +75,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [o, setO] = useState<Order | null>(null);
   const canPay = useCan("payments");
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
+  // the production view (Oct 21, Nick: "the people that should view production view are myself and Jose… I should be able
+  // to tab in and out of production view or admin view"): Jose lands there; Nick's choice is remembered (fbs:order.view)
+  const who = useRole();
+  const prodRole = who.realRole === "owner" || who.realRole === "production";
+  useEffect(() => {
+    if (!prodRole) return;
+    if (new URLSearchParams(window.location.search).get("view") === "admin") { try { localStorage.setItem("fbs:order.view", JSON.stringify("admin")); } catch { /* blocked */ } return; }
+    let pref = who.realRole === "production" ? "prod" : "admin";
+    try { const raw = localStorage.getItem("fbs:order.view"); if (raw) pref = JSON.parse(raw); } catch { /* blocked */ }
+    if (pref === "prod") router.replace(`/shop/orders/${id}/production`);
+  }, [prodRole, who.realRole, id, router]);
   const [missing, setMissing] = useState(false);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
   // a duplicate just made (?reprint=1): offer the reprint screen fee once
@@ -727,6 +738,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
+          {prodRole && <a className="btn" href={`/shop/orders/${o.id}/production`} onClick={() => { try { localStorage.setItem("fbs:order.view", JSON.stringify("prod")); } catch { /* blocked */ } }} title="One big view of the job for production: mockup, inks, film, press setup, photos">Production view</a>}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
