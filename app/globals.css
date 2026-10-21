@@ -11307,3 +11307,27 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
   main.main .md-tabs button.on{color:var(--ink)!important;font-weight:800!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)}
   main.main .md-tabs button b{font-size:11px;padding:1px 6px}
 }
+/* the order page's garments on a phone (Oct 21, Nick: "lots of stuff filling over… the numbers just don't line up"):
+   Qty / Each / Total on one line under the sizes, their labels on the same line, the program note under the price;
+   the group's total line, then its add buttons, nothing running off the side */
+@media (max-width:760px){
+  .ord .gl-list .gl > .gl-row.gl-r2{align-items:start!important;border-top:0}
+  .ord .gl-list .gl > .gl-row.gl-r2 > :is(.a-qt, .a-ea, .a-to, .a-cs){border-top:1px solid var(--line-2)!important;padding-top:8px!important;display:flex;flex-direction:column;gap:4px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > :is(.a-qt, .a-ea, .a-to, .a-cs)::before{display:block!important;margin:0!important;line-height:1.2;min-height:14px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-to{align-items:flex-end;text-align:right}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-to b,.ord .gl-list .gl > .gl-row.gl-r2 > .a-to{font-size:15px;line-height:36px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-to::before{line-height:1.2}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-qt input{height:36px;text-align:left;padding-left:2px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-ea .prg-tag{order:3;text-align:left;margin:0;font-size:10.5px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-ea input{order:2;height:36px}
+  .ord .gl-list .gl > .gl-row.gl-r2 > .a-x{align-self:center}
+  .ord .gl-list .gl-row.grp-total.gl-r2{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;grid-template-areas:"lb qt to" "ad ad ad"!important;gap:10px 14px!important;align-items:baseline!important;padding-top:10px}
+  .ord .gl-list .gl-row.grp-total.gl-r2 > .gl-foot{display:contents!important}
+  .ord .gl-list .gl-row.grp-total.gl-r2 .lbl2{grid-area:lb}
+  .ord .gl-list .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;font-size:15px}
+  .ord .gl-list .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;font-size:15px}
+  .ord .gl-list .gl-row.grp-total.gl-r2 .gl-adds{grid-area:ad;display:flex!important;flex-wrap:wrap;gap:6px;white-space:normal}
+  .ord .gl-list .gl-row.grp-total.gl-r2 .gl-adds .btn{flex:1 1 auto;justify-content:center;white-space:nowrap}
+  .ord .tagp-cb .faint{display:none}
+  .ord .tagp-cb{margin-left:10px;white-space:nowrap}
+}
