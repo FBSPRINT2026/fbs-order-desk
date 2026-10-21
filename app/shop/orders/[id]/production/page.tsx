@@ -68,13 +68,19 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   const gPrints = v.prints.filter((p) => p.groupId === group?.id);
   const print = gPrints[Math.min(pi, Math.max(0, gPrints.length - 1))];
   const lock = (i: number) => v.step < i; // a panel waits for its step
+  // the job's production status, at the top (Oct 21, Nick: "it just needs some sort of status… awaiting production details")
+  const waiting = v.prints.filter((p) => p.confirm && !p.confirmed).length;
+  const saved = v.prints.length > 0 && v.prints.every((p) => p.confirmed) && v.prints.filter((p) => p.screen).every((p) => p.film?.state === "asPrinted");
+  const status = waiting ? { t: "Awaiting production details", c: "warn", d: `${waiting} print${waiting === 1 ? "" : "s"} to confirm` }
+    : saved ? { t: "Saved as printed", c: "ok", d: "the next reorder copies this" }
+    : { t: v.step >= STEPS.length ? "Printed" : STEPS[v.step] ? `Next: ${STEPS[v.step]}` : "In production", c: "", d: "" };
 
   return (
     <div className="jv">
       <header className="jv-h">
         <div className="jv-h-t">
           <div className="jv-sub">{v.order.customer}{v.order.reorderOf ? ` · Reorder of ${v.order.reorderOf}` : ""}{v.order.due ? ` · due ${fmtDay(v.order.due)}` : ""}</div>
-          <h1>#{v.order.number} {v.order.nickname}</h1>
+          <h1>#{v.order.number} {v.order.nickname} <span className={"jv-status " + status.c} title={status.d}>{status.t}</span></h1>
           <div className="jv-sub">{v.order.qty.toLocaleString()} pcs · {group?.lines.join(" · ")}</div>
         </div>
         <div className="jv-h-a">
