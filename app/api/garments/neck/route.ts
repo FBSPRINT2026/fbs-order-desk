@@ -14,14 +14,38 @@ export const maxDuration = 60;
  * photo; the AI picks the one that is the seam. Saved per photo in garment_necks; a staff fix replaces it for good.
  *   GET  ?photo=a&photo=b              → { necks: { [photo]: { neck, source } } }
  *   POST { photo, lines: [{ label, y }], image, enhanced?, dry? } → AI pick → { neck, label, why } (saved unless dry)
- *   PUT  { photo, neck }                → staff fix, saved
+ *   PUT  { photo, neck } or { items: [{ photo, neck }] } → staff fix / a page checked, saved
+ *   GET  ?todo=1&limit=100              → catalog front photos not set yet (the Necklines page)
  */
 const key = (p: unknown) => (typeof p === "string" ? p.trim().slice(0, 400) : "");
 
 export async function GET(req: Request) {
   const v = await getViewer();
   if (!v.user) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
-  const photos = new URL(req.url).searchParams.getAll("photo").map(key).filter(Boolean).slice(0, 200);
+  const sp = new URL(req.url).searchParams;
+  // the Necklines page: catalog front photos nobody has set yet (garments, not bags or hats), a page at a time
+  if (sp.get("todo")) {
+    if (!v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
+    const admin = createAdminClient();
+    const [{ data: gs }, { data: done }] = await Promise.all([
+      admin.from("garments").select("brand, style, description, color_images").not("color_images", "is", null),
+      admin.from("garment_necks").select("photo"),
+    ]);
+    const have = new Set((done || []).map((r) => r.photo as string)), seen = new Set<string>();
+    const all: { photo: string; brand: string; style: string; color: string }[] = [];
+    for (const g of (gs || []).sort((a, b) => `${a.brand} ${a.style}`.localeCompare(`${b.brand} ${b.style}`))) {
+      if (/(tote|bag|cap|hat|beanie|apron|towel|blanket|sock)/i.test(String(g.description || ""))) continue;
+      for (const [color, ci] of Object.entries((g.color_images || {}) as Record<string, { front?: string }>)) {
+        const photo = key(ci?.front);
+        if (!photo || seen.has(photo)) continue;
+        seen.add(photo);
+        if (!have.has(photo)) all.push({ photo, brand: String(g.brand || ""), style: String(g.style || ""), color });
+      }
+    }
+    const n = Math.max(1, Math.min(150, Number(sp.get("limit")) || 100));
+    return NextResponse.json({ items: all.slice(0, n), left: all.length, done: have.size });
+  }
+  const photos = sp.getAll("photo").map(key).filter(Boolean).slice(0, 200);
   if (!photos.length) return NextResponse.json({ necks: {} });
   const { data } = await createAdminClient().from("garment_necks").select("photo, neck, source").in("photo", photos);
   const necks: Record<string, { neck: number; source: string }> = {};
@@ -32,12 +56,14 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = (await req.json().catch(() => ({}))) as { photo?: string; neck?: number };
-  const photo = key(b.photo), neck = Math.round(Number(b.neck));
-  if (!photo || !(neck > 0 && neck < 1250)) return NextResponse.json({ error: "Which photo, and where?" }, { status: 400 });
-  const { error } = await createAdminClient().from("garment_necks").upsert({ photo, neck, source: "staff", set_by: v.email || "staff", updated_at: new Date().toISOString() });
+  const b = (await req.json().catch(() => ({}))) as { photo?: string; neck?: number; items?: { photo?: string; neck?: number }[] };
+  // one photo, or a whole page at once (the Necklines page's "Done": the ones not clicked were right)
+  const rows = (Array.isArray(b.items) ? b.items : [b]).slice(0, 200).map((x) => ({ photo: key(x.photo), neck: Math.round(Number(x.neck)) }));
+  if (!rows.length || rows.some((x) => !x.photo || !(x.neck > 0 && x.neck < 1250))) return NextResponse.json({ error: "Which photo, and where?" }, { status: 400 });
+  const at = new Date().toISOString();
+  const { error } = await createAdminClient().from("garment_necks").upsert(rows.map((x) => ({ ...x, source: "staff", set_by: v.email || "staff", updated_at: at })));
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, neck });
+  return NextResponse.json({ ok: true, saved: rows.length, neck: rows[0].neck });
 }
 
 export async function POST(req: Request) {

@@ -25,6 +25,7 @@ const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
   inbox: <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
+  necks: <svg viewBox="0 0 24 24"><path d="M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3" /><path d="M8 3c1 2.5 7 2.5 8 0" /><path d="M8.5 7.5h7" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
@@ -335,6 +336,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       <nav className="nav nav-foot nav-tools">
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
+        {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
+        {role === "owner" && link(["/shop/necklines", "necks", "Necklines"])}
         {role === "owner" && link(["/shop/support", "support", "Support"])}
         {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
         {realRole === "owner" && !viewAs && viewAsEl}</nav>
