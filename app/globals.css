@@ -10359,3 +10359,16 @@ div.prod-kind{border:0;padding:0}
 .arc-seg button+button{border-left:1px solid var(--line)}
 .arc-seg button.on{background:var(--brand,#1F6FD1);color:#fff;font-weight:600}
 @media (max-width:600px){.arc-q{grid-template-columns:1fr}.arc-q-l{padding-top:0}}
+/* step 2, third pass (Oct 20): one line per question, the answer to the right; the mockup as two plain-language choices */
+.arc-tip{font-size:13px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line))}
+.arc-q{display:grid;grid-template-columns:100px auto minmax(0,1fr);gap:12px;align-items:center;min-height:40px}
+.arc-q+.arc-q{border-top:1px solid var(--line);padding-top:8px}
+.arc-q-l{padding-top:0}
+.arc-q-k{flex-wrap:nowrap}
+.arc-spot{margin-left:auto;font-size:12.5px}
+.arc-mk-q{font-size:14px}
+.arc-mk{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.arc-mk-o{display:flex;flex-direction:column;gap:3px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.arc-mk-o b{color:var(--ink);font-size:13.5px}
+.arc-mk-o.on{border:2px solid var(--brand,#1F6FD1);padding:9px 11px;background:color-mix(in srgb,var(--brand,#1F6FD1) 5%,var(--surface))}
+@media (max-width:700px){.arc-q{grid-template-columns:1fr}.arc-q-k{flex-wrap:wrap}.arc-mk{grid-template-columns:1fr}}

@@ -536,6 +536,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const [know, setKnow] = useState<Record<string, { colors: number; ub: boolean } | null>>({});
   const [mode, setMode] = useState<"visual" | "details">("visual");
   const [sizeKnown, setSizeKnown] = useState<Record<string, boolean>>({});
+  const [spotOpen, setSpotOpen] = useState("");
   // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
   const [kindOf, setKindOf] = useState<Record<string, string>>({});
   const [noteOf, setNoteOf] = useState<Record<string, string>>({});
@@ -681,11 +682,11 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
       <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
-      <p className="ap-why">{stage === "details" ? "Tell me what you know; leave a blank when you don't. Then the mockup." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
+      <p className="ap-why">{stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
       {stage === "details" && (() => {
         const spots = [...new Map(help.prints.map((p) => [p.location, p])).values()];
-        // one way to answer everything (Oct 20, Nick: "it looks like a mess… make it uniform"): each question is a label,
-        // two buttons (Don't know / I know), and what you know right under them
+        // one line per question (Oct 20, Nick: "once you click I know, put it on the right instead of below where it
+        // moves everything"): the question, Don't know / I know, and what you know to the right on the same line
         const Seg = ({ on, labels, pick }: { on: 0 | 1 | -1; labels: [string, string]; pick: (i: 0 | 1) => void }) => (
           <span className="arc-seg" role="radiogroup">
             {labels.map((t, i) => <button key={t} type="button" role="radio" aria-checked={on === i} className={on === i ? "on" : ""} onClick={() => pick(i as 0 | 1)}>{t}</button>)}
@@ -693,41 +694,42 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         );
         return (
           <div className="arc-det">
+            {help.archivedId && <div className="arc-tip">A reorder and you don&apos;t know the details? Leave everything on <b>Don&apos;t know</b> and make a <b>visual only mockup</b>. Production fills in the colors, size and placement when they print it.</div>}
             {spots.map((p) => {
               const ps = help.prints.filter((q) => q.location === p.location), pl = place[ps[0].key] || { location: p.location, size: "" };
               const setPl = (patch: Partial<{ location: string; size: string }>) => setPlace((x) => { const y = { ...x }; for (const q of ps) y[q.key] = { ...(y[q.key] || { location: q.location, size: q.size }), ...patch }; return y; });
               const dark = ps.some((q) => q.dark), v = know[p.location], set = p.location in know, asks = knowLocs.some((q) => q.location === p.location);
               const sizeOn = sizeKnown[p.location] ?? !!pl.size;
+              const moving = spotOpen === p.location;
               return (
                 <section key={p.location} className="arc-det-card">
-                  <div className="arc-det-h"><b>{pl.location || p.location}</b><select value={pl.location || p.location} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select></div>
+                  <div className="arc-det-h">
+                    <b>{pl.location || p.location}</b>
+                    {moving
+                      ? <select autoFocus value={pl.location || p.location} onChange={(e) => { setPl({ location: e.target.value }); setSpotOpen(""); }} onBlur={() => setSpotOpen("")} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+                      : <button type="button" className="ap-link arc-spot" onClick={() => setSpotOpen(p.location)}>Change spot</button>}
+                  </div>
                   {asks && (
                     <div className="arc-q">
                       <span className="arc-q-l">Colors</span>
-                      <div className="arc-q-c">
-                        <Seg on={!set ? -1 : v ? 1 : 0} labels={[`Don't know${p.colors ? ` (old job: ${p.colors})` : ""}`, "I know"]} pick={(i) => setKnow((x) => ({ ...x, [p.location]: i === 0 ? null : x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))} />
-                        {v && <div className="arc-q-k"><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> plus an underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></div>}
-                      </div>
+                      <Seg on={!set ? -1 : v ? 1 : 0} labels={[`Don't know${p.colors ? ` (old job: ${p.colors})` : ""}`, "I know"]} pick={(i) => setKnow((x) => ({ ...x, [p.location]: i === 0 ? null : x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))} />
+                      <span className="arc-q-k">{v ? <><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> + underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></> : set ? <span className="faint">production confirms the colors on the run</span> : null}</span>
                     </div>
                   )}
                   <div className="arc-q">
                     <span className="arc-q-l">Print size</span>
-                    <div className="arc-q-c">
-                      <Seg on={sizeOn ? 1 : 0} labels={["Don't know", "I know"]} pick={(i) => { setSizeKnown((x) => ({ ...x, [p.location]: i === 1 })); if (i === 0) setPl({ size: "" }); }} />
-                      {sizeOn && <div className="arc-q-k"><input type="number" min={1} max={16} step={0.25} value={pl.size || ""} autoFocus onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> inches wide</div>}
-                    </div>
+                    <Seg on={sizeOn ? 1 : 0} labels={["Don't know", "I know"]} pick={(i) => { setSizeKnown((x) => ({ ...x, [p.location]: i === 1 })); if (i === 0) setPl({ size: "" }); }} />
+                    <span className="arc-q-k">{sizeOn ? <><input type="number" min={1} max={16} step={0.25} value={pl.size || ""} autoFocus onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> inches wide</> : <span className="faint">production measures it on the run</span>}</span>
                   </div>
                 </section>
               );
             })}
             {help.archivedId && (
               <section className="arc-det-card">
-                <div className="arc-q">
-                  <span className="arc-q-l">The mockup</span>
-                  <div className="arc-q-c">
-                    <Seg on={mode === "visual" ? 0 : 1} labels={["Visual only", "With these details"]} pick={(i) => setMode(i === 0 ? "visual" : "details")} />
-                    <div className="arc-q-k faint">{mode === "visual" ? "Production confirms the details on the print run. The customer sees just the mockup, no guessed details." : "The mockup and the order show the details above (our guesses where you didn't know)."}</div>
-                  </div>
+                <b className="arc-mk-q">What kind of mockup should we make?</b>
+                <div className="arc-mk" role="radiogroup" aria-label="The mockup">
+                  <button type="button" role="radio" aria-checked={mode === "visual"} className={"arc-mk-o" + (mode === "visual" ? " on" : "")} onClick={() => setMode("visual")}><b>Visual only mockup</b><span>Just shows the art on the shirts. No colors, sizes or placement. Production fills those in when they print it.</span></button>
+                  <button type="button" role="radio" aria-checked={mode === "details"} className={"arc-mk-o" + (mode === "details" ? " on" : "")} onClick={() => setMode("details")}><b>Full mockup</b><span>Colors, size and placement filled in from our best guess. The customer and staff see them.</span></button>
                 </div>
               </section>
             )}
@@ -791,7 +793,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
             if (n > 1 && i < n - 1) return <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button>;
             return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => setStage("details")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Next: how it printed ›"}</button>;
           })()
-          : <button type="button" className="btn primary" disabled={knowLeft > 0} onClick={() => finish("skip")}>{knowLeft > 0 ? `Answer the colors (${knowLeft} left)` : !given.length ? "Make it without art for now" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
+          : <button type="button" className="btn primary" disabled={knowLeft > 0} onClick={() => finish("skip")}>{knowLeft > 0 ? `Answer the colors (${knowLeft} left)` : !given.length ? "Make it without art for now" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
       </div>
     </div>
   );
