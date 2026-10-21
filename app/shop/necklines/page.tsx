@@ -84,7 +84,7 @@ export default function NecklinesPage() {
   const noGuess = cards.filter((c) => c.crop && c.guess == null && c.set == null).length;
   return (
     <div className="nl-page">
-      <div className="nl-head">
+      <div className="nl-head page-head">
         <div>
           <h1>Necklines</h1>
           <p>The red line is where I think the bottom of the sewn neckline is (on a hoodie, the bottom of the hood). Every drop is measured from it. If one is off, click the photo where it should be: it turns blue and saves. When you&apos;ve looked through the page, click Done and the rest are saved as right.</p>

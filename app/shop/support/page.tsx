@@ -50,8 +50,10 @@ export default function SupportPage() {
   const openN = rows.filter((x) => x.status === "open").length;
   return (
     <div className="page sup-page">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1>Support {openN > 0 && <span className="badge">{openN}</span>}</h1>
+      <div className="page-head">
+        <div><h1>Support {openN > 0 && <span className="badge">{openN}</span>}</h1></div>
+      </div>
+      <div className="toolbar">
         <div className="rv-seg">{([["open", "Open"], ["all", "All"]] as const).map(([k, l]) => <button key={k} type="button" className={show === k ? "on" : ""} onClick={() => setShow(k)}>{l}</button>)}</div>
       </div>
       <p className="faint">Problems the team reported with “Report an issue”: what they said and what the screen looked like. Use “Copy for Claude” to work through one with Claude.</p>
