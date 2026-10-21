@@ -78,8 +78,9 @@ export const DOC_CSS = `
 
 /* work order: one print up close */
 .pdoc .p2h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:6px}
-.pdoc .p2h .t{font-size:20pt}
-.pdoc .p2h .r{font-size:11pt;color:var(--ink2);white-space:nowrap}
+.pdoc .p2h .t{font-size:20pt;flex:0 1 auto;max-width:62%;min-width:0}
+/* the colors list wraps under itself at the right (Oct 20, Nick: six onesie colors ran off the page and squeezed the name) */
+.pdoc .p2h .r{font-size:11pt;color:var(--ink2);flex:1 1 0;min-width:0;text-align:right;white-space:normal;overflow-wrap:anywhere}
 .pdoc .loc{display:flex;align-items:baseline;gap:14px;margin:12px 0 8px;flex-wrap:wrap}
 .pdoc .loc .n{font-size:30pt;line-height:1}
 .pdoc .loc .m{font-size:15pt;color:var(--ink2)}
