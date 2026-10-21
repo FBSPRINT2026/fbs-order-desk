@@ -266,7 +266,8 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
   // a short-sleeve tee that reads wider than its height: the photo is still shown at its height (Oct 21, Nick: the
   // adult A4 came out "really small" when the whole photo was shrunk to its chest), and prints are sized by the chest
-  const ps = Math.abs(sw - sh) > 0.1 && !cut && ((opts.tee && sw > sh) || (opts.kid && sw < sh)) ? sw : s;
+  // (only a little wider: much wider is sleeves hanging beside the body, not a boxy chest)
+  const ps = Math.abs(sw - sh) > 0.1 && !cut && ((opts.tee && sw > sh && sw < sh * 1.3) || (opts.kid && sw < sh)) ? sw : s;
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;
@@ -649,4 +650,6 @@ export function teeSvg(hex: string, view: View, heather = false) {
 export const ssImg = (path: string) => (!path ? "" : /^https?:\/\/[\w.-]*sanmar\.com\//i.test(path) ? `/api/ss/img?u=${encodeURIComponent(path)}` : `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}`);
 
 /** a short-sleeve tee, from its name and description (for measureGarment's `tee`) */
-export const isShortSleeveTee = (text: string) => /\b(tee|t-?shirt|short sleeve)\b/i.test(text) && !/long sleeve|\bls\b|hood|sweat|fleece|crew ?neck sweat|jacket|quarter|1\/4|zip|tank|sleeveless|muscle|raglan 3\/4|3\/4 sleeve/i.test(text);
+// a raglan is a baseball tee with 3/4 sleeves unless it says short sleeve (Oct 21: the Tultex 245 "Fine Jersey Raglan
+// T-Shirt" was read as a short-sleeve tee, its arms counted as chest, and its prints came out far too big)
+export const isShortSleeveTee = (text: string) => /\b(tee|t-?shirt|short sleeve)\b/i.test(text) && !/long sleeve|\bls\b|hood|sweat|fleece|crew ?neck sweat|jacket|quarter|1\/4|zip|tank|sleeveless|muscle|raglan 3\/4|3\/4 sleeve|3\/4/i.test(text) && !(/raglan|baseball/i.test(text) && !/short sleeve|s\/s\b/i.test(text));

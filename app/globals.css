@@ -11169,6 +11169,6 @@ main.main .aa-arch{font-family:var(--body)}
    the whole look"): titles (page h1 and panel h2) in the title font (--display); everything else in the one body font
    (--body), no typewriter text except real code. Text is --ink; sub text (second lines, notes, labels) --ink-3; bold
    is --ink at 700; links and the picked tab --accent / --fbs-blue. */
-main.main :where(*):not(h1, h1 *, h2, h2 *, code, pre, kbd, samp, svg, svg *){font-family:var(--body) !important}
+main.main :where(*):not(h1, h1 *, h2, h2 *, code, pre, kbd, samp, svg, svg *, [style*="font-family"], [style*="font-family"] *, [data-font], [data-font] *){font-family:var(--body) !important}
 main.main :is(.sub, .faint, .muted, small){color:var(--ink-3)}
 main.main :is(b, strong){color:inherit}
