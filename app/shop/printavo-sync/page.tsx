@@ -48,7 +48,12 @@ export default function PrintavoSyncPage() {
     for (const c of picks) c.apply?.(d);
     cardFix(d, snapOf(d))?.apply(d);
     const c = calcOrder(d, settings);
-    const { error } = await sb.from("orders").update({ groups: d.groups, fees: d.fees, total: c.total, qty: c.qty }).eq("id", o.id);
+    // every field a change can touch, not just the lines and fees (Oct 20, Nick: accepting a production date left it on
+    // the list: the new date was never saved). Only the ones that changed, so nothing else on the order is written over.
+    const FIELDS = ["nickname", "due_date", "production_date", "po_number", "notes", "discount_type", "discount_pct", "discount_amt", "tax_exempt", "tax_rate"] as const;
+    const before = o as unknown as Record<string, unknown>, after = d as unknown as Record<string, unknown>;
+    const more = Object.fromEntries(FIELDS.filter((k) => JSON.stringify(after[k] ?? null) !== JSON.stringify(before[k] ?? null)).map((k) => [k, after[k] ?? null]));
+    const { error } = await sb.from("orders").update({ groups: d.groups, fees: d.fees, total: c.total, qty: c.qty, ...more }).eq("id", o.id);
     const n = picks.find((x) => x.note !== undefined);
     if (!error && n) { const r = await sb.from("order_internal").upsert({ order_id: o.id, production_notes: n.note }); if (r.error) setErr(`#${o.number}: ${r.error.message}`); }
     if (error) setErr(`#${o.number}: ${error.message}`);
