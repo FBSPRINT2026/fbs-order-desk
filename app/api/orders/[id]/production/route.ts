@@ -89,7 +89,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       if (!screens.length) return NextResponse.json({ error: "Name at least one ink." }, { status: 400 });
       im.inks = screens.map((x) => x.name).join(", ");
       if ((im.method || "screen") === "screen") im.colors = screens.length;
-      if (im.design_id) im.inkMap = { design: im.design_id, map: Object.fromEntries(Object.entries(map).filter(([h, i]) => /^#[0-9a-f]{6}$/i.test(h) && screens[i]).map(([h, i]) => [h.toUpperCase(), { name: screens[i].name, hex: screens[i].hex, ...(screens[i].mix ? { mix: screens[i].mix } : {}) }])) };
+      // -1 = the shirt color: not printed ("none", as the Mockup Creator and the proof paint it: the shirt shows through)
+      if (im.design_id) im.inkMap = { design: im.design_id, map: Object.fromEntries(Object.entries(map).filter(([h, i]) => /^#[0-9a-f]{6}$/i.test(h) && (screens[i] || i === -1)).map(([h, i]) => [h.toUpperCase(), i === -1 ? { name: "none", hex: h.toUpperCase() } : { name: screens[i].name, hex: screens[i].hex, ...(screens[i].mix ? { mix: screens[i].mix } : {}) }])) };
       if (im.confirm) im.confirm = { ...im.confirm, filled: { by: w.by, at } };
       const mixes = screens.filter((x) => x.mix).map((x) => `${x.name} = ${x.mix}`);
       events.push(`${im.location}: ${screens.length} screen${screens.length === 1 ? "" : "s"}: ${im.inks}${mixes.length ? ` (mixed: ${mixes.join("; ")})` : ""}`);

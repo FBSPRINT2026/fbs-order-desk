@@ -10824,3 +10824,10 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .tagp-art{font-size:12px}
 .jv-view.on-shirt{padding:22px}
 .jv-view.on-shirt canvas{box-shadow:none}
+/* production mockup: notes from the customer and last time (Oct 21) */
+.jv-ref{border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.jv-ref summary{cursor:pointer;font-weight:700;font-size:14px}
+.jv-ref-l{display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:320px;overflow:auto}
+.jv-ref-i{font-size:13px;line-height:1.45}
+.jv-ref-i b{display:block;font-size:12px;color:var(--ink-2)}
+.jv-ref-i div{white-space:pre-wrap}

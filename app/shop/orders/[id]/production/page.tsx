@@ -178,6 +178,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
       const screens: Screen[] = [], assign: Record<string, number> = {};
       for (const k of plan) {
         const m = p.inkMap[k.hex]; if (!m) { screens.push({ name: k.name, hex: k.hex, mix: "" }); assign[k.hex] = screens.length - 1; continue; }
+        if (m.name === "none") { assign[k.hex] = -1; continue; } // the shirt color, not printed
         let i = screens.findIndex((x) => x.name === m.name);
         if (i < 0) { screens.push({ name: m.name, hex: m.hex, mix: m.mix || "" }); i = screens.length - 1; }
         assign[k.hex] = i;
@@ -187,7 +188,26 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     if (plan.length) return { screens: plan.map((k) => ({ name: k.name, hex: k.hex, mix: "" })), assign: Object.fromEntries(plan.map((k, i) => [k.hex, i])) as Record<string, number> };
     return { screens: inkList(p.inks).map((n) => ({ name: n, hex: colorHex(n) || "#888888", mix: "" })), assign: {} as Record<string, number> };
   }, [p]);
-  const [screens, setScreens] = useState<Screen[]>(start.screens);
+  // the inks on the print (from the customer's notes or last time: "PMS 7466 C, PMS 803 C, PMS 806 C, Black") name the
+  // screens: a screen whose name isn't one of them takes the closest unused one (Oct 21, Nick: "where you put electric
+  // pink, it should have been 806")
+  const named = useMemo(() => {
+    const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) || 0);
+    const inks = inkList(p.inks).map((n) => ({ n, hex: (colorHex(n) || "").toUpperCase() })).filter((x) => /^#[0-9A-F]{6}$/.test(x.hex));
+    if (!inks.length || !p.plan.length) return start.screens;
+    const lc = (s: string) => s.trim().toLowerCase();
+    const taken = new Set(start.screens.map((x) => lc(x.name)).filter((n) => inks.some((i) => lc(i.n) === n)));
+    return start.screens.map((x) => {
+      if (taken.has(lc(x.name)) || x.mix) return x;
+      const a = rgb(x.hex);
+      let best: { n: string; hex: string } | null = null, bd = 90 * 90;
+      for (const i of inks) { if (taken.has(lc(i.n))) continue; const b = rgb(i.hex), d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2; if (d < bd) { bd = d; best = i; } }
+      if (!best) return x;
+      taken.add(lc(best.n));
+      return { ...x, name: best.n, hex: best.hex };
+    });
+  }, [start, p.inks, p.plan.length]);
+  const [screens, setScreens] = useState<Screen[]>(named);
   const [assign, setAssign] = useState<Record<string, number>>(start.assign);
   const used = new Set(Object.values(assign));
   // a screen no art color prints through is dropped (and the rest renumbered)
@@ -199,7 +219,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     keep.forEach((k, i) => { if (k) remap.set(i, n++); });
     list = list.filter((_, i) => keep[i]);
     setScreens(p.plan.length ? list : screens);
-    setAssign(Object.fromEntries(Object.entries(next).map(([h, i]) => [h, remap.get(i) ?? 0])));
+    setAssign(Object.fromEntries(Object.entries(next).map(([h, i]) => [h, i < 0 ? -1 : remap.get(i) ?? 0])));
   }
   const setScreen = (i: number, f: Partial<Screen>) => setScreens((a) => a.map((x, j) => (j === i ? { ...x, ...f } : x)));
   const colorsOn = (i: number) => p.plan.filter((k) => assign[k.hex] === i);
@@ -220,7 +240,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     if (!p.plan.length) return;
     const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
     const off = new Set((shirt && byColor ? skip[shirt] || [] : []).map((n) => n.toLowerCase()));
-    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: off.has((screens[assign[q.hex]]?.name || "").toLowerCase()) ? [-1, -1, -1] : rgb(screens[assign[q.hex]]?.hex || q.hex) }));
+    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: assign[q.hex] === -1 || off.has((screens[assign[q.hex]]?.name || "").toLowerCase()) ? [-1, -1, -1] : rgb(screens[assign[q.hex]]?.hex || q.hex) }));
     const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map<number, number[]>();
     for (let o = 0; o < a.length; o += 4) {
       if (a[o + 3] < 8) continue;
@@ -295,7 +315,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     await reload();
     if (ok) setErr("");
   }
-  const dirty = skipDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(start.screens) || JSON.stringify(assign) !== JSON.stringify(start.assign);
+  const dirty = skipDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(named) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
   async function save() {
     const ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
@@ -328,6 +348,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
         <span className="faint">{p.method === "screen" ? "Screen print" : p.method}{p.design ? ` · ${p.design}` : ""}</span>
         <span className={"jv-badge" + (pending ? " warn" : " ok")}>{pending ? "Production to confirm" : p.confirmed ? `Confirmed by ${p.confirmed.by}` : "Set"}</span>
       </div>
+      <RefNotes v={v} p={p} open={pending} />
       {p.last.length > 0 && (
         <div className="jv-last">
           <div className="jv-lbl">Last time we printed {p.design || "this design"}</div>
@@ -368,15 +389,16 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
                   {p.plan.map((k) => {
                     const sc = assign[k.hex] ?? 0;
                     // the other art colors on the same screen (combined with this one)
-                    const with_ = p.plan.filter((o) => o.hex !== k.hex && (assign[o.hex] ?? 0) === sc);
+                    const with_ = sc < 0 ? [] : p.plan.filter((o) => o.hex !== k.hex && (assign[o.hex] ?? 0) === sc);
                     return (
                       <div key={k.hex} className={"jv-ac" + (with_.length ? " joined" : "")}>
                         <span className="jv-sw" style={{ background: k.hex }} />
                         <span className="jv-ac-n">{k.name}<span className="faint"> {k.hex}</span></span>
-                        <span className="jv-ac-c">{with_.length ? <span className="jv-join" title={`Prints on screen ${sc + 1} together with ${with_.map((o) => o.name).join(", ")}`}>⇄ with {with_.map((o) => o.name).join(", ")}</span> : <span className="faint">its own screen</span>}</span>
+                        <span className="jv-ac-c">{sc < 0 ? <span className="faint">shirt color: not printed</span> : with_.length ? <span className="jv-join" title={`Prints on screen ${sc + 1} together with ${with_.map((o) => o.name).join(", ")}`}>⇄ with {with_.map((o) => o.name).join(", ")}</span> : <span className="faint">its own screen</span>}</span>
                         <select value={sc} onChange={(e) => setAssigned(k.hex, +e.target.value)} aria-label={`Screen for ${k.name} (pick another color's screen to combine them)`}>
                           {screens.map((x, i) => <option key={i} value={i}>Screen {i + 1}: {x.name}</option>)}
                           <option value={screens.length}>A screen of its own</option>
+                          <option value={-1}>Shirt color: don&apos;t print</option>
                         </select>
                       </div>
                     );
@@ -481,6 +503,31 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
       </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What the customer and the last job said, to check the print against (Oct 21, Nick: "the customer gave us all the
+ * details in the customer notes and you missed it… include the notes and the production notes from last time in here
+ * somewhere as a reference"): the old Printavo job's customer and production notes, imprint details and emails, this
+ * order's notes and production notes, and this print's notes.
+ */
+function RefNotes({ v, p, open }: { v: ProductionView; p: PvPrint; open: boolean }) {
+  const old = v.history.filter((h) => /^(Customer note|Production note|Imprint|Customer email|Shop email)/.test(h.kind) && h.text.trim());
+  const items: { from: string; text: string }[] = [
+    ...old.map((h) => ({ from: `${h.when} · ${h.kind}`, text: h.text })),
+    ...(v.order.notes.trim() ? [{ from: `#${v.order.number} · Order notes`, text: v.order.notes }] : []),
+    ...(p.notes.trim() ? [{ from: `${p.location} · Print notes`, text: p.notes }] : []),
+    ...(v.productionNotes.trim() ? [{ from: `#${v.order.number} · Production notes`, text: v.productionNotes }] : []),
+  ];
+  if (!items.length) return null;
+  return (
+    <details className="jv-ref" open={open || undefined}>
+      <summary>Notes from the customer and last time <span className="faint">({items.length})</span></summary>
+      <div className="jv-ref-l">
+        {items.map((x, i) => <div key={i} className="jv-ref-i"><b>{x.from}</b><div>{x.text}</div></div>)}
+      </div>
+    </details>
   );
 }
 

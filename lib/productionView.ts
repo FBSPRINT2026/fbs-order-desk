@@ -35,7 +35,7 @@ export type PvPrint = {
   last: { orderId: string; number: number; at: string; by: string; size: string; drop: string; inks: string; colors: number; underbase?: boolean; garment?: string; notes?: string; job?: string; location: string }[];
 };
 export type ProductionView = {
-  order: { id: string; number: number; nickname: string; status: string; due: string | null; customer: string; customerId: string; qty: number; reorderOf: string };
+  order: { id: string; number: number; nickname: string; status: string; due: string | null; customer: string; customerId: string; qty: number; reorderOf: string; /** the order's own notes */ notes: string };
   groups: { id: string; name: string; lines: string[]; /** the shirt colors on it (one per color, the styles in it) */ shirts: { color: string; styles: string }[]; mockups: { title: string; thumb: string; full: string }[] }[];
   prints: PvPrint[];
   step: number; done: boolean[]; why: string[];
@@ -188,7 +188,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
 
   return {
     order: { id: order.id, number: order.number, nickname: order.nickname || "", status: st, due: order.due_date, customer: cust?.company || cust?.name || "", customerId: order.customer_id,
-      qty: groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, b) => a + (+b || 0), 0), 0), 0), reorderOf: pv ? `Printavo #${pv[1]}` : "" },
+      qty: groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, b) => a + (+b || 0), 0), 0), 0), reorderOf: pv ? `Printavo #${pv[1]}` : "", notes: String(order.notes || "") },
     groups: groups.map((g) => ({
       id: g.id, name: g.name || "",
       shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", ") })),
