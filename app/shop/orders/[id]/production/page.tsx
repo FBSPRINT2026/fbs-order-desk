@@ -6,6 +6,7 @@ import { PMS_COATED } from "@/lib/pms";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
 import { useShirtBg } from "@/lib/fabricTile";
+import { useSticky } from "@/lib/useSticky";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
 import { createClient } from "@/lib/supabase/client";
@@ -534,6 +535,10 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
  * order's notes and production notes, and this print's notes.
  */
 function RefNotes({ v, p, open }: { v: ProductionView; p: PvPrint; open: boolean }) {
+  // closed to start (Oct 21, Nick: "not dropped down by default"); opening it is remembered
+  const [shown, setKeepOpen] = useSticky("pv.refNotes", false);
+  const setShown = (x: boolean) => { if (x !== shown) setKeepOpen(x); };
+  void open;
   const old = v.history.filter((h) => /^(Customer note|Production note|Imprint|Customer email|Shop email)/.test(h.kind) && h.text.trim());
   const items: { from: string; text: string }[] = [
     ...old.map((h) => ({ from: `${h.when} · ${h.kind}`, text: h.text })),
@@ -543,7 +548,7 @@ function RefNotes({ v, p, open }: { v: ProductionView; p: PvPrint; open: boolean
   ];
   if (!items.length) return null;
   return (
-    <details className="jv-ref" open={open || undefined}>
+    <details className="jv-ref" open={shown} onToggle={(e) => setShown((e.currentTarget as HTMLDetailsElement).open)}>
       <summary>Notes from the customer and last time <span className="faint">({items.length})</span></summary>
       <div className="jv-ref-l">
         {items.map((x, i) => <div key={i} className="jv-ref-i"><b>{x.from}</b><div>{x.text}</div></div>)}

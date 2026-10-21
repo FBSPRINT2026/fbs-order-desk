@@ -10825,7 +10825,8 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-view.on-shirt{padding:22px}
 .jv-view.on-shirt canvas{box-shadow:none}
 /* production mockup: notes from the customer and last time (Oct 21) */
-.jv-ref{border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.jv-ref{border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.jv-ref summary{color:#1e40af}
 .jv-ref summary{cursor:pointer;font-weight:700;font-size:14px}
 .jv-ref-l{display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:320px;overflow:auto}
 .jv-ref-i{font-size:13px;line-height:1.45}
