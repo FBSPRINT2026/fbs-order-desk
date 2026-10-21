@@ -75,17 +75,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [o, setO] = useState<Order | null>(null);
   const canPay = useCan("payments");
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
-  // the production view (Oct 21, Nick: "the people that should view production view are myself and Jose… I should be able
-  // to tab in and out of production view or admin view"): Jose lands there; Nick's choice is remembered (fbs:order.view)
+  // the production mockup (Oct 21, Nick: "a production view of the mock-up… confirm details, look at the last order, what we
+  // did"): Nick and Jose open it from the order; the order page itself is the same for everyone
   const who = useRole();
   const prodRole = who.realRole === "owner" || who.realRole === "production";
-  useEffect(() => {
-    if (!prodRole) return;
-    if (new URLSearchParams(window.location.search).get("view") === "admin") { try { localStorage.setItem("fbs:order.view", JSON.stringify("admin")); } catch { /* blocked */ } return; }
-    let pref = who.realRole === "production" ? "prod" : "admin";
-    try { const raw = localStorage.getItem("fbs:order.view"); if (raw) pref = JSON.parse(raw); } catch { /* blocked */ }
-    if (pref === "prod") router.replace(`/shop/orders/${id}/production`);
-  }, [prodRole, who.realRole, id, router]);
   const [missing, setMissing] = useState(false);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
   // a duplicate just made (?reprint=1): offer the reprint screen fee once
@@ -738,7 +731,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
-          {prodRole && <a className="btn" href={`/shop/orders/${o.id}/production`} onClick={() => { try { localStorage.setItem("fbs:order.view", JSON.stringify("prod")); } catch { /* blocked */ } }} title="One big view of the job for production: mockup, inks, film, press setup, photos">Production view</a>}
+          {prodRole && <Link className="btn" href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
@@ -1144,6 +1137,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
           <aside className="ed-aside">
             {/* every mockup save, and the customer's approval: opened?, remind, approved another way (Oct 16, Nick) */}
+            {prodRole && (
+              <div className="panel pm-side">
+                <div className="panel-b">
+                  <b>Production mockup</b>
+                  <span className="faint">The real size, placement, inks and screens, confirmed by production, and what we did last time.</span>
+                  <Link className="btn primary sm" href={`/shop/orders/${o.id}/production`}>Open production mockup</Link>
+                </div>
+              </div>
+            )}
             <ProofSide orderId={o.id} bump={proofs.length * 1000 + events.length} onChanged={loadSide} customer={cust?.name || cust?.company || ""} email={cust?.email || ""} />
             <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
           </aside>

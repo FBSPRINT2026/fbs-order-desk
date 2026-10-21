@@ -1,8 +1,6 @@
 "use client";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRole } from "@/components/RoleContext";
-import { useSticky } from "@/lib/useSticky";
 import { colorHex } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { confirmDetails } from "@/app/shop/details-actions";
@@ -30,9 +28,6 @@ const toJpeg = async (src: Blob | string, max = 360) => {
 
 export default function ProductionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const role = useRole();
-  const canSwitch = role.realRole === "owner" || role.realRole === "production";
-  const [, setView] = useSticky<"admin" | "prod">("order.view", "prod");
   const [v, setV] = useState<ProductionView | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
@@ -80,17 +75,12 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
     <div className="jv">
       <header className="jv-h">
         <div className="jv-h-t">
-          <div className="jv-sub">{v.order.customer}{v.order.reorderOf ? ` · Reorder of ${v.order.reorderOf}` : ""}{v.order.due ? ` · due ${fmtDay(v.order.due)}` : ""}</div>
+          <div className="jv-sub"><b>Production mockup</b> · {v.order.customer}{v.order.reorderOf ? ` · Reorder of ${v.order.reorderOf}` : ""}{v.order.due ? ` · due ${fmtDay(v.order.due)}` : ""}</div>
           <h1>#{v.order.number} {v.order.nickname} <span className={"jv-status " + status.c} title={status.d}>{status.t}</span></h1>
           <div className="jv-sub">{v.order.qty.toLocaleString()} pcs · {group?.lines.join(" · ")}</div>
         </div>
         <div className="jv-h-a">
-          {canSwitch && (
-            <div className="jv-switch" role="group" aria-label="View">
-              <Link href={`/shop/orders/${id}?view=admin`} onClick={() => setView("admin")}>Admin view</Link>
-              <span className="on" aria-current="page">Production view</span>
-            </div>
-          )}
+          <Link className="btn sm" href={`/shop/orders/${id}?tab=prod`}>‹ Back to the order</Link>
           <Link className="btn sm" href={`/shop/artwork/mockup?order=${id}${group ? `&group=${group.id}` : ""}`}>Open in Mockup Creator</Link>
         </div>
       </header>
@@ -266,6 +256,19 @@ function ConfirmPrint({ p, busy, post }: { p: PvPrint; busy: boolean; post: (b: 
         <span className="faint">{p.method === "screen" ? "Screen print" : p.method}{p.design ? ` · ${p.design}` : ""}</span>
         <span className={"jv-badge" + (pending ? " warn" : " ok")}>{pending ? "Production to confirm" : p.confirmed ? `Confirmed by ${p.confirmed.by}` : "Set"}</span>
       </div>
+      {p.last.length > 0 && (
+        <div className="jv-last">
+          <div className="jv-lbl">Last time we printed {p.design || "this design"}</div>
+          {p.last.map((h, i) => (
+            <div key={i} className="jv-last-r">
+              <Link href={`/shop/orders/${h.orderId}/production`}>#{h.number}</Link>
+              <span>{h.location} · {h.size || "size not set"}{h.drop ? ` · drop ${h.drop}"` : ""} · {h.inks || `${h.colors} colors`}{h.underbase === true ? " · underbase" : h.underbase === false ? " · no underbase" : ""}{h.garment ? ` · on ${h.garment}` : ""}</span>
+              <span className="faint">confirmed by {h.by}, {new Date(h.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+              {i === 0 && <button type="button" className="btn sm" onClick={() => { setSize(h.size); setDrop(h.drop); if (h.underbase === true) setUb("yes"); else if (h.underbase === false) setUb("no"); if (!p.plan.length && h.inks) setScreens(inkList(h.inks).map((n) => ({ name: n, hex: colorHex(n) || "#888888", mix: "" }))); }}>Use the same</button>}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="jv-cp-row">
         <div className="jv-cp-step">
           <div className="jv-cp-n"><b>1</b>Size</div>

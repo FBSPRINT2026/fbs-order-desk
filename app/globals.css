@@ -10627,3 +10627,9 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-scr-b input:first-child{font-weight:700}
 .jv-scr-b .faint{font-size:12px}
 @media (max-width:640px){.jv-cp-row{grid-template-columns:minmax(0,1fr)}}
+.pm-side .panel-b{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.pm-side .btn{align-self:flex-start}
+.jv-last{display:flex;flex-direction:column;gap:6px;background:var(--ok-soft);border-radius:10px;padding:10px 12px}
+.jv-last-r{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:13px}
+.jv-last-r a{font-weight:700}
+.jv-last-r .btn{margin-left:auto}

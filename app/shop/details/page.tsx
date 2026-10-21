@@ -149,7 +149,7 @@ export default function ProductionDetailsPage() {
                   <span className="pdd-tag">{DETAILS_LABEL}</span>
                   <span className="pdd-side faint">{prints.length} print{prints.length === 1 ? "" : "s"} · due {day(r.due_date)}</span>
                 </button>
-                {prodView && <div className="pdd-pv"><Link href={`/shop/orders/${r.id}/production`} className="btn primary sm">Open in production view</Link><span className="faint">the mockup, film, press setup and photos in one view</span></div>}
+                {prodView && <div className="pdd-pv"><Link href={`/shop/orders/${r.id}/production`} className="btn primary sm">Open production mockup</Link><span className="faint">confirm the real size, placement, inks and screens, and see what we did last time</span></div>}
                 {isOpen && (
                   <div className="pdd-body">
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
@@ -183,7 +183,7 @@ export default function ProductionDetailsPage() {
                     <div className="pdd-foot">
                       <Link href={`/shop/orders/${r.id}?view=admin`} className="linkbtn">Open the order</Link>
                       {/* the whole job in one view: mockup, film, press setup, photos (Oct 21, Nick) */}
-                      {prodView && <Link href={`/shop/orders/${r.id}/production`} className="btn">Open in production view</Link>}
+                      {prodView && <Link href={`/shop/orders/${r.id}/production`} className="btn">Open production mockup</Link>}
                       <span className="spacer" />
                       {canConfirm ? <button type="button" className="btn primary" disabled={busy === r.id} onClick={() => save(r)}>{busy === r.id ? "Saving…" : `Confirm details for #${r.number}`}</button>
                         : <span className="faint">Production confirms these.</span>}
