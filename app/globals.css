@@ -11091,45 +11091,50 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .aa-shop .aa-age.late b{color:var(--warn)}
 .aa-shop .aa-age.bad b{color:var(--danger)}
 
-/* ===== One look across the shop (Oct 21, Nick: "go through the site and just unify everything") =====
-   The pages' own tab bars, number cards and tables, drawn as the Orders page's kit: chips (.chips/.chip), the number
-   strip (.stats/.stat) and the list (.tbl). Scoped to the shop (main.main), so the customer portal is untouched. */
-/* tabs and segmented switches → the chips toolbar */
-main.main :is(.aa-sub, .rv-seg, .md-seg, .ibx2-tabs, .ot-nav){display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--surface-2);padding:3px;border-radius:7px;border:0;overflow:visible;box-shadow:none;width:auto;max-width:100%}
-main.main .ot-nav{display:flex}
-main.main :is(.aa-sub, .rv-seg, .md-seg, .ibx2-tabs) > button,main.main .ot-nav .aa-tab{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12.5px;font-weight:600;color:var(--ink-2);letter-spacing:0;text-transform:none;line-height:1.5;white-space:nowrap}
-main.main :is(.aa-sub, .rv-seg, .md-seg, .ibx2-tabs) > button:hover,main.main .ot-nav .aa-tab:hover{border-color:var(--accent);color:var(--accent);background:var(--surface)}
-main.main :is(.aa-sub, .rv-seg, .md-seg, .ibx2-tabs) > button.on,main.main .ot-nav .aa-tab.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-main.main :is(.aa-sub, .ibx2-tabs) > button span,main.main .ot-nav .aa-tab .aa-n{background:none;color:var(--ink-3);font-size:11px;font-weight:700;padding:0;margin:0}
-main.main :is(.aa-sub, .ibx2-tabs) > button.on span,main.main .ot-nav .aa-tab.on .aa-n{color:inherit}
-main.main .md-seg input[type=date]{border:0;border-radius:99px;background:var(--surface)}
-main.main .set-tabs{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--surface-2);padding:3px;border-radius:7px;border:0;margin:0 0 14px}
-main.main .set-tabs a{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:0}
-main.main .set-tabs a:hover{border-color:var(--accent);color:var(--accent)}
-main.main .set-tabs a.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-/* number cards → the number strip */
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis){gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) > :is(a, button, div){all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:4px;background:var(--surface);padding:14px 16px;text-align:left;min-width:0;color:var(--ink);text-decoration:none;position:relative}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) > :is(a, button){cursor:pointer}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) > :is(a, button):hover{background:var(--surface-2)}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) > :is(a, button):disabled{cursor:default}
-main.main .db-kpis > a::before{display:none}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) b{font-family:var(--display);font-stretch:85%;font-weight:700;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--ink)}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) > * > span{font-size:12px;font-weight:500;color:var(--ink-2);text-transform:none;letter-spacing:0;order:2}
-main.main :is(.sc-kpis, .rv-kpis, .db-kpis) small{font-size:12px;color:var(--ink-3);order:3}
-main.main .rv-kpis .warn b,main.main .sc-kpi.warn b{color:var(--warn)}
-main.main .rv-kpis .bad b,main.main .sc-kpi.bad b,main.main .db-kpis .bad b small{color:var(--danger)}
+/* ===== One look across the shop (Oct 21, Nick: "unify everything… I meant the top of this page [the order page]…
+   I liked these toolbars"): the order page's top is the kit. Tab bars and filter chips are its tab bar (white bar, the
+   picked tab tinted blue with a blue underline, counts in little pills); number cards are its summary card (the color
+   fade on top, colored labels over each number). Scoped to the shop (main.main): the customer portal is untouched. */
+main.main :is(.toolbar .chips, .aa-sub, .set-tabs, .ibx2-tabs, .rv-seg, .md-seg){display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;overflow:hidden;margin-bottom:0}
+main.main :is(.aa-shopnav .chips, .aa-sub, .set-tabs, .ibx2-tabs){width:100%}
+main.main .aa-sub,main.main .set-tabs{margin-bottom:14px}
+main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button){all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;padding:8px 14px;font-family:var(--body);font-size:13.5px;font-weight:700;color:var(--ink-3);white-space:nowrap;text-decoration:none;border-radius:0}
+main.main :is(.aa-shopnav .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button){flex:1 0 auto;padding:12px 14px}
+main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button):hover{color:var(--ink);background:transparent}
+main.main :is(.toolbar .chips .chip.on, .aa-sub > button.on, .set-tabs a.on, .ibx2-tabs > button.on, .rv-seg > button.on, .md-seg > button.on){color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
+main.main :is(.chip .chip-n, .aa-sub > button span, .ibx2-tabs > button span){font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0}
+main.main :is(.chip.on .chip-n, .aa-sub > button.on span, .ibx2-tabs > button.on span){background:var(--fbs-blue);color:#fff}
+main.main .md-seg input[type=date]{border:0;background:var(--surface);padding:0 10px}
+main.main .toolbar{gap:10px}
+/* number cards → the summary card */
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging){position:relative;display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;overflow:hidden;padding-top:4px}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging)::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--fbs-fade)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button, div){all:unset;box-sizing:border-box;flex:1 1 0;min-width:130px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 16px;text-align:left;position:relative;background:var(--surface);color:var(--ink);text-decoration:none}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button){cursor:pointer}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button):hover{background:var(--surface-2)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button):disabled{cursor:default;background:var(--surface)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > * + *::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:1px;height:auto;background:var(--line-2);right:auto}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > * > :is(span, .k){order:-1;font-family:var(--body);font-size:11.5px;font-weight:700;color:var(--fbs-blue);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+2) > :is(span, .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+3) > :is(span, .k){color:color-mix(in srgb,var(--fbs-orange) 70%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+5) > :is(span, .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) :is(b, .v){font-family:var(--body);font-stretch:normal;font-weight:700;font-size:17px;line-height:1.25;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) small{font-size:12px;color:var(--ink-3)}
+main.main .stat .v.alert,main.main :is(.rv-kpis .bad, .sc-kpi.bad, .aa-age.bad) b,main.main .db-kpis .bad b small{color:var(--danger)}
+main.main :is(.rv-kpis .warn, .sc-kpi.warn, .aa-age.late) b{color:var(--warn)}
 main.main .rv-kpis .ok b{color:var(--ok)}
-main.main .rv-kpis .info b,main.main .db-kpis .hot b{color:var(--accent)}
-main.main :is(.sc-kpis, .rv-kpis) > button.on{box-shadow:inset 0 -3px 0 var(--accent);background:var(--surface)}
-/* tables → the list */
+main.main :is(.rv-kpis .info, .db-kpis .hot) b{color:var(--fbs-blue)}
+main.main :is(.sc-kpis, .rv-kpis) > button.on{background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue)}
+main.main .stats{margin-bottom:12px}
+/* tables → the Orders list */
 main.main :is(.rv-tbl, .aa-tbl){font-size:inherit}
-main.main :is(.rv-tbl, .aa-tbl) thead th,main.main .rv-tbl th{background:var(--surface);color:var(--ink-3);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+main.main :is(.rv-tbl, .aa-tbl) th{background:var(--surface);color:var(--ink-3);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 main.main :is(.rv-tbl, .aa-tbl) td{padding:10px 14px;border-bottom:1px solid var(--line-2)}
 main.main :is(.rv-tbl, .aa-tbl) tbody tr:last-child td{border-bottom:0}
 main.main .aa-tbl tbody tr:hover{background:transparent}
 main.main .aa-tbl tbody tr:hover td{background:var(--surface-2)}
 main.main .aa-tbl td a{font-weight:600}
-main.main :is(.aa-card.aa-tblcard){border-radius:var(--r);padding:0}
+main.main .aa-card.aa-tblcard{border-radius:var(--r);padding:0}
 /* page titles that aren't in a .page-head still get its color bar */
 main.main .jv-h h1::after{content:"";display:block;background:var(--fbs-fade);height:5px;border-radius:4px;width:calc(100% + 60px);min-width:140px;max-width:100%;margin-top:6px}
+main.main .db-kpis > a:first-child::before{display:none}

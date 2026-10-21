@@ -16,16 +16,19 @@
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
-  we need a common theme"). Build from the Orders page's kit (`app/shop/orders/page.tsx`), never a new one:
+  we need a common theme… I meant the top of this page [an order]… I liked these toolbars"). The top of the order page
+  is the template; never invent a new look:
   - Header: `.page-head` with the `h1` (the color bar comes with it), a one-line `.eyebrow` under it, the page's
     buttons on the right (`.btn`, one `.btn.primary` at most).
-  - Numbers: one `.stats` strip of `button.stat` cells (`.v` the number, `.k` the label; `.v.alert` for bad news), each
-    cell a filter or a jump. No separate number cards.
-  - Tabs and filters: a `.toolbar` with `.chips` of `button.chip` (`.on` when picked; a count in `.chip-n`), then the
-    search and any select on the same row. Sections of a page (a customer's Orders / Artwork / Payments) are chips too.
+  - Numbers: one summary card like the order page's (`.ot-sum` look: the color fade on top, colored labels over each
+    number). Build it as `.stats` with `button.stat` cells (`.v` the number, `.k` the label; `.v.alert` for bad news);
+    the shop CSS draws it as the summary card. No separate number cards.
+  - Tabs and filters: the order page's tab bar (white bar, the picked tab tinted blue with a blue underline, counts in
+    little pills). Build it as a `.toolbar` with `.chips` of `button.chip` (`.on` when picked; a count in `.chip-n`),
+    search and any select on the same row. Sections of a page are the same tab bar.
   - Lists: `.tbl-wrap > table.tbl` (small uppercase gray headers, `.ordno` for numbers, `.sub` for a second line only
     when it's needed, `<Pill>` from components/bits for statuses, `.bal` / `.bal.paid` for balances).
   - Panels: `.panel` with `.panel-h` (h2 + a `.faint` note) and `.panel-b`.
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
-    `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit in
-    `app/globals.css` and use it everywhere.
+    `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
+    in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
