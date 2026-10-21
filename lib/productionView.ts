@@ -25,6 +25,8 @@ export type PvPrint = {
   sep: { id: string; number: number; status: string; plates: PvPlate[] } | null;
   press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean; /** where it came from: saved as printed, the separation's setup, or laid out here */ from?: "actual" | "sep" | "auto" } | null;
   /** it only runs on this press (the schedule only puts it there) */ pressOnly: { id: string; name: string } | null;
+  /** a physical sample of it is in the shop: true / false, null = not asked */ sample: boolean | null;
+  /** shirt color → the screens (ink names) left off on it; empty = prints the same on every color */ skip: Record<string, string[]>;
   minutes: { setup: number; run: number };
   /** the print's art (the customer design's picture), to compare films against */ art: string; design: string;
   /** the art's own colors (the design's print plan) and how they map to screens (imprint.inkMap) */
@@ -34,7 +36,7 @@ export type PvPrint = {
 };
 export type ProductionView = {
   order: { id: string; number: number; nickname: string; status: string; due: string | null; customer: string; customerId: string; qty: number; reorderOf: string };
-  groups: { id: string; name: string; lines: string[]; mockups: { title: string; thumb: string; full: string }[] }[];
+  groups: { id: string; name: string; lines: string[]; /** the shirt colors on it (one per color, the styles in it) */ shirts: { color: string; styles: string }[]; mockups: { title: string; thumb: string; full: string }[] }[];
   prints: PvPrint[];
   step: number; done: boolean[]; why: string[];
   films: { name: string; url: string; path: string }[];
@@ -135,7 +137,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       notes: im.notes || "", confirm: im.confirm || null, confirmed: im.confirmed || null,
       film: im.film ? { ...im.film, files: (im.film.files || []).map((f) => ({ ...f, url: signed.get(f.path) || "" })) as never } : null,
       sep: s ? { id: s.id, number: s.number, status: s.status, plates: chans.map((c) => ({ name: c.name || "", hex: c.hex || "#000000", mesh: String(c.mesh || ""), coverage: typeof c.coverage === "number" ? c.coverage : null, url: c.file ? signed.get(c.file) || "" : "" })) } : null,
-      press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
+      press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, sample: typeof im.sample?.have === "boolean" ? im.sample.have : null, skip: im.byColor?.skip || {}, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
       ...(() => {
         const d = (dsgs || []).find((x) => x.id === im.design_id);
         const plan = (((d?.print_plan || {}) as { inks?: { hex?: string; name?: string }[] }).inks || []).filter((k) => k.hex).map((k) => ({ hex: String(k.hex).toUpperCase(), name: String(k.name || "") }));
@@ -189,6 +191,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       qty: groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, b) => a + (+b || 0), 0), 0), 0), reorderOf: pv ? `Printavo #${pv[1]}` : "" },
     groups: groups.map((g) => ({
       id: g.id, name: g.name || "",
+      shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", ") })),
       lines: g.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ") + ` · ${Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => `${z} ${q}`).join(" ")}`),
       mockups: (mks || []).filter((m) => m.group_id === g.id || (!m.group_id && groups.length === 1)).map((m) => ({ title: String(m.title || ""), full: signed.get(m.file_path) || "", thumb: signed.get(String(m.file_path).replace(/\.png$/, "-thumb.png")) || signed.get(m.file_path) || "" })),
     })),

@@ -153,6 +153,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                         {(d.printStyle === "fashion" || d.softHand) && <div className="s hitf">{d.printStyle === "fashion" && <span className="flag">FASHION HIT</span>}{d.softHand && <span className="flag">SOFT HAND</span>}</div>}
                         {d.method === "embroidery" && d.stitches ? <div className="s">{d.stitches.toLocaleString()} stitches</div> : null}
                         {d.visualOnly && <div className="warn">VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS</div>}
+                        {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}</div>}
                         {!d.visualOnly && (d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING</div>}
                         <div className="s f">Close-up on page {pg + 1 + di} ›</div>
                       </div>
@@ -254,6 +255,8 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       ) : null}
       {/* a fashion hit / soft hand: what the press does differently (Oct 16, Nick) */}
       {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
+      {/* prints differently by shirt color (Oct 21, Nick): the screens left off on some colors */}
+      {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="n2 warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c} shirts: skip ${n.join(" + ")} (pull the screen or don't flood it)`).join(". ")}</div>}
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
       {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
       <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>

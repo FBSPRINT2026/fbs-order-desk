@@ -19,7 +19,6 @@ import type { Machine } from "@/lib/production";
  */
 const STEPS = ["Order", "Mockup", "Separations requested", "Film made", "Film checked", "On press", "Printed"];
 const fmtDay = (d: string | null) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
-const hm = (m: number) => (m <= 0 ? "—" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} m`);
 const inkList = (s: string) => s.split(/\s*[,;+]\s*/).map((x) => x.trim()).filter(Boolean);
 const FILM_LABEL: Record<string, string> = { asPrinted: "As-printed film on file", physical: "Physical film only (in the drawer)", new: "New film, never printed" };
 const toJpeg = async (src: Blob | string, max = 360) => {
@@ -114,12 +113,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
             {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPi(i)}>{p.location}</button>)}
           </div>
         )}
-        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} /> : <div className="faint">No prints on this group.</div>}
-      </section>
-
-      <section className={"jv-card jv-mock" + (lock(1) ? " jv-off" : "")} aria-label="Mockup">
-        <div className="jv-card-h"><h2>Mockup</h2><span className="faint">what the customer approved</span></div>
-        <Mockups list={group?.mockups || []} />
+        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} photos={photos} reloadPhotos={loadPhotos} /> : <div className="faint">No prints on this group.</div>}
       </section>
 
       {print?.screen && !oneSitting && (
@@ -134,24 +128,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
             <Press p={print} number={v.order.number} />
           </section>
         )}
-        <section className={"jv-card jv-run" + (lock(5) ? " jv-off" : "")} aria-label="On press">
-          <div className="jv-card-h"><h2>On press</h2><span className="faint">{lock(5) ? "Opens when the job goes on press" : "from the phone at the press"}</span></div>
-          <div className="jv-stats">
-            <div><span>Setup</span><b>{hm(print?.minutes.setup || 0)}</b></div>
-            <div><span>Run</span><b>{hm(print?.minutes.run || 0)}</b></div>
-            <div><span>Pieces</span><b>{v.order.qty.toLocaleString()}</b></div>
-          </div>
-          <div className="jv-lbl">Photos</div>
-          <div className="jv-photos">
-            {photos.filter((x) => x.kind === "photo").slice(0, 8).map((x) => <a key={x.id} href={x.url} target="_blank" rel="noreferrer" title={x.body || x.file_name}><img src={x.url} alt={x.body || "Print photo"} /></a>)}
-            <label className="jv-addphoto">+ Photo<input type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setBusy("photo"); const r = await addPhoto({ kind: "o", id }, f, print ? `${print.location}` : "", "Approved print"); setBusy(""); if (!r.ok) setErr(r.error); else void loadPhotos(); }} /></label>
-          </div>
-          <div className="jv-lbl">Press notes</div>
-          <div className="jv-notes">{photos.filter((x) => x.kind === "note").slice(0, 6).map((x) => <div key={x.id}><b>{x.tag}</b> {x.body} <span className="faint">· {x.by_name}</span></div>)}{!photos.some((x) => x.kind === "note") && <span className="faint">Notes from the phone land here.</span>}</div>
-        </section>
       </div>
-
-      <History v={v} busy={!!busy} add={(text) => post({ op: "note", text }, "note")} />
 
       {!oneSitting && <footer className="jv-save">
         <span>{v.step >= STEPS.length ? `Saves every print's inks, size and film to #${v.order.number} and the customer's designs. The next reorder copies this.` : "Saving as printed opens once the job has printed. Until then anything here can still change."}</span>
@@ -163,19 +140,6 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
           await post({ op: "printed" }, "printed");
         }}>{busy === "printed" ? "Saving…" : "Confirm & save as printed"}</button>
       </footer>}
-    </div>
-  );
-}
-
-function Mockups({ list }: { list: { title: string; thumb: string; full: string }[] }) {
-  const [i, setI] = useState(0);
-  if (!list.length) return <div className="jv-empty">No mockup saved yet. Make it in the Mockup Creator.</div>;
-  const m = list[Math.min(i, list.length - 1)];
-  return (
-    <div className="jv-mk">
-      <a href={m.full} target="_blank" rel="noreferrer" className="jv-mk-big" title="Open full size"><img src={m.full || m.thumb} alt={m.title} /></a>
-      {list.length > 1 && <div className="jv-mk-thumbs">{list.map((x, k) => <button key={k} type="button" className={k === i ? "on" : ""} onClick={() => setI(k)} title={x.title}><img src={x.thumb} alt={x.title} /></button>)}</div>}
-      <div className="faint jv-mk-t">{m.title}</div>
     </div>
   );
 }
@@ -192,7 +156,19 @@ const avgHex = (a: string, b: string) => { const p = (h: string) => [1, 3, 5].ma
  */
 /** a screen's key on the press: its name (the same name is the same screen) */
 const plateKey = (name: string) => "s-" + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36);
-function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void }) {
+function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, photos, reloadPhotos }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void; photos: JobFile[]; reloadPhotos: () => Promise<void> }) {
+  const grp = v.groups.find((g) => g.id === p.groupId);
+  const mockups = grp?.mockups || [];
+  const shirts = grp?.shirts || [];
+  // the viewer (Oct 21, Nick: "move the mock-up so it's one of the first things you see… all the mock-ups below… click
+  // through and it brings it up to the one above"): -1 = the art as it will print, else a mockup
+  const [view, setView] = useState(-1);
+  // prints differently by shirt color (Nick: "you may not print the black on one mock-up"): shirt color → screens left off
+  const [skip, setSkip] = useState<Record<string, string[]>>(p.skip || {});
+  const [byColor, setByColor] = useState(Object.keys(p.skip || {}).length > 0);
+  const [shirt, setShirt] = useState("");
+  const skipNow = byColor ? Object.fromEntries(Object.entries(skip).filter(([, n]) => n.length)) : {};
+  const skipDirty = JSON.stringify(skipNow) !== JSON.stringify(p.skip || {});
   const [size, setSize] = useState(p.size), [loc, setLoc] = useState(p.location), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
   // screens + which screen each art color prints through
   const start = useMemo(() => {
@@ -242,17 +218,19 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
     const x = c.getContext("2d", { willReadFrequently: true })!; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
     if (!p.plan.length) return;
     const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
-    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: rgb(screens[assign[q.hex]]?.hex || q.hex) }));
+    const off = new Set((shirt && byColor ? skip[shirt] || [] : []).map((n) => n.toLowerCase()));
+    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: off.has((screens[assign[q.hex]]?.name || "").toLowerCase()) ? [-1, -1, -1] : rgb(screens[assign[q.hex]]?.hex || q.hex) }));
     const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map<number, number[]>();
     for (let o = 0; o < a.length; o += 4) {
       if (a[o + 3] < 8) continue;
       const key = (a[o] >> 3 << 10) | (a[o + 1] >> 3 << 5) | (a[o + 2] >> 3);
       let to = memo.get(key);
       if (!to) { let best = 1e9; for (const q of plan) { const dd = (q.c[0] - a[o]) ** 2 + (q.c[1] - a[o + 1]) ** 2 + (q.c[2] - a[o + 2]) ** 2; if (dd < best) { best = dd; to = q.to; } } memo.set(key, to!); }
+      if (to![0] < 0) { a[o + 3] = 0; continue; }
       a[o] = to![0]; a[o + 1] = to![1]; a[o + 2] = to![2];
     }
     x.putImageData(d, 0, 0);
-  }, [ready, screens, assign, p.plan]);
+  }, [ready, screens, assign, p.plan, shirt, skip, byColor]);
 
   // one sitting (a reorder): the film, the press setup as it ran, notes; then Save everything
   const [film, setFilm] = useState<"" | "asPrinted" | "physical" | "new">(p.film?.state || "");
@@ -296,6 +274,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
     setSaving("Saving size and placement…"); setErr("");
     let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
     if (ok && p.screen && screens.length) { setSaving("Saving colors and screens…"); ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save"); }
+    if (ok && p.screen && skipDirty) { setSaving("Saving the shirt colors…"); ok = await post({ op: "byColor", print: p.id, skip: skipNow }, "save"); }
     if (ok && p.screen && film && film !== p.film?.state) { setSaving("Saving the film…"); ok = await post({ op: "film", print: p.id, state: film }, "save"); }
     if (ok && p.screen && onPress && onPress.heads.some((h) => h.startsWith("p:"))) {
       setSaving("Saving the press setup…");
@@ -315,12 +294,30 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
     await reload();
     if (ok) setErr("");
   }
-  const dirty = size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(start.screens) || JSON.stringify(assign) !== JSON.stringify(start.assign);
+  const dirty = skipDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(start.screens) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
   async function save() {
     const ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
     if (ok && p.screen && screens.length) await post({ op: "colors", print: p.id, screens, map: assign }, "save");
+    if (ok && p.screen && skipDirty) await post({ op: "byColor", print: p.id, skip: skipNow }, "save");
   }
+  const shirtHex = shirt ? colorHex(shirt) || "#d9d9d9" : "";
+  const viewer = (
+    <div className="jv-cc-art">
+      <div className="jv-view">
+        {p.art ? <canvas ref={cv} aria-label="The art as it will print" style={{ display: view < 0 ? undefined : "none", background: shirtHex || undefined }} /> : view < 0 && <span className="faint">No art picture on this print.</span>}
+        {view >= 0 && mockups[view] && <a href={mockups[view].full} target="_blank" rel="noreferrer" title="Open full size"><img src={mockups[view].full || mockups[view].thumb} alt={mockups[view].title} /></a>}
+      </div>
+      <span className="faint">{view >= 0 && mockups[view] ? mockups[view].title.replace(/^.*? — /, "") : shirt ? `As it will print on ${shirt}${(skip[shirt] || []).length && byColor ? ` (no ${skip[shirt].join(", ")})` : ""}` : "As it will print"}</span>
+      {mockups.length > 0 && (
+        <div className="jv-strip" aria-label="Mockups">
+          {p.art && <button type="button" className={"jv-strip-art" + (view < 0 ? " on" : "")} onClick={() => setView(-1)} title="The art as it will print">Art</button>}
+          {mockups.map((m, i) => <button key={i} type="button" className={view === i ? "on" : ""} onClick={() => { setView(i); const c = shirts.find((sh) => m.title.toLowerCase().endsWith(sh.color.toLowerCase())); setShirt(c ? c.color : ""); }} title={m.title}><img src={m.thumb || m.full} alt={m.title} /></button>)}
+        </div>
+      )}
+      {!mockups.length && <span className="faint">No mockup saved yet: make it in the Mockup Creator.</span>}
+    </div>
+  );
   return (
     <div className="jv-cp">
       <div className="jv-card-h">
@@ -353,14 +350,12 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
           <label className="jv-inl">Drop from the collar <input value={drop} onChange={(e) => setDrop(e.target.value)} placeholder="3" aria-label="Drop from collar" />in.</label>
         </div>
       </div>
+      {!p.screen && mockups.length > 0 && <div className="jv-cp-step"><div className="jv-cp-n">Mockup</div><div className="jv-cc">{viewer}</div></div>}
       {p.screen && (
         <div className="jv-cp-step jv-cp-colors">
           <div className="jv-cp-n"><b>3</b>Colors &amp; screens <span className="faint">{p.plan.length ? `${p.plan.length} colors in the art → ${screens.length} screen${screens.length === 1 ? "" : "s"}` : `${screens.length} screen${screens.length === 1 ? "" : "s"}`}</span></div>
           <div className="jv-cc">
-            <div className="jv-cc-art">
-              {p.art ? <canvas ref={cv} aria-label="The art as it will print" /> : <span className="faint">No art picture on this print.</span>}
-              <span className="faint">As it will print</span>
-            </div>
+            {viewer}
             <div className="jv-cc-list">
               {p.plan.length > 0 && (
                 <div className="jv-cc-art-colors">
@@ -404,6 +399,36 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
               })}
               {!p.plan.length && <button type="button" className="btn sm ghost" onClick={() => setScreens((a) => [...a, { name: "", hex: "#888888", mix: "" }])}>+ Screen</button>}
               <div className="jv-ub"><span>Underbase</span>{([["", "Not sure"], ["yes", "Yes"], ["no", "No"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (ub === k ? " on" : "")} onClick={() => setUb(k)}>{l}</button>)}</div>
+              {shirts.length > 1 && screens.some((x) => x.name.trim()) && (
+                <div className="jv-bc">
+                  <h3 className="jv-cc-h">On each shirt color</h3>
+                  <div className="jv-ub">
+                    <button type="button" className={"chip" + (!byColor ? " on" : "")} onClick={() => { setByColor(false); setShirt(""); }}>Prints the same on every color</button>
+                    <button type="button" className={"chip" + (byColor ? " on" : "")} onClick={() => setByColor(true)}>Changes by shirt color</button>
+                  </div>
+                  {byColor && (
+                    <>
+                      <table className="jv-bc-t">
+                        <thead><tr><th>Shirt</th>{screens.filter((x) => x.name.trim()).map((x, i) => <th key={i}><span className="jv-sw" style={{ background: x.hex }} />{x.name}</th>)}</tr></thead>
+                        <tbody>{shirts.map((sh) => {
+                          const k = sh.color, offs = skip[k] || [];
+                          return (
+                            <tr key={k} className={shirt === k ? "on" : ""}>
+                              <td><button type="button" className="linkbtn" title="See how it prints on this color" onClick={() => { setShirt(shirt === k ? "" : k); setView(-1); }}>{k}</button>{sh.styles && <span className="faint"> {sh.styles}</span>}</td>
+                              {screens.filter((x) => x.name.trim()).map((x, i) => {
+                                const isOff = offs.some((n) => n.toLowerCase() === x.name.trim().toLowerCase());
+                                return <td key={i}><button type="button" className={"jv-bc-c" + (isOff ? " off" : "")} aria-label={`${x.name} on ${k}: ${isOff ? "skipped" : "prints"}`} aria-pressed={!isOff}
+                                  onClick={() => { setShirt(k); setView(-1); setSkip((m) => ({ ...m, [k]: isOff ? offs.filter((n) => n.toLowerCase() !== x.name.trim().toLowerCase()) : [...offs, x.name.trim()] })); }}>{isOff ? "skip" : "✓"}</button></td>;
+                              })}
+                            </tr>
+                          );
+                        })}</tbody>
+                      </table>
+                      <div className="jv-cc-hint">Click a box to skip that screen on that shirt color. Click a shirt to see how it prints on it. The work order and the next reorder show the skips.</div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -440,6 +465,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
           <textarea value={pnotes} onChange={(e) => setPnotes(e.target.value)} rows={2} placeholder="Ink order, flash time, what to watch for, anything the press operator says" aria-label="Notes" />
         </div>
       )}
+      <Samples n={one ? (p.screen ? 7 : 4) : p.screen ? 4 : 3} p={p} v={v} orderId={orderId} busy={busy} post={post} photos={photos} reloadPhotos={reloadPhotos} setErr={setErr} />
       {one ? (
         <div className="jv-saveall">
           <button type="button" className="btn primary" disabled={!!saving || busy} onClick={() => void saveAll()}>{saving || "Save everything"}</button>
@@ -450,6 +476,82 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
         <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save size, placement and screens"}</button>
         <span className="faint">{dirty ? "Not saved yet" : "Saved on the order · confirmed for good with Confirm & save as printed"}</span>
       </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 7 Samples or photos (Oct 21, Nick: "a box that says we have a physical sample… yes or no… find in the messages the
+ * pictures… look at the messages to Brooke… I sent this one… also an upload field for photos"). The yes/no is on the
+ * group's prints; the photos are the job's production photos (job_files), from the customer's texts and emails
+ * (/api/orders/[id]/photos) or uploaded.
+ */
+type Found = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean };
+const markOf = (body: string) => (body.match(/\[([te]:[^\]]+)\]\s*$/) || [])[1] || "";
+function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }: { n: number; p: PvPrint; v: ProductionView; orderId: string; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; photos: JobFile[]; reloadPhotos: () => Promise<void>; setErr: (s: string) => void }) {
+  const [found, setFound] = useState<Found[] | null>(null);
+  const [looking, setLooking] = useState(false), [adding, setAdding] = useState(""), [upl, setUpl] = useState(false), [msg, setMsg] = useState("");
+  const [all, setAll] = useState(false);
+  const pics = photos.filter((x) => x.kind === "photo" && x.url);
+  const added = new Set(pics.map((x) => markOf(x.body || "")).filter(Boolean));
+  const from = (v.order.reorderOf.match(/#(\d+)/) || [])[1] || "";
+  async function find() {
+    setLooking(true); setMsg("");
+    const r = await fetch(`/api/orders/${orderId}/photos?from=${from}`).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    setLooking(false);
+    if (r.error) { setMsg(r.error); return; }
+    setFound(r.items || []);
+  }
+  async function add(f: Found) {
+    setAdding(f.key); setMsg("");
+    const r = await fetch(`/api/orders/${orderId}/photos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: f.key, from }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    setAdding("");
+    if (r.error) { setMsg(r.error); return; }
+    await reloadPhotos();
+  }
+  const list = (found || []).filter((f) => all || f.here);
+  const fmt = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return (
+    <div className="jv-cp-step jv-smp">
+      <div className="jv-cp-n"><b>{n}</b>Samples or photos</div>
+      <div className="jv-ub">
+        <span>We have a physical sample</span>
+        {([[true, "Yes"], [false, "No"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (p.sample === k ? " on" : "")} disabled={busy} onClick={() => void post({ op: "sample", print: p.id, have: p.sample === k ? null : k }, "save")}>{l}</button>)}
+      </div>
+      <div className="jv-smp-pics">
+        {pics.map((x) => <a key={x.id} href={x.url} target="_blank" rel="noreferrer" title={(x.body || x.file_name || "").replace(/\s*\[[te]:[^\]]+\]\s*$/, "")}><img src={x.url} alt={x.body || "Photo"} /></a>)}
+        <label className="jv-addphoto">{upl ? "Adding…" : "+ Upload photos"}<input type="file" accept="image/*" multiple hidden onChange={async (e) => {
+          const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
+          setUpl(true);
+          for (const f of fs) { const r = await addPhoto({ kind: "o", id: orderId }, f, `${p.location} sample`, "Sample"); if (!r.ok) { setErr(r.error); break; } }
+          setUpl(false); await reloadPhotos();
+        }} /></label>
+        <button type="button" className="jv-addphoto" disabled={looking} onClick={() => (found ? setFound(null) : void find())}>{looking ? "Looking…" : found ? "Hide the messages" : "Find photos in texts and emails"}</button>
+      </div>
+      {!pics.length && !found && <div className="jv-cc-hint">No photos on this job yet. Find the ones you texted or emailed the customer, or upload them.</div>}
+      {msg && <div className="err">{msg}</div>}
+      {found && (
+        <div className="jv-find">
+          <div className="jv-find-h">
+            <span>{found.length ? `${list.length} picture${list.length === 1 ? "" : "s"} ${all ? `with ${v.order.customer}` : "on this job"}` : `No pictures in the texts or emails with ${v.order.customer}.`}</span>
+            {found.length > 0 && <button type="button" className="linkbtn" onClick={() => setAll((x) => !x)}>{all ? "Only this job's" : `All ${found.length} with ${v.order.customer}`}</button>}
+          </div>
+          {found.length > 0 && !list.length && <div className="jv-cc-hint">None of the texts or emails are filed to this job. <button type="button" className="linkbtn" onClick={() => setAll(true)}>Show all of {v.order.customer}&apos;s</button></div>}
+          <div className="jv-find-g">
+            {list.map((f) => {
+              const mk = `${f.key.slice(0, 2)}${f.key.split("/").pop()}`, has = added.has(mk);
+              return (
+                <div key={f.key} className={"jv-find-i" + (has ? " has" : "")}>
+                  <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.name} loading="lazy" /></a>
+                  <div className="jv-find-m"><b>{f.src === "text" ? (f.fromMe ? "We texted" : "They texted") : f.fromMe ? "We emailed" : "They emailed"}</b> {fmt(f.date)}{f.job && <span className="faint"> · {f.job}</span>}</div>
+                  {f.body && <div className="jv-find-b faint">{f.body}</div>}
+                  <button type="button" className={"btn sm" + (has ? "" : " primary")} disabled={has || !!adding} onClick={() => void add(f)}>{has ? "✓ On the job" : adding === f.key ? "Adding…" : "Add"}</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -640,20 +742,3 @@ function Press({ p, number, wheelOnly = false }: { p: PvPrint; number: number; w
   );
 }
 
-function History({ v, busy, add }: { v: ProductionView; busy: boolean; add: (t: string) => Promise<boolean> }) {
-  const [kept, setKept] = useState<Set<number>>(new Set());
-  return (
-    <section className="jv-card" aria-label="From the job's history">
-      <div className="jv-card-h"><h2>From the job&apos;s history</h2><span className="faint">keep what belongs on the record: it&apos;s added to the production notes</span></div>
-      {v.history.length === 0 && <div className="faint">Nothing from an older job.</div>}
-      {v.history.map((x, i) => (
-        <div key={i} className="jv-hist">
-          <span className="jv-hist-k"><b>{x.kind}</b><span className="faint">{x.when}</span></span>
-          <span className="jv-hist-t">{x.text}</span>
-          <button type="button" className={"jv-tick" + (kept.has(i) ? " on" : "")} disabled={busy || kept.has(i)} onClick={async () => { if (await add(`${x.kind} (${x.when}): ${x.text}`)) setKept((s) => new Set(s).add(i)); }}>{kept.has(i) ? "On the record" : "Keep"}</button>
-        </div>
-      ))}
-      {v.productionNotes && <details className="jv-pn"><summary>Production notes</summary><pre>{v.productionNotes}</pre></details>}
-    </section>
-  );
-}

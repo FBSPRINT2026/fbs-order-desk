@@ -20,6 +20,8 @@ export const maxDuration = 30;
  *   "filmOk"   {}: production looked the film over (fresh separations stay "new, never printed")
  *   "printed"  {}: after Confirm & save: film printed from becomes the as-printed film
  *   "note"     { text }: added to the production notes
+ *   "byColor" { skip: { <shirt color>: [screen ink names] } }: screens left off on some shirt colors ({} = the same on all)
+ *   "sample" { have: true | false | null }: a physical sample is in the shop (every print of the group)
  *   "pressOnly" { press: id | "" }: this print only runs on that press (the schedule only puts it there); the design's
  *              latest confirmed spec of the print gets it too, so every reorder of it does the same
  */
@@ -131,6 +133,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           await admin.from("designs").update({ specs }).eq("id", d.id);
         }
       }
+    } else if (b.op === "byColor") {
+      // prints differently by shirt color (Oct 21, Nick: "you may not print the black on one mockup")
+      const skip: Record<string, string[]> = {};
+      for (const [c, list] of Object.entries((b.skip || {}) as Record<string, unknown>).slice(0, 40)) {
+        const names = (Array.isArray(list) ? list : []).map((x) => clip(x, 60)).filter(Boolean).slice(0, 20);
+        if (clip(c, 60) && names.length) skip[clip(c, 60)] = names;
+      }
+      const was = JSON.stringify(im.byColor?.skip || {});
+      if (Object.keys(skip).length) im.byColor = { skip, by: w.by, at }; else delete im.byColor;
+      if (was !== JSON.stringify(skip)) events.push(Object.keys(skip).length ? `${im.location}: by shirt color: ${Object.entries(skip).map(([c, n]) => `${c} skips ${n.join(", ")}`).join("; ")}` : `${im.location}: prints the same on every shirt color`);
+    } else if (b.op === "sample") {
+      // a physical sample (the garment with every print on it): set on every print of the group
+      const g = groups.find((x) => (x.imprints || []).some((y) => y.id === im.id));
+      for (const x of g?.imprints || [im]) {
+        if (b.have === true || b.have === false) x.sample = { have: b.have, by: w.by, at }; else delete x.sample;
+      }
+      events.push(b.have === true ? "We have a physical sample" : b.have === false ? "No physical sample" : "Physical sample: not set");
     } else if (b.op === "filmOk") {
       im.film = { ...(im.film || { state: "new" as const }), checked: { by: w.by, at } };
       events.push(`${im.location}: film checked`);

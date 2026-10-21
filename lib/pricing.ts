@@ -88,6 +88,10 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** this print only runs on one press (Oct 21, Nick: "this bottles job, we have to run it on the 12 color… build that
    *  into the production scheduling"): the schedule only puts it there; reorders copy it (designs.specs) */
   pressOnly?: { id: string; name: string; by?: string; at?: string };
+  /** we have a physical sample of it (production mockup step 7): true / false; left out = not asked */
+  sample?: { have: boolean; by?: string; at?: string };
+  /** it prints differently by shirt color (production mockup step 3): shirt color → the screens (by ink name) left off */
+  byColor?: { skip: Record<string, string[]>; by?: string; at?: string };
   film?: { state: "asPrinted" | "physical" | "new"; files?: { path: string; name: string }[]; note?: string; by?: string; at?: string; checked?: { by: string; at: string } };
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through
