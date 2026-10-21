@@ -272,7 +272,15 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
         <div className="imp-wrap">
         <div className="imp-mock">
           {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
-            ? (g.mockupThumbs || []).map((p) => thumbUrls?.[p] ? <a key={p} href={thumbUrls[p]} target="_blank" rel="noreferrer" className="mk-big" title="Open the mockup"><img src={thumbUrls[p]} alt="Mockup" /></a> : null)
+            // the first mockup big, the rest small under it (Oct 20, Nick: six onesie colors stacked full size made the
+            // group five screens long)
+            ? (() => {
+              const ps = [...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))];
+              return <>
+                <a href={thumbUrls![ps[0]]} target="_blank" rel="noreferrer" className="mk-big" title="Open the mockup"><img src={thumbUrls![ps[0]]} alt="Mockup" /></a>
+                {ps.length > 1 && <div className="mk-more">{ps.slice(1).map((p) => <a key={p} href={thumbUrls![p]} target="_blank" rel="noreferrer" title="Open the mockup"><img src={thumbUrls![p]} alt="Mockup" /></a>)}</div>}
+              </>;
+            })()
             : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}

@@ -10372,3 +10372,7 @@ div.prod-kind{border:0;padding:0}
 .arc-mk-o b{color:var(--ink);font-size:13.5px}
 .arc-mk-o.on{border:2px solid var(--brand,#1F6FD1);padding:9px 11px;background:color-mix(in srgb,var(--brand,#1F6FD1) 5%,var(--surface))}
 @media (max-width:700px){.arc-q{grid-template-columns:1fr}.arc-q-k{flex-wrap:wrap}.arc-mk{grid-template-columns:1fr}}
+.mk-more{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.mk-more a{display:block;aspect-ratio:1;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;line-height:0}
+.mk-more img{width:100%;height:100%;object-fit:contain}
+.mk-more a:hover{border-color:var(--accent)}
