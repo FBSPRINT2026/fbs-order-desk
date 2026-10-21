@@ -11288,8 +11288,6 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
   main.main table.m-card td[data-label="Balance"]{grid-area:bal;text-align:right!important;font-size:12.5px!important}
   main.main table.m-card td[data-label="Date"],main.main table.m-card tr:has(> td[data-label="Job"]) > td:not([data-label]){display:none!important}
   /* an email on a phone: the AI summary is two lines, not a block that pushes the email down */
-  main.main .eh-ai .eh-sum{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  main.main .eh-ai .eh-ai-tags{display:none}
   main.main .lm-ai{max-height:120px;overflow:auto}
 }
 /* My Day: the to-do filter (All / Money / Shop…) is the secondary toolbar; on a phone the Replies / To-do / Calendar
@@ -11356,4 +11354,24 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
   html body:has(.pit) .pit-ai p,html body:has(.pit) .pit-qa{display:none!important}
   html body:has(.pit) main.main .ibx2-list .ibx2-list-h .ibx2-tabs{display:flex!important}
   html body:has(.pit) main.main .ibx2-list .ibx2-list-h .ibx2-find{display:none!important}
+}
+
+/* the top of an email on a phone (Oct 21, Nick: "a mess of information… the AI summary is flowing and rolling over"):
+   the subject; the sender, with their company and the date on a quiet line under; a light summary box whose sentence
+   wraps and ends, its buttons on their own row */
+@media (max-width:760px){
+  html body main.main .eh-from{display:grid!important;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"av who" "av date";column-gap:10px;row-gap:1px;align-items:start}
+  html body main.main .eh-from > .eh-av{grid-area:av}
+  html body main.main .eh-from > .eh-who{grid-area:who;min-width:0}
+  html body main.main .eh-from > .eh-date{grid-area:date;justify-self:start;text-align:left!important;font-size:12.5px;color:var(--ink-3);margin:0!important}
+  html body main.main .eh-n{flex-wrap:wrap!important;white-space:normal!important;row-gap:0}
+  html body main.main .eh-n > b{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body main.main .eh-n > :not(b){flex:1 1 100%;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0!important}
+  html body main.main .eh-to{font-size:12.5px}
+  html body main.main .eh-ai{display:flex!important;flex-wrap:wrap!important;align-items:center;gap:8px!important;padding:10px 12px!important}
+  html body main.main .eh-ai > .eh-ai-l{flex:1 1 100%}
+  html body main.main .eh-ai > .eh-ai-b{display:block!important;flex:1 1 100%;min-width:0}
+  html body main.main .eh-ai .eh-sum{display:block!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;-webkit-line-clamp:unset!important;max-height:none!important;font-size:14px;line-height:1.4;color:var(--ink-2)}
+  html body main.main .eh-ai .eh-ai-tags{display:none!important}
+  html body main.main .eh-ai > .eh-ai-go{flex:1 1 auto!important;height:34px!important;min-height:0!important;padding:0 10px!important;font-size:13px!important;border-radius:9px!important;justify-content:center}
 }
