@@ -30,7 +30,7 @@ export function OrdersTab({ b, reload }: { b: StoreBundle; reload: () => void })
   return (
     <div className="stack" style={{ gap: 12 }}>
       <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-        <input style={{ maxWidth: 320 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an order: student, parent, email, order #" />
+        <input style={{ maxWidth: 320 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an order" />
         <div className="chips">{(["all", "open", "packed", "cancelled"] as const).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "open" ? "To pack" : k === "packed" ? "Packed / done" : "Cancelled"}</button>)}</div>
         <span className="spacer" />
         {b.staff && <button type="button" className="btn" onClick={() => print(b, "slips")}>Packing slips</button>}
@@ -188,7 +188,7 @@ export function PackingTab({ b, reload }: { b: StoreBundle; reload: () => void }
         <button type="button" className="btn" onClick={() => print(b, "handout")}>Hand-out sheets</button>
       </div></div>
       <div className="row" style={{ gap: 10 }}>
-        <input style={{ maxWidth: 340 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a bag: student, order #, teacher" autoFocus />
+        <input style={{ maxWidth: 340 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a bag" autoFocus />
         <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" style={{ width: "auto" }} checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />Hide packed</label>
         <span className="faint" style={{ fontSize: 13 }}>Sorted by {sf.map((f) => f.label.toLowerCase()).join(" → ") || "order"}, then name: the order the bags go in the boxes.</span>
       </div>

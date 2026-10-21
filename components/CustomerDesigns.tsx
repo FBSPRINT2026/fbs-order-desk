@@ -238,7 +238,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
         {err && <div className="err">{err}</div>}
         {cur ? <DesignDetail d={cur} all={cat.designs} customerId={customerId} busy={busy} change={change} back={() => setOpen("")} setCover={(url) => setCat((c) => (c ? { ...c, designs: c.designs.map((x) => (x.key === cur.key ? { ...x, coverSet: true, thumb: url } : x)) } : c))} /> : <>
           <div className="dc-bar" data-toolbar>
-            <input className="dc-q" placeholder="Find a design, garment or color" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="dc-q" placeholder="Find a design" value={q} onChange={(e) => setQ(e.target.value)} />
             {site ? (sweep && sweep.done < sweep.of
               ? <span className="faint dc-sweep">Looking on {site.replace(/^https?:\/\/(www\.)?/, "")}… {sweep.done} of {sweep.of} · {sweep.found} found</span>
               : <button type="button" className="btn sm" title={`Look up every design on ${site.replace(/^https?:\/\//, "")} and use its picture there`} onClick={() => void findAll()}>{sweep ? `Found ${sweep.found} of ${sweep.of} · again` : "Find pictures on their website"}</button>) : null}

@@ -78,7 +78,7 @@ function StylePick({ label, onPick, current }: { label: string; onPick: (g: Garm
     <div className="field">
       <label>{label}</label>
       {current && <div className="faint" style={{ fontSize: 13 }}>{current.brand} {current.style} · {current.description?.slice(0, 60)} <button type="button" className="linkbtn" onClick={() => setQ(current.style)}>Change</button></div>}
-      {(!current || q) && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Style # or name: 5000, 64000, Comfort Colors 1717, PC54…" />}
+      {(!current || q) && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Style # or name" />}
       {hits.length > 0 && <div className="ms-hits">{hits.slice(0, 12).map((h) => (
         <button key={`${h.supplier}${h.styleID}${h.style}`} type="button" disabled={busy} onClick={async () => { setBusy(true); setErr(""); try { onPick(await lookup(h)); setQ(""); setHits([]); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>
           {h.image ? <img src={h.supplier === "sanmar" ? ssImg(h.image) : ssImg(h.image)} alt="" /> : <span />}<span><b>{h.brand} {h.style}</b><small>{h.title} · {h.supplier === "sanmar" ? "SanMar" : "S&S"}</small></span>
