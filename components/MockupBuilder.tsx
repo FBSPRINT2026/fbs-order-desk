@@ -25,7 +25,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -699,7 +699,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v));
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
-  const fitFor = (l: Line | undefined, v: View) => { if (!l) return null; const u = photo(l, v); return u.startsWith("data:") ? null : fits[u] || null; };
+  const fitFor = (l: Line | undefined, v: View): Fit | null => {
+    if (!l) return null;
+    const u = photo(l, v);
+    if (u.startsWith("data:")) return null;
+    const f = fits[u] || null;
+    if (!f || f.flat || !f.body || v !== "front") return f;
+    // Many S&S styles use one computer-made photo for every color (Oct 20, Nick: "the 6210 … all the images are exactly
+    // the same"): colors whose shirt outline matches to the pixel share the middle neckline reading, so one hard color
+    // (white on white) can't put its print somewhere else. Photos laid flat by hand (the Bella onesies) differ, and keep their own.
+    const g = garmentFor(l), fb = f.body;
+    if (!g) return f;
+    const near = (a: number, b: number) => Math.abs(a - b) <= 3;
+    const peers = [...new Set(lines.filter((x) => garmentFor(x)?.id === g.id).map((x) => photo(x, v)))]
+      .map((p) => fits[p]).filter((p): p is Fit => !!p && !p.flat && !!p.body && near(p.top, f.top) && near(p.body.l, fb.l) && near(p.body.r, fb.r) && near(p.body.hem, fb.hem));
+    const ns = peers.map((p) => p.neck).filter((n): n is number => n != null).sort((a, b) => a - b);
+    if (peers.length < 3 || ns.length * 2 <= peers.length) return f;
+    const mid = ns[ns.length >> 1];
+    return f.neck != null && Math.abs(f.neck - mid) <= 4 ? f : { ...f, neck: mid };
+  };
   /**
    * Each style's own print-area spot (Oct 20, Nick: "when I click Print areas, let me drag that print areas grid around
    * … it stays the same dependent on each individual shirt … so it knows moving forward: a PC55RS gets this spot").
@@ -1727,7 +1745,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     let z = start;
     if (!fit?.flat) {
       // the reference frame (where locations are judged): undo this photo's fit
-      const kf = fit?.s || 1, refL = fit ? CENTER_X + (tl.x - fit.cx) / kf : tl.x, refT = fit ? REF[v].top + (tl.y - fit.top) / kf : tl.y;
+      const kf = fit?.s || 1, refL = fit ? CENTER_X + (tl.x - fit.cx) / kf : tl.x, refT = fit ? (v === "front" && fit.neck != null ? REF_NECK.front + (tl.y - fit.neck) / kf : REF[v].top + (tl.y - fit.top) / kf) : tl.y;
       const ppiRef = PX_PER_IN * sc;
       z = autoSpot(start, v, (refL + pw / kf / 2 - CENTER_X) / ppiRef, (refT - COLLAR_Y[v]) / ppiRef, wIn, wIn * rr);
     }

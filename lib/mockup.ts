@@ -9,7 +9,9 @@ export const PHOTO_W = 1000;
 export const PHOTO_H = 1250;
 export const PX_PER_IN = 34;
 export const CENTER_X = 499;
-export const COLLAR_Y = { front: 128, back: 100 } as const;
+/** where a drop is measured from on the reference photos: front = the bottom of the sewn neckline (Oct 20, Nick: "when
+ *  we say a drop, we mean it right from [the bottom of the neckline] … on every garment"), back = the back collar */
+export const COLLAR_Y = { front: 186, back: 100 } as const;
 
 export type View = "front" | "back";
 type Half = { x: number; y: number; rot: number; show: "left" | "right" };
@@ -17,25 +19,25 @@ type Loc = { view: View; dx?: number; drop?: number; /** art starts at the top o
   /** sleeve prints wrap over the sleeve: part shows on the front photo, the rest on the back photo */
   wrap?: { front: Half; back: Half } };
 
-/** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the collar). */
+/** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the bottom of the front neckline seam / the back collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
   // max print areas from the FBS apparel placement guide (width x height)
-  "Full Front": { view: "front", dx: 0, drop: 4, top: true, defW: 11, maxW: 13, maxH: 18 },
-  "Medium Front": { view: "front", dx: 0, drop: 3, defW: 8, maxW: 8, maxH: 8 },
-  "Center Chest": { view: "front", dx: 0, drop: 3, defW: 4.5, maxW: 5, maxH: 5 },
-  "Across Chest": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 4 },
-  "Left Chest": { view: "front", dx: 3.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
-  "Right Chest": { view: "front", dx: -3.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
-  Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
+  "Full Front": { view: "front", dx: 0, drop: 3, top: true, defW: 11, maxW: 13, maxH: 18 },
+  "Medium Front": { view: "front", dx: 0, drop: 1.5, defW: 8, maxW: 8, maxH: 8 },
+  "Center Chest": { view: "front", dx: 0, drop: 1.5, defW: 4.5, maxW: 5, maxH: 5 },
+  "Across Chest": { view: "front", dx: 0, drop: 1.5, defW: 11, maxW: 12, maxH: 4 },
+  "Left Chest": { view: "front", dx: 3.5, drop: 1.5, defW: 3.5, maxW: 5, maxH: 5 },
+  "Right Chest": { view: "front", dx: -3.5, drop: 1.5, defW: 3.5, maxW: 5, maxH: 5 },
+  Pocket: { view: "front", dx: 4.5, drop: 3.5, defW: 3, maxW: 4, maxH: 4 },
   // wearer's left sleeve is on the right of the front photo and the left of the back photo
   // Measured on the S&S photos: the sleeve's outer edge (the fold between front and back) runs at ~35° and the hem is square to it.
   // x/y is the center of the 3.5" x 3.5" max print area: right on the fold, with the bottom of the area ~0.5" above the sleeve hem.
   "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 912, y: 343, rot: -35, show: "left" }, back: { x: 92, y: 343, rot: 35, show: "right" } } },
   "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 88, y: 343, rot: 35, show: "right" }, back: { x: 908, y: 343, rot: -35, show: "left" } } },
-  "Left Vertical": { view: "front", dx: 4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
-  "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
-  "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
-  "Front Bottom Right": { view: "front", dx: -4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
+  "Left Vertical": { view: "front", dx: 4.5, drop: 2.5, defW: 4, maxW: 5, maxH: 14 },
+  "Right Vertical": { view: "front", dx: -4.5, drop: 2.5, defW: 4, maxW: 5, maxH: 14 },
+  "Front Bottom Left": { view: "front", dx: 4.5, drop: 20, defW: 4.5, maxW: 5, maxH: 6 },
+  "Front Bottom Right": { view: "front", dx: -4.5, drop: 20, defW: 4.5, maxW: 5, maxH: 6 },
   "Full Back": { view: "back", dx: 0, drop: 4, top: true, defW: 12, maxW: 13, maxH: 18 },
   "Medium Back": { view: "back", dx: 0, drop: 4, defW: 8, maxW: 8, maxH: 8 },
   "Upper Back (Yoke)": { view: "back", dx: 0, drop: 2, defW: 3.5, maxW: 4, maxH: 4 },
@@ -55,7 +57,7 @@ export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque
    *  front = the bottom of the front neckline at the center, back = the top of the back neck at the center (px) */
   neck?: number };
 /** the same points on the reference Gildan 5000 photos (bottom of the front collar rib; top of the back collar) */
-export const REF_NECK = { front: 156, back: 95 } as const;
+export const REF_NECK = { front: 186, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
@@ -68,6 +70,71 @@ function drawContained(x: CanvasRenderingContext2D, img: HTMLImageElement, W: nu
   const iw = img.naturalWidth || W, ih = img.naturalHeight || H, k = Math.min(W / iw, H / ih), dw = iw * k, dh = ih * k;
   x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
   x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
+/**
+ * The bottom of the sewn front neckline (Oct 20, Nick: "when we say a drop, we mean it right from [the bottom of the
+ * neckline] … on every garment … all you've got to figure each time is where that seam starts"): where the collar rib
+ * ends and the body begins; on a hoodie, the bottom of the hood. The neck area is blurred a little (heather speckle
+ * gone, seams kept), then every row is scored by how strongly a neckline-shaped curve (flat to deep U) through it lines
+ * up with edges, across ~5" of the neck (the label down the middle skipped). The seam is the last line before a long
+ * plain stretch of body (~1.5"); what counts as a line is set by the plain body lower down. Tuned on 30 garments Nick
+ * marked (29 right). Reading the middle strip alone stopped inside the rib whenever the rib matched the body color
+ * (the onesies on #40087: 20-40 px high, a different amount on every color). Null when no clear seam is found.
+ */
+function seamFront(d: Uint8ClampedArray, W: number, H: number, T: number, cx: number, s: number): number | null {
+  const HW = Math.round(90 * s), b0 = Math.round(380 * s), Y1 = Math.min(H - 2, Math.round(T + 460 * s)), eh = Y1 - T, ew = 2 * HW + 1;
+  if (eh < b0 + 20 || cx - HW - 2 < 0 || cx + HW + 2 >= W) return null;
+  // 5x5 box blur of the neck area
+  const R = 2, cw = ew + 2 * R, t = new Float32Array(cw * eh * 3), u = new Float32Array(ew * eh * 3);
+  for (let y = 0; y < eh; y++) for (let i = 0; i < cw; i++) {
+    const X = cx - HW - R + i;
+    for (let c = 0; c < 3; c++) {
+      let sum = 0, n = 0;
+      for (let k = -R; k <= R; k++) { const Y = T + y + k; if (Y < 0 || Y >= H) continue; sum += d[(Y * W + X) * 4 + c]; n++; }
+      t[(y * cw + i) * 3 + c] = sum / n;
+    }
+  }
+  for (let y = 0; y < eh; y++) for (let i = 0; i < ew; i++) for (let c = 0; c < 3; c++) {
+    let sum = 0;
+    for (let k = 0; k <= 2 * R; k++) sum += t[(y * cw + i + k) * 3 + c];
+    u[(y * ew + i) * 3 + c] = sum / (2 * R + 1);
+  }
+  // up/down color change at each pixel
+  const E = new Float32Array(ew * eh);
+  for (let y = 1; y < eh - 1; y++) for (let i = 0; i < ew; i++) {
+    const p = ((y - 1) * ew + i) * 3, q = ((y + 1) * ew + i) * 3;
+    E[y * ew + i] = Math.hypot(u[p] - u[q], u[p + 1] - u[q + 1], u[p + 2] - u[q + 2]);
+  }
+  const tag = Math.round(16 * s), S = new Float32Array(eh), aMax = 0.012 / s + 1e-9, aStep = 0.0005 / s;
+  for (let y0 = 0; y0 < eh; y0++) {
+    let best = 0;
+    for (let a = 0; a <= aMax; a += aStep) {
+      let sum = 0, n = 0;
+      for (let i = 0; i < ew; i++) {
+        const dx = i - HW;
+        if (Math.abs(dx) < tag) continue;
+        const y = Math.round(y0 + a * dx * dx);
+        if (y < 1 || y >= eh - 1) continue;
+        const o = y * ew + i;
+        sum += Math.max(E[o], E[o - ew], E[o + ew]); n++;
+      }
+      if (n > ew * 0.5 && sum / n > best) best = sum / n;
+    }
+    S[y0] = best;
+  }
+  const base = Array.from(S.slice(b0, eh)).sort((a, b) => a - b);
+  if (base.length < 10) return null;
+  const med = base[base.length >> 1], mad = base.map((v) => Math.abs(v - med)).sort((a, b) => a - b)[base.length >> 1];
+  const thr = med + Math.max(4 * mad, 0.3 * med, 1), L = Math.round(50 * s);
+  for (let y = Math.round(10 * s); y < Math.round(300 * s) && y + L < eh; y++) {
+    if (S[y] <= thr) continue;
+    let quiet = true;
+    for (let k = 1; k <= L; k++) if (S[y + k] > thr) { quiet = false; break; }
+    // too close to the shoulders to be a seam: no answer
+    if (quiet) return y < 40 * s ? null : T + y;
+  }
+  return null;
 }
 
 /** Measure the shirt outline on a photo (white background). Returns null when it can't find a clean outline (e.g. drawn tee). */
@@ -190,39 +257,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
     // top of the back neck: the first of the shirt down the middle
     for (let y = T; y < T + 200 * s && y < H; y++) if (band(y)) { neck = y; break; }
   } else {
-    // bottom of the front neckline: where the first stretch of the body's own color starts below the collar (the rib,
-    // the inside of the back, a printed tag, or the empty neck opening). When only the empty opening is seen (the rib
-    // is the shirt's own color, e.g. a black Gildan 5000), the rib's ~0.75" is added
-    const yb = Math.round(T + 0.3 * (B - T)); const acc = [0, 0, 0]; let m = 0; const samples: number[][] = [];
-    for (let y = yb - 10; y <= yb + 10; y++) { const v = band(y); if (v) { acc[0] += v[0]; acc[1] += v[1]; acc[2] += v[2]; m++; samples.push(v); } }
-    if (m) {
-      const body = acc.map((v) => v / m), dist = (v: number[]) => Math.hypot(v[0] - body[0], v[1] - body[1], v[2] - body[2]);
-      // a heathered or textured body varies row to row: the line between collar and chest is set above that noise
-      const sd = Math.sqrt(samples.reduce((a, v) => a + dist(v) ** 2, 0) / samples.length);
-      // a second, finer look when the collar is close to the body's color (an Athletic Heather onesie: grey rib, grey
-      // inside of the back, nothing found the first time)
-      for (const thr of [Math.max(24, 2.5 * sd + 10), Math.max(12, 1.5 * sd + 6)]) {
-      if (neck != null) break;
-      const off = (v: number[] | null) => !v || dist(v) > thr;
-      // the first stretch of plain body below the collar (Oct 20, Nick: the Heather Mauve onesie's print sat lower than
-      // the others): the last "off" row before it used to be taken, so a crease or shadow further down pushed the
-      // neckline into the chest
-      const end = Math.min(H, T + 170 * s), run = Math.max(8, Math.round(14 * s));
-      let seenOff = false, n0 = -1, sawBg = false;
-      for (let y = T; y < end; y++) {
-        if (off(band(y))) { seenOff = true; continue; }
-        if (!seenOff || y - T < 10 * s) continue;
-        let ok = true;
-        for (let k = 1; k < run && y + k < H; k++) if (off(band(y + k))) { ok = false; break; }
-        if (!ok) continue;
-        // ending on the empty neck opening (background) means the rib itself wasn't seen
-        for (let k = 1; k <= 6 && y - k >= T; k++) if (!band(y - k)) sawBg = true;
-        n0 = y + (sawBg ? Math.round(26 * s) : 0);
-        break;
-      }
-      if (n0 >= 0 && n0 - T >= 10 * s && n0 - T <= 200 * s) neck = n0;
-      }
-    }
+    neck = seamFront(d, W, H, T, Math.round(cx), s) ?? undefined;
   }
   return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}) };
 }
@@ -287,7 +322,11 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
 export function normOf(fit: Fit | null | undefined, view: View): { z: number; tx: number; ty: number } {
   if (!fit || fit.flat || !fit.body || !(fit.s > 0)) return { z: 1, tx: 0, ty: 0 };
   const z = Math.max(0.8, Math.min(1.4, 1 / fit.s));
-  return { z, tx: CENTER_X - z * fit.cx, ty: REF[view].top - z * fit.top };
+  // lined up by the neckline seam when it was found (Oct 20, Nick: "just line up the garments so they're all in the
+  // same place"): every color shows its seam at the same height, so the art sits in the same spot on each one
+  const byTop = REF[view].top - z * fit.top;
+  const ty = view === "front" && fit.neck != null ? Math.max(byTop - 80, Math.min(byTop + 80, REF_NECK.front - z * fit.neck)) : byTop;
+  return { z, tx: CENTER_X - z * fit.cx, ty };
 }
 
 /** Which garment photos a location shows on. */
@@ -317,11 +356,12 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   // the chest is: an infant's drop follows its width (Oct 20, Nick: The Bottles sat in the middle of the onesie; a Full
   // Front starts about 1.75" below the collar, not 3.2").
   // (second pass, Oct 20: still ~2" low on the 12M Bottles; a onesie's full front starts about an inch below the collar)
-  const dropK = b?.kind === "infant" ? k.kw * 0.6 : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
+  // (Oct 20, third pass: drops now count from the seam bottom; a 12M's Full Front starts ~1" below it)
+  const dropK = b?.kind === "infant" ? k.kw * 0.75 : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
   return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
 export const spotFor = (location: string, b?: Body | null): Loc => {
-  const s = fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 }, b);
+  const s = fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 1.5, defW: 4, maxW: 12, maxH: 14 }, b);
   // a bag or tote: never past its own print area, and centered on it (no collar to hang from)
   if (!b?.cap || s.wrap) return s;
   const maxW = Math.min(s.maxW, b.cap.maxW), maxH = Math.min(s.maxH, b.cap.maxH);
@@ -384,7 +424,7 @@ export function autoSpot(current: string, view: View, dxIn: number, topIn: numbe
     else z = "Full Back";
   } else {
     const mid = topIn + hIn / 2;
-    if (wIn <= 5 && hIn <= 6 && mid > 17 && off >= 1.75) z = `Front Bottom ${side}`;
+    if (wIn <= 5 && hIn <= 6 && mid > 15.5 && off >= 1.75) z = `Front Bottom ${side}`;
     else if (wIn <= 5 && hIn <= 5) z = off >= 1.75 ? (current === "Pocket" && fits("Pocket", wIn, hIn) ? "Pocket" : `${side} Chest`) : "Center Chest";
     else if (wIn <= 5 && off >= 2) z = `${side} Vertical`;
     else if (wIn > 8 && hIn <= 4) z = "Across Chest";
