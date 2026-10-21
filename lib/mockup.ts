@@ -592,7 +592,14 @@ export const SHIRT_COLORS: { group: string; colors: [string, string][] }[] = [
   { group: "Greens", colors: [["Mint Green", "#a9dcc0"], ["Lime", "#8cc63f"], ["Electric Green", "#3dbb4a"], ["Irish Green", "#1f9a4f"], ["Kelly Green", "#1f9a4f"], ["Military Green", "#5e6145"], ["Forest Green", "#1f3d2b"]] },
   { group: "Purples & browns", colors: [["Orchid", "#c9a3cf"], ["Violet", "#8a74b5"], ["Purple", "#4b2a7b"], ["Brown Savana", "#8b6f56"], ["Russet", "#6d3b2b"], ["Dark Chocolate", "#3b2a24"]] },
 ];
-const NAMED: Record<string, string> = Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h])));
+/** supplier color names not in the picker list (SanMar sends no color codes; Oct 21: A4's Scarlet showed grey) */
+const SUPPLIER_NAMED: Record<string, string> = {
+  scarlet: "#ba0c2f", cardinal: "#8c1d40", crimson: "#a6192e", "vegas gold": "#c5b358", "athletic gold": "#ffb81c", "electric blue": "#0084d4",
+  "safety yellow": "#e7ef3c", "athletic orange": "#f47321", "pastel mint": "#a8dcc4", "pastel blue": "#a7c6ed", "light yellow": "#f6eb9a",
+  graphite: "#53565a", silver: "#b1b3b3", "military green": "#5e6145", olive: "#5f6131", coral: "#f2786a", fuchsia: "#c6007e", teal: "#00808a",
+  forest: "#1f3d2b", kelly: "#1f9a4f", lime: "#8cc63f", maroon: "#6a1f2d", "true navy": "#1f2a44", "true royal": "#1d4f9c", "true red": "#c8102e",
+};
+const NAMED: Record<string, string> = { ...SUPPLIER_NAMED, ...Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h]))) };
 const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);
 /** a color name's color: exact, then without "heather"/(…), then any known color named inside it ("True Royal" → Royal) */
 export const guessHex = (color: string): string => {

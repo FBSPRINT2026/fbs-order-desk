@@ -710,6 +710,22 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
+  // a color the supplier gave no color code for (SanMar's Scarlet): the color read off its photo is saved on the
+  // garment, so the order page's logo tiles and close-ups show the shirt's real color too (Oct 21, Nick: #40092's
+  // logo box was grey)
+  const hexSaved = useRef(new Set<string>());
+  useEffect(() => {
+    for (const l of lines) {
+      const g = garmentFor(l); if (!g || !l.color) continue;
+      const f = fits[photo(l, "front")]; if (!f?.hex) continue;
+      const k = Object.keys(g.color_images || {}).find((c) => colorKey(c) === colorKey(l.color));
+      if (!k || g.color_images![k].hex) continue;
+      const key = g.id + "|" + k; if (hexSaved.current.has(key)) continue;
+      hexSaved.current.add(key);
+      const ci = { ...(g.color_images || {}), [k]: { ...g.color_images![k], hex: f.hex } };
+      void sb.from("garments").update({ color_images: ci }).eq("id", g.id).then(({ error }) => { if (!error) setCatalog((c) => c.map((x) => (x.id === g.id ? { ...x, color_images: ci } : x))); });
+    }
+  }, [fits, lines, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * The bottom of the sewn neckline on each photo (where drops are measured from), remembered per photo
    * (garment_necks): a staff fix, else the AI's pick from the lines the pixel finder saw (Oct 20, Nick: "ask AI vision
