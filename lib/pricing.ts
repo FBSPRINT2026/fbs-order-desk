@@ -127,7 +127,9 @@ export type GLine = {
 /** Garments that share the same imprints. Quantity breaks use the group total. */
 export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[];
   /** finishing made up on this order (a label and a price per piece), ticked by id in `finishing` like the list's */
-  customFin?: Finishing[]; youth?: boolean;
+  customFin?: Finishing[];
+  /** the customer's neck label set printed when Private Label is on (customers.neck_labels id; lib/neckLabels.ts) */
+  neckLabel?: string; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];

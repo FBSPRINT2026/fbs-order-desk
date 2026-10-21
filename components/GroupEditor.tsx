@@ -7,6 +7,8 @@ import type { Imprint } from "@/lib/pricing";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import FinishingPicker from "@/components/FinishingPicker";
+import NeckLabelPick, { isRelabel } from "@/components/NeckLabelPick";
+import type { NeckLabelSet } from "@/lib/neckLabels";
 
 /** save a custom finishing to the sometimes-used list (retail, or the wholesale contract list for a wholesale job) */
 export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
@@ -16,6 +18,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 type Props = {
   /** where finishing is picked: in this group (default), or once for the whole order below the groups */
   finishingAt?: "group" | "order";
+  /** the customer's neck label sets (Private Label prints one) and who they are */
+  neckSets?: NeckLabelSet[]; customerId?: string;
   gi: number;
   g: Group;
   gc: GroupCalc;
@@ -61,7 +65,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
   // you want to change all the items on this group to 2.25?")
@@ -460,6 +464,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   onAddCustom={(f) => update((x) => { x.customFin = [...(x.customFin || []), f]; x.finishing = [...new Set([...(x.finishing || []), f.id])]; })}
                   onRemoveCustom={(id) => update((x) => { x.customFin = (x.customFin || []).filter((f) => f.id !== id); x.finishing = (x.finishing || []).filter((y) => y !== id); })}
                   onSave={saveFinishing(!!gc.wholesale)} />
+                {neckSets && finList.some((f) => isRelabel(f) && (g.finishing || []).includes(f.id)) && (
+                  <NeckLabelPick sets={neckSets} value={g.neckLabel} groups={[g]} customerId={customerId} onChange={(id) => update((x) => { x.neckLabel = id || undefined; })} />
+                )}
               </div>
             )}
             </div>

@@ -25,6 +25,9 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
+import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
+import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
+import { isRelabel, mainSize } from "@/components/NeckLabelPick";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -828,6 +831,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);
 
+  // Private Label on this group: the customer's neck label set it prints, and the size shown (lib/neckLabels.ts)
+  const curGroup = order ? (orderGroups(order).find((x) => x.id === groupId) || orderGroups(order)[0] || null) : null;
+  const neckSet = curGroup && ((curGroup.finishing || []).includes("relabel") || (curGroup.customFin || []).some((f) => isRelabel(f) && (curGroup.finishing || []).includes(f.id)))
+    ? setFor((customers.find((c) => c.id === customerId) as (Customer & { neck_labels?: NeckLabelSet[] }) | undefined)?.neck_labels, curGroup.neckLabel) : null;
+  const neckSize = curGroup ? mainSize([curGroup]) : "M";
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
   /** The colors printed at a location: each logo color with the ink it's set to (or as uploaded), else the imprint's typed inks. */
   const inkList = (im: Imprint): { hex: string; name: string }[] => {
@@ -1167,6 +1175,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
     }
     { const ph2 = await photosCanvas(l, k * S, pad * S); x.drawImage(ph2, pad, top, ph2.width / S, ph2.height / S); }
+    // Private Label: the inside of the neck with their label, in the top corner of the last photo (Oct 20, Nick: "it
+    // needs to be something we add to the mock-up, just like the sleeve… show the tag removed and it printed inside")
+    if (neckSet) {
+      const lab = await labelFor(neckSet, neckSize, guessHex(l.color)).catch(() => null);
+      const iw = Math.round(pw * 0.34), ih = Math.round(iw * 0.8), ix = pad + (views.length - 1) * (pw + pad) + pw - iw - 6, iy = top + 6;
+      x.save(); x.shadowColor = "rgba(0,0,0,0.18)"; x.shadowBlur = 8; x.fillStyle = "#fff"; x.beginPath(); x.roundRect(ix - 3, iy - 3, iw + 6, ih + 26, 8); x.fill(); x.restore();
+      drawNeckView(x, ix, iy, iw, ih, guessHex(l.color), lab, neckSet.widthIn || 2.5, `Inside neck · ${neckSize}`);
+    }
     if (!bare) {
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
       views.forEach((v, i) => x.fillText(v.toUpperCase(), pad + i * (pw + pad), top + ph + 18));
@@ -2037,6 +2053,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 onEnd={settleHere}
                 onPick={pickColor} />
             ))}
+            {neckSet && line && (
+              <div className="mk-neck-card" title="Private Label: the maker's tag cut out and their label printed inside the neck">
+                <NeckLabelView set={neckSet} size={neckSize} shirtHex={guessHex(line.color)} width={190} />
+                <small>{neckSet.name || "Neck label"}{neckSet.content ? ` · ${neckSet.content}` : ""}</small>
+              </div>
+            )}
           </div>
             <div className="mk-closeups" ref={cuRef} style={{ gridTemplateColumns: `repeat(${cuCols},minmax(0,1fr))` }}>
               {/* front locations first, then back, sleeves always last (in order-form order within each) */}

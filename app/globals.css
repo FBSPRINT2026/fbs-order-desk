@@ -10419,3 +10419,44 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .fin-price{display:inline-flex;align-items:center;gap:2px;font-size:13px}
 .fin-price input{width:68px}
 .fin-price small{color:var(--muted,#888)}
+/* Neck labels (customer → Artwork → Brand standards), Oct 20 */
+.nl-sec{margin-top:18px;border-top:1px solid var(--line,#e5e5e5);padding-top:14px}
+.nl-sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
+.nl-card{border:1px solid var(--line,#e2e2e2);border-radius:10px;padding:12px;margin-top:10px;background:var(--card,#fff)}
+.nl-card-top{display:flex;gap:16px;flex-wrap:wrap}
+.nl-fields{flex:1 1 320px;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;align-content:start}
+.nl-fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#666)}
+.nl-fields label.wide{grid-column:1/-1}
+.nl-fields input{font-size:13.5px}
+.nl-in{display:inline-flex;align-items:center;gap:3px}.nl-in input{width:70px}
+.nl-prev{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;max-width:360px}
+.nl-prev-sz{display:flex;flex-wrap:wrap;gap:4px;width:100%}
+.nlv{margin:0}.nlv canvas{display:block}
+.nlv-miss{font-size:11px;color:var(--muted,#888);margin-top:2px}
+.nl-mode{display:flex;gap:6px;margin:12px 0 8px;flex-wrap:wrap}
+.nl-sizes{display:flex;flex-direction:column;gap:8px}
+.nl-sg-h{font-size:11.5px;font-weight:600;color:var(--muted,#666);margin-bottom:4px}
+.nl-sg-row{display:flex;flex-wrap:wrap;gap:8px}
+.nl-slot{position:relative;width:76px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.nl-slot-pic{width:76px;height:60px;border:1.5px dashed #c9ced6;border-radius:6px;background:#fafbfc;display:grid;place-items:center;cursor:pointer;overflow:hidden;padding:2px}
+.nl-slot.has .nl-slot-pic{border-style:solid;border-color:#d9dde3;background:#fff}
+.nl-slot-pic img{max-width:100%;max-height:100%;object-fit:contain}
+.nl-plus{font-size:20px;color:#9aa3b0}.nl-ext{font-size:11px;font-weight:700;color:#5b6475}
+.nl-slot-z{font-size:12px;font-weight:700}
+.nl-slot-x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:1px solid #d0d4da;background:#fff;font-size:12px;line-height:14px;cursor:pointer;padding:0}
+.nl-tpl-art{position:relative;display:inline-block;max-width:340px;border:1px solid #e1e4e8;border-radius:6px;background:#fff;touch-action:none}
+.nl-tpl-art img{display:block;max-width:100%;user-select:none}
+.nl-tpl-box{position:absolute;border:2px solid #0a7ba6;background:rgba(10,123,166,.12);cursor:move;display:grid;place-items:center;touch-action:none}
+.nl-tpl-box span{font:700 11px system-ui;color:#0a7ba6}
+.nl-tpl-box i{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#0a7ba6;border:2px solid #fff;border-radius:3px;cursor:nwse-resize}
+.nl-tpl-add{border:1.5px dashed #c9ced6;border-radius:8px;background:#fafbfc;padding:18px 16px;cursor:pointer;font-size:13px;color:#4a566b}
+.nl-tpl-file{font-size:13px}
+.nl-card-f{display:flex;justify-content:flex-end;margin-top:8px}
+.nl-off{margin-top:8px;font-size:13px}.nl-off-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
+@media (max-width:640px){.nl-fields{grid-template-columns:1fr}}
+/* the neck label picked on an order (Private Label) */
+.nlp{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;margin-top:10px;width:100%}
+.nlp-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.nlp-l{font-weight:600}
+.nlp select{font-size:13px;max-width:320px}
+.mk-neck-card{display:flex;flex-direction:column;gap:4px;align-self:flex-start;font-size:11.5px;color:var(--muted,#666);max-width:190px}

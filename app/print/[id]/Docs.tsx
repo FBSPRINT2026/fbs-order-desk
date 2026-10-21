@@ -7,6 +7,7 @@ import { guessHex, spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
+import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
 /** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
 const MATCH_PREV = "Printed to match your previous order";
@@ -64,6 +65,22 @@ function ArtPic({ d, des, pic, style, hires }: { d: Imprint; des: Design | null;
   );
 }
 
+/**
+ * The work order's neck label line (Private Label): which set, its content, ink and width, and how many of each size's
+ * label to print (Oct 20, Nick: "each size gets its own neck label").
+ */
+function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: string }[]): string {
+  if (!fins.some(isRelabel)) return "";
+  const ns = setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel);
+  const n: Record<string, number> = {};
+  for (const l of g.lines) for (const [z, q] of Object.entries(l.sizes || {})) if (+(q as number) > 0) n[z] = (n[z] || 0) + +(q as number);
+  const counts = SIZES.filter((z) => n[z]).map((z) => `${z} ${n[z]}`).join(" · ");
+  if (!ns) return `NECK LABELS: cut the maker's tag out and print their label. No label set picked: check the customer's Brand standards → Neck labels. ${counts}`;
+  const missing = ns.mode === "per_size" ? SIZES.filter((z) => n[z] && !ns.files?.[z]) : ns.template ? [] : ["the design"];
+  return [`NECK LABELS: cut the maker's tag out, print "${ns.name || "neck label"}"${ns.content ? ` (${ns.content})` : ""}${ns.ink ? ` in ${ns.ink}` : ""}${ns.widthIn ? `, ${ns.widthIn}" wide` : ""}.`,
+    `Print: ${counts}`, missing.length ? `No art on file for: ${missing.join(", ")}` : "", ns.note || ""].filter(Boolean).join(" ");
+}
+
 // ───────────────────────────── work order ─────────────────────────────
 export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string }) {
   const { o, cust, groups, c } = p;
@@ -89,6 +106,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         const noteParts = [
           first && p.notes ? p.notes : "",
           gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
+          neckLine(cust, g, gc?.finishing || []),
           first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method ? ` (${o.ship_method})` : ""}` : "",
         ].filter(Boolean);
         const pg = starts[gi];
@@ -464,7 +482,7 @@ export function InvoiceDoc(p: DocData) {
                             </div>
                           );
                         })}
-                        {i === lines.length - 1 && gc.finishing.length > 0 && <div className="prl">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
+                        {i === lines.length - 1 && gc.finishing.length > 0 && <div className="prl">Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</div>}
                       </td>
                       <td className="r">{lc.qty}</td><td className="r">{money(lc.each)}</td><td className="r"><b>{money(lc.sub)}</b></td>
                     </tr>
