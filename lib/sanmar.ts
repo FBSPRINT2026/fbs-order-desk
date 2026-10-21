@@ -170,6 +170,31 @@ async function psProduct(version: "2.0.0" | "1.0.0", op: string, inner: string, 
   } finally { clearTimeout(t); }
 }
 
+/**
+ * A style's companion styles on SanMar (Oct 21, Nick: "sanmar has all the info. they call it companion styles": 1717 →
+ * 4410, 6014, 1745, 6030, 9360, 3023CL, 1745Y, 9018). From PromoStandards GetProduct (RelatedProduct), and any
+ * companion fields in SanMar's own product info. Style numbers, upper case; [] when SanMar has none or doesn't answer.
+ */
+export async function sanmarCompanions(style: string): Promise<string[]> {
+  const st = style.trim().toUpperCase(), out = new Set<string>();
+  for (const v of ["2.0.0", "1.0.0"] as const) {
+    try {
+      const x = await psProduct(v, "GetProduct", `<shar:localizationCountry>US</shar:localizationCountry><shar:localizationLanguage>en</shar:localizationLanguage><shar:productId>${esc(st)}</shar:productId>`, 25000);
+      for (const b of blocks(x, "RelatedProduct")) { const id = tag(b, "productId").trim().toUpperCase(); if (id && id !== st) out.add(id); }
+      if (out.size) break;
+    } catch { /* the other version, then SanMar's own service */ }
+  }
+  if (!out.size) {
+    try {
+      const rows = await sanmarInfoRows(st);
+      const x = rows.slice(0, 3).join("");
+      for (const m of x.matchAll(/<(?:[\w-]+:)?(\w*[Cc]ompanion\w*)(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w-]+:)?\1>/g))
+        for (const id of unesc(m[2]).split(/[\s,;|]+/)) { const t = id.trim().toUpperCase(); if (/^[A-Z0-9-]{2,15}$/.test(t) && t !== st) out.add(t); }
+    } catch { /* none */ }
+  }
+  return [...out];
+}
+
 /** Every style SanMar sells right now (style numbers only). */
 export async function sanmarSellableStyles(): Promise<{ styles: string[]; version: string; parts: number }> {
   let last: unknown = null;

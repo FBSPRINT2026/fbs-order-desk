@@ -10714,3 +10714,10 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-hd select{font-size:12.5px;min-width:0}
 .jv-hd input{font-size:12.5px;padding:4px 6px}
 .jv-wheel-only{flex:none}
+/* + Add youth on an order's garments (Oct 21) */
+.yth-note{display:flex;align-items:center;gap:10px;font-size:12.5px;padding:5px 10px;margin:4px 0;border-radius:8px;background:var(--surface-2)}
+.yth-ask{display:flex;flex-direction:column;gap:7px;font-size:12.5px;padding:9px 11px;margin:6px 0;border:1px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.yth-g{display:flex;flex-wrap:wrap;gap:6px}
+.yth-g .chip small{color:var(--ink-3);font-weight:500}
+.yth-k{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.yth-k input{width:160px}

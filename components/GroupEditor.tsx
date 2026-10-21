@@ -71,6 +71,39 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   // you want to change all the items on this group to 2.25?")
   const [askAll, setAskAll] = useState<null | { li: number; v: number }>(null);
   const [blockMsg, setBlockMsg] = useState("");
+  /**
+   * "+ Add youth" (Oct 21, Nick: "1717… the corresponding youth is the 9018… Gildan 5000 → 5000B… if you don't know,
+   * ask me and I can key it in and you can remember it"): the adult garment's youth style goes on a new line in the
+   * same color. Known pairs (/api/garments/youth) and one clear catalog match go straight on; otherwise it asks, with
+   * the catalog's best guesses, and remembers the answer.
+   */
+  type YGuess = { style: string; brand: string; title: string; supplier: string; sure?: boolean };
+  const [yth, setYth] = useState<null | { li: number; fix: number | null; adult: string; brand: string; guesses: YGuess[]; typed: string; busy: boolean }>(null);
+  const [ythNote, setYthNote] = useState<null | { text: string; li: number; youthLi: number; adult: string; brand: string }>(null);
+  const adultLi = () => { for (let i = g.lines.length - 1; i >= 0; i--) { const l = g.lines[i]; if (l.style.trim() && !(l.sizeRun || []).some((z) => (YOUTH_SIZES as readonly string[]).includes(z))) return i; } return -1; };
+  async function putYouth(li: number, fix: number | null, style: string, brand: string, supplier: string | undefined, learn: "staff" | "catalog" | false) {
+    const adult = g.lines[li];
+    const st = style.trim().toUpperCase();
+    const at = fix ?? g.lines.length;
+    if (fix == null) update((x) => { x.lines.push({ ...newGLine(), color: adult.color }); });
+    const hit = findStyle(st, brand) || findStyle(st) || (onLookup ? await onLookup(st, undefined, supplier === "sanmar" ? "sanmar" : undefined) : null);
+    onStyle(at, hit?.style || st, hit || undefined);
+    if (learn) void fetch("/api/garments/youth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adult: adult.style, adultBrand: adult.brand, youth: hit?.style || st, youthBrand: hit?.brand || brand, source: learn }) }).catch(() => null);
+    setYth(null);
+    setYthNote({ text: `Youth of ${adult.style}: ${hit?.style || st}${hit?.description ? ` · ${hit.description}` : ""}${learn === "catalog" ? " (matched in the catalog)" : learn === "staff" ? " (remembered for next time)" : ""}`, li, youthLi: at, adult: adult.style, brand: adult.brand || "" });
+  }
+  async function addYouth(fix: number | null = null, liIn?: number) {
+    const li = liIn ?? adultLi();
+    setYthNote(null);
+    if (li < 0) { setYthNote({ text: "Pick the adult style first, then Add youth.", li: -1, youthLi: -1, adult: "", brand: "" }); return; }
+    const l = g.lines[li];
+    setYth({ li, fix, adult: l.style.trim(), brand: l.brand || "", guesses: [], typed: "", busy: true });
+    const j = await fetch(`/api/garments/youth?style=${encodeURIComponent(l.style.trim())}&brand=${encodeURIComponent(l.brand || "")}&title=${encodeURIComponent(l.garment || "")}`).then((r) => r.json()).catch(() => ({})) as { known?: { style: string; brand: string } | null; guesses?: YGuess[] };
+    if (fix == null && j.known) { await putYouth(li, null, j.known.style, j.known.brand, undefined, false); return; }
+    const sure = fix == null ? (j.guesses || []).find((x) => x.sure) : undefined;
+    if (sure) { await putYouth(li, null, sure.style, sure.brand, sure.supplier, "catalog"); return; }
+    setYth({ li, fix, adult: l.style.trim(), brand: l.brand || "", guesses: j.guesses || [], typed: "", busy: false });
+  }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
   const frozen = !!onMockup && !!g.mockupAt && !g.mockupSkipped;
@@ -269,10 +302,30 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
           <span className="a-de gl-foot"><span className="gl-adds">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
+          <button className="btn sm ghost" type="button" disabled={!!yth?.busy} title="The youth style that goes with this garment, in the same color" onClick={() => void addYouth()}>{yth?.busy ? "Finding the youth style…" : "+ Add youth"}</button>
           </span><span className="lbl2">Total pieces</span></span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
+        {ythNote && !yth && (
+          <div className="yth-note">{ythNote.text}
+            {ythNote.youthLi >= 0 && <button type="button" className="linkbtn" onClick={() => void addYouth(ythNote.youthLi, ythNote.li)}>Not right?</button>}
+            <button type="button" className="btn icon ghost sm" aria-label="Close" onClick={() => setYthNote(null)}>✕</button>
+          </div>
+        )}
+        {yth && !yth.busy && (
+          <div className="yth-ask">
+            <b>Youth style for {yth.brand ? `${yth.brand} ` : ""}{yth.adult}?</b> <span className="faint">It&apos;s remembered for next time.</span>
+            {yth.guesses.length > 0 && <div className="yth-g">{yth.guesses.map((x) => (
+              <button key={x.style} type="button" className="chip" title={x.title} onClick={() => void putYouth(yth.li, yth.fix, x.style, x.brand, x.supplier, "staff")}><b>{x.style}</b> <small>{x.title.replace(/\.\s*\S+$/, "")}</small></button>))}</div>}
+            <div className="yth-k">
+              <input type="text" value={yth.typed} placeholder="Youth style #" aria-label="Youth style number" autoFocus
+                onChange={(e) => setYth({ ...yth, typed: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && yth.typed.trim()) void putYouth(yth.li, yth.fix, yth.typed, yth.brand, undefined, "staff"); }} />
+              <button type="button" className="btn sm primary" disabled={!yth.typed.trim()} onClick={() => void putYouth(yth.li, yth.fix, yth.typed, yth.brand, undefined, "staff")}>{yth.fix != null ? "Change it" : "Add youth"}</button>
+              <button type="button" className="btn sm ghost" onClick={() => setYth(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* the mockup big on the left, the imprints beside it (Oct 15, Nick: "make it large and move to the left of the
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
