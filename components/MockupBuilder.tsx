@@ -1899,12 +1899,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           </div>
         );
       })()}
-      <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
+      {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
+      {!portal && orderId ? <a className="back" href={`/shop/orders/${orderId}`}>← Order #{order?.number || ""}</a>
+        : <Link className="back" href={portal ? backHref || "/portal" : "/shop/artwork"}>← {portal ? "Dashboard" : "Artwork"}</Link>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => { setAdjust(false); void saveAll(imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed)); }}>{saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={async () => {
+          setAdjust(false);
+          const vis = imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed);
+          saveOk.current = false;
+          await saveAll(vis);
+          // a visual mockup saved: straight back to the order, loaded fresh so the new mockup shows (Oct 20, Nick)
+          if (vis && saveOk.current && orderId && !portal) { setMsg("Saved. Opening the order…"); setTimeout(() => location.assign(`/shop/orders/${orderId}`), 600); }
+        }}>{saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
       </div>
 
         {pdfOpen && (
