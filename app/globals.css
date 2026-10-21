@@ -10465,3 +10465,24 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .dcs-site{display:flex;flex-direction:column;gap:3px;margin-top:4px;max-width:420px}
 .dcs-site label{font-size:12px;color:var(--muted,#666)}
 .dc-sweep{font-size:12.5px;white-space:nowrap}
+/* Design catalog: product tabs and AI suggestions (Oct 20) */
+.dc-kinds{margin:10px 0 2px;flex-wrap:wrap}
+.dc-kinds .chip .faint{font-size:11px;margin-left:3px}
+.dc-ai{margin:12px 0;border:1px solid #c9dcf5;border-radius:12px;background:#f5f9ff;padding:8px 12px}
+.dc-ai summary{cursor:pointer;font-size:13.5px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.dc-ai-none{font-size:13px;padding:6px 0}
+.dc-ai-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.dc-ai-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:13.5px;margin-bottom:8px}
+.dc-ai-tag{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:#e3efff;color:#1d4f91}
+.dc-ai-tag.split{background:#FFF4D6;color:#8A5A00}
+.dc-ai-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.dc-ai-g{display:flex;flex-direction:column;gap:5px;border:1px solid var(--line-2);border-radius:8px;padding:8px;min-width:0}
+.dc-ai-g input{font-weight:700;font-size:13px}
+.dc-ai-pics{display:flex;gap:4px;flex-wrap:wrap}
+.dc-ai-pic{width:84px;height:84px;border-radius:6px;background:#f4f5f7;display:grid;place-items:center;overflow:hidden;font-size:11px}
+.dc-ai-pic img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.dc-ai-n{font-size:13px}
+.dc-ai-why{font-size:12px;line-height:1.35}
+.dc-ai-jobs{display:flex;flex-wrap:wrap;gap:4px}
+.dc-ai-f{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.dc-ai-f input{flex:1 1 200px;min-width:0;font-size:13px}

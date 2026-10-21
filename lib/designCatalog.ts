@@ -23,9 +23,39 @@ export type CatalogRules = {
   /** job ref ("p:<archived id>" / "o:<order id>") → design key (moved by hand); "" = not a design (left out) */ jobs?: Record<string, string>;
   /** design keys not shown */ hidden?: string[];
   /** design key → its cover picture in storage (chosen in the browser from the mockups; "-" = none of them would do) */ covers?: Record<string, string>;
+  /** AI suggestions staff turned down ("they're different" / "keep together"): never suggested again, and told to the AI */
+  aiNo?: { sig: string; text: string }[];
+  /** the last AI review's suggestions still waiting on staff */ review?: AiReview;
 };
+/**
+ * AI review of a catalog (Oct 20, Nick, Peticolas: "use AI to look at this and see when orders should be combined…
+ * look at the mockups and see how they compare on each order… a couple different versions of the koozies, so they
+ * have to be busted out"). Nothing changes until staff taps Merge or Split.
+ */
+export type AiMerge = { sig: string; keys: string[]; into: string; name: string; why: string };
+export type AiSplit = { sig: string; key: string; groups: { name: string; refs: string[]; why: string }[] };
+export type AiReview = { at: string; by: string; merges: AiMerge[]; splits: AiSplit[] };
+export const mergeSig = (keys: string[]) => `m:${[...keys].sort().join("+")}`;
+/** a split is answered per design: "keep together" holds until staff asks again */
+export const splitSig = (key: string) => `s:${key}`;
+
+/** what a garment is, for the catalog's tabs (Oct 20, Nick: "a tab for t-shirts, koozies, hats, other items") */
+export type Kind = "tees" | "sweats" | "hats" | "drink" | "other";
+export const KINDS: { k: Kind; label: string }[] = [
+  { k: "tees", label: "T-shirts" }, { k: "sweats", label: "Sweatshirts & jackets" }, { k: "hats", label: "Hats" }, { k: "drink", label: "Koozies & cups" }, { k: "other", label: "Other items" },
+];
+export function kindOf(text: string): Kind | "" {
+  const t = ` ${String(text || "").toLowerCase()} `;
+  if (/koozie|cooler|\bcups?\b|tumbler|bottle|\bmugs?\b|\bglass(es|ware)?\b|\bstein\b|drinkware|\bcusc|\bjit\d/.test(t)) return "drink";
+  if (/\bhats?\b|\bcaps?\b|beanie|snapback|trucker|visor|richardson|\b112\b|flexfit|\beza\b/.test(t)) return "hats";
+  if (/hood|sweat|fleece|pullover|quarter.?zip|1\/[24].?zip|jacket|soft ?shell|windbreaker|\bvests?\b|\bpc90h?\b|\b3719\b|\b3901\b|\b18500\b|\b18000\b/.test(t)) return "sweats";
+  if (/t-?shirts?|\btees?\b|\bshirts?\b|ringer|\btanks?\b|jersey|long ?sleeve|\bcvc\b|onesie|bodysuit|\bpolos?\b|\b6210|\b3001|\b3413|\b64000|\b5000\b|\bpc54|\bpc61|\bdm130|\b6010|\b245\b|\b246\b|\b293\b|\b6937\b|\b3480/.test(t)) return "tees";
+  if (/banner|tin tacker|\bsigns?\b|sticker|decal|frisbee|flying disc|towel|\btotes?\b|\bbags?\b|poster|\bflags?\b|patch|magnet|\bpins?\b|coaster|apron/.test(t)) return "other";
+  return "";
+}
 export type CatalogJob = { ref: string; src: "printavo" | "portal"; id: string; number: string; date: string; title: string; qty: number; status: string;
-  /** a split order (one order, several designs): the other designs on it */ split?: string[] };
+  /** a split order (one order, several designs): the other designs on it */ split?: string[];
+  /** the order's art picture (signed: the print's mockup, else its first garment mockup or file), to compare by eye */ pic?: string; kind?: Kind | "" };
 export type CatalogVersion = {
   key: string; n: number; label: string; style: string; brand: string; garment: string; color: string;
   first: string; last: string; times: number; pieces: number; prints: string[];
@@ -36,6 +66,7 @@ export type CatalogDesign = {
   key: string; name: string; names: string[]; first: string; last: string; orders: number; pieces: number;
   thumb: string; versions: CatalogVersion[]; jobs: CatalogJob[];
   /** the cover was chosen and saved; else `pics` are the files to choose it from (signed, newest first) */ coverSet: boolean; pics: string[];
+  /** what it's been printed on (T-shirts, hats…), most pieces first */ kinds: Kind[];
 };
 export type Catalog = { designs: CatalogDesign[]; other: CatalogJob[]; rules: CatalogRules; customer: string;
   /** designs staff deleted (only the grouping: the orders are untouched), to bring back */ hidden: { key: string; name: string; orders: number }[] };
@@ -177,6 +208,13 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     (data || []).forEach((d, j) => { if (d.signedUrl) signed.set(part[j], d.signedUrl); });
   }
 
+  // each order's own picture and kind (for the AI review and the tabs)
+  for (const r of [...[...byKey.values()].flat(), ...otherRaws]) {
+    const p = r.cover?.full || r.cover?.thumb || r.lines.find((l) => l.full || l.thumb)?.full || r.lines.find((l) => l.thumb)?.thumb || r.pics[0] || "";
+    r.job.pic = (p && signed.get(p)) || undefined;
+    r.job.kind = r.lines.map((l) => kindOf(`${l.style} ${l.brand} ${l.garment}`)).find(Boolean) || kindOf(r.job.title) || (r.named || []).map((n) => kindOf(n.text)).find(Boolean) || "";
+  }
+
   const designs: CatalogDesign[] = [];
   const hidden: Catalog["hidden"] = [];
   for (const [key, rs] of byKey) {
@@ -218,6 +256,11 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
       first: rs[0].job.date, last: rs[rs.length - 1].job.date, orders: rs.length, pieces: rs.reduce((n, r) => n + (r.lines.reduce((m, l) => m + l.pieces, 0) || r.job.qty), 0),
       thumb: saved ? (saved === "-" ? "" : signed.get(saved) || latestPic) : latestPic, versions, jobs: rs.map((r) => r.job).reverse(),
       coverSet: !!saved && (saved === "-" || signed.has(saved)), pics,
+      kinds: (() => {
+        const by = new Map<Kind, number>();
+        for (const r of rs) { const k = (r.job.kind || "other") as Kind; by.set(k, (by.get(k) || 0) + (r.job.qty || 1)); }
+        return [...by.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+      })(),
     });
   }
   designs.sort((a, b) => b.last.localeCompare(a.last) || b.orders - a.orders);

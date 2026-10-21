@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildCatalog, type CatalogRules } from "@/lib/designCatalog";
+import { buildCatalog, type AiReview, type CatalogRules } from "@/lib/designCatalog";
 import { safeUrl } from "@/lib/safeUrl";
 
 export const runtime = "nodejs";
@@ -12,6 +12,8 @@ export const maxDuration = 60;
  * A customer's designs catalog (lib/designCatalog.ts): GET ?customer=<id>. POST changes how it's grouped:
  *  { customer, op: "rename", key, name } · { op: "merge", key, into } · { op: "move", ref, into } (a job to another
  *  design; into "" = not a design) · { op: "hide" | "show", key } · { op: "reset", key } (undo staff's changes to it).
+ * The AI review's answers (app/api/designs/ai): { op: "review", review } saves the suggestions; { op: "mergeMany", keys,
+ *  into, name, sig } · { op: "split", key, groups: [{ name, refs }], sig } apply one; { op: "aiNo", sig, text } turns one down.
  */
 export async function GET(req: Request) {
   const v = await getViewer();
@@ -36,14 +38,55 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = (await req.json().catch(() => ({}))) as { customer?: string; op?: string; key?: string; name?: string; into?: string; ref?: string; data?: string; src?: string; site?: string };
+  const b = (await req.json().catch(() => ({}))) as { customer?: string; op?: string; key?: string; name?: string; into?: string; ref?: string; data?: string; src?: string; site?: string;
+    keys?: string[]; groups?: { name?: string; refs?: string[] }[]; sig?: string; text?: string; review?: AiReview };
   const cid = String(b.customer || "");
   if (!cid) return NextResponse.json({ error: "Which customer?" }, { status: 400 });
   const admin = createAdminClient();
   const { data: row } = await admin.from("customer_designs").select("rules").eq("customer_id", cid).maybeSingle();
   const r: CatalogRules = { names: {}, merge: {}, jobs: {}, hidden: [], ...((row?.rules || {}) as CatalogRules) };
   const key = String(b.key || "").slice(0, 200), into = String(b.into ?? "").slice(0, 200);
+  const sig = String(b.sig || "").slice(0, 4000);
+  /** a suggestion answered (applied or turned down) leaves the review */
+  const answered = () => { if (r.review && sig) r.review = { ...r.review, merges: r.review.merges.filter((m) => m.sig !== sig), splits: r.review.splits.filter((x) => x.sig !== sig) }; };
   switch (b.op) {
+    case "review": {
+      const rv = b.review;
+      if (!rv || !Array.isArray(rv.merges) || !Array.isArray(rv.splits)) return NextResponse.json({ error: "No review to save." }, { status: 400 });
+      const saved: AiReview = { at: new Date().toISOString(), by: v.email || "", merges: rv.merges.slice(0, 200), splits: rv.splits.slice(0, 200) };
+      if (JSON.stringify(saved).length > 400_000) return NextResponse.json({ error: "That review is too big to save." }, { status: 400 });
+      r.review = saved; break;
+    }
+    case "mergeMany": {
+      // the AI's "same design": every key into `into`, under the name staff kept
+      const ks = (Array.isArray(b.keys) ? b.keys : []).map((k) => String(k).slice(0, 200)).filter(Boolean);
+      if (!into || ks.length < 2 || !ks.includes(into)) return NextResponse.json({ error: "Which designs?" }, { status: 400 });
+      for (const k of ks) if (k !== into) r.merge![k] = into;
+      if (r.merge![into] && ks.includes(r.merge![into])) delete r.merge![into]; // never a loop
+      if ((b.name || "").trim()) r.names![into] = String(b.name).trim().slice(0, 120);
+      answered(); break;
+    }
+    case "split": {
+      // the AI's "these are different designs": the biggest group stays the design, each other group becomes its own
+      // (a new key; its orders moved to it by hand, so they stay there)
+      const gs = (Array.isArray(b.groups) ? b.groups : []).map((g) => ({ name: String(g.name || "").trim().slice(0, 120), refs: (Array.isArray(g.refs) ? g.refs : []).map((x) => String(x).slice(0, 160)).filter(Boolean) })).filter((g) => g.refs.length);
+      if (!key || gs.length < 2) return NextResponse.json({ error: "Nothing to split." }, { status: 400 });
+      const stay = gs.reduce((a, g) => (g.refs.length > a.refs.length ? g : a), gs[0]);
+      if (stay.name) r.names![key] = stay.name;
+      gs.filter((g) => g !== stay).forEach((g, i) => {
+        const nk = `d${Date.now().toString(36)}${i}`;
+        for (const ref of g.refs) r.jobs![ref] = nk;
+        r.names![nk] = g.name || "New design";
+      });
+      // its own orders that were moved here by hand stay with the group the AI put them in
+      for (const ref of stay.refs) if (r.jobs![ref] && r.jobs![ref] !== key) r.jobs![ref] = key;
+      answered(); break;
+    }
+    case "aiNo": {
+      if (!sig) break;
+      r.aiNo = [...(r.aiNo || []).filter((x) => x.sig !== sig), { sig, text: String(b.text || "").slice(0, 600) }].slice(-300);
+      answered(); break;
+    }
     case "rename": if (!key) break; if ((b.name || "").trim()) r.names![key] = String(b.name).trim().slice(0, 120); else delete r.names![key]; break;
     case "merge": if (!key || !into || key === into) break; r.merge![key] = into; break;
     case "move": if (!b.ref) break; r.jobs![String(b.ref).slice(0, 120)] = into; break;

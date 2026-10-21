@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
-import type { Catalog, CatalogDesign, CatalogJob } from "@/lib/designCatalog";
+import type { AiMerge, AiSplit, Catalog, CatalogDesign, CatalogJob, Kind } from "@/lib/designCatalog";
 import { coverJpeg, drawPic, isPdf, picRank } from "@/lib/pdfPic";
 import { pdfPicture } from "@/lib/printavoArt";
 
@@ -18,6 +18,20 @@ const n0 = (n: number) => n.toLocaleString("en-US");
 const words = (t: string) => t.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w && !["the", "a", "an", "and", "of", "tee", "shirt"].includes(w)).map((w) => w.replace(/s$/, ""));
 const titleHas = (title: string, name: string) => { const t = new Set(words(title)), n = words(name); return n.length > 0 && n.every((w) => t.has(w)); };
 const jobHref = (j: CatalogJob) => (j.src === "printavo" ? `/shop/archive/${j.id}` : `/shop/orders/${j.id}`);
+// the catalog's tabs (lib/designCatalog KINDS; kept here so the client doesn't pull the server file)
+const KIND_TABS: { k: Kind; label: string }[] = [
+  { k: "tees", label: "T-shirts" }, { k: "sweats", label: "Sweatshirts & jackets" }, { k: "hats", label: "Hats" }, { k: "drink", label: "Koozies & cups" }, { k: "other", label: "Other items" },
+];
+/** a tiny fingerprint of a picture: the same mockup on two orders has (nearly) the same one */
+function dhash(c: HTMLCanvasElement) {
+  const o = document.createElement("canvas"); o.width = 9; o.height = 8;
+  const x = o.getContext("2d")!; x.drawImage(c, 0, 0, 9, 8);
+  const d = x.getImageData(0, 0, 9, 8).data; let bits = "";
+  for (let y = 0; y < 8; y++) for (let i = 0; i < 8; i++) { const a = (y * 9 + i) * 4, b = a + 4; bits += d[a] + d[a + 1] + d[a + 2] > d[b] + d[b + 1] + d[b + 2] ? "1" : "0"; }
+  return bits;
+}
+const near = (a: string, b: string) => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && ++n > 5) return false; return true; };
+const yr = (d: string) => d.slice(0, 4);
 
 export default function CustomerDesigns({ customerId }: { customerId: string }) {
   const [cat, setCat] = useState<Catalog | null>(null);
@@ -26,6 +40,8 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
   const [sort, setSort] = useSticky<"recent" | "most" | "az">("designs.sort", "recent");
   const [open, setOpen] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useSticky<"all" | Kind>("designs.kind", "all");
+  const [ai, setAi] = useState<{ step: string; done: number; of: number } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -96,7 +112,91 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
     await Promise.all([run(), run()]);
   }
 
-  async function change(body: Record<string, string>) {
+  /**
+   * Check with AI (Oct 20, Nick: "look at the mockups and see how they compare on each order"): every order's picture
+   * is drawn small here; orders with the same mockup count as one picture. The AI is asked, a batch at a time, which
+   * designs are really several artworks (to split) and which designs are the same artwork (to merge). The answers are
+   * saved as suggestions for staff to take or turn down.
+   */
+  async function runAi() {
+    if (!cat || ai) return;
+    setErr("");
+    const ds = cat.designs;
+    const urls = [...new Set(ds.flatMap((d) => [...d.jobs.map((j) => j.pic || ""), d.thumb]).filter(Boolean))];
+    const drawn = new Map<string, { hash: string; data: string } | null>();
+    let done = 0;
+    setAi({ step: "Looking at each order's mockup", done: 0, of: urls.length });
+    const queue = [...urls];
+    const draw = async () => {
+      while (queue.length) {
+        const u = queue.shift()!;
+        const c = await drawPic(u, 360).catch(() => null);
+        drawn.set(u, c && picRank(c) >= 0 ? { hash: dhash(c), data: coverJpeg(c, 280) } : null);
+        setAi({ step: "Looking at each order's mockup", done: ++done, of: urls.length });
+      }
+    };
+    await Promise.all([draw(), draw(), draw(), draw()]);
+
+    // what each order was printed on
+    const onOf = new Map<string, string>();
+    for (const d of ds) for (const v of d.versions) for (const j of v.jobs) onOf.set(j.ref, [onOf.get(j.ref), [v.brand, v.style, v.color].filter(Boolean).join(" ")].filter(Boolean).join(", "));
+    const jobLine = (j: CatalogJob) => `#${j.number} ${fmtDate(j.date)}, ${n0(j.qty)} pcs, "${j.title}"${onOf.get(j.ref) ? ` on ${onOf.get(j.ref)}` : ""}`;
+
+    // split: each design's orders, one picture per different mockup
+    type P = { id: string; refs: string[]; label: string; data?: string };
+    const splitIn: { key: string; name: string; pics: P[] }[] = [];
+    for (const d of ds) {
+      if (d.jobs.length < 2) continue;
+      const groups: { hash: string; data: string; jobs: CatalogJob[] }[] = [];
+      for (const j of d.jobs) {
+        const p = j.pic ? drawn.get(j.pic) : null;
+        if (!p) continue;
+        const g = groups.find((x) => near(x.hash, p.hash));
+        if (g) g.jobs.push(j); else groups.push({ hash: p.hash, data: p.data, jobs: [j] });
+      }
+      if (groups.length < 2) continue;
+      splitIn.push({ key: d.key, name: d.name, pics: groups.slice(0, 30).map((g, i) => ({ id: `P${i + 1}`, refs: g.jobs.map((j) => j.ref), data: g.data,
+        label: `${g.jobs.length} order${g.jobs.length === 1 ? "" : "s"}: ${g.jobs.slice(0, 5).map(jobLine).join("; ")}${g.jobs.length > 5 ? ` and ${g.jobs.length - 5} more` : ""}` })) });
+    }
+    const batches: (typeof splitIn)[] = [];
+    for (const d of splitIn) { const last = batches[batches.length - 1]; if (last && last.reduce((n, x) => n + x.pics.length, 0) + d.pics.length <= 32) last.push(d); else batches.push([d]); }
+    const mergeBatches: CatalogDesign[][] = [];
+    const byName = [...ds].sort((a, b) => a.name.localeCompare(b.name));
+    for (let i = 0; i < byName.length; i += 80) mergeBatches.push(byName.slice(i, i + 80));
+    const total = batches.length + mergeBatches.length;
+    let asked = 0;
+    setAi({ step: "Asking the AI", done: 0, of: total });
+    const post = async (body: unknown) => {
+      const r = await fetch("/api/designs/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+      setAi({ step: "Asking the AI", done: ++asked, of: total });
+      if (!r?.ok || j.error) throw new Error(j.error || "The AI check didn't finish.");
+      return j;
+    };
+    try {
+      const splits: AiSplit[] = [], merges: AiMerge[] = [];
+      const sq = [...batches];
+      const runSplits = async () => { while (sq.length) { const j = await post({ customer: customerId, phase: "split", designs: sq.shift() }); splits.push(...(j.splits || [])); } };
+      await Promise.all([runSplits(), runSplits()]);
+      for (const mb of mergeBatches) {
+        const j = await post({ customer: customerId, phase: "merge", designs: mb.map((d) => {
+          const pic = (d.thumb && drawn.get(d.thumb)) || d.jobs.map((x) => (x.pic ? drawn.get(x.pic) : null)).find(Boolean) || null;
+          const on = [...new Set(d.versions.map((v) => [v.brand, v.style].filter(Boolean).join(" ")).filter(Boolean))].slice(0, 4).join(", ");
+          return { key: d.key, name: d.name, data: pic?.data, label: `${d.orders} order${d.orders === 1 ? "" : "s"} ${yr(d.first)}${yr(d.last) !== yr(d.first) ? `–${yr(d.last)}` : ""}; ordered as: ${d.names.slice(0, 5).map((x) => `"${x}"`).join(", ")}${on ? `; printed on ${on}` : ""}` };
+        }) });
+        merges.push(...(j.merges || []));
+      }
+      // the main design of a merge: the one ordered most
+      const ordersOf = new Map(ds.map((d) => [d.key, d.orders] as const));
+      for (const m of merges) m.into = [...m.keys].sort((a, b) => (ordersOf.get(b) || 0) - (ordersOf.get(a) || 0))[0];
+      await change({ op: "review", review: { at: "", by: "", splits, merges } });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "The AI check didn't finish.");
+    }
+    setAi(null);
+  }
+
+  async function change(body: Record<string, unknown>) {
     setBusy(true); setErr("");
     const r = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, ...body }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
@@ -105,11 +205,22 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
     setCat(j);
   }
 
+  // the tabs: only kinds this customer has; a tab with nothing here shows everything
+  const kindCount = useMemo(() => { const m = new Map<Kind, number>(); for (const d of cat?.designs || []) for (const k of d.kinds || []) m.set(k, (m.get(k) || 0) + 1); return m; }, [cat]);
+  const kindNow: "all" | Kind = kind !== "all" && kindCount.get(kind) ? kind : "all";
+  // the AI's suggestions still waiting, minus any that no longer fit the catalog
+  const review = useMemo(() => {
+    const rv = cat?.rules.review; if (!cat || !rv) return null;
+    const byKey = new Map(cat.designs.map((d) => [d.key, d] as const));
+    const merges = rv.merges.filter((m) => m.keys.filter((k) => byKey.has(k)).length >= 2).map((m) => ({ ...m, keys: m.keys.filter((k) => byKey.has(k)) })).map((m) => ({ ...m, into: m.keys.includes(m.into) ? m.into : m.keys[0] }));
+    const splits = rv.splits.map((x) => { const d = byKey.get(x.key); if (!d) return null; const here = new Set(d.jobs.map((j) => j.ref)); const groups = x.groups.map((g) => ({ ...g, refs: g.refs.filter((r) => here.has(r)) })).filter((g) => g.refs.length); return groups.length >= 2 ? { ...x, groups } : null; }).filter((x): x is AiSplit => !!x);
+    return { at: rv.at, merges, splits };
+  }, [cat]);
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const ds = (cat?.designs || []).filter((d) => !t || d.name.toLowerCase().includes(t) || d.names.some((n) => n.toLowerCase().includes(t)) || d.versions.some((v) => `${v.style} ${v.color} ${v.garment}`.toLowerCase().includes(t)));
+    const ds = (cat?.designs || []).filter((d) => kindNow === "all" || (d.kinds || []).includes(kindNow)).filter((d) => !t || d.name.toLowerCase().includes(t) || d.names.some((n) => n.toLowerCase().includes(t)) || d.versions.some((v) => `${v.style} ${v.color} ${v.garment}`.toLowerCase().includes(t)));
     return [...ds].sort((a, b) => (sort === "most" ? b.orders - a.orders || b.pieces - a.pieces : sort === "az" ? a.name.localeCompare(b.name) : b.last.localeCompare(a.last)));
-  }, [cat, q, sort]);
+  }, [cat, q, sort, kindNow]);
 
   if (err && !cat) return <div className="panel"><div className="panel-b err">{err}</div></div>;
   if (!cat) return <div className="panel"><div className="panel-b faint">Gathering their designs from every order…</div></div>;
@@ -130,10 +241,19 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
             {site ? (sweep && sweep.done < sweep.of
               ? <span className="faint dc-sweep">Looking on {site.replace(/^https?:\/\/(www\.)?/, "")}… {sweep.done} of {sweep.of} · {sweep.found} found</span>
               : <button type="button" className="btn sm" title={`Look up every design on ${site.replace(/^https?:\/\//, "")} and use its picture there`} onClick={() => void findAll()}>{sweep ? `Found ${sweep.found} of ${sweep.of} · again` : "Find pictures on their website"}</button>) : null}
+            {ai ? <span className="faint dc-sweep">AI: {ai.step}… {ai.done} of {ai.of}</span>
+              : <button type="button" className="btn sm" disabled={busy} title="The AI compares every order's mockup: designs that are really different artwork get split, and the same artwork under different names gets merged. You approve each one." onClick={() => void runAi()}>{review ? "Check with AI again" : "Check with AI"}</button>}
             <div className="chips" role="radiogroup" aria-label="Sort">
               {([["recent", "Last ordered"], ["most", "Most ordered"], ["az", "A–Z"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (sort === k ? " on" : "")} aria-pressed={sort === k} onClick={() => setSort(k)}>{l}</button>)}
             </div>
           </div>
+          {kindCount.size > 1 && (
+            <div className="chips dc-kinds" role="tablist" aria-label="What it's printed on" data-toolbar>
+              <button type="button" role="tab" className={"chip" + (kindNow === "all" ? " on" : "")} aria-selected={kindNow === "all"} onClick={() => setKind("all")}>All <span className="faint">{cat.designs.length}</span></button>
+              {KIND_TABS.filter((t) => kindCount.get(t.k)).map((t) => <button key={t.k} type="button" role="tab" className={"chip" + (kindNow === t.k ? " on" : "")} aria-selected={kindNow === t.k} onClick={() => setKind(t.k)}>{t.label} <span className="faint">{kindCount.get(t.k)}</span></button>)}
+            </div>
+          )}
+          {review && <AiReviewPanel review={review} cat={cat} busy={busy} change={change} />}
           {list.length === 0 && <div className="faint" style={{ padding: 12 }}>{q ? "No design matches." : "No orders yet."}</div>}
           <div className="dc-grid">
             {list.map((d) => (
@@ -164,7 +284,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
   );
 }
 
-function DesignDetail({ d, all, customerId, busy, change, back, setCover }: { d: CatalogDesign; all: CatalogDesign[]; customerId: string; busy: boolean; change: (b: Record<string, string>) => Promise<void>; back: () => void; setCover: (url: string) => void }) {
+function DesignDetail({ d, all, customerId, busy, change, back, setCover }: { d: CatalogDesign; all: CatalogDesign[]; customerId: string; busy: boolean; change: (b: Record<string, unknown>) => Promise<void>; back: () => void; setCover: (url: string) => void }) {
   const [picking, setPicking] = useState(false);
   const [name, setName] = useState(d.name);
   const [into, setInto] = useState("");
@@ -340,7 +460,7 @@ function VerPic({ thumb, full }: { thumb: string; full: string }) {
   return src ? <img src={src} alt="" loading="lazy" /> : <span className="faint">No mockup</span>;
 }
 
-function JobRow({ j, all, here, busy, change }: { j: CatalogJob; all: CatalogDesign[]; here?: string; busy: boolean; change: (b: Record<string, string>) => Promise<void> }) {
+function JobRow({ j, all, here, busy, change }: { j: CatalogJob; all: CatalogDesign[]; here?: string; busy: boolean; change: (b: Record<string, unknown>) => Promise<void> }) {
   return (
     <div className="dc-jr">
       <Link href={jobHref(j)}>#{j.number}</Link>
@@ -351,6 +471,77 @@ function JobRow({ j, all, here, busy, change }: { j: CatalogJob; all: CatalogDes
         {all.filter((x) => x.key !== here).sort((a, b) => a.name.localeCompare(b.name)).map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
         {here && <option value="-">Not a design (leave it out)</option>}
       </select>
+    </div>
+  );
+}
+
+/**
+ * The AI's suggestions (Check with AI): designs to merge (the same artwork under different names) and designs to split
+ * (one name, different artwork, like Peticolas's koozies). Each one is taken or turned down by hand; what's turned
+ * down is remembered and told to the AI next time.
+ */
+function AiReviewPanel({ review, cat, busy, change }: { review: { at: string; merges: AiMerge[]; splits: AiSplit[] }; cat: Catalog; busy: boolean; change: (b: Record<string, unknown>) => Promise<void> }) {
+  const byKey = new Map(cat.designs.map((d) => [d.key, d] as const));
+  const n = review.merges.length + review.splits.length;
+  return (
+    <details className="dc-ai" open={n > 0}>
+      <summary>
+        <b>AI suggestions</b> <span className="faint">{n ? `${review.splits.length} to split · ${review.merges.length} to merge` : "nothing left to look at"}{review.at ? ` · checked ${fmtDate(review.at)}` : ""}</span>
+      </summary>
+      {n === 0 && <div className="faint dc-ai-none">Every suggestion has been answered. Check with AI again after new orders come in.</div>}
+      {review.splits.map((x) => { const d = byKey.get(x.key); return d ? <AiSplitCard key={x.sig} x={x} d={d} busy={busy} change={change} /> : null; })}
+      {review.merges.map((m) => <AiMergeCard key={m.sig} m={m} ds={m.keys.map((k) => byKey.get(k)!).filter(Boolean)} busy={busy} change={change} />)}
+    </details>
+  );
+}
+
+function AiSplitCard({ x, d, busy, change }: { x: AiSplit; d: CatalogDesign; busy: boolean; change: (b: Record<string, unknown>) => Promise<void> }) {
+  const [names, setNames] = useState(x.groups.map((g) => g.name));
+  const jobs = new Map(d.jobs.map((j) => [j.ref, j] as const));
+  return (
+    <div className="dc-ai-card">
+      <div className="dc-ai-h"><span className="dc-ai-tag split">Split</span><b>{d.name}</b><span className="faint">looks like {x.groups.length} different designs</span></div>
+      <div className="dc-ai-groups">
+        {x.groups.map((g, i) => {
+          const js = g.refs.map((r) => jobs.get(r)).filter((j): j is CatalogJob => !!j);
+          const pics = [...new Set(js.map((j) => j.pic || "").filter(Boolean))].slice(0, 4);
+          return (
+            <div key={i} className="dc-ai-g">
+              <div className="dc-ai-pics">{pics.length ? pics.map((p) => <span key={p} className="dc-ai-pic"><VerPic thumb={isPdf(p) ? "" : p} full={p} /></span>) : <span className="dc-ai-pic faint">No mockup</span>}</div>
+              <input value={names[i] || ""} aria-label="Name for this design" onChange={(e) => setNames((a) => a.map((v, k) => (k === i ? e.target.value : v)))} />
+              {g.why && <div className="faint dc-ai-why">{g.why}</div>}
+              <div className="dc-ai-jobs">{js.map((j) => <Link key={j.ref} href={jobHref(j)} className="dc-job" title={j.title}>#{j.number} · {fmtDate(j.date)}</Link>)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="dc-ai-f">
+        <button type="button" className="btn sm primary" disabled={busy} onClick={() => void change({ op: "split", key: d.key, sig: x.sig, groups: x.groups.map((g, i) => ({ name: (names[i] || g.name).trim(), refs: g.refs })) })}>Split into {x.groups.length} designs</button>
+        <button type="button" className="btn sm ghost" disabled={busy} onClick={() => void change({ op: "aiNo", sig: x.sig, text: `"${d.name}": staff said all its orders are one design, though the AI saw ${x.groups.map((g) => `"${g.name}"`).join(" and ")}${x.groups[0]?.why ? ` (${x.groups.map((g) => g.why).filter(Boolean).join("; ")})` : ""}` })}>Keep together</button>
+      </div>
+    </div>
+  );
+}
+
+function AiMergeCard({ m, ds, busy, change }: { m: AiMerge; ds: CatalogDesign[]; busy: boolean; change: (b: Record<string, unknown>) => Promise<void> }) {
+  const [name, setName] = useState(m.name || ds.find((d) => d.key === m.into)?.name || "");
+  return (
+    <div className="dc-ai-card">
+      <div className="dc-ai-h"><span className="dc-ai-tag">Merge</span><b>The same design?</b>{m.why && <span className="faint">{m.why}</span>}</div>
+      <div className="dc-ai-groups">
+        {ds.map((d) => (
+          <div key={d.key} className="dc-ai-g">
+            <div className="dc-ai-pics"><span className="dc-ai-pic">{d.thumb ? <img src={d.thumb} alt="" loading="lazy" /> : <span className="faint">No mockup</span>}</span></div>
+            <b className="dc-ai-n">{d.name}</b>
+            <div className="faint dc-ai-why">{d.orders} order{d.orders === 1 ? "" : "s"} · {n0(d.pieces)} pcs · {yr(d.first)}{yr(d.last) !== yr(d.first) ? `–${yr(d.last)}` : ""}</div>
+          </div>
+        ))}
+      </div>
+      <div className="dc-ai-f">
+        <input value={name} aria-label="Name to keep" onChange={(e) => setName(e.target.value)} />
+        <button type="button" className="btn sm primary" disabled={busy || !name.trim()} onClick={() => void change({ op: "mergeMany", keys: ds.map((d) => d.key), into: ds.some((d) => d.key === m.into) ? m.into : ds[0].key, name: name.trim(), sig: m.sig })}>Merge into one</button>
+        <button type="button" className="btn sm ghost" disabled={busy} onClick={() => void change({ op: "aiNo", sig: m.sig, text: `${ds.map((d) => `"${d.name}"`).join(" and ")} are different designs (staff said so${m.why ? `; the AI had thought: ${m.why}` : ""})` })}>They&apos;re different</button>
+      </div>
     </div>
   );
 }
