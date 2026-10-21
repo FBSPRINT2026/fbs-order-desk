@@ -48,7 +48,9 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
  * and each color is shot on a slightly different form, so the shirt's size, height and sleeve angle change from photo to photo.
  * s = size vs the reference, cx = body center, top = top of the collar; sleeves = where each sleeve print sits on this photo.
  */
-export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } };
+export type Fit = { /** how big prints are drawn on this photo, against the reference */ s: number;
+  /** how big the photo itself is, against the reference, when that differs from `s` (a boxy tee: shown at its height,
+   *  printed by its chest); photo pixels ↔ reference pixels use this */ zs?: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } };
   /** a bag or tote (flat, no collar): its body on the photo (px) and pixels per inch from its real width */
   flat?: { cx: number; top: number; w: number; h: number; ppi: number };
   /** a shirt: its side seams across the body (px) and the bottom of the hem, as found on this photo */
@@ -167,7 +169,7 @@ function seamFront(d: Uint8ClampedArray, W: number, H: number, T: number, cx: nu
  */
 export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: string; y: number }[]; image: string; enhanced: string } | null {
   if (!fit.neckLines?.length) return null;
-  const W = PHOTO_W, H = PHOTO_H, s = fit.s;
+  const W = PHOTO_W, H = PHOTO_H, s = fit.zs || fit.s;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const cx0 = c.getContext("2d"); if (!cx0) return null;
   drawContained(cx0, img, W, H);
@@ -256,7 +258,10 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   // or hoodie's arms hang beside the body and read as width. Then the height alone sets the scale (unless the photo
   // cuts the garment off at the top or bottom, when the height can't be trusted).
   const sw = bodyW / ref.bodyW, sh = (B - T) / ref.h, cut = T <= 2 || B >= H - 3;
-  const s = Math.abs(sw - sh) > 0.1 && !cut ? (opts.tee && sw > sh ? sw : sh) : (sw + sh) / 2;
+  const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
+  // a short-sleeve tee that reads wider than its height: the photo is still shown at its height (Oct 21, Nick: the
+  // adult A4 came out "really small" when the whole photo was shrunk to its chest), and prints are sized by the chest
+  const ps = Math.abs(sw - sh) > 0.1 && !cut && opts.tee && sw > sh ? sw : s;
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;
@@ -341,7 +346,7 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
     const med = (a: number[]) => a.sort((m, n) => m - n)[a.length >> 1];
     return "#" + [med(rs), med(gs), med(bs)].map((v) => v.toString(16).padStart(2, "0")).join("");
   })();
-  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}), ...(hex ? { hex } : {}) };
+  return { s: ps, ...(ps !== s ? { zs: s } : {}), cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}), ...(hex ? { hex } : {}) };
 }
 
 /**
@@ -403,7 +408,7 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
  */
 export function normOf(fit: Fit | null | undefined, view: View): { z: number; tx: number; ty: number } {
   if (!fit || fit.flat || !fit.body || !(fit.s > 0)) return { z: 1, tx: 0, ty: 0 };
-  const z = Math.max(0.8, Math.min(1.4, 1 / fit.s));
+  const z = Math.max(0.8, Math.min(1.4, 1 / (fit.zs || fit.s)));
   // lined up by the neckline seam when it was found (Oct 20, Nick: "just line up the garments so they're all in the
   // same place"): every color shows its seam at the same height, so the art sits in the same spot on each one
   const byTop = REF[view].top - z * fit.top;
@@ -568,8 +573,11 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   const artY = dropIn != null || spot.top ? top : top + Math.max(0, (ah - h) / 2);
   // move from the reference photo onto this photo's shirt
   // down from this photo's neckline when it was found (the same distance on every shirt), else from the collar top
-  const mx = (v: number) => (fit ? fit.cx + (v - CENTER_X) * k : v), my = (v: number) => (fit ? (fit.neck != null ? fit.neck + (v - REF_NECK[spot.view]) * k : fit.top + (v - REF[spot.view].top) * k) : v);
-  return { view: spot.view, x: mx(cx - w / 2), y: my(artY), w: w * k, h: h * k, rot: 0, clip: "" as "" | "left" | "right", area: { x: mx(cx - aw / 2), y: my(top), w: aw * k, h: ah * k }, k };
+  // where things sit follows the photo's own scale (zs); how big prints are follows the print scale (k). The same on
+  // every photo but a boxy tee's (shown at its height, printed by its chest).
+  const z = fit?.zs || k;
+  const mx = (v: number) => (fit ? fit.cx + (v - CENTER_X) * z : v), my = (v: number) => (fit ? (fit.neck != null ? fit.neck + (v - REF_NECK[spot.view]) * z : fit.top + (v - REF[spot.view].top) * z) : v);
+  return { view: spot.view, x: mx(cx) - (w * k) / 2, y: my(top) + (artY - top) * k, w: w * k, h: h * k, rot: 0, clip: "" as "" | "left" | "right", area: { x: mx(cx) - (aw * k) / 2, y: my(top), w: aw * k, h: ah * k }, k };
 }
 
 /**

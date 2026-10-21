@@ -795,7 +795,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const adjusted = (fit: Fit | null | undefined, l: Line | undefined, v: View): Fit | null | undefined => {
     const a = fit && !fit.flat ? adjOf(l, v) : null;
     if (!a || !fit) return fit;
-    return { ...fit, cx: fit.cx + a.dx * fit.s, top: fit.top + a.dy * fit.s, ...(fit.neck != null ? { neck: fit.neck + a.dy * fit.s } : {}), s: fit.s * (a.k || 1) };
+    const zs = fit.zs || fit.s;
+    return { ...fit, cx: fit.cx + a.dx * zs, top: fit.top + a.dy * zs, ...(fit.neck != null ? { neck: fit.neck + a.dy * zs } : {}), s: fit.s * (a.k || 1), ...(fit.zs ? { zs: fit.zs } : {}) };
   };
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** move / resize one style's print areas on one side (photo pixels; k = how much bigger), and save it for next time */
@@ -803,7 +804,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const g = l && garmentFor(l), fit = l && fitFor(l, v);
     if (!g || !fit || fit.flat) return;
     const cur = adjOf(l, v) || { dx: 0, dy: 0, k: 1 };
-    const s0 = fit.s || 1;
+    const s0 = fit.zs || fit.s || 1;
     const next: FitAdj = { dx: cur.dx + dxPx / s0, dy: cur.dy + dyPx / s0, k: Math.max(0.6, Math.min(1.6, (cur.k || 1) * kMul)) };
     setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [v]: next } }));
     queueSave(g.id, v, next);
@@ -1818,7 +1819,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     let z = start;
     if (!fit?.flat) {
       // the reference frame (where locations are judged): undo this photo's fit
-      const kf = fit?.s || 1, refL = fit ? CENTER_X + (tl.x - fit.cx) / kf : tl.x, refT = fit ? (v === "front" && fit.neck != null ? REF_NECK.front + (tl.y - fit.neck) / kf : REF[v].top + (tl.y - fit.top) / kf) : tl.y;
+      const kf = fit?.zs || fit?.s || 1, refL = fit ? CENTER_X + (tl.x - fit.cx) / kf : tl.x, refT = fit ? (v === "front" && fit.neck != null ? REF_NECK.front + (tl.y - fit.neck) / kf : REF[v].top + (tl.y - fit.top) / kf) : tl.y;
       const ppiRef = PX_PER_IN * sc;
       z = autoSpot(start, v, (refL + pw / kf / 2 - CENTER_X) / ppiRef, (refT - COLLAR_Y[v]) / ppiRef, wIn, wIn * rr);
     }
