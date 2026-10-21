@@ -13,6 +13,7 @@ import type { HelperAction, HelperMsg, HelperOrder } from "@/lib/orderHelperShar
 export async function orderHelper(admin: SupabaseClient, s: Settings, a: {
   orderId: string; by: string; message: string; order: HelperOrder; thread: HelperMsg[];
   images: { media_type: "image/jpeg" | "image/png" | "image/webp"; data: string }[]; pairs: { adult: string; youth: string }[];
+  /** the pictures are the snip sent earlier, sent again */ picsEarlier?: boolean; model?: string;
 }): Promise<{ ok: true; reply: string; actions: HelperAction[] } | { ok: false; error: string }> {
   const o = a.order;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -23,7 +24,7 @@ export async function orderHelper(admin: SupabaseClient, s: Settings, a: {
     o.notes ? `Notes: ${o.notes.slice(0, 600)}` : "",
     ...o.groups.map((g, gi) => [
       `Group ${gi}${g.name ? ` "${g.name}"` : ""}:`,
-      ...g.lines.map((l, li) => `  line ${li}: ${l.style || "(no style)"}${l.brand ? ` ${l.brand}` : ""} · ${l.color || "(no color)"}${l.description ? ` · ${l.description}` : ""} · sizes ${Object.keys(l.sizes).length ? Object.entries(l.sizes).map(([k, v]) => `${k} ${v}`).join(", ") : "none"}${l.each != null ? ` · $${l.each.toFixed(2)} each${l.priceSetByHand ? " (typed by hand)" : ""}` : ""}${l.sizeCharges && Object.keys(l.sizeCharges).length ? ` · extra each: ${Object.entries(l.sizeCharges).map(([k, v]) => `${k} +$${v}`).join(", ")}` : ""}${l.colors?.length ? ` · comes in: ${l.colors.slice(0, 80).join(", ")}` : ""}`),
+      ...g.lines.map((l, li) => `  line ${li}: ${l.style || "(no style)"}${l.brand ? ` ${l.brand}` : ""} · ${l.color || "(no color)"}${l.description ? ` · ${l.description}` : ""}${l.run?.length ? ` · ${l.run.some((z) => /^Y/.test(z)) && !l.run.some((z) => /^(S|M|L|XL)$/.test(z)) ? "YOUTH" : "ADULT"} sizes ${l.run.join("/")}` : ""} · ordered ${Object.keys(l.sizes).length ? Object.entries(l.sizes).map(([k, v]) => `${k} ${v}`).join(", ") : "none"}${l.each != null ? ` · $${l.each.toFixed(2)} each${l.priceSetByHand ? " (typed by hand)" : ""}` : ""}${l.sizeCharges && Object.keys(l.sizeCharges).length ? ` · extra each: ${Object.entries(l.sizeCharges).map(([k, v]) => `${k} +$${v}`).join(", ")}` : ""}${l.colors?.length ? ` · comes in: ${l.colors.slice(0, 80).join(", ")}` : ""}`),
       ...g.imprints.map((d) => `  print: ${d.method} ${d.location}, ${d.colors} color${d.colors === 1 ? "" : "s"}${d.inks ? ` (${d.inks})` : ""}${d.size ? `, ${d.size}` : ""}`),
     ].join("\n")),
   ].filter(Boolean).join("\n");
@@ -31,12 +32,12 @@ export async function orderHelper(admin: SupabaseClient, s: Settings, a: {
     orderText,
     a.pairs.length ? `\nYouth styles that go with adult styles (adult → youth): ${a.pairs.map((p) => `${p.adult} → ${p.youth}`).join(", ")}` : "",
     a.thread.length ? `\nThe conversation so far:\n${a.thread.slice(-14).map((m) => `${m.role === "staff" ? "Staff" : "You"}: ${m.text}${m.images ? ` [${m.images} picture${m.images === 1 ? "" : "s"}]` : ""}${m.done?.length ? ` [done: ${m.done.join("; ")}]` : ""}`).join("\n")}` : "",
-    `\nStaff now says: ${a.message || "(see the picture)"}${a.images.length ? ` [${a.images.length} picture${a.images.length === 1 ? "" : "s"} attached]` : ""}`,
+    `\nStaff now says: ${a.message || "(see the picture)"}${a.images.length ? ` [${a.images.length} picture${a.images.length === 1 ? "" : "s"} attached${a.picsEarlier ? ": the snip from earlier in this conversation, attached again so you can read it" : ""}]` : ""}`,
   ].filter(Boolean).join("\n");
 
   const num = { type: "number" };
   const r = await askClaude<{ reply: string; actions?: HelperAction[] }>({
-    task: "order_helper", model: s.assistant.ai.model, maxTokens: 4000, timeoutMs: 58_000, admin,
+    task: "order_helper", model: a.model || s.assistant.ai.model, maxTokens: 4000, timeoutMs: 58_000, admin,
     images: a.images, ctx: { order_id: a.orderId, by: a.by },
     tool: { name: "answer", description: "Your reply to staff and the changes to make to the order.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, short. Say what you changed (with the totals), or ask what you need to know." },
@@ -60,9 +61,11 @@ How the order works: garments are lines in groups; lines in the same group share
 
 Doing it:
 - Change things with actions; the page makes them right away (staff can Undo). Then reply in one or two short sentences with what you did and the totals. Only take quantities, sizes and prices from what staff or the snip say; never make numbers up.
-- Filling in from a snip when the order already has the garments: put each row's sizes on the line it matches (same color, the closest color name: "Grey Soft" → a line in Soft Grey or Heather Grey) with set_sizes, mode replace. Don't add a line the order already has.
+- Staff usually set up the garments first (styles and colors, adult and youth lines) and want you to fill them in. Think like the shop's order manager who knows this order: read every row and column of the snip, and put each color's adult sizes on the ADULT line of that color and its youth sizes on the YOUTH line of that color (same group), with set_sizes, mode replace. A color name that isn't spelled the same goes on the closest one ("Grey Soft" → Athletic Heather / Heather Grey / Soft Grey). Don't add a line the order already has.
+- A color in the snip that has no line: if it's clear which styles it goes on (one group, or the other colors of the same rows are in one group), add it with add_line on the same styles (adult and youth) in that group, like "Same style, new color", and say so.
+- The picture attached is the snip staff sent; read the numbers from it yourself. Never ask staff to type out numbers that are in a picture you have.
 - Building it: add_line for each style and color, with its sizes; a new group by name (e.g. "Shirts") when the order has no garments yet, otherwise the group they belong to.
-- When you can't tell something you need (which style a color is, which line a row goes on, whether "Extra Red" adds to Red or is its own line), ask in one short message listing exactly what you need ("What style is the Black, the Grey Soft and the Red? Same style for all three?"), and do the parts that are clear. When staff answer, do it.
+- Ask only when a row could really go two different ways (two groups with different styles could take the Black; "Extra Red" could add to Red or be its own line). Do everything that's clear first, then ask in one short message that says what you'd do ("I'd put Black and Grey Soft on the Bella+Canvas lines and add Extra Red to Red: OK?") so staff can just say yes. When staff answer ("yes", "fill in what I made", "the styles are already on the order"), do it: don't ask again.
 - Sizes: ${SIZES.join(", ")}. Adult S → S, Adult XL → XL, XXL / 2X → 2XL, Youth M → YM, Youth XL → YXL, etc. Skip totals, subtotals and grand totals; check your numbers add up to the totals shown.
 - Youth sizes go on a youth style, not the adult one: the youth line of the same color if the order has one; else add one with the youth style that goes with the adult style (the list above, or one you know for sure, like Gildan 5000 → 5000B); if you don't know it, ask.
 - Prices: set_price "each" is the whole price per piece (garment and prints); null puts it back on the price list. set_size_charge is the extra each for a big size ("make the 2XLs $2 more" → {"2XL": 2}); leave group/line out to change every line. A fee is a line on the invoice (setup, rush, art, shipping). Discount: pct or amt.

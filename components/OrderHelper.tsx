@@ -37,6 +37,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo }: {
   const [text, setText] = useState("");
   const [pics, setPics] = useState<Pic[]>([]);
   const [busy, setBusy] = useState(false);
+  const lastPics = useRef<Pic[]>([]);
   const box = useRef<HTMLTextAreaElement>(null), end = useRef<HTMLDivElement>(null), file = useRef<HTMLInputElement>(null);
   useEffect(() => { if (open) setTimeout(() => box.current?.focus(), 30); }, [open]);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs, open]);
@@ -61,18 +62,21 @@ export default function OrderHelper({ orderId, snapshot, apply, undo }: {
     if (!order) return;
     const thread: HelperMsg[] = msgs.filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text, images: m.images, done: m.done }));
     const sent = pics;
+    // no new picture: the snip from earlier in the conversation goes again, so the helper can still read it
+    const again = !sent.length ? lastPics.current : [];
     const steps: Step[] = [
-      { label: sent.length ? "Reading the snip" : "Reading what you asked", state: "doing" },
+      { label: sent.length || again.length ? "Reading the snip" : "Reading what you asked", state: "doing" },
       { label: "Checking it against the order", state: "wait" },
       { label: "Making the changes", state: "wait" },
       { label: "Checking the totals", state: "wait" },
     ];
     setMsgs((ms) => [...ms.map((m) => ({ ...m, undo: false })), { role: "staff", text: message, images: sent.length || undefined, pics: sent.map((p) => p.url) }, { role: "ai", text: "", steps }]);
+    if (sent.length) lastPics.current = sent;
     setText(""); setPics([]); setBusy(true);
     const t = setTimeout(() => stepTo(1), sent.length ? 7000 : 3500);
     let j: { reply?: string; actions?: HelperAction[]; error?: string } = {};
     try {
-      const r = await fetch(`/api/orders/${orderId}/helper`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, images: sent.map((p) => ({ media_type: p.media_type, data: p.data })), thread, order }) });
+      const r = await fetch(`/api/orders/${orderId}/helper`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, images: (sent.length ? sent : again).map((p) => ({ media_type: p.media_type, data: p.data })), picsEarlier: !sent.length && again.length > 0, thread, order }) });
       j = await r.json().catch(() => ({ error: "The helper didn't answer. Try again." }));
       if (!r.ok && !j.error) j.error = "The helper didn't answer. Try again.";
     } catch { j = { error: "Couldn't reach the helper. Check the connection and try again." }; }
@@ -97,7 +101,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo }: {
           <div className="dla oh" onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addFiles(fs); } }}
             onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }}>
             <div className="oh-h"><b>✦ What can I help you with?</b><span className="oh-sp" />
-              {msgs.length > 0 && !busy && <button type="button" className="linkbtn" onClick={() => setMsgs([])}>Start over</button>}
+              {msgs.length > 0 && !busy && <button type="button" className="linkbtn" onClick={() => { setMsgs([]); lastPics.current = []; }}>Start over</button>}
               <button type="button" className="qo-x oh-x" onClick={() => setOpen(false)} disabled={busy} aria-label="Close">×</button></div>
             <div className="oh-thread">
               {!msgs.length && <div className="oh-hint">

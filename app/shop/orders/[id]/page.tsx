@@ -492,7 +492,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             if (v) sizeCharges[z] = Math.round(v * 100) / 100;
           }
           return { style: l.style, brand: l.brand, color: l.color, description: l.garment, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +(v as number) > 0)) as Record<string, number>,
-            colors: gm?.colors, each: seesMoney && lc ? Math.round(lc.each * 100) / 100 : undefined, priceSetByHand: l.priceOverride != null, sizeCharges };
+            colors: gm?.colors, run: l.sizeRun || gm?.sizes?.filter((z) => (SIZES as readonly string[]).includes(z)), each: seesMoney && lc ? Math.round(lc.each * 100) / 100 : undefined, priceSetByHand: l.priceOverride != null, sizeCharges };
         }),
         imprints: g.imprints.map((d) => ({ location: d.location, method: d.method, colors: d.colors, inks: d.inks, size: d.size })),
       })),

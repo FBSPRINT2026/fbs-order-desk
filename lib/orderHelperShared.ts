@@ -26,5 +26,5 @@ export type HelperAction =
 export type HelperOrder = {
   number: number; nickname: string; customer: string; due_date: string | null; po_number: string; notes: string;
   price_type: string; fees: { label: string; amount: number }[]; discount: string; total: number;
-  groups: { name: string; lines: { style: string; brand: string; color: string; description: string; sizes: Record<string, number>; colors?: string[]; each?: number; priceSetByHand?: boolean; sizeCharges?: Record<string, number> }[]; imprints: { location: string; method: string; colors: number; inks: string; size: string }[] }[];
+  groups: { name: string; lines: { style: string; brand: string; color: string; description: string; sizes: Record<string, number>; colors?: string[]; /** the sizes it comes in (youth / adult) */ run?: string[]; each?: number; priceSetByHand?: boolean; sizeCharges?: Record<string, number> }[]; imprints: { location: string; method: string; colors: number; inks: string; size: string }[] }[];
 };
