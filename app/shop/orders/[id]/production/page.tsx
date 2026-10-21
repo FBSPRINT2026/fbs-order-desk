@@ -556,7 +556,7 @@ function RefNotes({ v, p, open }: { v: ProductionView; p: PvPrint; open: boolean
  * group's prints; the photos are the job's production photos (job_files), from the customer's texts and emails
  * (/api/orders/[id]/photos) or uploaded.
  */
-type Found = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean };
+type Found = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean; with?: string; /** on the iPhone only (not on the shop's Mac yet) */ missing?: boolean };
 const markOf = (body: string) => (body.match(/\[([te]:[^\]]+)\]\s*$/) || [])[1] || "";
 function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number; p: PvPrint; v: ProductionView; orderId: string; busy?: boolean; post?: unknown; photos: JobFile[]; reloadPhotos: () => Promise<void>; setErr: (s: string) => void }) {
   // whose photos (Oct 21, Nick: "this is a reorder… you're not bringing photos in of the job that we're doing… are you
@@ -686,10 +686,11 @@ function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number
               const mk = `${f.key.slice(0, 2)}${f.key.split("/").pop()}`, has = added.has(mk);
               return (
                 <div key={f.key} className={"jv-find-i" + (has ? " has" : "")}>
-                  <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.name} loading="lazy" /></a>
-                  <div className="jv-find-m"><b>{f.src === "text" ? (f.fromMe ? "We texted" : "They texted") : f.fromMe ? "We emailed" : "They emailed"}</b> {fmt(f.date)}{f.job && <span className="faint"> · {f.job}</span>}</div>
+                  {f.missing ? <div className="jv-find-miss" title="Messages on the Mac mini hasn't downloaded this picture yet (it's in iCloud). Open the chat on the Mac and scroll up to it; it comes in within a day.">On your iPhone only</div>
+                    : <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.name} loading="lazy" /></a>}
+                  <div className="jv-find-m"><b>{f.src === "text" ? (f.fromMe ? `We texted${f.with ? ` ${f.with}` : ""}` : `${f.with || "They"} texted`) : f.fromMe ? "We emailed" : "They emailed"}</b> {fmt(f.date)}{f.job && <span className="faint"> · {f.job}</span>}</div>
                   {f.body && <div className="jv-find-b faint">{f.body}</div>}
-                  <button type="button" className={"btn sm" + (has ? "" : " primary")} disabled={has || !!adding} onClick={() => void add(f)}>{has ? "✓ On the job" : adding === f.key ? "Adding…" : "Add"}</button>
+                  <button type="button" className={"btn sm" + (has ? "" : " primary")} disabled={has || !!adding || !!f.missing} onClick={() => void add(f)}>{f.missing ? "Not on the Mac yet" : has ? "✓ On the job" : adding === f.key ? "Adding…" : "Add"}</button>
                 </div>
               );
             })}

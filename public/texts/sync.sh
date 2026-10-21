@@ -30,9 +30,10 @@ sqllist() { sed "s/'/''/g; s/.*/'&'/" "$1" | paste -sd, -; }
 
 LAST=$(cat last 2>/dev/null || echo 0)
 
-# the texts in conversations with these numbers, after a row, oldest first
+# the texts in conversations with these numbers, after a row, oldest first ($4 = "pics": only texts with pictures)
 query() { # $1 list, $2 after rowid, $3 up to rowid (0 = no limit)
   local upto=""; [ "$3" != "0" ] && upto="AND m.ROWID <= $3"
+  [ "$4" = "pics" ] && upto="$upto AND EXISTS (SELECT 1 FROM message_attachment_join mx WHERE mx.message_id = m.ROWID)"
   sqlite3 -readonly -json "$DB" "
 WITH cc AS (SELECT DISTINCT chj.chat_id FROM chat_handle_join chj JOIN handle hh ON hh.ROWID = chj.handle_id WHERE lower(hh.id) IN ($1))
 SELECT m.ROWID AS rowid, m.guid, m.text, hex(m.attributedBody) AS hex, m.is_from_me AS from_me, m.date, m.service,
@@ -56,7 +57,12 @@ send() { # $1 json file, $2 rowid to remember (or "" for older texts)
     [ -n "$aid" ] || continue
     f=$(sqlite3 -readonly "$DB" "SELECT filename FROM attachment WHERE ROWID = $aid")
     f="${f/#\~/$HOME}"
-    [ -f "$f" ] || { log "picture not on this Mac (iCloud only?): $aid"; continue; }
+    if [ ! -f "$f" ]; then
+      # kept in iCloud only (Messages hasn't downloaded it to this Mac): tell the portal, ask again on the daily pass
+      log "picture not on this Mac (iCloud only?): $aid"
+      api -X POST -F "guid=$guid" -F "id=$aid" -F "name=$(basename "$f")" -F "missing=1" "$URL/api/texts/file" >/dev/null 2>&1
+      continue
+    fi
     up="$f"; name=$(basename "$f"); type=""
     case "$(echo "$name" | tr 'A-Z' 'a-z')" in
       *.heic|*.heif|*.tif|*.tiff) sips -s format jpeg -Z 2400 "$f" --out up.jpg >/dev/null 2>&1 && up="$DIR/up.jpg" && name="${name%.*}.jpg" && type="image/jpeg" ;;
@@ -81,6 +87,32 @@ if [ -s forms.added ] && [ "$LAST" != "0" ]; then
   log "older texts for $(wc -l < forms.added | tr -d ' ') new customer numbers/emails"
 fi
 cp forms.new forms.old
+
+# 2b. once a day: every customer text with a picture again (oldest first), so pictures that weren't on this Mac before
+#     (Messages kept them in iCloud) go up once they are; the portal only asks for the ones it doesn't have
+TODAY=$(date +%Y-%m-%d)
+if [ "$(cat pics.day 2>/dev/null)" != "$TODAY" ] && [ "$LAST" != "0" ]; then
+  echo "$TODAY" > pics.day
+  LIST=$(sqllist forms.new); AFTER=0
+  while :; do
+    query "$LIST" "$AFTER" "$LAST" pics > page.json || break
+    [ -s page.json ] || break
+    send page.json "" || break
+    AFTER=$(grep -o '"rowid":[0-9]*' page.json | tail -1 | cut -d: -f2)
+    [ "$(grep -o '"rowid":' page.json | wc -l)" -lt 200 ] && break
+  done
+  log "pictures pass done"
+fi
+
+# 2c. once a day: the newest version of this script (so fixes reach this Mac without installing again)
+if [ "$(cat upd.day 2>/dev/null)" != "$TODAY" ]; then
+  echo "$TODAY" > upd.day
+  if curl -fsSL --max-time 60 "$URL/texts/sync.sh" -o sync.next 2>/dev/null && head -1 sync.next | grep -q '^#!/bin/bash' && grep -q 'FBS Texts' sync.next; then
+    # a new file (mv), so this run keeps reading the old one
+    if cmp -s sync.next "$DIR/sync.sh"; then rm -f sync.next; else chmod 700 sync.next; mv -f sync.next "$DIR/sync.sh"; log "updated sync.sh"; fi
+  fi
+  rm -f sync.next
+fi
 
 # 3. new texts since last time
 LIST=$(sqllist forms.new)

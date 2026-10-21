@@ -10869,3 +10869,4 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-phone-sm{margin-top:0;padding:6px 10px;max-width:420px;align-self:stretch}
 .jv-phone-sm .jv-phone-qr{width:84px;height:84px}
 .jv-smp-pics .jv-ph a{width:auto;height:auto;padding:0}
+.jv-find-miss{aspect-ratio:1;display:grid;place-items:center;border:1px dashed var(--line);border-radius:6px;color:var(--ink-2);font-size:12px;text-align:center;padding:6px}

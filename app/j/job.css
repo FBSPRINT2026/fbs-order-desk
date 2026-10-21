@@ -246,3 +246,10 @@
 .jm-texts-g button{display:flex;flex-direction:column;gap:4px;border:2px solid transparent;border-radius:10px;padding:0;background:none;font:inherit;font-size:11px;color:inherit;text-align:left;cursor:pointer}
 .jm-texts-g button.on{border-color:#16a34a}
 .jm-texts-g img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+.jm-chains{display:flex;flex-direction:column;gap:6px}
+.jm-chains button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;border:1px solid var(--line,#ddd);border-radius:12px;background:#fff;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.jm-chains button span{font-size:13px;color:#667}
+.jm-texts-g button.sel{border-color:var(--fbs-blue)}
+.jm-texts-g button.sel img{opacity:.8}
+.jm-miss{display:flex;flex-direction:column;justify-content:center;gap:4px;aspect-ratio:1;border:1px dashed #bbb;border-radius:8px;padding:6px;font-size:11px;color:#667;overflow:hidden}
+.jm-miss span{font-weight:700;color:#444}

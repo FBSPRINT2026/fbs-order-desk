@@ -221,34 +221,65 @@ function PhotoSave({ job, file, onDone }: { job: { kind: "o" | "a"; id: string }
  * client… I click into that text message chain and add the photos"). The phone's own Messages app can't be opened from
  * a web page, but the texts are already here (the Mac bridge): the ones filed to this job first, then the rest.
  */
-type TextPic = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean };
+type TextPic = { key: string; src: "text" | "email"; url: string; name: string; date: string; fromMe: boolean; body: string; job: string; here: boolean; chat?: string; with?: string; missing?: boolean };
 function FromTexts({ job, onAdded, onClose }: { job: { kind: "o" | "a"; id: string }; onAdded: () => void; onClose: () => void }) {
   const { t, locale } = useT();
-  const [items, setItems] = useState<TextPic[] | null>(null), [err, setErr] = useState(""), [all, setAll] = useState(false);
-  const [done, setDone] = useState<Set<string>>(new Set()), [busy, setBusy] = useState("");
+  const [items, setItems] = useState<TextPic[] | null>(null), [err, setErr] = useState("");
+  // pick the text chain first, then its pictures (Oct 21, Nick: "select the text chain and then see the photos I've
+  // sent to that person and select it")
+  const [chat, setChat] = useState<string | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set()), [done, setDone] = useState<Set<string>>(new Set()), [busy, setBusy] = useState("");
   useEffect(() => {
     fetch(`/api/jobs/text-photos?kind=${job.kind}&id=${job.id}`).then((r) => r.json()).then((j) => { if (j.error) setErr(j.error); else setItems(j.items || []); }).catch(() => setErr(t("Couldn't load the messages.")));
   }, [job.kind, job.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const list = (items || []).filter((x) => all || x.here);
+  const chainOf = (x: TextPic) => (x.src === "email" ? "email" : x.chat || "text");
+  const chains = [...new Map((items || []).map((x) => [chainOf(x), x])).values()].map((x) => {
+    const k = chainOf(x), its = (items || []).filter((y) => chainOf(y) === k);
+    return { k, label: k === "email" ? t("Emails") : x.with || t("Texts"), n: its.length, last: its.map((y) => y.date).sort().pop() || "" };
+  }).sort((a, b) => b.last.localeCompare(a.last));
+  const pics = (items || []).filter((x) => chat && chainOf(x) === chat).sort((a, b) => b.date.localeCompare(a.date));
+  async function addSel() {
+    for (const key of sel) {
+      setBusy(key); setErr("");
+      const r = await fetch("/api/jobs/text-photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: job.kind, id: job.id, key }) }).then((y) => y.json()).catch(() => ({ error: t("Offline. Try again.") }));
+      if (r.error && !/already/i.test(r.error)) { setErr(r.error); break; }
+      setDone((d) => new Set(d).add(key));
+    }
+    setBusy(""); setSel(new Set()); onAdded();
+  }
   return (
     <div className="jm-texts">
-      <div className="jm-texts-h"><b>{t("Pictures in your texts")}</b><button type="button" className="jm-link" onClick={onClose}>{t("Close")}</button></div>
-      {err ? <p className="jm-err">{err}</p> : items === null ? <p className="jm-faint">{t("Loading…")}</p> : (
-        <>
-          {!list.length && <p className="jm-faint">{items.length ? t("None filed to this job.") : t("No pictures in the texts with this customer.")}</p>}
-          {items.length > 0 && <button type="button" className="jm-link" onClick={() => setAll((x) => !x)}>{all ? t("Only this job's") : t("Show all {0}", items.length)}</button>}
-          <div className="jm-texts-g">{list.map((x) => (
-            <button key={x.key} type="button" className={done.has(x.key) ? "on" : ""} disabled={!!busy || done.has(x.key)} onClick={async () => {
-              setBusy(x.key); setErr("");
-              const r = await fetch("/api/jobs/text-photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: job.kind, id: job.id, key: x.key }) }).then((y) => y.json()).catch(() => ({ error: t("Offline. Try again.") }));
-              setBusy("");
-              if (r.error && !/already/i.test(r.error)) { setErr(r.error); return; }
-              setDone((d) => new Set(d).add(x.key)); onAdded();
-            }}>
-              <img src={x.url} alt="" loading="lazy" />
-              <span>{done.has(x.key) ? `✓ ${t("Added")}` : busy === x.key ? t("Saving…") : `${x.fromMe ? t("We sent") : t("They sent")} · ${when(x.date, locale)}`}</span>
+      <div className="jm-texts-h">
+        {chat ? <button type="button" className="jm-link" onClick={() => { setChat(null); setSel(new Set()); }}>‹ {t("All messages")}</button> : <b>{t("Pick the text chain")}</b>}
+        <button type="button" className="jm-link" onClick={onClose}>{t("Close")}</button>
+      </div>
+      {err && <p className="jm-err">{err}</p>}
+      {items === null ? (!err && <p className="jm-faint">{t("Loading…")}</p>) : !chat ? (
+        !chains.length ? <p className="jm-faint">{t("No pictures in the texts with this customer.")}</p> : (
+          <div className="jm-chains">{chains.map((c) => (
+            <button key={c.k} type="button" onClick={() => setChat(c.k)}>
+              <b>{c.label}</b><span>{t("{0} pictures", c.n)} · {when(c.last, locale)}</span>
             </button>
           ))}</div>
+        )
+      ) : (
+        <>
+          <div className="jm-texts-g">{pics.map((x) => (
+            x.missing ? (
+              <div key={x.key} className="jm-miss" title={x.body}>
+                <span>{t("On your iPhone only")}</span>
+                <small>{x.fromMe ? t("We sent") : t("They sent")} · {when(x.date, locale)}{x.body ? ` · ${x.body}` : ""}</small>
+              </div>
+            ) : (
+              <button key={x.key} type="button" className={sel.has(x.key) ? "sel" : done.has(x.key) ? "on" : ""} disabled={!!busy || done.has(x.key)}
+                onClick={() => setSel((s0) => { const n = new Set(s0); if (n.has(x.key)) n.delete(x.key); else n.add(x.key); return n; })}>
+                <img src={x.url} alt="" loading="lazy" />
+                <span>{done.has(x.key) ? `✓ ${t("Added")}` : busy === x.key ? t("Saving…") : `${x.fromMe ? t("We sent") : t("They sent")} · ${when(x.date, locale)}`}</span>
+              </button>
+            )
+          ))}</div>
+          {pics.some((x) => x.missing) && <p className="jm-faint">{t("Pictures marked On your iPhone only aren't on the shop's Mac yet. Open this chat in Messages on the Mac mini and scroll up to them; they come in within a day.")}</p>}
+          <button type="button" className="jm-cam" disabled={!sel.size || !!busy} onClick={() => void addSel()}>{busy ? t("Saving…") : sel.size ? t("Add {0} photos", sel.size) : t("Tap the photos to add")}</button>
         </>
       )}
     </div>
