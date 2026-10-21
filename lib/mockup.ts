@@ -199,7 +199,10 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
       const body = acc.map((v) => v / m), dist = (v: number[]) => Math.hypot(v[0] - body[0], v[1] - body[1], v[2] - body[2]);
       // a heathered or textured body varies row to row: the line between collar and chest is set above that noise
       const sd = Math.sqrt(samples.reduce((a, v) => a + dist(v) ** 2, 0) / samples.length);
-      const thr = Math.max(24, 2.5 * sd + 10);
+      // a second, finer look when the collar is close to the body's color (an Athletic Heather onesie: grey rib, grey
+      // inside of the back, nothing found the first time)
+      for (const thr of [Math.max(24, 2.5 * sd + 10), Math.max(12, 1.5 * sd + 6)]) {
+      if (neck != null) break;
       const off = (v: number[] | null) => !v || dist(v) > thr;
       // the first stretch of plain body below the collar (Oct 20, Nick: the Heather Mauve onesie's print sat lower than
       // the others): the last "off" row before it used to be taken, so a crease or shadow further down pushed the
@@ -218,6 +221,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
         break;
       }
       if (n0 >= 0 && n0 - T >= 10 * s && n0 - T <= 200 * s) neck = n0;
+      }
     }
   }
   return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}) };
