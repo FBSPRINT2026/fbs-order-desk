@@ -21,7 +21,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { FileTray, msgFiles, type MailFile, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -915,6 +915,8 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
   const [writing, setWriting] = useState(false), [body, setBody] = useState(""), [cc, setCc] = useState<string[]>([]);
   const [h, setH] = useState(240), ref = useRef<HTMLIFrameElement | null>(null), [plain, setPlain] = useState(false);
   const [tryN, setTryN] = useState(0);
+  // the attachments: openable once the email came from the mail box; else names only (open them in Outlook)
+  const files: MailFile[] = full ? msgFiles(full) : (m?.attachments || []).map((f, k) => ({ key: String(k), name: f.name, size: f.size }));
   useEffect(() => { if (replyNow) setWriting(true); }, [replyNow]);
   useEffect(() => {
     let live = true;
@@ -955,8 +957,8 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
-        <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
-          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv",
+        <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary} aiCount={openTasks.length + sugg.length}
+          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv", files,
             ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); setWriting(true); } },
             more: onKeep ? (close) => <PSec label="Actions">
               <PTile icon={TbIcon.order} label="Create order" kind="primary" disabled={!!busy} onClick={() => { close(); onKeep("order"); }} />
@@ -1011,12 +1013,12 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
             {added.map((e) => <div key={e.id} className="lm-row ev on"><span className="lm-cal" aria-hidden>✓</span><div><b>{e.title}</b><span className="faint">On your calendar</span></div></div>)}
           </div>}
           {!m ? <div className="ibx2-none">{loadErr ? <>{loadErr} <button type="button" className="btn ghost sm" onClick={() => setTryN((x) => x + 1)}>Try again</button></> : <OpeningNote />}</div> : <>
-            {full ? <><MailFrame html={full.html} text={full.text} /><Attachments m={full} /></> : doc && !plain ? <div className="ibx-html">
+            <FileTray files={files} inBar note={full ? undefined : "Open these in Outlook for now."} />
+            {full ? <MailFrame html={full.html} text={full.text} /> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
               <QuoteToggle html={doc} frame={ref} fit={fit} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
             </div> : <div className="lm-text">{m.text || "(no text)"}</div>}
-            {!full && m.attachments.length > 0 && <div className="ibx2-files">{m.attachments.map((f, k) => <span key={k} className="lm-att">📎 {f.name}</span>)}<span className="faint"> Open attachments in Outlook for now.</span></div>}
           </>}
         </div>
         {writing && <div className="ibx2-compose open">
@@ -1178,6 +1180,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // emails waiting on an answer get their suggested answers straight away (written once, then kept with the email)
   // (no suggested answers fetched up front any more: Oct 14)
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
+  const crmFiles: MailFile[] = (x.meta?.attachments || []).map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, onOpen: () => void urlFor(f.path) }));
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (r.ok && key === "arch") cheerWin("archived"); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
@@ -1220,7 +1223,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       <PhoneNav.Provider value={myNav}>
       <section className="ibx2-mail" aria-label="The email">
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject}
-          phone={{
+          phone={{ files: crmFiles,
             reply: x.direction === "in" ? () => write() : undefined, forward: view !== "order" ? () => setFwdOpen(true) : undefined, known: x.customer_id ? who : undefined,
             busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
             ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => { act({ kind: "reply", label: "", subject: d.subject, body: d.body }); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }, openChat: () => setSide("ai") } : undefined,
@@ -1359,8 +1362,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {convo}
             {!x.customer_id && x.direction === "in" && <NewSender key={`ns-${matchKey}`} x={x} busy={busy} run={run} start={matchKey ? "contact" : ""} />}
             <div className="ibx2-orig-h">{x.direction === "in" ? `${fromName}'s email, as sent` : "Our email, as sent"} <span className="faint">· {when}</span></div>
+            <FileTray files={crmFiles} inBar />
             <EmailBody x={x} />
-            {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
             <CanvaGet x={x} busy={busy} run={run} />
             {/* the whole conversation underneath, newest first, our replies too (Oct 12, Nick) */}
             {/* off with conversation grouping (Oct 20, Nick: "it should just be her email, just like Outlook has it") */}

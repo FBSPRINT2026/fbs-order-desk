@@ -11384,3 +11384,49 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
   html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-ph svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
   html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-ph:last-child svg{fill:currentColor;stroke:none}
 }
+
+/* ── Attachments as their own section, between an email's header and its body (Oct 21, Nick) ── */
+.mf-tray{margin:12px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.mf-tray-h{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);background:var(--bg);font-size:12.5px}
+.mf-tray-t{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink);white-space:nowrap}
+.mf-tray-t svg,.ps-save svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;color:var(--ink-3)}
+.mf-tray-h .spacer{flex:1}
+.mf-tray-g{display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px}
+.mf-tile{display:flex;flex-direction:column;gap:3px;width:132px;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);text-decoration:none;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.mf-tile:hover{border-color:var(--accent)}
+.mf-tile:disabled{cursor:default;opacity:.75}
+.mf-tp{display:block;width:100%;height:76px;border-radius:6px;object-fit:cover;background:var(--surface-2)}
+.mf-tn{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mf-fs{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.mf-ft{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:40px;height:26px;padding:0 5px;border-radius:6px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft,var(--surface-2))}
+span.mf-tp.mf-ft{display:flex;height:76px;font-size:15px}
+.mf-ft.pdf{color:var(--danger);background:var(--danger-soft)}
+.mf-ft.art{color:var(--warn);background:var(--warn-soft)}
+.mf-ft.xls,.mf-ft.img{color:var(--ok);background:var(--ok-soft)}
+.mf-ft.zip{color:var(--ink-3);background:var(--surface-2)}
+.mf-tray-t .chip-n,.eh-ai .eh-ai-cnt{align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700}
+.mf-tray-t .chip-n{display:inline-flex}
+.eh-ai-hint,.eh-ai .eh-ai-cnt{display:none}
+/* the Files sheet on a phone */
+.ps-files{display:flex;flex-direction:column;gap:6px}
+.mf-fr{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-decoration:none;font:inherit;text-align:left;min-width:0}
+.mf-fn{flex:1;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mf-fo{font-size:13px;font-weight:700;color:var(--accent)}
+.mf-fr:disabled .mf-fo{display:none}
+.pbar-ico{position:relative;display:inline-flex;font-style:normal}
+.pbar-n{position:absolute;top:-5px;right:-10px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
+@media (max-width:760px) and (pointer:coarse){
+  html body .pbar:has(.pbar-files){grid-template-columns:repeat(6,1fr)}
+  html body main.main:has(.pbar) .mf-tray.in-bar{display:none!important}
+  html body .pbar-sheet>button.ps-save{display:flex;justify-content:center;gap:8px;margin-top:10px;border:1px solid var(--line);font-size:15px;font-weight:700;color:var(--accent)}
+  html body .pbar-sheet>button.ps-save svg{color:var(--accent);width:18px;height:18px}
+  .mf-tile{width:calc(50% - 5px)}
+  /* the AI: a small chip on each email; tapping it opens the summary, the to-dos and the order buttons (Oct 21, Nick) */
+  html body main.main .eh-ai.mini{display:inline-flex!important;align-self:flex-start;width:fit-content!important;max-width:calc(100% - 24px);flex-wrap:nowrap!important;padding:0!important;margin:8px 12px 2px!important;border:1px solid var(--line)!important;border-radius:999px!important;background:var(--surface)!important;box-shadow:none!important}
+  html body main.main .eh-ai.mini > :not(.eh-ai-l){display:none!important}
+  html body main.main .eh-ai.mini > .eh-ai-l{flex:none!important;display:inline-flex!important;align-items:center;height:30px;padding:0 12px!important;gap:6px!important;font-size:12.5px!important}
+  html body main.main .eh-ai .eh-ai-l::after{content:none!important}
+  html body main.main .eh-ai .eh-ai-hint{display:inline;font-weight:600;color:var(--ink-2)}
+  html body main.main .eh-ai .eh-ai-cnt{display:inline-flex}
+  html body main.main:has(.eh-ai.mini) .lm-ai{display:none!important}
+}

@@ -115,6 +115,8 @@ export const TbIcon = {
   back: P("M15 5l-7 7 7 7"),
   up: P("M5 15l7-7 7 7"),
   down: P("M5 9l7 7 7-7"),
+  clip: P("M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"),
+  download: P("M12 4v11M7 10l5 5 5-5M5 20h14"),
 };
 
 /**
@@ -249,7 +251,9 @@ export type PhoneActs = { reply?: () => void; /** Forward (greyed when the email
   more?: (close: () => void) => React.ReactNode;
   /** the sender is a customer (their name): Black Hole asks first */ known?: string;
   /** the Assistant: say what to tell them, it writes the reply (id: a customer email's id, "inbox:<id>" or "box:<uid>:<folder>") */
-  ask?: { id: string; who?: string; onDraft: (d: Draft) => void; openChat?: () => void } };
+  ask?: { id: string; who?: string; onDraft: (d: Draft) => void; openChat?: () => void };
+  /** the email's attachments: a Files button in the bar opens them (Oct 21, Nick: "a little paper clip… click to view attachments") */
+  files?: MailFile[] };
 
 /** a section of the phone's More sheet: a small header, then its buttons as tiles */
 export function PSec({ label, children }: { label: string; children: React.ReactNode }) {
@@ -282,7 +286,8 @@ export function PPick({ icon, label, items, empty, extra }: { icon: React.ReactN
  * microphone sit in the AI card at the top of the email. A button an email can't use stays in its place, greyed out.
  */
 function PhoneBar({ a }: { a: PhoneActs }) {
-  const [sheet, setSheet] = useState<"" | "move" | "more" | "bh">("");
+  const [sheet, setSheet] = useState<"" | "move" | "more" | "bh" | "files">("");
+  const files = a.files || [];
   const [askBH, setAskBH] = useState(false);
   const [voice, setVoice] = useState<{ l: ReturnType<typeof startListening> } | null>(null);
   const others = (a.folders || []).filter((f) => f.path !== a.here && !/\\(Drafts|Junk)/.test(f.special));
@@ -297,13 +302,18 @@ function PhoneBar({ a }: { a: PhoneActs }) {
         <button type="button" className="pbar-b danger" disabled={off} onClick={() => (a.known ? (setSheet("bh"), setAskBH(true)) : mv("blackhole", bh))}>{TbIcon.ban}<span>Black Hole</span></button>
         <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => { a.reply?.(); window.scrollTo({ top: 0 }); }}>{TbIcon.reply}<span>Reply</span></button>
         <button type="button" className="pbar-b" disabled={!a.forward} onClick={() => a.forward?.()}>{TbIcon.forward}<span>Forward</span></button>
+        {files.length > 0 && <button type="button" className="pbar-b pbar-files" onClick={() => setSheet("files")} aria-label={`Attachments (${files.length})`}><i className="pbar-ico">{TbIcon.clip}<b className="pbar-n">{files.length}</b></i><span>Files</span></button>}
         <button type="button" className="pbar-b" onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
       </nav>
       {voice && a.ask && <VoiceDraft chatId={a.ask.id} who={a.ask.who} listener={voice.l} onDraft={(d) => { a.ask?.onDraft(d); window.scrollTo({ top: 0 }); }} openChat={a.ask.openChat} onClose={() => setVoice(null)} />}
       {sheet && <div className="pbar-bg" onClick={close}>
         <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
           <div className="ps-grab" aria-hidden />
-          {sheet === "move" ? <>
+          {sheet === "files" ? <>
+            <div className="pbar-t">Attachments ({files.length})</div>
+            <div className="ps-files">{files.map((f) => <FileRow key={f.key} f={f} />)}</div>
+            {files.some((f) => f.href) && <button type="button" className="btn ps-save" onClick={() => saveAll(files)}>{TbIcon.download} Save all</button>}
+          </> : sheet === "move" ? <>
             <div className="pbar-t">Move to</div>
             <button type="button" role="menuitem" disabled={off} onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>
             {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={off} onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
@@ -375,13 +385,20 @@ export function fitWidth(f: HTMLIFrameElement, d: Document) {
   if (w > 0 && sw > w + 2) b.style.zoom = String(Math.max(0.35, w / sw));
 }
 
-export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back, ai }: { /** the AI section's button(s), e.g. Assistant (Oct 14) */ ai?: React.ReactNode;
+export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back, ai, aiCount }: { /** the AI section's button(s), e.g. Assistant (Oct 14) */ ai?: React.ReactNode;
+  /** phones: how many to-dos / dates the AI found, on its small chip */ aiCount?: number;
   toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; /** the sender's company, beside their name */ org?: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
   // the AI summary: one line until clicked (Oct 16, Nick: "the AI suggestions is huge"), remembered
-  const [aiFull, setAiFull] = useSticky("mail.aiFull", false);
+  const [aiSticky, setAiSticky] = useSticky("mail.aiFull", false);
+  // phones (Oct 21, Nick: "in the mobile view it can just flag it… clicking it pops it down"): a small AI chip on every
+  // email, closed again on the next one
+  const [phoneAi, setPhoneAi] = useState(false), [isPhone, setIsPhone] = useState(false);
+  useEffect(() => { const q = window.matchMedia?.("(max-width: 760px) and (pointer: coarse)"); if (!q) return; const f = () => setIsPhone(q.matches); f(); q.addEventListener?.("change", f); return () => q.removeEventListener?.("change", f); }, []);
+  useEffect(() => { setPhoneAi(false); }, [subject, date]);
+  const aiFull = isPhone ? phoneAi : aiSticky, setAiFull = isPhone ? setPhoneAi : setAiSticky;
   void listOpen; void toggleList; // the list's hide arrow is gone (Oct 14): the list always shows beside the email
   const nav = useContext(PhoneNav);
   const name = fromName || fromEmail;
@@ -405,7 +422,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
       </div>
       {/* AI: the summary and the Assistant button, right under the toolbar, above the email (Oct 14, Nick) */}
       {(summary || tags || ai) && <div className={"eh-ai" + (aiFull ? "" : " mini")} role="group" aria-label="AI">
-        <button type="button" className="eh-ai-l" onClick={() => setAiFull(!aiFull)} aria-expanded={aiFull} title={aiFull ? "Show the AI summary on one line" : "Show the whole AI summary and its tags"}><span className="eh-ai-orb">✦</span>AI<span className="eh-ai-car" aria-hidden>{aiFull ? "▴" : "▾"}</span></button>
+        <button type="button" className="eh-ai-l" onClick={() => setAiFull(!aiFull)} aria-expanded={aiFull} title={aiFull ? "Show the AI summary on one line" : "Show the whole AI summary and its tags"}><span className="eh-ai-orb">✦</span>AI<span className="eh-ai-hint">Summary{aiCount ? " & to-dos" : ""}</span>{!!aiCount && <b className="chip-n eh-ai-cnt">{aiCount}</b>}<span className="eh-ai-car" aria-hidden>{aiFull ? "▴" : "▾"}</span></button>
         <div className="eh-ai-b" onClick={() => { if (!aiFull) setAiFull(true); }}>{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
         {ai}
       </div>}
@@ -510,9 +527,45 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
 export const attUrl = (path: string, uid: number, i: number) => `/api/mail/box?${new URLSearchParams({ do: "attachment", path, uid: String(uid), i: String(i) })}`;
 const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export function Attachments({ m }: { m: FullMsg }) {
-  if (!m.attachments.length) return null;
-  return <div className="mf-atts">{m.attachments.map((a) => <a key={a.i} href={a.ews ? `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id: a.ews })}` : attUrl(m.folder, m.uid, a.i)} target="_blank" rel="noreferrer" className="mf-att">📎 {a.name}<span>{kb(a.size)}</span></a>)}</div>;
+/** one attachment, wherever an email shows it (an email box, the Inbox, a customer's email) */
+export type MailFile = { key: string; name: string; size?: number; type?: string; href?: string; onOpen?: () => void };
+export const msgFiles = (m: FullMsg): MailFile[] => m.attachments.map((a) => ({ key: String(a.i), name: a.name, size: a.size, type: a.type,
+  href: a.ews ? `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id: a.ews })}` : attUrl(m.folder, m.uid, a.i) }));
+const ext = (f: MailFile) => (/\.([a-z0-9]{1,5})$/i.exec(f.name)?.[1] || (f.type || "").split("/")[1] || "file").toUpperCase().slice(0, 4);
+const isImg = (f: MailFile) => /^image\/(png|jpe?g|gif|webp)/i.test(f.type || "") || /\.(png|jpe?g|gif|webp)$/i.test(f.name);
+const kindOf = (f: MailFile) => { const e = ext(f); return /PDF/.test(e) ? "pdf" : isImg(f) ? "img" : /^(AI|EPS|SVG|PSD|CDR)$/.test(e) ? "art" : /^(ZIP|RAR|7Z)$/.test(e) ? "zip" : /^(XLS|XLSX|CSV|NUMB)$/.test(e) ? "xls" : "doc"; };
+function saveAll(files: MailFile[]) {
+  files.filter((f) => f.href).forEach((f, k) => setTimeout(() => { const a = document.createElement("a"); a.href = f.href!; a.download = f.name; a.rel = "noreferrer"; document.body.appendChild(a); a.click(); a.remove(); }, k * 350));
+}
+function FileRow({ f }: { f: MailFile }) {
+  const inner = <><span className={"mf-ft " + kindOf(f)}>{ext(f)}</span><span className="mf-fn">{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}<span className="mf-fo">Open</span></>;
+  return f.href ? <a className="mf-fr" href={f.href} target="_blank" rel="noreferrer">{inner}</a> : <button type="button" className="mf-fr" onClick={f.onOpen} disabled={!f.onOpen}>{inner}</button>;
+}
+/**
+ * The attachments, as their own section between the email's header and its body (Oct 21, Nick: "they need to be their
+ * own section"): a header with the count and Download all, then a tile per file (a picture's preview, else its type).
+ * On a phone with the bottom bar they live behind its Files button instead (inBar).
+ */
+export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones: shown by the bottom bar's Files button instead */ inBar?: boolean; note?: string }) {
+  if (!files.length) return null;
+  return (
+    <section className={"mf-tray" + (inBar ? " in-bar" : "")} aria-label="Attachments">
+      <div className="mf-tray-h"><span className="mf-tray-t">{TbIcon.clip}Attachments <b className="chip-n">{files.length}</b></span>
+        {note && <span className="faint">{note}</span>}
+        <span className="spacer" />
+        {files.length > 1 && files.some((f) => f.href) && <button type="button" className="linkbtn" onClick={() => saveAll(files)}>Download all</button>}
+      </div>
+      <div className="mf-tray-g">{files.map((f) => {
+        const body = <>{isImg(f) && f.href ? <img className="mf-tp" src={f.href} alt="" loading="lazy" /> : <span className={"mf-tp mf-ft " + kindOf(f)}>{ext(f)}</span>}
+          <span className="mf-tn" title={f.name}>{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}</>;
+        return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer">{body}</a>
+          : <button key={f.key} type="button" className="mf-tile" onClick={f.onOpen} disabled={!f.onOpen}>{body}</button>;
+      })}</div>
+    </section>
+  );
+}
+export function Attachments({ m, inBar }: { m: FullMsg; inBar?: boolean }) {
+  return <FileTray files={msgFiles(m)} inBar={inBar} />;
 }
 
 /** reply / reply all box (to any email in any folder) */
@@ -589,7 +642,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
-          phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy,
+          phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy, files: m ? msgFiles(m) : undefined,
             ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, cc: d.cc || [], n: (x?.n || 0) + 1 })); setRep("one"); } },
             more: m ? (close) => <PSec label="Email"><PTile icon={TbIcon.replyAll} label="Reply all" onClick={() => { close(); setRep("all"); }} /></PSec> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
@@ -604,8 +657,8 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
         <div className="ibx2-read">
           {!m ? <div className="ibx2-none">{err ? <button type="button" className="btn ghost sm" onClick={() => setN((x) => x + 1)}>Try again</button> : <OpeningNote />}</div> : <>
             {m.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => setFull(true)}>Show the full email</button></div>}
+            <Attachments m={m} inBar />
             <MailFrame html={m.html} text={m.text} />
-            <Attachments m={m} />
           </>}
         </div>
         {rep && m && <ReplyBox key={draft?.n || 0} m={m} all={rep === "all"} start={draft?.body} startCc={draft?.cc} onClose={() => { setRep(""); setDraft(null); }} onSent={(to) => { setRep(""); setDraft(null); flash(`Sent to ${to}.`); }} />}
@@ -776,8 +829,8 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
                 {isOpen && <div className="mf-msg-b">
                   {!f ? <div className="faint"><OpeningNote /></div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one{why[k] ? `: ${why[k]}` : "."} <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Try again</button></div> : <>
                     {f.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Show the full email</button></div>}
-                    <MailFrame html={f.html} text={f.text} />
                     <Attachments m={f} />
+                    <MailFrame html={f.html} text={f.text} />
                     <div className="mf-msg-a tb">
                       <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" onClick={() => setRep(f)} /></TbGroup>
                       <MoveBar folders={folders} here={m.folder} onMove={async (to, label) => { try { await boxPost({ do: "move", path: m.folder, uid: m.uid, to }); flash(label); onMoved(m); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } }} />
