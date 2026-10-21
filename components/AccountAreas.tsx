@@ -130,7 +130,16 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
   const rawArea = (sp.get("area") as Area) || "home";
   // portal: quotes and orders are one "Orders" tab with a Quotes / Orders switch inside
-  const area: Area = mode === "portal" && rawArea === "quotes" ? "orders" : rawArea;
+  // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
+  // the Orders tab's Active / Quotes / Done; Texts are in Conversations; Details is a panel the page opens
+  const shopArea: Record<string, Area> = { quotes: "home", orders: "home", invoices: "home", texts: "messages", details: "home" };
+  const area: Area = mode === "portal" && rawArea === "quotes" ? "orders" : mode === "shop" ? shopArea[rawArea] || rawArea : rawArea;
+  const [ordF, setOrdF] = useSticky<"active" | "quotes" | "done">("customer.orderFilter", "active");
+  const oFilter = mode === "shop" && rawArea === "quotes" ? "quotes" : ordF;
+  const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
+  const convNow = rawArea === "texts" ? "texts" : conv;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [recOpen, setRecOpen] = useState(false);
   const [sub, setSub] = useState<"quotes" | "orders">(rawArea === "quotes" || sp.get("sub") === "quotes" ? "quotes" : "orders");
   const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); router.replace(`${path}${p.size ? "?" + p : ""}`, { scroll: false }); };
   const [q, setQ] = useState("");
@@ -190,9 +199,20 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const overdue = owed.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
   const openQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
-  const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = [
+  const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = mode === "shop" ? [
+    { id: "home", label: "Orders", icon: I.orders, n: inWork.length },
+    { id: "artwork", label: "Artwork", icon: I.artwork },
+    { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
+    { id: "messages", label: "Conversations", icon: I.messages, n: messages.length + (textsCount || 0) },
+    { id: "payments", label: "Payments", icon: I.payments },
+    // only once it's turned on or added (Oct 21, Nick: "I wouldn't show program pricing on every client unless I added
+    // or enabled it"); "More" adds them
+    { id: "program", label: "Program", icon: I.program, show: !!programPanel && (!!hasProgram || area === "program") },
+    { id: "projects", label: "Projects", icon: I.projects, show: !!projectsPanel && ((projectsCount || 0) > 0 || area === "projects") },
+    { id: "receive", label: "Customer goods", icon: I.receive, show: area === "receive" },
+  ] : [
     { id: "home", label: "Dashboard", icon: I.home },
-    { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: mode === "shop" },
+    { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: (mode as string) === "shop" },
     { id: "orders", label: "Orders", icon: I.orders, n: mode === "portal" ? inWork.length + quotes.filter((o) => !o.archived && o.status === "quote_sent").length : inWork.length },
     { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
     { id: "program", label: "Program", icon: I.program, show: !!programPanel },
@@ -200,8 +220,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
     { id: "messages", label: mode === "portal" ? "Message center" : "Messages", icon: I.messages, n: messages.length },
-    { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: mode === "shop" && !!textsPanel },
-    { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
+    { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
+    { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Customer supplied goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -316,6 +336,62 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           </aside>
         </div>
       </div>
+    );
+  } else if (area === "home" && mode === "shop") {
+    // one line of numbers, then every order one line each under Active / Quotes / Done (Oct 21, Nick: "too much
+    // information… how pieces are underneath each thing")
+    const active = invoices.filter((o) => !o.archived && o.status !== "completed");
+    const done = invoices.filter((o) => o.archived || o.status === "completed");
+    const lists = { active, quotes, done };
+    const rows = lists[oFilter].filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, o.statusLabel, o.search));
+    const P = pageOf("orders:" + oFilter, rows, 25);
+    const showBal = rows.some((o) => !o.archived && o.balance > 0.004);
+    const waitingOn = new Set(goodsPanel ? receive.map((o) => o.id) : []);
+    const owedList = owed.filter((o) => !o.archived);
+    const sentQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");
+    const look = attention.filter((a) => a.kind === "request" || a.kind === "draft" || a.kind === "quote" || a.kind === "art");
+    const lookLabel = { request: "Request to price", draft: "Not sent yet", quote: "Quote waiting on them", art: "Art waiting on them", pay: "", receive: "" } as const;
+    body = (
+      <>
+        <div className="cx-sum">
+          <span><span className="k">In progress</span> <b>{inWork.length}</b></span>
+          <span><span className="k">Open quotes</span> <b>{sentQ.length}</b>{sentQ.length ? <span className="k"> ({money(openQuotes)})</span> : null}</span>
+          <span><span className="k">Owes</span> <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b>{owedList.length > 0 && owedList.length <= 3 ? <span className="k"> ({owedList.map((o) => "#" + o.number).join(", ")})</span> : null}{overdue > 0.004 ? <span className="aa-due"> · {money(overdue)} overdue</span> : null}</span>
+          <span><span className="k">Lifetime</span> <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> <span className="k">· {invoices.length} order{invoices.length === 1 ? "" : "s"}</span></span>
+        </div>
+        {look.length > 0 && (
+          <div className="cx-look"><span className="k">Needs a look</span>
+            {look.map((a, i) => <Link key={a.kind + a.order_id + i} href={!a.number && a.href ? a.href : orderHref(a.order_id, a.hash)} className="cx-look-i">{lookLabel[a.kind]}{a.number ? ` #${a.number}` : ""}</Link>)}
+          </div>
+        )}
+        <div className="cx-bar">
+          <div className="cx-chips" role="tablist" aria-label="Which orders">
+            {(([["active", "Active"], ["quotes", "Quotes"], ["done", "Done"]]) as const).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={oFilter === k} className={oFilter === k ? "on" : ""} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l} <span>{lists[k].length}</span></button>
+            ))}
+          </div>
+          {search(oFilter === "quotes" ? "Search quotes" : "Search orders: number, name, garment, color…")}
+        </div>
+        <div className="aa-card aa-tblcard">
+          <table className="aa-tbl cx-tbl">
+            <thead><tr><th>#</th><th>{oFilter === "quotes" ? "Quote" : "Order"}</th><th>Status</th><th>{oFilter === "quotes" ? "Created" : "In hands"}</th>{showBal && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
+            <tbody>
+              {P.items.map((o) => (
+                <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
+                  <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+                  <td className="m"><span className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</span>{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</td>
+                  <td>{pill(o)}</td>
+                  <td className="dt" data-l={oFilter === "quotes" ? "Created" : "In hands"}>{oFilter === "quotes" ? when(o.created_at) : when(o.due_date) || "—"}</td>
+                  {showBal && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : ""}</td>}
+                  <td className="r num b" data-l="Total">{money(o.total)}</td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td colSpan={6}><div className="aa-empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "active" ? "Nothing in progress right now." : oFilter === "quotes" ? "No quotes." : "No finished orders yet."}</div></td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {pager("orders:" + oFilter, rows.length, P.p, P.n, 25)}
+      </>
     );
   } else if (area === "home") {
     const groups: { kind: AAttn["kind"]; title: string; label: string }[] = [
@@ -434,11 +510,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="aa-stmt">
           {statementHref && <a className="btn sm" href={statementHref} target={mode === "shop" ? "_blank" : undefined} rel="noreferrer">{mode === "shop" ? "Open statement" : "View / print statement"}</a>}
           {onEmailStatement && <button type="button" className="btn sm" onClick={async () => { setStNote("Sending…"); const r = await onEmailStatement(); setStNote(r.ok ? (r.emailed ? "Statement emailed." : "Couldn't send the email.") : r.error || "Couldn't send."); }}>Email statement</button>}
+          {mode === "shop" && onRecordPayment && <button type="button" className={"btn sm" + (recOpen ? " on" : " primary")} onClick={() => setRecOpen((x) => !x)}>{recOpen ? "Close" : "Record a payment"}</button>}
           {stNote && <span className="faint">{stNote}</span>}
         </div>
       )}
       <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
-      {mode === "shop" && onRecordPayment && <RecordPayment record={onRecordPayment} onDone={() => router.refresh()} />}
+      {mode === "shop" && onRecordPayment && recOpen && <RecordPayment record={onRecordPayment} onDone={() => { setRecOpen(false); router.refresh(); }} />}
       {due > 0.004 ? (
       <div className="aa-aging" aria-label="Aging">
           {aging.map((b, i) => (
@@ -737,6 +814,17 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     </>;
   } else if (area === "texts" && textsPanel) {
     body = textsPanel;
+  } else if (area === "messages" && mode === "shop" && messagesPanel) {
+    // portal messages and their texts in one place (Oct 21, Nick)
+    body = <>
+      {textsPanel && (
+        <div className="cx-chips cx-conv" role="tablist" aria-label="Which conversation">
+          <button type="button" role="tab" aria-selected={convNow === "portal"} className={convNow === "portal" ? "on" : ""} onClick={() => { setConv("portal"); if (rawArea === "texts") go("messages"); }}>Portal messages <span>{messages.length}</span></button>
+          <button type="button" role="tab" aria-selected={convNow === "texts"} className={convNow === "texts" ? "on" : ""} onClick={() => { setConv("texts"); if (rawArea === "texts") go("messages"); }}>Texts <span>{textsCount || 0}</span></button>
+        </div>
+      )}
+      {convNow === "texts" && textsPanel ? textsPanel : messagesPanel}
+    </>;
   } else if (area === "messages" && messagesPanel) {
     body = messagesPanel;
   } else if (area === "messages") {
@@ -773,6 +861,19 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   return (
     <div className="aa">
       <nav className="aa-nav" aria-label="Account areas">
+        {mode === "shop" && (() => {
+          const more = [
+            !!programPanel && !hasProgram && area !== "program" ? { id: "program" as Area, label: "Turn on program pricing" } : null,
+            !!projectsPanel && !(projectsCount || 0) && area !== "projects" ? { id: "projects" as Area, label: "Add a project" } : null,
+            !!goodsPanel && area !== "receive" ? { id: "receive" as Area, label: `Customer goods${goodsCount ? ` (${goodsCount})` : ""}` } : null,
+          ].filter(Boolean) as { id: Area; label: string }[];
+          return more.length ? (
+            <span className="cx-more" style={{ order: 99 }}>
+              <button type="button" className="aa-tab" aria-expanded={moreOpen} onClick={() => setMoreOpen((x) => !x)}><Ico d="M5 12h.01M12 12h.01M19 12h.01" /><span>More</span></button>
+              {moreOpen && <span className="cx-more-m" role="menu">{more.map((m) => <button key={m.id} type="button" role="menuitem" onClick={() => { setMoreOpen(false); go(m.id); setQ(""); }}>{m.label}</button>)}</span>}
+            </span>
+          ) : null;
+        })()}
         {AREAS.filter((a) => a.show !== false).map((a) => (
           <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
             <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}

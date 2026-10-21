@@ -11026,3 +11026,35 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .bp-ro{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .bp-ro-r{display:flex;gap:10px;font-size:13px;color:var(--ink)}
 .bp-ro-l{flex:none;min-width:110px;color:var(--ink-3);font-weight:600;font-size:12.5px}
+/* customer page, simpler (Oct 21, Nick: "everything… needs to be rethought and reorganized to make it simpler") */
+.cx-facts{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:4px;font-size:13.5px;color:var(--ink-2)}
+.cx-facts > span + span::before{content:"·";margin:0 7px;color:var(--ink-3)}
+.cx-sum{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:baseline;background:var(--surface-2);border-radius:10px;padding:10px 14px;font-size:13.5px;margin-bottom:10px}
+.cx-sum .k{color:var(--ink-3)}
+.cx-sum b{font-weight:700}
+.cx-look{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;margin:0 0 10px}
+.cx-look .k{color:var(--ink-3);margin-right:4px}
+.cx-look-i{padding:3px 10px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-weight:600;text-decoration:none;font-size:12.5px}
+.cx-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+.cx-bar > .aa-search{margin-left:auto}
+.cx-chips{display:inline-flex;gap:6px;flex-wrap:wrap}
+.cx-chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 13px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.cx-chips button span{font-weight:500;color:var(--ink-3);margin-left:3px}
+.cx-chips button.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
+.cx-chips button.on span{color:var(--accent)}
+.cx-conv{margin-bottom:12px}
+.cx-tbl td.m{display:table-cell}
+.cx-tbl td.m .aa-t{display:inline}
+.cx-goods{margin-left:8px;font-size:11.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:2px 8px;text-decoration:none;white-space:nowrap}
+.cx-more{position:relative;display:inline-flex}
+.cx-more-m{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:4px}
+.cx-more-m button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
+.cx-more-m button:hover{background:var(--surface-2)}
+.cx-dr-bg{position:fixed;inset:0;z-index:200;background:rgba(15,18,24,.35);display:flex;justify-content:flex-end}
+.cx-dr{width:min(780px,100%);height:100%;background:var(--bg,#f4f5f7);box-shadow:-12px 0 40px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.cx-dr-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.cx-dr-h h2{font-size:17px;margin:0}
+.cx-dr-b{flex:1;overflow:auto;padding:16px 18px 30px}
+.cx-dr .cust-grid{grid-template-columns:minmax(0,1fr) !important}
+.cx-moved{font-size:12.5px;margin:0 0 10px}
+.aa-nav:has(.cx-more){overflow:visible}

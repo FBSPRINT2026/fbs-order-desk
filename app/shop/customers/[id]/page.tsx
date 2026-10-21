@@ -70,6 +70,11 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   // old orders brought over from Printavo: listed with the rest, marked "Archived"
   const [goodsOpen, setGoodsOpen] = useState(0);
   const [projOpen, setProjOpen] = useState(0);
+  // any projects at all: the Projects tab shows only then (Oct 21, Nick); "More" adds the first one
+  useEffect(() => { createClient().from("projects").select("id", { count: "exact", head: true }).eq("customer_id", id).then(({ count }) => setProjOpen(count || 0)); }, [id]);
+  // Customer details: a panel that slides in over the page (Oct 21, Nick: "everything… needs to be rethought… simpler");
+  // ?area=details (older links) and a brand new customer open it
+  const [detailsOpen, setDetailsOpen] = useState(() => isNew || searchParams.get("area") === "details");
   const [hasProgram, setHasProgram] = useState(false);
   useEffect(() => { createClient().from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id).then(({ count }) => setHasProgram(!!count)); }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
@@ -181,64 +186,30 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     <>
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head" style={{ marginTop: 8 }}>
-        <div><div className="eyebrow">Customer{c.is_test ? <span className="ta-tag">Test account</span> : null}</div><h1>{c.company || c.name || "New Customer"}</h1></div>
+        <div><h1>{c.company || c.name || "New Customer"}</h1>
+          <div className="cx-facts">{[c.company ? c.name : "", c.email, c.phone ? fmtPhone(c.phone) : "", c.price_type === "wholesale" ? "Wholesale" : "Retail", PAY_TERMS[c.payment_terms || "receipt"], c.tax_exempt ? "Tax exempt" : ""].filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}{c.is_test ? <span className="ta-tag">Test account</span> : null}</div></div>
         <div className="row">
-          <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
-          <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
+          <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
+          <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
           <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>
         </div>
       </div>
       {c && "moved_at" in (c as object) && !c.is_test && (() => {
         const mv = c as unknown as { moved_at?: string | null; moved_by?: string; move_checklist?: Record<string, unknown> };
         const steps = Object.entries(mv.move_checklist || {}).filter(([k, v]) => k !== "pricing_note" && v).length;
+        // moved: said in Details instead of a strip on every visit (Oct 21, Nick)
         return mv.moved_at
-          ? <div className="mv-strip on"><span>In the new system since {new Date(mv.moved_at).toLocaleDateString()}{mv.moved_by ? ` (${mv.moved_by})` : ""}. New orders are 40,000-series.</span><button type="button" className="linkbtn" onClick={() => setMoveOpen("edit")}>Checklist</button></div>
+          ? null
           : <div className="mv-strip"><span><b>Not in the new system yet.</b> Their next order here waits for a short checklist (name, contacts, retail / wholesale, pricing, addresses).{steps ? ` ${steps} of 5 done.` : ""}</span><button type="button" className="btn primary sm" onClick={() => setMoveOpen("edit")}>Move to the new system</button></div>;
       })()}
       {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
       {/* the Test account switch (components/TestAccount) is off (Oct 21, Nick: "we're past that point… might come back to it later") */}
-      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
-          projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
-          programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
-          designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} /> : undefined}
-          productionPanel={<CustomerProductionFiles customerId={id} />}
-          textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
-          statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
-          onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
-          goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
-          messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
-          orders={os.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/shop/orders/${o.id}` }))} start={searchParams.get("c")} />} attention={os.flatMap((o): AAttn[] => {
-          const out: AAttn[] = [];
-          const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
-          if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });
-          if (o.status === "quote_sent") out.push({ kind: "quote", order_id: o.id, number: o.number, date: d(o.created_at) });
-          if (pendingArt[o.id]) out.push({ kind: "art", order_id: o.id, number: o.number, date: d(pendingArt[o.id]) });
-          if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
-          if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
-          return out;
-        })} orders={[...os.map((o) => ({ ...o, search: orderSearchText(o), nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
-          ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
-        hrefBase="/shop/orders/"
-        onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
-        logoShirts={logoShirts} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
-        onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
-        onUploadLogos={async (files, star, progress) => {
-          const sb = createClient();
-          const { data: u } = await sb.auth.getUser();
-          const made: Design[] = [], bad: string[] = [];
-          for (const [i, f] of files.entries()) {
-            try {
-              const d = await uploadDesign(sb, { file: f, customer_id: id, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "" });
-              if (star) { await sb.rpc("set_design_star", { p_design: d.id, p_starred: true }); d.starred = true; }
-              made.push(d);
-            } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "couldn't upload"}`); }
-            progress(i + 1);
-          }
-          if (made.length) { setDesigns((ds) => [...made, ...ds]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
-          return bad.length ? `Couldn't add ${bad.join("; ")}` : undefined;
-        }}
-        onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
-        details={<>
+      {detailsOpen && (
+        <div className="cx-dr-bg" onClick={() => { setDetailsOpen(false); if (searchParams.get("area") === "details") router.replace(`/shop/customers/${id}`, { scroll: false }); }}>
+          <aside className="cx-dr" role="dialog" aria-modal="true" aria-label="Customer details" onClick={(e) => e.stopPropagation()}>
+            <div className="cx-dr-h"><h2>{c.company || c.name || "New customer"}</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setDetailsOpen(false); if (searchParams.get("area") === "details") router.replace(`/shop/customers/${id}`, { scroll: false }); }}>Done</button></div>
+            <div className="cx-dr-b">
+        {(c as unknown as { moved_at?: string | null }).moved_at ? <div className="faint cx-moved">In the new system since {new Date(String((c as unknown as { moved_at: string }).moved_at)).toLocaleDateString()}{(c as unknown as { moved_by?: string }).moved_by ? ` (${(c as unknown as { moved_by?: string }).moved_by})` : ""}. New orders are 40,000-series. <button type="button" className="linkbtn" onClick={() => { setDetailsOpen(false); setMoveOpen("edit"); }}>Checklist</button></div> : null}
       <div className="cust-grid">
           <form className="panel" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <div className="panel-h"><h2>Details</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span></div>
@@ -303,25 +274,6 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="panel-h"><h2>Timeline</h2><span className="faint" style={{ fontSize: 12 }}>Calls, notes and emails · shop only</span></div>
               <div className="panel-b"><Timeline customerId={id} orderNumbers={Object.fromEntries(os.map((o) => [o.id, o.number]))} /></div>
             </section>
-            <div className="stats" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))", margin: 0 }}>
-              <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length + archive.length}</span><span className="k">Orders</span></div>
-              <div className="stat" style={{ cursor: "default" }}><span className="v">{money(spent)}</span><span className="k">Invoiced</span></div>
-              <div className="stat" style={{ cursor: "default" }}><span className={"v" + (owed > 0.004 ? " alert" : "")}>{money(owed)}</span><span className="k">Balance owed</span></div>
-            </div>
-            <div className="tbl-wrap">
-              <table className="tbl" style={{ minWidth: 520 }}>
-                <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Due</th><th className="r">Total</th></tr></thead>
-                <tbody>
-                  {os.map((o) => (
-                    <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled Job"}</td><td><Pill status={o.status} pv={pvStatusOf(o as never)} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
-                  ))}
-                  {archive.map((a) => (
-                    <tr key={a.id} onClick={() => router.push(`/shop/archive/${a.id}`)}><td><span className="ordno">{a.visual_id}</span></td><td>{a.nickname || "Untitled Job"}<span className="aa-arch">Archived</span></td><td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td><td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td><td className="r">{money(a.total)}</td></tr>
-                  ))}
-                  {!os.length && !archive.length && <tr><td colSpan={5}><div className="empty">No orders for this customer yet.</div></td></tr>}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
         <div className="cu-del">
@@ -336,7 +288,52 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>}
         </div>
-      </>} />
+            </div>
+          </aside>
+        </div>
+      )}
+      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
+          projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} />} projectsCount={projOpen}
+          programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
+          designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} /> : undefined}
+          productionPanel={<CustomerProductionFiles customerId={id} />}
+          textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
+          statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
+          onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
+          goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
+          messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
+          orders={os.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/shop/orders/${o.id}` }))} start={searchParams.get("c")} />} attention={os.flatMap((o): AAttn[] => {
+          const out: AAttn[] = [];
+          const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
+          if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });
+          if (o.status === "quote_sent") out.push({ kind: "quote", order_id: o.id, number: o.number, date: d(o.created_at) });
+          if (pendingArt[o.id]) out.push({ kind: "art", order_id: o.id, number: o.number, date: d(pendingArt[o.id]) });
+          if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
+          if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
+          return out;
+        })} orders={[...os.map((o) => ({ ...o, search: orderSearchText(o), nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
+          ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+        hrefBase="/shop/orders/"
+        onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
+        logoShirts={logoShirts} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
+        onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
+        onUploadLogos={async (files, star, progress) => {
+          const sb = createClient();
+          const { data: u } = await sb.auth.getUser();
+          const made: Design[] = [], bad: string[] = [];
+          for (const [i, f] of files.entries()) {
+            try {
+              const d = await uploadDesign(sb, { file: f, customer_id: id, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "" });
+              if (star) { await sb.rpc("set_design_star", { p_design: d.id, p_starred: true }); d.starred = true; }
+              made.push(d);
+            } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "couldn't upload"}`); }
+            progress(i + 1);
+          }
+          if (made.length) { setDesigns((ds) => [...made, ...ds]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
+          return bad.length ? `Couldn't add ${bad.join("; ")}` : undefined;
+        }}
+        onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
+      />
     </>
   );
 }
