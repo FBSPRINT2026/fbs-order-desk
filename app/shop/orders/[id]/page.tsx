@@ -23,7 +23,7 @@ import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
-import ReorderPanel, { isReorder } from "@/components/ReorderPanel";
+import { isReorder } from "@/components/ReorderPanel";
 import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
@@ -842,8 +842,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Order: what's being made and what it costs (Oct 15, Nick: "too much information on one page… tabs at the top") */}
         <div className="ed-grid" hidden={tab !== "order"}>
           <div className="stack">
-            {isReorder(o) && !o.groups.every((g) => g.fromGroup) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
-              onReload={(groups) => { setO((x) => (x ? { ...x, groups } : x)); if (latest.current) latest.current = { ...latest.current, groups }; }} />}
+            {/* the Reorder section (mockup, pricing check, print specs, AI spec history) is gone from the order page (Oct 20,
+                Nick: "get rid of this whole section… it's overbearing… we handled it in the resolution center"): the
+                Resolution Center asks, Production Details confirms, the print row's stamp says what's waiting */}
           <div className="top2">
             <section className="panel">
               <div className="panel-h"><h2>Customer</h2>

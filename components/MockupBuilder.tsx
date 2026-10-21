@@ -157,6 +157,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [change, setChange] = useState<{ orderId: string; orderNumber: number } | null>(null);
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
+  // a visual-only reorder (Oct 20, Nick: "a reorder mockup helper… production will confirm details on first run…
+  // an adjust visual size and placement button"): the print settings are greyed, and the art moves and sizes on the
+  // shirt only after "Adjust visual size & placement" (the picture only: production still sets the size on the run)
+  const [adjust, setAdjust] = useState(false);
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
   const [measure, setMeasure] = useState(false);
@@ -938,8 +942,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
-                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); })}
+                    onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
+                    onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
                     onEnd={() => settleHere(im.id)} />
                   </div>
                 );
@@ -1935,7 +1939,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   )}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} overlay={measure ? measured(v) : undefined} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
-                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
+                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
                   const p = im && place(im, v);
@@ -2119,7 +2123,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             </section>
           )}
-          <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
+          {(() => { const vis = imprints.some((im) => im.visualOnly && !im.confirmed); return vis && ready ? (
+            <div className={"mk-vis-bar" + (adjust ? " on" : "")}>
+              <div className="mk-vis-stamp"><b>Reorder mockup helper</b><span>Production confirms the details on the first run</span></div>
+              {adjust
+                ? <p>Drag the art on the shirt and pull its corner to size it. This only changes the picture: production still sets the size, inks and placement on the run.</p>
+                : <p>The print settings stay as they are until production confirms them. You can still move and size the art so the picture looks right.</p>}
+              <button type="button" className={"btn sm" + (adjust ? " primary" : "")} onClick={() => setAdjust((x) => !x)}>{adjust ? "Done adjusting" : "Adjust visual size & placement"}</button>
+            </div>
+          ) : null; })()}
+          <section className={"panel" + (ready ? "" : " mk-off") + (imprints.some((im) => im.visualOnly && !im.confirmed) ? " mk-vis-lock" : "")} inert={!ready || imprints.some((im) => im.visualOnly && !im.confirmed) || undefined}>
             <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button></div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
@@ -2169,7 +2182,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
-                    {p.d && im.visualOnly && !im.confirmed && <div className="mk-plan mk-wait"><b>Visual mockup only · production confirming details on the print run.</b> The art shows as it is; production sets how it printed (inks, combine colors, halftones), here or on Production Details.</div>}
                     {p.d && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
                     {p.d && im.method === "screen" && !portal && (
                       <div className="mk-hit">
@@ -2275,7 +2287,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
   /** zoom and shift that make this photo's shirt fill the frame like the reference tee (normOf) */ norm?: { z: number; tx: number; ty: number };
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
-  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
+  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string; /** can't be dragged or sized (a visual-only reorder until "Adjust") */ locked?: boolean }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -2370,6 +2382,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
             onPointerDown={(e) => {
               e.stopPropagation();
               endTip();
+              if (it.locked) return;
               // double-click (two quick clicks in the same spot) opens the color menu for the color under the cursor
               const now = Date.now(), last = lastDown.current;
               lastDown.current = { t: now, x: e.clientX, y: e.clientY, id: it.id };
