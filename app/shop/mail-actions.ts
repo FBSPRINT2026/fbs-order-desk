@@ -333,7 +333,8 @@ export async function addEmailToOrderNotes(activityId: string, orderId: string) 
   } catch (e) { return fail(e); }
 }
 
-export type InboxItem = { id: string; uid: number; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string; /** a file attached (the list's paperclip) */ has_attachments?: boolean };
+export type InboxItem = { id: string; uid: number; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string; /** a file attached (the list's paperclip) */ has_attachments?: boolean;
+  /** who else it went to (To and Cc, names and addresses), for the list's search (Oct 21, Nick: "when I search Alvin, this email doesn't come up") */ people?: string };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
 export async function getOutlookInbox() {
@@ -350,9 +351,18 @@ export async function getOutlookInbox() {
         // someone who wasn't a customer when they wrote, and is now: their emails are linked (no "New sender")
         relinkInboxLeads(admin, a).catch((e) => console.warn("relinkInboxLeads", e instanceof Error ? e.message : e)),
       ]), new Promise((r) => setTimeout(r, 4000))]); }
-    const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary, has_attachments")
+    const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary, has_attachments, message_id")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
-    return { ok: true as const, items: (data || []) as InboxItem[], connected: true, checked: a.last_ok_at };
+    const rows = (data || []) as (InboxItem & { message_id?: string })[];
+    // To and Cc from our copy of the mailbox (mail_cache), so searching the list finds someone who was only copied
+    const ids = [...new Set(rows.map((r) => r.message_id || "").filter(Boolean))];
+    const people = new Map<string, string>();
+    await Promise.race([Promise.all(Array.from({ length: Math.ceil(ids.length / 80) }, async (_, i) => {
+      const { data: c } = await admin.from("mail_cache").select("message_id, to_text, cc_text").eq("account_id", a.id).in("message_id", ids.slice(i * 80, i * 80 + 80));
+      for (const x of (c || []) as { message_id: string; to_text: string; cc_text: string }[]) people.set(x.message_id, `${x.to_text} ${x.cc_text}`.trim());
+    })).catch(() => null), new Promise((r) => setTimeout(r, 3000))]);
+    const items: InboxItem[] = rows.map(({ message_id, ...r }) => ({ ...r, people: (message_id && people.get(message_id)) || "" }));
+    return { ok: true as const, items, connected: true, checked: a.last_ok_at };
   } catch (e) { return fail(e); }
 }
 

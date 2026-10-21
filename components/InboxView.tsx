@@ -305,7 +305,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const bkN = (k: Bk) => (ol || []).filter((i) => k === "all" || bucketOf(i) === k).length;
   const olShown = (ol || []).filter((i) => bk === "all" || bucketOf(i) === bk).filter((i) => {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
-    return !t || `${i.from_name} ${i.from_email} ${i.subject} ${i.summary || ""} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") + " " + bodyOf(r.x) : ""}`.toLowerCase().includes(t);
+    return !t || `${i.from_name} ${i.from_email} ${i.people || ""} ${i.subject} ${i.summary || ""} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") + " " + bodyOf(r.x) : ""}`.toLowerCase().includes(t);
   });
   // conversations (Oct 12, Nick: "three emails from Methodist… should just be one email with the conversation
   // underneath it"): the Inbox grouped by conversation (lib/mail/convo), newest first; a conversation's row opens its
