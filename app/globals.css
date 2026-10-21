@@ -11334,6 +11334,26 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
 /* the phone menu: "View as…" is a row like the others (Oct 21, Nick: it was a lone binoculars icon at the bottom) */
 .nav-viewas > .lbl-t{display:none}
 @media (max-width:820px){
-  .side-drawer .nav-viewas{justify-content:flex-start!important;gap:10px;padding:11px 12px!important;font-size:15px;width:100%!important;height:auto!important;border-radius:6px;color:var(--side-ink)}
+  .side-drawer .nav-viewas{justify-content:flex-start!important;gap:10px;padding:5px 0!important;font-size:15px;width:100%!important;height:auto!important;border-radius:6px;color:var(--side-ink)}
   .side-drawer .nav-viewas > .lbl-t{display:inline!important}
+}
+/* Email on a phone (Oct 21, Nick: "takes up way too much space when you first open it… a sticky toolbar so you see
+   Inbox, Sent, all that stuff at the top and it always remains at the top"): the folder strip (Inbox · Sent · Archive ·
+   Drafts…) and the filter tabs (All · Customers · To-dos · Events · FYI) stay pinned under the header as you scroll;
+   the top is one row (folder, select, check, more) and the search; the AI summary is one line; the duplicate filter
+   buttons and the "Checked" line are gone */
+@media (max-width:760px) and (pointer:coarse){
+  html body:has(.pit) main.main{overflow:visible!important}
+  html body:has(.pit) :is(.ibx2, .ibx2-list, .ibx2-work, .ibx2-list-h){overflow:visible!important}
+  html body:has(.pit) main.main .mf-bar{display:flex!important;position:sticky;top:var(--phone-top,64px);z-index:30;margin:0!important;border-radius:0!important;box-shadow:0 1px 0 var(--line-2)!important}
+  html body:has(.pit):has(.ibx2.picked) main.main .mf-bar{display:none!important}
+  html body:has(.pit) main.main .mf-bar .mf-chip{padding:9px 12px!important;font-size:13px!important}
+  html body:has(.pit) .pit{padding-top:8px}
+  html body:has(.pit) .pit-fold{font-size:20px}
+  html body:has(.pit) .pit-chk{display:none}
+  html body:has(.pit) .pit-ai{margin:8px 0;padding:8px 12px}
+  html body:has(.pit) .pit-ai p,html body:has(.pit) .pit-qa{display:none!important}
+  html body:has(.pit) main.main .ibx2-list .ibx2-list-h{position:sticky;top:calc(var(--phone-top,64px) + 40px);z-index:29;background:var(--surface)}
+  html body:has(.pit) main.main .ibx2-list .ibx2-list-h .ibx2-tabs{display:flex!important}
+  html body:has(.pit) main.main .ibx2-list .ibx2-list-h .ibx2-find{display:none!important}
 }

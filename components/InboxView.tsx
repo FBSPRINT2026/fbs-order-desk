@@ -70,6 +70,12 @@ function byConvo<T>(xs: T[], keys: (x: T) => string[], at: (x: T) => string): T[
 }
 
 export default function InboxView({ mode }: { mode: Mode }) {
+  // phones: how tall the app's header is, so the folder strip and the filter tabs pin right under it (Oct 21, Nick)
+  useEffect(() => {
+    const set = () => { const h = document.querySelector<HTMLElement>(".side")?.getBoundingClientRect().height || 64; document.documentElement.style.setProperty("--phone-top", `${Math.round(h)}px`); };
+    set(); window.addEventListener("resize", set);
+    return () => window.removeEventListener("resize", set);
+  }, []);
   const [st, setSt] = useState<Status | null>(null);
   const [acts, setActs] = useState<Act[] | null>(null), [sugs, setSugs] = useState<Sug[]>([]), [custs, setCusts] = useState<Map<string, Cust>>(new Map()), [orders, setOrders] = useState<Ord[]>([]);
   // Inbox (mail): your Outlook Inbox, sorted by the AI. Conversations (crm): customer email: Needs reply / Leads / All.
