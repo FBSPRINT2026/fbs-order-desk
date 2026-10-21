@@ -59,6 +59,12 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
     if (!lines.length) throw new Error("Nothing waiting on production details here (already confirmed?).");
     const { error } = await admin.from("orders").update({ groups }).eq("id", o.id);
     if (error) throw new Error(error.message);
+    // every print confirmed: the "REORDER: confirm the print specs… <link>" line comes off the production notes
+    if (!groups.some((g) => (g.imprints || []).some((x) => x.confirm && (x.confirm.size || x.confirm.ink)))) {
+      const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();
+      const pn = String(inn?.production_notes || ""), clean = pn.replace(/REORDER: confirm the print specs \([^)]*\) before printing:[ \t]*\S*\s*/gi, "").trim();
+      if (clean !== pn.trim()) await admin.from("order_internal").update({ production_notes: clean }).eq("order_id", o.id);
+    }
     // the customer's design keeps every confirmation (designs.specs history; lib/designSpecs.ts): never overwritten, and
     // one that differs from an earlier confirmation of the same print says so
     const differs: string[] = [];

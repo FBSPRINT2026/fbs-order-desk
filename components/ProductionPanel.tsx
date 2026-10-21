@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 
@@ -42,7 +42,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
             {files.map((f) => (
               <div key={f.id} className="prod-file">
                 <button type="button" className="prod-thumb" title={f.name} onClick={() => (isImg(f) && f.url ? setZoom(f) : f.url && window.open(f.url, "_blank", "noopener"))}>
-                  {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <span>{ext(f.name)}</span>}
+                  {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
                 {onCategory && !f.category && f.guess && f.guess !== "?" && (
@@ -82,4 +82,31 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
       )}
     </section>
   );
+}
+
+/**
+ * A file's picture (Oct 21, Nick: "files don't show, they just show PDF and XLS"): a PDF / AI shows its first page
+ * (drawn in the browser, kept for the visit), a spreadsheet a sheet icon with its type; anything else its type.
+ */
+const thumbCache = new Map<string, Promise<string>>();
+function pdfThumb(url: string, name: string): Promise<string> {
+  if (!thumbCache.has(url)) thumbCache.set(url, (async () => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const { makePreview } = await import("@/lib/artPrep");
+      const png = await makePreview(new File([blob], name, { type: blob.type || "application/pdf" }), 360);
+      return png ? URL.createObjectURL(png) : "";
+    } catch { return ""; }
+  })());
+  return thumbCache.get(url)!;
+}
+function FileThumb({ f }: { f: ProdFile }) {
+  const [u, setU] = useState("");
+  const pdf = /\.(pdf|ai)$/i.test(f.name) || /pdf/i.test(f.mime || "");
+  const sheet = /\.(xlsx?|csv|numbers)$/i.test(f.name) || /sheet|excel|csv/i.test(f.mime || "");
+  useEffect(() => { let off = false; if (pdf && f.url) void pdfThumb(f.url, f.name).then((x) => { if (!off) setU(x); }); return () => { off = true; }; }, [pdf, f.url, f.name]);
+  // eslint-disable-next-line @next/next/no-img-element
+  if (u) return <img src={u} alt={f.name} className="prod-page" />;
+  if (sheet) return <span className="prod-sheet" aria-hidden><i /><i /><i /><i /><i /><i /><i /><i /><i /><b>{ext(f.name)}</b></span>;
+  return <span>{ext(f.name)}</span>;
 }

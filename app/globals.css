@@ -10903,3 +10903,21 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .tagp-which{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .tagp-which select{width:auto}
 .tagp-which .danger{color:#b91c1c}
+/* Art & production tidied (Oct 21): proof versions in a row, mockup saves grouped */
+.ph-row{display:flex!important;flex-direction:column;gap:8px}
+.ph-row .ph-body{order:1}
+.ph-row .ph-pics{order:2;display:flex;flex-direction:row;flex-wrap:wrap;gap:6px}
+.ph-row .ph-pic{width:72px;height:72px}
+.mkh-grp{padding:10px 0;border-bottom:1px solid var(--line-2,var(--line));display:flex;flex-direction:column;gap:6px}
+.mkh-grp.old{opacity:.85}
+.mkh-grp-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.mkh-strip{display:flex;flex-wrap:wrap;gap:5px}
+.mkh-th{width:44px;height:44px;border:1px solid var(--line);border-radius:7px;background:#fff;display:grid;place-items:center;overflow:hidden}
+.mkh-grp:first-child .mkh-th{width:54px;height:54px}
+.mkh-th img{max-width:100%;max-height:100%;object-fit:contain}
+.mkh-grp-s{color:var(--ink-2);font-size:12px}
+.mkh-more{margin-top:8px;font-size:13px}
+.prod-thumb img.prod-page{background:#fff;object-fit:contain}
+.prod-sheet{display:grid;grid-template-columns:repeat(3,18px);grid-auto-rows:10px;gap:2px;position:relative;padding-bottom:16px}
+.prod-sheet i{background:#e7f3ea;border:1px solid #9cc7a6;border-radius:1px}
+.prod-sheet b{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:11px;color:#1e7a3a}

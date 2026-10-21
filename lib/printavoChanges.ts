@@ -30,7 +30,9 @@ export const htmlText = (x: string) => !/<[a-z/][^>]*>/i.test(x || "") ? x || ""
   .replace(/<br\s*\/?>/gi, "\n").replace(/<\/(div|p|li|h\d)>/gi, "\n").replace(/<li[^>]*>/gi, "• ").replace(/<[^>]+>/g, "")
   .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
   .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
-const noteText = (x: string) => htmlText(x || "").replace(/\r\n?/g, "\n").replace(SENT_LINE, "").trim();
+// our own "REORDER: confirm the print specs… <link>" line isn't the customer's note (it's made from the prints' state)
+const REORDER_LINE = /REORDER: confirm the print specs \([^)]*\) before printing:[ \t]*\S*\s*/gi;
+const noteText = (x: string) => htmlText(x || "").replace(/\r\n?/g, "\n").replace(SENT_LINE, "").replace(REORDER_LINE, "").trim();
 
 export const snapOf = (o: Order) => (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state?.pv || null;
 

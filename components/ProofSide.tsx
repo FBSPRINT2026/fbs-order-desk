@@ -30,6 +30,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     (async () => {
       const [{ data: ms }, { data: pr }] = await Promise.all([
@@ -55,6 +56,14 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   const sentAs = (m: Mk) => proofs.filter((p) => p.mockup_id === m.id).sort((a, b) => a.version - b.version);
   const unsentCurrent = current.some((m) => !live.some((p) => p.mockup_id === m.id));
   const st = live.length ? versionState(live) : null;
+  // one entry per save (Oct 21, Nick: "the mockups are not stacked together, so they're really tall"): the shirts saved
+  // together (within a couple of minutes, same group, both current or both older) side by side; older saves fold away
+  const groups: Mk[][] = [];
+  for (const m of mocks) {
+    const g = groups[groups.length - 1], last = g?.[g.length - 1];
+    if (last && last.group_id === m.group_id && !!last.archived_at === !!m.archived_at && Math.abs(new Date(last.created_at).getTime() - new Date(m.created_at).getTime()) < 150_000) g.push(m);
+    else groups.push([m]);
+  }
   const first = (customer || "The customer").split(/\s+/)[0];
 
   const done = (t: string) => { setMsg(t); setAsk(""); setNote(""); setN((x) => x + 1); onChanged(); };
@@ -73,24 +82,31 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
         <div className="panel-h"><h2>Mockup history</h2><span className="faint">every save</span><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
         <div className="panel-b">
           {!mocks.length && <p className="faint" style={{ margin: 0 }}>No mockups saved yet. Make one in the Mockup Creator.</p>}
-          {mocks.map((m) => {
-            const v = sentAs(m), im = m.snapshot?.imprints?.[0];
+          {groups.slice(0, showAll ? groups.length : 2).map((gr) => {
+            const m = gr[0], im = m.snapshot?.imprints?.[0];
+            const v = [...new Map(gr.flatMap((x) => sentAs(x)).map((p) => [p.version, p])).values()].sort((a, b) => a.version - b.version);
+            const old = !!m.archived_at;
             return (
-              <div className={"mkh-row" + (m.archived_at ? " old" : "")} key={m.id}>
-                <a className="mkh-pic" href={urls[m.id + ":full"] || undefined} target="_blank" rel="noreferrer" title="Open full size">
-                  {urls[m.id] ? <img src={urls[m.id]} alt="" onError={(e) => { const t = e.currentTarget; if (urls[m.id + ":full"] && t.src !== urls[m.id + ":full"]) t.src = urls[m.id + ":full"]; }} /> : null}
-                </a>
-                <div className="mkh-body">
-                  <b>{m.title.replace(/^Group \d+ — /, "")}</b>
-                  <small>{[im?.location, im?.size].filter(Boolean).join(" · ")}{im?.location ? " · " : ""}{fmtStamp(m.created_at)}{m.created_by ? ` · ${m.created_by.split("@")[0]}` : ""}</small>
-                  {m.archived_at && m.snapshot && (ask === "back" + m.id
-                    ? <div className="mkh-q"><span>Make this the current mockup again?</span><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => goBack(m)}>{busy ? "…" : "Yes"}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div>
-                    : <button type="button" className="linkbtn mkh-back" onClick={() => setAsk("back" + m.id)}>↶ Go back to this</button>)}
+              <div className={"mkh-grp" + (old ? " old" : "")} key={m.id}>
+                <div className="mkh-grp-h">
+                  <b>{fmtStamp(m.created_at)}</b>
+                  <span className={"mkh-pill " + (v.length ? "sent" : old ? "draft" : "cur")}>{v.length ? `${v.some((p) => p.sent_at) ? "Sent" : "Approved"} as v${v.map((p) => p.version).join(", v")}` : old ? "Not sent" : "Current · not sent"}</span>
                 </div>
-                <span className={"mkh-pill " + (v.length ? "sent" : m.archived_at ? "draft" : "cur")}>{v.length ? `${v.some((p) => p.sent_at) ? "Sent" : "Approved"} as v${v.map((p) => p.version).join(", v")}` : m.archived_at ? "Not sent" : "Current · not sent"}</span>
+                <div className="mkh-strip">
+                  {gr.map((x) => (
+                    <a key={x.id} className="mkh-th" href={urls[x.id + ":full"] || undefined} target="_blank" rel="noreferrer" title={`${x.title.replace(/^Group \d+ — /, "")}: open full size`}>
+                      {urls[x.id] ? <img src={urls[x.id]} alt="" onError={(e) => { const t = e.currentTarget; if (urls[x.id + ":full"] && t.src !== urls[x.id + ":full"]) t.src = urls[x.id + ":full"]; }} /> : null}
+                    </a>
+                  ))}
+                </div>
+                <small className="mkh-grp-s">{[im?.location, im?.size, `${gr.length} shirt${gr.length === 1 ? "" : "s"}`, m.created_by ? m.created_by.split("@")[0] : ""].filter(Boolean).join(" · ")}</small>
+                {old && m.snapshot && (ask === "back" + m.id
+                  ? <div className="mkh-q"><span>Make this the current mockup again?</span><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => goBack(m)}>{busy ? "…" : "Yes"}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div>
+                  : <button type="button" className="linkbtn mkh-back" onClick={() => setAsk("back" + m.id)}>↶ Go back to this</button>)}
               </div>
             );
           })}
+          {groups.length > 2 && <button type="button" className="linkbtn mkh-more" onClick={() => setShowAll((x) => !x)}>{showAll ? "Fewer saves" : `${groups.length - 2} older save${groups.length - 2 === 1 ? "" : "s"}`}</button>}
           {current.length > 0 && unsentCurrent && (ask === "send"
             ? <div className="ca-confirm"><div>Email <b>{email || "the customer"}</b> “Artwork proof ready for your order” with a link to review <b>Version {nextV}</b>?</div>
                 <div className="row"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => act("send", () => sendProofVersion(orderId), (r) => r.emailed ? `Version ${r.version} sent to ${email}.` : `Version ${r.version} is in their portal. Email is off, so send them the portal link.`)}>{busy === "send" ? "Sending…" : `Send Version ${nextV}`}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>

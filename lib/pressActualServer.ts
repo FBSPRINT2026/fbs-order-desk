@@ -84,7 +84,14 @@ export async function saveActual(admin: SupabaseClient, who: JobActor, card: Job
 
   // a shop note on the job, so it's in Production files & notes and on the work order
   const body = [`As printed, ${plan.location}: ${setupLine(act.press, heads)}`, changes.length ? `Changed from the suggestion: ${changes.map((c) => c.text).join("; ")}` : "Same as the suggested setup.", notes].filter(Boolean).join("\n");
-  await admin.from("job_files").insert({ [card.kind === "o" ? "order_id" : "archived_order_id"]: card.id, customer_id: card.customerId || null, kind: "note", tag: "Press setup", body, by_name: who.name, by_email: who.email, employee_id: who.employeeId });
+  // one "As printed" note per print (Oct 21, Nick: "so many double entries"): the earlier ones for this print are archived
+  // (never deleted), and saving the same setup again adds nothing new
+  const col = card.kind === "o" ? "order_id" : "archived_order_id";
+  const { data: prior } = await admin.from("job_files").select("id, body").eq(col, card.id).eq("kind", "note").eq("tag", "Press setup").eq("archived", false).like("body", `As printed, ${plan.location.replace(/[%_]/g, "")}:%`);
+  const same = ((prior || []) as { id: string; body: string }[]).find((p) => p.body === body);
+  const older = ((prior || []) as { id: string; body: string }[]).filter((p) => p !== same).map((p) => p.id);
+  if (older.length) await admin.from("job_files").update({ archived: true }).in("id", older);
+  if (!same) await admin.from("job_files").insert({ [col]: card.id, customer_id: card.customerId || null, kind: "note", tag: "Press setup", body, by_name: who.name, by_email: who.email, employee_id: who.employeeId });
 
   if (learn) await learnFrom(admin, card.id, plan, act, changes, who.name);
   if (card.kind === "o") await admin.from("order_events").insert({ order_id: card.id, kind: "press_actual", detail: `${plan.location}: ${changes.length ? changes.map((c) => c.text).join("; ") : "as suggested"}`, actor: who.email || who.name });
