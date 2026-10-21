@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { BrandEdit } from "@/components/BrandAssistant";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
 import { uid } from "@/lib/pricing";
@@ -22,6 +23,7 @@ export default function CustomerNeckLabels({ customerId }: { customerId: string 
   const [sets, setSets] = useState<NeckLabelSet[] | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState("");
   const [showOff, setShowOff] = useState(false);
+  const { editing } = useContext(BrandEdit);
   useEffect(() => {
     sb.from("customers").select("neck_labels").eq("id", customerId).maybeSingle().then(({ data, error }) => {
       if (error) { setErr(/neck_labels/.test(error.message) ? "Neck labels aren't set up in the database yet." : error.message); setSets([]); return; }
@@ -62,6 +64,8 @@ export default function CustomerNeckLabels({ customerId }: { customerId: string 
 
   if (!sets) return null;
   const live = sets.filter((s) => !s.archived), off = sets.filter((s) => s.archived);
+  // locked: one line per tag to read (Oct 21, Nick: "cluttered"); Edit opens the full card
+  if (!editing) return live.length ? <section className="nl-sec nl-ro">{live.map((s) => <SetRow key={s.id} set={s} />)}</section> : null;
   return (
     <section className="nl-sec">
       <div className="nl-sec-h">
@@ -79,6 +83,31 @@ export default function CustomerNeckLabels({ customerId }: { customerId: string 
         </div>
       )}
     </section>
+  );
+}
+
+function SetRow({ set }: { set: NeckLabelSet }) {
+  const order = SIZE_GROUPS.flatMap((g) => [...g.sizes]);
+  const sized = order.filter((z) => set.files?.[z]);
+  const main = set.mode === "per_size" ? null : set.template || null;
+  const u = useUrl(main || (sized[0] ? set.files![sized[0]] : null));
+  const shown: NeckLabelSet = main ? { ...set, mode: "one", files: {} } : set;
+  const size = main ? "M" : sized[0] || "M";
+  const facts = [main ? (sized.length ? `One tag for every size, plus ${sized.join(", ")}` : "One tag for every size") : sized.length ? `A tag for ${sized.join(", ")}` : "No tag art yet", set.ink || "Light gray", `${set.widthIn ?? 2.5}" wide`];
+  return (
+    <div className="nl-row">
+      <span className="nl-row-pic">{u ? <img src={u} alt="" /> : null}</span>
+      <span className="nl-row-t">
+        <b>Neck tag{set.name ? `: ${set.name}` : ""}</b>
+        <span>{facts.join(" · ")}</span>
+        {main && <small className="faint">{main.name}</small>}
+        {set.note && <small>{set.note}</small>}
+      </span>
+      <span className="nl-row-pv">
+        <NeckLabelView set={shown} size={size} shirtHex="#1f1f22" width={76} caption={false} />
+        <NeckLabelView set={shown} size={size} shirtHex="#f3f3f1" width={76} caption={false} />
+      </span>
+    </div>
   );
 }
 

@@ -1,7 +1,6 @@
 "use client";
 import { oneOfEach } from "@/lib/mockupList";
 import { logoShirtsFrom } from "@/lib/logoShirts";
-import TestAccount from "@/components/TestAccount";
 import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import { use, useEffect, useRef, useState } from "react";
@@ -28,12 +27,9 @@ import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
 import CustomerContacts from "@/components/CustomerContacts";
-import CustomerBrandColors from "@/components/CustomerBrandColors";
 import { cropPreviews, uploadDesign } from "@/lib/designs";
-import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import BrandAssistant from "@/components/BrandAssistant";
-import CustomerStyleGuides from "@/components/CustomerStyleGuides";
-import CustomerNeckLabels from "@/components/CustomerNeckLabels";
+import BrandSections from "@/components/BrandSections";
 import DesignCatalogSetting from "@/components/DesignCatalogSetting";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
@@ -200,8 +196,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           : <div className="mv-strip"><span><b>Not in the new system yet.</b> Their next order here waits for a short checklist (name, contacts, retail / wholesale, pricing, addresses).{steps ? ` ${steps} of 5 done.` : ""}</span><button type="button" className="btn primary sm" onClick={() => setMoveOpen("edit")}>Move to the new system</button></div>;
       })()}
       {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
-      <TestAccount key={id} customerId={id} isTest={!!c.is_test} jobs={os.length} onChange={(v) => { reloadShop(); if (v !== undefined) setC((x) => (x ? { ...x, is_test: v } : x)); }} />
-      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><CustomerStyleGuides customerId={id} /><CustomerBrandColors customerId={id} company={c?.company || c?.name || ""} /><CustomerBrandPrint customerId={id} /><CustomerNeckLabels customerId={id} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
+      {/* the Test account switch (components/TestAccount) is off (Oct 21, Nick: "we're past that point… might come back to it later") */}
+      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} /> : undefined}

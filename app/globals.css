@@ -11004,3 +11004,25 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .cmp-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--line)}
 .cmp-f input{width:160px}
 .imp-mock .mk-more{border:0;background:none;padding:0;border-radius:0;cursor:default}
+/* Brand standards shows only what's on file (Oct 21, Nick) */
+.bai-slot{display:contents}
+.bsx-add{position:relative;display:inline-flex}
+.bsx-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:4px}
+.bsx-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
+.bsx-menu button:hover{background:var(--surface-2)}
+.bsx-none{font-size:13px;color:var(--ink-3);margin:10px 0 0}
+.bs-lock[data-locked] .bp-hint,.bs-lock[data-locked] .bc-foot{display:none}
+.nl-ro{border:0;padding:0;margin:0}
+.nl-row{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:14px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.nl-row + .nl-row{margin-top:8px}
+.nl-row-pic{height:68px;border-radius:6px;border:1px solid var(--line-2);background:#fff;display:grid;place-items:center;overflow:hidden}
+.nl-row-pic img{max-width:100%;max-height:100%;object-fit:contain}
+.nl-row-t{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13px;color:var(--ink-2)}
+.nl-row-t b{font-size:14px;color:var(--ink)}
+.nl-row-t small{font-size:12px}
+.nl-row-pv{display:flex;gap:8px}
+.nl-row-pv > *{border-radius:6px;overflow:hidden}
+@media (max-width:700px){.nl-row{grid-template-columns:72px minmax(0,1fr)}.nl-row-pv{grid-column:1 / -1}}
+.bp-ro{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.bp-ro-r{display:flex;gap:10px;font-size:13px;color:var(--ink)}
+.bp-ro-l{flex:none;min-width:110px;color:var(--ink-3);font-weight:600;font-size:12.5px}

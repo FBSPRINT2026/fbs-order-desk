@@ -28,7 +28,8 @@ export default function CustomersPage() {
     return m;
   }, [orders]);
 
-  const list = Object.values(customers)
+  // test companies are off (Oct 21, Nick: "we're past that point… might come back to it later"): kept, not listed
+  const list = Object.values(customers).filter((c) => !c.is_test)
     .filter((c) => !q.trim() || [c.name, c.company, c.email, c.phone, ...(c.tags || [])].join(" ").toLowerCase().includes(q.trim().toLowerCase()))
     .filter((c) => !tag || (tag === "__fu" ? !!c.next_follow_up && (daysUntil(c.next_follow_up) ?? 1) <= 0 : (c.tags || []).includes(tag)))
     .sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name));
@@ -44,7 +45,7 @@ export default function CustomersPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">{Object.keys(customers).length} on file</div><h1>Customers</h1></div>
+        <div><div className="eyebrow">{Object.values(customers).filter((c) => !c.is_test).length} on file</div><h1>Customers</h1></div>
         <div className="row"><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
         <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></div>
       </div>

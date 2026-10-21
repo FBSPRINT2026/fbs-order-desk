@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
@@ -16,6 +16,12 @@ const post = async (body: Record<string, unknown>) => {
   return (await r.json().catch(() => ({ ok: false, error: "No answer from the server." }))) as { ok: boolean; error?: string; off?: boolean; messages?: BrandMsg[] };
 };
 const OP = { "+": "add", "~": "chg", "-": "del" } as const;
+/**
+ * Whether Brand standards is being edited, and where "+ Add" goes on its title line (Oct 21, Nick: "all you should show
+ * in there is just the tags… no other brand standards"): the sections read it to show only what's on file when locked.
+ * Outside Brand standards it reads as editing, so the editors work as before.
+ */
+export const BrandEdit = createContext<{ editing: boolean; setEditing: (v: boolean) => void; slot: HTMLElement | null }>({ editing: true, setEditing: () => {}, slot: null });
 
 export default function BrandAssistant({ customerId, customerName, children, onApplied }: { customerId: string; customerName: string; children: ReactNode; onApplied?: () => void }) {
   const { role, realRole } = useRole();
@@ -31,6 +37,7 @@ export default function BrandAssistant({ customerId, customerName, children, onA
   // locked unless Edit is clicked (Oct 16, Nick: "you can just X delete something easily… locked, click to edit");
   // starts locked every visit on purpose
   const [editing, setEditing] = useState(false);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,11 +84,12 @@ export default function BrandAssistant({ customerId, customerName, children, onA
     <div className={"bai" + (open ? " open" : "")}>
       {/* even with the Brand standards title, at the right (Oct 16, Nick) */}
       <div className="bai-btns">
+        <span ref={setSlot} className="bai-slot" />
         <button type="button" className={"bai-edit" + (editing ? " on" : "")} onClick={() => setEditing((x) => !x)} aria-pressed={editing} title={editing ? "Lock brand standards again" : "Brand standards are locked. Click to change them."}>{editing ? "✓ Done" : "✎ Edit"}</button>
         {can && <button type="button" className={"bai-btn" + (open ? " on" : "")} onClick={() => setOpen((x) => !x)} aria-expanded={open}>✦ {open ? "Close AI" : "Set up with AI"}</button>}
       </div>
       <div className="bai-wrap">
-        <div className="bai-ed" key={ver}><fieldset className="bs-lock" disabled={!editing} data-locked={!editing || undefined}>{children}</fieldset></div>
+        <div className="bai-ed" key={ver}><BrandEdit.Provider value={{ editing, setEditing, slot }}><fieldset className="bs-lock" disabled={!editing} data-locked={!editing || undefined}>{children}</fieldset></BrandEdit.Provider></div>
         {can && open && (
           // looks like Apple Messages (Oct 16, Nick): blue bubbles for us, gray for the AI, a rounded message field
           <section className="im" aria-label="Set up brand standards with AI">

@@ -196,7 +196,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       setO(d);
       latest.current = d;
-      setCustomers((await withPrivate(sb, (cu.data || []) as Customer[])).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      // test companies are off (Oct 21, Nick: "we're past that point"): not offered, unless this order is one of theirs
+      setCustomers((await withPrivate(sb, ((cu.data || []) as Customer[]).filter((c) => !c.is_test || c.id === d.customer_id))).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
       setSettings(mergeSettings(st.data?.data));
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");

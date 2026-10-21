@@ -668,7 +668,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {(brandColors.length > 0 || brandEditor) && (
         <div className="aa-card">
-          <div className="aa-sec-h"><h3>Brand standards</h3><span className="faint">{mode === "shop" ? "Their exact inks. They show first in the Mockup Creator for this customer." : "Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span></div>
+          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}</div>
           {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
             <div key={g || "_"} className="bs-group">
               {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}

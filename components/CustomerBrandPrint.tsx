@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { BrandEdit } from "@/components/BrandAssistant";
 import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, uid, type BrandPrint, type BrandSize } from "@/lib/pricing";
 
@@ -19,6 +20,7 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
   const [bp, setBp] = useState<BrandPrint | null>(null);
   const [logos, setLogos] = useState<{ id: string; name: string; number: number }[]>([]);
   const [state, setState] = useState("");
+  const { editing } = useContext(BrandEdit);
   useEffect(() => {
     sb.from("customers").select("brand_print").eq("id", customerId).maybeSingle().then(({ data }) => setBp(((data?.brand_print || {}) as BrandPrint)));
     sb.from("designs").select("id, name, number").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("number", { ascending: false }).limit(200)
@@ -35,6 +37,19 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
   const sizes = bp.sizes || [];
   const setRow = (id: string, patch: Partial<BrandSize>) => save({ ...bp, sizes: sizes.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
   const hit = bp.hit || "standard";
+  // locked: only what's set, no help text (Oct 21, Nick: "cluttered")
+  if (!editing) {
+    const how = [bp.hit === "fashion" ? "Fashion hit (no underbase)" : bp.hit === "ask" ? "Ask each time" : bp.hit ? "Standard (underbase)" : "", bp.soft ? "soft hand additive" : "", bp.hit === "fashion" && bp.distressedOnly ? "only distressed logos" : ""].filter(Boolean);
+    const rules = (bp.rules || []).filter(Boolean);
+    const nameOf = (r: BrandSize) => (r.which === "design" ? (() => { const l = logos.find((x) => x.id === r.design_id); return l ? `D-${l.number} ${l.name}` : "One logo"; })() : WHICH.find((w) => w.v === r.which)?.label || "");
+    return (
+      <div className="bp bp-ro">
+        {sizes.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">Print sizes</span><span>{sizes.map((r) => `${nameOf(r)}: ${r.width}" on the ${locLabel(r.location)}${r.note ? ` (${r.note})` : ""}`).join(" · ")}</span></div>}
+        {how.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">On dark shirts</span><span>{how.join(", ")}</span></div>}
+        {rules.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">Rules</span><span>{rules.join(" · ")}</span></div>}
+      </div>
+    );
+  }
 
   return (
     <div className="bp">
