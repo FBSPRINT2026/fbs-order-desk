@@ -11192,3 +11192,14 @@ main.main .ibx2-list .ibx2-tabs button.on{color:var(--ink)!important;font-weight
 main.main .ibx2-list .ibx2-tabs button span{font-size:10.5px!important;font-weight:700;min-width:16px;padding:0 5px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0!important}
 main.main .ibx2-list .ibx2-tabs button.on span{background:var(--fbs-blue);color:#fff}
 main.main .ibx2-list .ibx2-tabs button span.hot{background:var(--danger);color:#fff}
+/* Email's reading-pane buttons (Reply · Archive · News · Move · Create order…) in the toolbar look: white bars with the
+   card ring, bold gray labels that darken on hover (Oct 21, Nick: "the buttons should be the new style") */
+main.main .tb-g{background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;gap:0;overflow:hidden}
+main.main .tb-b{border-radius:0;font-size:13px;font-weight:700;color:var(--ink-3);padding:0 13px}
+main.main .tb-b:hover:not(:disabled){background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));color:var(--ink)}
+main.main .tb-b.strong{color:var(--ink)}
+main.main .tb-b.danger{color:var(--danger)}
+main.main .tb-b.primary{color:#fff;background:var(--accent)}
+/* page-top buttons are all the same button (no bare text buttons next to boxed ones) */
+main.main :is(.page-head, .ibx2-head) .btn.ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
+main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
