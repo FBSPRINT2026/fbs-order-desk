@@ -330,15 +330,14 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       {/* Admin Tools: only for me (the owner), and not while viewing as someone (Oct 16, Nick) */}
       {role === "owner" && (
       <div className="nav-g nav-g-admintools nav-foot-g">
-      <div className="nav-h nav-h-admintools">Admin Tools</div>
+      {/* the portal's version, on the Admin Tools title line at the right, my view only (Oct 20, Nick) */}
+      <div className="nav-h nav-h-admintools nav-h-ver"><span>Admin Tools</span><VersionTag /></div>
       <nav className="nav nav-foot nav-tools">
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         {role === "owner" && link(["/shop/support", "support", "Support"])}
         {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
-        {realRole === "owner" && !viewAs && viewAsEl}
-        {/* the portal's version, at the right end of my Admin Tools (Oct 20, Nick: "my view only") */}
-        <VersionTag /></nav>
+        {realRole === "owner" && !viewAs && viewAsEl}</nav>
       </div>
       )}
       <div className="side-user">
