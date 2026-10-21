@@ -615,6 +615,19 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     return true;
   }
 
+  /** take a group's mockup off the order so a new one can be made: the mockups are archived (never deleted) */
+  async function removeMockup(gi: number) {
+    if (!o) return;
+    const g = o.groups[gi]; if (!g) return;
+    let q = sb.from("mockups").update({ archived_at: new Date().toISOString() }).eq("order_id", o.id).is("archived_at", null);
+    q = o.groups.length === 1 ? q.or(`group_id.eq.${g.id},group_id.is.null`) : q.eq("group_id", g.id);
+    const { error } = await q;
+    if (error) return say("Couldn't remove the mockup: " + error.message);
+    patch((d) => { const x = d.groups[gi]; if (!x) return; delete x.mockupAt; delete x.mockupSkipped; x.mockupThumbs = []; });
+    setArmed("");
+    say("Mockup removed. Create mockup makes a new one.");
+  }
+
   async function saveToCatalog(l: GLine) {
     const row = { style: l.style.trim(), brand: l.brand || "", description: l.garment, colors: l.color ? [l.color] : [], cost: +l.cost || 0 };
     const { data, error } = await sb.from("garments").insert(row).select("*").single();
@@ -1133,7 +1146,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

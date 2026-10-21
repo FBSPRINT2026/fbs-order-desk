@@ -36,6 +36,8 @@ type Props = {
   onLookup?: (style: string, styleID?: number, supplier?: string) => Promise<Garment | null>;
   designs?: Design[];
   onMockup?: () => void;
+  /** take the group's mockup off the order to make a new one (archived, not deleted; Oct 21, Nick: #40091) */
+  onRemoveMockup?: () => void;
   /** why a mockup can't be made yet (no customer / no garment) */
   mockupBlock?: string;
   /** signed links for the group's saved mockup thumbnails */
@@ -65,7 +67,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
   // you want to change all the items on this group to 2.25?")
@@ -346,6 +348,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+          {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup off the order (it's archived, not deleted) so you can make a new one"
+            onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup?" : "Remove mockup"}</button>}
           {g.mockupAt && <span className="faint mk-when">Saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
           {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
         </div>
