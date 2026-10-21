@@ -11169,7 +11169,9 @@ main.main .aa-arch{font-family:var(--body)}
    the whole look"): titles (page h1 and panel h2) in the title font (--display); everything else in the one body font
    (--body), no typewriter text except real code. Text is --ink; sub text (second lines, notes, labels) --ink-3; bold
    is --ink at 700; links and the picked tab --accent / --fbs-blue. */
-main.main :where(*):not(h1, h1 *, h2, h2 *, code, pre, kbd, samp, svg, svg *, [style*="font-family"], [style*="font-family"] *, [data-font], [data-font] *){font-family:var(--body) !important}
+/* the sidebar too (Oct 21, Nick: "don't forget about the left toolbar"); the title font only on the page's h1 and panel titles
+   (an email's subject or the inbox summary's heading are body text) */
+.app :where(*):not(main.main h1, main.main h1 *, .panel-h h2, .panel-h h2 *, code, pre, kbd, samp, svg, svg *, [style*="font-family"], [style*="font-family"] *, [data-font], [data-font] *){font-family:var(--body) !important}
 main.main :is(.sub, .faint, .muted, small){color:var(--ink-3)}
 main.main :is(b, strong){color:inherit}
 /* Email's folder bar is a section bar like the order page's (Oct 21, Nick: "all the toolbars on email look off") */
