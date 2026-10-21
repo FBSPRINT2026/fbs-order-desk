@@ -11238,3 +11238,36 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
 .sx-art-p img{max-width:100%;max-height:100%;object-fit:contain}
 .sx-art-i b{font-size:12.5px}
 .sx-msg{white-space:normal!important;max-width:640px;color:var(--ink-2)}
+
+/* ===== Phones, after the one-look changes (Oct 21, Nick: "look at what we did to the mobile phone… it looks really
+   funky now") ===== */
+@media (max-width:760px){
+  /* a garment: style and brand, the description, then each color with its sizes, then qty / each / total */
+  .ord .gl-list .gl{display:flex;flex-direction:column;gap:8px}
+  .ord .gl-list .gl .gl-sty{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:6px;max-width:none;width:100%}
+  .ord .gl-list .gl .gl-sty > *{grid-area:auto!important;min-width:0}
+  .ord .gl-list .gl .gl-sty .a-de{grid-column:1 / -1!important}
+  .ord .gl-list .gl > .gl-row.gl-r2{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-template-areas:"co co co x" "sz sz sz sz" "cs qt ea to"!important;gap:8px;align-items:end}
+  .ord .gl-list.ws .gl > .gl-row.gl-r2{grid-template-areas:"co co co x" "sz sz sz sz" "qt ea to to"!important}
+  .ord .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
+  .ord .gl-list .gl > .gl-row.gl-r2 .a-sz .szrow{margin:0}
+  .ord .gl-list .gl.same{padding-top:6px}
+  /* tab bars and secondary toolbars: even columns that wrap neatly instead of a ragged second row */
+  main.main :is(.chips, .aa-sub, .set-tabs, .mk-hit-seg, .jt-chips, .rv-seg, .md-seg){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));width:100%!important}
+  main.main :is(:is(.chips, .mk-hit-seg) > :is(.chip, button), .aa-sub > button, .set-tabs a, .rv-seg > button, .md-seg > button, .jt-chips > button){padding:10px 6px!important;font-size:12.5px!important;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body main.main .mf-bar{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+  html body main.main .mf-bar::before{display:none!important}
+  html body main.main .mf-bar .mf-chip{padding:10px 6px!important;font-size:12.5px!important}
+  html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button{flex:1 1 0!important;min-width:0;overflow:hidden;font-size:12px!important;padding:10px 2px!important}
+  html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button:not(.on) span{display:none}
+  /* the toolbar's search and selects take the full width under the tabs */
+  main.main .toolbar{gap:8px}
+  main.main .toolbar > :is(select, .sx, label, .aa-search, input){flex:1 1 100%;max-width:none!important;width:100%}
+  /* summary cards: two to a row */
+  main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis) > *{flex:1 1 45%;min-width:0}
+  /* list cards on a phone: the number and job on top, the status pill without a "Status:" label, the rest small */
+  table.m-card td[data-label="Status"]::before,table.m-card td[data-label="Job"]::before,table.m-card td[data-label="Customer"]::before,table.m-card td[data-label="Order"]::before{content:none!important}
+  table.m-card td[data-label="Status"]{flex:1 1 100%}
+  table.m-card td[data-label="Customer"]{flex:1 1 100%;font-size:13px}
+  table.m-card td[data-label]:not(:first-child):not(:nth-child(2)):not([data-label="Status"]):not([data-label="Customer"]){font-size:12.5px}
+}
