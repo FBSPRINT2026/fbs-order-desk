@@ -227,8 +227,8 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
   const photos = (items || []).filter((x) => x.kind === "photo");
   return (
     <>
-      <button type="button" className="jm-cam" onClick={() => cam.current?.click()}><Icon d={I.photo} />{t("Take a photo")}</button>
-      <button type="button" className="jm-cam jm-lib" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
+      <button type="button" className="jm-cam" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
+      <button type="button" className="jm-cam jm-lib" onClick={() => cam.current?.click()}><Icon d={I.photo} />{t("Take a photo")}</button>
       <input ref={lib} type="file" accept="image/*" multiple hidden onChange={async (e) => {
         const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
         setErr("");

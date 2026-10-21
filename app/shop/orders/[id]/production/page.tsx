@@ -564,9 +564,16 @@ function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }:
   const [all, setAll] = useState(false);
   // from the phone (Oct 21, Nick: "upload photos directly from his iPhone… scan a QR code and on this screen… bring in
   // photos"): the job's phone page opens on Photos (take one, or add from the photo library); they show up here
-  const [phone, setPhone] = useState(false);
-  const qr = useMemo(() => (phone ? qrSvg(`${jobLink(v.order.number)}?v=photos`, 2).svg : ""), [phone, v.order.number]);
-  useEffect(() => { if (!phone) return; const t = setInterval(() => void reloadPhotos(), 6000); return () => clearInterval(t); }, [phone, reloadPhotos]);
+  const qr = useMemo(() => qrSvg(`${jobLink(v.order.number)}?v=photos`, 2).svg, [v.order.number]);
+  useEffect(() => { const t = setInterval(() => { if (document.visibilityState === "visible") void reloadPhotos(); }, 8000); return () => clearInterval(t); }, [reloadPhotos]);
+  // the physical sample: set right away on screen, saved in the background (it lagged waiting on the whole page)
+  const [have, setHave] = useState<boolean | null>(p.sample);
+  async function setSample(k: boolean) {
+    const next = have === k ? null : k, was = have;
+    setHave(next); setMsg("");
+    const r = await fetch(`/api/orders/${orderId}/production`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "sample", print: p.id, have: next }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    if (r.error) { setHave(was); setMsg(r.error); }
+  }
   const pics = photos.filter((x) => x.kind === "photo" && x.url);
   const added = new Set(pics.map((x) => markOf(x.body || "")).filter(Boolean));
   const from = (v.order.reorderOf.match(/#(\d+)/) || [])[1] || "";
@@ -589,9 +596,18 @@ function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }:
   return (
     <div className="jv-cp-step jv-smp">
       <div className="jv-cp-n"><b>{n}</b>Samples or photos</div>
-      <div className="jv-ub">
-        <span>We have a physical sample</span>
-        {([[true, "Yes"], [false, "No"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (p.sample === k ? " on" : "")} disabled={busy} onClick={() => void post({ op: "sample", print: p.id, have: p.sample === k ? null : k }, "save")}>{l}</button>)}
+      <div className="jv-smp-top">
+        <div className="jv-ub">
+          <span>We have a physical sample</span>
+          {([[true, "Yes"], [false, "No"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (have === k ? " on" : "")} onClick={() => void setSample(k)}>{l}</button>)}
+        </div>
+        <div className="jv-phone">
+          <div className="jv-phone-qr" dangerouslySetInnerHTML={{ __html: qr }} />
+          <div>
+            <b>Have photos on your phone? Upload here</b>
+            <div className="jv-cc-hint">Scan with the iPhone camera: #{v.order.number}&apos;s Photos opens. Tap <b>Add from my photos</b> (or take one). They show up here in a few seconds.</div>
+          </div>
+        </div>
       </div>
       <div className="jv-smp-pics">
         {pics.map((x) => <a key={x.id} href={x.url} target="_blank" rel="noreferrer" title={(x.body || x.file_name || "").replace(/\s*\[[te]:[^\]]+\]\s*$/, "")}><img src={x.url} alt={x.body || "Photo"} /></a>)}
@@ -602,17 +618,7 @@ function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }:
           setUpl(false); await reloadPhotos();
         }} /></label>
         <button type="button" className="jv-addphoto" disabled={looking} onClick={() => (found ? setFound(null) : void find())}>{looking ? "Looking…" : found ? "Hide the messages" : "Find photos in texts and emails"}</button>
-        <button type="button" className="jv-addphoto" onClick={() => setPhone((x) => !x)}>{phone ? "Done with the phone" : "Add from my phone"}</button>
       </div>
-      {phone && (
-        <div className="jv-phone">
-          <div className="jv-phone-qr" dangerouslySetInnerHTML={{ __html: qr }} />
-          <div>
-            <b>Scan with your iPhone camera</b>
-            <div className="jv-cc-hint">It opens #{v.order.number}&apos;s Photos on the phone: take a photo, or tap <b>Add from my photos</b> to pick ones already on it. They show up here in a few seconds.</div>
-          </div>
-        </div>
-      )}
       {!pics.length && !found && <div className="jv-cc-hint">No photos on this job yet. Find the ones you texted or emailed the customer, or upload them.</div>}
       {msg && <div className="err">{msg}</div>}
       {found && (
