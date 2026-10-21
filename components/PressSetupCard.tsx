@@ -3,6 +3,7 @@ import { useRef, useState, type ReactNode } from "react";
 import PressLayout from "@/components/PressLayout";
 import PressDefaults, { pressLayOf } from "@/components/PressDefaults";
 import { useRole } from "@/components/RoleContext";
+import { useSticky } from "@/lib/useSticky";
 import { autoSetup, checkSetup, drawLayout, fitSetup, plateOf, printOrder, type Slot } from "@/lib/pressSetup";
 import { recommendSetup, type PlanPlate } from "@/lib/pressPlan";
 import { layoutCounts, type Machine, type Station } from "@/lib/production";
@@ -35,7 +36,7 @@ export function planOnPress(press: Machine | undefined, plates0: PsPlate[], setu
 }
 export type OnPress = NonNullable<ReturnType<typeof planOnPress>>;
 
-export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup" }: {
+export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup", compact = false }: {
   presses: Machine[]; setPresses?: (fn: (ps: Machine[]) => Machine[]) => void;
   press: Machine; onPickPress: (id: string) => void;
   onPress: OnPress; setup: Slot[] | null;
@@ -45,7 +46,10 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
   /** more beside the press picker (the production mockup's "Must run on this press") */ extra?: ReactNode;
   /** mesh typed per color (the production mockup: the screens as they ran) */ onMesh?: (key: string, mesh: number | undefined) => void;
   title?: string;
+  /** a narrow column (Separations): the stations open from a button beside Press Defaults */ compact?: boolean;
 }) {
+  const [showSt, setShowSt] = useSticky("ps.stations", false);
+  const stations = !compact || showSt;
   const { perms, email } = useRole();
   const plates = onPress.plates;
   const [selHead, setSelHead] = useState<number | null>(null);
@@ -71,11 +75,10 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
     for (let i = head + 1; i < n.length && moving.length; i++) if (n[i] === "") n[i] = moving.shift()!;
     commit(n);
   }
-  // tap a head on the drawing: its row in the list below lights up and its dropdown opens for a choice
+  // tap a head on the drawing: its station picker opens beside the press and its row below lights up
   function pickHead(i: number) {
     if (onPress.heads[i] === "down") { setMsg(`Head ${i + 1} is down (Production → Equipment Status).`); return; }
     setSelHead(i);
-    setTimeout(() => { const el = document.getElementById(`ps-head-${i}`) as HTMLSelectElement | null; el?.scrollIntoView({ block: "nearest" }); el?.focus(); }, 0);
   }
   /**
    * Drag anything onto a head (Oct 21, Nick: "if I want to make the white head 8, I should just be able to drag it down
@@ -117,15 +120,52 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
       <div className="sep-row">
         <select value={press.id} onChange={(e) => { onPickPress(e.target.value); setSelHead(null); }} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
         {perms.pressDefaults && setPresses && <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>}
+        {compact && <button type="button" className={"btn sm" + (showSt ? " on" : "")} aria-pressed={showSt} onClick={() => setShowSt(!showSt)} title="How each station sits for this job: flashes, cool-down, the roller">Stations</button>}
         {extra}
       </div>
-      <div className="sep-press" ref={drawing}><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
-        onDropHead={drag ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>
-      <p className="sep-help">Every head of the press, head 1 first. Drag a color, a flash, the roller or a cool-down onto another head to move it (they trade places), or pick what goes on a head. Tap a head on the press to find it here.</p>
+      {/* the press drawn, and beside it how each station sits for this job (Oct 21, Nick: "a visual next to the press…
+          flash on 2, cool down 3, roller on 4… select from there the flashes, and it should edit it down below") */}
+      <div className="ps-top">
+        <div className="sep-press" ref={drawing}><PressLayout layout={drawLayout(onPress.heads)} size={230} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
+          onDropHead={drag ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>
+        {stations && <div className="ps-side">
+          <div className="ps-lbl">How the press sits for this job · click a station to change it</div>
+          <div className="ps-strip" style={{ gridTemplateColumns: `repeat(${Math.min(6, onPress.heads.length)}, minmax(0, 1fr))` }}>
+            {onPress.heads.map((x, h) => {
+              const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
+              const kind = p ? "print" : x === "" ? "open" : x;
+              const word = p ? "print" : x === "flash" ? "flash" : x === "roller" ? "roller" : x === "cool" ? "cool" : x === "down" ? "down" : "open";
+              return (
+                <button key={h} type="button" className={"ps-tile t-" + kind + (selHead === h ? " sel" : "")} disabled={x === "down"} title={p ? `Head ${h + 1}: ${p.name}` : `Head ${h + 1}: ${word}`}
+                  onClick={() => setSelHead(selHead === h ? null : h)}>
+                  <b>{h + 1}</b><span>{p && <i className="ps-dot" style={{ background: p.hex }} />}{word}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selHead != null && onPress.heads[selHead] !== "down" && (() => {
+            const x = onPress.heads[selHead], k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
+            return (
+              <div className="ps-pick">
+                <span>Head {selHead + 1}{p ? ` (${p.name})` : ""}:</span>
+                {([["", "Print"], ["flash", "Flash"], ["cool", "Cool down"], ["roller", "Roller"]] as const).map(([v, l]) => (
+                  <button key={v || "open"} type="button" className={"ps-chip c-" + (v || "open") + ((v === "" ? !!p || x === "" : x === v) ? " on" : "")}
+                    onClick={() => { if (v === "" ? !(p || x === "") : x !== v) setHeadTo(selHead, v); }}>{l}</button>
+                ))}
+                <button type="button" className="btn icon ghost sm" aria-label="Close" onClick={() => setSelHead(null)}>✕</button>
+              </div>
+            );
+          })()}
+          <div className="ps-sum">
+            {(() => { const used = onPress.heads.filter((x) => x === "flash").length, units = onPress.lay.filter((x) => x === "flash" || x === "flashdown").length; return <span>{used} flash{used === 1 ? "" : "es"} of {units}</span>; })()}
+            {onPress.moves.length > 0 && <span> · Set up: {onPress.moves.join("; ")}</span>}
+          </div>
+        </div>}
+      </div>
       <ol className="ps-heads">{onPress.heads.map((x, h) => {
         const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
         const kind = p ? "print" : x || "empty";
-        const label = p ? p.name : x === "flash" ? "Flash" : x === "roller" ? "Roller (dead screen)" : x === "cool" ? "Cool down (left empty)" : x === "down" ? "Head down (Equipment Status)" : "Empty";
+        const label = p ? p.name : x === "flash" ? "Flash" : x === "roller" ? "Roller (dead screen)" : x === "cool" ? "Cool down (left empty)" : x === "down" ? "Head down (Equipment Status)" : "Open";
         const prev = (() => { for (let j = h - 1; j >= 0; j--) if (onPress.heads[j] !== "down") return j; return -1; })();
         const next = (() => { for (let j = h + 1; j < onPress.heads.length; j++) if (onPress.heads[j] !== "down") return j; return -1; })();
         const down = x === "down";
@@ -134,27 +174,25 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
             draggable={!down && x !== ""} onDragStart={(e) => { setDrag({ head: h }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(h)); }} onDragEnd={() => { setDrag(null); setDropHead(null); }}
             onDragOver={(e) => { if (drag && !down) { e.preventDefault(); if (dropHead !== h) setDropHead(h); } }} onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(h); }}>
             <span className="ps-hn">{h + 1}</span>
-            {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-st " + kind} aria-hidden />}
-            <span className="ps-hl">
-              <b>{label}</b>
-              {p && (onMesh
-                ? <input className="ps-mesh" value={p.mesh || ""} inputMode="numeric" placeholder="mesh" aria-label={`${p.name} mesh`} onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); onMesh(p.key, n > 0 ? n : undefined); }} />
-                : p.mesh ? <small>mesh {p.mesh}</small> : null)}
-              {p?.kind === "underbase" && <small>underbase</small>}
-            </span>
+            {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-st k-" + kind} aria-hidden />}
+            <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}</span>
+            <span className="ps-hm">{p && (onMesh
+              ? <input className="ps-mesh" value={p.mesh || ""} inputMode="numeric" placeholder="mesh" aria-label={`${p.name} mesh`} onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); onMesh(p.key, n > 0 ? n : undefined); }} />
+              : null)}</span>
             <span className="ps-ud">
               <button type="button" className="btn icon ghost sm" title="Move to the head before (trade places)" disabled={down || x === "" || prev < 0} onClick={() => moveSlot(h, prev)}>↑</button>
               <button type="button" className="btn icon ghost sm" title="Move to the head after (trade places)" disabled={down || x === "" || next < 0} onClick={() => moveSlot(h, next)}>↓</button>
             </span>
-            <select id={`ps-head-${h}`} value={k ? "p:" + k : x} disabled={down} aria-label={`What goes on head ${h + 1}`}
-              onChange={(e) => { const v = e.target.value; if (v.startsWith("p:")) putPlate(v.slice(2), h); else setHeadTo(h, v); }}>
-              {down && <option value="down">Head down</option>}
-              {plates.map((q) => { const at = onPress.heads.indexOf("p:" + q.key); return <option key={q.key} value={"p:" + q.key}>{q.name}{at >= 0 && at !== h ? ` (head ${at + 1})` : ""}</option>; })}
-              <option value="flash">Flash</option><option value="roller">Roller</option><option value="cool">Cool down</option><option value="">Empty</option>
+            <select id={`ps-head-${h}`} className="ps-chg" value="" disabled={down} aria-label={`Change what goes on head ${h + 1}`}
+              onChange={(e) => { const v = e.target.value; if (v === "keep") return; if (v.startsWith("p:")) putPlate(v.slice(2), h); else setHeadTo(h, v); }}>
+              <option value="" disabled>Change…</option>
+              {plates.filter((q) => q.key !== k).map((q) => { const at = onPress.heads.indexOf("p:" + q.key); return <option key={q.key} value={"p:" + q.key}>{q.name}{at >= 0 ? ` (now head ${at + 1})` : ""}</option>; })}
+              {x !== "flash" && <option value="flash">Flash</option>}{x !== "roller" && <option value="roller">Roller</option>}{x !== "cool" && <option value="cool">Cool down</option>}{x !== "" && <option value="">Open</option>}
             </select>
           </li>
         );
       })}</ol>
+      <p className="sep-help">Drag a row onto another head to move it (they trade places), or use ↑ ↓ or Change….</p>
       {plates.some((q) => !onPress.heads.includes("p:" + q.key)) && (
         <div className="ps-off"><b>Not on the press:</b>{plates.filter((q) => !onPress.heads.includes("p:" + q.key)).map((q) => (
           <span key={q.key} className="ps-offc" draggable onDragStart={(e) => { setDrag({ plate: q.key }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", q.key); }} onDragEnd={() => { setDrag(null); setDropHead(null); }} title="Drag it onto a head">
@@ -165,7 +203,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
       {onPress.recNote && <div className="sep-tip">{onPress.recNote}</div>}
       {!setup && onPress.why.length > 0 && <details className="ps-why" open><summary>Why this layout</summary><ul>{onPress.why.map((w) => <li key={w}>{w}</li>)}</ul></details>}
       {onPress.warn.map((w) => <div key={w} className="sep-tip">{w}</div>)}
-      {onPress.moves.length > 0 && <div className="ps-moves"><b>Set up the press:</b><ul>{onPress.moves.map((m) => <li key={m}>{m}</li>)}</ul></div>}
+      {!stations && onPress.moves.length > 0 && <div className="ps-moves"><b>Set up the press:</b><ul>{onPress.moves.map((m) => <li key={m}>{m}</li>)}</ul></div>}
       {msg && <div className="sep-tip">{msg}</div>}
       <div className="ps-acts">
         <button type="button" className="linkbtn" onClick={() => { const n = autoSetup(onPress.lay, plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind })), true); commit(n); }} title="Leave an empty head between colors where there's room, so each hit cools before the next">Space colors out</button>

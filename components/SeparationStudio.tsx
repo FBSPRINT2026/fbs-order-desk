@@ -1309,7 +1309,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           </section>}
           {rtab === "press" && !onPress && <div className="sep-card faint">No screen presses set up (Settings → Production).</div>}
           {rtab === "press" && onPress && press && (
-            <PressSetupCard presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup} commit={commitSetup} clearSetup={() => setSetup(null)}
+            <PressSetupCard compact presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup} commit={commitSetup} clearSetup={() => setSetup(null)}
               sheet={{ title: `Press setup S-${row.number}`, heading: `Press setup · ${row.location || ""}${order ? ` · #${order.number} ${order.nickname || ""}` : ""}`, sub: `S-${row.number} · ${plates.length} screens · shirt ${row.garment_color || st.garment || "not picked"}` }} />
           )}
           {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
