@@ -11391,15 +11391,16 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
 .mf-tray-t{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink);white-space:nowrap}
 .mf-tray-t svg,.ps-save svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;color:var(--ink-3)}
 .mf-tray-h .spacer{flex:1}
-.mf-tray-g{display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px}
-.mf-tile{display:flex;flex-direction:column;gap:3px;width:132px;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);text-decoration:none;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.mf-tray-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;padding:10px 12px}
+.mf-tile{display:grid;grid-template-columns:40px minmax(0,1fr);grid-template-rows:auto auto;column-gap:9px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);text-decoration:none;font:inherit;text-align:left;cursor:pointer;min-width:0}
 .mf-tile:hover{border-color:var(--accent)}
 .mf-tile:disabled{cursor:default;opacity:.75}
-.mf-tp{display:block;width:100%;height:76px;border-radius:6px;object-fit:cover;background:var(--surface-2)}
-.mf-tn{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mf-tp{grid-row:1 / 3;display:block;width:40px;height:40px;border-radius:6px;object-fit:cover;background:var(--surface-2)}
+.mf-tn{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:end}
+.mf-tile .mf-fs{align-self:start}
 .mf-fs{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
 .mf-ft{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:40px;height:26px;padding:0 5px;border-radius:6px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft,var(--surface-2))}
-span.mf-tp.mf-ft{display:flex;height:76px;font-size:15px}
+span.mf-tp.mf-ft{display:flex;min-width:0;height:40px;padding:0;font-size:10.5px}
 .mf-ft.pdf{color:var(--danger);background:var(--danger-soft)}
 .mf-ft.art{color:var(--warn);background:var(--warn-soft)}
 .mf-ft.xls,.mf-ft.img{color:var(--ok);background:var(--ok-soft)}
@@ -11421,7 +11422,7 @@ html body .pbar .pbar-n{color:#fff}
   html body main.main:has(.pbar) .mf-tray.in-bar{display:none!important}
   html body .pbar-sheet>button.ps-save{display:flex;justify-content:center;gap:8px;margin-top:10px;border:1px solid var(--line);font-size:15px;font-weight:700;color:var(--accent)}
   html body .pbar-sheet>button.ps-save svg{color:var(--accent);width:18px;height:18px}
-  .mf-tile{width:calc(50% - 5px)}
+  .mf-tray-g{grid-template-columns:minmax(0,1fr)}
   /* the AI: a small chip on each email; tapping it opens the summary, the to-dos and the order buttons (Oct 21, Nick) */
   html body main.main .eh-ai.mini{display:inline-flex!important;align-self:flex-start;width:fit-content!important;max-width:calc(100% - 24px);flex-wrap:nowrap!important;padding:0!important;margin:8px 12px 2px!important;border:1px solid var(--line)!important;border-radius:999px!important;background:var(--surface)!important;box-shadow:none!important}
   html body main.main .eh-ai.mini > :not(.eh-ai-l){display:none!important}
