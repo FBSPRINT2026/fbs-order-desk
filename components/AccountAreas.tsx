@@ -138,7 +138,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const oFilter = mode === "shop" && rawArea === "quotes" ? "quotes" : ordF;
   const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
   const convNow = rawArea === "texts" ? "texts" : conv;
-  const [moreOpen, setMoreOpen] = useState(false);
+  // where the More menu opens: fixed under its button (the tab bar clips anything that drops out of it)
+  const [moreOpen, setMoreOpen] = useState<{ top: number; right: number } | null>(null);
   const [recOpen, setRecOpen] = useState(false);
   const [sub, setSub] = useState<"quotes" | "orders">(rawArea === "quotes" || sp.get("sub") === "quotes" ? "quotes" : "orders");
   const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); router.replace(`${path}${p.size ? "?" + p : ""}`, { scroll: false }); };
@@ -869,8 +870,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           ].filter(Boolean) as { id: Area; label: string }[];
           return more.length ? (
             <span className="cx-more" style={{ order: 99 }}>
-              <button type="button" className="aa-tab" aria-expanded={moreOpen} onClick={() => setMoreOpen((x) => !x)}><Ico d="M5 12h.01M12 12h.01M19 12h.01" /><span>More</span></button>
-              {moreOpen && <span className="cx-more-m" role="menu">{more.map((m) => <button key={m.id} type="button" role="menuitem" onClick={() => { setMoreOpen(false); go(m.id); setQ(""); }}>{m.label}</button>)}</span>}
+              <button type="button" className="aa-tab" aria-expanded={!!moreOpen} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMoreOpen((x) => (x ? null : { top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })); }}><Ico d="M5 12h.01M12 12h.01M19 12h.01" /><span>More</span></button>
+              {moreOpen && <><span className="cx-more-bg" onClick={() => setMoreOpen(null)} /><span className="cx-more-m" role="menu" style={{ top: moreOpen.top, right: moreOpen.right }}>{more.map((m) => <button key={m.id} type="button" role="menuitem" onClick={() => { setMoreOpen(null); go(m.id); setQ(""); }}>{m.label}</button>)}</span></>}
             </span>
           ) : null;
         })()}

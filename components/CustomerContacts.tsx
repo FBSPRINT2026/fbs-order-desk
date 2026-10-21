@@ -26,15 +26,15 @@ export default function CustomerContacts({ customerId }: { customerId: string })
   };
   if (!list) return null;
   return (
-    <div className="cc">
-      <div className="cc-h"><span className="lbl">Contacts ({list.length})</span><span className="faint" style={{ fontSize: 12 }}>{state || "Each can sign in to this customer's portal with their email"}</span></div>
+    <div className="ccx">
+      <div className="ccx-h"><span className="lbl">Contacts ({list.length})</span><span className="faint" style={{ fontSize: 12 }}>{state || "Each can sign in to this customer's portal with their email"}</span></div>
       {list.map((c) => (
-        <div key={c.id} className="cc-row">
+        <div key={c.id} className="ccx-row">
           <input type="text" aria-label="Name" placeholder="Name" value={c.name} onChange={(e) => save(c.id, { name: e.target.value })} />
           <input type="email" aria-label="Email" placeholder="Email" value={c.email} onChange={(e) => save(c.id, { email: e.target.value })} />
           <input type="tel" aria-label="Phone" placeholder="Phone" value={c.phone} onChange={(e) => save(c.id, { phone: e.target.value })} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) save(c.id, { phone: f }); }} />
           <label className="check" title="Can sign in to the portal"><input type="checkbox" checked={c.portal_access} onChange={(e) => save(c.id, { portal_access: e.target.checked })} /> Portal</label>
-          {c.is_primary ? <span className="cc-tag">Main</span> : <button type="button" className="btn icon ghost sm" aria-label="Remove contact" title="Remove contact" onClick={async () => { await sb.from("customer_contacts").delete().eq("id", c.id); load(); }}>✕</button>}
+          {c.is_primary ? <span className="ccx-tag">Main</span> : <button type="button" className="btn icon ghost sm" aria-label="Remove contact" title="Remove contact" onClick={async () => { await sb.from("customer_contacts").delete().eq("id", c.id); load(); }}>✕</button>}
         </div>
       ))}
       <button type="button" className="btn sm" onClick={async () => { const { error } = await sb.from("customer_contacts").insert({ customer_id: customerId }); if (error) setState(error.message); load(); }}>+ Add contact</button>

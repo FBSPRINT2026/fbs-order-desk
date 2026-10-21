@@ -11047,7 +11047,7 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .cx-tbl td.m .aa-t{display:inline}
 .cx-goods{margin-left:8px;font-size:11.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:2px 8px;text-decoration:none;white-space:nowrap}
 .cx-more{position:relative;display:inline-flex}
-.cx-more-m{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:4px}
+.cx-more-m{position:fixed;z-index:120;display:flex;flex-direction:column;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:4px}
 .cx-more-m button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
 .cx-more-m button:hover{background:var(--surface-2)}
 .cx-dr-bg{position:fixed;inset:0;z-index:200;background:rgba(15,18,24,.35);display:flex;justify-content:flex-end}
@@ -11058,3 +11058,13 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .cx-dr .cust-grid{grid-template-columns:minmax(0,1fr) !important}
 .cx-moved{font-size:12.5px;margin:0 0 10px}
 .aa-nav:has(.cx-more){overflow:visible}
+.cx-more-bg{position:fixed;inset:0;z-index:110}
+/* the customer's contacts in Details: their own names (".cc" is the shirt-colors check pop-up) */
+.ccx{display:flex;flex-direction:column;gap:8px}
+.ccx-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.ccx-row{display:grid;grid-template-columns:1.1fr 1.4fr 1fr auto 30px;gap:6px;align-items:center}
+.ccx-row input{min-width:0}
+.ccx-row .check{font-size:12.5px;white-space:nowrap}
+.ccx-tag{font-size:11px;font-weight:700;color:var(--ink-3);text-align:center}
+.ccx > .btn{align-self:flex-start}
+@media (max-width:700px){.ccx-row{grid-template-columns:1fr 1fr}.ccx-row input[type=email]{grid-column:span 2}}
