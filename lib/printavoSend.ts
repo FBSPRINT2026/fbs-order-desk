@@ -454,7 +454,9 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
  * writes at `until` (the rest is counted in `left`). Oct 20: sent inside quoteCreate, Printavo fetched every picture
  * (about 19 MB for #40072) before answering and gave up with HTTP 503.
  */
-export async function attachFiles(admin: SupabaseClient, orderId: string, until = Date.now() + 95_000) {
+/** `again`: add the current mockups even where Printavo already has some (remade mockups; the old ones there are left
+ *  for staff to remove: nothing is deleted in Printavo) */
+export async function attachFiles(admin: SupabaseClient, orderId: string, until = Date.now() + 95_000, again = false) {
   const { data: o } = await admin.from("orders").select("number, printavo_id, groups, lines").eq("id", orderId).maybeSingle();
   if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
   const number = o.number as number;
@@ -497,11 +499,11 @@ export async function attachFiles(admin: SupabaseClient, orderId: string, until 
     if (!pg) break;
     for (const [li, l] of ours.entries()) {
       const pl = pg.lines[li];
-      if (!pl || pl.mockups.length) continue;
+      if (!pl || (pl.mockups.length && !again)) continue;
       for (const m of lineMocks(gi, l.style, l.color)) jobs.push({ what: `mockup on ${l.style || "line"} ${l.color || ""}`.trim(), q: `mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, v: { id: pl.id, u: m.u } });
     }
     const pi = pg.imprints[0];
-    if (pi && !pi.mockups.length) for (const m of groupMocks(gi).slice(0, 6)) jobs.push({ what: "mockup on the print", q: `mutation($id:ID!,$u:String!){ imprintMockupCreate(imprintId:$id, publicImageUrl:$u){ id } }`, v: { id: pi.id, u: m.u } });
+    if (pi && (!pi.mockups.length || again)) for (const m of groupMocks(gi).slice(0, 6)) jobs.push({ what: "mockup on the print", q: `mutation($id:ID!,$u:String!){ imprintMockupCreate(imprintId:$id, publicImageUrl:$u){ id } }`, v: { id: pi.id, u: m.u } });
   }
   // production files: the order's files and each print's art (skipped when a file of that name is already there)
   const { data: af } = await admin.from("art_files").select("file_path").eq("order_id", orderId);

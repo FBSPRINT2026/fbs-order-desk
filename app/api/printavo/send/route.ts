@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     // what changed in Printavo since it was sent (quantities, prices, fees, number, status)
     // our mockups onto the Printavo product lines that have none (what the customer's invoice page shows)
     // (and the art as production files, and the mockups on the first print: whatever isn't there yet)
-    if (b.action === "mockups") { const r = await attachFiles(createAdminClient(), orderId); return NextResponse.json({ ...r, pv: await refreshFromPrintavo(createAdminClient(), orderId) }); }
+    if (b.action === "mockups") { const r = await attachFiles(createAdminClient(), orderId, undefined, !!(b as { again?: boolean }).again); return NextResponse.json({ ...r, pv: await refreshFromPrintavo(createAdminClient(), orderId) }); }
     // an order sent before the send included them: the prints in the line descriptions and the addresses
     if (b.action === "resync") return NextResponse.json({ ...(await resyncDetails(createAdminClient(), orderId)), pv: await refreshFromPrintavo(createAdminClient(), orderId) });
     if (b.action === "refresh") return NextResponse.json({ pv: await refreshFromPrintavo(createAdminClient(), orderId) });

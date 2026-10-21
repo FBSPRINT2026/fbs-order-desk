@@ -1159,9 +1159,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // the bare picture (order screen, work order, invoice, review page) is as big as the proof (Oct 16, Nick: "we need
     // good resolution, high quality"): about 1,240 px wide per view, saved as a JPEG so it stays light (~250 KB)
     const k = 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
-    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
+    // a visual-only print (a reorder waiting for production) gets no details under the shirt: no location, logo number or
+    // size (Oct 20, Nick: "when we're doing a visual only mockup, that whole bottom section should just be blank")
+    const specLines = imprints.filter((im) => !(im.visualOnly && !im.confirmed)).map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
+    const quiet = specLines.length === 0;
     const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
-    const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
+    const H = bare ? ph + pad * 2 : quiet ? 70 + ph + pad : 70 + ph + 30 + specLines.length * 26 + pad;
     // the saved proof at twice the size (thumbnails as they were), the photos drawn at that size: sharp when zoomed
     const S = 2, c = document.createElement("canvas");
     c.width = W * S; c.height = H * S;
@@ -1183,7 +1186,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       x.save(); x.shadowColor = "rgba(0,0,0,0.18)"; x.shadowBlur = 8; x.fillStyle = "#fff"; x.beginPath(); x.roundRect(ix - 3, iy - 3, iw + 6, ih + 26, 8); x.fill(); x.restore();
       drawNeckView(x, ix, iy, iw, ih, guessHex(l.color), lab, neckSet.widthIn || 2.5, `Inside neck · ${neckSize}`);
     }
-    if (!bare) {
+    if (!bare && !quiet) {
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
       views.forEach((v, i) => x.fillText(v.toUpperCase(), pad + i * (pw + pad), top + ph + 18));
       x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif"; specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26));
