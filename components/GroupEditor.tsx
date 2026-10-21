@@ -7,8 +7,9 @@ import type { Imprint } from "@/lib/pricing";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import FinishingPicker from "@/components/FinishingPicker";
-import NeckLabelPick, { isRelabel } from "@/components/NeckLabelPick";
-import type { NeckLabelSet } from "@/lib/neckLabels";
+import { isRelabel } from "@/components/NeckLabelPick";
+import NeckLabelView from "@/components/NeckLabelView";
+import { mainSize, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 
 /** save a custom finishing to the sometimes-used list (retail, or the wholesale contract list for a wholesale job) */
 export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
@@ -346,7 +347,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
         <div className="imp-sec">
         <div className="lbl gsec">Imprints
-          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
+          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag Print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
         </div>
         <div className="imp-wrap">
         <div className="imp-mock">
@@ -480,26 +481,44 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               </div>
             ))}
           </div>
-          {tagOn && tagFin && (
-            <div className="tagp">
-              <div className="tagp-h">
-                <b>Tag print</b>
-                <span className="faint">inside the neck</span>
-                <span className="spacer" />
-                <button type="button" className="linkbtn" onClick={() => tick(tagFin.id, false)}>Remove</button>
+          {tagOn && tagFin && (() => {
+            // the tag print as a print row like the ones above (Oct 21, Nick: "make it look exactly like the thing
+            // above… the little mock-up on the left")
+            const live = (neckSets || []).filter((x) => !x.archived), cur = setFor(neckSets, g.neckLabel);
+            const ink = cur?.ink || "Light gray";
+            return (
+              <div className="pr pr-tag">
+                <div className="pr-logo pr-tag-pic" style={{ background: shirtHex }} title={cur ? `${cur.name || "Their tag"}: inside the neck` : "No tag art on file yet"}>
+                  {cur ? <NeckLabelView set={cur} size={mainSize([g])} shirtHex={shirtHex} width={130} caption={false} /> : <span>No tag yet</span>}
+                </div>
+                <div className="pr-main">
+                  <div className="pr-top">
+                    <b>Tag Print</b>
+                    <span className="pr-how">Inside the neck</span>
+                    {!hidePrices && <span className="pr-each">each <span className="qp-amt-in tagp-amt"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)}
+                      onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span></span>}
+                  </div>
+                  <div className="pr-specs">
+                    <span>1 color</span>
+                    <span className="pr-ink">{ink}</span>
+                    <span>{cur?.widthIn || 2.5}&quot; wide</span>
+                    <span>The maker&apos;s tag removed</span>
+                  </div>
+                  <div className="pr-art tagp-which">
+                    {live.length > 1 ? (
+                      <select value={cur?.id || ""} onChange={(e) => update((x) => { x.neckLabel = e.target.value || undefined; })} aria-label="Which tag">
+                        {!cur && <option value="">Pick their tag…</option>}
+                        {live.map((x) => <option key={x.id} value={x.id}>{x.name || "Tag"}</option>)}
+                      </select>
+                    ) : cur ? <span>{cur.name || "Their tag"}</span> : <span className="faint">No tag art on file.</span>}
+                    {customerId && <a className="linkbtn" href={`/shop/customers/${customerId}`} target="_blank" rel="noreferrer">{cur ? "Change their tag art ↗" : "Add their tag art ↗"}</a>}
+                    <button type="button" className="linkbtn danger" onClick={() => tick(tagFin.id, false)}>Remove</button>
+                  </div>
+                  {cur?.note && <div className="pr-notes">{cur.note}</div>}
+                </div>
               </div>
-              <div className="tagp-b">
-                {neckSets && <NeckLabelPick sets={neckSets} value={g.neckLabel} groups={[g]} customerId={customerId} onChange={(id) => update((x) => { x.neckLabel = id || undefined; })} />}
-                {/* the price a piece, changeable on this job (the list's $1.00 by default) */}
-                {!hidePrices && <label className="tagp-price" title="Price a piece for the tag print on this job">
-                  <span className="qp-amt-in"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)}
-                    onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span>
-                  <span className="faint">/pc</span>
-                </label>}
-              </div>
-              {customerId && <a className="faint tagp-art" href={`/shop/customers/${customerId}`} target="_blank" rel="noreferrer">Add or change their label art (Brand standards → Neck labels) ↗</a>}
-            </div>
-          )}
+            );
+          })()}
           {priceLine}
           <div className="row" style={{ gap: 8 }}>
           {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
