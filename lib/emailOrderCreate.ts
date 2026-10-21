@@ -130,7 +130,11 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // a reorder of a job production already confirmed: its prints take the confirmed specs, not guesses (lib/designSpecs.ts)
   const tookSpecs = reorderOf && fromLabel ? await applyConfirmedSpecs(admin, custId, fromLabel, groups) : [];
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
-  const notes = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
+  // the AI's notes are for the shop (what it noticed reading the email), not the customer: they go in the internal
+  // production notes, never the order's notes, which print on the quote and invoice (Oct 20, Nick: #40089's quote showed
+  // "please confirm these map to the same garment colors…" to the customer)
+  const notes = "";
+  const shopNote = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity
   const useProgram = await customerUsesProgram(admin, custId);
@@ -151,6 +155,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : "From the customer's email (Inbox → Create order)", actor: by });
   if (tookSpecs.length) await admin.from("order_events").insert({ order_id: oid, kind: "details", detail: `Specs taken from what production confirmed before: ${tookSpecs.join("; ")}`.slice(0, 2000), actor: by });
   const pn = [
+    shopNote ? `From reading the email: ${shopNote}` : "",
     d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",
     d.told ? `What we told the AI: ${d.told}` : "",
     d.lookedUp ? `Looked up online: ${d.lookedUp.text}${d.lookedUp.sources.length ? ` (${d.lookedUp.sources.map((x) => x.url).join(", ")})` : ""}` : "",

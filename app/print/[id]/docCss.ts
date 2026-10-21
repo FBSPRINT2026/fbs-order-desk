@@ -168,7 +168,7 @@ export const DOC_CSS = `
 .pdoc .parties .osum{background:#f6f7f9;border-radius:10px;padding:10px 14px 11px;white-space:normal}
 .pdoc .osum dl{display:grid;grid-template-columns:auto 1fr;gap:3px 0;margin:4px 0 0;font-size:10.5pt;line-height:1.35}
 .pdoc .osum-name{text-align:right;font-weight:800;font-size:12pt;line-height:1.25;margin-top:3px;color:var(--ink)}
-.pdoc .osum dt{color:var(--ink3)}
+.pdoc .osum dt{color:var(--ink3);white-space:nowrap}
 .pdoc .osum dd{margin:0;padding-left:14px;text-align:right;color:var(--ink);overflow-wrap:anywhere}
 .pdoc .osum dt.bd,.pdoc .osum dd.bd{border-top:1px solid #dfe3e8;padding-top:6px;margin-top:3px;font-weight:800;color:var(--ink)}
 .pdoc .osum dd.bd.ok{color:var(--ok)}

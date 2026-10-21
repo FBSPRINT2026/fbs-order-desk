@@ -419,7 +419,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
         <datalist id="eo-locs">{LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
         <button type="button" className="eo-link" onClick={() => patch((x) => { x.groups.push({ id: uidish(), lines: [newGLine()], imprints: [newImprint()] }); })}>+ Add a group (garments with different prints)</button>
 
-        <label className="eo-notes">Notes on the order<textarea rows={2} value={d.notes} onChange={(e) => patch((x) => { x.notes = e.target.value; })} /></label>
+        <label className="eo-notes">Notes for the shop (internal, not on the quote)<textarea rows={2} value={d.notes} onChange={(e) => patch((x) => { x.notes = e.target.value; })} /></label>
         {d.questions.length > 0 && <div className="eo-q">
           <div className="eo-sub">Still to ask the customer <button type="button" className="eo-link" onClick={() => navigator.clipboard?.writeText(d.questions.map((q) => `- ${q}`).join("\n"))}>Copy</button></div>
           <ul>{d.questions.map((q, i) => <li key={i}>{q}<button type="button" className="eo-x" aria-label="Drop this question" onClick={() => patch((x) => { x.questions.splice(i, 1); })}>×</button></li>)}</ul>
