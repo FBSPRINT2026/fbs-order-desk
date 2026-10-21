@@ -11151,3 +11151,17 @@ main.main .ibx2-tabs > button{flex:0 0 auto;padding:9px 15px}
 main.main .ibx2-tabs > button span.hot{background:var(--danger);color:#fff}
 main.main :is(:is(.toolbar .chips, .chips[data-toolbar], .chips[role=tablist], .panel-h .chips) > .chip, .ibx2-tabs > button, .jt-chips > button){gap:7px}
 main.main nav.aa-shopnav .chips{width:100%}
+/* one type in lists (Oct 21, Nick: "we got like 5 different fonts here… spilling over onto other lines… the invoice
+   number aren't the same as the numbers under all the other ones"): every list in the page's font, numbers with even
+   digits, numbers / money / dates never break across lines, the Quote / Inv tag on the number's line, every status the
+   same pill (Printavo's history statuses too) */
+main.main :is(.tbl, .rv-tbl, .aa-tbl){font-family:var(--body)}
+main.main :is(.ordno, .tag, .aa-tbl .num, .rv-tbl .num, .aa-tbl td.num a){font-family:var(--body);font-variant-numeric:tabular-nums}
+main.main .ordno{font-weight:700;font-size:14px;color:var(--ink)}
+main.main .tag{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 6px;vertical-align:1px}
+main.main :is(.tbl, .rv-tbl, .aa-tbl) td{font-variant-numeric:tabular-nums}
+main.main :is(.tbl, .rv-tbl, .aa-tbl) :is(td.r, th.r, td.dt, td:first-child){white-space:nowrap}
+main.main .due{white-space:nowrap}
+main.main .pill,main.main .pv-dot{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 8px;border-radius:99px;font-family:var(--body);font-size:12px;font-weight:600;line-height:1.35;white-space:nowrap;color:color-mix(in srgb,var(--sc) 72%,#000);background:color-mix(in srgb,var(--sc) 14%,transparent)}
+main.main .pv-dot::before,main.main .pill::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--sc)}
+main.main .aa-arch{font-family:var(--body)}

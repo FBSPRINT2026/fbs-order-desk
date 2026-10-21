@@ -24,5 +24,5 @@ export function Due({ date, status }: { date: string | null; status: string }) {
   if (!done && n < 0) cls = "due-late";
   else if (!done && n <= 3) cls = "due-soon";
   const rel = done ? "" : n === 0 ? " · today" : n === 1 ? " · tomorrow" : n < 0 ? ` · ${-n}d late` : n <= 7 ? ` · ${n}d` : "";
-  return <span className={cls}>{fmtDate(date)}{rel}</span>;
+  return <span className={"due" + (cls ? " " + cls : "")}>{fmtDate(date)}{rel}</span>;
 }
