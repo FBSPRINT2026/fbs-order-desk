@@ -209,9 +209,12 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   const hasFoot = inksSec || embImps.length > 0 || (finishingAt === "group" && finList.length > 0);
   // the group's money in one line under its prints (Oct 15, Nick: "move the total up")
   const priceLine = hidePrices ? null : (() => {
-    const part = (lc: GroupCalc["lines"][number], v: number) => (lc.hasOv ? (lc.calcEach ? (lc.each * v) / lc.calcEach : 0) : v);
-    const imp = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, lc.printEach), 0);
-    const fin = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, gc.finishEach), 0);
+    // a price typed or set by the program: finishing at its own price per piece (Oct 21, Nick: tag removal $1 × 200 shows
+    // $200, not a share of the $5.50), the rest split between the garment and the prints
+    const finOf = (lc: GroupCalc["lines"][number]) => (lc.hasOv ? Math.min(gc.finishEach, lc.each) : gc.finishEach);
+    const impOf = (lc: GroupCalc["lines"][number]) => { if (!lc.hasOv) return lc.printEach; const base = lc.calcEach - gc.finishEach; return base > 0 ? ((lc.each - finOf(lc)) * lc.printEach) / base : 0; };
+    const imp = gc.lines.reduce((a, lc) => a + lc.qty * impOf(lc), 0);
+    const fin = gc.lines.reduce((a, lc) => a + lc.qty * finOf(lc), 0);
     const gar = Math.round((gc.sub - imp - fin) * 100) / 100;
     const bits: [string, number, string?][] = [
       ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),

@@ -290,6 +290,7 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
           {finChoices.map((x) => <button key={x} type="button" className={"chip" + (inc.includes(x) ? " on" : "")} aria-pressed={inc.includes(x)} onClick={() => toggleInc(x)}>{inc.includes(x) ? "✓ " : ""}{x}</button>)}
           <input type="text" value={incDraft} placeholder="Add another…" aria-label="Add included finishing" onChange={(e) => setIncDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && incDraft.trim()) { e.preventDefault(); if (!inc.includes(incDraft.trim())) set({ included: [...inc, incDraft.trim()] }); setIncDraft(""); } }} style={{ width: 150 }} />
         </div>
+        <label className="check" title="Off: finishing on the job (like tag removal) is added on top of a design's own price, unless it's listed above as included"><input type="checkbox" checked={!!c.designsAllIn} onChange={(e) => set({ designsAllIn: e.target.checked || undefined })} />A design&apos;s own price includes all finishing</label>
       </div>
       <div className="rc-grid-wrap">
         <table className="rc-grid">

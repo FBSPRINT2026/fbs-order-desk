@@ -349,12 +349,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o || ["production", "ready", "completed"].includes(o.status)) return;
     const on = !!o.use_program && !!prog;
     const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
-    // flat: a design's flat price is everything in, except extras the program prices itself (Nine18 personalization $5)
+    // flat: a design's own price. Finishing on the job is added on top of it (Oct 21, Nick: Mewjira's tagging is $1 a
+    // piece on top of $5.50) unless the card says designs are all-in (Nine18: then only extras the program prices itself,
+    // like personalization $5)
     const finishingExtra = (d: Order, g: Group, flat: boolean) => {
       const pl = priceList(settings, d.price_type || "retail");
       const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
       const own = prog!.card?.extraPrices || {};
-      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || own[f.id] != null));
+      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || !prog!.card?.designsAllIn || own[f.id] != null));
       const price = (f: { id: string; price: number }) => (own[f.id] != null ? +own[f.id] : +f.price || 0);
       return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };

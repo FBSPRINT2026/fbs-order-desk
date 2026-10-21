@@ -80,6 +80,9 @@ export type RateCard = {
   /** the program's own price for extras (finishing / embroidery extras by id): Nine18 personalization $5 a name, not the
    *  list's $6. These are added on top even of a design's flat price (Oct 18) */
   extraPrices?: Record<string, number>;
+  /** a design's own price includes the finishing too (Nine18); off (the default, Oct 21, Nick: Mewjira's tagging is $1
+   *  on top), finishing on the job is added on top of a design's price unless it's listed in `included` */
+  designsAllIn?: boolean;
   /** free local delivery by our courier (not shipping) (Oct 17, Nick: Peticolas) */
   freeDelivery?: boolean;
   /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
@@ -88,7 +91,7 @@ export type RateCard = {
   about?: { text: string; by: string; at: string }[];
 };
 /** does the card set anything? (prices, or a rule) */
-export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery);
+export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery || !!c.designsAllIn);
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
