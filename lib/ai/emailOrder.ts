@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
+import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
 import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
@@ -423,6 +424,23 @@ ${staffSays}` : ""}`;
   // the model sometimes wraps its answer as { order: { ... } } (Peticolas, Oct 8: an empty draft): unwrap it
   const raw = r.data as AiOrder & { order?: AiOrder };
   const p: AiOrder = !raw.kind && raw.order && typeof raw.order === "object" ? raw.order : raw;
+  // the quantities straight off a size-breakdown spreadsheet, not the AI's reading of it (lib/sheetSizes.ts)
+  {
+    const sheets = listing.map((x) => /contents:\n"""\n([\s\S]*)\n"""$/.exec(x)?.[1] || "").filter(Boolean);
+    const sheet = sheets.flatMap((t) => sheetBreakdown(t));
+    const all = (p.groups || []).flatMap((g) => g.garments || []);
+    if (sheet.length && all.length) {
+      const { unmatched, extra } = applySheetSizes(all, sheet);
+      for (const g of p.groups || []) g.garments = (g.garments || []).filter((x) => !extra.has(x));
+      // a color on the sheet the AI left out: added with the style most of the order has
+      if (unmatched.length && p.groups?.[0]) {
+        const sc = new Map<string, number>(); for (const x of all) { const k0 = String(x.style || "").trim(); if (k0) sc.set(k0, (sc.get(k0) || 0) + 1); }
+        const style = [...sc.entries()].sort((a2, b2) => b2[1] - a2[1])[0]?.[0] || "";
+        const like = all.find((x) => String(x.style || "").trim() === style);
+        for (const u of unmatched) p.groups[0].garments = [...(p.groups[0].garments || []), { ...(like ? { brand: like.brand, description: like.description } : {}), style, color: u.color, sizes: { ...u.sizes } } as (typeof all)[number]];
+      }
+    }
+  }
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
     const t = (p.files || []).find((x) => x.file === i + 1);
     const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
