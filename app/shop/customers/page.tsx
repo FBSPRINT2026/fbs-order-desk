@@ -57,7 +57,28 @@ export default function CustomersPage() {
           {allTags.length > 0 && <optgroup label="Tags">{allTags.map((t) => <option key={t} value={t}>{t}</option>)}</optgroup>}
         </select>
       </div>
-      <div className="tbl-wrap">
+      {/* phones (Oct 21, Nick: "can't tell what a customer is or whether the next line is"): one card per customer */}
+      <div className="cu-cards" role="list">
+        {loading ? <div className="empty">Loading…</div> : list.length ? list.filter((c) => !c.is_test).map((c) => {
+          const s = stats[c.id] || { n: 0, spent: 0, owed: 0 };
+          const name = c.company || c.name || "Unnamed";
+          const ini = name.replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "?";
+          const who = [c.company && c.name ? c.name : "", c.email || fmtPhone(c.phone) || ""].filter(Boolean).join(" · ");
+          const fuLate = c.next_follow_up ? (daysUntil(c.next_follow_up) ?? 1) <= 0 : false;
+          return (
+            <button key={c.id} type="button" role="listitem" className="cu-card" onClick={() => router.push(`/shop/customers/${c.id}`)}>
+              <span className="cu-av" aria-hidden>{ini}</span>
+              <span className="cu-mid">
+                <span className="cu-n"><b>{name}</b>{c.price_type === "wholesale" && <span className="tag i">Wholesale</span>}</span>
+                {who && <span className="cu-s">{who}</span>}
+                <span className="cu-m">{s.n ? `${s.n} order${s.n === 1 ? "" : "s"}` : "No orders yet"}{s.spent > 0.004 ? ` · ${money(s.spent)}` : ""}{c.next_follow_up && <span className={fuLate ? "due-late" : ""}> · Follow up {fmtDate(c.next_follow_up)}</span>}</span>
+              </span>
+              <span className="cu-r">{s.owed > 0.004 ? <><span className="cu-ow">Owes</span><span className="bal">{money(s.owed)}</span></> : null}<span className="cu-chev" aria-hidden>›</span></span>
+            </button>
+          );
+        }) : <div className="empty">{Object.keys(customers).length ? "No customers match." : "No customers yet."}</div>}
+      </div>
+      <div className="tbl-wrap cu-tblw">
         <table className="tbl">
           <thead><tr><th>Customer</th><th>Contact</th><th>Follow-up</th><th className="r">Orders</th><th className="r">Lifetime</th><th className="r">Owes</th></tr></thead>
           <tbody>

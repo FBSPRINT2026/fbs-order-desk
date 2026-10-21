@@ -11432,3 +11432,25 @@ html body .pbar .pbar-n{color:#fff}
   html body main.main .eh-ai .eh-ai-cnt{display:inline-flex}
   html body main.main:has(.eh-ai.mini) .lm-ai{display:none!important}
 }
+
+/* ── Customers list on a phone: one clear card per customer (Oct 21, Nick) ── */
+.cu-cards{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  html body main.main .cu-tblw{display:none!important}
+  html body main.main .cu-cards{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+  .cu-card{display:flex;align-items:center;gap:12px;width:100%;padding:12px 12px 12px 14px;border:0;border-bottom:1px solid var(--line);background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+  .cu-card:last-child{border-bottom:0}
+  .cu-card:active{background:var(--surface-2)}
+  .cu-av{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:700}
+  .cu-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .cu-n{display:flex;align-items:center;gap:6px;min-width:0}
+  .cu-n b{font-size:15.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cu-n .tag{flex:none;margin:0}
+  .cu-s,.cu-m{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cu-m{color:var(--ink-2)}
+  .cu-r{flex:none;display:flex;align-items:center;gap:8px;text-align:right}
+  .cu-r .cu-ow{display:none}
+  .cu-r .bal{font-size:13px;font-weight:700;white-space:nowrap}
+  .cu-chev{font-size:22px;line-height:1;color:var(--ink-3)}
+  .cu-cards .empty{padding:20px}
+}
