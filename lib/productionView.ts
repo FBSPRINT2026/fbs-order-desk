@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, type Imprint, type Order } from "@/lib/pricing";
 import { oldJobText } from "@/lib/ai/oldJobNotes";
-import { defaultLayout, mergeProduction, validLayout } from "@/lib/production";
+import { defaultLayout, mergeProduction, validLayout, withIssue, type EquipRow, type Machine } from "@/lib/production";
 import { autoSetup, type SetupPlate } from "@/lib/pressSetup";
 import { colorHex } from "@/lib/inkColors";
 
@@ -23,7 +23,8 @@ export type PvPrint = {
   colors: number; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
   confirm: Imprint["confirm"] | null; confirmed: Imprint["confirmed"] | null; film: Imprint["film"] | null;
   sep: { id: string; number: number; status: string; plates: PvPlate[] } | null;
-  press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean } | null;
+  press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean; /** where it came from: saved as printed, the separation's setup, or laid out here */ from?: "actual" | "sep" | "auto" } | null;
+  /** it only runs on this press (the schedule only puts it there) */ pressOnly: { id: string; name: string } | null;
   minutes: { setup: number; run: number };
   /** the print's art (the customer design's picture), to compare films against */ art: string; design: string;
   /** the art's own colors (the design's print plan) and how they map to screens (imprint.inkMap) */
@@ -38,7 +39,7 @@ export type ProductionView = {
   step: number; done: boolean[]; why: string[];
   films: { name: string; url: string; path: string }[];
   history: { kind: string; when: string; title: string; text: string }[];
-  /** the shop's screen presses, for the press setup */ presses: { id: string; name: string; heads: number }[];
+  /** the shop's screen presses (layout, flashes, heads down today), for the press setup */ presses: Machine[];
   productionNotes: string;
 };
 
@@ -103,7 +104,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     const act = (acts || []).find((a) => (s && a.separation_id === s.id) || (!s && a.location === im.location));
     const setup = (s?.settings as { pressSetup?: { heads?: string[] } } | null)?.pressSetup;
     let press: PvPrint["press"] = null;
-    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || "") })), asPrinted: true };
+    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || "") })), asPrinted: true, from: "actual" };
     else if (!setup?.heads?.length && screen && (im.inks || "").trim()) {
       // no separation (film on file or in the drawer, Oct 21: The Bottles): laid out from the print's own screens, on the
       // press it's scheduled on, else the smallest press that fits
@@ -114,14 +115,15 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       if (mach) {
         const lay = validLayout(mach.layout, nHeads(mach)) ? mach.layout! : defaultLayout(nHeads(mach), mach.flashes ?? 2);
         const laid = autoSetup(lay, plates);
-        press = { press: mach.name, pressId: mach.id, asPrinted: false, heads: laid.map((slot) => {
+        press = { press: mach.name, pressId: mach.id, asPrinted: false, from: "auto", heads: laid.map((slot) => {
           if (slot.startsWith("p:")) { const c = plates.find((x) => x.key === slot.slice(2)); return { what: "screen", name: c?.name || "Screen", hex: c?.hex || "#999999", mesh: "" }; }
           return { what: slot === "flash" ? "flash" : slot === "cool" ? "cool" : slot === "roller" ? "roller" : "empty", name: "", hex: "", mesh: "" };
         }) };
       }
     }
     else if (setup?.heads?.length) {
-      press = { press: "", asPrinted: false, heads: setup.heads.map((slot) => {
+      const sp = (s?.settings as { pressSetup?: { press?: string } } | null)?.pressSetup;
+      press = { press: machines.find((x) => x.id === sp?.press)?.name || "", pressId: sp?.press || "", asPrinted: false, from: "sep", heads: setup.heads.map((slot) => {
         if (slot.startsWith("p:")) { const c = chans.find((x) => (x as { key?: string }).key === slot.slice(2)); return { what: "screen", name: c?.name || "Screen", hex: c?.hex || "#999999", mesh: String(c?.mesh || "") }; }
         return { what: slot === "flash" ? "flash" : slot === "cool" ? "cool" : slot === "roller" ? "roller" : "empty", name: "", hex: "", mesh: "" };
       }) };
@@ -133,7 +135,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       notes: im.notes || "", confirm: im.confirm || null, confirmed: im.confirmed || null,
       film: im.film ? { ...im.film, files: (im.film.files || []).map((f) => ({ ...f, url: signed.get(f.path) || "" })) as never } : null,
       sep: s ? { id: s.id, number: s.number, status: s.status, plates: chans.map((c) => ({ name: c.name || "", hex: c.hex || "#000000", mesh: String(c.mesh || ""), coverage: typeof c.coverage === "number" ? c.coverage : null, url: c.file ? signed.get(c.file) || "" : "" })) } : null,
-      press, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
+      press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
       ...(() => {
         const d = (dsgs || []).find((x) => x.id === im.design_id);
         const plan = (((d?.print_plan || {}) as { inks?: { hex?: string; name?: string }[] }).inks || []).filter((k) => k.hex).map((k) => ({ hex: String(k.hex).toUpperCase(), name: String(k.name || "") }));
@@ -193,6 +195,10 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     prints, step, done, why,
     films: filmFiles.map((f) => ({ name: String(f.name || "").replace(/^Film:\s*/i, ""), path: f.file_path, url: signed.get(f.file_path) || "" })),
     history, productionNotes: String(inn?.production_notes || ""),
-    presses: machines.map((x) => ({ id: x.id, name: x.name, heads: nHeads(x) })),
+    presses: await (async () => {
+      const { data: eq } = await admin.from("production_equipment").select("*");
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+      return machines.map((m) => withIssue(m, ((eq || []) as EquipRow[]).find((e) => e.machine === m.id), today));
+    })(),
   };
 }

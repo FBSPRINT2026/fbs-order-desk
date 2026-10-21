@@ -4913,6 +4913,10 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ps-cname{display:flex;flex-direction:column;min-width:0}
 .ps-cname b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ps-cname small{font-size:10.5px;color:var(--ink-3)}
+.ps-cname .ps-mesh{width:64px;font-size:11px;padding:1px 5px;margin-top:2px}
+.sep-pressup .sep-row{flex-wrap:wrap}
+.sep-pressup .sep-row .chip{white-space:nowrap}
+.jv-cp-step .sep-pressup{border:0;padding:0;box-shadow:none;background:none}
 .ps-color select{font-size:12px;padding:3px 5px;width:100%}
 .ps-ask{margin-top:6px;padding:7px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));font-size:12.5px;display:flex;flex-direction:column;gap:6px;cursor:default}
 .ps-ask-b{display:flex;flex-wrap:wrap;gap:6px;align-items:center}

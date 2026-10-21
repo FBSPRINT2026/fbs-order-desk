@@ -3,6 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PROD_ROLES, productionView } from "@/lib/productionView";
 import type { Group, Imprint } from "@/lib/pricing";
+import { mergeProduction } from "@/lib/production";
+import type { DesignSpecs } from "@/lib/designSpecs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +20,8 @@ export const maxDuration = 30;
  *   "filmOk"   {}: production looked the film over (fresh separations stay "new, never printed")
  *   "printed"  {}: after Confirm & save: film printed from becomes the as-printed film
  *   "note"     { text }: added to the production notes
+ *   "pressOnly" { press: id | "" }: this print only runs on that press (the schedule only puts it there); the design's
+ *              latest confirmed spec of the print gets it too, so every reorder of it does the same
  */
 async function who() {
   const v = await getViewer(", name");
@@ -108,6 +112,25 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const files = [...(im.film?.files || []).filter((f) => f.path !== path), { path, name: name || path.split("/").pop() || "Film" }];
       im.film = { ...(im.film || {}), state: "asPrinted", files, by: w.by, at };
       events.push(`${im.location}: as-printed film on file: ${name}`);
+    } else if (b.op === "pressOnly") {
+      const pid = clip(b.press, 60);
+      if (pid) {
+        const { data: stRow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+        const m = mergeProduction((stRow?.data as { production?: unknown } | null)?.production).machines.find((x) => x.id === pid && x.type === "screen");
+        if (!m) return NextResponse.json({ error: "Which press?" }, { status: 400 });
+        im.pressOnly = { id: m.id, name: m.name, by: w.by, at };
+        events.push(`${im.location}: must run on ${m.name}`);
+      } else { delete im.pressOnly; events.push(`${im.location}: can run on any press that fits`); }
+      if (im.design_id) {
+        const { data: d } = await admin.from("designs").select("id, specs").eq("id", im.design_id).maybeSingle();
+        const specs = (d?.specs || {}) as DesignSpecs;
+        const lk = (x: string) => x.toLowerCase().replace(/[^a-z]/g, "");
+        const last = [...(specs.history || [])].reverse().find((h) => lk(h.location) === lk(im!.location));
+        if (d && last) {
+          if (im.pressOnly) last.press = { id: im.pressOnly.id, name: im.pressOnly.name }; else delete last.press;
+          await admin.from("designs").update({ specs }).eq("id", d.id);
+        }
+      }
     } else if (b.op === "filmOk") {
       im.film = { ...(im.film || { state: "new" as const }), checked: { by: w.by, at } };
       events.push(`${im.location}: film checked`);

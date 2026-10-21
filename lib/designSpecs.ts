@@ -14,7 +14,7 @@ import type { Group, Imprint } from "@/lib/pricing";
  */
 export type SpecEntry = {
   location: string; method: string; size: string; drop: string; inks: string; colors: number; underbase?: boolean;
-  garment?: string; notes?: string;
+  garment?: string; notes?: string; /** it only runs on this press */ press?: { id: string; name: string };
   by: string; at: string; order_id: string; order_number: number; /** the old job this order repeated */ job?: string;
 };
 export type DesignSpecs = { history?: SpecEntry[] };
@@ -61,6 +61,7 @@ export function applySpec(im: Imprint, e: SpecEntry, designId: string) {
   if (e.colors >= 1 && e.colors <= 20) im.colors = e.colors;
   if (e.underbase === undefined) delete im.underbase; else im.underbase = e.underbase;
   if (e.size) im.sizeFrom = "film";
+  if (e.press?.id) im.pressOnly = { id: e.press.id, name: e.press.name };
   im.design_id = designId;
   delete im.confirm;
   im.confirmed = { by: e.by, at: e.at, from: `#${e.order_number}` };

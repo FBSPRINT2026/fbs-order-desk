@@ -26,7 +26,7 @@ export function screenPresses(settingsData: unknown): PressOption[] {
 
 const slotToHead = (h: string, ch: Ch[]): PHead => {
   if (h.startsWith("p:")) { const k = h.slice(2), c = ch.find((x) => x.key === k); return { what: "screen", key: k, name: c?.name || k, hex: c?.hex || "", mesh: c?.mesh || null }; }
-  return { what: h === "flash" ? "flash" : h === "cool" ? "cool" : "empty", name: "", hex: "", mesh: null };
+  return { what: h === "flash" ? "flash" : h === "cool" ? "cool" : h === "roller" ? "roller" : "empty", name: "", hex: "", mesh: null };
 };
 const headToSlot = (h: PHead) => (h.what === "screen" ? (h.key ? `p:${h.key}` : "") : h.what === "empty" ? "" : h.what);
 
@@ -60,7 +60,7 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
 
 const clean = (hs: unknown): PHead[] => (Array.isArray(hs) ? hs : []).slice(0, 24).map((h) => {
   const x = h as Partial<PHead>;
-  const what = (["screen", "flash", "cool", "empty"] as const).includes(x.what as never) ? (x.what as PHead["what"]) : "empty";
+  const what = (["screen", "flash", "cool", "roller", "empty"] as const).includes(x.what as never) ? (x.what as PHead["what"]) : "empty";
   return { what, ...(what === "screen" && x.key ? { key: String(x.key).slice(0, 40) } : {}), name: what === "screen" ? String(x.name || "").trim().slice(0, 60) || "Ink" : "", hex: /^#[0-9a-f]{6}$/i.test(String(x.hex || "")) ? String(x.hex) : "", mesh: what === "screen" && +(x.mesh || 0) > 0 ? Math.round(+x.mesh!) : null };
 });
 

@@ -52,7 +52,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
       if (im.design_id) {
         designs.set(im.design_id, [...(designs.get(im.design_id) || []), [im.location, im.size, im.inks, im.underbase === true ? "underbase" : ""].filter(Boolean).join(", ")]);
         const garment = [...new Set(groups.filter((g) => g.imprints.includes(im!)).flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
-        entries.push({ design: im.design_id, e: { location: im.location, method: im.method, size: im.size, drop: im.drop || "", inks: im.inks, colors: im.colors, ...(im.underbase !== undefined ? { underbase: im.underbase } : {}), garment, notes: note, by, at, order_id: o.id, order_number: o.number, ...(job ? { job } : {}) } });
+        entries.push({ design: im.design_id, e: { location: im.location, method: im.method, size: im.size, drop: im.drop || "", inks: im.inks, colors: im.colors, ...(im.underbase !== undefined ? { underbase: im.underbase } : {}), garment, notes: note, by, at, order_id: o.id, order_number: o.number, ...(job ? { job } : {}), ...(im.pressOnly?.id ? { press: { id: im.pressOnly.id, name: im.pressOnly.name } } : {}) } });
       }
     }
     if (!lines.length) throw new Error("Nothing waiting on production details here (already confirmed?).");

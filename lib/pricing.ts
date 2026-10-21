@@ -85,6 +85,9 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
    *  have to reburn a job from scratch"). asPrinted = the exact film it printed from is on file, so one screen can be
    *  remade on its own; physical = only the film in the drawer; new = fresh separations never printed, so a screen
    *  that pops means reburning every screen of this print together. `checked` = production looked the film over. */
+  /** this print only runs on one press (Oct 21, Nick: "this bottles job, we have to run it on the 12 color… build that
+   *  into the production scheduling"): the schedule only puts it there; reorders copy it (designs.specs) */
+  pressOnly?: { id: string; name: string; by?: string; at?: string };
   film?: { state: "asPrinted" | "physical" | "new"; files?: { path: string; name: string }[]; note?: string; by?: string; at?: string; checked?: { by: string; at: string } };
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through

@@ -4,7 +4,7 @@
  * Safe for the browser. The saving and the learning (into the separation, the design and the order) are in
  * lib/pressActualServer.ts.
  */
-export type HeadWhat = "screen" | "flash" | "cool" | "empty";
+export type HeadWhat = "screen" | "flash" | "cool" | "roller" | "empty";
 /** one head on the press, in order. `key` ties a screen to its separation plate (the film), so an ink can change and
  *  still be the same screen. */
 export type PHead = { what: HeadWhat; key?: string; name: string; hex: string; mesh: number | null };
@@ -53,5 +53,5 @@ export function diffSetup(plan: { pressId: string; press: string; heads: PHead[]
 
 /** "Press 3: 1 Underbase White · 2 Flash · 3 PMS 186 (230) …" for notes and the work order. */
 export function setupLine(press: string, heads: PHead[]) {
-  return `${press ? press + ": " : ""}${heads.map((h, i) => `${i + 1} ${h.what === "screen" ? `${h.name}${h.mesh ? ` (${h.mesh})` : ""}` : h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool" : "Empty"}`).join(" · ")}`;
+  return `${press ? press + ": " : ""}${heads.map((h, i) => `${i + 1} ${h.what === "screen" ? `${h.name}${h.mesh ? ` (${h.mesh})` : ""}` : h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool" : h.what === "roller" ? "Roller" : "Empty"}`).join(" · ")}`;
 }

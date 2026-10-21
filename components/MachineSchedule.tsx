@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -1798,7 +1798,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {log.length > 0 && <ul className="ms-log">{log.map((x) => <li key={x.id}><span>{when(x.at)}</span><span>{ACT[x.action] || x.action}{x.progress != null && x.action !== "done" && x.action !== "not_started" ? ` · ${Math.round(+x.progress * 100)}%` : ""}{x.note ? ` · ${x.note}` : ""}</span><span className="faint">{x.by}</span></li>)}</ul>}
           </div>}
           <div className="tmx-2 ms-3">
-            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? " (not enough colors)" : ""}</option>)}</select></label>
+            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? (pressOnlyOf(c.need, x) ? ` (must run on ${pressOnlyOf(c.need, x)!.name.split(" · ")[0]})` : " (not enough colors)") : ""}</option>)}</select></label>
             <label>Day<select value={day} onChange={(e) => setDay(e.target.value)}>{[...new Set([c.day, ...days])].sort().map((d) => <option key={d} value={d}>{dayLbl(d)}</option>)}</select></label>
             <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">After the job before it</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
           </div>
@@ -2073,6 +2073,8 @@ type OtRow = { m: Machine; w: WeekOT; used: number; unused: number; perHour: num
 function whyUnfit(need: Need, m: Machine) {
   if (need.type !== m.type) return `needs ${TYPE_LBL[need.type]}`;
   if (need.type !== "screen") return `${shortName(m)} can't run it right now`;
+  const only = pressOnlyOf(need, m);
+  if (only) return `must run on ${only.name.split(" · ")[0]} (set on the production mockup)`;
   if (need.steps.some((st) => flashesFor(st) > 0) && flashesOf(m) === 0) return `needs a flash (underbase or puff): ${shortName(m)} has none working`;
   return `needs ${stationsNeeded(need)} heads (screens + flashes): more than ${shortName(m)} can print, even in two rounds`;
 }

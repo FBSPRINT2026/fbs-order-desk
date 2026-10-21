@@ -7,6 +7,10 @@ import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
 import { createClient } from "@/lib/supabase/client";
 import type { ProductionView, PvPrint } from "@/lib/productionView";
+import PressSetupCard, { planOnPress, type PsPlate, type PsRec } from "@/components/PressSetupCard";
+import { pressLayOf } from "@/components/PressDefaults";
+import type { Slot } from "@/lib/pressSetup";
+import type { Machine } from "@/lib/production";
 
 /**
  * Production view (Oct 21, Nick: "one big view of the job… just like our mock-up… the press layout… the separations in
@@ -190,7 +194,8 @@ const avgHex = (a: string, b: string) => { const p = (h: string) => [1, 3, 5].ma
  * 3 the art's colors onto screens: two art colors on one screen print together; each screen is a PMS, a plain ink or a
  * custom mix. The art is repainted here the way it will print.
  */
-type Head = { what: string; name: string; hex: string; mesh: string };
+/** a screen's key on the press: its name (the same name is the same screen) */
+const plateKey = (name: string) => "s-" + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36);
 function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void }) {
   const [size, setSize] = useState(p.size), [loc, setLoc] = useState(p.location), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
   // screens + which screen each art color prints through
@@ -256,27 +261,53 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
   // one sitting (a reorder): the film, the press setup as it ran, notes; then Save everything
   const [film, setFilm] = useState<"" | "asPrinted" | "physical" | "new">(p.film?.state || "");
   const [finder, setFinder] = useState(false);
-  const [pressId, setPressId] = useState(p.press?.pressId || v.presses[0]?.id || "");
-  const headCount = v.presses.find((x) => x.id === pressId)?.heads || 0;
-  const layOut = (): Head[] => {
-    const seq: Head[] = [...(ub === "yes" ? [{ what: "screen", name: "White underbase", hex: "#FFFFFF", mesh: "" }, { what: "flash", name: "", hex: "", mesh: "" }] : []), ...screens.filter((x) => x.name.trim()).map((x) => ({ what: "screen", name: x.name, hex: x.hex, mesh: "" }))];
-    return [...seq, ...Array.from({ length: Math.max(0, headCount - seq.length) }, () => ({ what: "empty", name: "", hex: "", mesh: "" }))];
-  };
-  const [heads, setHeads] = useState<Head[]>(() => (p.press?.heads.length ? p.press.heads.map((h) => ({ ...h })) : []));
+  // 5: the press setup, the same card as Separations → Press (components/PressSetupCard.tsx): the screens are the
+  // underbase and the colors above; a setup saved as printed (or the separation's) comes back as it was
+  const [presses, setPresses] = useState<Machine[]>(v.presses);
+  const [mesh, setMesh] = useState<Record<string, number>>(() => {
+    const m: Record<string, number> = {};
+    for (const h of p.press?.heads || []) if (h.what === "screen" && +h.mesh > 0) m[plateKey(h.name)] = +h.mesh;
+    return m;
+  });
+  const plates = useMemo<PsPlate[]>(() => {
+    const out: PsPlate[] = [], seen = new Set<string>();
+    const add = (pl: PsPlate) => { if (seen.has(pl.key)) return; seen.add(pl.key); out.push({ ...pl, ...(mesh[pl.key] ? { mesh: mesh[pl.key] } : {}) }); };
+    if (ub === "yes") add({ key: plateKey("White underbase"), name: "White underbase", hex: "#FFFFFF", kind: "underbase" });
+    for (const x of screens) if (x.name.trim()) add({ key: plateKey(x.name), name: x.name.trim(), hex: x.hex || colorHex(x.name) || "#999999", kind: "color" });
+    return out;
+  }, [screens, ub, mesh]);
+  const rec = useMemo<PsRec>(() => ({ all: plates.map((x) => ({ key: x.key, name: x.name, hex: x.hex, kind: x.kind, coverage: x.kind === "underbase" ? 0.5 : 0.25 })), dark: ub === "yes" }), [plates, ub]);
+  const savedSetup = useMemo<Slot[] | null>(() => (p.press && p.press.from !== "auto" && p.press.heads.length
+    ? p.press.heads.map((h) => (h.what === "screen" ? "p:" + plateKey(h.name) : h.what === "flash" || h.what === "cool" || h.what === "roller" ? h.what : "")) : null), [p.press]);
+  const [setup, setSetup] = useState<Slot[] | null>(savedSetup);
+  // the press: the one it must run on, else the one it ran on (or the separation's), else the scheduled one if the
+  // screens fit, else the smallest press they fit on
+  const [pressId, setPressId] = useState(() => {
+    const ok = (m?: Machine) => !!m && (planOnPress(m, plates, null, rec)?.off.length ?? 1) === 0;
+    const by = (id?: string) => v.presses.find((m) => m.id === id);
+    if (p.pressOnly && by(p.pressOnly.id)) return p.pressOnly.id;
+    if (p.press && p.press.from !== "auto" && by(p.press.pressId)) return p.press.pressId!;
+    if (ok(by(p.press?.pressId))) return p.press!.pressId!;
+    const fit = [...v.presses].sort((a, b) => pressLayOf(a).length - pressLayOf(b).length).find((m) => ok(m));
+    return fit?.id || v.presses[0]?.id || "";
+  });
+  const press = presses.find((m) => m.id === pressId) || presses[0];
+  const onPress = useMemo(() => planOnPress(press, plates, setup, rec), [press, plates, setup, rec]);
+  const pinned = p.pressOnly;
   const [pnotes, setPnotes] = useState("");
   const [saving, setSaving] = useState("");
-  const setHead = (i: number, h: Partial<Head>) => setHeads((a) => a.map((x, j) => (j === i ? { ...x, ...h } : x)));
-  const moveHead = (i: number, d: number) => setHeads((a) => { const b = [...a]; const j = i + d; if (j < 0 || j >= b.length) return a; [b[i], b[j]] = [b[j], b[i]]; return b; });
-  const inkNames = [...new Set(["White underbase", ...screens.map((x) => x.name).filter(Boolean)])];
   async function saveAll() {
     setSaving("Saving size and placement…"); setErr("");
     let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
     if (ok && p.screen && screens.length) { setSaving("Saving colors and screens…"); ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save"); }
     if (ok && p.screen && film && film !== p.film?.state) { setSaving("Saving the film…"); ok = await post({ op: "film", print: p.id, state: film }, "save"); }
-    if (ok && p.screen && heads.some((h) => h.what === "screen")) {
+    if (ok && p.screen && onPress && onPress.heads.some((h) => h.startsWith("p:"))) {
       setSaving("Saving the press setup…");
-      const r = await fetch("/api/jobs/press", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job: { kind: "o", id: orderId }, sheet: p.sep ? p.sep.id : `loc:${loc}`, pressId, notes: pnotes, learn: true,
-        heads: heads.map((h) => ({ what: h.what === "screen" ? "screen" : h.what === "flash" ? "flash" : h.what === "cool" ? "cool" : "empty", name: h.name, hex: h.hex || colorHex(h.name) || "", mesh: +h.mesh > 0 ? +h.mesh : null })) }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+      const heads = onPress.heads.map((h) => {
+        const pl = h.startsWith("p:") ? plates.find((x) => x.key === h.slice(2)) : null;
+        return pl ? { what: "screen", name: pl.name, hex: pl.hex, mesh: pl.mesh || null } : { what: h === "flash" || h === "cool" || h === "roller" ? h : "empty", name: "", hex: "", mesh: null };
+      });
+      const r = await fetch("/api/jobs/press", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job: { kind: "o", id: orderId }, sheet: p.sep ? p.sep.id : `loc:${loc}`, pressId: press?.id || "", notes: pnotes, learn: true, heads }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
       if (r.error) { setErr(`Press setup: ${r.error}`); ok = false; }
     }
     if (ok) {
@@ -387,31 +418,15 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
       {one && p.screen && (
         <div className="jv-cp-step">
           <div className="jv-cp-n"><b>5</b>Press setup, as we ran it</div>
-          <div className="jv-act">
-            <select value={pressId} onChange={(e) => setPressId(e.target.value)} aria-label="Press">{v.presses.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.heads} heads)</option>)}</select>
-            <button type="button" className="btn sm" onClick={() => setHeads(layOut())}>{heads.length ? "Lay it out again from the screens" : "Lay it out from the screens"}</button>
-            {p.press?.asPrinted && <span className="faint">Showing what was saved as printed</span>}
-          </div>
-          {heads.length > 0 && (
-            <div className="jv-pr">
-              <Press p={{ ...p, press: { press: v.presses.find((x) => x.id === pressId)?.name || "", heads, asPrinted: false } }} number={0} wheelOnly />
-              <div className="jv-heads jv-heads-ed">
-                {heads.map((h, i) => (
-                  <div key={i} className="jv-hd">
-                    <span className="jv-n">{i + 1}</span>
-                    <select value={h.what === "screen" ? `s:${h.name}` : h.what} onChange={(e) => { const x = e.target.value; if (x.startsWith("s:")) { const n = x.slice(2); setHead(i, { what: "screen", name: n, hex: screens.find((sc) => sc.name === n)?.hex || (n === "White underbase" ? "#FFFFFF" : colorHex(n) || "#999999") }); } else setHead(i, { what: x, name: "", hex: "", mesh: "" }); }} aria-label={`Head ${i + 1}`}>
-                      {inkNames.map((n) => <option key={n} value={`s:${n}`}>{n}</option>)}
-                      {h.what === "screen" && !inkNames.includes(h.name) && <option value={`s:${h.name}`}>{h.name}</option>}
-                      <option value="flash">Flash</option><option value="cool">Cool-down</option><option value="empty">Empty</option>
-                    </select>
-                    {h.what === "screen" ? <input value={h.mesh} onChange={(e) => setHead(i, { mesh: e.target.value.replace(/[^0-9]/g, "") })} placeholder="mesh" aria-label={`Head ${i + 1} mesh`} /> : <span />}
-                    <button type="button" className="jv-x" aria-label="Move up" onClick={() => moveHead(i, -1)}>↑</button>
-                    <button type="button" className="jv-x" aria-label="Move down" onClick={() => moveHead(i, 1)}>↓</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {p.press?.asPrinted && <div className="faint">Showing what was saved as printed{p.press.press ? ` on ${p.press.press}` : ""}.</div>}
+          {!plates.length ? <div className="jv-empty">Put the colors in step 3 first: the press is laid out from those screens.</div>
+            : !press || !onPress ? <div className="jv-empty">No screen presses set up (Settings → Production).</div>
+            : <PressSetupCard title="Press setup" presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup}
+                commit={setSetup} clearSetup={() => setSetup(null)} onMesh={(k, n) => setMesh((m) => { const x = { ...m }; if (n) x[k] = n; else delete x[k]; return x; })}
+                sheet={{ title: `Press setup #${v.order.number}`, heading: `Press setup · ${loc}${` · #${v.order.number} ${v.order.nickname}`}`, sub: `${plates.length} screens${p.design ? ` · ${p.design}` : ""}` }}
+                extra={pinned && pinned.id === press.id
+                  ? <button type="button" className="chip on" disabled={busy} title="The schedule only puts this print on this press, and every reorder of it does the same. Click to let it run on any press that fits." onClick={() => void post({ op: "pressOnly", print: p.id, press: "" }, "save")}>✓ Must run on {press.name.split(" · ")[0]}</button>
+                  : <button type="button" className="chip" disabled={busy} title="The schedule will only put this print on this press, now and on every reorder" onClick={() => void post({ op: "pressOnly", print: p.id, press: press.id }, "save")}>Must run on this press{pinned ? ` (now: ${pinned.name.split(" · ")[0]})` : ""}</button>} />}
         </div>
       )}
       {one && (
