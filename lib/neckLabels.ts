@@ -87,11 +87,17 @@ export function labelCanvas(img: HTMLImageElement, set: NeckLabelSet, size: stri
   let clear = 0;
   for (let i = 3; i < p.length; i += 16) if (p[i] < 128) clear++;
   const usesAlpha = clear > p.length / 16 * 0.1;
+  // dark art on a clear background with white inside it (Furry Feline's "SMALL" in white on a black bar, Oct 21, Nick:
+  // "that should be a knockout"): the white is a knockout, as on a flat file. Art that's mostly light or colored on clear
+  // (white ink art for dark shirts) still prints its shapes.
+  let dark = 0, solid = 0;
+  if (usesAlpha) for (let i = 0; i < p.length; i += 16) if (p[i + 3] > 128) { solid++; if (0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2] < 90) dark++; }
+  const knock = usesAlpha && solid > 0 && dark / solid > 0.4;
   const [r, g, bl] = hexRgb(inkHex);
   for (let i = 0; i < p.length; i += 4) {
     const a = p[i + 3] / 255, lum = (0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]) / 255;
     // the size text is drawn black on the template, so it prints even on a transparent design
-    const m = usesAlpha ? (lum < 0.08 && a > 0.5 ? 1 : a) : a * (1 - lum);
+    const m = usesAlpha && !knock ? (lum < 0.08 && a > 0.5 ? 1 : a) : a * (1 - lum);
     p[i] = r; p[i + 1] = g; p[i + 2] = bl; p[i + 3] = Math.round(Math.max(0, Math.min(1, m)) * 255);
   }
   x.putImageData(d, 0, 0);
