@@ -11271,3 +11271,18 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
   table.m-card td[data-label="Customer"]{flex:1 1 100%;font-size:13px}
   table.m-card td[data-label]:not(:first-child):not(:nth-child(2)):not([data-label="Status"]):not([data-label="Customer"]){font-size:12.5px}
 }
+/* My Day: the to-do filter (All / Money / Shop…) is the secondary toolbar; on a phone the Replies / To-do / Calendar
+   switch is a section bar */
+main.main .md-areas{display:flex;flex-wrap:wrap;gap:0;background:var(--surface);box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;overflow:hidden;width:fit-content;max-width:100%;padding:0;border:0}
+main.main .md-areas > button{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;font-size:13px;font-weight:700;color:var(--ink-3);white-space:nowrap}
+main.main .md-areas > button:hover{color:var(--ink)}
+main.main .md-areas > button.on{color:var(--ink);font-weight:800;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue)}
+main.main .md-areas > button i{width:7px;height:7px;border-radius:50%;background:var(--ac,var(--ink-3));flex:none}
+main.main .md-areas > button span{font-size:11px;font-weight:700;min-width:18px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3)}
+main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
+@media (max-width:760px){
+  main.main .md-tabs{gap:0!important;background:var(--surface)!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;overflow:hidden;padding:0!important;margin-bottom:10px}
+  main.main .md-tabs button{border:0!important;border-radius:0!important;background:transparent!important;padding:11px 6px!important;font-size:13px!important;font-weight:700!important;color:var(--ink-3)!important}
+  main.main .md-tabs button.on{color:var(--ink)!important;font-weight:800!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)}
+  main.main .md-tabs button b{font-size:11px;padding:1px 6px}
+}
