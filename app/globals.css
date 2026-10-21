@@ -10381,3 +10381,7 @@ div.prod-kind{border:0;padding:0}
 button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999px;padding:2px 8px;cursor:pointer;font-weight:700}
 .nav-h-ver{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav-h-ver .ver-tag{margin-left:auto;text-transform:none;letter-spacing:.02em;font-weight:500}
+/* the neckline seam on a garment photo (shown with the print areas; drag to fix) */
+.mk-neck{position:absolute;left:30%;width:40%;height:14px;margin-top:-7px;cursor:ns-resize;touch-action:none;z-index:3}
+.mk-neck::before{content:"";position:absolute;left:0;right:0;top:6px;border-top:2px solid #e0245e}
+.mk-neck span{position:absolute;left:100%;top:-1px;margin-left:4px;white-space:nowrap;font:600 10px/16px system-ui,sans-serif;color:#fff;background:#e0245e;border-radius:3px;padding:0 5px}

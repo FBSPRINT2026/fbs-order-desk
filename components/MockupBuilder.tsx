@@ -25,7 +25,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -86,6 +86,9 @@ function containRect(img: HTMLImageElement) {
   const iw = img.naturalWidth || PHOTO_W, ih = img.naturalHeight || PHOTO_H, k = Math.min(PHOTO_W / iw, PHOTO_H / ih);
   return { x: (PHOTO_W - iw * k) / 2, y: (PHOTO_H - ih * k) / 2, w: iw * k, h: ih * k };
 }
+/** the AI picks each new photo's neckline from the pixel finder's lines (off until it beats the pixel finder on Nick's marked photos) */
+const NECK_AI = false;
+
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const im = new Image();
@@ -699,25 +702,69 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v));
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
+  /**
+   * The bottom of the sewn neckline on each photo (where drops are measured from), remembered per photo
+   * (garment_necks): a staff fix, else the AI's pick from the lines the pixel finder saw (Oct 20, Nick: "ask AI vision
+   * to find it, and then if it's wrong, I fix it"), else the pixel finder's own guess.
+   */
+  const [necks, setNecks] = useState<Record<string, { neck: number; source: string }>>({});
+  const neckAsked = useRef(new Set<string>());
+  const neckKey = (u: string) => { try { const q = new URL(u, "https://x.invalid").searchParams; return q.get("p") || q.get("u") || u; } catch { return u; } };
   const fitFor = (l: Line | undefined, v: View): Fit | null => {
     if (!l) return null;
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
     const f = fits[u] || null;
     if (!f || f.flat || !f.body || v !== "front") return f;
+    const own = necks[neckKey(u)];
+    if (own) return { ...f, neck: own.neck };
     // Many S&S styles use one computer-made photo for every color (Oct 20, Nick: "the 6210 … all the images are exactly
-    // the same"): colors whose shirt outline matches to the pixel share the middle neckline reading, so one hard color
-    // (white on white) can't put its print somewhere else. Photos laid flat by hand (the Bella onesies) differ, and keep their own.
+    // the same"): colors whose shirt outline matches to the pixel share a neckline (one fixed by hand counts for all of
+    // them, else the middle reading), so one hard color (white on white) can't put its print somewhere else. Photos
+    // laid flat by hand (the Bella onesies) differ, and keep their own.
     const g = garmentFor(l), fb = f.body;
     if (!g) return f;
     const near = (a: number, b: number) => Math.abs(a - b) <= 3;
     const peers = [...new Set(lines.filter((x) => garmentFor(x)?.id === g.id).map((x) => photo(x, v)))]
-      .map((p) => fits[p]).filter((p): p is Fit => !!p && !p.flat && !!p.body && near(p.top, f.top) && near(p.body.l, fb.l) && near(p.body.r, fb.r) && near(p.body.hem, fb.hem));
-    const ns = peers.map((p) => p.neck).filter((n): n is number => n != null).sort((a, b) => a - b);
+      .filter((pu) => { const p = fits[pu]; return !!p && !p.flat && !!p.body && near(p.top, f.top) && near(p.body.l, fb.l) && near(p.body.r, fb.r) && near(p.body.hem, fb.hem); });
+    const fixed = peers.map((pu) => necks[neckKey(pu)]).filter(Boolean);
+    const byHand = fixed.find((x) => x.source === "staff") || fixed[0];
+    if (byHand) return { ...f, neck: byHand.neck };
+    const ns = peers.map((pu) => fits[pu]?.neck).filter((n): n is number => n != null).sort((a, b) => a - b);
     if (peers.length < 3 || ns.length * 2 <= peers.length) return f;
     const mid = ns[ns.length >> 1];
     return f.neck != null && Math.abs(f.neck - mid) <= 4 ? f : { ...f, neck: mid };
   };
+  /** where this photo's neckline reading came from, for the label on the line */
+  const neckTag = (l: Line) => { const x = necks[neckKey(photo(l, "front"))]; return x?.source === "staff" ? "set by hand" : x ? "AI" : "auto"; };
+  const setNeck = (l: Line, y: number) => {
+    const k = neckKey(photo(l, "front"));
+    setNecks((m) => ({ ...m, [k]: { neck: y, source: "staff" } }));
+    void fetch("/api/garments/neck", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ photo: k, neck: y }) }).catch(() => {});
+  };
+  // saved necklines for the front photos, then the AI for any not seen before (one at a time, in the background)
+  useEffect(() => {
+    const todo = [...new Set(lines.map((l) => photo(l, "front")))].filter((u) => !u.startsWith("data:") && !neckAsked.current.has(u) && fits[u] && !fits[u]!.flat && fits[u]!.neckLines?.length);
+    if (!todo.length) return;
+    todo.forEach((u) => neckAsked.current.add(u));
+    void (async () => {
+      const got = await fetch(`/api/garments/neck?${todo.map((u) => "photo=" + encodeURIComponent(neckKey(u))).join("&")}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const have: Record<string, { neck: number; source: string }> = got?.necks || {};
+      if (Object.keys(have).length) setNecks((m) => ({ ...m, ...have }));
+      if (!NECK_AI) return;
+      for (const u of todo) {
+        const f = fits[u];
+        if (have[neckKey(u)] || !f) continue;
+        const img = await loadImg(u).catch(() => null);
+        const pic = img && neckPicture(img, f);
+        if (!pic) continue;
+        const r = await fetch("/api/garments/neck", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ photo: neckKey(u), ...pic }) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        if (r?.neck) setNecks((m) => ({ ...m, [neckKey(u)]: { neck: r.neck, source: r.source || "ai" } }));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fits, lines]);
+
   /**
    * Each style's own print-area spot (Oct 20, Nick: "when I click Print areas, let me drag that print areas grid around
    * … it stays the same dependent on each individual shirt … so it knows moving forward: a PC55RS gets this spot").
@@ -1944,7 +1991,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), v)} cx={normOf(fitFor(line, v), v).z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
+              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), v)}
+                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => setNeck(line, y) } : undefined} cx={normOf(fitFor(line, v), v).z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
                 areaEdit={grid && !!line && !!garmentFor(line) && !!fitFor(line, v) && !fitFor(line, v)?.flat}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
                 areaNote={grid && line && adjOf(line, v) ? <span className="mk-areanote">Print area set by hand for {line.style}{lines.length > 1 ? " (this garment only)" : ""} · <button type="button" className="linkbtn" onClick={() => resetArea(line, v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
@@ -2300,7 +2348,9 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, areaEdit, onArea, areaNote }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, areaEdit, onArea, areaNote, neckLine }: {
+  /** the bottom of the sewn neckline on this photo (shown with the print areas; drag it to fix it, saved for this photo) */
+  neckLine?: { y: number; tag: string; onSet: (y: number) => void };
   /** the dashed print areas can be dragged (moves this style's prints) and resized from the corner */ areaEdit?: boolean;
   onArea?: (dx: number, dy: number, kMul: number) => void; areaNote?: ReactNode;
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
@@ -2312,7 +2362,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize"; w: number; el?: HTMLElement } | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize" | "neck"; w: number; el?: HTMLElement } | null>(null);
+  const [neckDy, setNeckDy] = useState(0);
   const [sel, setSel] = useState("");
   const [tip, setTip] = useState("");
   const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2356,6 +2407,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           }
           const d = drag.current; if (!d) return;
           const f = k();
+          if (d.mode === "neck") { setNeckDy((e.clientY - d.sy) / f); return; }
           if (d.mode === "area") { onArea?.((e.clientX - d.x) / f, (e.clientY - d.y) / f, 1); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "areaSize") { const dw = (e.clientX - d.x) / f; if (d.w + dw > 40) { onArea?.(0, 0, (d.w + dw) / d.w); d.w += dw; } drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
@@ -2367,6 +2419,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           const pz = pinch.current;
           if (pz) { if (pts.current.size < 2) { pinch.current = null; drag.current = null; onEnd?.(pz.id); } return; }
           const d = drag.current; drag.current = null;
+          if (d?.mode === "neck") { const dy = (e.clientY - d.sy) / k(); setNeckDy(0); if (neckLine && Math.abs(dy) > 0.5) neckLine.onSet(Math.round(neckLine.y + dy)); return; }
           // only after a real drag: a plain click never changes the location
           if (d && onEnd && !d.mode.startsWith("area") && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id);
         }}
@@ -2380,6 +2433,12 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           onPointerDown={areaEdit && !it.p.clip ? (e) => { if ((e.target as HTMLElement).closest(".mk-art")) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "area", w: 0 }; } : undefined}>
           {areaEdit && !it.p.clip && <span className="mk-area-h" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "areaSize", w: it.p.area.w }; }} />}
         </div>)}
+        {grid && neckLine && (
+          <div className="mk-neck" style={{ top: `${(neckLine.y + neckDy) * sy}%` }} title="The bottom of the sewn neckline: every drop is measured from here. Drag it onto the seam if it's off (saved for this photo)."
+            onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "neck", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "neck", w: 0 }; }}>
+            <span>Neckline · {neckLine.tag}</span>
+          </div>
+        )}
         {/* the art itself, cut to the shirt outline */}
         <div className="mk-artlayer" style={mask ? { maskImage: `url(${mask})`, WebkitMaskImage: `url(${mask})` } : undefined}>
           {items.map((it) => it.url ? (

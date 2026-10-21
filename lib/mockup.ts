@@ -55,7 +55,9 @@ export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque
   body?: { l: number; r: number; hem: number };
   /** where prints are measured from (Oct 20, Nick: "start in the same spot from the bottom of the neckline every time"):
    *  front = the bottom of the front neckline at the center, back = the top of the back neck at the center (px) */
-  neck?: number };
+  neck?: number;
+  /** the lines the neckline finder saw across the collar (px, top to bottom), for the AI to pick the seam from */
+  neckLines?: number[] };
 /** the same points on the reference Gildan 5000 photos (bottom of the front collar rib; top of the back collar) */
 export const REF_NECK = { front: 186, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
@@ -82,9 +84,10 @@ function drawContained(x: CanvasRenderingContext2D, img: HTMLImageElement, W: nu
  * marked (29 right). Reading the middle strip alone stopped inside the rib whenever the rib matched the body color
  * (the onesies on #40087: 20-40 px high, a different amount on every color). Null when no clear seam is found.
  */
-function seamFront(d: Uint8ClampedArray, W: number, H: number, T: number, cx: number, s: number): number | null {
+function seamFront(d: Uint8ClampedArray, W: number, H: number, T: number, cx: number, s: number): { pick: number | null; lines: number[] } {
+  const none = { pick: null, lines: [] as number[] };
   const HW = Math.round(90 * s), b0 = Math.round(380 * s), Y1 = Math.min(H - 2, Math.round(T + 460 * s)), eh = Y1 - T, ew = 2 * HW + 1;
-  if (eh < b0 + 20 || cx - HW - 2 < 0 || cx + HW + 2 >= W) return null;
+  if (eh < b0 + 20 || cx - HW - 2 < 0 || cx + HW + 2 >= W) return none;
   // 5x5 box blur of the neck area
   const R = 2, cw = ew + 2 * R, t = new Float32Array(cw * eh * 3), u = new Float32Array(ew * eh * 3);
   for (let y = 0; y < eh; y++) for (let i = 0; i < cw; i++) {
@@ -124,17 +127,74 @@ function seamFront(d: Uint8ClampedArray, W: number, H: number, T: number, cx: nu
     S[y0] = best;
   }
   const base = Array.from(S.slice(b0, eh)).sort((a, b) => a - b);
-  if (base.length < 10) return null;
+  if (base.length < 10) return none;
   const med = base[base.length >> 1], mad = base.map((v) => Math.abs(v - med)).sort((a, b) => a - b)[base.length >> 1];
   const thr = med + Math.max(4 * mad, 0.3 * med, 1), L = Math.round(50 * s);
+  let pick: number | null = null;
   for (let y = Math.round(10 * s); y < Math.round(300 * s) && y + L < eh; y++) {
     if (S[y] <= thr) continue;
     let quiet = true;
     for (let k = 1; k <= L; k++) if (S[y + k] > thr) { quiet = false; break; }
     // too close to the shoulders to be a seam: no answer
-    if (quiet) return y < 40 * s ? null : T + y;
+    if (quiet) { pick = y < 40 * s ? null : T + y; break; }
   }
-  return null;
+  // every line it sees across the collar (for the AI to pick from): each one's lower edge, close ones merged, the 9
+  // strongest top to bottom. On Nick's 63 marked photos the seam was one of them 61 times.
+  const sm = Array.from(S, (v, i) => ((S[i - 1] ?? v) + 2 * v + (S[i + 1] ?? v)) / 4);
+  const sb = sm.slice(b0).sort((a, b) => a - b), m2 = sb[sb.length >> 1] || 1;
+  const pk: { y: number; v: number }[] = [];
+  for (let y = Math.round(12 * s); y < Math.min(eh - 1, Math.round(300 * s)); y++) {
+    if (!(sm[y] >= sm[y - 1] && sm[y] > sm[y + 1] && sm[y] > m2 * 1.06)) continue;
+    let e = y; const half = m2 + (sm[y] - m2) * 0.5;
+    while (e + 1 < eh && sm[e + 1] > half) e++;
+    pk.push({ y: e, v: sm[y] });
+  }
+  const merged: { y: number; v: number }[] = [];
+  for (const c of pk.sort((a, b) => a.y - b.y)) {
+    const last = merged[merged.length - 1];
+    if (last && c.y - last.y < Math.round(7 * s)) { if (c.v > last.v * 0.6) { last.y = c.y; last.v = Math.max(last.v, c.v); } }
+    else merged.push({ ...c });
+  }
+  const lines = merged.sort((a, b) => b.v - a.v).slice(0, 9).map((c) => T + c.y).sort((a, b) => a - b);
+  return { pick, lines };
+}
+
+/**
+ * The top of a garment photo with the neckline finder's lines drawn across it, lettered A, B, C… at both ends (for the
+ * AI to pick the seam from), plus a brightened copy so a dark collar shows. JPEG data URLs, 640 px wide.
+ */
+export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: string; y: number }[]; image: string; enhanced: string } | null {
+  if (!fit.neckLines?.length) return null;
+  const W = PHOTO_W, H = PHOTO_H, s = fit.s;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const cx0 = c.getContext("2d"); if (!cx0) return null;
+  drawContained(cx0, img, W, H);
+  const lines = fit.neckLines.map((y, i) => ({ label: String.fromCharCode(65 + i), y }));
+  const x0 = Math.round(fit.cx - 160 * s), y0 = Math.max(0, Math.round(fit.top - 15 * s)), w = Math.round(320 * s), h = Math.round(345 * s);
+  const out = 640, k = out / w, oh = Math.round(h * k);
+  const cols = ["#ff0000", "#0066ff", "#00b050", "#ff00ff", "#ff8c00", "#00c8c8", "#8000ff", "#c8a000", "#ff3399"];
+  // ticks at the sides only (a line drawn across hid the seam it marked, and the AI picked the line above it)
+  const M = 70;
+  const make = (enh: boolean) => {
+    const e = document.createElement("canvas"); e.width = out + 2 * M; e.height = oh;
+    const x = e.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, out + 2 * M, oh); x.imageSmoothingQuality = "high";
+    x.drawImage(c, x0, y0, w, h, M, 0, out, oh);
+    if (enh) {
+      const id = x.getImageData(M, 0, out, oh); let lo = 255, hi = 0;
+      for (let i = 0; i < id.data.length; i += 4) { const m = (id.data[i] + id.data[i + 1] + id.data[i + 2]) / 3; if (m < 248) { lo = Math.min(lo, m); hi = Math.max(hi, m); } }
+      const g = 255 / Math.max(25, hi - lo);
+      for (let i = 0; i < id.data.length; i += 4) for (let j = 0; j < 3; j++) id.data[i + j] = Math.max(0, Math.min(255, (id.data[i + j] - lo) * g));
+      x.putImageData(id, M, 0);
+    }
+    lines.forEach((l, i) => {
+      const yy = Math.round((l.y - y0) * k) + 0.5, col = cols[i % cols.length];
+      x.strokeStyle = col; x.lineWidth = 2; x.beginPath();
+      x.moveTo(22, yy); x.lineTo(M + 30, yy); x.moveTo(M + out - 30, yy); x.lineTo(out + 2 * M - 22, yy); x.stroke();
+      x.font = "bold 15px sans-serif"; x.fillStyle = col; x.fillText(l.label, 4, yy + 5); x.fillText(l.label, out + 2 * M - 18, yy + 5);
+    });
+    return e.toDataURL("image/jpeg", 0.88);
+  };
+  return { lines, image: make(false), enhanced: make(true) };
 }
 
 /** Measure the shirt outline on a photo (white background). Returns null when it can't find a clean outline (e.g. drawn tee). */
@@ -252,14 +312,16 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
   // the neckline at the center (a narrow band down the middle of the shirt)
   const band = (y: number) => { let r = 0, g = 0, bl = 0, n = 0; for (let X = Math.round(cx) - 8; X <= Math.round(cx) + 8; X++) { const p = y * W + X; if (bg[p]) continue; r += d[p * 4]; g += d[p * 4 + 1]; bl += d[p * 4 + 2]; n++; } return n >= 10 ? [r / n, g / n, bl / n] : null; };
-  let neck: number | undefined;
+  let neck: number | undefined, neckLines: number[] = [];
   if (view === "back") {
     // top of the back neck: the first of the shirt down the middle
     for (let y = T; y < T + 200 * s && y < H; y++) if (band(y)) { neck = y; break; }
   } else {
-    neck = seamFront(d, W, H, T, Math.round(cx), s) ?? undefined;
+    const sf = seamFront(d, W, H, T, Math.round(cx), s);
+    neck = sf.pick ?? undefined;
+    neckLines = sf.lines;
   }
-  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}) };
+  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}) };
 }
 
 /**
