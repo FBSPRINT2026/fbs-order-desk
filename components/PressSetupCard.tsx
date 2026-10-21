@@ -162,7 +162,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
           </div>
         </div>}
       </div>
-      <ol className="ps-heads">{onPress.heads.map((x, h) => {
+      <ol className="ps-hrows">{onPress.heads.map((x, h) => {
         const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
         const kind = p ? "print" : x || "empty";
         const label = p ? p.name : x === "flash" ? "Flash" : x === "roller" ? "Roller (dead screen)" : x === "cool" ? "Cool down (left empty)" : x === "down" ? "Head down (Equipment Status)" : "Open";
