@@ -212,7 +212,7 @@ export default function InkRoom() {
   const draftPms = edit ? tidyPms(edit.pms) : "", draftF = edit && draftPms ? formulaFor(draftPms) : null;
 
   const tabs = (
-    <div className="row" style={{ gap: 6 }} role="tablist">
+    <div className="chips" role="tablist">
       <button type="button" role="tab" aria-selected={tab === "pms"} className={"chip" + (tab === "pms" ? " on" : "")} onClick={() => setTab("pms")}>PMS formulas</button>
       <button type="button" role="tab" aria-selected={tab === "stock"} className={"chip" + (tab === "stock" ? " on" : "")} onClick={() => setTab("stock")}>Stock colors{stock ? ` (${stockedN})` : ""}</button>
       <button type="button" role="tab" aria-selected={tab === "inventory"} className={"chip" + (tab === "inventory" ? " on" : "")} onClick={() => setTab("inventory")}>Inventory</button>

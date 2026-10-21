@@ -388,7 +388,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="toolbar">
           <div className="chips">
             {(([["all", "All"], ["quotes", "Quotes"], ["completed", "Completed"]]) as const).map(([k, l]) => (
-              <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l} {lists[k].length}</button>
+              <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l}<span className="chip-n">{lists[k].length}</span></button>
             ))}
           </div>
           {search(oFilter === "quotes" ? "Search quotes" : "Search #, name, garment, color…")}
@@ -842,8 +842,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     body = <>
       {textsPanel && (
         <div className="toolbar"><div className="chips" role="tablist" aria-label="Which conversation">
-          <button type="button" role="tab" aria-selected={convNow === "portal"} className={"chip" + (convNow === "portal" ? " on" : "")} onClick={() => { setConv("portal"); if (rawArea === "texts") go("messages"); }}>Portal messages {messages.length}</button>
-          <button type="button" role="tab" aria-selected={convNow === "texts"} className={"chip" + (convNow === "texts" ? " on" : "")} onClick={() => { setConv("texts"); if (rawArea === "texts") go("messages"); }}>Texts {textsCount || 0}</button>
+          <button type="button" role="tab" aria-selected={convNow === "portal"} className={"chip" + (convNow === "portal" ? " on" : "")} onClick={() => { setConv("portal"); if (rawArea === "texts") go("messages"); }}>Portal messages<span className="chip-n">{messages.length}</span></button>
+          <button type="button" role="tab" aria-selected={convNow === "texts"} className={"chip" + (convNow === "texts" ? " on" : "")} onClick={() => { setConv("texts"); if (rawArea === "texts") go("messages"); }}>Texts<span className="chip-n">{(textsCount || 0).toLocaleString()}</span></button>
         </div></div>
       )}
       {convNow === "texts" && textsPanel ? textsPanel : messagesPanel}

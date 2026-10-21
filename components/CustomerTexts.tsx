@@ -23,8 +23,8 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
       {/* always say whose texts these are: "Nicholas & Michael Peticolas" (one chip per conversation) */}
       {/* the same secondary toolbar as everywhere (Oct 21, Nick: "that would be a secondary toolbar and it should match everywhere") */}
       <div className="toolbar ctx-tb"><div className="chips" role="group" aria-label="Conversations">
-        {convos.length > 1 && <button type="button" className={"chip" + (!only ? " on" : "")} onClick={() => setOnly("")}>All {t.length}</button>}
-        {convos.map(([c, n]) => <button key={c} type="button" className={"chip" + (only === c || convos.length === 1 ? " on" : "")} onClick={() => convos.length > 1 && setOnly(c)}>{c.replace(" & ", " and ")} {n}</button>)}
+        {convos.length > 1 && <button type="button" className={"chip" + (!only ? " on" : "")} onClick={() => setOnly("")}>All<span className="chip-n">{t.length.toLocaleString()}</span></button>}
+        {convos.map(([c, n]) => <button key={c} type="button" className={"chip" + (only === c || convos.length === 1 ? " on" : "")} onClick={() => convos.length > 1 && setOnly(c)}>{c.replace(" & ", " and ")}<span className="chip-n">{n.toLocaleString()}</span></button>)}
       </div></div>
       <div className="panel-b ctx">
         {shown.map((m) => {
