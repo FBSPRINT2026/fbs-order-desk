@@ -236,9 +236,11 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
   }, [p.art]);
   useEffect(() => {
     const c = cv.current, i = img.current; if (!c || !i || !ready) return;
-    const k = Math.min(1, 420 / Math.max(i.naturalWidth, i.naturalHeight));
+    // full detail (Oct 21, Nick: "on the photoshop files in preview… they are extremely grainy"): it was drawn at 420px
+    // and stretched, so halftone dots turned to noise; now up to 1800px, shown smaller (sharp on a retina screen too)
+    const k = Math.min(1, 1800 / Math.max(i.naturalWidth, i.naturalHeight));
     c.width = Math.max(1, Math.round(i.naturalWidth * k)); c.height = Math.max(1, Math.round(i.naturalHeight * k));
-    const x = c.getContext("2d", { willReadFrequently: true })!; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
+    const x = c.getContext("2d", { willReadFrequently: true })!; x.imageSmoothingQuality = "high"; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
     if (!p.plan.length) return;
     const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
     const off = new Set((shirt && byColor ? skip[shirt] || [] : []).map((n) => n.toLowerCase()));
