@@ -15,7 +15,7 @@ import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
 import { loadMemories, memoryText } from "@/lib/ai/orderMemory";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
-import { isPicture, looksLikeSignature, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
+import { isPicture, looksLikeSignature, oldNoteText, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
 /**
  * "Create order" from a customer email. The AI reads the email AND its attachments (pictures and PDFs it looks at,
@@ -113,6 +113,9 @@ function groupsFromOrder(o: Order): Group[] {
   }));
 }
 
+/** a Printavo job's customer and production notes, as text */
+const pvNotes = (r: { data?: unknown }) => { const d = (r.data || {}) as { customerNote?: string; productionNote?: string }; return { customer: oldNoteText(d.customerNote).slice(0, 1500), production: oldNoteText(d.productionNote).slice(0, 1500) }; };
+
 export async function pastJobs(admin: SupabaseClient, customerId: string | null): Promise<PastJob[]> {
   if (!customerId) return [];
   const [{ data: os }, { data: as }, { data: st }] = await Promise.all([
@@ -130,7 +133,7 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
   for (const r of (as || []) as PvRow[]) {
     const groups = groupsFromPrintavo(r, prod);
     if (!groups.length) continue;
-    jobs.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job: its art is in the job's files on the archive page." });
+    jobs.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job: its art is in the job's files on the archive page.", oldNotes: pvNotes(r) });
   }
   return jobs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25);
 }
@@ -159,7 +162,7 @@ export async function jobsNamed(admin: SupabaseClient, told: string, customerId:
     const r = ((as || []) as (PvRow & { customer_id: string | null })[]).find((x) => !customerId || x.customer_id === customerId);
     if (r) {
       const groups = groupsFromPrintavo(r, prod);
-      if (groups.length) out.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job named by staff." });
+      if (groups.length) out.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job named by staff.", oldNotes: pvNotes(r) });
     }
   }
   return out;

@@ -14,7 +14,21 @@ export type PastJob = {
   /** "o:<order id>" or "a:<archived order id>" */ ref: string;
   label: string; date: string; qty: number; groups: Group[];
   /** for Printavo jobs: where the art and mockups are kept */ note?: string;
+  /** a Printavo job's own notes, as text (a reorder can carry them over to production) */
+  oldNotes?: { customer: string; production: string };
 };
+
+/**
+ * Carrying the old Printavo job's notes over to a reorder (Oct 21, Nick: "give us the option of carrying over production
+ * customer notes… sometimes customer notes will be like a shipping address and that's not important. But sometimes like
+ * this one, it's actual color information"). Ticked by default when the note talks about the print (inks, colors, size).
+ */
+export const oldNoteText = (s: unknown) => String(s ?? "").replace(/<br\s*\/?>|<\/(div|p|li)>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+export const aboutThePrint = (t: string) => /\bpms\b|\b\d{3,4}\s?c\b|\binks?\b|\bcolou?rs?\b|\bc\s?=\s?\d|\bscreens?\b|\bunderbase\b|\bflash\b|\bmesh\b|\b\d+(\.\d+)?\s?("|in\b|inch)|\b(front|back|sleeve|chest)\b/i.test(t);
+export type CarryKey = "customer" | "production";
+/** which of the old job's notes go to the reorder: what staff ticked, else the ones about the print */
+export const carryOf = (d: { carry?: CarryKey[] }, n: { customer: string; production: string }): CarryKey[] =>
+  d.carry ?? (["customer", "production"] as CarryKey[]).filter((k) => n[k] && aboutThePrint(n[k]));
 export type EODraft = {
   v: 2; kind: "new" | "reorder"; summary: string; confidence: "high" | "medium" | "low";
   nickname: string; due_date: string | null; delivery: "pickup" | "ship" | "deliver"; ship_to: string; po_number: string; notes: string;
@@ -32,6 +46,8 @@ export type EODraft = {
   artNotes?: string[];
   /** a reorder of a Printavo job: what its notes say about the prints, for production to confirm (lib/ai/oldJobNotes.ts) */
   prodSuggest?: string;
+  /** the old Printavo job's notes to carry over to production (unset: the ones about the print) */
+  carry?: CarryKey[];
   /** what staff told the AI before it read the email ("it's a reorder of 31174, art is on the old job") */
   told?: string;
   /** the AI read it as a reorder (even when it couldn't tell which job) */

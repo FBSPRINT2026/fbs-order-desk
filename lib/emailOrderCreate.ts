@@ -3,7 +3,7 @@ import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { METHODS, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
-import { isPicture, type EODraft } from "@/lib/emailOrderShared";
+import { carryOf, isPicture, oldNoteText, type EODraft } from "@/lib/emailOrderShared";
 import { trimPng } from "@/lib/pngTrim";
 import { SITE_URL } from "@/lib/config";
 import { namesForPaths } from "@/lib/printavoFileMeta";
@@ -126,7 +126,17 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const reorderOf = d.kind === "reorder" && d.reorderOf ? d.reorderOf : null;
   let fromLabel = "";
   if (reorderOf?.startsWith("o:")) { const { data: o } = await admin.from("orders").select("number").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `#${o.number}`; }
-  else if (reorderOf?.startsWith("a:")) { const { data: o } = await admin.from("archived_orders").select("visual_id").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `Printavo #${o.visual_id}`; }
+  // the old Printavo job's notes carried over to production (ticked, else the ones about the print)
+  let carried = "";
+  if (reorderOf?.startsWith("a:")) {
+    const { data: o } = await admin.from("archived_orders").select("visual_id, data").eq("id", reorderOf.slice(2)).maybeSingle();
+    if (o) {
+      fromLabel = `Printavo #${o.visual_id}`;
+      const od = (o.data || {}) as { customerNote?: string; productionNote?: string };
+      const n = { customer: oldNoteText(od.customerNote), production: oldNoteText(od.productionNote) };
+      carried = carryOf(d, n).filter((k) => n[k]).map((k) => `${k === "customer" ? "Customer note" : "Production note"} on ${fromLabel}:\n${n[k].slice(0, 1500)}`).join("\n\n");
+    }
+  }
   // a reorder of a job production already confirmed: its prints take the confirmed specs, not guesses (lib/designSpecs.ts)
   const tookSpecs = reorderOf && fromLabel ? await applyConfirmedSpecs(admin, custId, fromLabel, groups) : [];
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
@@ -161,8 +171,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     d.lookedUp ? `Looked up online: ${d.lookedUp.text}${d.lookedUp.sources.length ? ` (${d.lookedUp.sources.map((x) => x.url).join(", ")})` : ""}` : "",
     d.artNotes?.length ? `Reorder art:\n- ${d.artNotes.join("\n- ")}` : "",
     d.prodSuggest || "",
+    carried,
   ].filter(Boolean).join("\n\n");
-  if (pn) await admin.from("order_internal").upsert({ order_id: oid, production_notes: pn.slice(0, 4000) });
+  if (pn) await admin.from("order_internal").upsert({ order_id: oid, production_notes: pn.slice(0, 8000) });
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
   }

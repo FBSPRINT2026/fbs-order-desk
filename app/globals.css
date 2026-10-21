@@ -10833,3 +10833,8 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-ref-i div{white-space:pre-wrap}
 
 .jv-cc-art canvas{width:100%;height:auto}
+/* a reorder: carry the old job's notes over (Oct 21) */
+.carry{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.carry-i{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.carry-i input{margin-top:3px}
+.carry-t{display:block;white-space:pre-wrap;color:var(--ink-2);max-height:120px;overflow:auto}

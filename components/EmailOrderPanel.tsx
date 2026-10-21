@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
 import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
+import CarryNotes from "@/components/CarryNotes";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
@@ -335,6 +336,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
           <label>PO #<input value={d.po_number} onChange={(e) => patch((x) => { x.po_number = e.target.value; })} /></label>
         </div>
         {job?.note && <p className="faint eo-note">{job.note}</p>}
+        <CarryNotes job={job} carry={d.carry} onChange={(c) => patch((x) => { x.carry = c; })} />
 
         <div className="eo-goods">
           <label className="eo-check"><input type="checkbox" checked={d.goods.supplied} onChange={(e) => patch((x) => { x.goods.supplied = e.target.checked; })} /> The customer sends the garments</label>
