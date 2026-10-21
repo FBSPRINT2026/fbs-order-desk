@@ -198,7 +198,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "program", label: "Program", icon: I.program, show: !!programPanel },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
-    { id: "designs", label: "Designs", icon: I.artwork, show: !!designsPanel },
+    { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
     { id: "messages", label: mode === "portal" ? "Message center" : "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: mode === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },

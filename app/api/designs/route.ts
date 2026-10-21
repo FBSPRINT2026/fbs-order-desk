@@ -16,8 +16,19 @@ export const maxDuration = 60;
 export async function GET(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const cid = new URL(req.url).searchParams.get("customer") || "";
+  const sp = new URL(req.url).searchParams, cid = sp.get("customer") || "";
   if (!cid) return NextResponse.json({ error: "Which customer?" }, { status: 400 });
+  // just their website (the customer's settings): the one saved, and the one their email suggests
+  if (sp.get("site")) {
+    const admin = createAdminClient();
+    const [{ data: c }, { data: row }] = await Promise.all([
+      admin.from("customers").select("email, contact2_email").eq("id", cid).maybeSingle(),
+      admin.from("customer_designs").select("rules").eq("customer_id", cid).maybeSingle(),
+    ]);
+    const FREE = /^(gmail|yahoo|hotmail|outlook|icloud|aol|live|msn|me|comcast|att|sbcglobal|ymail|proton|protonmail)\./i;
+    const dom = [c?.email, c?.contact2_email].map((e) => String(e || "").split("@")[1] || "").find((d) => d && !FREE.test(d)) || "";
+    return NextResponse.json({ site: ((row?.rules || {}) as { site?: string }).site || "", guess: dom ? `https://www.${dom.replace(/^www\./, "")}` : "" });
+  }
   try { return NextResponse.json(await buildCatalog(createAdminClient(), cid)); }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
 }

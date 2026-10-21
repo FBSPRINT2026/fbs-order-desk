@@ -34,6 +34,7 @@ import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import BrandAssistant from "@/components/BrandAssistant";
 import CustomerStyleGuides from "@/components/CustomerStyleGuides";
 import CustomerNeckLabels from "@/components/CustomerNeckLabels";
+import DesignCatalogSetting from "@/components/DesignCatalogSetting";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
 import CustomerDesigns from "@/components/CustomerDesigns";
@@ -126,8 +127,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const { id: _id, created_at, ...all } = latest.current;
     const { pub: rest0, priv } = splitCustomer(all);
     // the move fields belong to the move checklist: never written from here (a stale copy would undo a move)
-    const { moved_at: _ma, moved_by: _mb, move_checklist: _mc, film_folder: _ff, ...rest } = rest0 as typeof rest0 & { moved_at?: unknown; moved_by?: unknown; move_checklist?: unknown; film_folder?: unknown };
-    void _ma; void _mb; void _mc; void _ff;
+    // so are the brand fields, each saved by its own section (a stale copy here would undo a label, guide or color added
+    // there since the page opened)
+    const { moved_at: _ma, moved_by: _mb, move_checklist: _mc, film_folder: _ff, neck_labels: _nl, style_guides: _sg, brand_print: _bp, brand_colors: _bc, ...rest } = rest0 as typeof rest0 & { moved_at?: unknown; moved_by?: unknown; move_checklist?: unknown; film_folder?: unknown; neck_labels?: unknown; style_guides?: unknown; brand_print?: unknown; brand_colors?: unknown };
+    void _ma; void _mb; void _mc; void _ff; void _nl; void _sg; void _bp; void _bc;
     setState("Saving…");
     const sb = createClient();
     const [a, b] = await Promise.all([
@@ -201,7 +204,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><CustomerStyleGuides customerId={id} /><CustomerBrandColors customerId={id} company={c?.company || c?.name || ""} /><CustomerBrandPrint customerId={id} /><CustomerNeckLabels customerId={id} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
-          designsPanel={<CustomerDesigns customerId={id} />}
+          designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} /> : undefined}
           productionPanel={<CustomerProductionFiles customerId={id} />}
           textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
@@ -274,6 +277,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               </select>
             </div>
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
+            <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} />
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
             </div>
           </form>

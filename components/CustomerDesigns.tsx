@@ -14,6 +14,9 @@ import { pdfPicture } from "@/lib/printavoArt";
  */
 const fmtDate = (d: string) => { if (!d) return ""; const x = new Date(d.length === 10 ? d + "T12:00:00" : d); return x.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
 const n0 = (n: number) => n.toLocaleString("en-US");
+/** every word of the design's name is in the product's name ("The Bottles" → "The Bottles Baby Bodysuit") */
+const words = (t: string) => t.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w && !["the", "a", "an", "and", "of", "tee", "shirt"].includes(w)).map((w) => w.replace(/s$/, ""));
+const titleHas = (title: string, name: string) => { const t = new Set(words(title)), n = words(name); return n.length > 0 && n.every((w) => t.has(w)); };
 const jobHref = (j: CatalogJob) => (j.src === "printavo" ? `/shop/archive/${j.id}` : `/shop/orders/${j.id}`);
 
 export default function CustomerDesigns({ customerId }: { customerId: string }) {
@@ -30,16 +33,37 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
     return () => { live = false; };
   }, [customerId]);
 
-  // covers: for each design not done yet, its jobs' full-size files are drawn here and the most picture-like one (a
-  // mockup or a photo, never an order page) is saved as its cover, once (Oct 20, Nick)
+  // their website (saved, else their email's): design pictures come from it first (Oct 20, Nick: "it should use their
+  // site, littlegroupies.com, all that stuff, and find the images")
+  const [site, setSite] = useState<string | null>(null);
+  useEffect(() => { fetch(`/api/designs?customer=${customerId}&site=1`).then((r) => r.json()).then((j) => setSite(j.site || j.guess || "")).catch(() => setSite("")); }, [customerId]);
+  /** the picture of this design on their site: a product whose name has every word of the design's name */
+  const fromSite = async (d: CatalogDesign): Promise<string> => {
+    if (!site) return "";
+    const j = await fetch(`/api/designs/site?customer=${customerId}&q=${encodeURIComponent(d.name)}`).then((r) => r.json()).catch(() => null) as { products?: { title: string; images: string[] }[] } | null;
+    const p = (j?.products || []).find((x) => titleHas(x.title, d.name) && x.images.length);
+    return p?.images[0] || "";
+  };
+  const saveSiteCover = async (d: CatalogDesign, src: string) => {
+    const r = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, op: "cover", key: d.key, src }) }).then((x) => x.json()).catch(() => null) as { ok?: boolean; url?: string } | null;
+    if (r?.ok) setCat((c) => (c ? { ...c, designs: c.designs.map((x) => (x.key === d.key ? { ...x, coverSet: true, thumb: r.url || "" } : x)) } : c));
+    return !!r?.ok;
+  };
+
+  // covers: for each design not done yet, its picture on their website, else its jobs' full-size files are drawn here
+  // and the most picture-like one (a mockup or a photo, never an order page) is saved as its cover, once (Oct 20, Nick)
   const [making, setMaking] = useState<Set<string>>(new Set());
-  const todo = useMemo(() => (cat?.designs || []).filter((d) => !d.coverSet && d.pics.length).map((d) => d.key).join("|"), [cat]);
+  const todo = useMemo(() => (site === null ? "" : (cat?.designs || []).filter((d) => !d.coverSet && (d.pics.length || site)).map((d) => d.key).join("|")), [cat, site]);
   useEffect(() => {
     if (!cat || !todo) return;
     let live = true;
-    const queue = cat.designs.filter((d) => !d.coverSet && d.pics.length);
+    const queue = cat.designs.filter((d) => !d.coverSet && (d.pics.length || site));
     setMaking(new Set(queue.map((d) => d.key)));
     const one = async (d: CatalogDesign) => {
+      const src = await fromSite(d).catch(() => "");
+      if (!live) return;
+      if (src && await saveSiteCover(d, src)) { setMaking((m) => { const n = new Set(m); n.delete(d.key); return n; }); return; }
+      if (!d.pics.length) { setMaking((m) => { const n = new Set(m); n.delete(d.key); return n; }); return; }
       let best: { c: HTMLCanvasElement; s: number } | null = null;
       for (const u of d.pics.slice(0, 6)) {
         if (!live) return;
@@ -60,6 +84,17 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todo, customerId]);
+
+  // Find pictures on their website: every design looked up again; a picture found there replaces the one it has
+  const [sweep, setSweep] = useState<{ done: number; of: number; found: number } | null>(null);
+  async function findAll() {
+    if (!cat || !site) return;
+    const ds = [...cat.designs];
+    setSweep({ done: 0, of: ds.length, found: 0 });
+    let found = 0, done = 0;
+    const run = async () => { while (ds.length) { const d = ds.shift()!; const src = await fromSite(d).catch(() => ""); if (src && await saveSiteCover(d, src)) found++; done++; setSweep({ done, of: cat.designs.length, found }); } };
+    await Promise.all([run(), run()]);
+  }
 
   async function change(body: Record<string, string>) {
     setBusy(true); setErr("");
@@ -84,7 +119,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
   return (
     <section className="panel dc">
       <div className="panel-h">
-        <h2>Designs</h2>
+        <h2>Design catalog</h2>
         <span className="faint" style={{ fontSize: 12 }}>{cat.designs.length} designs · {n0(total)} orders · every way each one was printed</span>
       </div>
       <div className="panel-b">
@@ -92,6 +127,9 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
         {cur ? <DesignDetail d={cur} all={cat.designs} customerId={customerId} busy={busy} change={change} back={() => setOpen("")} setCover={(url) => setCat((c) => (c ? { ...c, designs: c.designs.map((x) => (x.key === cur.key ? { ...x, coverSet: true, thumb: url } : x)) } : c))} /> : <>
           <div className="dc-bar" data-toolbar>
             <input className="dc-q" placeholder="Find a design, garment or color" value={q} onChange={(e) => setQ(e.target.value)} />
+            {site ? (sweep && sweep.done < sweep.of
+              ? <span className="faint dc-sweep">Looking on {site.replace(/^https?:\/\/(www\.)?/, "")}… {sweep.done} of {sweep.of} · {sweep.found} found</span>
+              : <button type="button" className="btn sm" title={`Look up every design on ${site.replace(/^https?:\/\//, "")} and use its picture there`} onClick={() => void findAll()}>{sweep ? `Found ${sweep.found} of ${sweep.of} · again` : "Find pictures on their website"}</button>) : null}
             <div className="chips" role="radiogroup" aria-label="Sort">
               {([["recent", "Last ordered"], ["most", "Most ordered"], ["az", "A–Z"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (sort === k ? " on" : "")} aria-pressed={sort === k} onClick={() => setSort(k)}>{l}</button>)}
             </div>
@@ -100,7 +138,7 @@ export default function CustomerDesigns({ customerId }: { customerId: string }) 
           <div className="dc-grid">
             {list.map((d) => (
               <button key={d.key} type="button" className="dc-card" onClick={() => setOpen(d.key)}>
-                <span className="dc-pic">{making.has(d.key) ? <span className="faint">Finding the mockup…</span> : d.thumb ? <img src={d.thumb} alt="" loading="lazy" /> : <span className="faint">No mockup</span>}</span>
+                <span className="dc-pic">{making.has(d.key) ? <span className="faint">Finding a picture…</span> : d.thumb ? <img src={d.thumb} alt="" loading="lazy" /> : <span className="faint">No mockup</span>}</span>
                 <span className="dc-name">{d.name}</span>
                 <span className="dc-meta">{d.orders} order{d.orders === 1 ? "" : "s"} · {n0(d.pieces)} pcs</span>
                 <span className="dc-meta">{d.versions.length} version{d.versions.length === 1 ? "" : "s"} · last {fmtDate(d.last)}</span>

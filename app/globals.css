@@ -10460,3 +10460,8 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .nlp-l{font-weight:600}
 .nlp select{font-size:13px;max-width:320px}
 .mk-neck-card{display:flex;flex-direction:column;gap:4px;align-self:flex-start;font-size:11.5px;color:var(--muted,#666);max-width:190px}
+/* customer details: Design catalog */
+.dcs{display:flex;flex-direction:column;gap:4px}
+.dcs-site{display:flex;flex-direction:column;gap:3px;margin-top:4px;max-width:420px}
+.dcs-site label{font-size:12px;color:var(--muted,#666)}
+.dc-sweep{font-size:12.5px;white-space:nowrap}
