@@ -198,7 +198,12 @@ export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: 
 }
 
 /** Measure the shirt outline on a photo (white background). Returns null when it can't find a clean outline (e.g. drawn tee). */
-export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
+/**
+ * `tee`: a short-sleeve tee (not long sleeve, hoodie, sweatshirt or tank). Its arms don't hang beside the body, so when
+ * its photo reads wider than its height says (a boxy performance tee: A4 N3142, Oct 21, Nick: "11.5 inches shouldn't
+ * look that small on this style"), the chest width sets the scale: a print is judged against the chest.
+ */
+export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean } = {}): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
@@ -249,7 +254,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   // or hoodie's arms hang beside the body and read as width. Then the height alone sets the scale (unless the photo
   // cuts the garment off at the top or bottom, when the height can't be trusted).
   const sw = bodyW / ref.bodyW, sh = (B - T) / ref.h, cut = T <= 2 || B >= H - 3;
-  const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
+  const s = Math.abs(sw - sh) > 0.1 && !cut ? (opts.tee && sw > sh ? sw : sh) : (sw + sh) / 2;
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;
@@ -607,3 +612,6 @@ export function teeSvg(hex: string, view: View, heather = false) {
 
 /** Same-origin link to an S&S photo (so it can be drawn into the saved mockup). */
 export const ssImg = (path: string) => (!path ? "" : /^https?:\/\/[\w.-]*sanmar\.com\//i.test(path) ? `/api/ss/img?u=${encodeURIComponent(path)}` : `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}`);
+
+/** a short-sleeve tee, from its name and description (for measureGarment's `tee`) */
+export const isShortSleeveTee = (text: string) => /\b(tee|t-?shirt|short sleeve)\b/i.test(text) && !/long sleeve|\bls\b|hood|sweat|fleece|crew ?neck sweat|jacket|quarter|1\/4|zip|tank|sleeveless|muscle|raglan 3\/4|3\/4 sleeve/i.test(text);
