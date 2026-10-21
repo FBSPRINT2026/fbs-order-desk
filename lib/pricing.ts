@@ -821,3 +821,10 @@ export function payDueDate(o: { approved_at?: string | null; sent_at?: string | 
   d.setUTCDate(d.getUTCDate() + 30);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * A print's notes without the lines we write on it in Printavo (Oct 21, Nick: "why is this disclaimer… still on there
+ * once production has already confirmed the details?"): "*** REORDER DETAILS NEEDED … ***" and "Specs confirmed by
+ * production …" are made from the print's state each time; read back from Printavo they ended up in the notes.
+ */
+export const shopNotes = (s: string | null | undefined) => String(s || "").replace(/\*\*\*\s*REORDER[^*]*\*\*\*[^\n]*\n?/gi, "").replace(/^\s*Specs confirmed by production[^\n]*\n?/gim, "").trim();

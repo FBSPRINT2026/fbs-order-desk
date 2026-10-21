@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { CARD, htmlText } from "@/lib/printavoChanges";
-import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, imprintLabel, shopNotes, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 import { parseAddress } from "@/lib/qbo/map";
 
@@ -189,7 +189,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
         // production runs from Printavo during the move: an unconfirmed size / ink says so on the print
         const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** REORDER DETAILS NEEDED: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why}). Confirm in the portal: link in the production note.`
           : d.confirmed ? `Specs confirmed by production (${d.confirmed.by}, ${new Date(d.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${d.confirmed.from ? `, from ${d.confirmed.from}` : ""}).` : "";
-        const details = [imprintLabel(d), unconf, d.notes].filter(Boolean).join("\n").slice(0, 1000);
+        const details = [imprintLabel(d), unconf, shopNotes(d.notes)].filter(Boolean).join("\n").slice(0, 1000);
         return { details, ...(t ? { typeOfWork: { id: t.id } } : {}) };
       }),
     };

@@ -10894,7 +10894,8 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .nl-pv{display:flex;flex-direction:column;align-items:center;gap:2px}
 .nl-prev-cap{font-size:11.5px;color:var(--ink-2)}
 /* the tag print as a print row (Oct 21) */
-.pr-tag .pr-tag-pic{padding:0;overflow:hidden;cursor:default}
+.pr-tag .pr-tag-pic{padding:8px;overflow:hidden;cursor:default}
+.pr-tag .pr-tag-pic img{width:100%;height:100%;object-fit:contain}
 .pr-tag .pr-tag-pic .nlv{width:100%!important;margin:0}
 .pr-tag .pr-tag-pic canvas{width:100%!important;height:auto!important;display:block}
 .tagp-amt{display:inline-flex;align-items:center;gap:2px;margin-left:4px}

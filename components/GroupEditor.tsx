@@ -1,5 +1,5 @@
 "use client";
-import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
 import { colorHex, repaintLogo } from "@/lib/inkColors";
@@ -8,7 +8,7 @@ import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
-import NeckLabelView from "@/components/NeckLabelView";
+import { labelFor } from "@/components/NeckLabelView";
 import { mainSize, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 
 /** save a custom finishing to the sometimes-used list (retail, or the wholesale contract list for a wholesale job) */
@@ -489,7 +489,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             return (
               <div className="pr pr-tag">
                 <div className="pr-logo pr-tag-pic" style={{ background: shirtHex }} title={cur ? `${cur.name || "Their tag"}: inside the neck` : "No tag art on file yet"}>
-                  {cur ? <NeckLabelView set={cur} size={mainSize([g])} shirtHex={shirtHex} width={130} caption={false} /> : <span>No tag yet</span>}
+                  {cur ? <TagTile set={cur} size={mainSize([g])} shirtHex={shirtHex} /> : <span>No tag yet</span>}
                 </div>
                 <div className="pr-main">
                   <div className="pr-top">
@@ -866,7 +866,7 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {extra}
-        {d.notes && <div className="pr-notes">{d.notes}</div>}
+        {shopNotes(d.notes) && <div className="pr-notes">{shopNotes(d.notes)}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Reorder details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Reorder Details</a> : null}</div>}
       </div>
     </div>
@@ -1008,4 +1008,16 @@ function SizeBox({ q, label, onSet }: { q: number | undefined; label: string; on
   return <input type="number" min="0" step="1" inputMode="numeric" aria-label={label} className={"sz" + (q || typed === "0" ? " has" : "")}
     value={typed ?? (q ? String(q) : "")} onFocus={(e) => { setTyped(q ? String(q) : ""); e.target.select(); }} onBlur={() => setTyped(null)}
     onChange={(e) => { setTyped(e.target.value); onSet(e.target.value); }} />;
+}
+
+/** the tag art itself in its ink, filling the print row's picture box (Oct 21, Nick: "make it fill the box so that it's viewable") */
+function TagTile({ set, size, shirtHex }: { set: NeckLabelSet; size: string; shirtHex: string }) {
+  const [u, setU] = useState(""), [none, setNone] = useState(false);
+  useEffect(() => {
+    let off = false;
+    labelFor(set, size, shirtHex).then((c) => { if (off) return; if (c) { setU(c.toDataURL("image/png")); setNone(false); } else { setU(""); setNone(true); } }).catch(() => { if (!off) setNone(true); });
+    return () => { off = true; };
+  }, [set, size, shirtHex]);
+  // eslint-disable-next-line @next/next/no-img-element
+  return u ? <img src={u} alt={`${set.name || "Tag"}, as it prints`} /> : <span>{none ? "No picture of the tag" : ""}</span>;
 }

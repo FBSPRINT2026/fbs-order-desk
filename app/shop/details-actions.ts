@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Group, Imprint } from "@/lib/pricing";
+import { shopNotes, type Group, type Imprint } from "@/lib/pricing";
 import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { addSpec, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 
@@ -44,6 +44,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
       if (im.size) im.sizeFrom = "film";
       const note = clip(p.notes, 240);
       if (note) im.notes = [im.notes, `Press: ${note}`].filter(Boolean).join(". ").slice(0, 300);
+      im.notes = shopNotes(im.notes);
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || "inks left blank", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");

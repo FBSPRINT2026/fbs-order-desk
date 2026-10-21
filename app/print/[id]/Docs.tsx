@@ -1,5 +1,5 @@
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -258,7 +258,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       {/* prints differently by shirt color (Oct 21, Nick): the screens left off on some colors */}
       {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="n2 warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c} shirts: skip ${n.join(" + ")} (pull the screen or don't flood it)`).join(". ")}</div>}
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
-      {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
+      {shopNotes(d.notes) && <div className="n2"><b>Notes:</b> {shopNotes(d.notes)}</div>}
       <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>
     </section>
   );
@@ -401,7 +401,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
           <div className="pf-inklist">{inks.map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b></span>)}</div>
         </div>
       )}
-      {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
+      {shopNotes(d.notes) && <div className="n2"><b>Notes:</b> {shopNotes(d.notes)}</div>}
       {foot}
     </section>
   );

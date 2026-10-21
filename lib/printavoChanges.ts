@@ -1,4 +1,4 @@
-import { imprintLabel, lineQty, newGLine, SIZES, type GLine, type Order, type OrderCalc, type Size } from "@/lib/pricing";
+import { imprintLabel, shopNotes, lineQty, newGLine, SIZES, type GLine, type Order, type OrderCalc, type Size } from "@/lib/pricing";
 
 /**
  * What changed in Printavo on a 40,000-series order (the read-back snapshot in orders.printavo_state.pv) compared
@@ -107,7 +107,7 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
       (snap.imprints?.[gi] || []).forEach((det, ii) => {
         const im = g.imprints[ii]; if (!im) return;
         const [head, ...rest] = det.replace(/\r\n?/g, "\n").split("\n");
-        const notes = rest.join("\n").trim();
+        const notes = shopNotes(rest.join("\n"));
         if (!same(head, imprintLabel(im))) info.push(`Print ${ii + 1} reads "${head}" in Printavo (ours: "${imprintLabel(im)}"). Change the print here by hand if that's right.`);
         if (!same(im.notes, notes)) changes.push({ what: "Print details", key: `im${gi}.${ii}`, text: `${im.location}: ${notes ? `"${notes.slice(0, 200)}"` : "(notes cleared in Printavo)"}`, apply: (d) => { const x = d.groups[gi].imprints[ii]; if (x) x.notes = notes; } });
       });
