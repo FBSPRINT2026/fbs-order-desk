@@ -10840,7 +10840,9 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .carry-t{display:block;white-space:pre-wrap;color:var(--ink-2);max-height:120px;overflow:auto}
 /* press setup: more than one round (Oct 21, Nick) */
 .ps-rounds{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 6px;font-size:13px}
-.ps-rounds label{display:flex;align-items:center;gap:6px}
+.ps-rounds label{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ps-rounds select{width:auto;min-width:0;flex:none;height:34px;padding:4px 30px 4px 10px}
+.ps-rounds{flex-wrap:nowrap}
 .ps-hrows .ps-round{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:4px 0;border:1.5px dashed #2563eb;border-radius:8px;background:#eff6ff;color:#1d4ed8;cursor:grab;font-size:13px;list-style:none}
 .ps-round-opt{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:10px;cursor:default}
 .ps-rbtn{padding:2px 10px;border:1px solid #93c5fd;border-radius:6px;background:#fff;color:#1d4ed8;font-size:12px;cursor:pointer}

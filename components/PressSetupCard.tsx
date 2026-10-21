@@ -200,12 +200,11 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
       </div>
       {onBreaks && (
         <div className="ps-rounds">
-          <span>Go more than one round?</span>
+          <span>Do we go multiple rounds?</span>
           <select value={rounds > 1 ? "yes" : "no"} onChange={(e) => setRounds(e.target.value === "yes" ? Math.max(2, rounds) : 1)} aria-label="More than one round">
             <option value="no">No, one round</option><option value="yes">Yes</option>
           </select>
           {rounds > 1 && <label>How many rounds <select value={rounds} onChange={(e) => setRounds(+e.target.value)} aria-label="How many rounds"><option value={2}>2</option><option value={3}>3</option></select></label>}
-          <span className="faint">{rounds > 1 ? "Drag the round bar to the head where the press goes around again." : "The press goes around again so a later color can be flashed first."}</span>
         </div>
       )}
       <ol className="ps-hrows">{onPress.heads.map((x, h) => {
