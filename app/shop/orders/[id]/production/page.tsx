@@ -63,7 +63,10 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   const group = v.groups[Math.min(gi, v.groups.length - 1)];
   const gPrints = v.prints.filter((p) => p.groupId === group?.id);
   const print = gPrints[Math.min(pi, Math.max(0, gPrints.length - 1))];
-  const lock = (i: number) => v.step < i; // a panel waits for its step
+  // a reorder is logged in one sitting (Oct 21, Nick: "the production man is gonna sit down with the press operator and log
+  // it all in, one step… a one page here's what we did"): nothing waits on a step, one Save everything
+  const oneSitting = !!v.order.reorderOf || v.prints.some((p) => !!p.confirm && !p.confirmed);
+  const lock = (i: number) => !oneSitting && v.step < i; // a new job's panels wait for their step
   // the job's production status, at the top (Oct 21, Nick: "it just needs some sort of status… awaiting production details")
   const waiting = v.prints.filter((p) => p.confirm && !p.confirmed).length;
   const saved = v.prints.length > 0 && v.prints.every((p) => p.confirmed) && v.prints.filter((p) => p.screen).every((p) => p.film?.state === "asPrinted");
@@ -85,12 +88,18 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </div>
       </header>
 
+      {oneSitting ? (
+        <section className="jv-steps jv-one" aria-label="Reorder">
+          <b>Reorder: here&apos;s what we did.</b> <span>Log it all on this page with the press operator (size, placement, colors and screens, film, press setup, notes), then <b>Save everything</b>. The next reorder copies it.</span>
+        </section>
+      ) : (
       <section className="jv-steps" aria-label="Where the job is">
         <div className="jv-rail">
           {STEPS.map((s, i) => <span key={s} className={"jv-step" + (v.done[i] ? " done" : i === v.step ? " now" : "")}><b>{v.done[i] ? "✓" : i + 1}</b>{s}</span>)}
         </div>
         <div className="jv-why">{v.step >= STEPS.length ? "Printed. Check the details below and save them as printed: the next reorder starts from this record." : v.why[v.step]}</div>
       </section>
+      )}
       {err && <div className="err">{err}</div>}
 
       {v.groups.length > 1 && (
@@ -105,7 +114,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
             {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPi(i)}>{p.location}</button>)}
           </div>
         )}
-        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} /> : <div className="faint">No prints on this group.</div>}
+        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} /> : <div className="faint">No prints on this group.</div>}
       </section>
 
       <section className={"jv-card jv-mock" + (lock(1) ? " jv-off" : "")} aria-label="Mockup">
@@ -113,13 +122,13 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         <Mockups list={group?.mockups || []} />
       </section>
 
-      {print?.screen && (
+      {print?.screen && !oneSitting && (
         <FilmPanel key={`f${print.id}`} v={v} p={print} locked={v.step < 2 && !print.sep && !print.film} busy={busy} post={post} orderId={id}
           request={async () => { setBusy("seps"); const r = await fetch("/api/separations/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: id, only: [print.id] }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." })); setBusy(""); if (r.error) setErr(r.error); await load(); }} />
       )}
 
       <div className="jv-row">
-        {print?.screen && (
+        {print?.screen && !oneSitting && (
           <section className={"jv-card jv-press" + (lock(4) ? " jv-off" : "")} aria-label="Press setup">
             <div className="jv-card-h"><h2>Press setup · {print.location}</h2><span className="faint">{lock(4) ? "Opens once the film is checked" : print.press?.asPrinted ? `As printed${print.press.press ? ` on ${print.press.press}` : ""}` : "Planned from the separation · change anything that ran differently"}</span></div>
             <Press p={print} number={v.order.number} />
@@ -144,7 +153,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
 
       <History v={v} busy={!!busy} add={(text) => post({ op: "note", text }, "note")} />
 
-      <footer className="jv-save">
+      {!oneSitting && <footer className="jv-save">
         <span>{v.step >= STEPS.length ? `Saves every print's inks, size and film to #${v.order.number} and the customer's designs. The next reorder copies this.` : "Saving as printed opens once the job has printed. Until then anything here can still change."}</span>
         <button type="button" className="btn primary" disabled={v.step < STEPS.length || !!busy} onClick={async () => {
           setBusy("printed"); setErr("");
@@ -153,7 +162,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
           if (!r.ok) { setErr(r.error); return; }
           await post({ op: "printed" }, "printed");
         }}>{busy === "printed" ? "Saving…" : "Confirm & save as printed"}</button>
-      </footer>
+      </footer>}
     </div>
   );
 }
@@ -181,7 +190,8 @@ const avgHex = (a: string, b: string) => { const p = (h: string) => [1, 3, 5].ma
  * 3 the art's colors onto screens: two art colors on one screen print together; each screen is a PMS, a plain ink or a
  * custom mix. The art is repainted here the way it will print.
  */
-function ConfirmPrint({ p, busy, post }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean> }) {
+type Head = { what: string; name: string; hex: string; mesh: string };
+function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void }) {
   const [size, setSize] = useState(p.size), [loc, setLoc] = useState(p.location), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
   // screens + which screen each art color prints through
   const start = useMemo(() => {
@@ -243,6 +253,41 @@ function ConfirmPrint({ p, busy, post }: { p: PvPrint; busy: boolean; post: (b: 
     x.putImageData(d, 0, 0);
   }, [ready, screens, assign, p.plan]);
 
+  // one sitting (a reorder): the film, the press setup as it ran, notes; then Save everything
+  const [film, setFilm] = useState<"" | "asPrinted" | "physical" | "new">(p.film?.state || "");
+  const [finder, setFinder] = useState(false);
+  const [pressId, setPressId] = useState(p.press?.pressId || v.presses[0]?.id || "");
+  const headCount = v.presses.find((x) => x.id === pressId)?.heads || 0;
+  const layOut = (): Head[] => {
+    const seq: Head[] = [...(ub === "yes" ? [{ what: "screen", name: "White underbase", hex: "#FFFFFF", mesh: "" }, { what: "flash", name: "", hex: "", mesh: "" }] : []), ...screens.filter((x) => x.name.trim()).map((x) => ({ what: "screen", name: x.name, hex: x.hex, mesh: "" }))];
+    return [...seq, ...Array.from({ length: Math.max(0, headCount - seq.length) }, () => ({ what: "empty", name: "", hex: "", mesh: "" }))];
+  };
+  const [heads, setHeads] = useState<Head[]>(() => (p.press?.heads.length ? p.press.heads.map((h) => ({ ...h })) : []));
+  const [pnotes, setPnotes] = useState("");
+  const [saving, setSaving] = useState("");
+  const setHead = (i: number, h: Partial<Head>) => setHeads((a) => a.map((x, j) => (j === i ? { ...x, ...h } : x)));
+  const moveHead = (i: number, d: number) => setHeads((a) => { const b = [...a]; const j = i + d; if (j < 0 || j >= b.length) return a; [b[i], b[j]] = [b[j], b[i]]; return b; });
+  const inkNames = [...new Set(["White underbase", ...screens.map((x) => x.name).filter(Boolean)])];
+  async function saveAll() {
+    setSaving("Saving size and placement…"); setErr("");
+    let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
+    if (ok && p.screen && screens.length) { setSaving("Saving colors and screens…"); ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save"); }
+    if (ok && p.screen && film && film !== p.film?.state) { setSaving("Saving the film…"); ok = await post({ op: "film", print: p.id, state: film }, "save"); }
+    if (ok && p.screen && heads.some((h) => h.what === "screen")) {
+      setSaving("Saving the press setup…");
+      const r = await fetch("/api/jobs/press", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job: { kind: "o", id: orderId }, sheet: p.sep ? p.sep.id : `loc:${loc}`, pressId, notes: pnotes, learn: true,
+        heads: heads.map((h) => ({ what: h.what === "screen" ? "screen" : h.what === "flash" ? "flash" : h.what === "cool" ? "cool" : "empty", name: h.name, hex: h.hex || colorHex(h.name) || "", mesh: +h.mesh > 0 ? +h.mesh : null })) }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+      if (r.error) { setErr(`Press setup: ${r.error}`); ok = false; }
+    }
+    if (ok) {
+      setSaving("Confirming…");
+      const r = await confirmDetails(orderId, [{ id: p.id, size, inks: screens.map((x) => x.name).filter(Boolean).join(", ") || p.inks, colors: screens.filter((x) => x.name).length || p.colors, underbase: ub, drop, screensOnFile: film === "asPrinted", notes: pnotes }]);
+      if (!r.ok) { setErr(r.error); ok = false; }
+    }
+    setSaving("");
+    await reload();
+    if (ok) setErr("");
+  }
   const dirty = size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(start.screens) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
   async function save() {
@@ -328,10 +373,64 @@ function ConfirmPrint({ p, busy, post }: { p: PvPrint; busy: boolean; post: (b: 
         </div>
       )}
       <datalist id="jv-pms">{["White", "Black", "Athletic Gold", "Navy", "Red", "Royal", "Kelly Green", "Orange", "Purple", "Maroon", "Silver", ...Object.keys(PMS_COATED)].map((n) => <option key={n} value={n} />)}</datalist>
+      {one && p.screen && (
+        <div className="jv-cp-step">
+          <div className="jv-cp-n"><b>4</b>Film</div>
+          <div className="jv-ub">
+            {([["asPrinted", "On file (film folder)"], ["physical", "In the drawer"], ["new", "New film / new separations"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (film === k ? " on" : "")} onClick={() => setFilm(k)}>{l}</button>)}
+            <button type="button" className="linkbtn" onClick={() => setFinder((x) => !x)}>{finder ? "Hide the film folder" : "Find it in the Dropbox film folder"}</button>
+          </div>
+          {film && film !== "asPrinted" && <div className="jv-warn"><b>A screen popped?</b> {film === "new" ? "New film has never printed: reburn every screen of this print together." : "No digital copy: if a film is lost, reburn every screen of this print from new film."}</div>}
+          {finder && <FilmFinder v={v} p={p} busy={busy ? "busy" : ""} post={post} orderId={orderId} />}
+        </div>
+      )}
+      {one && p.screen && (
+        <div className="jv-cp-step">
+          <div className="jv-cp-n"><b>5</b>Press setup, as we ran it</div>
+          <div className="jv-act">
+            <select value={pressId} onChange={(e) => setPressId(e.target.value)} aria-label="Press">{v.presses.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.heads} heads)</option>)}</select>
+            <button type="button" className="btn sm" onClick={() => setHeads(layOut())}>{heads.length ? "Lay it out again from the screens" : "Lay it out from the screens"}</button>
+            {p.press?.asPrinted && <span className="faint">Showing what was saved as printed</span>}
+          </div>
+          {heads.length > 0 && (
+            <div className="jv-pr">
+              <Press p={{ ...p, press: { press: v.presses.find((x) => x.id === pressId)?.name || "", heads, asPrinted: false } }} number={0} wheelOnly />
+              <div className="jv-heads jv-heads-ed">
+                {heads.map((h, i) => (
+                  <div key={i} className="jv-hd">
+                    <span className="jv-n">{i + 1}</span>
+                    <select value={h.what === "screen" ? `s:${h.name}` : h.what} onChange={(e) => { const x = e.target.value; if (x.startsWith("s:")) { const n = x.slice(2); setHead(i, { what: "screen", name: n, hex: screens.find((sc) => sc.name === n)?.hex || (n === "White underbase" ? "#FFFFFF" : colorHex(n) || "#999999") }); } else setHead(i, { what: x, name: "", hex: "", mesh: "" }); }} aria-label={`Head ${i + 1}`}>
+                      {inkNames.map((n) => <option key={n} value={`s:${n}`}>{n}</option>)}
+                      {h.what === "screen" && !inkNames.includes(h.name) && <option value={`s:${h.name}`}>{h.name}</option>}
+                      <option value="flash">Flash</option><option value="cool">Cool-down</option><option value="empty">Empty</option>
+                    </select>
+                    {h.what === "screen" ? <input value={h.mesh} onChange={(e) => setHead(i, { mesh: e.target.value.replace(/[^0-9]/g, "") })} placeholder="mesh" aria-label={`Head ${i + 1} mesh`} /> : <span />}
+                    <button type="button" className="jv-x" aria-label="Move up" onClick={() => moveHead(i, -1)}>↑</button>
+                    <button type="button" className="jv-x" aria-label="Move down" onClick={() => moveHead(i, 1)}>↓</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {one && (
+        <div className="jv-cp-step">
+          <div className="jv-cp-n"><b>{p.screen ? 6 : 3}</b>Notes for next time</div>
+          <textarea value={pnotes} onChange={(e) => setPnotes(e.target.value)} rows={2} placeholder="Ink order, flash time, what to watch for, anything the press operator says" aria-label="Notes" />
+        </div>
+      )}
+      {one ? (
+        <div className="jv-saveall">
+          <button type="button" className="btn primary" disabled={!!saving || busy} onClick={() => void saveAll()}>{saving || "Save everything"}</button>
+          <span>Saves the size, placement, screens, film and press setup to #{v.order.number} and confirms them on {p.design || "the design"}. The next reorder copies this.</span>
+        </div>
+      ) : (
       <div className="jv-pd-f">
         <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save size, placement and screens"}</button>
         <span className="faint">{dirty ? "Not saved yet" : "Saved on the order · confirmed for good with Confirm & save as printed"}</span>
       </div>
+      )}
     </div>
   );
 }
@@ -494,12 +593,12 @@ function FilmFinder({ v, p, busy, post, orderId }: { v: ProductionView; p: PvPri
   );
 }
 
-function Press({ p, number }: { p: PvPrint; number: number }) {
+function Press({ p, number, wheelOnly = false }: { p: PvPrint; number: number; wheelOnly?: boolean }) {
   const heads = p.press?.heads || [];
   if (!heads.length) return <div className="jv-empty">The press setup comes from the separation once it&apos;s made. <a href={`/j/${number}`}>Phone menu → Press setup</a></div>;
   const n = heads.length, R = 132, C = 170;
   return (
-    <div className="jv-pr">
+    <div className={wheelOnly ? "jv-wheel-only" : "jv-pr"}>
       <div className="jv-wheel" style={{ width: C * 2, height: C * 2 }}>
         <div className="jv-hub"><b>{p.press?.press || "Press"}</b><span>{n} heads</span></div>
         {heads.map((h, i) => {
@@ -513,10 +612,10 @@ function Press({ p, number }: { p: PvPrint; number: number }) {
           );
         })}
       </div>
-      <div className="jv-heads">
+      {!wheelOnly && <div className="jv-heads">
         {heads.map((h, i) => h.what === "empty" ? null : <div key={i}><span className="jv-n">{i + 1}</span><span>{h.what === "screen" ? h.name : h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool-down" : h.what}</span><span className="faint">{h.mesh ? `${h.mesh} mesh` : ""}</span></div>)}
         <a className="btn sm" href={`/j/${number}`} target="_blank" rel="noreferrer">We ran it differently</a>
-      </div>
+      </div>}
     </div>
   );
 }

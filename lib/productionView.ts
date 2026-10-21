@@ -2,6 +2,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, type Imprint, type Order } from "@/lib/pricing";
 import { oldJobText } from "@/lib/ai/oldJobNotes";
+import { defaultLayout, mergeProduction, validLayout } from "@/lib/production";
+import { autoSetup, type SetupPlate } from "@/lib/pressSetup";
+import { colorHex } from "@/lib/inkColors";
 
 /**
  * The production view of one order (Oct 21, Nick: "one big view of the job… the mockup, the color selections, the
@@ -20,7 +23,7 @@ export type PvPrint = {
   colors: number; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
   confirm: Imprint["confirm"] | null; confirmed: Imprint["confirmed"] | null; film: Imprint["film"] | null;
   sep: { id: string; number: number; status: string; plates: PvPlate[] } | null;
-  press: { press: string; heads: PvHead[]; asPrinted: boolean } | null;
+  press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean } | null;
   minutes: { setup: number; run: number };
   /** the print's art (the customer design's picture), to compare films against */ art: string; design: string;
   /** the art's own colors (the design's print plan) and how they map to screens (imprint.inkMap) */
@@ -35,6 +38,7 @@ export type ProductionView = {
   step: number; done: boolean[]; why: string[];
   films: { name: string; url: string; path: string }[];
   history: { kind: string; when: string; title: string; text: string }[];
+  /** the shop's screen presses, for the press setup */ presses: { id: string; name: string; heads: number }[];
   productionNotes: string;
 };
 
@@ -49,8 +53,8 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     admin.from("customers").select("company, name").eq("id", order.customer_id).maybeSingle(),
     admin.from("mockups").select("title, file_path, group_id, created_at").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("separations").select("id, number, imprint_id, location, status, channels, settings").eq("order_id", orderId).neq("status", "cancelled"),
-    admin.from("press_actuals").select("separation_id, location, press_name, heads, created_at").eq("order_id", orderId).order("created_at", { ascending: false }),
-    admin.from("production_slots").select("status").eq("order_id", orderId),
+    admin.from("press_actuals").select("separation_id, location, press_id, press_name, heads, created_at").eq("order_id", orderId).order("created_at", { ascending: false }),
+    admin.from("production_slots").select("status, machine").eq("order_id", orderId),
     admin.from("job_time").select("task, started_at, ended_at, voided").eq("order_id", orderId).eq("voided", false),
     admin.from("order_internal").select("production_notes").eq("order_id", orderId).maybeSingle(),
     admin.from("order_events").select("kind, detail, created_at").eq("order_id", orderId).order("created_at"),
@@ -76,6 +80,10 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     (data || []).forEach((d, j) => { if (d.signedUrl) signed.set(part[j], d.signedUrl); });
   }
 
+  const { data: stRow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const machines = mergeProduction((stRow?.data as { production?: unknown } | null)?.production).machines.filter((x) => x.type === "screen" && x.active !== false);
+  const nHeads = (x: (typeof machines)[number]) => x.colors || x.heads || 0;
+  const slotMachine = ((slots || []) as { machine?: string }[]).map((x) => String(x.machine || "")).find(Boolean) || "";
   // press time per location (the phone's timer: "Setup · Full Front" / "Run · Full Front")
   const mins = new Map<string, { setup: number; run: number }>();
   for (const t of (times || []) as { task: string; started_at: string; ended_at: string | null }[]) {
@@ -95,7 +103,23 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     const act = (acts || []).find((a) => (s && a.separation_id === s.id) || (!s && a.location === im.location));
     const setup = (s?.settings as { pressSetup?: { heads?: string[] } } | null)?.pressSetup;
     let press: PvPrint["press"] = null;
-    if (act) press = { press: String(act.press_name || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || "") })), asPrinted: true };
+    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || "") })), asPrinted: true };
+    else if (!setup?.heads?.length && screen && (im.inks || "").trim()) {
+      // no separation (film on file or in the drawer, Oct 21: The Bottles): laid out from the print's own screens, on the
+      // press it's scheduled on, else the smallest press that fits
+      const names = (im.inks || "").split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+      const hexOf = (n: string) => (im.inkMap?.design === im.design_id ? Object.values(im.inkMap?.map || {}).find((x) => x.name === n)?.hex : "") || colorHex(n) || "#999999";
+      const plates: SetupPlate[] = [...(im.underbase ? [{ key: "ub", name: "White underbase", hex: "#FFFFFF", kind: "underbase" }] : []), ...names.map((n, i) => ({ key: `c${i}`, name: n, hex: hexOf(n), kind: "color" }))];
+      const mach = machines.find((x) => x.id === slotMachine || x.name === slotMachine) || [...machines].filter((x) => nHeads(x) >= plates.length).sort((a, b) => nHeads(a) - nHeads(b))[0] || [...machines].sort((a, b) => nHeads(b) - nHeads(a))[0];
+      if (mach) {
+        const lay = validLayout(mach.layout, nHeads(mach)) ? mach.layout! : defaultLayout(nHeads(mach), mach.flashes ?? 2);
+        const laid = autoSetup(lay, plates);
+        press = { press: mach.name, pressId: mach.id, asPrinted: false, heads: laid.map((slot) => {
+          if (slot.startsWith("p:")) { const c = plates.find((x) => x.key === slot.slice(2)); return { what: "screen", name: c?.name || "Screen", hex: c?.hex || "#999999", mesh: "" }; }
+          return { what: slot === "flash" ? "flash" : slot === "cool" ? "cool" : slot === "roller" ? "roller" : "empty", name: "", hex: "", mesh: "" };
+        }) };
+      }
+    }
     else if (setup?.heads?.length) {
       press = { press: "", asPrinted: false, heads: setup.heads.map((slot) => {
         if (slot.startsWith("p:")) { const c = chans.find((x) => (x as { key?: string }).key === slot.slice(2)); return { what: "screen", name: c?.name || "Screen", hex: c?.hex || "#999999", mesh: String(c?.mesh || "") }; }
@@ -169,5 +193,6 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     prints, step, done, why,
     films: filmFiles.map((f) => ({ name: String(f.name || "").replace(/^Film:\s*/i, ""), path: f.file_path, url: signed.get(f.file_path) || "" })),
     history, productionNotes: String(inn?.production_notes || ""),
+    presses: machines.map((x) => ({ id: x.id, name: x.name, heads: nHeads(x) })),
   };
 }
