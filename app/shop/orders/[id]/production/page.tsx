@@ -563,8 +563,8 @@ function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number
   // uploading photos from a previous order, or from this order… this whole process is about what we did last time"):
   // photos of last time go on the job they're of (the old Printavo job or order), photos of this run on this order
   const jobs = [
-    ...(v.prev ? [{ kind: v.prev.kind, id: v.prev.id, number: v.prev.number, label: v.prev.label, what: "Last time" }] : []),
-    { kind: "o" as const, id: orderId, number: String(v.order.number), label: `#${v.order.number}`, what: "This order" },
+    ...(v.prev ? [{ kind: v.prev.kind, id: v.prev.id, number: v.prev.number, label: v.prev.label, what: "How we ran it before" }] : []),
+    { kind: "o" as const, id: orderId, number: String(v.order.number), label: `#${v.order.number}`, what: "This run" },
   ];
   const [to, setTo] = useState(0); // last time first on a reorder
   const tgt = jobs[Math.min(to, jobs.length - 1)];
@@ -592,7 +592,14 @@ function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number
     if (r.error) { setHave(was); setMsg(r.error); }
   }
   const mine = photos.filter((x) => x.kind === "photo" && x.url), last = prevPics.filter((x) => x.kind === "photo" && x.url);
-  const added = new Set((tgt.what === "Last time" ? last : mine).map((x) => markOf(x.body || "")).filter(Boolean));
+  const added = new Set((v.prev && tgt.id === v.prev.id ? last : mine).map((x) => markOf(x.body || "")).filter(Boolean));
+  // a photo's note, or take it off (archived, never deleted)
+  const [noting, setNoting] = useState(""), [noteText, setNoteText] = useState("");
+  const capOf = (x: JobFile) => (x.body || "").replace(/\s*\[[te]:[^\]]+\]\s*$/, "").trim();
+  async function patchFile(id: string, b: Record<string, unknown>) {
+    const r = await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...b }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    if (r.error) setMsg(r.error); else await reloadAll();
+  }
   async function find() {
     setLooking(true); setMsg("");
     const r = await fetch(`/api/jobs/text-photos?kind=${tgt.kind}&id=${tgt.id}`).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
@@ -609,7 +616,20 @@ function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number
   }
   const list = (found || []).filter((f) => all || f.here);
   const fmt = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const gallery = (xs: JobFile[]) => xs.map((x) => <a key={x.id} href={x.url} target="_blank" rel="noreferrer" title={(x.body || x.file_name || "").replace(/\s*\[[te]:[^\]]+\]\s*$/, "")}><img src={x.url} alt={x.body || "Photo"} /></a>);
+  const gallery = (xs: JobFile[]) => xs.map((x) => (
+    <div key={x.id} className="jv-ph">
+      <a href={x.url} target="_blank" rel="noreferrer" title={capOf(x) || x.file_name}><img src={x.url} alt={capOf(x) || "Photo"} /></a>
+      {noting === x.id ? (
+        <input autoFocus value={noteText} placeholder="Add a note" aria-label="Photo note" onChange={(e) => setNoteText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { setNoting(""); void patchFile(x.id, { body: noteText }); } if (e.key === "Escape") setNoting(""); }}
+          onBlur={() => { if (noteText !== capOf(x)) void patchFile(x.id, { body: noteText }); setNoting(""); }} />
+      ) : capOf(x) ? <span className="jv-ph-cap" title={capOf(x)}>{capOf(x)}</span> : null}
+      <span className="jv-ph-acts">
+        <button type="button" className="linkbtn" onClick={() => { setNoting(x.id); setNoteText(capOf(x)); }}>{capOf(x) ? "Edit note" : "Add note"}</button>
+        <button type="button" className="linkbtn danger" onClick={() => void patchFile(x.id, { archived: true })}>Remove</button>
+      </span>
+    </div>
+  ));
   return (
     <div className="jv-cp-step jv-smp">
       <div className="jv-cp-n"><b>{n}</b>Samples or photos</div>
@@ -622,45 +642,45 @@ function Samples({ n, p, v, orderId, photos, reloadPhotos, setErr }: { n: number
           {jobs.length > 1 && (
             <div className="jv-ub">
               <span>Adding photos of</span>
-              {jobs.map((j, i) => <button key={j.id} type="button" className={"chip" + (tgt === j ? " on" : "")} onClick={() => { setTo(i); setFound(null); }}>{j.what} · {j.label}</button>)}
+              {jobs.map((j, i) => <button key={j.id} type="button" className={"chip" + (tgt === j ? " on" : "")} onClick={() => { setTo(i); setFound(null); }}>{j.what}</button>)}
             </div>
           )}
-        </div>
-        <div className="jv-phone">
-          <div className="jv-phone-qr" dangerouslySetInnerHTML={{ __html: qr }} />
-          <div>
-            <b>Have photos on your phone? Upload here</b>
-            <div className="jv-cc-hint">Photos of <b>{tgt.what.toLowerCase()} ({tgt.label})</b>. Scan with the iPhone camera, then tap <b>Add from my messages</b> or <b>Add from my photos</b>. They show up here in a few seconds.</div>
-          </div>
         </div>
       </div>
       {v.prev && (
         <div className="jv-smp-sec">
-          <div className="jv-lbl">Last time · {v.prev.label}</div>
-          <div className="jv-smp-pics">{gallery(last)}{!last.length && <span className="faint">No photos of {v.prev.label} yet.</span>}</div>
+          <div className="jv-lbl">How we ran it before</div>
+          <div className="jv-smp-pics">{gallery(last)}{!last.length && <span className="faint">No photos yet.</span>}</div>
         </div>
       )}
       <div className="jv-smp-sec">
-        {v.prev && <div className="jv-lbl">This order · #{v.order.number}</div>}
+        {v.prev && <div className="jv-lbl">This run</div>}
         <div className="jv-smp-pics">{gallery(mine)}{v.prev && !mine.length && <span className="faint">No photos of this run yet.</span>}</div>
       </div>
       <div className="jv-smp-pics">
-        <label className="jv-addphoto">{upl ? "Adding…" : `+ Upload photos of ${tgt.label}`}<input type="file" accept="image/*" multiple hidden onChange={async (e) => {
+        <label className="jv-addphoto">{upl ? "Adding…" : "+ Upload photos"}<input type="file" accept="image/*" multiple hidden onChange={async (e) => {
           const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
           setUpl(true);
           for (const f of fs) { const r = await addPhoto({ kind: tgt.kind, id: tgt.id }, f, `${p.location} sample`, "Sample"); if (!r.ok) { setErr(r.error); break; } }
           setUpl(false); await reloadAll();
         }} /></label>
         <button type="button" className="jv-addphoto" disabled={looking} onClick={() => (found ? setFound(null) : void find())}>{looking ? "Looking…" : found ? "Hide the messages" : "Find photos in texts and emails"}</button>
+        <div className="jv-phone jv-phone-sm">
+          <div className="jv-phone-qr" dangerouslySetInnerHTML={{ __html: qr }} />
+          <div>
+            <b>Photos on your phone?</b>
+            <div className="jv-cc-hint">Scan with the iPhone camera, then tap <b>Add from my messages</b> or <b>Add from my photos</b>. They show up here in a few seconds{jobs.length > 1 ? `, under ${tgt.what.toLowerCase()}` : ""}.</div>
+          </div>
+        </div>
       </div>
       {msg && <div className="err">{msg}</div>}
       {found && (
         <div className="jv-find">
           <div className="jv-find-h">
-            <span>{found.length ? `${list.length} picture${list.length === 1 ? "" : "s"} ${all ? `with ${v.order.customer}` : `filed to ${tgt.label}`}` : `No pictures in the texts or emails with ${v.order.customer}.`} · adding to {tgt.label}</span>
-            {found.length > 0 && <button type="button" className="linkbtn" onClick={() => setAll((x) => !x)}>{all ? `Only ${tgt.label}'s` : `All ${found.length} with ${v.order.customer}`}</button>}
+            <span>{found.length ? `${list.length} picture${list.length === 1 ? "" : "s"} ${all ? `with ${v.order.customer}` : "filed to this job"}` : `No pictures in the texts or emails with ${v.order.customer}.`}{jobs.length > 1 ? ` · adding to ${tgt.what.toLowerCase()}` : ""}</span>
+            {found.length > 0 && <button type="button" className="linkbtn" onClick={() => setAll((x) => !x)}>{all ? "Only this job's" : `All ${found.length} with ${v.order.customer}`}</button>}
           </div>
-          {found.length > 0 && !list.length && <div className="jv-cc-hint">None of the texts or emails are filed to {tgt.label}. <button type="button" className="linkbtn" onClick={() => setAll(true)}>Show all of {v.order.customer}&apos;s</button></div>}
+          {found.length > 0 && !list.length && <div className="jv-cc-hint">None of the texts or emails are filed to this job. <button type="button" className="linkbtn" onClick={() => setAll(true)}>Show all of {v.order.customer}&apos;s</button></div>}
           <div className="jv-find-g">
             {list.map((f) => {
               const mk = `${f.key.slice(0, 2)}${f.key.split("/").pop()}`, has = added.has(mk);

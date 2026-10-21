@@ -80,12 +80,20 @@ export async function POST(req: Request) {
   return NextResponse.json({ item: data });
 }
 
-/** Archive or restore (staff; nothing is ever deleted). */
+/** Archive or restore, or change a photo's note (staff; nothing is ever deleted). */
 export async function PATCH(req: Request) {
   const who = await jobActor();
   if (!who || who.kind !== "staff") return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   if (typeof b.id !== "string") return NextResponse.json({ error: "Which one?" }, { status: 400 });
-  const { error } = await createAdminClient().from("job_files").update({ archived: !!b.archived }).eq("id", b.id);
+  const admin = createAdminClient();
+  if (typeof b.body === "string") {
+    // the note; a picture added from the texts keeps its marker (so it isn't added twice)
+    const { data: f } = await admin.from("job_files").select("body").eq("id", b.id).maybeSingle();
+    const mark = (String(f?.body || "").match(/\s*\[[te]:[^\]]+\]\s*$/) || [""])[0];
+    const { error } = await admin.from("job_files").update({ body: `${b.body.trim().slice(0, 1000)}${mark}`.trim() }).eq("id", b.id);
+    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true });
+  }
+  const { error } = await admin.from("job_files").update({ archived: !!b.archived }).eq("id", b.id);
   return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true });
 }
