@@ -207,7 +207,12 @@ export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: 
  * its photo reads wider than its height says (a boxy performance tee: A4 N3142, Oct 21, Nick: "11.5 inches shouldn't
  * look that small on this style"), the chest width sets the scale: a print is judged against the chest.
  */
-export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean } = {}): Fit | null {
+/**
+ * `kid`: a baby or toddler garment (onesie, toddler tee). A onesie is far longer for its width than the reference tee, so
+ * its photo is shown by its height; its prints are still sized by its width (Oct 21, Nick: a 6.5" print on the Bella
+ * 100B came out about half again too big: 97% of the chest instead of ~70%).
+ */
+export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean } = {}): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
@@ -261,7 +266,7 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
   // a short-sleeve tee that reads wider than its height: the photo is still shown at its height (Oct 21, Nick: the
   // adult A4 came out "really small" when the whole photo was shrunk to its chest), and prints are sized by the chest
-  const ps = Math.abs(sw - sh) > 0.1 && !cut && opts.tee && sw > sh ? sw : s;
+  const ps = Math.abs(sw - sh) > 0.1 && !cut && ((opts.tee && sw > sh) || (opts.kid && sw < sh)) ? sw : s;
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;

@@ -707,7 +707,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const m = `${g?.description || ""} ${l.garment || ""}`.match(/(\d+(?:\.\d+)?)\s*["”]?\s*h\b/i);
     return m ? +m[1] : bagWidth(l);
   };
-  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
+  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l) }));
+  /** a baby or toddler garment (its size run, or a onesie / bodysuit by name) */
+  const isKidGarment = (l: Line) => { const b = bodyFor(l); return b.kind === "infant" || b.kind === "toddler" || /one ?piece|onesie|bodysuit|creeper|romper/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`); };
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
   // a color the supplier gave no color code for (SanMar's Scarlet): the color read off its photo is saved on the
