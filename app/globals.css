@@ -11386,7 +11386,7 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
 }
 
 /* ── Attachments as their own section, between an email's header and its body (Oct 21, Nick) ── */
-.mf-tray{margin:12px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.mf-tray{flex:none;margin:12px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
 .mf-tray-h{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);background:var(--bg);font-size:12.5px}
 .mf-tray-t{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink);white-space:nowrap}
 .mf-tray-t svg,.ps-save svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;color:var(--ink-3)}
@@ -11413,6 +11413,7 @@ span.mf-tp.mf-ft{display:flex;height:76px;font-size:15px}
 .mf-fn{flex:1;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mf-fo{font-size:13px;font-weight:700;color:var(--accent)}
 .mf-fr:disabled .mf-fo{display:none}
+html body .pbar .pbar-n{color:#fff}
 .pbar-ico{position:relative;display:inline-flex;font-style:normal}
 .pbar-n{position:absolute;top:-5px;right:-10px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
 @media (max-width:760px) and (pointer:coarse){
