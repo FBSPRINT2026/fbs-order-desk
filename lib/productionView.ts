@@ -110,7 +110,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       const names = (im.inks || "").split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
       const hexOf = (n: string) => (im.inkMap?.design === im.design_id ? Object.values(im.inkMap?.map || {}).find((x) => x.name === n)?.hex : "") || colorHex(n) || "#999999";
       const plates: SetupPlate[] = [...(im.underbase ? [{ key: "ub", name: "White underbase", hex: "#FFFFFF", kind: "underbase" }] : []), ...names.map((n, i) => ({ key: `c${i}`, name: n, hex: hexOf(n), kind: "color" }))];
-      const mach = machines.find((x) => x.id === slotMachine || x.name === slotMachine) || [...machines].filter((x) => nHeads(x) >= plates.length).sort((a, b) => nHeads(a) - nHeads(b))[0] || [...machines].sort((a, b) => nHeads(b) - nHeads(a))[0];
+      const mach = machines.find((x) => x.id === slotMachine || x.name === slotMachine) || [...machines].filter((x) => nHeads(x) >= plates.length + (im.underbase ? 1 : 0)).sort((a, b) => nHeads(a) - nHeads(b))[0] || [...machines].sort((a, b) => nHeads(b) - nHeads(a))[0];
       if (mach) {
         const lay = validLayout(mach.layout, nHeads(mach)) ? mach.layout! : defaultLayout(nHeads(mach), mach.flashes ?? 2);
         const laid = autoSetup(lay, plates);
