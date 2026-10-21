@@ -10838,3 +10838,11 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .carry-i{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
 .carry-i input{margin-top:3px}
 .carry-t{display:block;white-space:pre-wrap;color:var(--ink-2);max-height:120px;overflow:auto}
+/* press setup: more than one round (Oct 21, Nick) */
+.ps-rounds{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 6px;font-size:13px}
+.ps-rounds label{display:flex;align-items:center;gap:6px}
+.ps-hrows .ps-round{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:4px 0;border:1.5px dashed #2563eb;border-radius:8px;background:#eff6ff;color:#1d4ed8;cursor:grab;font-size:13px;list-style:none}
+.ps-hrows .ps-round span:last-child{color:#3b6fd8;font-size:12px}
+.ps-hrows .ps-round.dragging{opacity:.5}
+.ps-rtag{margin-left:8px;padding:1px 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);font-size:11px}
+.ps-rtag.on{background:#dbeafe;color:#1d4ed8}

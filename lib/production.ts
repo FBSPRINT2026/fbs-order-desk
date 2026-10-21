@@ -231,7 +231,8 @@ export function mergeProduction(d: unknown): ProductionSettings {
 
 /** One decoration to run: a location on a group of garments. */
 export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean;
-  /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string } };
+  /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string };
+  /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
@@ -263,7 +264,8 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
       const screens = method === "screen" ? colors + (dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
       const puff = method === "screen" && /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`);
       const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
-      steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}) });
+      const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
+      steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}) });
     }
   }
   return groupNeeds(steps);
@@ -416,7 +418,7 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       rate *= rateF;
       if (st.puff) suF /= S.puffSetupFactor ?? 1.5;
       // more screens + flashes than the press has heads: two rounds, every piece goes around twice
-      const rounds = Math.min(2, roundsOn(st, mach));
+      const rounds = Math.min(Math.max(2, st.rounds || 1), roundsOn(st, mach));
       const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
@@ -500,12 +502,14 @@ export function roundsOn(st: Step, mach: Machine): number {
   // the roller and cool-down stations take a head on every job
   const fl = flashesFor(st), have = flashesOf(mach), heads = Math.max(1, mach.colors - (mach.rollers || 0));
   if (fl > 0 && have === 0) return Infinity;
+  // rounds set on the press setup (the pallet goes around again to flash before a later color)
+  if (st.rounds && st.rounds > 1) return st.screens <= heads * st.rounds ? st.rounds : Infinity;
   if (st.screens + fl <= heads && fl <= have) return 1;
   // two rounds: each round gets the flashes it needs (the underbase round flashes, the puff round flashes)
   return st.screens + fl <= heads * 2 && fl <= have * 2 ? 2 : Infinity;
 }
 /** Can this machine run it? (a job needing 11 screens only fits a 12-color press; flashes take heads too) */
-export const fits = (need: Need, mach: Machine) => mach.active && mach.type === need.type && (need.type !== "screen" || need.steps.every((st) => (!st.only || st.only.id === mach.id) && roundsOn(st, mach) <= 2));
+export const fits = (need: Need, mach: Machine) => mach.active && mach.type === need.type && (need.type !== "screen" || need.steps.every((st) => (!st.only || st.only.id === mach.id) && roundsOn(st, mach) <= Math.max(2, st.rounds || 1)));
 /** a print on it that only runs on another press ("must run on Press 4"), for messages */
 export const pressOnlyOf = (need: Need, mach?: Machine) => need.steps.find((st) => st.only && (!mach || st.only.id !== mach.id))?.only || null;
 /** the most heads any print location takes (screens + flashes), for messages */

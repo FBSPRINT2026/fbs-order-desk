@@ -16,6 +16,7 @@ export type SpecEntry = {
   location: string; method: string; size: string; drop: string; inks: string; colors: number; underbase?: boolean;
   garment?: string; notes?: string; /** it only runs on this press */ press?: { id: string; name: string };
   /** shirt color → screens left off on it */ skip?: Record<string, string[]>;
+  /** times around the press */ rounds?: number;
   by: string; at: string; order_id: string; order_number: number; /** the old job this order repeated */ job?: string;
 };
 export type DesignSpecs = { history?: SpecEntry[] };
@@ -64,6 +65,7 @@ export function applySpec(im: Imprint, e: SpecEntry, designId: string) {
   if (e.size) im.sizeFrom = "film";
   if (e.press?.id) im.pressOnly = { id: e.press.id, name: e.press.name };
   if (e.skip && Object.keys(e.skip).length) im.byColor = { skip: e.skip };
+  if (e.rounds && e.rounds > 1) im.rounds = e.rounds;
   im.design_id = designId;
   delete im.confirm;
   im.confirmed = { by: e.by, at: e.at, from: `#${e.order_number}` };

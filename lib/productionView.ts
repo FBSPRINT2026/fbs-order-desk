@@ -17,7 +17,7 @@ export const PROD_ROLES = ["owner", "production"];
 export const STEPS = ["Order", "Mockup", "Separations requested", "Film made", "Film checked", "On press", "Printed"] as const;
 
 export type PvPlate = { name: string; hex: string; mesh: string; coverage: number | null; url: string };
-export type PvHead = { what: string; name: string; hex: string; mesh: string };
+export type PvHead = { what: string; name: string; hex: string; mesh: string; /** printed on round 2 or 3 */ round?: number };
 export type PvPrint = {
   id: string; groupId: string; group: string; location: string; method: string; screen: boolean;
   colors: number; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
@@ -26,6 +26,7 @@ export type PvPrint = {
   press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean; /** where it came from: saved as printed, the separation's setup, or laid out here */ from?: "actual" | "sep" | "auto" } | null;
   /** it only runs on this press (the schedule only puts it there) */ pressOnly: { id: string; name: string } | null;
   /** a physical sample of it is in the shop: true / false, null = not asked */ sample: boolean | null;
+  /** times around the press (Imprint.rounds) */ rounds: number;
   /** shirt color → the screens (ink names) left off on it; empty = prints the same on every color */ skip: Record<string, string[]>;
   minutes: { setup: number; run: number };
   /** the print's art (the customer design's picture), to compare films against */ art: string; design: string;
@@ -106,7 +107,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     const act = (acts || []).find((a) => (s && a.separation_id === s.id) || (!s && a.location === im.location));
     const setup = (s?.settings as { pressSetup?: { heads?: string[] } } | null)?.pressSetup;
     let press: PvPrint["press"] = null;
-    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || "") })), asPrinted: true, from: "actual" };
+    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || ""), ...(+(h.round || 0) > 1 ? { round: +h.round! } : {}) })), asPrinted: true, from: "actual" };
     else if (!setup?.heads?.length && screen && (im.inks || "").trim()) {
       // no separation (film on file or in the drawer, Oct 21: The Bottles): laid out from the print's own screens, on the
       // press it's scheduled on, else the smallest press that fits
@@ -137,7 +138,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       notes: im.notes || "", confirm: im.confirm || null, confirmed: im.confirmed || null,
       film: im.film ? { ...im.film, files: (im.film.files || []).map((f) => ({ ...f, url: signed.get(f.path) || "" })) as never } : null,
       sep: s ? { id: s.id, number: s.number, status: s.status, plates: chans.map((c) => ({ name: c.name || "", hex: c.hex || "#000000", mesh: String(c.mesh || ""), coverage: typeof c.coverage === "number" ? c.coverage : null, url: c.file ? signed.get(c.file) || "" : "" })) } : null,
-      press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, sample: typeof im.sample?.have === "boolean" ? im.sample.have : null, skip: im.byColor?.skip || {}, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
+      press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, sample: typeof im.sample?.have === "boolean" ? im.sample.have : null, skip: im.byColor?.skip || {}, rounds: im.rounds || 1, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
       ...(() => {
         const d = (dsgs || []).find((x) => x.id === im.design_id);
         const plan = (((d?.print_plan || {}) as { inks?: { hex?: string; name?: string }[] }).inks || []).filter((k) => k.hex).map((k) => ({ hex: String(k.hex).toUpperCase(), name: String(k.name || "") }));

@@ -20,6 +20,7 @@ export const maxDuration = 30;
  *   "filmOk"   {}: production looked the film over (fresh separations stay "new, never printed")
  *   "printed"  {}: after Confirm & save: film printed from becomes the as-printed film
  *   "note"     { text }: added to the production notes
+ *   "rounds" { n: 1-3 }: times around the press (the schedule's run time counts each round)
  *   "byColor" { skip: { <shirt color>: [screen ink names] } }: screens left off on some shirt colors ({} = the same on all)
  *   "sample" { have: true | false | null }: a physical sample is in the shop (every print of the group)
  *   "pressOnly" { press: id | "" }: this print only runs on that press (the schedule only puts it there); the design's
@@ -134,6 +135,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           await admin.from("designs").update({ specs }).eq("id", d.id);
         }
       }
+    } else if (b.op === "rounds") {
+      // times around the press (Oct 21, Nick: "go a second round… because we don't have the space to add a flash")
+      const n = Math.max(1, Math.min(3, Math.round(+(b.n as number) || 1)));
+      if ((im.rounds || 1) !== n) events.push(`${im.location}: ${n > 1 ? `${n} rounds on press` : "one round on press"}`);
+      if (n > 1) im.rounds = n; else delete im.rounds;
     } else if (b.op === "byColor") {
       // prints differently by shirt color (Oct 21, Nick: "you may not print the black on one mockup")
       const skip: Record<string, string[]> = {};

@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import PressLayout from "@/components/PressLayout";
 import PressDefaults, { pressLayOf } from "@/components/PressDefaults";
 import { useRole } from "@/components/RoleContext";
@@ -36,7 +36,7 @@ export function planOnPress(press: Machine | undefined, plates0: PsPlate[], setu
 }
 export type OnPress = NonNullable<ReturnType<typeof planOnPress>>;
 
-export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup", compact = false }: {
+export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup", compact = false, breaks, onBreaks }: {
   presses: Machine[]; setPresses?: (fn: (ps: Machine[]) => Machine[]) => void;
   press: Machine; onPickPress: (id: string) => void;
   onPress: OnPress; setup: Slot[] | null;
@@ -47,6 +47,12 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
   /** mesh typed per color (the production mockup: the screens as they ran) */ onMesh?: (key: string, mesh: number | undefined) => void;
   title?: string;
   /** a narrow column (Separations): the stations open from a button beside Press Defaults */ compact?: boolean;
+  /**
+   * More than one round (Oct 21, Nick: "sometimes we have to go an additional round so that we can flash again… we
+   * would go a second round between heads 11 and 12… we don't have the space to add a flash"): the heads where round 2
+   * (and 3) start. Screens from there on print on that round; the earlier screens are lifted and the flashes fire again.
+   */
+  breaks?: number[]; onBreaks?: (b: number[]) => void;
 }) {
   const [showSt, setShowSt] = useSticky("ps.stations", false);
   const stations = !compact || showSt;
@@ -85,7 +91,26 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
    * to head 8"): a head's color, flash, roller or cool-down dragged in the head list (or a screen off the press, or onto
    * the drawing) goes there, and what was there trades places with it. Heads that are down stay put.
    */
-  const [drag, setDrag] = useState<{ head?: number; plate?: string } | null>(null), [dropHead, setDropHead] = useState<number | null>(null);
+  const [drag, setDrag] = useState<{ head?: number; plate?: string; round?: number } | null>(null), [dropHead, setDropHead] = useState<number | null>(null);
+  const brk = [...(breaks || [])].filter((b) => b > 0 && b < onPress.heads.length).sort((a, b) => a - b);
+  const rounds = brk.length + 1;
+  const roundOf = (h: number) => 1 + brk.filter((b) => b <= h).length;
+  /** 2 or 3 rounds: round 2 (and 3) start at the last screens, unless they were placed already */
+  function setRounds(n: number) {
+    if (!onBreaks) return;
+    if (n <= 1) { onBreaks([]); return; }
+    const scr = onPress.heads.flatMap((x, i) => (plateOf(x) && i > 0 ? [i] : []));
+    const next = brk.slice(0, n - 1);
+    for (const w of scr.slice(-(n - 1))) if (next.length < n - 1 && !next.includes(w)) next.push(w);
+    for (const w of [...scr].reverse()) if (next.length < n - 1 && !next.includes(w)) next.push(w);
+    onBreaks(next.sort((a, b) => a - b));
+  }
+  /** the "round N starts here" bar dropped on a head: that round starts at that head */
+  function moveBreak(k: number, h: number) {
+    if (!onBreaks || h <= 0) return;
+    const next = [...brk]; next[k] = h;
+    onBreaks([...new Set(next)].sort((a, b) => a - b));
+  }
   function moveSlot(from: number, to: number) {
     const n = [...onPress.heads];
     if (from === to || n[from] === "down" || n[to] === "down") return;
@@ -93,7 +118,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
     commit(n); setSelHead(null);
   }
   function dropOnHead(i: number) {
-    if (drag?.head != null) moveSlot(drag.head, i); else if (drag?.plate) putPlate(drag.plate, i);
+    if (drag?.round != null) moveBreak(drag.round, i); else if (drag?.head != null) moveSlot(drag.head, i); else if (drag?.plate) putPlate(drag.plate, i);
     setDrag(null); setDropHead(null);
   }
   /** a sheet for the press operator: the press drawn with every head, and the list */
@@ -103,12 +128,14 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
     const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]!));
     const rows = onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
       const what = p ? `<b>${esc(p.name)}</b>${p.kind === "underbase" ? " (underbase)" : p.kind === "highlight" ? " (highlight white)" : ""}${p.mesh ? ` · mesh ${p.mesh}` : ""}` : x === "flash" ? "<b>FLASH</b>" : x === "roller" ? "<b>ROLLER</b> (dead screen)" : x === "cool" ? "<i>empty: cool down</i>" : x === "down" ? "<i>head down</i>" : "<span style=\"color:#999\">empty</span>";
-      return `<tr><td style="padding:5px 10px;font-weight:800">Head ${i + 1}</td><td style="padding:5px 10px">${p ? `<span style="display:inline-block;width:14px;height:14px;border:1px solid #999;vertical-align:-2px;margin-right:6px;background:${p.hex}"></span>` : ""}${what}</td></tr>`; }).join("");
+      const bar = rounds > 1 && brk.includes(i) ? `<tr><td colspan="2" style="padding:5px 10px;font-weight:800;border-top:2px dashed #2563eb;color:#2563eb">↻ ROUND ${roundOf(i)} STARTS HERE</td></tr>` : "";
+      return `${bar}<tr><td style="padding:5px 10px;font-weight:800">Head ${i + 1}</td><td style="padding:5px 10px">${p ? `<span style="display:inline-block;width:14px;height:14px;border:1px solid #999;vertical-align:-2px;margin-right:6px;background:${p.hex}"></span>` : ""}${what}${rounds > 1 && p ? ` · <b>round ${roundOf(i)}</b>` : ""}</td></tr>`; }).join("");
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(sheet.title)}</title>${css}<style>body{background:#fff;color:#111;font:14px system-ui;padding:24px}table{border-collapse:collapse}tr:nth-child(odd){background:#f4f5f7}.pl{width:360px;height:auto}</style></head><body>
       <h2 style="margin:0">${esc(sheet.heading)}</h2>
       <div style="color:#555;margin:4px 0 14px">${esc(press.name)} · ${esc(sheet.sub)}</div>
       <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">${svg}<table>${rows}</table></div>
+      ${rounds > 1 ? `<h3>${rounds} rounds</h3><ul>${Array.from({ length: rounds }, (_, r) => { const hs = onPress.heads.flatMap((x, i) => (plateOf(x) && roundOf(i) === r + 1 ? [i + 1] : [])); return `<li>Round ${r + 1}: print head${hs.length === 1 ? "" : "s"} ${hs.join(", ")}${r ? " only (the others lifted), flashes on" : ""}</li>`; }).join("")}</ul>` : ""}
       ${onPress.moves.length ? `<h3>Before you start</h3><ul>${onPress.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
       <script>setTimeout(()=>print(),400)</script></body></html>`);
     w.document.close();
@@ -126,7 +153,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
       {/* the press drawn, and beside it how each station sits for this job (Oct 21, Nick: "a visual next to the press…
           flash on 2, cool down 3, roller on 4… select from there the flashes, and it should edit it down below") */}
       <div className="ps-top">
-        <div className="sep-press" ref={drawing}><PressLayout layout={drawLayout(onPress.heads)} size={230} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
+        <div className="sep-press" ref={drawing}><PressLayout layout={drawLayout(onPress.heads)} size={230} mirror={!!press.mirror} inks={rounds > 1 ? onPress.out.map((o, i) => (o && roundOf(i) > 1 ? { ...o, name: `${o.name} · R${roundOf(i)}` } : o)) : onPress.out} selected={selHead} onPick={pickHead}
           onDropHead={drag ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>
         {stations && <div className="ps-side">
           <div className="ps-lbl">How the press sits for this job · click a station to change it</div>
@@ -162,6 +189,16 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
           </div>
         </div>}
       </div>
+      {onBreaks && (
+        <div className="ps-rounds">
+          <span>Go more than one round?</span>
+          <select value={rounds > 1 ? "yes" : "no"} onChange={(e) => setRounds(e.target.value === "yes" ? Math.max(2, rounds) : 1)} aria-label="More than one round">
+            <option value="no">No, one round</option><option value="yes">Yes</option>
+          </select>
+          {rounds > 1 && <label>How many rounds <select value={rounds} onChange={(e) => setRounds(+e.target.value)} aria-label="How many rounds"><option value={2}>2</option><option value={3}>3</option></select></label>}
+          <span className="faint">{rounds > 1 ? "Drag the round bar to the head where the press goes around again." : "The press goes around again so a later color can be flashed first."}</span>
+        </div>
+      )}
       <ol className="ps-hrows">{onPress.heads.map((x, h) => {
         const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
         const kind = p ? "print" : x || "empty";
@@ -169,13 +206,21 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
         const prev = (() => { for (let j = h - 1; j >= 0; j--) if (onPress.heads[j] !== "down") return j; return -1; })();
         const next = (() => { for (let j = h + 1; j < onPress.heads.length; j++) if (onPress.heads[j] !== "down") return j; return -1; })();
         const down = x === "down";
+        const bk = brk.indexOf(h);
         return (
-          <li key={h} className={"ps-head k-" + kind + (selHead === h ? " sel" : "") + (drag?.head === h ? " dragging" : "") + (dropHead === h && drag ? " drop" : "")}
+          <Fragment key={h}>
+          {rounds > 1 && bk >= 0 && (
+            <li className={"ps-round" + (drag?.round === bk ? " dragging" : "")} draggable onDragStart={(e) => { setDrag({ round: bk }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", `round${bk}`); }} onDragEnd={() => { setDrag(null); setDropHead(null); }}
+              title="Drag onto the head where this round starts">
+              <span aria-hidden>↻</span><b>Round {bk + 2} starts here</b><span>drag to move · the shirt goes around again: the screens before are lifted, the flashes fire again</span>
+            </li>
+          )}
+          <li className={"ps-head k-" + kind + (selHead === h ? " sel" : "") + (drag?.head === h ? " dragging" : "") + (dropHead === h && drag ? " drop" : "")}
             draggable={!down && x !== ""} onDragStart={(e) => { setDrag({ head: h }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(h)); }} onDragEnd={() => { setDrag(null); setDropHead(null); }}
             onDragOver={(e) => { if (drag && !down) { e.preventDefault(); if (dropHead !== h) setDropHead(h); } }} onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(h); }}>
             <span className="ps-hn">{h + 1}</span>
             {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-st k-" + kind} aria-hidden />}
-            <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}</span>
+            <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}{rounds > 1 && (p ? <small className={"ps-rtag" + (roundOf(h) > 1 ? " on" : "")}>round {roundOf(h)}</small> : x === "flash" ? <small className="ps-rtag">every round</small> : null)}</span>
             <span className="ps-hm">{p && (onMesh
               ? <input className="ps-mesh" value={p.mesh || ""} inputMode="numeric" placeholder="mesh" aria-label={`${p.name} mesh`} onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); onMesh(p.key, n > 0 ? n : undefined); }} />
               : null)}</span>
@@ -190,6 +235,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
               {x !== "flash" && <option value="flash">Flash</option>}{x !== "roller" && <option value="roller">Roller</option>}{x !== "cool" && <option value="cool">Cool down</option>}{x !== "" && <option value="">Open</option>}
             </select>
           </li>
+          </Fragment>
         );
       })}</ol>
       <p className="sep-help">Drag a row onto another head to move it (they trade places), or use ↑ ↓ or Change….</p>

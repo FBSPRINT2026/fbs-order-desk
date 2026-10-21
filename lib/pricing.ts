@@ -90,6 +90,8 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   pressOnly?: { id: string; name: string; by?: string; at?: string };
   /** we have a physical sample of it (production mockup step 7): true / false; left out = not asked */
   sample?: { have: boolean; by?: string; at?: string };
+  /** times around the press (2 or 3: the pallet goes around again to flash before a later color), from the press setup */
+  rounds?: number;
   /** it prints differently by shirt color (production mockup step 3): shirt color → the screens (by ink name) left off */
   byColor?: { skip: Record<string, string[]>; by?: string; at?: string };
   film?: { state: "asPrinted" | "physical" | "new"; files?: { path: string; name: string }[]; note?: string; by?: string; at?: string; checked?: { by: string; at: string } };
