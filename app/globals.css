@@ -11114,10 +11114,10 @@ main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a,
 main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button):hover{background:var(--surface-2)}
 main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :is(a, button):disabled{cursor:default;background:var(--surface)}
 main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > * + *::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:1px;height:auto;background:var(--line-2);right:auto}
-main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > * > :is(span, .k){order:-1;font-family:var(--body);font-size:11.5px;font-weight:700;color:var(--fbs-blue);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+2) > :is(span, .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
-main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+3) > :is(span, .k){color:color-mix(in srgb,var(--fbs-orange) 70%,#000)}
-main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+5) > :is(span, .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > * > :is(span:not(.v), .k){order:-1;font-family:var(--body);font-size:11.5px;font-weight:700;color:var(--fbs-blue);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+2) > :is(span:not(.v), .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+3) > :is(span:not(.v), .k){color:color-mix(in srgb,var(--fbs-orange) 70%,#000)}
+main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) > :nth-child(5n+5) > :is(span:not(.v), .k){color:color-mix(in srgb,var(--fbs-salmon) 85%,#000)}
 main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) :is(b, .v){font-family:var(--body);font-stretch:normal;font-weight:700;font-size:17px;line-height:1.25;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis, .aa-shop .aa-aging) small{font-size:12px;color:var(--ink-3)}
 main.main .stat .v.alert,main.main :is(.rv-kpis .bad, .sc-kpi.bad, .aa-age.bad) b,main.main .db-kpis .bad b small{color:var(--danger)}
