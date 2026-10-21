@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { addDays, dayLabel, localDay, localToIso, mergeTime, periodOf, type Employee, type Punch, type TimeSettings } from "@/lib/timeclock";
 import { timeIssues, type TimeIssue } from "@/lib/timeIssues";
@@ -36,16 +35,11 @@ export async function loadIssueData(force = false): Promise<Loaded> {
 export const issuesFrom = (l: Loaded) => timeIssues(l.s, l.emps, l.punches, periodOf(l.s, addDays(periodOf(l.s, localDay(new Date())).start, -1)).start, new Set(l.dismissed));
 export const clearIssueCache = () => { try { sessionStorage.removeItem(CACHE); } catch { /* none */ } window.dispatchEvent(new Event("fbs:time-changed")); };
 
-const greet = () => { const h = +new Date().toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 export default function TimeBubble() {
-  const { perms, role, staffName, email } = useRole();
-  const path = usePathname();
+  const { perms, role } = useRole();
   const runs = role === "owner" || role === "admin" || perms.pay;
   const [issues, setIssues] = useState<TimeIssue[] | null>(null);
-  const [open, setOpen] = useState(false), [hello, setHello] = useState(false);
-  // where the Time Clock icon is in the menu: the list opens beside it
-  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const load = useCallback(async (force = false) => { try { setIssues(issuesFrom(await loadIssueData(force))); } catch { /* try again later */ } }, []);
   useEffect(() => {
     if (!runs) return;
@@ -54,42 +48,12 @@ export default function TimeBubble() {
     window.addEventListener("fbs:time-changed", re);
     return () => { clearTimeout(t); clearInterval(i); window.removeEventListener("fbs:time-changed", re); };
   }, [runs, load]);
-  // the hello card: once a day, when there's something to fix
-  useEffect(() => {
-    if (!issues?.length) return;
-    const k = `fbs:timeHello:${email}:${localDay(new Date())}`;
-    try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch { return; }
-    setHello(true); const t = setTimeout(() => setHello(false), 12000); return () => clearTimeout(t);
-  }, [issues, email]);
-  useEffect(() => { setOpen(false); }, [path]);
   // the button lives in Shop Tools now (Oct 20, Nick: "should just be in the shop tools… similar to" Printavo Sync's
-  // badge): the count goes to the Time Clock icon there, and clicking it opens this list
+  // badge): the count goes to the Time Clock icon there, which opens the Time Clock page
   useEffect(() => { window.dispatchEvent(new CustomEvent("fbs:time-count", { detail: runs ? issues?.length || 0 : 0 })); (window as unknown as { __timeCount?: number }).__timeCount = runs ? issues?.length || 0 : 0; }, [issues, runs]);
-  useEffect(() => {
-    const op = (e: Event) => { const d = (e as CustomEvent).detail as { x: number; y: number } | undefined; if (d) setAt(d); setOpen((o) => !o); setHello(false); };
-    window.addEventListener("fbs:time-open", op);
-    return () => window.removeEventListener("fbs:time-open", op);
-  }, []);
-  if (!runs || !issues?.length) return null;
-  const first = (staffName || "").split(/\s+/)[0] || "there";
-  const n = issues.length;
-  return (
-    <div className="tcb-wrap tcb-side" style={at && typeof window !== "undefined" && window.innerWidth > 820 ? { left: at.x + 12, top: Math.max(12, Math.min(at.y - 20, window.innerHeight - 420)) } : undefined}>
-      {hello && !open && (
-        <button type="button" className="tb-hello" onClick={() => { setOpen(true); setHello(false); }}>
-          <span className="tb-hello-ic" aria-hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></svg></span>
-          <span className="tb-hello-t"><small>Time Clock · now</small><b>{greet()}, {first}</b><span>{n === 1 ? `One issue: ${issues[0].text}.` : `${n} time clock issues. ${issues[0].text}.`}</span></span>
-        </button>
-      )}
-      {open && (
-        <div className="tb-pop" role="dialog" aria-label="Time clock issues">
-          <div className="tb-pop-h"><b>{greet()}, {first}</b><span>{n === 1 ? "One time clock issue" : `${n} time clock issues`}</span><button type="button" className="btn icon ghost" onClick={() => setOpen(false)} aria-label="Close">✕</button></div>
-          <IssueList issues={issues} onFixed={() => { clearIssueCache(); }} />
-          <div className="tb-pop-f"><Link href="/shop/time" onClick={() => setOpen(false)}>Open Time Clock</Link></div>
-        </div>
-      )}
-    </div>
-  );
+  // no pop-ups (Oct 20, Nick: "when you click it, it should just pull up the screen… don't do any of that, just make
+  // it like a normal page"): this only counts the issues for the badge on Time Clock in Shop Tools
+  return null;
 }
 
 /** the issues, each with its fix: add the clock-out, add the lunch (or "they didn't take one"), or open the time card */
