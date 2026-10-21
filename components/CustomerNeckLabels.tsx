@@ -77,7 +77,9 @@ function SetCard({ set, patch, upload, onOff }: { set: NeckLabelSet; patch: (fn:
   useEffect(() => { setD({ name: set.name, content: set.content || "", ink: set.ink || "", widthIn: String(set.widthIn ?? 2.5), note: set.note || "" }); }, [set.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const commit = () => patch((s) => ({ ...s, name: d.name.trim(), content: d.content.trim(), ink: d.ink.trim(), widthIn: Math.max(0.5, Math.min(6, +d.widthIn || 2.5)), note: d.note.trim() }));
   const groups = SIZE_GROUPS.filter((g, i) => i === 0 || more || g.sizes.some((z) => set.files?.[z]));
-  const sizesSet = set.mode === "template" ? ["S", "M", "L", "XL"] : Object.keys(set.files || {}).filter((z) => set.files?.[z]);
+  // in size order (S, M, L, XL…), not the order they were uploaded
+  const order = SIZE_GROUPS.flatMap((g) => [...g.sizes]);
+  const sizesSet = set.mode === "template" ? ["S", "M", "L", "XL"] : order.filter((z) => set.files?.[z]);
   const pv = sizesSet.includes(preview) ? preview : sizesSet[0] || "M";
   return (
     <div className="nl-card">
@@ -132,7 +134,7 @@ function SizeSlot({ size, file, upload, onSet }: { size: string; file: NeckFile 
   const u = useUrl(file);
   const take = async (fs: FileList | File[] | null) => { const f = fs && Array.from(fs)[0]; if (!f) return; const up = await upload(f); if (up) onSet(up); };
   return (
-    <div className={"nl-slot" + (file ? " has" : "")} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); void take(e.dataTransfer.files); }}>
+    <div className={"nl-slot" + (file ? " has" : "")} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); } }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); void take(e.dataTransfer.files); }}>
       <button type="button" className="nl-slot-pic" title={file ? `${file.name}: click to replace` : `Upload the ${size} label`} onClick={() => inp.current?.click()}>
         {file ? (u ? <img src={u} alt="" /> : <span className="nl-ext">{(file.name.split(".").pop() || "").toUpperCase().slice(0, 4)}</span>) : <span className="nl-plus">+</span>}
       </button>
@@ -160,7 +162,7 @@ function TemplateEditor({ set, upload, patch }: { set: NeckLabelSet; upload: (f:
   };
   const end = () => { if (!drag.current) return; drag.current = null; void patch((s) => ({ ...s, sizeBox: b })); };
   return (
-    <div className="nl-tpl" onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); void take(e.dataTransfer.files); }}>
+    <div className="nl-tpl" onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); } }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); void take(e.dataTransfer.files); }}>
       {set.template ? (
         <>
           {u ? (
