@@ -190,23 +190,34 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
     // top of the back neck: the first of the shirt down the middle
     for (let y = T; y < T + 200 * s && y < H; y++) if (band(y)) { neck = y; break; }
   } else {
-    // bottom of the front neckline: below the last row down the middle that isn't the body's own color (the collar
-    // rib, the inside of the back, or the empty neck opening) and above the chest. When only the empty opening is seen
-    // (the rib is the shirt's own color, e.g. a black Gildan 5000), the rib's ~0.75" is added
-    const yb = Math.round(T + 0.3 * (B - T)); const acc = [0, 0, 0]; let m = 0;
-    for (let y = yb - 10; y <= yb + 10; y++) { const v = band(y); if (v) { acc[0] += v[0]; acc[1] += v[1]; acc[2] += v[2]; m++; } }
+    // bottom of the front neckline: where the first stretch of the body's own color starts below the collar (the rib,
+    // the inside of the back, a printed tag, or the empty neck opening). When only the empty opening is seen (the rib
+    // is the shirt's own color, e.g. a black Gildan 5000), the rib's ~0.75" is added
+    const yb = Math.round(T + 0.3 * (B - T)); const acc = [0, 0, 0]; let m = 0; const samples: number[][] = [];
+    for (let y = yb - 10; y <= yb + 10; y++) { const v = band(y); if (v) { acc[0] += v[0]; acc[1] += v[1]; acc[2] += v[2]; m++; samples.push(v); } }
     if (m) {
-      const body = acc.map((v) => v / m), off = (v: number[] | null) => !v || Math.hypot(v[0] - body[0], v[1] - body[1], v[2] - body[2]) > 24;
-      let last = -1;
-      const end = Math.min(H, T + 170 * s);
-      for (let y = T; y < end; y++) if (off(band(y))) last = y;
-      if (last >= 0) {
+      const body = acc.map((v) => v / m), dist = (v: number[]) => Math.hypot(v[0] - body[0], v[1] - body[1], v[2] - body[2]);
+      // a heathered or textured body varies row to row: the line between collar and chest is set above that noise
+      const sd = Math.sqrt(samples.reduce((a, v) => a + dist(v) ** 2, 0) / samples.length);
+      const thr = Math.max(24, 2.5 * sd + 10);
+      const off = (v: number[] | null) => !v || dist(v) > thr;
+      // the first stretch of plain body below the collar (Oct 20, Nick: the Heather Mauve onesie's print sat lower than
+      // the others): the last "off" row before it used to be taken, so a crease or shadow further down pushed the
+      // neckline into the chest
+      const end = Math.min(H, T + 170 * s), run = Math.max(8, Math.round(14 * s));
+      let seenOff = false, n0 = -1, sawBg = false;
+      for (let y = T; y < end; y++) {
+        if (off(band(y))) { seenOff = true; continue; }
+        if (!seenOff || y - T < 10 * s) continue;
+        let ok = true;
+        for (let k = 1; k < run && y + k < H; k++) if (off(band(y + k))) { ok = false; break; }
+        if (!ok) continue;
         // ending on the empty neck opening (background) means the rib itself wasn't seen
-        let sawBg = false;
-        for (let y = last; y > last - 6 && y >= T; y--) if (!band(y)) sawBg = true;
-        const n0 = last + 1 + (sawBg ? 26 * s : 0);
-        if (n0 - T >= 10 * s && n0 - T <= 200 * s) neck = n0;
+        for (let k = 1; k <= 6 && y - k >= T; k++) if (!band(y - k)) sawBg = true;
+        n0 = y + (sawBg ? Math.round(26 * s) : 0);
+        break;
       }
+      if (n0 >= 0 && n0 - T >= 10 * s && n0 - T <= 200 * s) neck = n0;
     }
   }
   return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}) };
