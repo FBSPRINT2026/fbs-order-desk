@@ -10400,7 +10400,7 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .nl-shot{position:relative;cursor:crosshair;background:#f6f6f6}
 .nl-shot img{display:block;width:100%;height:100%;user-select:none}
 .nl-wait{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#999}
-.nl-line{position:absolute;left:22%;right:22%;border-top:2px solid #e0245e;pointer-events:none}
+.nl-line{position:absolute;left:22%;right:22%;height:0;border-top:2px solid #e0245e;box-shadow:0 0 0 1px #fff;pointer-events:none}
 .nl-card.fixed .nl-line{border-top-color:#0a6cff}
 .nl-card figcaption{font-size:11px;line-height:1.3;padding:3px 5px 4px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nl-card figcaption em{color:#c00;font-style:normal}
