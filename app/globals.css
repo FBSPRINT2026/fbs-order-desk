@@ -11321,13 +11321,13 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
   .ord .gl-list .gl > .gl-row.gl-r2 > .a-ea .prg-tag{order:3;text-align:left;margin:0;font-size:10.5px}
   .ord .gl-list .gl > .gl-row.gl-r2 > .a-ea input{order:2;height:36px}
   .ord .gl-list .gl > .gl-row.gl-r2 > .a-x{align-self:center}
-  .ord .gl-list .gl-row.grp-total.gl-r2{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;grid-template-areas:"lb qt to" "ad ad ad"!important;gap:10px 14px!important;align-items:baseline!important;padding-top:10px}
-  .ord .gl-list .gl-row.grp-total.gl-r2 > .gl-foot{display:contents!important}
-  .ord .gl-list .gl-row.grp-total.gl-r2 .lbl2{grid-area:lb}
-  .ord .gl-list .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;font-size:15px}
-  .ord .gl-list .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;font-size:15px}
-  .ord .gl-list .gl-row.grp-total.gl-r2 .gl-adds{grid-area:ad;display:flex!important;flex-wrap:wrap;gap:6px;white-space:normal}
-  .ord .gl-list .gl-row.grp-total.gl-r2 .gl-adds .btn{flex:1 1 auto;justify-content:center;white-space:nowrap}
+  .ord .line-b .gl-row.grp-total.gl-r2{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;grid-template-areas:"lb qt to" "ad ad ad"!important;gap:10px 14px!important;align-items:baseline!important;padding-top:10px}
+  .ord .line-b .gl-row.grp-total.gl-r2 > .gl-foot{display:contents!important}
+  .ord .line-b .gl-row.grp-total.gl-r2 .lbl2{grid-area:lb}
+  .ord .line-b .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;font-size:15px}
+  .ord .line-b .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;font-size:15px}
+  .ord .line-b .gl-row.grp-total.gl-r2 .gl-adds{grid-area:ad;display:flex!important;flex-wrap:wrap;gap:6px;white-space:normal}
+  .ord .line-b .gl-row.grp-total.gl-r2 .gl-adds .btn{flex:1 1 auto;justify-content:center;white-space:nowrap}
   .ord .tagp-cb .faint{display:none}
   .ord .tagp-cb{margin-left:10px;white-space:nowrap}
 }
