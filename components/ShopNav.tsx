@@ -271,7 +271,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {/* phones: "On the go", moving (Oct 15, Nick) */}
         <span className="tag-go" aria-hidden><span className="tag-k" data-notranslate>{[...(brand.sideTagline || "Shop Management")].map((ch, i) => <span key={i}>{ch === " " ? "\u00a0" : ch}</span>)}</span><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
       </Link>
-      <VersionTag />
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
       </button>
@@ -337,7 +336,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         {role === "owner" && link(["/shop/support", "support", "Support"])}
         {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
-        {realRole === "owner" && !viewAs && viewAsEl}</nav>
+        {realRole === "owner" && !viewAs && viewAsEl}
+        {/* the portal's version, at the right end of my Admin Tools (Oct 20, Nick: "my view only") */}
+        <VersionTag /></nav>
       </div>
       )}
       <div className="side-user">
