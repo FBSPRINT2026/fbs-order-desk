@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import SearchInput from "@/components/SearchInput";
 
 /** The big "ask or search anything" box (AI answers + search everything). Speaking into the mic runs it when you stop. */
-export default function AiSearch({ placeholder = "Ask AI or search orders, customers, POs, tracking…", className = "" }: { placeholder?: string; className?: string }) {
+export default function AiSearch({ placeholder = "Ask or search", className = "" }: { placeholder?: string; className?: string }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const go = (t: string) => { const x = t.trim(); if (x) router.push(`/shop/search?q=${encodeURIComponent(x)}`); };

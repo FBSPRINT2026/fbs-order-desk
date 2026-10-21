@@ -210,7 +210,7 @@ function OrderGoods() {
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="og-add">
             <span className="og-find" style={{ flex: 1 }}>
-              <SearchInput value={q} onChange={(e) => setQ(e.target.value)} onDictated={(t) => setQ(t)} placeholder="Add a style: Gildan 5000, 3001, Comfort Colors 1717…" aria-label="Search S&S styles" />
+              <SearchInput value={q} onChange={(e) => setQ(e.target.value)} onDictated={(t) => setQ(t)} placeholder="Add a style" aria-label="Search S&S styles" />
               {hits.length > 0 && <span className="og-hits wide">{hits.map((h) => <button key={h.styleID} type="button" onClick={() => openStyle(h)}>{h.image && <img src={h.image} alt="" />}<span><b>{h.brand} {h.style}</b> {h.title}</span></button>)}</span>}
             </span>
           </div>

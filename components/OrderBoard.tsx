@@ -58,7 +58,7 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
     <div className="ob">
       <div className="bd-bar">
         {mineProp === undefined && <div className="rv-seg" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>}
-        <SearchInput placeholder="Find a job: #, name, customer, PO…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <SearchInput placeholder="Find a job" value={q} onChange={(e) => setQ(e.target.value)} />
         <span className="faint bd-count">{shown.filter((o) => cols.some((c) => c.k === o.status)).length} jobs{mine ? " on your accounts" : ""}</span>
         <span className="spacer" />
         <label className="check"><input type="checkbox" checked={showQuotes} onChange={(e) => setShowQuotes(e.target.checked)} /> Show quotes</label>

@@ -27,7 +27,7 @@ export default function JobPicker({ jobs, tasks, stations, mates, busy, startLab
   if (!job) return (
     <div className="jp">
       <div className="jp-h"><b>Which order?</b><button type="button" className="jp-x" onClick={onCancel} aria-label="Cancel">✕</button></div>
-      <input className="jp-find" autoFocus inputMode="search" placeholder="Type or scan the order #, or a customer" value={q} onChange={(e) => setQ(e.target.value)}
+      <input className="jp-find" autoFocus inputMode="search" placeholder="Order # or customer" value={q} onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && list[0]) setJob(list[0]); }} />
       {jobs === null ? <div className="jp-none">Loading jobs…</div> : (
         <div className="jp-jobs">{list.map((j) => (

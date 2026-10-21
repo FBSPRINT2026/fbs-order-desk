@@ -133,7 +133,7 @@ export default function ShippingCenter() {
           <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
           <button type="button" className={tab === "transit" ? "on" : ""} onClick={() => setTab("transit")}>Transit Map</button>
         </div>
-        {tab === "ready" && <label className="aa-search"><SearchInput placeholder="Search order, customer, city" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
+        {tab === "ready" && <label className="aa-search"><SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 
       {tab === "overview" ? (

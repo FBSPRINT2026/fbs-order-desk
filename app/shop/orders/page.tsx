@@ -175,7 +175,7 @@ export default function OrdersPage() {
           <option value="">Any status</option>
           {STATUSES.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
-        <SearchInput placeholder="Search #, customer, garment, color, print details… (includes Printavo orders)" value={q} onChange={(e) => setQ(e.target.value)} />
+        <SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} />
         {canBulk && !picking && <button type="button" className="btn" onClick={() => { setPicking(true); setBulkMsg(""); }}>Select</button>}
       </div>
       {canBulk && picking && <div className="bulk-bar" role="toolbar" aria-label="Selected orders">

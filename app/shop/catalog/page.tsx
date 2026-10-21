@@ -162,7 +162,7 @@ export default function CatalogPage() {
           </div>
         )}
       </section>
-      <div className="toolbar"><SearchInput placeholder="Search style, brand, color…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      <div className="toolbar"><SearchInput placeholder="Search styles" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <div className="tbl-wrap">
         <table className="tbl" style={{ minWidth: 860 }}>
           <thead><tr><th>Style #</th><th>Brand</th><th>Description</th><th>Colors</th><th>Sizes</th><th className="r">Your cost</th><th /></tr></thead>

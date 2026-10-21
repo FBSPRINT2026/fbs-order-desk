@@ -246,7 +246,7 @@ export default function InkRoom() {
             {tab === "stock" ? (
               <>
                 <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                  <input className="ink-q" type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Find a stock color: Bora Bora, Monarch, 186…" aria-label="Find a stock color" style={{ flex: 1 }} />
+                  <input className="ink-q" type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Find a stock color" aria-label="Find a stock color" style={{ flex: 1 }} />
                   {canStock && <button type="button" className={"btn" + (choosing ? " primary" : "")} onClick={() => { setChoosing(!choosing); setEdit(null); }} aria-pressed={choosing}>{choosing ? "Done choosing" : "Choose what we stock"}</button>}
                   {canStock && !choosing && <button type="button" className="btn" onClick={startAdd}>+ Add stock color</button>}
                 </div>
@@ -272,7 +272,7 @@ export default function InkRoom() {
                 ))}
               </>
             ) : (<>
-            <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a color: 186, 7527, Cool Gray 7, Warm Red…" aria-label="Find a color" autoFocus />
+            <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a color" aria-label="Find a color" autoFocus />
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
               <span className="faint" style={{ fontSize: 13 }}>{ready} colors read from IMS so far. More are added as they're read.</span>
             </div>

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
  * Pick a customer by typing part of the company, name or email (645+ customers: searched, not listed).
  * Shows the picked one as a chip with × to clear.
  */
-export default function CustomerPick({ value, label, onPick, placeholder = "Customer (type to search)", disabled, compact }: {
+export default function CustomerPick({ value, label, onPick, placeholder = "Customer", disabled, compact }: {
   value: string | null; label?: string; onPick: (id: string | null, label: string) => void; placeholder?: string; disabled?: boolean; compact?: boolean;
 }) {
   const sb = useMemo(() => createClient(), []);

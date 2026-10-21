@@ -191,7 +191,7 @@ function ClipArtPanel({ onAdd }: { onAdd: (ic: ClipIcon) => void }) {
     <div className="il-panel-b">
       <label className="il-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-        <SearchInput placeholder="Search clip art: football, eagle, cross…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clip art" />
+        <SearchInput placeholder="Search clip art" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clip art" />
       </label>
       <div className="il-seg" role="group" aria-label="Art style">
         {([["all", "All"], ["one", "One color"], ["full", "Full color"]] as const).map(([k, t]) => <button key={k} type="button" className={style === k ? "on" : ""} onClick={() => setStyle(k)}>{t}</button>)}

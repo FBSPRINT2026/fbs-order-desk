@@ -280,7 +280,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
       <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
         <svg className="side-ai" viewBox="0 0 24 24" aria-hidden><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z" /></svg>
-        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask AI or search…" aria-label="Ask AI or search orders, customers, artwork, shipments"
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask or search" aria-label="Ask AI or search orders, customers, artwork, shipments"
           onDictated={(t) => { const x = t.trim(); if (x) router.push(`/shop/search?q=${encodeURIComponent(x)}`); }} />
       </form>
       <nav className="nav">

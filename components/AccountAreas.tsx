@@ -391,7 +391,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
               <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l}<span className="chip-n">{lists[k].length}</span></button>
             ))}
           </div>
-          {search(oFilter === "quotes" ? "Search quotes" : "Search #, name, garment, color…")}
+          {search(oFilter === "quotes" ? "Search quotes" : "Search orders")}
         </div>
         <div className="tbl-wrap">
           <table className="tbl">
@@ -468,7 +468,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </div>
       </>
     );
-  } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes: number, name, garment, color…")}{orderTable(quotes, "quote")}</>;
+  } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes")}{orderTable(quotes, "quote")}</>;
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
@@ -476,7 +476,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const shownQ = oldQuotes ? quotes : recentQ;
     const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent").length;
     body = <>
-      {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search quotes and orders: number, name, garment, color, print…")}
+      {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search orders")}
       {/* the Quotes section and its checkbox stay even with no quotes (Oct 15, Nick) */}
       <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
         <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
@@ -485,7 +485,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       {orderTable(invoices, "invoice")}
     </>;
   } else if (area === "orders" || area === "invoices") body = <>
-    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders: number, name, garment, color, print details…")}
+    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
     const open = liveInvoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
@@ -526,7 +526,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </tbody>
       </table>
     );
-    const searchBox = search("Search by order number, method or amount");
+    const searchBox = search("Search payments");
     body = <>
       <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>{!canPay && searchBox}</div>
       {(statementHref || onEmailStatement) && (
@@ -604,7 +604,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           const shown = list.slice(pg * PERH, pg * PERH + PERH);
           return (<>
             <div className="aa-sec-h ph-h"><h3>Payment history</h3>
-              <label className="aa-search ph-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={15} /><SearchInput placeholder="Amount, order # or method" value={hq} onChange={(e) => { setHq(e.target.value); setHp(0); }} aria-label="Search payment history" /></label>
+              <label className="aa-search ph-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={15} /><SearchInput placeholder="Search payments" value={hq} onChange={(e) => { setHq(e.target.value); setHp(0); }} aria-label="Search payment history" /></label>
             </div>
             <table className="aa-tbl ph">
               <thead><tr><th>Date</th><th>Paid for</th><th>Method</th><th className="r">Amount</th></tr></thead>
@@ -764,7 +764,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     body = <>
       <div className="aa-home">
       <div className="aa-home-main stack">
-      {tableHead(<h2>Artwork</h2>, "Search by logo number (D-10004), name, ink or order")}
+      {tableHead(<h2>Artwork</h2>, "Search logos")}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {(brandColors.length > 0 || brandEditor) && (
         <div className="aa-card">
@@ -872,7 +872,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     </>;
   } else if (area === "receive") {
     body = <>
-      {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search by order number or name")}
+      {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search orders")}
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
   else if (area === "projects" && projectsPanel) body = <>
