@@ -366,16 +366,23 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
                 <div className="jv-cc-art-colors">
                   <h3 className="jv-cc-h">Detected colors</h3>
                   <div className="jv-cc-hint">The colors found in the art. To combine two, pick the same screen for both (e.g. set PMS 7506 C to the screen PMS 475 C is on); a color on its own screen prints by itself.</div>
-                  {p.plan.map((k) => (
-                    <div key={k.hex} className="jv-ac">
-                      <span className="jv-sw" style={{ background: k.hex }} />
-                      <span className="jv-ac-n">{k.name}<span className="faint"> {k.hex}</span></span>
-                      <select value={assign[k.hex] ?? 0} onChange={(e) => setAssigned(k.hex, +e.target.value)} aria-label={`Screen for ${k.name}`}>
-                        {screens.map((x, i) => <option key={i} value={i}>Screen {i + 1}: {x.name}</option>)}
-                        <option value={screens.length}>A screen of its own</option>
-                      </select>
-                    </div>
-                  ))}
+                  <div className="jv-ac jv-ac-head"><span /><span>Art color</span><span className="jv-ac-c">Combined</span><span title="Pick the same screen for two colors to print them together">Screen · ⇄ same screen = combined</span></div>
+                  {p.plan.map((k) => {
+                    const sc = assign[k.hex] ?? 0;
+                    // the other art colors on the same screen (combined with this one)
+                    const with_ = p.plan.filter((o) => o.hex !== k.hex && (assign[o.hex] ?? 0) === sc);
+                    return (
+                      <div key={k.hex} className={"jv-ac" + (with_.length ? " joined" : "")}>
+                        <span className="jv-sw" style={{ background: k.hex }} />
+                        <span className="jv-ac-n">{k.name}<span className="faint"> {k.hex}</span></span>
+                        <span className="jv-ac-c">{with_.length ? <span className="jv-join" title={`Prints on screen ${sc + 1} together with ${with_.map((o) => o.name).join(", ")}`}>⇄ with {with_.map((o) => o.name).join(", ")}</span> : <span className="faint">its own screen</span>}</span>
+                        <select value={sc} onChange={(e) => setAssigned(k.hex, +e.target.value)} aria-label={`Screen for ${k.name} (pick another color's screen to combine them)`}>
+                          {screens.map((x, i) => <option key={i} value={i}>Screen {i + 1}: {x.name}</option>)}
+                          <option value={screens.length}>A screen of its own</option>
+                        </select>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               <h3 className="jv-cc-h">How we printed it</h3>
@@ -388,7 +395,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
                     <input type="color" value={x.hex} onChange={(e) => setScreen(i, { hex: e.target.value.toUpperCase() })} aria-label={`Screen ${i + 1} color`} />
                     <div className="jv-scr-b">
                       <input value={x.name} list="jv-pms" onChange={(e) => { const name = e.target.value; const h = colorHex(name); setScreen(i, { name, ...(h ? { hex: h.toUpperCase() } : {}) }); }} aria-label={`Screen ${i + 1} ink`} placeholder="PMS 475 C, White, or a custom name" />
-                      <input value={x.mix} onChange={(e) => setScreen(i, { mix: e.target.value })} placeholder="Custom mix? e.g. half PMS 475 C, half PMS 7506 C" aria-label={`Screen ${i + 1} mix`} />
+                      <input value={x.mix} onChange={(e) => setScreen(i, { mix: e.target.value })} placeholder="Custom mix (optional)" aria-label={`Screen ${i + 1} mix`} />
                       {on.length > 1 && <span className="faint">Prints {on.map((k) => k.name).join(" + ")}{!x.mix && <> · <button type="button" className="linkbtn" onClick={() => setScreen(i, { name: `Custom ${on.map((k) => k.name.replace(/^PMS /, "").replace(/ C$/, "")).join("/")}`, hex: on.slice(1).reduce((h, k) => avgHex(h, k.hex), on[0].hex), mix: `half ${on[0].name}, half ${on[1].name}${on.length > 2 ? `, plus ${on.slice(2).map((k) => k.name).join(", ")}` : ""}` })}>Mix them half and half</button></>}</span>}
                     </div>
                     {!p.plan.length && <button type="button" className="jv-x" aria-label={`Remove screen ${i + 1}`} onClick={() => setScreens((a) => a.filter((_, j) => j !== i))}>×</button>}
