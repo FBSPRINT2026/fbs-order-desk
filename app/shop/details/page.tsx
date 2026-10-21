@@ -41,7 +41,9 @@ const guessOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || ""
 
 export default function ProductionDetailsPage() {
   const sb = useMemo(() => createClient(), []);
-  const { role } = useRole();
+  const { role, realRole } = useRole();
+  // Nick and Jose: the production view (Oct 21)
+  const prodView = realRole === "owner" || realRole === "production";
   const canConfirm = !role || ["owner", "admin", "production"].includes(role);
   const open0 = useSearchParams().get("order");
   const [tab, setTab] = useState<"waiting" | "done">("waiting");
@@ -147,6 +149,7 @@ export default function ProductionDetailsPage() {
                   <span className="pdd-tag">{DETAILS_LABEL}</span>
                   <span className="pdd-side faint">{prints.length} print{prints.length === 1 ? "" : "s"} · due {day(r.due_date)}</span>
                 </button>
+                {prodView && <div className="pdd-pv"><Link href={`/shop/orders/${r.id}/production`} className="btn primary sm">Open in production view</Link><span className="faint">the mockup, film, press setup and photos in one view</span></div>}
                 {isOpen && (
                   <div className="pdd-body">
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
@@ -178,7 +181,9 @@ export default function ProductionDetailsPage() {
                     })}
                     {msg?.bad && msg.id === r.id && <div className="err">{msg.text}</div>}
                     <div className="pdd-foot">
-                      <Link href={`/shop/orders/${r.id}`} className="linkbtn">Open the order</Link>
+                      <Link href={`/shop/orders/${r.id}?view=admin`} className="linkbtn">Open the order</Link>
+                      {/* the whole job in one view: mockup, film, press setup, photos (Oct 21, Nick) */}
+                      {prodView && <Link href={`/shop/orders/${r.id}/production`} className="btn">Open in production view</Link>}
                       <span className="spacer" />
                       {canConfirm ? <button type="button" className="btn primary" disabled={busy === r.id} onClick={() => save(r)}>{busy === r.id ? "Saving…" : `Confirm details for #${r.number}`}</button>
                         : <span className="faint">Production confirms these.</span>}
