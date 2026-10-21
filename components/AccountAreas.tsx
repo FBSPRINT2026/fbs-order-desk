@@ -15,11 +15,13 @@ import RecordPayment from "@/components/RecordPayment";
 import type { PayFilter } from "@/lib/paySelect";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import { Pill } from "@/components/bits";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
-  /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string };
+  /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
+  /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
@@ -354,40 +356,42 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const lookLabel = { request: "Request to price", draft: "Not sent yet", quote: "Quote waiting on them", art: "Art waiting on them", pay: "", receive: "" } as const;
     body = (
       <>
-        <div className="cx-sum">
-          <span><span className="k">In progress</span> <b>{inWork.length}</b></span>
-          <span><span className="k">Open quotes</span> <b>{sentQ.length}</b>{sentQ.length ? <span className="k"> ({money(openQuotes)})</span> : null}</span>
-          <span><span className="k">Owes</span> <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b>{owedList.length > 0 && owedList.length <= 3 ? <span className="k"> ({owedList.map((o) => "#" + o.number).join(", ")})</span> : null}{overdue > 0.004 ? <span className="aa-due"> · {money(overdue)} overdue</span> : null}</span>
-          <span><span className="k">Lifetime</span> <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> <span className="k">· {invoices.length} order{invoices.length === 1 ? "" : "s"}</span></span>
+        {/* the same number strip, toolbar and table as the Orders page (Oct 21, Nick: "a common theme") */}
+        <div className="stats">
+          <button type="button" className="stat" onClick={() => setOrdF("active")}><span className="v">{inWork.length}</span><span className="k">Jobs in progress</span></button>
+          <button type="button" className="stat money-only" onClick={() => setOrdF("quotes")}><span className="v">{money(openQuotes)}</span><span className="k">{sentQ.length} open quote{sentQ.length === 1 ? "" : "s"}</span></button>
+          <button type="button" className="stat money-only" onClick={() => go("payments")}><span className={"v" + (overdue > 0.004 ? " alert" : "")}>{money(due)}</span><span className="k">{due > 0.004 ? `Owed${owedList.length && owedList.length <= 3 ? ` on ${owedList.map((o) => "#" + o.number).join(", ")}` : ""}${overdue > 0.004 ? ` · ${money(overdue)} overdue` : ""}` : "Nothing owed"}</span></button>
+          <button type="button" className="stat money-only" onClick={() => setOrdF("done")}><span className="v">{money(invoices.reduce((a, o) => a + o.total, 0))}</span><span className="k">Lifetime · {invoices.length} order{invoices.length === 1 ? "" : "s"}</span></button>
         </div>
         {look.length > 0 && (
           <div className="cx-look"><span className="k">Needs a look</span>
             {look.map((a, i) => <Link key={a.kind + a.order_id + i} href={!a.number && a.href ? a.href : orderHref(a.order_id, a.hash)} className="cx-look-i">{lookLabel[a.kind]}{a.number ? ` #${a.number}` : ""}</Link>)}
           </div>
         )}
-        <div className="cx-bar">
-          <div className="cx-chips" role="tablist" aria-label="Which orders">
+        <div className="toolbar">
+          <div className="chips">
             {(([["active", "Active"], ["quotes", "Quotes"], ["done", "Done"]]) as const).map(([k, l]) => (
-              <button key={k} type="button" role="tab" aria-selected={oFilter === k} className={oFilter === k ? "on" : ""} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l} <span>{lists[k].length}</span></button>
+              <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l} {lists[k].length}</button>
             ))}
           </div>
-          {search(oFilter === "quotes" ? "Search quotes" : "Search orders: number, name, garment, color…")}
+          {search(oFilter === "quotes" ? "Search quotes" : "Search #, name, garment, color…")}
         </div>
-        <div className="aa-card aa-tblcard">
-          <table className="aa-tbl cx-tbl">
-            <thead><tr><th>#</th><th>{oFilter === "quotes" ? "Quote" : "Order"}</th><th>Status</th><th>{oFilter === "quotes" ? "Created" : "In hands"}</th>{showBal && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>{oFilter === "quotes" ? "Created" : "Due"}</th><th className="r">Pcs</th>{showBal && <th className="r money-only">Balance</th>}<th className="r money-only">Total</th></tr></thead>
             <tbody>
               {P.items.map((o) => (
-                <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
-                  <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                  <td className="m"><span className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</span>{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</td>
-                  <td>{pill(o)}</td>
-                  <td className="dt" data-l={oFilter === "quotes" ? "Created" : "In hands"}>{oFilter === "quotes" ? when(o.created_at) : when(o.due_date) || "—"}</td>
-                  {showBal && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : ""}</td>}
-                  <td className="r num b" data-l="Total">{money(o.total)}</td>
+                <tr key={o.id} tabIndex={0} onClick={() => router.push(orderHref(o.id))} onKeyDown={(e) => e.key === "Enter" && router.push(orderHref(o.id))}>
+                  <td><span className="ordno">{o.number}</span></td>
+                  <td><div>{o.nickname || "Untitled Job"}{o.archived && <span className="aa-arch">Printavo</span>}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
+                  <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
+                  <td>{oFilter === "quotes" ? when(o.created_at) : when(o.due_date) || <span className="faint">No date</span>}</td>
+                  <td className="r">{o.qty}</td>
+                  {showBal && <td className="r money-only"><span className={"bal" + (o.archived || o.balance <= 0.004 ? " paid" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : "Paid"}</span></td>}
+                  <td className="r money-only">{money(o.total)}</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={6}><div className="aa-empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "active" ? "Nothing in progress right now." : oFilter === "quotes" ? "No quotes." : "No finished orders yet."}</div></td></tr>}
+              {!rows.length && <tr><td colSpan={7}><div className="empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "active" ? "Nothing in progress right now." : oFilter === "quotes" ? "No quotes." : "No finished orders yet."}</div></td></tr>}
             </tbody>
           </table>
         </div>
@@ -860,27 +864,37 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   else if (area === "designs" && designsPanel) body = designsPanel;
 
   return (
-    <div className="aa">
+    <div className={"aa" + (mode === "shop" ? " aa-shop" : "")}>
+      {mode === "shop" ? (
+        <nav className="toolbar aa-shopnav" aria-label="Customer sections">
+          <div className="chips">
+            {AREAS.filter((a) => a.show !== false).map((a) => (
+              <button key={a.id} type="button" className={"chip" + (area === a.id ? " on" : "")} onClick={() => { go(a.id); setQ(""); }}>{a.label}{a.n ? <span className="chip-n">{a.n}</span> : null}</button>
+            ))}
+            {(() => {
+              const more = [
+                !!programPanel && !hasProgram && area !== "program" ? { id: "program" as Area, label: "Turn on program pricing" } : null,
+                !!projectsPanel && !(projectsCount || 0) && area !== "projects" ? { id: "projects" as Area, label: "Add a project" } : null,
+                !!goodsPanel && area !== "receive" ? { id: "receive" as Area, label: `Customer goods${goodsCount ? ` (${goodsCount})` : ""}` } : null,
+              ].filter(Boolean) as { id: Area; label: string }[];
+              return more.length ? (
+                <>
+                  <button type="button" className="chip" aria-expanded={!!moreOpen} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMoreOpen((x) => (x ? null : { top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })); }}>More ▾</button>
+                  {moreOpen && <><span className="cx-more-bg" onClick={() => setMoreOpen(null)} /><span className="cx-more-m" role="menu" style={{ top: moreOpen.top, right: moreOpen.right }}>{more.map((m) => <button key={m.id} type="button" role="menuitem" onClick={() => { setMoreOpen(null); go(m.id); setQ(""); }}>{m.label}</button>)}</span></>}
+                </>
+              ) : null;
+            })()}
+          </div>
+        </nav>
+      ) : (
       <nav className="aa-nav" aria-label="Account areas">
-        {mode === "shop" && (() => {
-          const more = [
-            !!programPanel && !hasProgram && area !== "program" ? { id: "program" as Area, label: "Turn on program pricing" } : null,
-            !!projectsPanel && !(projectsCount || 0) && area !== "projects" ? { id: "projects" as Area, label: "Add a project" } : null,
-            !!goodsPanel && area !== "receive" ? { id: "receive" as Area, label: `Customer goods${goodsCount ? ` (${goodsCount})` : ""}` } : null,
-          ].filter(Boolean) as { id: Area; label: string }[];
-          return more.length ? (
-            <span className="cx-more" style={{ order: 99 }}>
-              <button type="button" className="aa-tab" aria-expanded={!!moreOpen} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMoreOpen((x) => (x ? null : { top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })); }}><Ico d="M5 12h.01M12 12h.01M19 12h.01" /><span>More</span></button>
-              {moreOpen && <><span className="cx-more-bg" onClick={() => setMoreOpen(null)} /><span className="cx-more-m" role="menu" style={{ top: moreOpen.top, right: moreOpen.right }}>{more.map((m) => <button key={m.id} type="button" role="menuitem" onClick={() => { setMoreOpen(null); go(m.id); setQ(""); }}>{m.label}</button>)}</span></>}
-            </span>
-          ) : null;
-        })()}
         {AREAS.filter((a) => a.show !== false).map((a) => (
           <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
             <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}
       </nav>
+      )}
       <section className="aa-body">{body}</section>
     </div>
   );

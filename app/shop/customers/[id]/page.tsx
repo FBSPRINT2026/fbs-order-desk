@@ -187,7 +187,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head" style={{ marginTop: 8 }}>
         <div><h1>{c.company || c.name || "New Customer"}</h1>
-          <div className="cx-facts">{[c.company ? c.name : "", c.email, c.phone ? fmtPhone(c.phone) : "", c.price_type === "wholesale" ? "Wholesale" : "Retail", PAY_TERMS[c.payment_terms || "receipt"], c.tax_exempt ? "Tax exempt" : ""].filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}{c.is_test ? <span className="ta-tag">Test account</span> : null}</div></div>
+          <div className="eyebrow cx-facts">{[c.company ? c.name : "", c.email, c.phone ? fmtPhone(c.phone) : "", c.price_type === "wholesale" ? "Wholesale" : "Retail", PAY_TERMS[c.payment_terms || "receipt"], c.tax_exempt ? "Tax exempt" : ""].filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}{c.is_test ? <span className="ta-tag">Test account</span> : null}</div></div>
         <div className="row">
           <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
@@ -311,7 +311,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
           if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
           return out;
-        })} orders={[...os.map((o) => ({ ...o, search: orderSearchText(o), nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
+        })} orders={[...os.map((o) => ({ ...o, search: orderSearchText(o), nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null, pv: pvStatusOf(o as never) })),
           ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
