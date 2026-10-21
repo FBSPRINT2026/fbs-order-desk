@@ -26,7 +26,8 @@ async function sanmarSearch(q: string): Promise<Hit[]> {
   const words = q.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9\-+&\/]/g, "")).filter((w) => w.length >= 1).slice(0, 5);
   if (!words.length) return [];
   const stripped = words.length === 1 ? words[0].replace(/^[a-z]{1,2}(?=\d)/, "") : "";
-  const ors = (w: string) => altsOf(w).flatMap((a) => [`style.ilike.${a}%`, `title.ilike.%${a}%`, `brand.ilike.%${a}%`]);
+  // a number matches anywhere in the style (Oct 21, Nick: "3142" should find A4's A4N3142)
+  const ors = (w: string) => altsOf(w).flatMap((a) => [/\d/.test(a) ? `style.ilike.%${a}%` : `style.ilike.${a}%`, `title.ilike.%${a}%`, `brand.ilike.%${a}%`]);
   const admin = createAdminClient();
   type Row = { style: string; brand: string; title: string; image: string };
   // all the words (each word its own condition, so the database narrows it: no arbitrary first 400 rows)
@@ -46,6 +47,9 @@ async function sanmarSearch(q: string): Promise<Hit[]> {
     const st = lc(r.style);
     if (st === full || st === stripped || `${lc(r.brand)} ${st}` === full) return 0;
     if (words.some((w) => st.startsWith(w)) || (stripped && st.startsWith(stripped))) return 1;
+    // the number is the end of the style (3142 → A4N3142), or inside it
+    if (words.some((w) => /\d/.test(w) && st.endsWith(w))) return 1.5;
+    if (words.some((w) => /\d/.test(w) && st.includes(w))) return 1.8;
     return 2;
   };
   return rows
@@ -71,6 +75,9 @@ export async function GET(req: Request) {
   // exact style matches from either supplier first, then the rest of S&S, then the rest of SanMar
   const t = q.toLowerCase(), stripped = t.replace(/^[a-z]{1,2}(?=\d)/, "");
   const exact = (h: Hit) => [t, stripped].includes(h.style.toLowerCase()) || `${h.brand} ${h.style}`.toLowerCase() === t;
-  const results = [...a.filter(exact), ...b.filter(exact), ...a.filter((h) => !exact(h)), ...b.filter((h) => !exact(h))].slice(0, 45);
+  // a style number typed without its brand letters (3142 → A4N3142, 5000 → G5000): right after the exact ones
+  const ends = (h: Hit) => /^\d{3,}[a-z]?$/.test(t) && h.style.toLowerCase().endsWith(t) && !exact(h);
+  const rest = (h: Hit) => !exact(h) && !ends(h);
+  const results = [...a.filter(exact), ...b.filter(exact), ...a.filter(ends), ...b.filter(ends), ...a.filter(rest).slice(0, 20), ...b.filter(rest), ...a.filter(rest).slice(20)].slice(0, 45);
   return NextResponse.json({ results });
 }
