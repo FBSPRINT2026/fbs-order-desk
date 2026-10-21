@@ -1260,7 +1260,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
             <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
           </div>
-          <div className={"sep-stage" + ((bg === "checker" || noShirt) && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : undefined }}>
+          <div className={"sep-stage" + (bg === "checker" && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : bg === "checker" ? undefined : "#fff" }}>
             {films && res && <FilmsView plates={plates} w={res.w} h={res.h} onOpen={(k) => { setSolo(k); setLoupe(null); }} />}
             <div className={"sep-canvases" + (films ? " gone" : "")}>
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
