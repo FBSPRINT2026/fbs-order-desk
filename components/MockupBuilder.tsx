@@ -895,7 +895,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
   /** a print's proportions: the art as it prints (cut down when a color was removed), else the design's */
-  const ratioIm = (im: Imprint) => { const b = paintBox[im.id]; return b?.w && b.h ? b.h / b.w : ratioIm(im); };
+  const ratioIm = (im: Imprint) => { const b = paintBox[im.id]; return b?.w && b.h ? b.h / b.w : ratioOf(designOf(im)); };
   const ratioOf = (d?: Design) => {
     const t = d ? trims[d.id] || d.art_box || null : null;
     if (t?.w && t.h) return t.h / t.w;
