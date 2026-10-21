@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import ImprintSpecs from "@/components/ImprintSpecs";
 import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
-import { Pill } from "@/components/bits";
+import { Pill, pvStatusOf } from "@/components/bits";
+import { customerStatus, type Flag } from "@/lib/orderStages";
 import { MessageThread, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import PayPanel from "@/components/PayPanel";
 import { fmtPhone } from "@/lib/phone";
@@ -19,6 +20,17 @@ const STEPS: { label: string; keys: string[] }[] = [
   { label: "Garments", keys: ["blanks"] },
   { label: "Printing", keys: ["production"] },
   { label: "Ready", keys: ["ready"] },
+  { label: "Done", keys: ["completed"] },
+];
+// orders run here (not from Printavo): the customer statuses (Oct 21, the order statuses doc). The shop's steps
+// (goods, film, screens, press) are never shown: it's all "In production"
+const CSTEPS: { label: string; keys: string[] }[] = [
+  { label: "Requested", keys: ["request"] },
+  { label: "Quote", keys: ["quote", "quote_sent", "changes"] },
+  { label: "Approved", keys: ["approved"] },
+  { label: "Proof", keys: ["proof"] },
+  { label: "In production", keys: ["production", "waiting", "delayed"] },
+  { label: "Ready", keys: ["ready", "shipped", "delivered"] },
   { label: "Done", keys: ["completed"] },
 ];
 
@@ -54,7 +66,11 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
     if (!count) await admin.from("order_events").insert({ order_id: id, kind: "viewed", detail: "", actor: ctx.email });
   }
 
-  const curIdx = STEPS.findIndex((s) => s.keys.includes(o.status));
+  // the customer status, for orders run here; a Printavo-run job keeps its old wording
+  const runHere = !pvStatusOf(o as never);
+  const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method }, { proofSent: proofs.length > 0 }) : null;
+  const steps = cs ? CSTEPS : STEPS;
+  const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
   const pendingProofs = proofs.filter((x) => x.status === "pending");
   const deposit = Math.min(c.balance, Math.round(c.total * ctx.settings.depositPct) / 100);
   const canPay = o.type === "invoice" && c.balance > 0.004;
@@ -71,7 +87,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <div className="muted" style={{ marginTop: 6 }}>{c.qty} pieces{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}{o.po_number ? ` · PO ${o.po_number}` : ""}{o.delivery_method === "ship" ? " · shipping" : o.delivery_method === "deliver" ? " · delivery" : ""}{o.tracking ? ` · tracking ${o.tracking}` : ""}</div>
           </div>
           <div className="row">
-            <Pill status={o.status} portal />
+            {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
             {o.type === "invoice" && <ReorderButton orderId={o.id} disabled={preview} />}
             <a className="btn" href={`/print/${o.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} target="_blank" rel="noreferrer">Print or save PDF</a>
           </div>
@@ -79,7 +95,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
 
         <div className="panel"><div className="panel-b">
           <div className="stepper" aria-label="Order progress">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <div key={s.label} className={"step" + (i < curIdx ? " done" : "") + (i === curIdx ? " cur" : "")}>
                 <span className="dot">{i < curIdx ? "✓" : ""}</span>{s.label}
               </div>
@@ -87,6 +103,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div></div>
 
+        {cs && (cs.key === "waiting" || cs.key === "delayed") && <div className={"callout" + (cs.key === "waiting" ? " warn" : "")}><h2>{cs.label}</h2><div className="muted">{cs.text}</div></div>}
         {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
 
