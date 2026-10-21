@@ -1,5 +1,6 @@
 "use client";
 import { pdfPicture } from "@/lib/printavoArt";
+import { isPsd, psdPicture } from "@/lib/psdPic";
 
 /**
  * Pictures for the designs catalog (Oct 20, Nick: "default to be mock-ups… just don't let the thumbnail be a S&S
@@ -7,10 +8,12 @@ import { pdfPicture } from "@/lib/printavoArt";
  * job's files mix our mockup with the S&S purchase order. Each file is drawn here (a PDF's first page) and scored by
  * how much of it is solid picture: shirts and photos are big solid areas, an order page is thin text and table lines.
  */
-export const isPdf = (url: string) => /\.pdf(\?|$)/i.test(url.split("?")[0]) || /\.pdf\?/i.test(url);
+export const isPdf = (url: string) => /\.(pdf|ai)(\?|$)/i.test(url.split("?")[0]) || /\.(pdf|ai)\?/i.test(url);
 
 export async function drawPic(url: string, width = 900): Promise<HTMLCanvasElement | null> {
   try {
+    // a Photoshop file: its flattened picture (lib/psdPic.ts)
+    if (isPsd(url)) { const r = await fetch(url); if (!r.ok) return null; return await psdPicture(await r.arrayBuffer(), width); }
     if (isPdf(url)) {
       const r = await fetch(url); if (!r.ok) return null;
       return await pdfPicture(await r.arrayBuffer(), width);

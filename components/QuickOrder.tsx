@@ -14,6 +14,7 @@ import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 import { pdfPicture } from "@/lib/printavoArt";
+import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
@@ -432,7 +433,8 @@ async function drawFile(url: string, name: string, type: string): Promise<Drawn 
   const r = await fetch(url); if (!r.ok) return null;
   const b = await r.blob();
   const pdfish = /pdf|illustrator/i.test(b.type || type) || /\.(pdf|ai)$/i.test(name);
-  const c = pdfish ? await pdfPicture(await b.arrayBuffer(), 1400).catch(() => null) : /^image\/(png|jpe?g|gif|webp)/i.test(b.type) || /\.(png|jpe?g|gif|webp)$/i.test(name) ? await drawPic(URL.createObjectURL(b), 1400) : null;
+  // a Photoshop file: its flattened picture (Oct 21, Nick: "I can't figure out if it's a front or a back without the image")
+  const c = isPsd(name, b.type || type) ? await psdPicture(await b.arrayBuffer(), 1400).catch(() => null) : pdfish ? await pdfPicture(await b.arrayBuffer(), 1400).catch(() => null) : /^image\/(png|jpe?g|gif|webp)/i.test(b.type) || /\.(png|jpe?g|gif|webp)$/i.test(name) ? await drawPic(URL.createObjectURL(b), 1400) : null;
   if (!c) return { cut: null, cutUrl: "", asIs: null, asIsUrl: "", raw: new File([b], name, { type: b.type }) };
   const asIs = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
   knockOutBackground(c, 28, true);
@@ -488,6 +490,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         olds = help.files.map((f, i) => ({ name: realName(f.name, f.path), path: f.path, url: data?.[i]?.signedUrl || "", type: /\.pdf$/i.test(f.path) ? "application/pdf" : "image" })).filter((x) => x.url);
       }
       if (!live) return;
+      // never Printavo's stand-in icon for a file it couldn't show (ico-document.png): it isn't one of the job's files
+      olds = olds.filter((o) => !/(^|[-/])i?co-document-[0-9a-f]{16,}/i.test(`${o.name} ${o.path}`));
       setOld(olds); setFound(j.found || []);
       if (!olds.length) setElseOpen(true);
       for (const [k, f] of olds.entries()) {

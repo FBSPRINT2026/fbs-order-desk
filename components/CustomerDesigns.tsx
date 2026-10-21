@@ -5,6 +5,7 @@ import { useSticky } from "@/lib/useSticky";
 import type { AiMerge, AiSplit, Catalog, CatalogDesign, CatalogJob, Kind } from "@/lib/designCatalog";
 import { coverJpeg, drawPic, isPdf, picRank } from "@/lib/pdfPic";
 import { pdfPicture } from "@/lib/printavoArt";
+import { isPsd } from "@/lib/psdPic";
 
 /**
  * A customer's designs (Oct 20, Nick, Dear Heart Designs: "group orders by design… a master design and then all the
@@ -450,7 +451,7 @@ function ThumbPicker({ d, customerId, onSet, onClose }: { d: CatalogDesign; cust
 function VerPic({ thumb, full }: { thumb: string; full: string }) {
   const [big, setBig] = useState("");
   useEffect(() => {
-    if (!full || !isPdf(full)) return;
+    if (!full || !(isPdf(full) || isPsd(full))) return;
     let live = true;
     void drawPic(full, 700).then((c) => { if (live && c) setBig(picRank(c) > 0 ? coverJpeg(c, 500) : "-"); });
     return () => { live = false; };
@@ -507,7 +508,7 @@ function AiSplitCard({ x, d, busy, change }: { x: AiSplit; d: CatalogDesign; bus
           const pics = [...new Set(js.map((j) => j.pic || "").filter(Boolean))].slice(0, 4);
           return (
             <div key={i} className="dc-ai-g">
-              <div className="dc-ai-pics">{pics.length ? pics.map((p) => <span key={p} className="dc-ai-pic"><VerPic thumb={isPdf(p) ? "" : p} full={p} /></span>) : <span className="dc-ai-pic faint">No mockup</span>}</div>
+              <div className="dc-ai-pics">{pics.length ? pics.map((p) => <span key={p} className="dc-ai-pic"><VerPic thumb={isPdf(p) || isPsd(p) ? "" : p} full={p} /></span>) : <span className="dc-ai-pic faint">No mockup</span>}</div>
               <input value={names[i] || ""} aria-label="Name for this design" onChange={(e) => setNames((a) => a.map((v, k) => (k === i ? e.target.value : v)))} />
               {g.why && <div className="faint dc-ai-why">{g.why}</div>}
               <div className="dc-ai-jobs">{js.map((j) => <Link key={j.ref} href={jobHref(j)} className="dc-job" title={j.title}>#{j.number} · {fmtDate(j.date)}</Link>)}</div>
