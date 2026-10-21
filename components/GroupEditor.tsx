@@ -107,6 +107,34 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     if (sure) { await putYouth(li, null, sure.style, sure.brand, sure.supplier, "catalog"); return; }
     setYth({ li, fix, adult: l.style.trim(), brand: l.brand || "", guesses: j.guesses || [], typed: "", busy: false });
   }
+  /**
+   * "+ Add companion style" (Oct 21, Nick: "should really say Add Companion Style… pop up… the youth is 3001Y, the
+   * women's is this model, the long sleeve is this model, just like SanMar does"): SanMar's companion styles for the
+   * garment, by kind; a pick goes on a new line in the same color. A youth pick is remembered (Add youth's pairs).
+   */
+  type CItem = { style: string; brand: string; title: string; image: string | null; inColor: boolean | null; remembered?: boolean };
+  const [cmp, setCmp] = useState<null | { li: number; busy: boolean; title: string; kinds: { kind: string; items: CItem[] }[]; typed: string; err: string }>(null);
+  async function openCompanions() {
+    const li = adultLi();
+    setYthNote(null); setYth(null);
+    if (li < 0) { setYthNote({ text: "Pick a style first, then Add companion style.", li: -1, youthLi: -1, adult: "", brand: "" }); return; }
+    const l = g.lines[li];
+    setCmp({ li, busy: true, title: "", kinds: [], typed: "", err: "" });
+    const j = await fetch(`/api/garments/companions?style=${encodeURIComponent(l.style.trim())}&brand=${encodeURIComponent(l.brand || "")}&color=${encodeURIComponent(l.color || "")}`).then((r) => r.json()).catch(() => ({ error: "Couldn't reach SanMar." })) as { title?: string; kinds?: { kind: string; items: CItem[] }[]; error?: string };
+    setCmp((c) => (c && c.li === li ? { ...c, busy: false, title: j.title || "", kinds: j.kinds || [], err: j.error || "" } : c));
+  }
+  async function putCompanion(li: number, style: string, brand: string, kind: string, remember: boolean) {
+    const adult = g.lines[li];
+    const st = style.trim().toUpperCase();
+    if (!st) return;
+    const at = g.lines.length;
+    update((x) => { x.lines.push({ ...newGLine(), color: adult.color }); });
+    setCmp(null);
+    const hit = findStyle(st, brand) || findStyle(st) || (onLookup ? await onLookup(st, undefined, "sanmar") : null);
+    onStyle(at, hit?.style || st, hit || undefined);
+    if (remember) void fetch("/api/garments/youth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adult: adult.style, adultBrand: adult.brand, youth: hit?.style || st, youthBrand: hit?.brand || brand, source: "staff" }) }).catch(() => null);
+    setYthNote({ text: `${kind} for ${adult.style}: ${hit?.style || st}${hit?.description ? ` · ${hit.description}` : ""}${remember ? " (remembered for next time)" : ""}`, li, youthLi: kind === "Youth" ? at : -1, adult: adult.style, brand: adult.brand || "" });
+  }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
   const frozen = !!onMockup && !!g.mockupAt && !g.mockupSkipped;
@@ -343,7 +371,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
           <span className="a-de gl-foot"><span className="gl-adds">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
-          <button className="btn sm ghost" type="button" disabled={!!yth?.busy} title="The youth style that goes with this garment, in the same color" onClick={() => void addYouth()}>{yth?.busy ? "Finding the youth style…" : "+ Add youth"}</button>
+          <button className="btn sm ghost" type="button" disabled={!!yth?.busy || !!cmp?.busy} title="The youth, women's, long sleeve… styles that go with this garment, in the same color" onClick={() => void openCompanions()}>{cmp?.busy ? "Finding companion styles…" : "+ Add companion style"}</button>
           </span><span className="lbl2">Total pieces</span></span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
@@ -354,6 +382,45 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             <button type="button" className="btn icon ghost sm" aria-label="Close" onClick={() => setYthNote(null)}>✕</button>
           </div>
         )}
+        {cmp && (() => {
+          const l = g.lines[cmp.li];
+          return (
+            <div className="cmp-bg" role="dialog" aria-modal="true" aria-label="Companion styles" onClick={() => setCmp(null)}>
+              <div className="cmp" onClick={(e) => e.stopPropagation()}>
+                <div className="cmp-h">
+                  <div><b>Companion styles for {l?.brand ? `${l.brand} ` : ""}{l?.style}</b>{cmp.title && <div className="faint">{cmp.title}</div>}</div>
+                  <button type="button" className="btn icon ghost sm" aria-label="Close" onClick={() => setCmp(null)}>✕</button>
+                </div>
+                <div className="cmp-b">
+                  {cmp.busy ? <div className="faint">Asking SanMar…</div> : null}
+                  {!cmp.busy && cmp.err ? <div className="ink-warn">{cmp.err}</div> : null}
+                  {!cmp.busy && !cmp.err && !cmp.kinds.length ? <div className="faint">SanMar doesn&apos;t list companion styles for {l?.style}. Type one below{l?.style ? ", or find the youth style" : ""}.</div> : null}
+                  {cmp.kinds.map((k) => (
+                    <div key={k.kind} className="cmp-k">
+                      <div className="cmp-kh">{k.kind}</div>
+                      <div className="cmp-items">
+                        {k.items.map((x) => (
+                          <button key={x.style} type="button" className="cmp-it" onClick={() => void putCompanion(cmp.li, x.style, x.brand, k.kind, k.kind === "Youth" && !x.remembered)} title={`Add ${x.style} in ${l?.color || "the same color"}`}>
+                            <span className="cmp-pic">{x.image ? <img src={x.image} alt="" loading="lazy" /> : null}</span>
+                            <span className="cmp-t"><b>{x.style}</b><small>{x.title}</small>
+                              {l?.color && x.inColor != null ? <em className={x.inColor ? "ok" : "no"}>{x.inColor ? `Comes in ${l.color}` : `No ${l.color}`}</em> : null}
+                              {x.remembered ? <em className="ok">Picked before</em> : null}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="cmp-f">
+                  <input type="text" value={cmp.typed} placeholder="Another style #" aria-label="Another style number" onChange={(e) => setCmp({ ...cmp, typed: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === "Enter" && cmp.typed.trim()) void putCompanion(cmp.li, cmp.typed, l?.brand || "", "Companion", false); }} />
+                  <button type="button" className="btn sm" disabled={!cmp.typed.trim()} onClick={() => void putCompanion(cmp.li, cmp.typed, l?.brand || "", "Companion", false)}>Add it</button>
+                  {!cmp.busy && !cmp.kinds.some((k) => k.kind === "Youth") && <button type="button" className="btn sm ghost" onClick={() => { const li = cmp.li; setCmp(null); void addYouth(null, li); }}>Find the youth style</button>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         {yth && !yth.busy && (
           <div className="yth-ask">
             <b>Youth style for {yth.brand ? `${yth.brand} ` : ""}{yth.adult}?</b> <span className="faint">It&apos;s remembered for next time.</span>
