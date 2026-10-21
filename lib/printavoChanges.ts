@@ -3,7 +3,7 @@ import { imprintLabel, shopNotes, lineQty, newGLine, SIZES, type GLine, type Ord
 /**
  * What changed in Printavo on a 40,000-series order (the read-back snapshot in orders.printavo_state.pv) compared
  * with our order: each change says what it is and can be accepted onto our order. Used by the order page and the
- * Printavo Sync page.
+ * Printavo Sync page. Only money and quantities come back (BACK); everything else goes one way, from here to Printavo.
  */
 export type PvSnap = {
   at: string; visualId: string; status: string; total: number; productionNote?: string;
@@ -122,9 +122,16 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
   }
   // changes staff chose to ignore stay ignored until Printavo changes that thing again (the text differs then)
   const ignored = new Set(((o as Order & { printavo_state?: { ignored?: string[] } | null }).printavo_state?.ignored) || []);
-  return { changes: changes.filter((c) => !ignored.has(sigOf(c))), info };
+  // Printavo only talks back about money and quantities on orders made here (Oct 21, Nick: "once we create something in
+  // the new system, we want to keep all that detail correct in there… we should just receive payments, update pricing
+  // maybe, maybe quantities… all the other information needs to just talk one way"): prices, quantities, lines added
+  // or taken out, fees, discount and tax. Production notes, print details, art, garments, names, dates, PO and the
+  // customer note never come back. (Payments, the card fee, the status and goods received come in on their own.)
+  return { changes: changes.filter((c) => BACK.has(c.what) && !ignored.has(sigOf(c))), info: info.filter((t) => !/^Print \d+ reads/.test(t)) };
 }
 export const sigOf = (c: Change) => `${c.key}|${c.text}`;
+/** what Printavo may change on an order made here */
+export const BACK = new Set<Change["what"]>(["Quantities", "Price", "Setup fees", "New fee", "Fee amount", "Fee removed", "Discount", "Sales tax", "New line", "Line removed"]);
 
 /** Printavo's card surcharge vs ours: the fees to set when they differ (null when they already match). */
 export function cardFix(o: Order, snap: PvSnap | null) {
