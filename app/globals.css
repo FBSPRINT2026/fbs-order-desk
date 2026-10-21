@@ -11138,3 +11138,4 @@ main.main .aa-card.aa-tblcard{border-radius:var(--r);padding:0}
 /* page titles that aren't in a .page-head still get its color bar */
 main.main .jv-h h1::after{content:"";display:block;background:var(--fbs-fade);height:5px;border-radius:4px;width:calc(100% + 60px);min-width:140px;max-width:100%;margin-top:6px}
 main.main .db-kpis > a:first-child::before{display:none}
+main.main .stat small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}

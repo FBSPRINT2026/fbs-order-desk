@@ -136,8 +136,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   // the Orders tab's Active / Quotes / Done; Texts are in Conversations; Details is a panel the page opens
   const shopArea: Record<string, Area> = { quotes: "home", orders: "home", invoices: "home", texts: "messages", details: "home" };
   const area: Area = mode === "portal" && rawArea === "quotes" ? "orders" : mode === "shop" ? shopArea[rawArea] || rawArea : rawArea;
-  const [ordF, setOrdF] = useSticky<"active" | "quotes" | "done">("customer.orderFilter", "active");
-  const oFilter = mode === "shop" && rawArea === "quotes" ? "quotes" : ordF;
+  // All (quotes and orders, newest first, like Printavo), Quotes, Completed (Oct 21, Nick)
+  const [ordF, setOrdF] = useSticky<"all" | "quotes" | "completed">("customer.orderList", "all");
+  const oFilter: "all" | "quotes" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "quotes", "completed"].includes(ordF) ? ordF : "all";
   const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
   const convNow = rawArea === "texts" ? "texts" : conv;
   // where the More menu opens: fixed under its button (the tab bar clips anything that drops out of it)
@@ -344,8 +345,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     // one line of numbers, then every order one line each under Active / Quotes / Done (Oct 21, Nick: "too much
     // information… how pieces are underneath each thing")
     const active = invoices.filter((o) => !o.archived && o.status !== "completed");
-    const done = invoices.filter((o) => o.archived || o.status === "completed");
-    const lists = { active, quotes, done };
+    const dayOf = (o: AOrder) => (o.created_at || o.due_date || "").slice(0, 10);
+    const newest = (l: AOrder[]) => l.slice().sort((x, y) => dayOf(y).localeCompare(dayOf(x)) || y.number - x.number);
+    const completed = invoices.filter((o) => o.archived || o.status === "completed");
+    const lists = { all: newest(orders.filter((o) => o.type === "invoice" || quotes.includes(o))), quotes: newest(quotes), completed: newest(completed) };
     const rows = lists[oFilter].filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, o.statusLabel, o.search));
     const P = pageOf("orders:" + oFilter, rows, 25);
     const showBal = rows.some((o) => !o.archived && o.balance > 0.004);
@@ -354,14 +357,28 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const sentQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");
     const look = attention.filter((a) => a.kind === "request" || a.kind === "draft" || a.kind === "quote" || a.kind === "art");
     const lookLabel = { request: "Request to price", draft: "Not sent yet", quote: "Quote waiting on them", art: "Art waiting on them", pay: "", receive: "" } as const;
+    // what's worth knowing at a glance (Oct 21, Nick: "surely we can put some more pertinent information there"): what's
+    // in the works and when it's next due, what they owe, when they last ordered and how often they do, and their sales
+    const t0 = today(), dd = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
+    const nextDue = active.filter((o) => o.due_date).sort((x, y) => (x.due_date || "").localeCompare(y.due_date || ""))[0];
+    const days = [...new Set(invoices.map(dayOf).filter(Boolean))].sort().reverse();
+    const lastOrder = newest(invoices)[0];
+    const gaps = days.slice(0, 11).map((d, i, a) => (i ? dd(a[i - 1], d) : 0)).slice(1).filter((g) => g > 0).sort((x, y) => x - y);
+    const gap = gaps.length >= 2 ? gaps[Math.floor(gaps.length / 2)] : 0;
+    const every = !gap ? "" : gap < 14 ? `Every ~${gap} days` : gap < 63 ? `Every ~${Math.round(gap / 7)} weeks` : `Every ~${Math.round(gap / 30.4)} months`;
+    const nextAround = gap && days[0] ? new Date(Date.parse(days[0]) + gap * 86400000).toISOString().slice(0, 10) : "";
+    const yr = t0.slice(0, 4), lastYr = String(+yr - 1);
+    const sales = (y: string) => invoices.filter((o) => dayOf(o).startsWith(y)).reduce((a, o) => a + o.total, 0);
+    const firstYr = days.length ? days[days.length - 1].slice(0, 4) : "";
     body = (
       <>
-        {/* the same number strip, toolbar and table as the Orders page (Oct 21, Nick: "a common theme") */}
+        {/* the order page's summary card (Oct 21, Nick: "a common theme") */}
         <div className="stats">
-          <button type="button" className="stat" onClick={() => setOrdF("active")}><span className="v">{inWork.length}</span><span className="k">Jobs in progress</span></button>
-          <button type="button" className="stat money-only" onClick={() => setOrdF("quotes")}><span className="v">{money(openQuotes)}</span><span className="k">{sentQ.length} open quote{sentQ.length === 1 ? "" : "s"}</span></button>
-          <button type="button" className="stat money-only" onClick={() => go("payments")}><span className={"v" + (overdue > 0.004 ? " alert" : "")}>{money(due)}</span><span className="k">{due > 0.004 ? `Owed${owedList.length && owedList.length <= 3 ? ` on ${owedList.map((o) => "#" + o.number).join(", ")}` : ""}${overdue > 0.004 ? ` · ${money(overdue)} overdue` : ""}` : "Nothing owed"}</span></button>
-          <button type="button" className="stat money-only" onClick={() => setOrdF("done")}><span className="v">{money(invoices.reduce((a, o) => a + o.total, 0))}</span><span className="k">Lifetime · {invoices.length} order{invoices.length === 1 ? "" : "s"}</span></button>
+          <button type="button" className="stat" onClick={() => setOrdF("all")}><span className="k">In the works</span><span className="v">{active.length} job{active.length === 1 ? "" : "s"}{sentQ.length ? ` · ${sentQ.length} quote${sentQ.length === 1 ? "" : "s"}` : ""}</span><small>{nextDue ? `Next due ${when(nextDue.due_date)} · #${nextDue.number}` : active.length ? "No in-hands dates yet" : "Nothing in progress"}</small></button>
+          <button type="button" className="stat money-only" onClick={() => go("payments")}><span className="k">Balance</span><span className={"v" + (overdue > 0.004 ? " alert" : "")}>{due > 0.004 ? money(due) : "Paid up"}</span><small>{due > 0.004 ? `${owedList.length && owedList.length <= 3 ? owedList.map((o) => "#" + o.number).join(", ") : `${owedList.length} invoices`}${overdue > 0.004 ? ` · ${money(overdue)} overdue` : terms ? ` · ${terms}` : ""}` : terms || "Nothing owed"}</small></button>
+          <button type="button" className="stat" onClick={() => lastOrder && router.push(orderHref(lastOrder.id))}><span className="k">Last order</span><span className="v">{lastOrder ? when(dayOf(lastOrder)) : "None yet"}</span><small>{lastOrder ? `#${lastOrder.number} · ${dd(t0, dayOf(lastOrder))} days ago` : ""}</small></button>
+          <button type="button" className="stat" onClick={() => setOrdF("completed")}><span className="k">Orders about</span><span className="v">{every || "Not enough orders"}</span><small>{nextAround ? (nextAround < t0 ? `Due for one: ${dd(t0, nextAround)} days past usual` : `Next one around ${when(nextAround)}`) : ""}</small></button>
+          <button type="button" className="stat money-only" onClick={() => setOrdF("completed")}><span className="k">Sales this year</span><span className="v">{money(sales(yr))}</span><small>{`${lastYr} ${money(sales(lastYr))} · all time ${money(invoices.reduce((a, o) => a + o.total, 0))}`}{firstYr ? ` since ${firstYr}` : ""}</small></button>
         </div>
         {look.length > 0 && (
           <div className="cx-look"><span className="k">Needs a look</span>
@@ -370,7 +387,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         )}
         <div className="toolbar">
           <div className="chips">
-            {(([["active", "Active"], ["quotes", "Quotes"], ["done", "Done"]]) as const).map(([k, l]) => (
+            {(([["all", "All"], ["quotes", "Quotes"], ["completed", "Completed"]]) as const).map(([k, l]) => (
               <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l} {lists[k].length}</button>
             ))}
           </div>
@@ -378,20 +395,21 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </div>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>{oFilter === "quotes" ? "Created" : "Due"}</th><th className="r">Pcs</th>{showBal && <th className="r money-only">Balance</th>}<th className="r money-only">Total</th></tr></thead>
+            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Date</th><th>Due</th><th className="r">Pcs</th>{showBal && <th className="r money-only">Balance</th>}<th className="r money-only">Total</th></tr></thead>
             <tbody>
               {P.items.map((o) => (
                 <tr key={o.id} tabIndex={0} onClick={() => router.push(orderHref(o.id))} onKeyDown={(e) => e.key === "Enter" && router.push(orderHref(o.id))}>
-                  <td><span className="ordno">{o.number}</span></td>
+                  <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span></td>
                   <td><div>{o.nickname || "Untitled Job"}{o.archived && <span className="aa-arch">Printavo</span>}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
                   <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
-                  <td>{oFilter === "quotes" ? when(o.created_at) : when(o.due_date) || <span className="faint">No date</span>}</td>
+                  <td>{when(dayOf(o)) || "—"}</td>
+                  <td>{when(o.due_date) || <span className="faint">No date</span>}</td>
                   <td className="r">{o.qty}</td>
                   {showBal && <td className="r money-only"><span className={"bal" + (o.archived || o.balance <= 0.004 ? " paid" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : "Paid"}</span></td>}
                   <td className="r money-only">{money(o.total)}</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={7}><div className="empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "active" ? "Nothing in progress right now." : oFilter === "quotes" ? "No quotes." : "No finished orders yet."}</div></td></tr>}
+              {!rows.length && <tr><td colSpan={8}><div className="empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "all" ? "No orders or quotes yet." : oFilter === "quotes" ? "No quotes." : "No completed orders yet."}</div></td></tr>}
             </tbody>
           </table>
         </div>
