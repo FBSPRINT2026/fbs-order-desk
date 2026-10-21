@@ -151,11 +151,12 @@ export default function SettingsPage() {
         <section className="panel">
           <div className="panel-h"><h2>Finishing add-ons</h2><button className="btn sm" type="button" onClick={() => upd((d) => { d.finishing.push({ id: uid(), name: "", price: 0 }); })}>+ Add</button></div>
           <div className="panel-b stack">
-            <div className="muted" style={{ fontSize: 13 }}>Per-piece extras you can tick on any group. Wholesale jobs use the contract finishing list on the Wholesale tab when it has one.</div>
+            <div className="muted" style={{ fontSize: 13 }}>Per-piece extras you can tick on any group. &ldquo;Sometimes used&rdquo; ones aren&apos;t shown on every order: they&apos;re under + More, next to a custom one you can type in. Wholesale jobs use the contract finishing list on the Wholesale tab when it has one.</div>
             {s.finishing.map((f, i) => (
               <div key={f.id} className="fee-row">
                 <input type="text" aria-label="Add-on name" placeholder="Fold & bag" value={f.name} onChange={(e) => upd((d) => { d.finishing[i].name = e.target.value; })} />
                 <input type="number" step="0.05" aria-label="Price per piece" value={f.price} onChange={(e) => upd((d) => { d.finishing[i].price = n(e.target.value); })} />
+                <label className="check" style={{ fontSize: 12.5, whiteSpace: "nowrap" }} title="Kept under + More on orders instead of shown every time"><input type="checkbox" checked={!!f.more} onChange={(e) => upd((d) => { d.finishing[i].more = e.target.checked || undefined; })} /> Sometimes used</label>
                 <button className="btn icon ghost" type="button" aria-label="Remove add-on" onClick={() => upd((d) => { d.finishing.splice(i, 1); })}>✕</button>
               </div>
             ))}

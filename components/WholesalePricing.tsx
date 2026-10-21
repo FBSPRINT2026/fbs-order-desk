@@ -10,13 +10,14 @@ import { FBS_CONTRACT_2024 } from "@/lib/contractPricing";
 const n = (v: string) => (v === "" || isNaN(+v) ? 0 : +v);
 const money = (v: number) => `$${(+v || 0).toFixed(2)}`;
 
-function ExtrasList({ list, onChange, placeholder }: { list: Finishing[]; onChange: (fn: (l: Finishing[]) => Finishing[]) => void; placeholder: string }) {
+function ExtrasList({ list, onChange, placeholder, more }: { list: Finishing[]; onChange: (fn: (l: Finishing[]) => Finishing[]) => void; placeholder: string; /** show "Sometimes used" (the finishing list) */ more?: boolean }) {
   return (
     <div className="stack" style={{ gap: 6 }}>
       {list.map((f, i) => (
         <div key={f.id} className="fee-row">
           <input type="text" aria-label="Name" placeholder={placeholder} value={f.name} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
           <input type="number" step="0.05" aria-label="Price per piece" value={f.price} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, price: n(e.target.value) } : x)))} />
+          {more && <label className="check" style={{ fontSize: 12.5, whiteSpace: "nowrap" }} title="Kept under + More on orders instead of shown every time"><input type="checkbox" checked={!!f.more} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, more: e.target.checked || undefined } : x)))} /> Sometimes used</label>}
           <button className="btn icon ghost" type="button" aria-label="Remove" onClick={() => onChange((l) => l.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
@@ -93,7 +94,7 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
       <section className="ws-sec">
         <h3>Finishing</h3>
         <div className="faint" style={{ fontSize: 12.5 }}>Per piece, ticked on a group. Wholesale jobs use this list.</div>
-        <ExtrasList list={pl.finishing || []} placeholder="Fold" onChange={(fn) => upd((d) => { d.finishing = fn(d.finishing || []); })} />
+        <ExtrasList more list={pl.finishing || []} placeholder="Fold" onChange={(fn) => upd((d) => { d.finishing = fn(d.finishing || []); })} />
       </section>
 
       <section className="ws-sec">

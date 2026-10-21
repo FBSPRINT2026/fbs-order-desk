@@ -125,7 +125,9 @@ export type GLine = {
   progOff?: boolean;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean;
+export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[];
+  /** finishing made up on this order (a label and a price per piece), ticked by id in `finishing` like the list's */
+  customFin?: Finishing[]; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
@@ -267,7 +269,8 @@ export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">, 
   const c = normColor(color);
   return !!c && (list || []).some((x) => normColor(x) === c);
 }
-export type Finishing = { id: string; name: string; price: number };
+/** a per-piece add-on. `more`: a sometimes-used one, kept under "+ More" on orders instead of shown every time (Oct 20, Nick: suffocation bags) */
+export type Finishing = { id: string; name: string; price: number; more?: boolean };
 /** Someone who owns customer accounts (a salesperson / account manager). Email links them to their shop login. */
 export type AccountOwner = { name: string; email: string };
 export const DEFAULT_ACCOUNT_OWNERS: AccountOwner[] = [{ name: "Nicholas McCoy", email: "nicholas@fbsprint.com" }, { name: "Amanda McCoy", email: "" }, { name: "Claudia Garcia", email: "" }];
@@ -615,7 +618,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
     return { light, print: printCache.get(key) as number };
   };
-  const finList = [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || [])];
+  const finList = [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
   const finishing = (g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments

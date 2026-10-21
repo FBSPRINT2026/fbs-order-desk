@@ -18,7 +18,8 @@ import {
   calcOrder, designLabel, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
-import GroupEditor from "@/components/GroupEditor";
+import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
+import FinishingPicker from "@/components/FinishingPicker";
 import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
@@ -342,7 +343,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // flat: a design's flat price is everything in, except extras the program prices itself (Nine18 personalization $5)
     const finishingExtra = (d: Order, g: Group, flat: boolean) => {
       const pl = priceList(settings, d.price_type || "retail");
-      const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || [])];
+      const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
       const own = prog!.card?.extraPrices || {};
       const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || own[f.id] != null));
       const price = (f: { id: string; price: number }) => (own[f.id] != null ? +own[f.id] : +f.price || 0);
@@ -433,8 +434,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const finPerGroup = finSplit ?? (!!o && new Set(o.groups.map(finKey)).size > 1);
   const orderFinList = o?.price_type === "wholesale" && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   const setOrderFin = (id: string, on: boolean) => patch((d) => { for (const g of d.groups) { const set = new Set(g.finishing || []); if (on) set.add(id); else set.delete(id); g.finishing = [...set]; } });
-  const finishingSame = () => { setFinSplit(false); patch((d) => { const base = (d.groups[0]?.finishing || []).filter(isFin); for (const g of d.groups) g.finishing = [...(g.finishing || []).filter((x) => !isFin(x)), ...base]; }); };
-  const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), finishing: [...(g.finishing || [])] });
+  const finishingSame = () => { setFinSplit(false); patch((d) => { const base = (d.groups[0]?.finishing || []).filter(isFin), cf = d.groups[0]?.customFin || []; for (const g of d.groups) { g.finishing = [...(g.finishing || []).filter((x) => !isFin(x)), ...base]; g.customFin = [...cf]; } }); };
+  const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), finishing: [...(g.finishing || [])], ...(g.customFin?.length ? { customFin: [...g.customFin] } : {}) });
 
   /** Groups the AI read from an email: fill blank costs and details from the catalog, then add or replace. */
   function applyProposal(groups: Group[], p: { nickname?: string; due_date?: string | null; notes?: string; po_number?: string }, mode: "replace" | "add") {
@@ -982,7 +983,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
           ))}
           <div className="row">
-            <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); d.groups.push(ng); })}>+ Add line item group</button>
+            <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
             <FillFromText orderId={o.id} hasContent={o.groups.some((g) => g.lines.some((l) => l.style || Object.keys(l.sizes || {}).length))} onApply={applyProposal} />
           </div>
@@ -996,14 +997,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="panel-b">
                 {finPerGroup ? <div className="faint" style={{ fontSize: 13 }}>Pick finishing in each group above.</div> : (
-                  <div className="row" style={{ gap: 16 }}>
-                    {orderFinList.map((f) => (
-                      <label key={f.id} className="check" style={{ fontSize: 13 }}>
-                        <input type="checkbox" checked={o.groups.length > 0 && o.groups.every((g) => (g.finishing || []).includes(f.id))} onChange={(e) => setOrderFin(f.id, e.target.checked)} />
-                        {f.name}{seesMoney && <span className="faint"> ({money(f.price)}/pc)</span>}
-                      </label>
-                    ))}
-                  </div>
+                  <FinishingPicker list={orderFinList} hidePrices={!seesMoney}
+                    custom={(o.groups[0]?.customFin || [])}
+                    isOn={(id) => o.groups.length > 0 && o.groups.every((g) => (g.finishing || []).includes(id))} onToggle={setOrderFin}
+                    onAddCustom={(f) => patch((d) => { for (const g of d.groups) { g.customFin = [...(g.customFin || []).filter((x) => x.id !== f.id), f]; g.finishing = [...new Set([...(g.finishing || []), f.id])]; } })}
+                    onRemoveCustom={(id) => patch((d) => { for (const g of d.groups) { g.customFin = (g.customFin || []).filter((x) => x.id !== id); g.finishing = (g.finishing || []).filter((y) => y !== id); } })}
+                    onSave={saveFinishing(o.price_type === "wholesale")} />
                 )}
               </div>
             </section>

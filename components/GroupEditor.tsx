@@ -6,6 +6,11 @@ import { colorHex, repaintLogo } from "@/lib/inkColors";
 import type { Imprint } from "@/lib/pricing";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
+import FinishingPicker from "@/components/FinishingPicker";
+
+/** save a custom finishing to the sometimes-used list (retail, or the wholesale contract list for a wholesale job) */
+export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
+  fetch("/api/settings/finishing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...f, wholesale }) }).then((r) => r.ok).catch(() => false);
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
@@ -451,14 +456,10 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             {finishingAt === "group" && finList.length > 0 && (
         <div className="imprints">
                 <div className="lbl gsec" style={{ marginBottom: 6 }}>Finishing</div>
-                <div className="row" style={{ gap: 14 }}>
-                  {finList.map((f) => (
-                    <label key={f.id} className="check" style={{ fontSize: 13 }}>
-                      <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />
-                      {f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}
-                    </label>
-                  ))}
-                </div>
+                <FinishingPicker list={finList} custom={g.customFin || []} isOn={(id) => (g.finishing || []).includes(id)} onToggle={tick} hidePrices={hidePrices}
+                  onAddCustom={(f) => update((x) => { x.customFin = [...(x.customFin || []), f]; x.finishing = [...new Set([...(x.finishing || []), f.id])]; })}
+                  onRemoveCustom={(id) => update((x) => { x.customFin = (x.customFin || []).filter((f) => f.id !== id); x.finishing = (x.finishing || []).filter((y) => y !== id); })}
+                  onSave={saveFinishing(!!gc.wholesale)} />
               </div>
             )}
             </div>
