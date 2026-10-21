@@ -58,7 +58,10 @@ export function FolderRail({ folders, current, onPick, onSearch }: { folders: Fo
 }
 
 /** the folders across the top (no extra width): Inbox, Sent, Archive, Drafts, Deleted, then SaneBox and your own folders in menus */
-export function FolderBar({ folders, current, onPick }: { folders: Folder[] | null; current: string; onPick: (path: string) => void }) {
+export function FolderBar({ folders, current, onPick, onSearch, onMore }: { folders: Folder[] | null; current: string; onPick: (path: string) => void;
+  /** phones (Oct 21, Nick: "just the Inbox, Sent, Archive, then a search icon and a little icon for more… the rest of the
+   *  folders"): the strip keeps those three and ends with these two icons; the other folders are under More */
+  onSearch?: () => void; onMore?: () => void }) {
   const sRef = useRef<HTMLDetailsElement | null>(null), fRef = useRef<HTMLDetailsElement | null>(null);
   const list = folders || [];
   const main = ["\\Inbox", "\\Sent", "\\Archive", "\\Drafts", "\\Trash", "\\Junk"].map((s) => list.find((f) => f.special === s)).filter(Boolean) as Folder[];
@@ -82,6 +85,8 @@ export function FolderBar({ folders, current, onPick }: { folders: Folder[] | nu
           <summary className="mf-chip">{inRest ? folderLabel(inRest) : "More folders"} ▾</summary>
           <div className="mf-ddm">{rest.map((f) => <button key={f.path} type="button" className={current === f.path ? "on" : ""} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 12 }} onClick={() => pick(f.path)}>{folderLabel(f)}{f.unseen > 0 && <b>{f.unseen}</b>}</button>)}</div>
         </details>}
+        {onSearch && <button type="button" className="mf-chip mf-ph" aria-label="Search mail" title="Search mail" onClick={onSearch}><svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>}
+        {onMore && <button type="button" className="mf-chip mf-ph" aria-label="More folders" title="More folders" onClick={onMore}><svg viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg></button>}
       </>}
     </div>
   );

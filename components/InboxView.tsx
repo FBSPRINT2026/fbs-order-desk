@@ -632,7 +632,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
           </div>}
         </div>;
       })()}
-      {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
+      {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }}
+        onSearch={() => { window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => document.querySelector<HTMLInputElement>(".pit-search input")?.focus(), 350); }}
+        onMore={() => setPSheet(true)} />}
       <div ref={fitRef} className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
         {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}

@@ -11375,3 +11375,13 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
   html body main.main .eh-ai .eh-ai-tags{display:none!important}
   html body main.main .eh-ai > .eh-ai-go{flex:1 1 auto!important;height:34px!important;min-height:0!important;padding:0 10px!important;font-size:13px!important;border-radius:9px!important;justify-content:center}
 }
+/* the pinned folder strip on a phone: Inbox · Sent · Archive, then search and More (the rest of the folders) */
+.mf-bar .mf-ph{display:none!important}
+@media (max-width:760px) and (pointer:coarse){
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar{overflow:hidden!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-chip:not(.mf-ph):nth-of-type(n+4),html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-dd{display:none!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-chip:not(.mf-ph){flex:1 1 0!important;justify-content:center}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-ph{display:inline-flex!important;flex:0 0 46px!important;padding:0!important;justify-content:center;align-items:center;color:var(--ink-3)!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-ph svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar > .mf-ph:last-child svg{fill:currentColor;stroke:none}
+}
