@@ -11252,12 +11252,16 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
   .ord .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
   .ord .gl-list .gl > .gl-row.gl-r2 .a-sz .szrow{margin:0}
   .ord .gl-list .gl.same{padding-top:6px}
-  /* tab bars and secondary toolbars: even columns that wrap neatly instead of a ragged second row */
-  main.main :is(.chips, .aa-sub, .set-tabs, .mk-hit-seg, .jt-chips, .rv-seg, .md-seg){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));width:100%!important}
-  main.main :is(:is(.chips, .mk-hit-seg) > :is(.chip, button), .aa-sub > button, .set-tabs a, .rv-seg > button, .md-seg > button, .jt-chips > button){padding:10px 6px!important;font-size:12.5px!important;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  html body main.main .mf-bar{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+  /* tab bars and toolbars on a phone: one row you can swipe, never two or three rows (Oct 21, Nick: "these 3 or 4 line
+     toolbars everywhere") */
+  main.main :is(.chips, .aa-sub, .set-tabs, .mk-hit-seg, .jt-chips, .rv-seg, .md-seg, .md-areas, .ibx2-tabs){display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden;scrollbar-width:none;width:100%!important;max-width:100%!important;-webkit-overflow-scrolling:touch}
+  main.main :is(.chips, .aa-sub, .set-tabs, .mk-hit-seg, .jt-chips, .rv-seg, .md-seg, .md-areas, .ibx2-tabs)::-webkit-scrollbar{display:none}
+  main.main :is(:is(.chips, .mk-hit-seg) > :is(.chip, button), .aa-sub > button, .set-tabs a, .rv-seg > button, .md-seg > button, .jt-chips > button, .md-areas > button){flex:0 0 auto!important;padding:10px 12px!important;font-size:12.5px!important;white-space:nowrap}
+  html body main.main .mf-bar{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none}
+  html body main.main .mf-bar::-webkit-scrollbar{display:none}
   html body main.main .mf-bar::before{display:none!important}
-  html body main.main .mf-bar .mf-chip{padding:10px 6px!important;font-size:12.5px!important}
+  html body main.main .mf-bar .mf-chip,html body main.main .mf-bar .mf-dd{flex:0 0 auto!important;padding:10px 12px!important;font-size:12.5px!important}
+  html body main.main .mf-bar .mf-dd{padding:0!important}
   html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button{flex:1 1 0!important;min-width:0;overflow:hidden;font-size:12px!important;padding:10px 2px!important}
   html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button:not(.on) span{display:none}
   /* the toolbar's search and selects take the full width under the tabs */
@@ -11265,11 +11269,28 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
   main.main .toolbar > :is(select, .sx, label, .aa-search, input){flex:1 1 100%;max-width:none!important;width:100%}
   /* summary cards: two to a row */
   main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis) > *{flex:1 1 45%;min-width:0}
-  /* list cards on a phone: the number and job on top, the status pill without a "Status:" label, the rest small */
-  table.m-card td[data-label="Status"]::before,table.m-card td[data-label="Job"]::before,table.m-card td[data-label="Customer"]::before,table.m-card td[data-label="Order"]::before{content:none!important}
-  table.m-card td[data-label="Status"]{flex:1 1 100%}
-  table.m-card td[data-label="Customer"]{flex:1 1 100%;font-size:13px}
-  table.m-card td[data-label]:not(:first-child):not(:nth-child(2)):not([data-label="Status"]):not([data-label="Customer"]){font-size:12.5px}
+  /* an order list on a phone (Oct 21, Nick: "just all runs together"): the number on the left; the job and its total;
+     the customer and what's owed; the status, pieces and due date. No "Status:" / "Customer:" labels */
+  main.main table.m-card tr:has(> td[data-label="Job"]){display:grid!important;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"num job job tot" "num cust cust bal" "num stat pcs due";gap:3px 10px;align-items:center;padding:12px 12px!important}
+  main.main table.m-card tr:has(> td[data-label="Job"]) > td{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+  main.main table.m-card tr:has(> td[data-label="Job"]) > td::before{content:none!important}
+  main.main table.m-card td[data-label="#"]{grid-area:num;align-self:start;display:flex!important;flex-direction:column;gap:4px;align-items:flex-start}
+  main.main table.m-card td[data-label="Job"]{grid-area:job;white-space:normal!important;font-weight:600}
+  main.main table.m-card td[data-label="Job"] .sub{display:none}
+  main.main table.m-card td[data-label="Customer"]{grid-area:cust;color:var(--ink-2)}
+  main.main table.m-card td[data-label="Customer"] .sub{display:none}
+  main.main table.m-card td[data-label="Status"]{grid-area:stat;white-space:normal!important}
+  main.main table.m-card td[data-label="Status"] .pdn-tag{display:none}
+  main.main table.m-card td[data-label="Pcs"]{grid-area:pcs;color:var(--ink-3);font-size:12px!important}
+  main.main table.m-card td[data-label="Pcs"]::after{content:" pcs"}
+  main.main table.m-card td[data-label="Due"]{grid-area:due;text-align:right!important;font-size:12.5px!important}
+  main.main table.m-card td[data-label="Total"]{grid-area:tot;text-align:right!important;font-weight:700}
+  main.main table.m-card td[data-label="Balance"]{grid-area:bal;text-align:right!important;font-size:12.5px!important}
+  main.main table.m-card td[data-label="Date"],main.main table.m-card tr:has(> td[data-label="Job"]) > td:not([data-label]){display:none!important}
+  /* an email on a phone: the AI summary is two lines, not a block that pushes the email down */
+  main.main .eh-ai .eh-sum{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  main.main .eh-ai .eh-ai-tags{display:none}
+  main.main .lm-ai{max-height:120px;overflow:auto}
 }
 /* My Day: the to-do filter (All / Money / Shop…) is the secondary toolbar; on a phone the Replies / To-do / Calendar
    switch is a section bar */
