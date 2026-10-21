@@ -11175,38 +11175,38 @@ main.main .aa-arch{font-family:var(--body)}
 main.main :is(.sub, .faint, .muted, small){color:var(--ink-3)}
 main.main :is(b, strong){color:inherit}
 /* Email's folder bar is a section bar like the order page's (Oct 21, Nick: "all the toolbars on email look off") */
-html body main.main .mf-bar{background:var(--surface)!important;border:0!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2)!important;border-radius:14px!important;padding:0!important;gap:0!important;align-items:stretch}
-html body main.main .mf-bar .mf-chip{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:12px 14px!important;font-size:13.5px!important;font-weight:700!important;color:var(--ink-3)!important;display:inline-flex;align-items:center;gap:6px;flex:1 0 auto;justify-content:center;min-height:0!important}
-html body main.main .mf-bar .mf-chip:hover{color:var(--ink)!important}
-html body main.main .mf-bar .mf-chip.on,html body main.main .mf-bar .mf-dd.on>.mf-chip{color:var(--ink)!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)!important;font-weight:800!important;border-bottom:0!important}
-html body main.main .mf-bar .mf-chip b{font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3)}
-html body main.main .mf-bar .mf-chip.on b,html body main.main .mf-bar .mf-dd.on>.mf-chip b{background:var(--fbs-blue);color:#fff}
-html body main.main .mf-bar .mf-dd{display:flex;flex:1 0 auto}
-html body main.main .mf-bar .mf-dd > .mf-chip{width:100%}
+html body main.main.main:has(.ibx2) .mf-bar{background:var(--surface)!important;border:0!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2)!important;border-radius:14px!important;padding:0!important;gap:0!important;align-items:stretch}
+html body main.main.main:has(.ibx2) .mf-bar .mf-chip{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:12px 14px!important;font-size:13.5px!important;font-weight:700!important;color:var(--ink-3)!important;display:inline-flex;align-items:center;gap:6px;flex:1 0 auto;justify-content:center;min-height:0!important}
+html body main.main.main:has(.ibx2) .mf-bar .mf-chip:hover{color:var(--ink)!important}
+html body main.main.main:has(.ibx2) .mf-bar .mf-chip.on,html body main.main.main:has(.ibx2) .mf-bar .mf-dd.on>.mf-chip{color:var(--ink)!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)!important;font-weight:800!important;border-bottom:0!important}
+html body main.main.main:has(.ibx2) .mf-bar .mf-chip b{font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3)}
+html body main.main.main:has(.ibx2) .mf-bar .mf-chip.on b,html body main.main.main:has(.ibx2) .mf-bar .mf-dd.on>.mf-chip b{background:var(--fbs-blue);color:#fff}
+html body main.main.main:has(.ibx2) .mf-bar .mf-dd{display:flex;flex:1 0 auto}
+html body main.main.main:has(.ibx2) .mf-bar .mf-dd > .mf-chip{width:100%}
 /* the inbox list's filter tabs fit its narrow column: one row, smaller */
 main.main .ibx2-tabs{width:100%;flex-wrap:nowrap}
 main.main .ibx2-tabs > button{flex:1 1 auto;padding:8px 6px;font-size:12.5px;gap:4px;min-width:0}
 main.main .ibx2-tabs > button span{min-width:16px;padding:0 5px;font-size:10.5px}
 /* the inbox list's filter tabs: the secondary toolbar's look across the top of the list */
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs{background:var(--surface)!important;border-radius:0!important;padding:0!important;gap:0!important;border-bottom:1px solid var(--line-2);box-shadow:none!important;flex-wrap:nowrap!important}
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button{padding:10px 4px!important;font-size:12.5px!important;font-weight:700!important;color:var(--ink-3)!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;flex:1 1 auto;gap:4px;margin:0}
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button.on{color:var(--ink)!important;font-weight:800!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)!important}
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button span{font-size:10.5px!important;font-weight:700;min-width:16px;padding:0 5px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0!important}
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button.on span{background:var(--fbs-blue);color:#fff}
-html body main.main:has(.ibx2) .ibx2-list .ibx2-tabs button span.hot{background:var(--danger);color:#fff}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs{background:var(--surface)!important;border-radius:0!important;padding:0!important;gap:0!important;border-bottom:1px solid var(--line-2);box-shadow:none!important;flex-wrap:nowrap!important}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs button{padding:10px 4px!important;font-size:12.5px!important;font-weight:700!important;color:var(--ink-3)!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;flex:1 1 auto;gap:4px;margin:0}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs button.on{color:var(--ink)!important;font-weight:800!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important;box-shadow:inset 0 -4px 0 var(--fbs-blue)!important}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs button span{font-size:10.5px!important;font-weight:700;min-width:16px;padding:0 5px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0!important}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs button.on span{background:var(--fbs-blue);color:#fff}
+html body main.main.main:has(.ibx2) .ibx2-list .ibx2-tabs button span.hot{background:var(--danger);color:#fff}
 /* Email's reading-pane buttons (Reply · Forward · Archive · News · Move · Black Hole · Create order…): each group a white
    bar like the toolbars, icon and label on one line, bold gray labels that darken and tint on hover; Reply the one blue
    button (Oct 21, Nick: "the buttons look weird too") */
-html body main.main .eh-bar .tb-row{gap:8px!important}
-html body main.main .eh-bar .tb-row .tb-g{flex:0 0 auto!important;display:flex!important;flex-wrap:nowrap!important;gap:0!important;padding:0!important;background:var(--surface)!important;border:0!important;border-left:0!important;border-radius:14px!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2)!important;overflow:hidden}
-html body main.main .eh-bar .tb-row .tb-g>.tb-b,html body main.main .eh-bar .tb-row .tb-g>.tb-m{flex:0 0 auto!important;min-width:0}
-html body main.main .eh-bar .tb-row .tb-b{flex-direction:row!important;height:38px!important;min-height:0!important;padding:0 12px!important;gap:6px!important;border-radius:0!important;font-size:13px!important;font-weight:700!important;line-height:1!important;white-space:nowrap!important;color:var(--ink-3)!important;background:transparent!important;box-shadow:none!important}
-html body main.main .eh-bar .tb-row .tb-b svg{width:16px!important;height:16px!important;color:inherit!important}
-html body main.main .eh-bar .tb-row .tb-b:hover:not(:disabled){color:var(--ink)!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important}
-html body main.main .eh-bar .tb-row .tb-b.danger{color:var(--danger)!important}
-html body main.main .eh-bar .tb-row .tb-b.primary{color:#fff!important;background:var(--accent)!important}
-html body main.main .eh-bar .tb-row .tb-b.ai{color:#fff!important;background:var(--ai-grad)!important}
-html body main.main .eh-bar .tb-row .tb-sec-l{display:none!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row{gap:8px!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-g{flex:0 0 auto!important;display:flex!important;flex-wrap:nowrap!important;gap:0!important;padding:0!important;background:var(--surface)!important;border:0!important;border-left:0!important;border-radius:14px!important;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2)!important;overflow:hidden}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-g>.tb-b,html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-g>.tb-m{flex:0 0 auto!important;min-width:0}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b{flex-direction:row!important;height:38px!important;min-height:0!important;padding:0 12px!important;gap:6px!important;border-radius:0!important;font-size:13px!important;font-weight:700!important;line-height:1!important;white-space:nowrap!important;color:var(--ink-3)!important;background:transparent!important;box-shadow:none!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b svg{width:16px!important;height:16px!important;color:inherit!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b:hover:not(:disabled){color:var(--ink)!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b.danger{color:var(--danger)!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b.primary{color:#fff!important;background:var(--accent)!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-b.ai{color:#fff!important;background:var(--ai-grad)!important}
+html body main.main.main:has(.ibx2) .eh-bar .tb-row .tb-sec-l{display:none!important}
 /* page-top buttons are all the same button (no bare text buttons next to boxed ones) */
 main.main :is(.page-head, .ibx2-head) .btn.ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
 main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
