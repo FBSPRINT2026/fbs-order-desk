@@ -364,7 +364,8 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
             <div className="jv-cc-list">
               {p.plan.length > 0 && (
                 <div className="jv-cc-art-colors">
-                  <div className="jv-lbl">The art&apos;s colors · put two on one screen to print them together</div>
+                  <h3 className="jv-cc-h">Detected colors</h3>
+                  <div className="jv-cc-hint">The colors found in the art. To combine two, pick the same screen for both (e.g. set PMS 7506 C to the screen PMS 475 C is on); a color on its own screen prints by itself.</div>
                   {p.plan.map((k) => (
                     <div key={k.hex} className="jv-ac">
                       <span className="jv-sw" style={{ background: k.hex }} />
@@ -377,7 +378,8 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr }
                   ))}
                 </div>
               )}
-              <div className="jv-lbl">Screens, in print order</div>
+              <h3 className="jv-cc-h">How we printed it</h3>
+              <div className="jv-cc-hint">The screens, in print order: the ink on each, and a custom mix if it was mixed.</div>
               {screens.map((x, i) => {
                 const on = colorsOn(i);
                 return (
