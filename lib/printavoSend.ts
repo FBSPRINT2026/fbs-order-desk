@@ -199,12 +199,17 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // Digitize File, PMS MATCH, Color Change; 2XL+ as Sizes Above XL; the order's own fees (no card surcharge: added in Printavo when they pay by card)
   type PvFee = { description: string; amount?: number; quantity?: number; unitPrice?: number; unitPriceAsPercentage?: boolean; taxable: boolean };
   const FEE_NAME = { screens: "New Screen Fee ", remake: "Repeat Screen Fee ", digitize: "Digitize File", pms: "PMS MATCH", inkchange: "Color Change", min: "Minimum Order Charge" } as const;
+  // Printavo reads a fee's `amount` as the price of ONE and multiplies it by the quantity itself (Oct 20, #40090: 7 repeat
+  // screens sent as quantity 7, amount $105 came out 7 × $105 = $735 instead of 7 × $15): amount = the unit price
   const sum = new Map<string, PvFee>();
   for (const c of calc.groups) {
     for (const it of c.setupItems) {
-      const key = `${it.kind}|${it.unit}`, f = sum.get(key);
-      if (f) { f.quantity = (f.quantity || 0) + it.qty; f.amount = Math.round(((f.amount || 0) + it.amount) * 100) / 100; }
-      else sum.set(key, { description: FEE_NAME[it.kind], quantity: it.qty, unitPrice: it.unit, amount: it.amount, taxable: taxed });
+      // a charge that doesn't split evenly per screen goes as one line for its exact total (no cents lost to rounding)
+      const even = Math.abs(it.unit * it.qty - it.amount) < 0.005;
+      const key = even ? `${it.kind}|${it.unit}` : `${it.kind}|total|${sum.size}`, f = sum.get(key);
+      if (f) f.quantity = (f.quantity || 0) + it.qty;
+      else sum.set(key, even ? { description: FEE_NAME[it.kind], quantity: it.qty, unitPrice: it.unit, amount: it.unit, taxable: taxed }
+        : { description: `${FEE_NAME[it.kind].trim()} (${it.qty})`, quantity: 1, unitPrice: it.amount, amount: it.amount, taxable: taxed });
     }
     if (c.materials > 0) { const f = sum.get("materials"); if (f) { f.amount = Math.round(((f.amount || 0) + c.materials) * 100) / 100; f.unitPrice = f.amount; } else sum.set("materials", { description: "Sizes Above XL", quantity: 1, unitPrice: c.materials, amount: c.materials, taxable: taxed }); }
   }

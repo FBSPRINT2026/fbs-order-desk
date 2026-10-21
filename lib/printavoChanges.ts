@@ -13,7 +13,7 @@ export type PvSnap = {
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
 // the fees Send to Printavo makes from our setup (screens, digitizing, PMS, ink changes, minimum, 2XL+)
-const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|color change|minimum order charge|sizes above xl)$/i;
+const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|color change|minimum order charge|sizes above xl)( \(\d+\))?$/i;
 export const ADJUST = "Setup adjustment (from Printavo)";
 // the card surcharge is added in Printavo only when the customer pays by card (Oct 16, Nick: a check customer doesn't
 // get it): taken as it is when it's there, removed here when it isn't, without asking. Printavo's preset is "CC Fees".
