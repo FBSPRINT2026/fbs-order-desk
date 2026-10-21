@@ -160,6 +160,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     d.told ? `What we told the AI: ${d.told}` : "",
     d.lookedUp ? `Looked up online: ${d.lookedUp.text}${d.lookedUp.sources.length ? ` (${d.lookedUp.sources.map((x) => x.url).join(", ")})` : ""}` : "",
     d.artNotes?.length ? `Reorder art:\n- ${d.artNotes.join("\n- ")}` : "",
+    d.prodSuggest || "",
   ].filter(Boolean).join("\n\n");
   if (pn) await admin.from("order_internal").upsert({ order_id: oid, production_notes: pn.slice(0, 4000) });
   if (priceType === "wholesale" && d.goods?.supplied) {

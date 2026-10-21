@@ -30,6 +30,8 @@ export type EODraft = {
   questions: string[];
   /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */
   artNotes?: string[];
+  /** a reorder of a Printavo job: what its notes say about the prints, for production to confirm (lib/ai/oldJobNotes.ts) */
+  prodSuggest?: string;
   /** what staff told the AI before it read the email ("it's a reorder of 31174, art is on the old job") */
   told?: string;
   /** the AI read it as a reorder (even when it couldn't tell which job) */

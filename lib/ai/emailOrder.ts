@@ -14,6 +14,7 @@ import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
 import { loadMemories, memoryText } from "@/lib/ai/orderMemory";
+import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import { isPicture, looksLikeSignature, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
 /**
@@ -593,6 +594,8 @@ ${staffSays}` : ""}`;
     ...(told ? { told } : {}), ...(p.kind === "reorder" || picked ? { looksReorder: true } : {}),
     ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}), ...(o.part ? { part: o.part } : {}),
   };
+  // a reorder of a Printavo job: the inks its notes name go on the prints, for production to confirm
+  if (job?.ref.startsWith("a:")) await fillFromOldNotes(admin, settings, draft, by, a.customer_id).catch((e) => console.warn("fillFromOldNotes", e));
   const row = {
     kind: o.part ? "draft_order_part" : "draft_order", dedupe_key: o.part ? `email:${o.part.anchor || C.id}:order:${o.part.key}` : `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
     customer_id: a.customer_id, order_id: null, activity_id: C.id,

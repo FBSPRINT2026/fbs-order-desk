@@ -3,6 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupsFromPrintavo } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
+import { aiState } from "@/lib/ai/claude";
+import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import type { EODraft } from "@/lib/emailOrderShared";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,9 @@ export async function POST(req: Request) {
     nickname: String(r.nickname || "").slice(0, 120), due_date: null, delivery: "pickup", ship_to: "", po_number: "", notes: "",
     goods: { supplied: false, supplier: "", expected: "", note: "" }, groups, art: {}, mockups: {}, reorderOf: `a:${r.id}`, questions: [], files: [],
   };
+  // what the old job's notes say about the inks: on the prints, for production to confirm
+  const ai = await aiState(admin).catch(() => null);
+  if (ai?.ready) await fillFromOldNotes(admin, ai.settings, draft, v.email || "staff", r.customer_id as string).catch((e) => console.warn("fillFromOldNotes", e));
   return NextResponse.json({ draft, customer: c, job: { label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "" } });
 }
 
