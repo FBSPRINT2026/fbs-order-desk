@@ -854,14 +854,14 @@ function SizeRow<K extends string>({ cols, sizes, onSet, up, off, upSet, onUp }:
         ? <input className="upc-in" type="number" step="0.01" min="0" autoFocus defaultValue={u != null ? String(u) : ""} aria-label={`${s} extra charge each`}
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditUp(null); }}
             onBlur={(e) => { const t = e.target.value.trim(); onUp(s, t === "" ? null : Math.max(0, +t)); setEditUp(null); }} />
-        : <button type="button" className={"upc upc-btn" + (upSet?.(s) ? " set" : "")} onClick={(e) => { e.preventDefault(); setEditUp(s); }} title={upSet?.(s) ? "Typed by hand. Click to change; clear it to go back to automatic." : "Extra charge each for this size. Click to type your own."}>{u ? `+${u}` : "+ $"}</button>)
+        : <button type="button" tabIndex={-1} className={"upc upc-btn" + (upSet?.(s) ? " set" : "")} onClick={(e) => { e.preventDefault(); setEditUp(s); }} title={upSet?.(s) ? "Typed by hand. Click to change; clear it to go back to automatic." : "Extra charge each for this size. Click to type your own."}>{u ? `+${u}` : "+ $"}</button>)
       : <small className="upc">{u ? `+${u}` : "\u00a0"}</small>;
     return (
       <label key={s} className={"szc" + (s === "YXL" && si < cols.length - 1 ? " ysep" : "")}>
         <span>{s}</span>
         {touch
           ? <button type="button" className={"sz sz-tap" + (q ? " has" : "") + (at === si ? " on" : "")} aria-label={`${s} quantity`} onClick={() => { box.current?.focus(); go(si); }}>{q || ""}</button>
-          : <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (q ? " has" : "")} value={q || ""} onChange={(e) => onSet(s, e.target.value)} />}
+          : <SizeBox q={q} label={`${s} quantity`} onSet={(v) => onSet(s, v)} />}
         {upEl}
       </label>
     );
@@ -886,4 +886,16 @@ function SizeRow<K extends string>({ cols, sizes, onSet, up, off, upSet, onUp }:
       {cur && pos && timer.current && <i key={tick} className="sz-wait" style={{ left: pos.left, top: pos.top + pos.height + 1, width: pos.width, animationDuration: `${SIZE_ADVANCE_MS}ms` }} />}
     </div>
   );
+}
+
+/**
+ * One size's quantity on a computer (Oct 21, Nick: "you should be able to enter zero… I need 0 2XL"): a 0 typed shows
+ * as 0 while the box is being typed in (a size with none is blank once you move on). Tab goes size to size; the 2XL+
+ * charges under the sizes are clicked, never tabbed to.
+ */
+function SizeBox({ q, label, onSet }: { q: number | undefined; label: string; onSet: (v: string) => void }) {
+  const [typed, setTyped] = useState<string | null>(null);
+  return <input type="number" min="0" step="1" inputMode="numeric" aria-label={label} className={"sz" + (q || typed === "0" ? " has" : "")}
+    value={typed ?? (q ? String(q) : "")} onFocus={(e) => { setTyped(q ? String(q) : ""); e.target.select(); }} onBlur={() => setTyped(null)}
+    onChange={(e) => { setTyped(e.target.value); onSet(e.target.value); }} />;
 }
