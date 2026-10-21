@@ -84,7 +84,6 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         <div className="jv-h-t">
           <div className="jv-sub"><b>Production mockup</b> · {v.order.customer}{v.order.reorderOf ? ` · Reorder of ${v.order.reorderOf}` : ""}{v.order.due ? ` · due ${fmtDay(v.order.due)}` : ""}</div>
           <h1>#{v.order.number} {v.order.nickname} <span className={"jv-status " + status.c} title={status.d}>{status.t}</span></h1>
-          <div className="jv-sub">{v.order.qty.toLocaleString()} pcs · {group?.lines.join(" · ")}</div>
         </div>
         <div className="jv-h-a">
           <Link className="btn sm" href={`/shop/orders/${id}?tab=prod`}>‹ Back to the order</Link>
@@ -92,11 +91,8 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </div>
       </header>
 
-      {oneSitting ? (
-        <section className="jv-steps jv-one" aria-label="Reorder">
-          <b>Reorder: here&apos;s what we did.</b> <span>Log it all on this page with the press operator (size, placement, colors and screens, film, press setup, notes), then <b>Save everything</b>. The next reorder copies it.</span>
-        </section>
-      ) : (
+      {/* a reorder sitting: no banner (Oct 21, Nick: "don't need all this extra text at the top") */}
+      {oneSitting ? null : (
       <section className="jv-steps" aria-label="Where the job is">
         <div className="jv-rail">
           {STEPS.map((s, i) => <span key={s} className={"jv-step" + (v.done[i] ? " done" : i === v.step ? " now" : "")}><b>{v.done[i] ? "✓" : i + 1}</b>{s}</span>)}
