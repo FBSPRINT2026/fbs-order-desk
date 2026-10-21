@@ -11288,7 +11288,6 @@ main.main :is(.page-head, .ibx2-head) .btn.ghost:hover{border-color:var(--accent
   main.main table.m-card td[data-label="Balance"]{grid-area:bal;text-align:right!important;font-size:12.5px!important}
   main.main table.m-card td[data-label="Date"],main.main table.m-card tr:has(> td[data-label="Job"]) > td:not([data-label]){display:none!important}
   /* an email on a phone: the AI summary is two lines, not a block that pushes the email down */
-  main.main .lm-ai{max-height:120px;overflow:auto}
 }
 /* My Day: the to-do filter (All / Money / Shop…) is the secondary toolbar; on a phone the Replies / To-do / Calendar
    switch is a section bar */
