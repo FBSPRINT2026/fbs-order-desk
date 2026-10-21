@@ -13,3 +13,5 @@
   buttons show icons only, then the row wraps. `components/ToolbarFit.tsx` does this for `.aa-nav`, `.ot-nav`,
   `.ibx2-tabs`, `.mf-bar` and anything with `data-toolbar`; give new toolbars icons and one of those hooks. Tables and
   calendars may still scroll.
+- **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
+  with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
