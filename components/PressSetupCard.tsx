@@ -36,7 +36,7 @@ export function planOnPress(press: Machine | undefined, plates0: PsPlate[], setu
 }
 export type OnPress = NonNullable<ReturnType<typeof planOnPress>>;
 
-export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup", compact = false, breaks, onBreaks }: {
+export default function PressSetupCard({ presses, setPresses, press, onPickPress, onPress, setup, commit, clearSetup, sheet, extra, onMesh, title = "Press Setup", compact = false, breaks, onBreaks, hits, onHits }: {
   presses: Machine[]; setPresses?: (fn: (ps: Machine[]) => Machine[]) => void;
   press: Machine; onPickPress: (id: string) => void;
   onPress: OnPress; setup: Slot[] | null;
@@ -53,6 +53,12 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
    * (and 3) start. Screens from there on print on that round; the earlier screens are lifted and the flashes fire again.
    */
   breaks?: number[]; onBreaks?: (b: number[]) => void;
+  /**
+   * Each later round: flash only (null), or the earlier colors hit again on it (Oct 21, Nick: "sometimes we have to hit
+   * a color again… we need to hit the brown one more time to get the color right"). hits[0] is round 2, hits[1] round 3;
+   * the screens by key.
+   */
+  hits?: (string[] | null)[]; onHits?: (h: (string[] | null)[]) => void;
 }) {
   const [showSt, setShowSt] = useSticky("ps.stations", false);
   const stations = !compact || showSt;
@@ -95,6 +101,9 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
   const brk = [...(breaks || [])].filter((b) => b > 0 && b < onPress.heads.length).sort((a, b) => a - b);
   const rounds = brk.length + 1;
   const roundOf = (h: number) => 1 + brk.filter((b) => b <= h).length;
+  /** the later rounds a screen is hit again on */
+  const againOf = (key: string) => (hits || []).flatMap((hs, k) => (k < rounds - 1 && hs?.includes(key) ? [k + 2] : []));
+  const setHit = (k: number, v: string[] | null) => { if (!onHits) return; const n = [...(hits || [])]; while (n.length <= k) n.push(null); n[k] = v; onHits(n); };
   /** 2 or 3 rounds: round 2 (and 3) start at the last screens, unless they were placed already */
   function setRounds(n: number) {
     if (!onBreaks) return;
@@ -129,13 +138,13 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
     const rows = onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
       const what = p ? `<b>${esc(p.name)}</b>${p.kind === "underbase" ? " (underbase)" : p.kind === "highlight" ? " (highlight white)" : ""}${p.mesh ? ` · mesh ${p.mesh}` : ""}` : x === "flash" ? "<b>FLASH</b>" : x === "roller" ? "<b>ROLLER</b> (dead screen)" : x === "cool" ? "<i>empty: cool down</i>" : x === "down" ? "<i>head down</i>" : "<span style=\"color:#999\">empty</span>";
       const bar = rounds > 1 && brk.includes(i) ? `<tr><td colspan="2" style="padding:5px 10px;font-weight:800;border-top:2px dashed #2563eb;color:#2563eb">↻ ROUND ${roundOf(i)} STARTS HERE</td></tr>` : "";
-      return `${bar}<tr><td style="padding:5px 10px;font-weight:800">Head ${i + 1}</td><td style="padding:5px 10px">${p ? `<span style="display:inline-block;width:14px;height:14px;border:1px solid #999;vertical-align:-2px;margin-right:6px;background:${p.hex}"></span>` : ""}${what}${rounds > 1 && p ? ` · <b>round ${roundOf(i)}</b>` : ""}</td></tr>`; }).join("");
+      return `${bar}<tr><td style="padding:5px 10px;font-weight:800">Head ${i + 1}</td><td style="padding:5px 10px">${p ? `<span style="display:inline-block;width:14px;height:14px;border:1px solid #999;vertical-align:-2px;margin-right:6px;background:${p.hex}"></span>` : ""}${what}${rounds > 1 && p ? ` · <b>${againOf(p.key).length ? `rounds ${[roundOf(i), ...againOf(p.key)].join(" & ")}` : `round ${roundOf(i)}`}</b>` : ""}</td></tr>`; }).join("");
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(sheet.title)}</title>${css}<style>body{background:#fff;color:#111;font:14px system-ui;padding:24px}table{border-collapse:collapse}tr:nth-child(odd){background:#f4f5f7}.pl{width:360px;height:auto}</style></head><body>
       <h2 style="margin:0">${esc(sheet.heading)}</h2>
       <div style="color:#555;margin:4px 0 14px">${esc(press.name)} · ${esc(sheet.sub)}</div>
       <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">${svg}<table>${rows}</table></div>
-      ${rounds > 1 ? `<h3>${rounds} rounds</h3><ul>${Array.from({ length: rounds }, (_, r) => { const hs = onPress.heads.flatMap((x, i) => (plateOf(x) && roundOf(i) === r + 1 ? [i + 1] : [])); return `<li>Round ${r + 1}: print head${hs.length === 1 ? "" : "s"} ${hs.join(", ")}${r ? " only (the others lifted), flashes on" : ""}</li>`; }).join("")}</ul>` : ""}
+      ${rounds > 1 ? `<h3>${rounds} rounds</h3><ul>${Array.from({ length: rounds }, (_, r) => { const hs = onPress.heads.flatMap((x, i) => { const kk = plateOf(x); return kk && (roundOf(i) === r + 1 || againOf(kk).includes(r + 1)) ? [i + 1] : []; }); return `<li>Round ${r + 1}: print head${hs.length === 1 ? "" : "s"} ${hs.join(", ")}${r ? `${hs.some((h) => roundOf(h - 1) < r + 1) ? " (hitting earlier colors again)" : ""} only (the others lifted), flashes on` : ""}</li>`; }).join("")}</ul>` : ""}
       ${onPress.moves.length ? `<h3>Before you start</h3><ul>${onPress.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
       <script>setTimeout(()=>print(),400)</script></body></html>`);
     w.document.close();
@@ -212,7 +221,20 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
           {rounds > 1 && bk >= 0 && (
             <li className={"ps-round" + (drag?.round === bk ? " dragging" : "")} draggable onDragStart={(e) => { setDrag({ round: bk }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", `round${bk}`); }} onDragEnd={() => { setDrag(null); setDropHead(null); }}
               title="Drag onto the head where this round starts">
-              <span aria-hidden>↻</span><b>Round {bk + 2} starts here</b><span>drag to move · the shirt goes around again: the screens before are lifted, the flashes fire again</span>
+              <span aria-hidden>↻</span><b>Round {bk + 2} starts here</b>
+              {onHits && (() => {
+                const cur = hits?.[bk] ?? null;
+                const earlier = onPress.heads.flatMap((y, j) => { const kk = plateOf(y), q = kk ? plates.find((z) => z.key === kk) : null; return q && roundOf(j) < bk + 2 ? [q] : []; });
+                return (
+                  <span className="ps-round-opt" draggable={false} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                    <button type="button" className={"ps-rbtn" + (cur === null ? " on" : "")} onClick={() => setHit(bk, null)}>Flash only</button>
+                    <button type="button" className={"ps-rbtn" + (cur !== null ? " on" : "")} onClick={() => { if (cur === null) setHit(bk, []); }}>Re-hit colors</button>
+                    {cur !== null && <span className="ps-rhits">{earlier.map((q) => (
+                      <label key={q.key}><input type="checkbox" checked={cur.includes(q.key)} onChange={(e) => setHit(bk, e.target.checked ? [...cur, q.key] : cur.filter((x) => x !== q.key))} />{q.name}</label>
+                    ))}</span>}
+                  </span>
+                );
+              })()}
             </li>
           )}
           <li className={"ps-head k-" + kind + (selHead === h ? " sel" : "") + (drag?.head === h ? " dragging" : "") + (dropHead === h && drag ? " drop" : "")}
@@ -220,7 +242,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
             onDragOver={(e) => { if (drag && !down) { e.preventDefault(); if (dropHead !== h) setDropHead(h); } }} onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(h); }}>
             <span className="ps-hn">{h + 1}</span>
             {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-st k-" + kind} aria-hidden />}
-            <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}{rounds > 1 && (p ? <small className={"ps-rtag" + (roundOf(h) > 1 ? " on" : "")}>round {roundOf(h)}</small> : x === "flash" ? <small className="ps-rtag">every round</small> : null)}</span>
+            <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}{rounds > 1 && (p ? <small className={"ps-rtag" + (roundOf(h) > 1 || againOf(p.key).length ? " on" : "")}>{againOf(p.key).length ? `rounds ${[roundOf(h), ...againOf(p.key)].join(" & ")}` : `round ${roundOf(h)}`}</small> : x === "flash" ? <small className="ps-rtag">every round</small> : null)}</span>
             <span className="ps-hm">{p && (onMesh
               ? <input className="ps-mesh" value={p.mesh || ""} inputMode="numeric" placeholder="mesh" aria-label={`${p.name} mesh`} onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); onMesh(p.key, n > 0 ? n : undefined); }} />
               : null)}</span>

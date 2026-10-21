@@ -10842,7 +10842,11 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .ps-rounds{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 6px;font-size:13px}
 .ps-rounds label{display:flex;align-items:center;gap:6px}
 .ps-hrows .ps-round{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:4px 0;border:1.5px dashed #2563eb;border-radius:8px;background:#eff6ff;color:#1d4ed8;cursor:grab;font-size:13px;list-style:none}
-.ps-hrows .ps-round span:last-child{color:#3b6fd8;font-size:12px}
+.ps-round-opt{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:10px;cursor:default}
+.ps-rbtn{padding:2px 10px;border:1px solid #93c5fd;border-radius:6px;background:#fff;color:#1d4ed8;font-size:12px;cursor:pointer}
+.ps-rbtn.on{background:#2563eb;border-color:#2563eb;color:#fff}
+.ps-rhits{display:inline-flex;gap:4px 12px;flex-wrap:wrap;margin-left:6px;color:var(--ink);font-size:12px}
+.ps-rhits label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .ps-hrows .ps-round.dragging{opacity:.5}
 .ps-rtag{margin-left:8px;padding:1px 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);font-size:11px}
 .ps-rtag.on{background:#dbeafe;color:#1d4ed8}

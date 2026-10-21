@@ -61,7 +61,7 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
 const clean = (hs: unknown): PHead[] => (Array.isArray(hs) ? hs : []).slice(0, 24).map((h) => {
   const x = h as Partial<PHead>;
   const what = (["screen", "flash", "cool", "roller", "empty"] as const).includes(x.what as never) ? (x.what as PHead["what"]) : "empty";
-  return { what, ...(what === "screen" && x.key ? { key: String(x.key).slice(0, 40) } : {}), name: what === "screen" ? String(x.name || "").trim().slice(0, 60) || "Ink" : "", hex: /^#[0-9a-f]{6}$/i.test(String(x.hex || "")) ? String(x.hex) : "", mesh: what === "screen" && +(x.mesh || 0) > 0 ? Math.round(+x.mesh!) : null, ...(what === "screen" && +(x.round || 0) > 1 ? { round: Math.min(3, Math.round(+x.round!)) } : {}) };
+  return { what, ...(what === "screen" && x.key ? { key: String(x.key).slice(0, 40) } : {}), name: what === "screen" ? String(x.name || "").trim().slice(0, 60) || "Ink" : "", hex: /^#[0-9a-f]{6}$/i.test(String(x.hex || "")) ? String(x.hex) : "", mesh: what === "screen" && +(x.mesh || 0) > 0 ? Math.round(+x.mesh!) : null, ...(what === "screen" && +(x.round || 0) > 1 ? { round: Math.min(3, Math.round(+x.round!)) } : {}), ...(what === "screen" && Array.isArray(x.again) && x.again.length ? { again: [...new Set(x.again.map((n) => Math.round(+n)).filter((n) => n >= 2 && n <= 3))] } : {}) };
 });
 
 export async function saveActual(admin: SupabaseClient, who: JobActor, card: JobCard, settingsData: unknown, b: { sheet: string; pressId: string; heads: unknown; notes?: string; learn?: boolean }) {

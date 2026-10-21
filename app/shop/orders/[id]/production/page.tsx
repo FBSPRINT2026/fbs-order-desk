@@ -282,6 +282,13 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     hs.forEach((h, i) => { if (h.what === "screen" && (h.round || 1) > r) { r = h.round || 1; out.push(i); } });
     return out;
   });
+  // each later round: flash only (null) or the earlier screens hit again (by key)
+  const [hits, setHits] = useState<(string[] | null)[]>(() => {
+    const hs = p.press && p.press.from !== "auto" ? p.press.heads : [];
+    const out: (string[] | null)[] = [null, null];
+    for (const h of hs) for (const r of h.again || []) if (r >= 2 && r <= 3) { out[r - 2] = [...(out[r - 2] || []), plateKey(h.name)]; }
+    return out;
+  });
   // the press: the one it must run on, else the one it ran on (or the separation's), else the scheduled one if the
   // screens fit, else the smallest press they fit on
   const [pressId, setPressId] = useState(() => {
@@ -309,7 +316,8 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
       const heads = onPress.heads.map((h, i) => {
         const pl = h.startsWith("p:") ? plates.find((x) => x.key === h.slice(2)) : null;
         const round = 1 + breaks.filter((b) => b <= i).length;
-        return pl ? { what: "screen", name: pl.name, hex: pl.hex, mesh: pl.mesh || null, ...(round > 1 ? { round } : {}) } : { what: h === "flash" || h === "cool" || h === "roller" ? h : "empty", name: "", hex: "", mesh: null };
+        const again = pl ? hits.flatMap((hs, k) => (k < breaks.length && hs?.includes(pl.key) ? [k + 2] : [])) : [];
+        return pl ? { what: "screen", name: pl.name, hex: pl.hex, mesh: pl.mesh || null, ...(round > 1 ? { round } : {}), ...(again.length ? { again } : {}) } : { what: h === "flash" || h === "cool" || h === "roller" ? h : "empty", name: "", hex: "", mesh: null };
       });
       const r = await fetch("/api/jobs/press", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job: { kind: "o", id: orderId }, sheet: p.sep ? p.sep.id : `loc:${loc}`, pressId: press?.id || "", notes: pnotes, learn: true, heads }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
       if (r.error) { setErr(`Press setup: ${r.error}`); ok = false; }
@@ -485,7 +493,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
           {p.press?.asPrinted && <div className="faint">Showing what was saved as printed{p.press.press ? ` on ${p.press.press}` : ""}.</div>}
           {!plates.length ? <div className="jv-empty">Put the colors in step 3 first: the press is laid out from those screens.</div>
             : !press || !onPress ? <div className="jv-empty">No screen presses set up (Settings → Production).</div>
-            : <PressSetupCard title="Press setup" presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); setBreaks([]); }} breaks={breaks} onBreaks={setBreaks} onPress={onPress} setup={setup}
+            : <PressSetupCard title="Press setup" presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); setBreaks([]); setHits([null, null]); }} breaks={breaks} onBreaks={setBreaks} hits={hits} onHits={setHits} onPress={onPress} setup={setup}
                 commit={setSetup} clearSetup={() => setSetup(null)} onMesh={(k, n) => setMesh((m) => { const x = { ...m }; if (n) x[k] = n; else delete x[k]; return x; })}
                 sheet={{ title: `Press setup #${v.order.number}`, heading: `Press setup · ${loc}${` · #${v.order.number} ${v.order.nickname}`}`, sub: `${plates.length} screens${p.design ? ` · ${p.design}` : ""}` }}
                 extra={pinned && pinned.id === press.id

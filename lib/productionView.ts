@@ -17,7 +17,7 @@ export const PROD_ROLES = ["owner", "production"];
 export const STEPS = ["Order", "Mockup", "Separations requested", "Film made", "Film checked", "On press", "Printed"] as const;
 
 export type PvPlate = { name: string; hex: string; mesh: string; coverage: number | null; url: string };
-export type PvHead = { what: string; name: string; hex: string; mesh: string; /** printed on round 2 or 3 */ round?: number };
+export type PvHead = { what: string; name: string; hex: string; mesh: string; /** printed on round 2 or 3 */ round?: number; /** hit again on these later rounds */ again?: number[] };
 export type PvPrint = {
   id: string; groupId: string; group: string; location: string; method: string; screen: boolean;
   colors: number; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
@@ -107,7 +107,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     const act = (acts || []).find((a) => (s && a.separation_id === s.id) || (!s && a.location === im.location));
     const setup = (s?.settings as { pressSetup?: { heads?: string[] } } | null)?.pressSetup;
     let press: PvPrint["press"] = null;
-    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || ""), ...(+(h.round || 0) > 1 ? { round: +h.round! } : {}) })), asPrinted: true, from: "actual" };
+    if (act) press = { press: String(act.press_name || ""), pressId: String(act.press_id || ""), heads: ((act.heads || []) as PvHead[]).map((h) => ({ what: h.what, name: h.name || "", hex: h.hex || "", mesh: String(h.mesh || ""), ...(+(h.round || 0) > 1 ? { round: +h.round! } : {}), ...(Array.isArray(h.again) && h.again.length ? { again: h.again.map(Number) } : {}) })), asPrinted: true, from: "actual" };
     else if (!setup?.heads?.length && screen && (im.inks || "").trim()) {
       // no separation (film on file or in the drawer, Oct 21: The Bottles): laid out from the print's own screens, on the
       // press it's scheduled on, else the smallest press that fits
