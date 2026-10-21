@@ -237,6 +237,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const viewAsEl = (
           <span className={"nav-viewas" + (viewAs ? " on" : "")} data-tip={viewAs ? "Viewing as someone else: pick My view to go back" : "View as"}>
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="6.5" cy="16" r="3.5" /><circle cx="17.5" cy="16" r="3.5" /><path d="M3.3 14.6 5 7a2 2 0 0 1 2-1.6h1A2 2 0 0 1 10 7.4v6.4" /><path d="M20.7 14.6 19 7a2 2 0 0 0-2-1.6h-1a2 2 0 0 0-2 2v6.4" /><path d="M10 11.5h4" /></svg>
+            <span className="lbl-t">{viewAs ? "Viewing as someone else" : "View as…"}</span>
             <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
               onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
               <option value="">View as…</option>
