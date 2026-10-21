@@ -68,7 +68,8 @@ export type Method = "screen" | "embroidery" | "dtf";
 export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
-  inkMap?: { design: string; map: Record<string, { name: string; hex: string; /** printed as a halftone of that ink, % (Mockup Creator: Combine colors) */ tone?: number }> };
+  inkMap?: { design: string; map: Record<string, { name: string; hex: string; /** printed as a halftone of that ink, % (Mockup Creator: Combine colors) */ tone?: number;
+    /** a custom ink mixed for this job ("half PMS 475 C, half PMS 7506 C"), set in the production view */ mix?: string }> };
   /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;
   /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
    *  are charged by pmsInks() */ pms?: number;

@@ -23,6 +23,8 @@ export type PvPrint = {
   press: { press: string; heads: PvHead[]; asPrinted: boolean } | null;
   minutes: { setup: number; run: number };
   /** the print's art (the customer design's picture), to compare films against */ art: string; design: string;
+  /** the art's own colors (the design's print plan) and how they map to screens (imprint.inkMap) */
+  plan: { hex: string; name: string }[]; inkMap: Record<string, { name: string; hex: string; mix?: string }>; sizeFrom: string;
 };
 export type ProductionView = {
   order: { id: string; number: number; nickname: string; status: string; due: string | null; customer: string; customerId: string; qty: number; reorderOf: string };
@@ -53,7 +55,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     admin.from("art_files").select("name, file_path, category").eq("order_id", orderId).order("created_at"),
   ]);
   const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((i) => i.design_id || "")).filter(Boolean))];
-  const { data: dsgs } = dIds.length ? await admin.from("designs").select("id, name, preview_path, file_path").in("id", dIds) : { data: [] as { id: string; name: string; preview_path: string | null; file_path: string }[] };
+  const { data: dsgs } = dIds.length ? await admin.from("designs").select("id, name, preview_path, file_path, print_plan").in("id", dIds) : { data: [] as { id: string; name: string; preview_path: string | null; file_path: string; print_plan: unknown }[] };
   const artPath = (d?: { preview_path: string | null; file_path: string }) => (d ? (d.preview_path || (/\.(png|jpe?g|webp|gif)$/i.test(d.file_path) ? d.file_path : "")) : "");
 
   // pictures: one signing call
@@ -106,7 +108,12 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       film: im.film ? { ...im.film, files: (im.film.files || []).map((f) => ({ ...f, url: signed.get(f.path) || "" })) as never } : null,
       sep: s ? { id: s.id, number: s.number, status: s.status, plates: chans.map((c) => ({ name: c.name || "", hex: c.hex || "#000000", mesh: String(c.mesh || ""), coverage: typeof c.coverage === "number" ? c.coverage : null, url: c.file ? signed.get(c.file) || "" : "" })) } : null,
       press, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },
-      ...(() => { const d = (dsgs || []).find((x) => x.id === im.design_id); return { art: signed.get(artPath(d)) || "", design: d?.name || "" }; })(),
+      ...(() => {
+        const d = (dsgs || []).find((x) => x.id === im.design_id);
+        const plan = (((d?.print_plan || {}) as { inks?: { hex?: string; name?: string }[] }).inks || []).filter((k) => k.hex).map((k) => ({ hex: String(k.hex).toUpperCase(), name: String(k.name || "") }));
+        const inkMap = im.inkMap && im.inkMap.design === im.design_id ? Object.fromEntries(Object.entries(im.inkMap.map).map(([h, v]) => [h.toUpperCase(), { name: v.name, hex: v.hex, ...(v.mix ? { mix: v.mix } : {}) }])) : {};
+        return { art: signed.get(artPath(d)) || "", design: d?.name || "", plan, inkMap, sizeFrom: im.sizeFrom || "" };
+      })(),
     });
   }
 

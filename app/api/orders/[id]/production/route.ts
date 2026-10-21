@@ -75,7 +75,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   } else {
     const im = all.find((x) => x.id === String(b.print || ""));
     if (!im) return NextResponse.json({ error: "Which print?" }, { status: 400 });
-    if (b.op === "draft") {
+    if (b.op === "colors") {
+      // the art's colors onto screens (Oct 21, Nick: "we need to combine colors… put in PMS colors, or a custom color,
+      // half this, half that"): each screen's ink, and which art colors print through it
+      const screens = (Array.isArray(b.screens) ? b.screens : []).slice(0, 20).map((x) => { const s = x as { name?: string; hex?: string; mix?: string }; return { name: clip(s.name, 60), hex: /^#[0-9a-f]{6}$/i.test(String(s.hex || "")) ? String(s.hex).toUpperCase() : "#888888", mix: clip(s.mix, 160) }; }).filter((x) => x.name);
+      const map = (b.map || {}) as Record<string, number>;
+      if (!screens.length) return NextResponse.json({ error: "Name at least one ink." }, { status: 400 });
+      im.inks = screens.map((x) => x.name).join(", ");
+      if ((im.method || "screen") === "screen") im.colors = screens.length;
+      if (im.design_id) im.inkMap = { design: im.design_id, map: Object.fromEntries(Object.entries(map).filter(([h, i]) => /^#[0-9a-f]{6}$/i.test(h) && screens[i]).map(([h, i]) => [h.toUpperCase(), { name: screens[i].name, hex: screens[i].hex, ...(screens[i].mix ? { mix: screens[i].mix } : {}) }])) };
+      if (im.confirm) im.confirm = { ...im.confirm, filled: { by: w.by, at } };
+      const mixes = screens.filter((x) => x.mix).map((x) => `${x.name} = ${x.mix}`);
+      events.push(`${im.location}: ${screens.length} screen${screens.length === 1 ? "" : "s"}: ${im.inks}${mixes.length ? ` (mixed: ${mixes.join("; ")})` : ""}`);
+    } else if (b.op === "draft") {
+      if (b.location !== undefined && clip(b.location, 60)) im.location = clip(b.location, 60);
       if (b.size !== undefined) im.size = clip(b.size, 80);
       if (b.drop !== undefined) im.drop = clip(b.drop, 20);
       if (b.inks !== undefined) im.inks = clip(b.inks, 200);

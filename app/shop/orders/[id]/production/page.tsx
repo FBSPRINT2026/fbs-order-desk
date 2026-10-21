@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRole } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
 import { colorHex } from "@/lib/inkColors";
+import { PMS_COATED } from "@/lib/pms";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
 import { createClient } from "@/lib/supabase/client";
@@ -108,19 +109,19 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      <div className="jv-row">
-        <section className={"jv-card jv-mock" + (lock(1) ? " jv-off" : "")} aria-label="Mockup">
-          <div className="jv-card-h"><h2>Mockup</h2><span className="faint">what the customer approved</span></div>
-          <Mockups list={group?.mockups || []} />
-        </section>
-
-        <section className="jv-card jv-print" aria-label="Print details">
+      <section className="jv-card jv-confirm" aria-label="Confirm the print">
+        {gPrints.length > 1 && (
           <div className="chips" role="tablist" aria-label="Print" data-toolbar>
             {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPi(i)}>{p.location}</button>)}
           </div>
-          {print ? <PrintDetails key={print.id} p={print} busy={!!busy} save={(f) => post({ op: "draft", print: print.id, ...f })} /> : <div className="faint">No prints on this group.</div>}
-        </section>
-      </div>
+        )}
+        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} /> : <div className="faint">No prints on this group.</div>}
+      </section>
+
+      <section className={"jv-card jv-mock" + (lock(1) ? " jv-off" : "")} aria-label="Mockup">
+        <div className="jv-card-h"><h2>Mockup</h2><span className="faint">what the customer approved</span></div>
+        <Mockups list={group?.mockups || []} />
+      </section>
 
       {print?.screen && (
         <FilmPanel key={`f${print.id}`} v={v} p={print} locked={v.step < 2 && !print.sep && !print.film} busy={busy} post={post} orderId={id}
@@ -180,43 +181,152 @@ function Mockups({ list }: { list: { title: string; thumb: string; full: string 
   );
 }
 
-function PrintDetails({ p, busy, save }: { p: PvPrint; busy: boolean; save: (f: Record<string, unknown>) => Promise<boolean> }) {
-  const [size, setSize] = useState(p.size), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
-  const [inks, setInks] = useState(() => inkList(p.inks));
-  const [ok, setOk] = useState<Set<number>>(new Set());
-  const dirty = size !== p.size || drop !== p.drop || ub !== p.underbase || inks.join(", ") !== p.inks;
-  const fromNotes = (p.notes.match(/Inks from [^.]*(?:"[^"]*")?/) || [""])[0];
+const LOCS = ["Full Front", "Full Back", "Left Chest", "Right Chest", "Center Chest", "Medium Front", "Medium Back", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve", "Nape (Back Neck)", "Pocket", "Bottom Hem"];
+type Screen = { name: string; hex: string; mix: string };
+const avgHex = (a: string, b: string) => { const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); const x = p(a), y = p(b); return "#" + x.map((v, i) => Math.round((v + y[i]) / 2).toString(16).padStart(2, "0")).join("").toUpperCase(); };
+
+/**
+ * Confirm the print (Oct 21, Nick: "the first thing you should see… confirm the size, then the drop, then the colors and
+ * screens… we need to combine colors… put in PMS colors, or a custom color, half this, half that"). 1 size, 2 placement,
+ * 3 the art's colors onto screens: two art colors on one screen print together; each screen is a PMS, a plain ink or a
+ * custom mix. The art is repainted here the way it will print.
+ */
+function ConfirmPrint({ p, busy, post }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean> }) {
+  const [size, setSize] = useState(p.size), [loc, setLoc] = useState(p.location), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
+  // screens + which screen each art color prints through
+  const start = useMemo(() => {
+    const plan = p.plan;
+    if (plan.length && Object.keys(p.inkMap).length) {
+      const screens: Screen[] = [], assign: Record<string, number> = {};
+      for (const k of plan) {
+        const m = p.inkMap[k.hex]; if (!m) { screens.push({ name: k.name, hex: k.hex, mix: "" }); assign[k.hex] = screens.length - 1; continue; }
+        let i = screens.findIndex((x) => x.name === m.name);
+        if (i < 0) { screens.push({ name: m.name, hex: m.hex, mix: m.mix || "" }); i = screens.length - 1; }
+        assign[k.hex] = i;
+      }
+      return { screens, assign };
+    }
+    if (plan.length) return { screens: plan.map((k) => ({ name: k.name, hex: k.hex, mix: "" })), assign: Object.fromEntries(plan.map((k, i) => [k.hex, i])) as Record<string, number> };
+    return { screens: inkList(p.inks).map((n) => ({ name: n, hex: colorHex(n) || "#888888", mix: "" })), assign: {} as Record<string, number> };
+  }, [p]);
+  const [screens, setScreens] = useState<Screen[]>(start.screens);
+  const [assign, setAssign] = useState<Record<string, number>>(start.assign);
+  const used = new Set(Object.values(assign));
+  // a screen no art color prints through is dropped (and the rest renumbered)
+  function setAssigned(hex: string, to: number) {
+    const next = { ...assign, [hex]: to };
+    let list = to >= screens.length ? [...screens, { name: p.plan.find((k) => k.hex === hex)?.name || "New ink", hex, mix: "" }] : [...screens];
+    const keep = list.map((_, i) => Object.values(next).includes(i));
+    const remap = new Map<number, number>(); let n = 0;
+    keep.forEach((k, i) => { if (k) remap.set(i, n++); });
+    list = list.filter((_, i) => keep[i]);
+    setScreens(p.plan.length ? list : screens);
+    setAssign(Object.fromEntries(Object.entries(next).map(([h, i]) => [h, remap.get(i) ?? 0])));
+  }
+  const setScreen = (i: number, f: Partial<Screen>) => setScreens((a) => a.map((x, j) => (j === i ? { ...x, ...f } : x)));
+  const colorsOn = (i: number) => p.plan.filter((k) => assign[k.hex] === i);
+
+  // the art repainted with the screens' inks
+  const cv = useRef<HTMLCanvasElement | null>(null);
+  const img = useRef<HTMLImageElement | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!p.art) return;
+    const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => { img.current = i; setReady(true); }; i.src = p.art;
+  }, [p.art]);
+  useEffect(() => {
+    const c = cv.current, i = img.current; if (!c || !i || !ready) return;
+    const k = Math.min(1, 420 / Math.max(i.naturalWidth, i.naturalHeight));
+    c.width = Math.max(1, Math.round(i.naturalWidth * k)); c.height = Math.max(1, Math.round(i.naturalHeight * k));
+    const x = c.getContext("2d", { willReadFrequently: true })!; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
+    if (!p.plan.length) return;
+    const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
+    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: rgb(screens[assign[q.hex]]?.hex || q.hex) }));
+    const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map<number, number[]>();
+    for (let o = 0; o < a.length; o += 4) {
+      if (a[o + 3] < 8) continue;
+      const key = (a[o] >> 3 << 10) | (a[o + 1] >> 3 << 5) | (a[o + 2] >> 3);
+      let to = memo.get(key);
+      if (!to) { let best = 1e9; for (const q of plan) { const dd = (q.c[0] - a[o]) ** 2 + (q.c[1] - a[o + 1]) ** 2 + (q.c[2] - a[o + 2]) ** 2; if (dd < best) { best = dd; to = q.to; } } memo.set(key, to!); }
+      a[o] = to![0]; a[o + 1] = to![1]; a[o + 2] = to![2];
+    }
+    x.putImageData(d, 0, 0);
+  }, [ready, screens, assign, p.plan]);
+
+  const dirty = size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(start.screens) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
+  async function save() {
+    const ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
+    if (ok && p.screen && screens.length) await post({ op: "colors", print: p.id, screens, map: assign }, "save");
+  }
   return (
-    <div className="jv-pd">
+    <div className="jv-cp">
       <div className="jv-card-h">
-        <h2>{p.location}</h2>
-        <span className="faint">{p.method === "screen" ? "Screen print" : p.method} · {inks.length || p.colors} color{(inks.length || p.colors) === 1 ? "" : "s"}{p.design ? ` · ${p.design}` : ""}</span>
+        <h2>Confirm the print · {p.location}</h2>
+        <span className="faint">{p.method === "screen" ? "Screen print" : p.method}{p.design ? ` · ${p.design}` : ""}</span>
         <span className={"jv-badge" + (pending ? " warn" : " ok")}>{pending ? "Production to confirm" : p.confirmed ? `Confirmed by ${p.confirmed.by}` : "Set"}</span>
       </div>
-      <div className="jv-2">
-        <label>Print size<input value={size} onChange={(e) => setSize(e.target.value)} placeholder={'11" wide'} /></label>
-        <label>Drop from collar<input value={drop} onChange={(e) => setDrop(e.target.value)} placeholder="3" /></label>
-      </div>
-      {p.screen && <>
-        <div className="jv-lbl">Inks, in print order</div>
-        <div className="jv-inks">
-          {inks.map((k, i) => (
-            <div key={i} className="jv-ink">
-              <span className="jv-n">{i + 1}</span>
-              <span className="jv-sw" style={{ background: colorHex(k) || "#fff" }} />
-              <input value={k} aria-label={`Ink ${i + 1}`} onChange={(e) => setInks((a) => a.map((x, j) => (j === i ? e.target.value : x)))} />
-              <button type="button" className={"jv-tick" + (ok.has(i) ? " on" : "")} onClick={() => setOk((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}>{ok.has(i) ? "Confirmed" : "Confirm"}</button>
-              <button type="button" className="jv-x" aria-label={`Remove ink ${i + 1}`} onClick={() => setInks((a) => a.filter((_, j) => j !== i))}>×</button>
-            </div>
-          ))}
-          <button type="button" className="btn sm ghost" onClick={() => setInks((a) => [...a, ""])}>+ Ink</button>
+      <div className="jv-cp-row">
+        <div className="jv-cp-step">
+          <div className="jv-cp-n"><b>1</b>Size</div>
+          <input value={size} onChange={(e) => setSize(e.target.value)} placeholder={'11" wide'} aria-label="Print size" />
+          <span className="faint">{p.sizeFrom === "film" ? "From the film (printed at this size before)" : p.sizeFrom === "customer" ? "The customer asked for this size" : pending ? "Our guess from the mockup: check it" : ""}</span>
         </div>
-        <div className="jv-ub"><span>Underbase</span>{([["", "Not sure"], ["yes", "Yes"], ["no", "No"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (ub === k ? " on" : "")} onClick={() => setUb(k)}>{l}</button>)}</div>
-      </>}
-      {fromNotes && <div className="jv-found"><b>Found in the old job</b><span>{fromNotes}</span></div>}
+        <div className="jv-cp-step">
+          <div className="jv-cp-n"><b>2</b>Placement</div>
+          <select value={loc} onChange={(e) => setLoc(e.target.value)} aria-label="Location">{[...new Set([p.location, ...LOCS])].map((l) => <option key={l}>{l}</option>)}</select>
+          <label className="jv-inl">Drop from the collar <input value={drop} onChange={(e) => setDrop(e.target.value)} placeholder="3" aria-label="Drop from collar" />in.</label>
+        </div>
+      </div>
+      {p.screen && (
+        <div className="jv-cp-step jv-cp-colors">
+          <div className="jv-cp-n"><b>3</b>Colors &amp; screens <span className="faint">{p.plan.length ? `${p.plan.length} colors in the art → ${screens.length} screen${screens.length === 1 ? "" : "s"}` : `${screens.length} screen${screens.length === 1 ? "" : "s"}`}</span></div>
+          <div className="jv-cc">
+            <div className="jv-cc-art">
+              {p.art ? <canvas ref={cv} aria-label="The art as it will print" /> : <span className="faint">No art picture on this print.</span>}
+              <span className="faint">As it will print</span>
+            </div>
+            <div className="jv-cc-list">
+              {p.plan.length > 0 && (
+                <div className="jv-cc-art-colors">
+                  <div className="jv-lbl">The art&apos;s colors · put two on one screen to print them together</div>
+                  {p.plan.map((k) => (
+                    <div key={k.hex} className="jv-ac">
+                      <span className="jv-sw" style={{ background: k.hex }} />
+                      <span className="jv-ac-n">{k.name}<span className="faint"> {k.hex}</span></span>
+                      <select value={assign[k.hex] ?? 0} onChange={(e) => setAssigned(k.hex, +e.target.value)} aria-label={`Screen for ${k.name}`}>
+                        {screens.map((x, i) => <option key={i} value={i}>Screen {i + 1}: {x.name}</option>)}
+                        <option value={screens.length}>A screen of its own</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="jv-lbl">Screens, in print order</div>
+              {screens.map((x, i) => {
+                const on = colorsOn(i);
+                return (
+                  <div key={i} className="jv-scr">
+                    <span className="jv-n">{i + 1}</span>
+                    <input type="color" value={x.hex} onChange={(e) => setScreen(i, { hex: e.target.value.toUpperCase() })} aria-label={`Screen ${i + 1} color`} />
+                    <div className="jv-scr-b">
+                      <input value={x.name} list="jv-pms" onChange={(e) => { const name = e.target.value; const h = colorHex(name); setScreen(i, { name, ...(h ? { hex: h.toUpperCase() } : {}) }); }} aria-label={`Screen ${i + 1} ink`} placeholder="PMS 475 C, White, or a custom name" />
+                      <input value={x.mix} onChange={(e) => setScreen(i, { mix: e.target.value })} placeholder="Custom mix? e.g. half PMS 475 C, half PMS 7506 C" aria-label={`Screen ${i + 1} mix`} />
+                      {on.length > 1 && <span className="faint">Prints {on.map((k) => k.name).join(" + ")}{!x.mix && <> · <button type="button" className="linkbtn" onClick={() => setScreen(i, { name: `Custom ${on.map((k) => k.name.replace(/^PMS /, "").replace(/ C$/, "")).join("/")}`, hex: on.slice(1).reduce((h, k) => avgHex(h, k.hex), on[0].hex), mix: `half ${on[0].name}, half ${on[1].name}${on.length > 2 ? `, plus ${on.slice(2).map((k) => k.name).join(", ")}` : ""}` })}>Mix them half and half</button></>}</span>}
+                    </div>
+                    {!p.plan.length && <button type="button" className="jv-x" aria-label={`Remove screen ${i + 1}`} onClick={() => setScreens((a) => a.filter((_, j) => j !== i))}>×</button>}
+                  </div>
+                );
+              })}
+              {!p.plan.length && <button type="button" className="btn sm ghost" onClick={() => setScreens((a) => [...a, { name: "", hex: "#888888", mix: "" }])}>+ Screen</button>}
+              <div className="jv-ub"><span>Underbase</span>{([["", "Not sure"], ["yes", "Yes"], ["no", "No"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (ub === k ? " on" : "")} onClick={() => setUb(k)}>{l}</button>)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      <datalist id="jv-pms">{["White", "Black", "Athletic Gold", "Navy", "Red", "Royal", "Kelly Green", "Orange", "Purple", "Maroon", "Silver", ...Object.keys(PMS_COATED)].map((n) => <option key={n} value={n} />)}</datalist>
       <div className="jv-pd-f">
-        <button type="button" className="btn sm" disabled={!dirty || busy} onClick={() => void save({ size, drop, underbase: ub, inks: inks.filter(Boolean).join(", "), colors: inks.filter(Boolean).length || undefined })}>Save details</button>
+        <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save size, placement and screens"}</button>
         <span className="faint">{dirty ? "Not saved yet" : "Saved on the order · confirmed for good with Confirm & save as printed"}</span>
       </div>
     </div>
