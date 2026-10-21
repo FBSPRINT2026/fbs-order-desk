@@ -23,7 +23,7 @@ import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
-import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
+import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolorTrim } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
@@ -214,6 +214,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [askUploaded, setAskUploaded] = useState(false);
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
+  /** a print's art cut down to what prints when a color was removed (its proportions; the print size is this art's) */
+  const [paintBox, setPaintBox] = useState<Record<string, { w: number; h: number }>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   // raster logos (JPG, PNG…) on a solid background get it knocked out; staff can keep it per logo
   const [clean, setClean] = useState<Record<string, string>>({});
@@ -527,7 +529,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [hover, setHover] = useState<{ id: string; hexes: string[]; v: { name: string; hex: string } } | null>(null);
   // repaint logos whenever an ink choice changes (or a color is being previewed)
   useEffect(() => {
-    const next: Record<string, string> = {};
+    const next: Record<string, string> = {}, boxes: Record<string, { w: number; h: number }> = {};
     for (const im of imprints) {
       const pt = paints[im.id];
       if (!pt) continue;
@@ -537,9 +539,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!img) continue;
       const targets: Record<string, string> = {};
       Object.entries(map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
-      next[im.id] = recolor(img, pt.sources.map((x) => x.hex), targets);
+      const t = recolorTrim(img, pt.sources.map((x) => x.hex), targets);
+      next[im.id] = t.url;
+      if (t.box) boxes[im.id] = { w: t.w, h: t.h };
     }
     setPainted(next);
+    setPaintBox(boxes);
   }, [paints, imprints, hover]);
 
   // picture files (JPG, PNG…): warn once per logo that they don't print as crisp as vector art
@@ -597,15 +602,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const matchBrand = (im: Imprint, key: string) => { const pt = paints[im.id]; const g = brand.groups.find((x) => x.key === key); if (!pt || !g?.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, g); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
   /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
-    const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioOf(designOf(im))), Math.round(inches * 100) / 100));
+    const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioIm(im)), Math.round(inches * 100) / 100));
     setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide` } : x)));
     return v;
   };
   /** Top-left of a print on the reference shirt (reference px), where it sits now including any hand move. */
   const refPos = (im: Imprint) => {
-    const d = designOf(im), r = ratioOf(d) || 0.6;
+    const d = designOf(im), r = ratioIm(im) || 0.6;
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, printWidth(im, im.location, ratioOf(d)), r, drop, scale);
+    const b = basePlacement(im.location, printWidth(im, im.location, ratioIm(im)), r, drop, scale);
     const o = offsets[im.id] || { dx: 0, dy: 0 };
     return { left: b.x + o.dx, top: b.y + o.dy };
   };
@@ -616,8 +621,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const settle = (im: Imprint, wantW: number, at = refPos(im)) => {
     const sp = spotFor(im.location);
     if (sp.wrap) return growTo(im, wantW);
-    const d = designOf(im), r = ratioOf(d) || 0.6;
-    const wIn = Math.max(0.5, Math.min(sideMaxWidth(im.location, ratioOf(d)), Math.round(wantW * 100) / 100));
+    const d = designOf(im), r = ratioIm(im) || 0.6;
+    const wIn = Math.max(0.5, Math.min(sideMaxWidth(im.location, ratioIm(im)), Math.round(wantW * 100) / 100));
     const ppi = PX_PER_IN * scale;
     const z = autoSpot(im.location, sp.view, (at.left + (wIn * ppi) / 2 - CENTER_X) / ppi, (at.top - COLLAR_Y[sp.view]) / ppi, wIn, wIn * r);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
@@ -629,11 +634,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** After typing a size: the width asked for (not cut to the current location), then let the location follow. */
   const settleTyped = (im: Imprint) => {
     if (spotFor(im.location).wrap) return;
-    const r = ratioOf(designOf(im)), m = im.size.match(/^([\d.]+)/); if (!m) return;
+    const r = ratioIm(im), m = im.size.match(/^([\d.]+)/); if (!m) return;
     const w = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
     if (w > 0) settle(im, w);
   };
-  const settleHere = (id: string) => { const im = imprints.find((x) => x.id === id); if (im && !spotFor(im.location).wrap) settle(im, printWidth(im, im.location, ratioOf(designOf(im)))); };
+  const settleHere = (id: string) => { const im = imprints.find((x) => x.id === id); if (im && !spotFor(im.location).wrap) settle(im, printWidth(im, im.location, ratioIm(im))); };
 
   function setInk(im: Imprint, src: string, v: { name: string; hex: string } | null) {
     setPaints((p) => {
@@ -889,6 +894,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
+  /** a print's proportions: the art as it prints (cut down when a color was removed), else the design's */
+  const ratioIm = (im: Imprint) => { const b = paintBox[im.id]; return b?.w && b.h ? b.h / b.w : ratioIm(im); };
   const ratioOf = (d?: Design) => {
     const t = d ? trims[d.id] || d.art_box || null : null;
     if (t?.w && t.h) return t.h / t.w;
@@ -898,7 +905,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // is always 10.5" on the front"), applied on its own; and how it prints (fashion hit, soft hand), each new print's start
   const brandPrint = useMemo(() => (customers.find((c) => c.id === customerId)?.brand_print || null), [customers, customerId]);
   const brandSized = useRef<Record<string, string>>({}), brandHit = useRef<Record<string, string>>({});
-  const brandRule = (im: Imprint) => { const d = designOf(im); if (!d || !brandPrint) return null; const r = ratioOf(d); return brandSizeFor(brandPrint, d.id, r ? 1 / r : 0, im.location); };
+  const brandRule = (im: Imprint) => { const d = designOf(im); if (!d || !brandPrint) return null; const r = ratioIm(im); return brandSizeFor(brandPrint, d.id, r ? 1 / r : 0, im.location); };
   useEffect(() => {
     if (!brandPrint || viewId) return;
     const sizes: Record<string, string> = {}, hits: Record<string, { printStyle?: "fashion"; softHand?: boolean }> = {};
@@ -919,9 +926,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
   const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
-    const r = ratioOf(d) || 0.6;
+    const r = ratioIm(im) || 0.6;
     const bd = on ? bodyFor(on) : body;
-    const wIn = printWidth(im, im.location, ratioOf(d), bd);
+    const wIn = printWidth(im, im.location, ratioIm(im), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const vv = view || viewsFor(im.location)[0];
     const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, on || line, vv), bd);
@@ -1005,8 +1012,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
   const closeUp = (im: Imprint, size: number) => {
-                const d = designOf(im); const r = ratioOf(d) || 0.6;
-                const wIn = printWidth(im, im.location, ratioOf(d));
+                const d = designOf(im); const r = ratioIm(im) || 0.6;
+                const wIn = printWidth(im, im.location, ratioIm(im));
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
                 const sp = spotFor(im.location);
                 return (
@@ -1033,7 +1040,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */
   const labSpot = (im: Imprint) => {
     const sp = spotFor(im.location); if (sp.wrap) return undefined;
-    const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im, im.location, ratioOf(d)), ppi = PX_PER_IN * scale, at = refPos(im);
+    const d = designOf(im), r = ratioIm(im) || 0.6, wIn = printWidth(im, im.location, ratioIm(im)), ppi = PX_PER_IN * scale, at = refPos(im);
     const leftIn = (at.left - CENTER_X) / ppi, topIn = (at.top - COLLAR_Y[sp.view]) / ppi - 4;
     return { x: 300 + (leftIn + wIn / 2) * 50, y: (topIn + (wIn * r) / 2) * 50, w: wIn * 50 };
   };
@@ -1293,7 +1300,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
           // one print alone sits in the middle
           const ox = prints.length === 1 ? M + (PW - 2 * M - cellW) / 2 : M + col * (cellW + cGap), oy = cuTop + rw * (cellH + 0.2 * DPI);
-          const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im, im.location, ratioOf(d)), hIn = wIn * r;
+          const d = designOf(im), r = ratioIm(im) || 0.6, wIn = printWidth(im, im.location, ratioIm(im)), hIn = wIn * r;
           const sp = spotFor(im.location), o = offsets[im.id] || { dx: 0, dy: 0 };
           // heading: location and the max print area
           x.fillStyle = ink; x.font = font(800, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
@@ -1581,7 +1588,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fixes: Record<string, { size: string; note: string }> = {};
     for (const im of imprints) {
       const d = designOf(im); if (!d || im.sizeFrom === "customer" || im.sizeFrom === "film") continue; // the customer's own size, or the size printed before (film): not changed
-      const r = ratioOf(d) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
+      const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
       const want = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
       const cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4;
       if (want > cap + 0.01) fixes[im.id] = { size: `${cap}" wide`, note: `${cap}" wide: the largest that fits the ${capBody.size}, the smallest size on this order (one screen prints every size). Was ${im.size}.` };
@@ -2114,7 +2121,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {sizer && (() => {
             const im = imprints.find((x) => x.id === sizer.ids[sizer.i]);
             if (!im) return null;
-            const d = designOf(im), p = place(im), r = ratioOf(d) || 0;
+            const d = designOf(im), p = place(im), r = ratioIm(im) || 0;
             const cap = Math.max(1, Math.floor(sideMaxWidth(im.location, r) * 4) / 4);
             const cur = Math.round(p.wIn * 4) / 4;
             const steps = Array.from({ length: Math.round((cap - 0.5) / 0.25) + 1 }, (_, k) => 0.5 + k * 0.25);
@@ -2313,7 +2320,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           const set = (v: string, dim: "wide" | "tall") => {
                             let t = v.replace(/[^\d.]/g, "");
                             // cap at the biggest print this side of the shirt takes (sleeves: 3.5" x 3.5"); the location follows when you leave the box
-                            const r = ratioOf(designOf(im)) || 0;
+                            const r = ratioIm(im) || 0;
                             const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
                             if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
                             guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x))));
@@ -2327,8 +2334,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           );
                         })()}
                       </div>
-                      {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioOf(designOf(im)) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
-                      {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioOf(designOf(im)) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
+                      {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
+                      {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
                       <div className="mk-imp-acts">
                         <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>

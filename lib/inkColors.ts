@@ -83,6 +83,31 @@ const rgb = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5),
 
 /** Repaint a logo: each detected color becomes the chosen ink color, or is dropped ("none") so the shirt shows through. */
 export function recolor(img: HTMLImageElement, sources: string[], targets: Record<string, string>): string {
+  return recolorCanvas(img, sources, targets).toDataURL("image/png");
+}
+
+/**
+ * Recolored, and cut down to what's left when a color was removed (Oct 21, Nick: "when I remove a color and it becomes
+ * the shirt color, are you cropping down?… when I say 11.50 you still have the original box from the color I
+ * removed"): a logo on a black box with the black removed is sized by the art that prints, not the box.
+ * `box` = the part kept, as fractions of the full picture (null when nothing was cut).
+ */
+export function recolorTrim(img: HTMLImageElement, sources: string[], targets: Record<string, string>): { url: string; w: number; h: number; box: { x: number; y: number; w: number; h: number } | null } {
+  const c = recolorCanvas(img, sources, targets);
+  const W = c.width, H = c.height;
+  if (!Object.values(targets).includes("none") || !W || !H) return { url: c.toDataURL("image/png"), w: W, h: H, box: null };
+  const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return { url: c.toDataURL("image/png"), w: W, h: H, box: null };
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  if (w >= W * 0.99 && h >= H * 0.99) return { url: c.toDataURL("image/png"), w: W, h: H, box: null };
+  const o = document.createElement("canvas"); o.width = w; o.height = h;
+  o.getContext("2d")!.drawImage(c, x0, y0, w, h, 0, 0, w, h);
+  return { url: o.toDataURL("image/png"), w, h, box: { x: x0 / W, y: y0 / H, w: w / W, h: h / H } };
+}
+
+function recolorCanvas(img: HTMLImageElement, sources: string[], targets: Record<string, string>): HTMLCanvasElement {
   const w = img.naturalWidth, h = img.naturalHeight;
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
@@ -133,7 +158,7 @@ export function recolor(img: HTMLImageElement, sources: string[], targets: Recor
     if (out.length > 3) d[i + 3] = Math.round(d[i + 3] * out[3]);
   }
   x.putImageData(data, 0, 0);
-  return c.toDataURL("image/png");
+  return c;
 }
 
 const lab = (h: string) => {
