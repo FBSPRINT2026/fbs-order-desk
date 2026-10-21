@@ -11165,3 +11165,10 @@ main.main .due{white-space:nowrap}
 main.main .pill,main.main .pv-dot{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 8px;border-radius:99px;font-family:var(--body);font-size:12px;font-weight:600;line-height:1.35;white-space:nowrap;color:color-mix(in srgb,var(--sc) 72%,#000);background:color-mix(in srgb,var(--sc) 14%,transparent)}
 main.main .pv-dot::before,main.main .pill::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--sc)}
 main.main .aa-arch{font-family:var(--body)}
+/* the type and color system (Oct 21, Nick: "a standard font, then a sub font, a standard color, a bold color… unify
+   the whole look"): titles (page h1 and panel h2) in the title font (--display); everything else in the one body font
+   (--body), no typewriter text except real code. Text is --ink; sub text (second lines, notes, labels) --ink-3; bold
+   is --ink at 700; links and the picked tab --accent / --fbs-blue. */
+main.main :where(*):not(h1, h1 *, h2, h2 *, code, pre, kbd, samp, svg, svg *){font-family:var(--body) !important}
+main.main :is(.sub, .faint, .muted, small){color:var(--ink-3)}
+main.main :is(b, strong){color:inherit}

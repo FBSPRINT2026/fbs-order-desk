@@ -31,6 +31,11 @@
   - Lists: `.tbl-wrap > table.tbl` (small uppercase gray headers, `.ordno` for numbers, `.sub` for a second line only
     when it's needed, `<Pill>` from components/bits for statuses, `.bal` / `.bal.paid` for balances).
   - Panels: `.panel` with `.panel-h` (h2 + a `.faint` note) and `.panel-b`.
+  - Type and color: two fonts only. The title font (`--display`, Archivo) for the page `h1` and panel `h2`; the body
+    font (`--body`, Public Sans) for everything else, numbers included (no `--mono` except real code). Standard text
+    14px `--ink`; sub text (second lines, notes, labels, `.sub` / `.faint` / `small`) 12–12.5px `--ink-3`; bold is
+    `--ink` at weight 700; links, the picked tab and counts on it `--accent` / `--fbs-blue`. Money, numbers, dates and
+    statuses never wrap onto a second line (`white-space:nowrap`).
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
