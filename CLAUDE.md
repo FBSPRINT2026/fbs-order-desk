@@ -24,8 +24,10 @@
     number). Build it as `.stats` with `button.stat` cells (`.v` the number, `.k` the label; `.v.alert` for bad news);
     the shop CSS draws it as the summary card. No separate number cards.
   - Tabs and filters: the order page's tab bar (white bar, the picked tab tinted blue with a blue underline, counts in
-    little pills). Build it as a `.toolbar` with `.chips` of `button.chip` (`.on` when picked; a count in `.chip-n`),
-    search and any select on the same row. Sections of a page are the same tab bar.
+    little pills). Two kinds, each always the same: the page's sections (full width, like the order page's Order / Art
+    & production / Messages…), and a secondary toolbar under them for filters and views inside a section (All / Quotes
+    / Completed, Portal messages / Texts…). Build the secondary one as a `.toolbar` with `.chips` of `button.chip`
+    (`.on` when picked), with the search and any select on the same row. Never a one-off switch or pill row.
   - Lists: `.tbl-wrap > table.tbl` (small uppercase gray headers, `.ordno` for numbers, `.sub` for a second line only
     when it's needed, `<Pill>` from components/bits for statuses, `.bal` / `.bal.paid` for balances).
   - Panels: `.panel` with `.panel-h` (h2 + a `.faint` note) and `.panel-b`.

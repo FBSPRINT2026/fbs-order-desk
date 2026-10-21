@@ -21,10 +21,11 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
     <section className="panel ctx-panel">
       <div className="panel-h"><h2>Texts</h2><span className="faint" style={{ fontSize: 12 }}>{t.length} · shop only (owners, Jose, Claudia)</span></div>
       {/* always say whose texts these are: "Nicholas & Michael Peticolas" (one chip per conversation) */}
-      <div className="ctx-chips" role="group" aria-label="Conversations">
-        {convos.length > 1 && <button type="button" className={!only ? "on" : ""} onClick={() => setOnly("")}>All <small>{t.length}</small></button>}
-        {convos.map(([c, n]) => <button key={c} type="button" className={only === c || convos.length === 1 ? "on" : ""} onClick={() => convos.length > 1 && setOnly(c)}>Texts between {c.replace(" & ", " and ")} <small>{n}</small></button>)}
-      </div>
+      {/* the same secondary toolbar as everywhere (Oct 21, Nick: "that would be a secondary toolbar and it should match everywhere") */}
+      <div className="toolbar ctx-tb"><div className="chips" role="group" aria-label="Conversations">
+        {convos.length > 1 && <button type="button" className={"chip" + (!only ? " on" : "")} onClick={() => setOnly("")}>All {t.length}</button>}
+        {convos.map(([c, n]) => <button key={c} type="button" className={"chip" + (only === c || convos.length === 1 ? " on" : "")} onClick={() => convos.length > 1 && setOnly(c)}>{c.replace(" & ", " and ")} {n}</button>)}
+      </div></div>
       <div className="panel-b ctx">
         {shown.map((m) => {
           const d = day(m.sent_at), sep = d !== last; last = d;

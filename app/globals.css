@@ -11095,13 +11095,13 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
    I liked these toolbars"): the order page's top is the kit. Tab bars and filter chips are its tab bar (white bar, the
    picked tab tinted blue with a blue underline, counts in little pills); number cards are its summary card (the color
    fade on top, colored labels over each number). Scoped to the shop (main.main): the customer portal is untouched. */
-main.main :is(.toolbar .chips, .aa-sub, .set-tabs, .ibx2-tabs, .rv-seg, .md-seg){display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;overflow:hidden;margin-bottom:0}
+main.main :is(.toolbar .chips, .aa-sub, .set-tabs, .ibx2-tabs, .rv-seg, .md-seg, .jt-chips){display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:0;box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);border-radius:14px;padding:0;overflow:hidden;margin-bottom:0}
 main.main :is(.aa-shopnav .chips, .aa-sub, .set-tabs, .ibx2-tabs){width:100%}
 main.main .aa-sub,main.main .set-tabs{margin-bottom:14px}
-main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button){all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;padding:8px 14px;font-family:var(--body);font-size:13.5px;font-weight:700;color:var(--ink-3);white-space:nowrap;text-decoration:none;border-radius:0}
+main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button){all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;padding:8px 14px;font-family:var(--body);font-size:13.5px;font-weight:700;color:var(--ink-3);white-space:nowrap;text-decoration:none;border-radius:0}
 main.main :is(.aa-shopnav .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button){flex:1 0 auto;padding:12px 14px}
-main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button):hover{color:var(--ink);background:transparent}
-main.main :is(.toolbar .chips .chip.on, .aa-sub > button.on, .set-tabs a.on, .ibx2-tabs > button.on, .rv-seg > button.on, .md-seg > button.on){color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
+main.main :is(.toolbar .chips .chip, .aa-sub > button, .set-tabs a, .ibx2-tabs > button, .rv-seg > button, .md-seg > button, .jt-chips > button):hover{color:var(--ink);background:transparent}
+main.main :is(.toolbar .chips .chip.on, .aa-sub > button.on, .set-tabs a.on, .ibx2-tabs > button.on, .rv-seg > button.on, .md-seg > button.on, .jt-chips > button.on){color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
 main.main :is(.chip .chip-n, .aa-sub > button span, .ibx2-tabs > button span){font-size:11px;font-weight:700;min-width:20px;text-align:center;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3);margin:0}
 main.main :is(.chip.on .chip-n, .aa-sub > button.on span, .ibx2-tabs > button.on span){background:var(--fbs-blue);color:#fff}
 main.main .md-seg input[type=date]{border:0;background:var(--surface);padding:0 10px}
@@ -11139,3 +11139,7 @@ main.main .aa-card.aa-tblcard{border-radius:var(--r);padding:0}
 main.main .jv-h h1::after{content:"";display:block;background:var(--fbs-fade);height:5px;border-radius:4px;width:calc(100% + 60px);min-width:140px;max-width:100%;margin-top:6px}
 main.main .db-kpis > a:first-child::before{display:none}
 main.main .stat small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ctx-tb{padding:10px 16px 0;margin:0}
+main.main .jt-chips{margin:0 16px 8px;width:fit-content}
+main.main .jt-chips > button small{font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;background:var(--surface-2);color:var(--ink-3)}
+main.main .jt-chips > button.on small{background:var(--fbs-blue);color:#fff}

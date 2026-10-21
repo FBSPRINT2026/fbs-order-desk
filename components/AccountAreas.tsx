@@ -841,10 +841,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     // portal messages and their texts in one place (Oct 21, Nick)
     body = <>
       {textsPanel && (
-        <div className="cx-chips cx-conv" role="tablist" aria-label="Which conversation">
-          <button type="button" role="tab" aria-selected={convNow === "portal"} className={convNow === "portal" ? "on" : ""} onClick={() => { setConv("portal"); if (rawArea === "texts") go("messages"); }}>Portal messages <span>{messages.length}</span></button>
-          <button type="button" role="tab" aria-selected={convNow === "texts"} className={convNow === "texts" ? "on" : ""} onClick={() => { setConv("texts"); if (rawArea === "texts") go("messages"); }}>Texts <span>{textsCount || 0}</span></button>
-        </div>
+        <div className="toolbar"><div className="chips" role="tablist" aria-label="Which conversation">
+          <button type="button" role="tab" aria-selected={convNow === "portal"} className={"chip" + (convNow === "portal" ? " on" : "")} onClick={() => { setConv("portal"); if (rawArea === "texts") go("messages"); }}>Portal messages {messages.length}</button>
+          <button type="button" role="tab" aria-selected={convNow === "texts"} className={"chip" + (convNow === "texts" ? " on" : "")} onClick={() => { setConv("texts"); if (rawArea === "texts") go("messages"); }}>Texts {textsCount || 0}</button>
+        </div></div>
       )}
       {convNow === "texts" && textsPanel ? textsPanel : messagesPanel}
     </>;
