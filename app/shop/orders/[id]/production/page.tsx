@@ -6,6 +6,8 @@ import { PMS_COATED } from "@/lib/pms";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
 import { useShirtBg } from "@/lib/fabricTile";
+import { qrSvg } from "@/lib/qr";
+import { jobLink } from "@/lib/zpl";
 import { createClient } from "@/lib/supabase/client";
 import type { ProductionView, PvPrint } from "@/lib/productionView";
 import PressSetupCard, { planOnPress, type PsPlate, type PsRec } from "@/components/PressSetupCard";
@@ -560,6 +562,11 @@ function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }:
   const [found, setFound] = useState<Found[] | null>(null);
   const [looking, setLooking] = useState(false), [adding, setAdding] = useState(""), [upl, setUpl] = useState(false), [msg, setMsg] = useState("");
   const [all, setAll] = useState(false);
+  // from the phone (Oct 21, Nick: "upload photos directly from his iPhone… scan a QR code and on this screen… bring in
+  // photos"): the job's phone page opens on Photos (take one, or add from the photo library); they show up here
+  const [phone, setPhone] = useState(false);
+  const qr = useMemo(() => (phone ? qrSvg(`${jobLink(v.order.number)}?v=photos`, 2).svg : ""), [phone, v.order.number]);
+  useEffect(() => { if (!phone) return; const t = setInterval(() => void reloadPhotos(), 6000); return () => clearInterval(t); }, [phone, reloadPhotos]);
   const pics = photos.filter((x) => x.kind === "photo" && x.url);
   const added = new Set(pics.map((x) => markOf(x.body || "")).filter(Boolean));
   const from = (v.order.reorderOf.match(/#(\d+)/) || [])[1] || "";
@@ -595,7 +602,17 @@ function Samples({ n, p, v, orderId, busy, post, photos, reloadPhotos, setErr }:
           setUpl(false); await reloadPhotos();
         }} /></label>
         <button type="button" className="jv-addphoto" disabled={looking} onClick={() => (found ? setFound(null) : void find())}>{looking ? "Looking…" : found ? "Hide the messages" : "Find photos in texts and emails"}</button>
+        <button type="button" className="jv-addphoto" onClick={() => setPhone((x) => !x)}>{phone ? "Done with the phone" : "Add from my phone"}</button>
       </div>
+      {phone && (
+        <div className="jv-phone">
+          <div className="jv-phone-qr" dangerouslySetInnerHTML={{ __html: qr }} />
+          <div>
+            <b>Scan with your iPhone camera</b>
+            <div className="jv-cc-hint">It opens #{v.order.number}&apos;s Photos on the phone: take a photo, or tap <b>Add from my photos</b> to pick ones already on it. They show up here in a few seconds.</div>
+          </div>
+        </div>
+      )}
       {!pics.length && !found && <div className="jv-cc-hint">No photos on this job yet. Find the ones you texted or emailed the customer, or upload them.</div>}
       {msg && <div className="err">{msg}</div>}
       {found && (

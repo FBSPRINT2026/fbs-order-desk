@@ -41,6 +41,8 @@ export default function JobMobile(p: {
   const { who, card } = p;
   const { t, locale } = useT();
   const [view, setView] = useState<View>("home");
+  // ?v=photos (the "Add photos from your phone" QR on the production mockup) opens straight on Photos
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("v"); if (v === "photos") setView("photos"); }, []);
   // each tool is its own history entry, so the phone's Back button returns to the menu
   const go = (v: View) => { if (v !== "home") history.pushState({ jm: v }, ""); setView(v); scrollTo(0, 0); };
   useEffect(() => { const on = (e: PopStateEvent) => setView(((e.state && e.state.jm) as View) || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
@@ -219,10 +221,21 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
   const { items, load } = useJobFiles(job);
   const cam = useRef<HTMLInputElement>(null);
   const [shot, setShot] = useState<File | null>(null), [big, setBig] = useState<JobFile | null>(null);
+  // pictures already on the phone (Oct 21, Nick: "upload photos directly from his iPhone without… email the photos")
+  const lib = useRef<HTMLInputElement>(null);
+  const [upl, setUpl] = useState(""), [err, setErr] = useState("");
   const photos = (items || []).filter((x) => x.kind === "photo");
   return (
     <>
       <button type="button" className="jm-cam" onClick={() => cam.current?.click()}><Icon d={I.photo} />{t("Take a photo")}</button>
+      <button type="button" className="jm-cam jm-lib" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
+      <input ref={lib} type="file" accept="image/*" multiple hidden onChange={async (e) => {
+        const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
+        setErr("");
+        for (let i = 0; i < fs.length; i++) { setUpl(t("Saving {0} of {1}…", i + 1, fs.length)); const r = await addPhoto(job, fs[i], "", "Sample"); if (!r.ok) { setErr(r.error); break; } }
+        setUpl(""); load();
+      }} />
+      {err && <p className="jm-err">{err}</p>}
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setShot(f); }} />
       {shot && <PhotoSave job={job} file={shot} onDone={() => { setShot(null); load(); }} />}
       {items === null ? <p className="jm-faint">{t("Loading…")}</p> : !photos.length ? <p className="jm-faint">{t("No photos on this job yet.")}</p> : (

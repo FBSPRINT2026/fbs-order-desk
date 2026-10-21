@@ -237,3 +237,6 @@
 .jm-mix td small{display:block;color:var(--ink-3);font-size:12.5px}
 .jm-mix td.r{text-align:right;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:17px}
 .jm-mix tr.tot td{border-bottom:0;font-weight:800}
+/* pictures already on the phone (Oct 21) */
+.jm-cam.jm-lib{background:#fff;color:var(--fbs-blue);border:2px solid var(--fbs-blue);margin-top:10px}
+.jm-cam.jm-lib:disabled{opacity:.7}

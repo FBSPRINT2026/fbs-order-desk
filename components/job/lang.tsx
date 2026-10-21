@@ -87,6 +87,8 @@ const ES: Record<string, string> = {
   "This code doesn't match a job in the portal or in Printavo. Check the number on the label.": "Este código no coincide con ningún trabajo en el portal ni en Printavo. Revisa el número en la etiqueta.",
   "Take a photo of the print": "Tomar foto de la impresión",
   "Take a photo": "Tomar foto",
+  "Add from my photos": "Agregar de mis fotos",
+  "Saving {0} of {1}…": "Guardando {0} de {1}…",
   "Press setup": "Configuración de prensa",
   "Notes": "Notas",
   "Photos": "Fotos",

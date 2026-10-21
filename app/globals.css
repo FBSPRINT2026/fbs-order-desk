@@ -10850,3 +10850,6 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .ps-hrows .ps-round.dragging{opacity:.5}
 .ps-rtag{margin-left:8px;padding:1px 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);font-size:11px}
 .ps-rtag.on{background:#dbeafe;color:#1d4ed8}
+.jv-phone{display:flex;gap:14px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;max-width:560px}
+.jv-phone-qr{width:132px;height:132px;flex:none;background:#fff}
+.jv-phone-qr svg{width:100%;height:100%}
