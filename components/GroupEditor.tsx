@@ -186,7 +186,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   const inkRate = wpl.specialtyInk?.length ? wpl.specialtyInk[Math.min(gc.ti, wpl.specialtyInk.length - 1)] : 0;
   const setPms = (di: number, name: string, v: boolean | undefined) => update((x) => { const m = { ...(x.imprints[di].pmsCharge || {}) }; if (v == null) delete m[name.toLowerCase()]; else m[name.toLowerCase()] = v; x.imprints[di].pmsCharge = Object.keys(m).length ? m : undefined; });
   // the tag print (Oct 21, Nick: "move the tag imprints out of the finishing… under imprints… add tag imprint, use it on
-  // file, and it calculates it to the dollar"): still the "relabel" finishing for the price, shown with the prints
+  // file, and it calculates it to the dollar"): still the "relabel" finishing for the price, shown with the prints. Not
+  // frozen with the prints once there's a mockup (it was finishing before, and it doesn't change the mockup's art)
   const tagFin = finList.find((f) => isRelabel(f));
   const tagOn = !!tagFin && (g.finishing || []).includes(tagFin.id);
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
@@ -345,7 +346,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
         <div className="imp-sec">
         <div className="lbl gsec">Imprints
-          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} disabled={frozen} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
+          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
         </div>
         <div className="imp-wrap">
         <div className="imp-mock">
@@ -485,13 +486,13 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                 <b>Tag print</b>
                 <span className="faint">inside the neck</span>
                 <span className="spacer" />
-                {!frozen && <button type="button" className="linkbtn" onClick={() => tick(tagFin.id, false)}>Remove</button>}
+                <button type="button" className="linkbtn" onClick={() => tick(tagFin.id, false)}>Remove</button>
               </div>
               <div className="tagp-b">
                 {neckSets && <NeckLabelPick sets={neckSets} value={g.neckLabel} groups={[g]} customerId={customerId} onChange={(id) => update((x) => { x.neckLabel = id || undefined; })} />}
                 {/* the price a piece, changeable on this job (the list's $1.00 by default) */}
                 {!hidePrices && <label className="tagp-price" title="Price a piece for the tag print on this job">
-                  <span className="qp-amt-in"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)} disabled={frozen}
+                  <span className="qp-amt-in"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)}
                     onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span>
                   <span className="faint">/pc</span>
                 </label>}
