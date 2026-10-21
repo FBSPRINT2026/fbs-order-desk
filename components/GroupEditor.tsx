@@ -702,7 +702,7 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
   const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false);
   return (
     <div className={"pr" + (vis && !opened ? " pr-vis" : "")}>
-      {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span>Visual mockup</span><small>Production confirming details on print run</small></button>}
+      {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span><b>Visual mockup</b><small>Production confirming details on print run</small></span></button>}
       {ask && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>

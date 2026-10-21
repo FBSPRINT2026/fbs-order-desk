@@ -10330,17 +10330,17 @@ div.prod-kind{border:0;padding:0}
 /* a visual-only print on the order page: greyed under a big stamp (Oct 20) */
 .pr.pr-vis{position:relative}
 .pr.pr-vis>*:not(.pr-vis-stamp):not(.dla-bg){opacity:.38;filter:grayscale(1);pointer-events:none;user-select:none}
-.pr-vis-stamp{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;cursor:pointer;font:inherit}
-.pr-vis-stamp span,.pr-vis-stamp small{padding:0 14px;color:#9a5b10;text-transform:uppercase;letter-spacing:.06em;transform:rotate(-4deg)}
-.pr-vis-stamp span{font-size:22px;font-weight:900;border:3px solid #b7791f;border-bottom:0;border-radius:8px 8px 0 0;padding-top:4px;background:color-mix(in srgb,#fff7e6 80%,transparent)}
-.pr-vis-stamp small{font-size:12px;font-weight:800;border:3px solid #b7791f;border-top:0;border-radius:0 0 8px 8px;padding-bottom:5px;background:color-mix(in srgb,#fff7e6 80%,transparent)}
-.pr-vis-stamp:hover span,.pr-vis-stamp:hover small{background:#fff3d6}
+.pr-vis-stamp{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;font:inherit;padding:0}
+.pr-vis-stamp>span{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 18px 7px;border:3px solid #6b6f76;border-radius:8px;background:rgba(255,255,255,.88);color:#4a4e55;text-transform:uppercase;letter-spacing:.06em;transform:rotate(-3deg)}
+.pr-vis-stamp b{font-size:20px;font-weight:900;line-height:1.1}
+.pr-vis-stamp small{font-size:11px;font-weight:800}
+.pr-vis-stamp:hover>span{border-color:#3d4047;color:#2c2f34;background:#fff}
 /* Mockup Creator: a visual-only reorder (Oct 20) */
-.mk-vis-bar{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:2px solid #b7791f;border-radius:12px;background:#fff8e8}
+.mk-vis-bar{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:2px solid #6b6f76;border-radius:12px;background:var(--surface)}
 .mk-vis-bar.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
 .mk-vis-bar p{margin:0;font-size:12.5px;color:var(--ink-2)}
 .mk-vis-bar .btn{align-self:flex-start}
-.mk-vis-stamp{display:flex;flex-direction:column;align-items:flex-start;color:#975a16;text-transform:uppercase;letter-spacing:.05em}
+.mk-vis-stamp{display:flex;flex-direction:column;align-items:flex-start;color:#4a4e55;text-transform:uppercase;letter-spacing:.05em}
 .mk-vis-stamp b{font-size:15px;font-weight:900}
 .mk-vis-stamp span{font-size:11px;font-weight:800}
 .mk-vis-lock{opacity:.45;filter:grayscale(1)}

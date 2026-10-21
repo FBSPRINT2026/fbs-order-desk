@@ -1372,7 +1372,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   autoSave.current = async () => { saveOk.current = false; await saveAll(true); return saveOk.current; };
   async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
-    if (!force && imprints.some((im) => unsetColors(im).length)) { setAskUploaded(true); return; }
+    // a visual-only reorder print keeps its colors as uploaded on purpose (production sets the inks on the run): not asked
+    if (!force && imprints.some((im) => !(im.visualOnly && !im.confirmed) && unsetColors(im).length)) { setAskUploaded(true); return; }
     setAskUploaded(false);
     if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
     if (!imprints.length) return setMsg("Add at least one print location first.");
@@ -1881,7 +1882,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         )}
       {askUploaded && (
         <div className="confirm-bar" style={{ marginBottom: 10 }}>
-          <span>Some design colors are still &quot;as uploaded&quot; instead of a standard ink ({imprints.filter((im) => unsetColors(im).length).map((im) => `${im.location}: ${unsetColors(im).length}`).join(", ")}). Set them to the closest Wilflex RFU inks?</span>
+          <span>Some design colors are still &quot;as uploaded&quot; instead of a standard ink ({imprints.filter((im) => !(im.visualOnly && !im.confirmed) && unsetColors(im).length).map((im) => `${im.location}: ${unsetColors(im).length}`).join(", ")}). Set them to the closest Wilflex RFU inks?</span>
           <button type="button" className="btn sm primary" onClick={() => { imprints.forEach(matchStandard); setAskUploaded(false); setMsg("Matched to the closest standard inks. Check them, then save."); }}>Use closest standard inks</button>
           <button type="button" className="btn sm" onClick={() => saveAll(true)}>Save as uploaded</button>
           <button type="button" className="btn sm ghost" onClick={() => setAskUploaded(false)}>Cancel</button>
