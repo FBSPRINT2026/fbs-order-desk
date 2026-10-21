@@ -535,6 +535,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const knowLocs = !help.archivedId ? [] : [...new Map(help.prints.filter((p) => (p.method || "screen") === "screen").map((p) => [p.location, p])).values()];
   const [know, setKnow] = useState<Record<string, { colors: number; ub: boolean } | null>>({});
   const [mode, setMode] = useState<"visual" | "details">("visual");
+  const [sizeKnown, setSizeKnown] = useState<Record<string, boolean>>({});
   // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
   const [kindOf, setKindOf] = useState<Record<string, string>>({});
   const [noteOf, setNoteOf] = useState<Record<string, string>>({});
@@ -683,35 +684,52 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       <p className="ap-why">{stage === "details" ? "Tell me what you know; leave a blank when you don't. Then the mockup." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
       {stage === "details" && (() => {
         const spots = [...new Map(help.prints.map((p) => [p.location, p])).values()];
+        // one way to answer everything (Oct 20, Nick: "it looks like a mess… make it uniform"): each question is a label,
+        // two buttons (Don't know / I know), and what you know right under them
+        const Seg = ({ on, labels, pick }: { on: 0 | 1 | -1; labels: [string, string]; pick: (i: 0 | 1) => void }) => (
+          <span className="arc-seg" role="radiogroup">
+            {labels.map((t, i) => <button key={t} type="button" role="radio" aria-checked={on === i} className={on === i ? "on" : ""} onClick={() => pick(i as 0 | 1)}>{t}</button>)}
+          </span>
+        );
         return (
-          <div className="arc-ub arc-det">
-            <div className="arc-det-h"><span>Print</span><span>Colors</span><span>Print size</span></div>
+          <div className="arc-det">
             {spots.map((p) => {
               const ps = help.prints.filter((q) => q.location === p.location), pl = place[ps[0].key] || { location: p.location, size: "" };
               const setPl = (patch: Partial<{ location: string; size: string }>) => setPlace((x) => { const y = { ...x }; for (const q of ps) y[q.key] = { ...(y[q.key] || { location: q.location, size: q.size }), ...patch }; return y; });
               const dark = ps.some((q) => q.dark), v = know[p.location], set = p.location in know, asks = knowLocs.some((q) => q.location === p.location);
+              const sizeOn = sizeKnown[p.location] ?? !!pl.size;
               return (
-                <div key={p.location} className="arc-det-r">
-                  <select value={pl.location || p.location} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-                  {asks ? (
-                    <span className="arc-det-c">
-                      <span className="arc-chips" role="radiogroup" aria-label={`${p.location} colors`}>
-                        <button type="button" role="radio" aria-checked={set && v === null} className={"chip" + (set && v === null ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: null }))}>Don&apos;t know{p.colors ? ` (old job: ${p.colors})` : ""}</button>
-                        <button type="button" role="radio" aria-checked={!!v} className={"chip" + (v ? " on" : "")} onClick={() => setKnow((x) => ({ ...x, [p.location]: x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))}>I know</button>
-                      </span>
-                      {v && <span className="arc-det-k"><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> + underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></span>}
-                    </span>
-                  ) : <span className="faint">{p.colors ? `${p.colors} color${p.colors === 1 ? "" : "s"}` : ""}</span>}
-                  <span className="arc-det-s"><input type="number" min={1} max={16} step={0.25} value={pl.size || ""} placeholder="?" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide <span className="faint">{pl.size ? "" : "(blank: don't know)"}</span></span>
-                </div>
+                <section key={p.location} className="arc-det-card">
+                  <div className="arc-det-h"><b>{pl.location || p.location}</b><select value={pl.location || p.location} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select></div>
+                  {asks && (
+                    <div className="arc-q">
+                      <span className="arc-q-l">Colors</span>
+                      <div className="arc-q-c">
+                        <Seg on={!set ? -1 : v ? 1 : 0} labels={[`Don't know${p.colors ? ` (old job: ${p.colors})` : ""}`, "I know"]} pick={(i) => setKnow((x) => ({ ...x, [p.location]: i === 0 ? null : x[p.location] || { colors: dark && p.colors > 1 ? p.colors - 1 : p.colors, ub: dark && p.colors > 1 } }))} />
+                        {v && <div className="arc-q-k"><input type="number" min={1} max={14} value={v.colors} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, colors: Math.max(1, +e.target.value || 1) } }))} aria-label="Colors" /> colors <label className="check"><input type="checkbox" checked={v.ub} onChange={(e) => setKnow((x) => ({ ...x, [p.location]: { ...v, ub: e.target.checked } }))} /> plus an underbase</label><span className="faint">= {v.colors + (v.ub ? 1 : 0)} screens</span></div>}
+                      </div>
+                    </div>
+                  )}
+                  <div className="arc-q">
+                    <span className="arc-q-l">Print size</span>
+                    <div className="arc-q-c">
+                      <Seg on={sizeOn ? 1 : 0} labels={["Don't know", "I know"]} pick={(i) => { setSizeKnown((x) => ({ ...x, [p.location]: i === 1 })); if (i === 0) setPl({ size: "" }); }} />
+                      {sizeOn && <div className="arc-q-k"><input type="number" min={1} max={16} step={0.25} value={pl.size || ""} autoFocus onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> inches wide</div>}
+                    </div>
+                  </div>
+                </section>
               );
             })}
             {help.archivedId && (
-              <div className="arc-ub-r arc-mode" role="radiogroup" aria-label="The mockup">
-                <span className="arc-ub-l"><b>The mockup</b></span>
-                <label className="check"><input type="radio" name="arcmode" checked={mode === "visual"} onChange={() => setMode("visual")} /> Visual only: production confirms the details on the print run <span className="faint">(the customer sees just the mockup, no guessed details)</span></label>
-                <label className="check"><input type="radio" name="arcmode" checked={mode === "details"} onChange={() => setMode("details")} /> With these details</label>
-              </div>
+              <section className="arc-det-card">
+                <div className="arc-q">
+                  <span className="arc-q-l">The mockup</span>
+                  <div className="arc-q-c">
+                    <Seg on={mode === "visual" ? 0 : 1} labels={["Visual only", "With these details"]} pick={(i) => setMode(i === 0 ? "visual" : "details")} />
+                    <div className="arc-q-k faint">{mode === "visual" ? "Production confirms the details on the print run. The customer sees just the mockup, no guessed details." : "The mockup and the order show the details above (our guesses where you didn't know)."}</div>
+                  </div>
+                </div>
+              </section>
             )}
           </div>
         );

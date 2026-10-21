@@ -10344,3 +10344,18 @@ div.prod-kind{border:0;padding:0}
 .mk-vis-stamp b{font-size:15px;font-weight:900}
 .mk-vis-stamp span{font-size:11px;font-weight:800}
 .mk-vis-lock{opacity:.45;filter:grayscale(1)}
+/* Resolution Center step 2, uniform (Oct 20, second pass): a card per print, each question = label · Don't know / I know · what you know */
+.arc-det{display:flex;flex-direction:column;gap:10px}
+.arc-det-card{border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.arc-det-card .arc-det-h{display:flex;align-items:center;gap:10px;font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.arc-det-card .arc-det-h select{margin-left:auto;font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink-2)}
+.arc-q{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 14px;align-items:start}
+.arc-q-l{font-size:13px;font-weight:600;padding-top:6px}
+.arc-q-c{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.arc-q-k{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+.arc-q-k input[type=number]{width:64px;font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px}
+.arc-seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.arc-seg button{border:0;background:var(--surface);padding:6px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.arc-seg button+button{border-left:1px solid var(--line)}
+.arc-seg button.on{background:var(--brand,#1F6FD1);color:#fff;font-weight:600}
+@media (max-width:600px){.arc-q{grid-template-columns:1fr}.arc-q-l{padding-top:0}}
