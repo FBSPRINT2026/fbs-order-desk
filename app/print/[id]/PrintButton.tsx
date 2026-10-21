@@ -59,7 +59,18 @@ async function cropAtFullSize(src: string, shown: HTMLImageElement, r: NonNullab
   // a raster logo shown repainted in its inks: repainted again from the original at its full size
   let img: HTMLImageElement | null = hi;
   if (!img && shown.dataset.orig && shown.dataset.inkmap) {
-    try { const o = await loadImage(shown.dataset.orig); const { repaintLogo } = await import("@/lib/inkColors"); img = await loadImage(repaintLogo(o, JSON.parse(shown.dataset.inkmap), 5000), false); } catch { img = null; }
+    try {
+      let o = await loadImage(shown.dataset.orig);
+      // its solid background knocked out, as the page shows it
+      const { knockOut } = await import("@/lib/artPrep");
+      const k = knockOut(o, { maxPx: 5000, full: true });
+      if (k) o = await loadImage(k.url, false);
+      const { repaintLogo } = await import("@/lib/inkColors"); img = await loadImage(repaintLogo(o, JSON.parse(shown.dataset.inkmap), 5000), false);
+    } catch { img = null; }
+  }
+  // a raster picture shown knocked out: knocked out again from the original at its full size
+  if (!img && !shown.dataset.inkmap && shown.dataset.ko) {
+    try { const o = await loadImage(shown.dataset.ko); const { knockOut } = await import("@/lib/artPrep"); const k = knockOut(o, { maxPx: 5000, full: true }); if (k) img = await loadImage(k.url, false); } catch { img = null; }
   }
   if (!img) img = src.startsWith("data:") || src.startsWith("blob:") ? shown : await loadImage(src);
   const nw = img.naturalWidth, nh = img.naturalHeight;

@@ -66,11 +66,11 @@ export function trimClear(img: HTMLImageElement): CleanArt | null {
  * from the background, so there's no white halo on dark shirts.
  * Returns null when there's nothing to remove (already transparent, or a busy photo edge).
  */
-export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } = {}): CleanArt | null {
+export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean; maxPx?: number; full?: boolean } = {}): CleanArt | null {
   const W = img.naturalWidth, H = img.naturalHeight;
   if (!W || !H) return null;
   // work at up to 2000px; the result is used for mockups, not production files
-  const k = Math.min(1, 2000 / Math.max(W, H));
+  const k = Math.min(1, (opts.maxPx || 2000) / Math.max(W, H));
   const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
   const { c, x } = canvasOf(img, w, h);
   let data: ImageData;
@@ -127,6 +127,8 @@ export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } =
   }
   if (removed < w * h * 0.05) return null;
   x.putImageData(data, 0, 0);
+  // the whole picture, not cropped (the proof's close-up keeps its size and rulers)
+  if (opts.full) return { url: c.toDataURL("image/png"), bg: "", w, h, box: { x: 0, y: 0, w: 1, h: 1 }, of: { w: W, h: H } };
   const hex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
   // cropped to what's left: the removed background no longer counts as part of the logo's size
   return cropToArt(c, data, k, W, H, `#${hex(bg[0])}${hex(bg[1])}${hex(bg[2])}`);
