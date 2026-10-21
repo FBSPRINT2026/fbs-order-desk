@@ -846,8 +846,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {([["order", "Order", 0], ["prod", "Art & production", art.length], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
           <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} aria-label={l} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{n > 0 && <span className="aa-n">{n}</span>}</button>)}
       </nav>
-      {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc) */}
-      {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
       <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
 
         {/* Order: what's being made and what it costs (Oct 15, Nick: "too much information on one page… tabs at the top") */}
@@ -1085,6 +1083,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
+          {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
+              right under Totals, above Order check (Nick, Oct 21) */}
+          {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
           {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (
             <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}

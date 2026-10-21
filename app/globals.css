@@ -10664,6 +10664,24 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 /* Shop steps on the order (Oct 21) */
 .os{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
 .os-pv{background:var(--surface-2);border:0}
+.osp .panel-h .faint{font-size:12px}
+.osp-now{color:var(--accent)}
+.osp-cust{font-size:12.5px;padding:4px 10px;border-radius:8px;background:var(--surface-2);margin-bottom:8px}
+.osp-rail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.osp-g{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);margin:6px 0 2px 4px}
+.osp-step{display:flex;align-items:center;gap:8px;width:100%;font:inherit;font-size:12.5px;padding:4px 8px 4px 5px;border-radius:8px;border:1px solid transparent;background:none;color:var(--ink-2);cursor:pointer;text-align:left}
+.osp-step:hover:not(:disabled){background:var(--surface-2)}
+.osp-step:disabled{cursor:default}
+.osp-step .osp-l{flex:1;min-width:0}
+.osp-step small{font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.osp-dot{flex:none;display:inline-flex;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;font-size:10px;background:var(--surface-3);color:#fff}
+.osp-step.done{color:var(--ink)}
+.osp-step.done .osp-dot{background:var(--ok)}
+.osp-step.now{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:700}
+.osp-step.now .osp-dot{background:var(--accent)}
+.osp-flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.osp-add{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.osp-addb{margin-top:8px}
 .os-h{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
 .os-h>b{font-family:var(--display);font-size:14px}
 .os-now b{color:var(--accent)}
