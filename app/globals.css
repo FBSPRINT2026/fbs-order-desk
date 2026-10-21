@@ -11345,10 +11345,10 @@ main.main .md-areas > button.on span{background:var(--fbs-blue);color:#fff}
 @media (max-width:760px) and (pointer:coarse){
   html body:has(.pit) main.main{overflow:visible!important}
   html body:has(.pit) :is(.ibx2, .ibx2-list, .ibx2-work, .ibx2-list-h){overflow:visible!important}
-  html body:has(.pit) main.main .mf-bar{display:flex!important;position:sticky;top:var(--phone-top,64px);z-index:30;margin:0!important;width:auto!important;max-width:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;border-bottom:1px solid var(--line-2)!important;background:var(--surface)!important}
-  html body:has(.pit) main.main .mf-bar :is(.mf-chip, .mf-dd){border-radius:0!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar{display:flex!important;position:sticky;top:var(--phone-top,64px);z-index:30;margin:0!important;width:auto!important;max-width:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;border-bottom:1px solid var(--line-2)!important;background:var(--surface)!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar :is(.mf-chip, .mf-dd){border-radius:0!important}
   html body:has(.pit):has(.ibx2.picked) main.main .mf-bar{display:none!important}
-  html body:has(.pit) main.main .mf-bar .mf-chip{padding:9px 12px!important;font-size:13px!important}
+  html body:has(.pit) main.main.main:has(.ibx2) .mf-bar .mf-chip{padding:9px 12px!important;font-size:13px!important}
   html body:has(.pit) .pit{padding-top:8px}
   html body:has(.pit) .pit-fold{font-size:20px}
   html body:has(.pit) .pit-chk{display:none}
