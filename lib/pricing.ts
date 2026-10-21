@@ -142,6 +142,8 @@ export type GLine = {
 export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[];
   /** finishing made up on this order (a label and a price per piece), ticked by id in `finishing` like the list's */
   customFin?: Finishing[];
+  /** the tag print's price a piece on this job (Private Label / relabel), typed on the group's imprints; the list's when not set */
+  tagPrice?: number;
   /** the customer's neck label set printed when Private Label is on (customers.neck_labels id; lib/neckLabels.ts) */
   neckLabel?: string; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
@@ -635,7 +637,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     return { light, print: printCache.get(key) as number };
   };
   const finList = [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
-  const finishing = (g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
+  const finishing = ((g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[])
+    .map((f) => (f.id === "relabel" && g.tagPrice != null && !isNaN(+g.tagPrice) ? { ...f, price: +g.tagPrice } : f));
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
   const imps = g.imprints || [];

@@ -21,7 +21,7 @@ import {
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
 import FinishingPicker from "@/components/FinishingPicker";
-import NeckLabelPick, { isRelabel } from "@/components/NeckLabelPick";
+import { isRelabel } from "@/components/NeckLabelPick";
 import type { NeckLabelSet } from "@/lib/neckLabels";
 import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
@@ -357,7 +357,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
       const own = prog!.card?.extraPrices || {};
       const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || !prog!.card?.designsAllIn || own[f.id] != null));
-      const price = (f: { id: string; price: number }) => (own[f.id] != null ? +own[f.id] : +f.price || 0);
+      // the tag print's price typed on the group wins, then the program's own price, then the list's
+      const price = (f: { id: string; price: number }) => (f.id === "relabel" && g.tagPrice != null ? +g.tagPrice : own[f.id] != null ? +own[f.id] : +f.price || 0);
       return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };
     const apply = (d: Order) => {
@@ -440,7 +441,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
   // finishing: picked once for the whole order (the usual case) or per group. Embroidery extras stay on their group.
   const [finSplit, setFinSplit] = useState<boolean | null>(null);
-  const isFin = (id: string) => !id.startsWith("emb_");
+  // finishing picked for the whole order: not embroidery extras, not the tag print (it's on each group's imprints)
+  const isFin = (id: string) => !id.startsWith("emb_") && id !== "relabel";
   const finKey = (g: Group) => (g.finishing || []).filter(isFin).sort().join(",");
   const finPerGroup = finSplit ?? (!!o && new Set(o.groups.map(finKey)).size > 1);
   const orderFinList = o?.price_type === "wholesale" && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
@@ -1168,16 +1170,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="panel-b">
                 {finPerGroup ? <div className="faint" style={{ fontSize: 13 }}>Pick finishing in each group above.</div> : (<>
-                  <FinishingPicker list={orderFinList} hidePrices={!seesMoney}
+                  <FinishingPicker list={orderFinList.filter((f) => !isRelabel(f))} hidePrices={!seesMoney}
                     custom={(o.groups[0]?.customFin || [])}
                     isOn={(id) => o.groups.length > 0 && o.groups.every((g) => (g.finishing || []).includes(id))} onToggle={setOrderFin}
                     onAddCustom={(f) => patch((d) => { for (const g of d.groups) { g.customFin = [...(g.customFin || []).filter((x) => x.id !== f.id), f]; g.finishing = [...new Set([...(g.finishing || []), f.id])]; } })}
                     onRemoveCustom={(id) => patch((d) => { for (const g of d.groups) { g.customFin = (g.customFin || []).filter((x) => x.id !== id); g.finishing = (g.finishing || []).filter((y) => y !== id); } })}
                     onSave={saveFinishing(o.price_type === "wholesale")} />
-                  {orderFinList.some((f) => isRelabel(f) && o.groups.length > 0 && o.groups.every((g) => (g.finishing || []).includes(f.id))) && (
-                    <NeckLabelPick sets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} value={o.groups[0]?.neckLabel} groups={o.groups} customerId={o.customer_id || undefined}
-                      onChange={(id) => patch((d) => { for (const g of d.groups) g.neckLabel = id || undefined; })} />
-                  )}
                 </>)}
               </div>
             </section>

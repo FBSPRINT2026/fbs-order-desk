@@ -185,6 +185,10 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   const embImps = gc.wholesale ? g.imprints.filter((d) => d.method === "embroidery") : [];
   const inkRate = wpl.specialtyInk?.length ? wpl.specialtyInk[Math.min(gc.ti, wpl.specialtyInk.length - 1)] : 0;
   const setPms = (di: number, name: string, v: boolean | undefined) => update((x) => { const m = { ...(x.imprints[di].pmsCharge || {}) }; if (v == null) delete m[name.toLowerCase()]; else m[name.toLowerCase()] = v; x.imprints[di].pmsCharge = Object.keys(m).length ? m : undefined; });
+  // the tag print (Oct 21, Nick: "move the tag imprints out of the finishing… under imprints… add tag imprint, use it on
+  // file, and it calculates it to the dollar"): still the "relabel" finishing for the price, shown with the prints
+  const tagFin = finList.find((f) => isRelabel(f));
+  const tagOn = !!tagFin && (g.finishing || []).includes(tagFin.id);
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
@@ -212,15 +216,19 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     // a price typed or set by the program: finishing at its own price per piece (Oct 21, Nick: tag removal $1 × 200 shows
     // $200, not a share of the $5.50), the rest split between the garment and the prints
     const finOf = (lc: GroupCalc["lines"][number]) => (lc.hasOv ? Math.min(gc.finishEach, lc.each) : gc.finishEach);
+    const tagEach = gc.finishing.filter((f) => isRelabel(f)).reduce((t, f) => t + (+f.price || 0), 0); // g.tagPrice applied in calcGroup
     const impOf = (lc: GroupCalc["lines"][number]) => { if (!lc.hasOv) return lc.printEach; const base = lc.calcEach - gc.finishEach; return base > 0 ? ((lc.each - finOf(lc)) * lc.printEach) / base : 0; };
     const imp = gc.lines.reduce((a, lc) => a + lc.qty * impOf(lc), 0);
-    const fin = gc.lines.reduce((a, lc) => a + lc.qty * finOf(lc), 0);
-    const gar = Math.round((gc.sub - imp - fin) * 100) / 100;
+    const finAll = gc.lines.reduce((a, lc) => a + lc.qty * finOf(lc), 0);
+    const tags = gc.lines.reduce((a, lc) => a + lc.qty * Math.min(tagEach, finOf(lc)), 0);
+    const fin = Math.round((finAll - tags) * 100) / 100;
+    const gar = Math.round((gc.sub - imp - finAll) * 100) / 100;
     const bits: [string, number, string?][] = [
       ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),
       ["Imprints", imp],
       // finishing by name when there's one ("Tag removal & custom imprint"), its own line on top of the prints
-      ...(fin ? [[gc.finishing.length === 1 ? gc.finishing[0].name.replace(/\s*\([^)]*\)/g, "") : "Finishing", fin, gc.finishing.map((f) => `${f.name} ${money(+f.price)}/pc`).join(", ")] as [string, number, string]] : []),
+      ...(tags ? [["Tag prints", tags, `${money(tagEach)} a piece`] as [string, number, string]] : []),
+      ...(fin > 0.004 ? [["Finishing", fin, gc.finishing.filter((f) => !isRelabel(f)).map((f) => `${f.name} ${money(+f.price)}/pc`).join(", ")] as [string, number, string]] : []),
       ...(gc.setup ? [["Setup", gc.setup, gc.minCharge ? `incl. ${money(gc.minCharge)}: under ${settings.wholesale.minQty || 12} pcs is charged as ${settings.wholesale.minQty || 12}` : gc.inkFees ? "incl. ink and PMS fees" : ""] as [string, number, string]] : []),
       ...(gc.materials ? [["2XL+ materials", gc.materials] as [string, number]] : []),
     ];
@@ -336,7 +344,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         {/* the mockup big on the left, the imprints beside it (Oct 15, Nick: "make it large and move to the left of the
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
         <div className="imp-sec">
-        <div className="lbl gsec">Imprints</div>
+        <div className="lbl gsec">Imprints
+          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} disabled={frozen} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
+        </div>
         <div className="imp-wrap">
         <div className="imp-mock">
           {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
@@ -469,8 +479,30 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               </div>
             ))}
           </div>
+          {tagOn && tagFin && (
+            <div className="tagp">
+              <div className="tagp-h">
+                <b>Tag print</b>
+                <span className="faint">inside the neck</span>
+                <span className="spacer" />
+                {!frozen && <button type="button" className="linkbtn" onClick={() => tick(tagFin.id, false)}>Remove</button>}
+              </div>
+              <div className="tagp-b">
+                {neckSets && <NeckLabelPick sets={neckSets} value={g.neckLabel} groups={[g]} customerId={customerId} onChange={(id) => update((x) => { x.neckLabel = id || undefined; })} />}
+                {/* the price a piece, changeable on this job (the list's $1.00 by default) */}
+                {!hidePrices && <label className="tagp-price" title="Price a piece for the tag print on this job">
+                  <span className="qp-amt-in"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)} disabled={frozen}
+                    onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span>
+                  <span className="faint">/pc</span>
+                </label>}
+              </div>
+              {customerId && <a className="faint tagp-art" href={`/shop/customers/${customerId}`} target="_blank" rel="noreferrer">Add or change their label art (Brand standards → Neck labels) ↗</a>}
+            </div>
+          )}
           {priceLine}
+          <div className="row" style={{ gap: 8 }}>
           {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
+          </div>
           </div>
           </div>
         </div>
@@ -521,13 +553,10 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             {finishingAt === "group" && finList.length > 0 && (
         <div className="imprints">
                 <div className="lbl gsec" style={{ marginBottom: 6 }}>Finishing</div>
-                <FinishingPicker list={finList} custom={g.customFin || []} isOn={(id) => (g.finishing || []).includes(id)} onToggle={tick} hidePrices={hidePrices}
+                <FinishingPicker list={finList.filter((f) => !isRelabel(f))} custom={g.customFin || []} isOn={(id) => (g.finishing || []).includes(id)} onToggle={tick} hidePrices={hidePrices}
                   onAddCustom={(f) => update((x) => { x.customFin = [...(x.customFin || []), f]; x.finishing = [...new Set([...(x.finishing || []), f.id])]; })}
                   onRemoveCustom={(id) => update((x) => { x.customFin = (x.customFin || []).filter((f) => f.id !== id); x.finishing = (x.finishing || []).filter((y) => y !== id); })}
                   onSave={saveFinishing(!!gc.wholesale)} />
-                {neckSets && finList.some((f) => isRelabel(f) && (g.finishing || []).includes(f.id)) && (
-                  <NeckLabelPick sets={neckSets} value={g.neckLabel} groups={[g]} customerId={customerId} onChange={(id) => update((x) => { x.neckLabel = id || undefined; })} />
-                )}
               </div>
             )}
             </div>
