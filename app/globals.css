@@ -11861,7 +11861,11 @@ html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(
 .sep-mocks button{display:flex;flex-direction:column;gap:3px;color:var(--ink-3);font-size:11.5px;min-width:0;border:0;background:none;padding:0;cursor:zoom-in;text-align:left}
 .sep-mocks button:hover img{border-color:var(--accent)}
 /* the inks and the proof's views on one line */
-.sep-vbar.in{margin-left:auto;align-self:flex-end;justify-content:flex-end}
+.sep-vbar.full{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+main.main .sep-vbar.full>.rv-seg{width:auto!important}
+.sep-inkbar .sep-count{align-self:center}
+.sep-inkbar>.btn.sm{align-self:center}
+@media (max-width:760px){main.main .sep-vbar.full>.rv-seg{width:100%!important}main.main .sep-vbar.full>.rv-seg>button{flex:1 1 0!important}}
 /* the settings: one line each, the rest behind the chevron (Oct 22, Nick) */
 .sep-set{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:2px 12px}
 .sep-sr{padding:8px 0;border-top:1px solid var(--line-2,var(--line))}

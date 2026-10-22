@@ -1401,11 +1401,6 @@ export default function SeparationStudio({ id }: { id: string }) {
             <span className="spacer" />
             <label className="sep-count">Colors <select value={st.maxColors} onChange={(e) => { set({ maxColors: +e.target.value }); }}>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
             <button type="button" className="btn sm" onClick={() => findInks()} title="Separate with this many inks. Fewer than the art has: the colors left out are mixed from the other inks as halftones.">Apply</button>
-            {/* the proof's views on the same line as the inks (Oct 22, Nick: "fix the tool bars") */}
-            <div className="sep-vbar in">
-              <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
-              <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
-            </div>
           </div>
           {st.method === "spot" && fadeRows.length > 0 && (
             <div className="sep-fades">
@@ -1426,6 +1421,12 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>
           )}
           <datalist id="sep-inklist">{[...Object.keys(WILFLEX_NAMES), ...PMS_NAMES].map((n) => <option key={n} value={n} />)}</datalist>
+          {/* the views: their own full-width bar right on top of the proof (Oct 22, Nick: "move that down so it takes up the
+              whole space above the mock-up window"); the ink bar above keeps just the inks and Colors / Apply */}
+          <div className="sep-vbar full">
+            <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
+            <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
+          </div>
           <div className={"sep-stage" + (bg === "checker" && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : bg === "checker" ? undefined : "#fff" }}>
             {films && res && <FilmsView plates={plates} w={res.w} h={res.h} onOpen={(k) => { setSolo(k); setLoupe(null); }} />}
             <div className={"sep-canvases" + (films ? " gone" : "")}>
