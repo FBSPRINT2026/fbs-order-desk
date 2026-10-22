@@ -12151,3 +12151,19 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-colors-list a{color:var(--accent);text-decoration:none}
 .mk-colors-list a:hover{text-decoration:underline}
 .mk-pdf-kind{margin:2px 0 8px;width:fit-content}
+/* Mockup Creator garments: one row per style, its colors as chips (Oct 22) */
+.mk-gar{flex:1 1 100%;display:flex;flex-direction:column;gap:0}
+.mk-gar-row{display:grid;grid-template-columns:220px minmax(0,1fr) 32px;gap:12px;align-items:start;padding:10px 0 22px;border-top:1px solid var(--line)}
+.mk-gar-row:first-of-type{border-top:0;padding-top:2px}
+.mk-gar-colors{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.mk-gc{display:inline-flex;align-items:center;border:1px solid var(--line-2,var(--line));border-radius:999px;background:var(--surface);font-size:13px;color:var(--ink)}
+.mk-gc.on{border-color:var(--accent);background:var(--accent-soft,var(--surface-2));color:var(--accent)}
+.mk-gc-pick{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:4px 4px 4px 6px;font:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+.mk-gc-dot{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.18);flex:none}
+.mk-gc-x{border:0;background:none;color:var(--ink-3);font-size:11px;padding:4px 8px 4px 2px;cursor:pointer}
+.mk-gc-x:hover{color:var(--danger)}
+.mk-gc-add{width:150px}
+.mk-gc-add .style-pick input{height:30px !important;border-radius:999px;border-style:dashed;font-size:13px}
+.mk-gar .mk-add{align-self:flex-start;margin-top:2px}
+.mk-gar-x{align-self:center}
+@media (max-width:700px){.mk-gar-row{grid-template-columns:minmax(0,1fr) 32px}.mk-gar-colors{grid-column:1/-1;grid-row:2}}

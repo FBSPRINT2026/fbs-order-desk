@@ -2159,23 +2159,58 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           <section className="panel mk-setup">
             {!portal && <label className="mk-f"><span>Customer</span><select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></label>}
             <label className="mk-f"><span>Mockup name</span><input type="text" aria-label="Mockup name" placeholder="e.g. Spring promo tee" value={groupName} onChange={(e) => setGroupName(e.target.value)} /></label>
-            {lines.map((l, i) => {
-              const g = garmentFor(l);
+            {/* the garments grouped by style, each style's colors as chips under it (Oct 22, Nick: "this top part… is
+                jumbled… maybe grouping like styles and just listing colors under"); a color chip shows that shirt */}
+            {(() => {
+              const keyOf = (l: Line) => (l.style.trim() ? `${l.style.trim().toLowerCase()}|${(l.brand || "").toLowerCase()}` : `new:${l.id}`);
+              const groups: { key: string; idx: number[] }[] = [];
+              lines.forEach((l, i) => { const k = keyOf(l), g = groups.find((x) => x.key === k); if (g) g.idx.push(i); else groups.push({ key: k, idx: [i] }); });
+              const setStyle = (ids: string[], f: (x: Line) => Line) => setLines((ls) => {
+                const out = ls.map((x) => (ids.includes(x.id) ? f(x) : x));
+                // colors the new style doesn't come in drop off (one line of the style stays)
+                const keep = out.filter((x, j) => !ids.includes(x.id) || x.color || out.findIndex((y) => ids.includes(y.id)) === j);
+                return keep.length ? keep : out;
+              });
+              const pickStyle = (ids: string[], gg: { style: string; brand: string; description: string; colors?: string[] }) => setStyle(ids, (x) => ({ ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : "" }));
+              const removeLine = (i: number) => { setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ...ls[0], color: "" }])); setActive((a) => (a >= i && a > 0 ? a - 1 : a)); };
               return (
-                <div key={l.id} className="mk-f mk-setup-g"><span>{i === 0 ? "Garment & color" : `Color ${i + 1}`}</span><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
-                  <div className="mk-style">
-                    <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
-                      onType={(v) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: v, brand: "", garment: "" } : x)))}
-                      onPick={(gg) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : gg.colors?.[0] || "" } : x)))}
-                      onPickSS={async (h) => { const gg = await lookupStyle(h.style, h.styleID || undefined, h.supplier); if (gg) setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : gg.colors?.[0] || "" } : x))); }} />
-                    <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l.style.trim() ? "Pick a style from the list" : "Type a style #, e.g. 6210, 5000, PC54"}</small>
-                  </div>
-                  <div className="mk-color"><ColorPicker value={l.color} colors={g?.colors || []} onChange={(v) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: v } : x)))} /></div>
-                  {lines.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this color" onClick={() => { setLines((ls) => ls.filter((_, j) => j !== i)); setActive(0); }}>✕</button>}
-                </div></div>
+                <div className="mk-f mk-gar"><span>Garments</span>
+                  {groups.map((gr) => {
+                    const l0 = lines[gr.idx[0]], g = garmentFor(l0), ids = gr.idx.map((i) => lines[i].id);
+                    const have = gr.idx.map((i) => lines[i].color).filter(Boolean);
+                    return (
+                      <div key={gr.key} className="mk-gar-row">
+                        <div className="mk-style">
+                          <StylePicker value={l0.style} catalog={catalog} busy={!!lookingUp}
+                            onType={(v) => setLines((ls) => ls.map((x) => (ids.includes(x.id) ? { ...x, style: v, brand: "", garment: "" } : x)))}
+                            onPick={(gg) => pickStyle(ids, gg)}
+                            onPickSS={async (h) => { const gg = await lookupStyle(h.style, h.styleID || undefined, h.supplier); if (gg) pickStyle(ids, gg); }} />
+                          <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l0.style.trim() ? "Pick a style from the list" : "Type a style #, e.g. 6210, 5000, PC54"}</small>
+                        </div>
+                        <div className="mk-gar-colors">
+                          {gr.idx.filter((i) => lines[i].color).map((i) => {
+                            const l = lines[i], hex = g?.color_images?.[l.color]?.hex || guessHex(l.color);
+                            return (
+                              <span key={l.id} className={"mk-gc" + (i === active ? " on" : "")}>
+                                <button type="button" className="mk-gc-pick" onClick={() => setActive(i)} title={`Show ${l.color}`}><span className="mk-gc-dot" style={{ background: hex }} />{l.color}</button>
+                                <button type="button" className="mk-gc-x" aria-label={`Remove ${l.color}`} onClick={() => removeLine(i)}>✕</button>
+                              </span>
+                            );
+                          })}
+                          {g && <AddColor colors={(g.colors || []).filter((c) => !have.includes(c))} onAdd={(c) => {
+                            const blank = gr.idx.find((i) => !lines[i].color);
+                            if (blank != null) { setLines((ls) => ls.map((x, j) => (j === blank ? { ...x, color: c } : x))); setActive(blank); }
+                            else { setLines((ls) => [...ls, { ...l0, id: uid(), color: c }]); setActive(lines.length); }
+                          }} />}
+                        </div>
+                        {groups.length > 1 && <button type="button" className="btn icon ghost mk-gar-x" aria-label={`Remove ${l0.style || "this style"}`} title="Remove this style and its colors" onClick={() => { setLines((ls) => ls.filter((x) => !ids.includes(x.id))); setActive(0); }}>✕</button>}
+                      </div>
+                    );
+                  })}
+                  <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
+                </div>
               );
-            })}
-            <button className="btn sm mk-add" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
+            })()}
           </section>
         )}
       {askUploaded && (
@@ -2186,7 +2221,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           <button type="button" className="btn sm ghost" onClick={() => setAskUploaded(false)}>Cancel</button>
         </div>
       )}
-          {lines.length > 1 && (
+          {lines.length > 1 && !!orderId && (
             <div className="chips" style={{ marginBottom: 10, width: "fit-content" }}>
               {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
             </div>
@@ -3052,5 +3087,15 @@ function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, bra
         </div>
       )}
     </div>
+  );
+}
+
+/** "+ Color" on a style in the Mockup Creator: type or pick one of the style's colors to add it (Oct 22) */
+function AddColor({ colors, onAdd }: { colors: string[]; onAdd: (c: string) => void }) {
+  const [v, setV] = useState("");
+  return (
+    <span className="mk-gc-add" title="Add a color of this style">
+      <ColorPicker value={v} colors={colors} onChange={(c) => { if (colors.includes(c)) { onAdd(c); setV(""); } else setV(c); }} />
+    </span>
   );
 }
