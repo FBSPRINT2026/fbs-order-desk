@@ -509,7 +509,10 @@ const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" c
 export function frameHeight(d: Document) {
   const cs = d.defaultView?.getComputedStyle(d.documentElement);
   const pad = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) : 0;
-  return Math.max(d.body.scrollHeight, d.body.offsetHeight) + pad + 4;
+  // zoomed in (FrameZoom): the body's own height is before the zoom
+  const z = parseFloat(d.body.style.zoom) || 1;
+  const h = Math.max(d.body.scrollHeight, d.body.offsetHeight);
+  return (z > 1 ? Math.max(h * z, d.body.getBoundingClientRect().height) : h) + pad + 4;
 }
 const QUOTED = /<blockquote|gmail_quote|yahoo_quoted|divRplyFwdMsg|appendonsend/i;
 /** "Show the earlier emails" under an email whose quoted replies are folded away (PHONE_MAIL_CSS) */
