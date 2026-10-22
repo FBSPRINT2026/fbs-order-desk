@@ -12195,6 +12195,8 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .ss-item textarea{width:100%;font:inherit}
 .ss-del{align-self:flex-start;color:var(--danger)}
 .ss-stage{position:relative;overflow:auto;background:var(--surface-2);display:flex;align-items:center;justify-content:center;padding:18px}
-.ss-canvas{max-width:100%;max-height:100%;width:auto;height:auto;box-shadow:0 4px 18px rgba(20,29,43,.16);background:#fff;touch-action:none}
+.ss-frame{position:relative;display:inline-flex;max-width:100%;max-height:100%}
+.ss-canvas{max-width:100%;max-height:calc(100vh - 140px);width:auto;height:auto;box-shadow:0 4px 18px rgba(20,29,43,.16);background:#fff;touch-action:none}
+.ss-corner{position:absolute;right:-7px;bottom:-7px;width:16px;height:16px;border-radius:4px;background:var(--accent);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:nwse-resize;touch-action:none}
 .ss-busy{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--ink-2);z-index:2}
 @media (max-width:800px){.ss-body{grid-template-columns:1fr;grid-template-rows:auto minmax(320px,1fr)}.ss-ctl{border-right:0;border-bottom:1px solid var(--line);max-height:45vh}}

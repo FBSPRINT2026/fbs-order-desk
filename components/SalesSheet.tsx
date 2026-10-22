@@ -18,11 +18,15 @@ type Sides = "both" | "front" | "back";
 type Item = { id: string; kind: "text"; text: string; x: number; y: number; size: number; color: string; bold: boolean; align: CanvasTextAlign }
   | { id: string; kind: "pic"; src: string; name: string; x: number; y: number; w: number };
 
+// shapes for sending out, not paper (Oct 22, Nick: "this is going to be like an email blast… don't think in those kind of
+// sizes… draw… how you want it to appear, and then you fill it"); w: 0 = the size you set
 const PAGES = {
-  landscape: { label: "Landscape (11 × 8.5)", w: 2200, h: 1700, pt: [792, 612] },
-  portrait: { label: "Portrait (8.5 × 11)", w: 1700, h: 2200, pt: [612, 792] },
-  square: { label: "Square (posts)", w: 2000, h: 2000, pt: [720, 720] },
-  story: { label: "Tall (stories)", w: 1440, h: 2560, pt: [540, 960] },
+  fit: { label: "Fits the shirts (email)", w: 0, h: 0 },
+  square: { label: "Square post (1080 × 1080)", w: 1080, h: 1080 },
+  story: { label: "Story (1080 × 1920)", w: 1080, h: 1920 },
+  wide: { label: "Wide banner (1600 × 900)", w: 1600, h: 900 },
+  custom: { label: "Custom: drag the corner", w: 0, h: 0 },
+  print: { label: "Print (11 × 8.5)", w: 2200, h: 1700 },
 } as const;
 type PageKey = keyof typeof PAGES;
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -37,7 +41,12 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   shop: { name: string; line: string; logoUrl: string };
   onClose: () => void;
 }) {
-  const [page, setPage] = useSticky<PageKey>("ss.page", "landscape");
+  const [page0, setPage] = useSticky<PageKey>("ss.page2", "fit");
+  const page: PageKey = page0 in PAGES ? page0 : "fit";
+  const [fitW, setFitW] = useSticky<number>("ss.fitW", 1200);
+  const [cust, setCust] = useSticky<{ w: number; h: number }>("ss.custom", { w: 1200, h: 1200 });
+  /** the sheet's size as last drawn (fits-the-shirts works its height out from the shirts) */
+  const [dims, setDims] = useState<{ w: number; h: number }>({ w: 1200, h: 1200 });
   const [bg, setBg] = useSticky<string>("ss.bg", "#ffffff");
   const [perRow, setPerRow] = useSticky<number>("ss.perRow", 4), [autoRow, setAutoRow] = useSticky<boolean>("ss.autoRow", true);
   const [gap, setGap] = useSticky<number>("ss.gap", 3);
@@ -70,7 +79,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const cv = useRef<HTMLCanvasElement | null>(null);
   const [tick, setTick] = useState(0);
   const sideList: ("front" | "back")[] = sides === "both" ? views : views.includes(sides) ? [sides] : views;
-  const P = PAGES[page] || PAGES.landscape;
+  const P = { w: dims.w, h: dims.h, pt: [dims.w * 0.36, dims.h * 0.36] as const };
   const ink = dark(bg) ? "#ffffff" : "#141D2B", soft = dark(bg) ? "#d5dbe3" : "#5B6678";
 
   // every color's shirts, drawn once per set of sides
@@ -126,21 +135,29 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const shown = useMemo(() => order.map((k) => colors.find((c) => c.key === k)).filter((c): c is SheetColor => !!c && !off.has(c.key)), [order, off, colors]);
   const multiStyle = new Set(colors.map((c) => c.style)).size > 1;
 
-  /** the whole page on a canvas, at full size */
+  /** the whole sheet on a canvas, at full size; "fits the shirts" is drawn once tall to measure, then at its height */
   function draw(c: HTMLCanvasElement) {
-    const W = P.w, H = P.h;
+    let W: number = PAGES[page].w, H: number = PAGES[page].h;
+    if (page === "custom") { W = cust.w; H = cust.h; }
+    if (page === "fit") { W = Math.max(400, Math.min(4000, fitW || 1200)); const end = paint(c, W, W * 6, true); H = Math.round(end); }
+    paint(c, W, H, page === "fit");
+    if (dims.w !== W || dims.h !== H) setDims({ w: W, h: H });
+  }
+  /** draws the sheet at W × H; returns where the content ends (fit: the height the sheet needs) */
+  function paint(c: HTMLCanvasElement, W: number, H: number, fit: boolean): number {
     c.width = W; c.height = H;
     const x = c.getContext("2d")!;
     x.imageSmoothingQuality = "high";
     x.fillStyle = bg; x.fillRect(0, 0, W, H);
-    const M = Math.round(Math.min(W, H) * (margin / 100));
+    const S = fit ? W : Math.min(W, H);
+    const M = Math.round(S * (margin / 100));
     const font = (w: number, s: number) => `${w} ${s}px Helvetica, Arial, sans-serif`;
     const ax = align === "center" ? W / 2 : M;
     x.textAlign = align; x.textBaseline = "alphabetic";
     let y = M;
     // header: our logo and / or their name, the title, the subtitle
     if ((ours && logo.current) || (theirs && customer)) {
-      const lh = Math.round(H * 0.045);
+      const lh = Math.round(S * 0.045);
       const lw = ours && logo.current ? Math.min(W * 0.3, (logo.current.naturalWidth / (logo.current.naturalHeight || 1)) * lh) : 0;
       x.font = font(800, Math.round(lh * 0.8));
       const nameW = theirs && customer ? x.measureText(customer).width : 0;
@@ -148,12 +165,12 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
       let lx = align === "center" ? (W - total) / 2 : M;
       if (lw && logo.current) { x.drawImage(logo.current, lx, y, lw, lh); lx += lw + (nameW ? lh * 0.6 : 0); }
       if (nameW) { x.fillStyle = ink; x.textAlign = "left"; x.fillText(customer, lx, y + lh * 0.82); x.textAlign = align; }
-      y += lh + Math.round(H * 0.02);
+      y += lh + Math.round(S * 0.02);
     }
     if (title.trim()) { x.fillStyle = ink; x.font = font(800, titleSize); y += titleSize; x.fillText(title.trim(), ax, y); y += Math.round(titleSize * 0.35); }
     if (sub.trim()) { x.fillStyle = soft; x.font = font(400, Math.round(titleSize * 0.5)); y += Math.round(titleSize * 0.55); x.fillText(sub.trim(), ax, y); y += Math.round(titleSize * 0.3); }
-    const footH = contact ? Math.round(H * 0.05) : 0;
-    const top = y + Math.round(H * 0.025), bot = H - M - footH;
+    const footH = contact ? Math.round(S * 0.05) : 0;
+    const top = y + Math.round(S * 0.025), bot = H - M - footH;
     // the grid: one unit per color (its sides side by side, trimmed), as big as fits with the spacing asked for, the
     // whole block centered on the page (Oct 22, Nick: fewer per row should mean bigger shirts, not bigger gaps)
     const n = shown.length;
@@ -166,16 +183,18 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     const fitK = (cols: number) => {
       const rows = Math.max(1, Math.ceil(n / cols));
       const kW = (W - 2 * M - (cols - 1) * g - cols * (ns - 1) * pg) / (cols * uw0);
-      const kH = (bot - top - (rows - 1) * g - rows * labelH) / (rows * uh0);
+      const kH = fit ? Infinity : (bot - top - (rows - 1) * g - rows * labelH) / (rows * uh0);
       return Math.min(kW, kH);
     };
     // per row: as asked, or (Auto) whatever makes the shirts biggest
     let cols = Math.max(1, Math.min(perRow || 1, n || 1));
-    if (autoRow) { let best = 0; for (let c2 = 1; c2 <= Math.max(1, n); c2++) { const k2 = fitK(c2); if (k2 > best + 1e-6) { best = k2; cols = c2; } } }
+    if (autoRow && !fit) { let best = 0; for (let c2 = 1; c2 <= Math.max(1, n); c2++) { const k2 = fitK(c2); if (k2 > best + 1e-6) { best = k2; cols = c2; } } }
+    // fits the shirts: as many per row as make a sheet about 4:5 (tall enough to scroll an email, wide enough to see)
+    if (autoRow && fit) { let bestD = Infinity; for (let c2 = 1; c2 <= Math.max(1, n); c2++) { const k2 = fitK(c2), r2 = Math.ceil(n / c2); const hh = top + r2 * (uh0 * k2 + labelH) + (r2 - 1) * g + M + footH; const d2 = Math.abs(Math.log(hh / W / 1.25)); if (d2 < bestD) { bestD = d2; cols = c2; } } }
     const rows = Math.max(1, Math.ceil(n / cols));
     const k = Math.max(0.05, fitK(cols)) * (size / 100);
     const uw = uw0 * k + (ns - 1) * pg, uh = uh0 * k, cellH = uh + labelH;
-    const usedH = rows * cellH + (rows - 1) * g, oy = top + Math.max(0, (bot - top - usedH) / 2);
+    const usedH = rows * cellH + (rows - 1) * g, oy = fit ? top : top + Math.max(0, (bot - top - usedH) / 2);
     x.textAlign = "center";
     for (let i = 0; i < n; i++) {
       const col = i % cols, row = Math.floor(i / cols), inRow = row === rows - 1 ? n - row * cols : cols;
@@ -220,11 +239,13 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     const s = bx.find((b) => b.id === sel);
     if (s && c === cv.current) { x.setLineDash([12, 8]); x.strokeStyle = "#0E9BD8"; x.lineWidth = 3; x.strokeRect(s.x - 8, s.y - 8, s.w + 16, s.h + 16); x.setLineDash([]); }
     boxes.current = bx;
+    return oy + usedH + M + footH;
   }
   useEffect(() => { if (cv.current && !busy) draw(cv.current); });
 
   // drag text and pictures on the preview
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const resize = useRef<{ x: number; y: number; w: number; h: number; k: number } | null>(null);
   const toPage = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * P.w, y: ((e.clientY - r.top) / r.height) * P.h }; };
   const down = (e: React.PointerEvent) => {
     const p = toPage(e), hit = [...boxes.current].reverse().find((b) => p.x >= b.x - 10 && p.x <= b.x + b.w + 10 && p.y >= b.y - 10 && p.y <= b.y + b.h + 10);
@@ -281,7 +302,9 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
           <aside className="ss-ctl">
             <section><h3>Page</h3>
               <label className="mk-f"><span>Page margin: {margin < 2 ? "thin" : margin < 4 ? "small" : margin < 6 ? "medium" : "wide"}</span><input type="range" min={0.5} max={8} step={0.25} value={margin} onChange={(e) => setMargin(+e.target.value)} /></label>
-              <label className="mk-f"><span>Size</span><select value={page} onChange={(e) => setPage(e.target.value as PageKey)}>{(Object.keys(PAGES) as PageKey[]).map((k) => <option key={k} value={k}>{PAGES[k].label}</option>)}</select></label>
+              <label className="mk-f"><span>Shape</span><select value={page} onChange={(e) => setPage(e.target.value as PageKey)}>{(Object.keys(PAGES) as PageKey[]).map((k) => <option key={k} value={k}>{PAGES[k].label}</option>)}</select></label>
+              {page === "fit" && <label className="mk-f"><span>Width: {fitW} px (the height follows the shirts)</span><input type="range" min={600} max={2400} step={50} value={fitW} onChange={(e) => setFitW(+e.target.value)} /></label>}
+              {page === "custom" && <div className="ss-row"><label className="mk-f" style={{ width: 90 }}><span>Width</span><input type="number" min={300} max={4000} value={cust.w} onChange={(e) => setCust({ ...cust, w: Math.max(300, Math.min(4000, +e.target.value || 300)) })} /></label><span>×</span><label className="mk-f" style={{ width: 90 }}><span>Height</span><input type="number" min={300} max={4000} value={cust.h} onChange={(e) => setCust({ ...cust, h: Math.max(300, Math.min(4000, +e.target.value || 300)) })} /></label><span className="faint">or drag the sheet&apos;s corner</span></div>}
               <div className="ss-row"><span>Background</span>{["#ffffff", "#f3f1ec", "#e9edf2", "#141d2b"].map((c) => <button key={c} type="button" className={"ss-sw" + (bg === c ? " on" : "")} style={{ background: c }} aria-label={`Background ${c}`} onClick={() => setBg(c)} />)}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} aria-label="Background color" /></div>
             </section>
             <section><h3>Shirts</h3>
@@ -334,8 +357,15 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
           </aside>
           <div className="ss-stage">
             {busy && <div className="ss-busy">{busy}</div>}
-            <canvas ref={cv} className="ss-canvas" style={{ aspectRatio: `${P.w} / ${P.h}`, cursor: drag.current ? "grabbing" : "default" }} data-tick={tick}
-              onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+            <div className="ss-frame">
+              <canvas ref={cv} className="ss-canvas" style={{ aspectRatio: `${P.w} / ${P.h}`, cursor: drag.current ? "grabbing" : "default" }} data-tick={tick}
+                onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+              {/* draw the sheet's shape: drag its corner (switches to Custom) */}
+              <span className="ss-corner" title="Drag to change the sheet's shape" aria-label="Resize the sheet"
+                onPointerDown={(e) => { e.preventDefault(); (e.target as HTMLElement).setPointerCapture(e.pointerId); const r = cv.current!.getBoundingClientRect(); resize.current = { x: e.clientX, y: e.clientY, w: P.w, h: P.h, k: P.w / r.width }; if (page !== "custom") { setCust({ w: P.w, h: P.h }); setPage("custom"); } }}
+                onPointerMove={(e) => { const z = resize.current; if (!z) return; setCust({ w: Math.round(Math.max(300, Math.min(4000, z.w + (e.clientX - z.x) * z.k * 2))), h: Math.round(Math.max(300, Math.min(4000, z.h + (e.clientY - z.y) * z.k))) }); }}
+                onPointerUp={() => { resize.current = null; }} onPointerCancel={() => { resize.current = null; }} />
+            </div>
           </div>
         </div>
       </div>

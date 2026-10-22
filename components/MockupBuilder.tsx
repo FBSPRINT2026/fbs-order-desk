@@ -1066,7 +1066,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // hand moves are stored in reference-photo pixels; scale them to this photo
     // a hand drag lines the logo up on the shirt picture only (Oct 22, Nick: "locks in the close-up… then we just drag
     // to visually align it on the mockup… that shouldn't matter for our proofing"): close-ups and the print spec stay put
-    const o0 = offsets[im.id] || NO_OFF, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
+    const og = offsets[im.id] || NO_OFF, ol = offsets[`${(on || line)?.id}:${im.id}`] || NO_OFF;
+    const o0 = { dx: og.dx + ol.dx, dy: og.dy + ol.dy }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -2266,7 +2267,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
                   }
                   if (p) { dx /= p.k; dy /= p.k; }
-                  setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }));
+                  // the first color's drag moves the logo on every color; another color's drag is its own fine-tune on top
+                  // of that, kept for that color only (Oct 22, Nick: "go into each individual one… drag… it just stays there")
+                  const key = !line || !anchorLine || line.id === anchorLine.id ? id : `${line.id}:${id}`;
+                  setOffsets((o) => ({ ...o, [key]: { dx: (o[key]?.dx || 0) + dx, dy: (o[key]?.dy || 0) + dy } }));
                 }}
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
