@@ -1081,17 +1081,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
                     </div>
                     {/* pricing on its own line under the customer (Oct 21, Nick: "that little retail wholesale program thing is
-                        screwing up this whole box… put program underneath"): Retail / Wholesale, then program pricing as a switch */}
+                        screwing up this whole box… put program underneath"): Retail / Wholesale / Program, their program notes under it */}
                     <div className="pt-row money-only">
                       <span className="pt-l">Pricing</span>
                       <div className="chips">
-                        <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
-                        <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
+                        <button type="button" className={"chip" + (o.price_type !== "wholesale" && !o.use_program ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; d.use_program = false; }); }}>Retail</button>
+                        <button type="button" className={"chip" + (o.price_type === "wholesale" && !o.use_program ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }}>Wholesale</button>
+                        {(prog || o.use_program) && <button type="button" className={"chip" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Program</button>}
                       </div>
-                      {cust && o.price_type !== (cust.price_type || "retail") && <span className="faint pt-ch">Changed for this order</span>}
-                      {(prog || o.use_program) && <label className={"check pt-prog" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)">
-                        <input type="checkbox" checked={!!o.use_program} onChange={(e) => { setConfirmRetail(false); const v = e.target.checked; patch((d) => { d.use_program = v; }); }} />Program pricing
-                      </label>}
+                      {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <span className="faint pt-ch">Changed for this order</span>}
                       {o.use_program && progAll && progAll.cards.length > 1 && (
                         <label className="prg-pick">Rate card
                           <select value={progCard?.id || ""} onChange={(e) => patch((d) => { d.program_card = e.target.value; })}>

@@ -11630,8 +11630,8 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
    (boxes shrinking to fit) on the second ── */
 @media (min-width:761px){
   @container (max-width: 1000px){
-    .line-b .gl-list .gl{display:grid;grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"st br de cs qt ea to x" "co co sz sz sz sz sz sz";column-gap:8px;row-gap:6px;align-items:center}
-    .line-b .gl-list.ws .gl{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"st br de qt ea to x" "co co sz sz sz sz sz"}
+    .line-b .gl-list .gl{display:grid;grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"st br de cs qt ea to x" "co sz sz sz sz sz sz sz";column-gap:8px;row-gap:6px;align-items:center}
+    .line-b .gl-list.ws .gl{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"st br de qt ea to x" "co sz sz sz sz sz sz"}
     .line-b .gl-list .gl.same{grid-template-areas:"co co . cs qt ea to x" "sz sz sz sz sz sz sz sz"}
     .line-b .gl-list.ws .gl.same{grid-template-areas:"co co . qt ea to x" "sz sz sz sz sz sz sz"}
     .line-b .gl-list .gl > .gl-sty,.line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
@@ -11641,14 +11641,25 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
     .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
     .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
     .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{align-self:end}
-    .line-b .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co co sz cs qt ea to x"}
-    .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co co sz qt ea to x"}
+    .line-b .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co co sz cs qt ea to x"}
+    .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co co sz qt ea to x"}
     .line-b .gl-head.gl-r2 .a-sz{display:block;visibility:hidden}
     .line-b .gl-head.gl-r2 .a-co{visibility:hidden}
-    .line-b .gl-row.grp-total.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de de de cs qt ea to x"}
-    .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de de de qt ea to x"}
+    .line-b .gl-row.grp-total.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de de de cs qt ea to x"}
+    .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de de de qt ea to x"}
     .line-b .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
     .line-b .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0;max-width:52px}
     .line-b .gl-r2 .a-sz .szc.ysep{margin-right:8px}
   }
 }
+
+/* size boxes: the number always shows whole (Oct 21, Nick: "you can never have the numbers getting cut off"): no spin
+   arrows taking room, no "…", and a box never narrower than two digits */
+.szc input.sz{-moz-appearance:textfield;appearance:textfield;text-overflow:clip!important;padding-left:0!important;padding-right:0!important}
+.szc input.sz::-webkit-inner-spin-button,.szc input.sz::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+html body .line-b .gl-r2 .a-sz .szc{min-width:30px}
+/* the order's left column: Customer and Job details side by side only when there's room for both (Oct 21, Nick:
+   "set some minimum widths… Furry Feline… so vertically") */
+.ord .ed-grid > .stack{container-type:inline-size}
+@container (max-width: 760px){ html body main.main .ord .top2{grid-template-columns:minmax(0,1fr)} }
+.ord .cust-card{min-width:160px}
