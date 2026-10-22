@@ -6497,7 +6497,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-chip.on b,.mf-dd.on>.mf-chip b{color:#fff;background:var(--accent);border-radius:8px;padding:0 6px}
 .mf-dd{position:relative;flex:1 1 auto;display:flex}
 .mf-dd>.mf-chip{flex:1}
-.mf-ddm{position:fixed;z-index:70;margin-top:6px;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
+.mf-ddm{position:fixed;z-index:70;margin-top:0;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
 .mf-ddm button{display:flex;align-items:center;gap:8px;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--ink)}
 .mf-ddm button:hover{background:var(--surface-2)}
 .mf-ddm button.on{color:var(--accent);font-weight:700}
