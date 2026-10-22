@@ -17,6 +17,7 @@ import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
 import CustomerPick from "@/components/CustomerPick";
 import PicZoom from "@/components/PicZoom";
+import { shirtSets } from "@/lib/shirtSets";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { makePreview } from "@/lib/artPrep";
@@ -90,18 +91,26 @@ const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, garment: shirt
 function inksAsOnMockup(list: SepInk[], im: { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined, designId: string | null): { list: SepInk[]; note: string } {
   const map = im?.inkMap && (!designId || im.inkMap.design === designId) ? im.inkMap.map : null;
   if (!map || !Object.keys(map).length) return { list, note: "" };
+  const target = (hex: string) => { let best: { name: string; hex: string } | null = null, bd = 14; for (const [src, v] of Object.entries(map)) { const d = deltaE(src, hex); if (d < bd) { bd = d; best = v; } } return best; };
   const out: SepInk[] = [], said: string[] = [];
   for (const k of list) {
-    let best: { name: string; hex: string } | null = null, bd = 14;
-    for (const [src, v] of Object.entries(map)) { const d = deltaE(src, k.hex); if (d < bd) { bd = d; best = v; } }
-    if (!best) { out.push(k); continue; }
-    if (best.name === "none") { out.push({ ...k, shirt: true, noPrint: true }); said.push(`${k.name} → not printed (taken out on the mockup)`); continue; }
-    const same = out.find((x) => x.name.trim().toLowerCase() === best!.name.trim().toLowerCase());
-    if (same) { same.also = [...(same.also || []), k.hex, ...(k.also || [])]; said.push(`${k.name} → ${best.name} (one screen)`); continue; }
-    if (k.name !== best.name) said.push(`${k.name} → ${best.name}`);
-    out.push({ ...k, name: best.name });
+    // every color of the ink on its own (a saved ink can hold several): each goes to its mockup ink
+    const { also, ...one } = k, parts = [k.hex, ...(also || [])], tg = parts.map(target);
+    if (tg.every((t) => !t)) { out.push(k); continue; }
+    parts.forEach((hex, n) => {
+      const b = tg[n];
+      if (!b) { out.push({ ...one, hex }); return; }
+      if (b.name === "none") { out.push({ ...one, hex, shirt: true, noPrint: true }); said.push(`${k.name} → not printed (taken out on the mockup)`); return; }
+      // colors that became the same ink print on one screen, never folded into one that doesn't print (Oct 22, #40091:
+      // the black became White and was merged into the white that's taken out, so nothing printed)
+      const same = out.find((x) => !x.noPrint && x.name.trim().toLowerCase() === b.name.trim().toLowerCase());
+      if (same) { same.also = [...(same.also || []), hex]; said.push(`${k.name} → ${b.name} (one screen)`); return; }
+      if (k.name !== b.name) said.push(`${k.name} → ${b.name}`);
+      const { noPrint: _n, shirt: _s, ...printed } = one;
+      out.push({ ...printed, hex, name: b.name, ...(k.noPrint ? {} : k.shirt !== undefined ? { shirt: k.shirt } : {}) });
+    });
   }
-  return { list: out, note: said.length ? `Inks as on the mockup: ${said.join(", ")}.` : "" };
+  return { list: out, note: said.length ? `Inks as on the mockup: ${[...new Set(said)].join(", ")}.` : "" };
 }
 /** one setting on one line: its name, its main control, and ⌄ for the rest */
 function SetRow({ k, label, main, note, open, onToggle, children }: { k: string; label: string; main: ReactNode; note?: ReactNode; open: string[]; onToggle: (k: string) => void; children?: ReactNode }) {
@@ -689,7 +698,8 @@ export default function SeparationStudio({ id }: { id: string }) {
       const hex = shirtHex(c) || colorHex(c) || guessHex(c);
       if (hex && !out.some((o) => deltaE(o.hex, hex) < 12)) out.push({ name: c, hex });
     }
-    return out;
+    // colors that print alike are one shirt (Violet and Purple): only really different shirts count
+    return shirtSets(out).map((x) => ({ name: x.names.join(" / "), hex: x.hex }));
   }, [order, row]);
   const multiShirt = groupShirts.length > 1;
   // the mockup(s) of the garments this print goes on, so the film room sees what it's for (Oct 22, Nick on #40092:

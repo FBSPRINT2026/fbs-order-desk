@@ -11,6 +11,7 @@ import CustomerPick from "@/components/CustomerPick";
 import { orderGroups } from "@/lib/pricing";
 import { colorHex, deltaE, repaintLogo } from "@/lib/inkColors";
 import { guessHex, shirtHex } from "@/lib/mockup";
+import { shirtSets } from "@/lib/shirtSets";
 
 /**
  * Separations queue (Production → Separations): one row per job (Oct 22, Nick: "you shouldn't separate the separations
@@ -96,6 +97,8 @@ export default function SeparationsPage() {
     if (!out.length && r.garment_color) add(r.garment_color);
     return out;
   };
+  // shirts that print alike are one (Violet and Purple); the split picture is only for really different shirts
+  const setsOf = (r: SepRow) => shirtSets(shirtsOf(r));
 
   const inTab = (r: SepRow, t: Tab) => (t === "all" ? sepStage(r.status) !== "archived" : sepStage(r.status) === t);
   // one row per job: its prints in this tab, front first
@@ -131,16 +134,18 @@ export default function SeparationsPage() {
           const due = rs.map((x) => x.due_date).find(Boolean) || o?.due_date;
           const screens = rs.reduce((n, x) => n + (x.channels?.length || 0), 0);
           const shirtNames = [...new Set(rs.flatMap((x) => shirtsOf(x).map((c) => c.name)))];
+          // one set of films prints on every shirt: say so when the shirts really differ (Oct 22, Nick: "we're not actually
+          // changing film… he just needs to know that somehow")
+          const many = rs.map(setsOf).reduce((a, b) => (b.length > a.length ? b : a), [] as ReturnType<typeof setsOf>);
           return (
             <Link key={r.id} href={`/shop/separations/${r.id}`} className="sep-qi sep-qj">
               <span className="sep-qps">{rs.map((x) => {
-                const sh = shirtsOf(x);
-                const bg = sh.length > 1 ? `linear-gradient(135deg, ${sh[0].hex} 0 50%, ${sh[1].hex} 50% 100%)` : sh[0]?.hex || "var(--surface-2)";
+                const sh = setsOf(x);
+                const bg = sh.length > 1 ? `linear-gradient(90deg, ${sh.map((c, k) => `${c.hex} ${(k * 100) / sh.length}% ${((k + 1) * 100) / sh.length}%`).join(", ")})` : sh[0]?.hex || "var(--surface-2)";
                 return (
-                  <span key={x.id} className="sep-qp" title={`${x.location || "Print"}${sh.length ? ` on ${sh.map((c) => c.name).join(" and ")}` : ""}`}>
+                  <span key={x.id} className="sep-qp" title={`${x.location || "Print"}${sh.length ? ` on ${sh.flatMap((c) => c.names).join(", ")}` : ""}`}>
                     <span className="sep-qt" style={{ background: bg }}>
                       {thumbs[x.id] ? <img src={thumbs[x.id]} alt="" /> : <span className="faint">No art</span>}
-                      {sh.length > 1 && <span className="sep-qdots">{sh.map((c) => <i key={c.hex} style={{ background: c.hex }} />)}</span>}
                     </span>
                     <small>{x.location || "Print"}</small>
                   </span>
@@ -149,7 +154,8 @@ export default function SeparationsPage() {
               <span className="sep-qb">
                 <b>{o ? `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}` : `S-${r.number} · ${r.location || "Uploaded art"}`}</b>
                 <span>{cust[r.customer_id || ""] || (o ? "" : <span className="faint">Uploaded art · no order</span>)}</span>
-                <small className="faint">{shirtNames.length ? `${shirtNames.length > 1 ? `${shirtNames.length} shirts: ` : ""}${shirtNames.join(", ")}` : "—"}{screens ? ` · ${screens} screen${screens === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
+                <small className="faint">{shirtNames.length ? shirtNames.join(", ") : "—"}{screens ? ` · ${screens} screen${screens === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
+                {many.length > 1 && <span className="sep-qsame" title={`One set of films prints on all of them: ${many.map((c) => c.names.join(" / ")).join(", ")}. Nothing is left to one shirt's color, and the underbase prints for the dark ones.`}>{many.map((c) => <i key={c.hex} style={{ background: c.hex }} />)}Same films on {many.length} shirt colors</span>}
               </span>
               <span className="sep-qr">
                 <span className="pill" style={{ ["--sc" as string]: st.c }}>{st.label}</span>

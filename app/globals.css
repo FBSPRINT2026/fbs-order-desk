@@ -11912,7 +11912,10 @@ html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(
 /* the Separations list by job: a picture per print, its spot under it */
 .sep-qj{grid-template-columns:auto minmax(0,1fr) auto}
 .sep-qps{display:flex;gap:8px}
-.sep-qp{display:flex;flex-direction:column;align-items:center;gap:3px;width:64px}
+.sep-qp{display:flex;flex-direction:column;align-items:center;gap:3px;width:84px}
+.sep-qp .sep-qt{width:84px;height:84px}
+.sep-qsame{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;margin-top:3px;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.sep-qsame i{width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 1px var(--line)}
 .sep-qp small{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .sep-qp .sep-qt{position:relative;border:1px solid var(--line)}
 .sep-qp .sep-qt img{max-width:86%;max-height:86%}
