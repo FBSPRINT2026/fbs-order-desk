@@ -11678,6 +11678,7 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b.fit-w1c .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz cs cs . ."}
   html body .ord .line-b.fit-w1c .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x" ". . . sz cs cs . ."}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:center;align-self:start}
+  html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl .a-de input{width:calc(max(100%, var(--dew,0px)) + 8px)}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same){padding-top:20px}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same) > .gl-row.gl-r2 > .a-sz{margin-top:-15px}
   html body .ord .line-b.fit-w1 .gl-list .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}

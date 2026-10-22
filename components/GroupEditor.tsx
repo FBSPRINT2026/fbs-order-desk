@@ -310,9 +310,16 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         }
       }
       if (mode === "s") { gap = 10; sg = 4; box = Math.max(boxMin, Math.min(BOXPHONE, Math.floor((W - (own - 1) * 4) / own))); }
+      // on one line the description may run on under the empty room left of the sizes (they sit centered)
+      let dew = 0;
+      if (mode === "w1" || mode === "w1c") {
+        const cost = mode === "w1" && !!cs;
+        const other = st + br + co + (cost ? cs : 0) + qt + ea + to + X + gap * (cost ? 8 : 7);
+        dew = st + br + co + 3 * gap + Math.max(0, Math.floor((W - other - run(box, sg)) / 2)) - 12;
+      }
       const px = (k: string, v: number) => el.style.setProperty(k, `${v}px`);
       px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X);
-      px("--gap", gap); px("--sg", sg); px("--szw", box);
+      px("--gap", gap); px("--sg", sg); px("--szw", box); px("--dew", dew);
       setGlFit(mode);
     };
     fit();
