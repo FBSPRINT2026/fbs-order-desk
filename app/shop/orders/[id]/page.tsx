@@ -899,31 +899,43 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <h1>{o.nickname || "Untitled Job"}<span className="ot-no"> – #{o.number}</span>{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className="ed-actions">
-          <span className="save-state">{saveState}</span>
-          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} />
-          {prodRole && <Link className="btn" href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
+          {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
+          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} />
+          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+            <summary className="btn">Documents ▾</summary>
+            <div className="ot-menu">
+              <a href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
+              <a href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks">Proof PDF</a>
+              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
+            </div>
+          </details>
+          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+            <summary className="btn">Production ▾</summary>
+            <div className="ot-menu">
+              {prodRole && <Link href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
+              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
+              <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
+              <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
+            </div>
+          </details>
           {o.number >= 40000 && o.number < 50000 && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
           {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
-          <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
-          <a className="btn" href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks">Proof PDF</a>
-          <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
-              <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
-              <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
               <button type="button" onClick={duplicate}>Duplicate</button>
               <button type="button" className="danger" onClick={del}>Delete order</button>
             </div>
           </details>
+          <span className="save-state">{saveState}</span>
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
