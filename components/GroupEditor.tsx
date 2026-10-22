@@ -262,8 +262,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       const ea = widest(".gl .a-ea input", 28, 54, 120);
       const to = Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
-      // a size box is never narrower than its number (+6), its size name, or its 2XL+ charge underneath (which may use the gap)
-      const num = widest(".gl .a-sz :is(input.sz,.sz-tap)", 6, 0, 80);
+      // a size box is never narrower than its number (+8: border and the phone's 2px padding), its size name, or its 2XL+
+      // charge underneath (which may use the gap)
+      const num = widest(".gl .a-sz :is(input.sz,.sz-tap)", 8, 0, 80);
       const name = widest(".gl .a-sz .szc > span:first-child", 2, 0, 80);
       const upc = widest(".gl .a-sz .szc > :is(small.upc,.upc-btn)", 0, 0, 80);
       const boxMin = Math.max(26, num, name, upc - 2);
