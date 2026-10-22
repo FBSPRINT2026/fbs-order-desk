@@ -11688,6 +11688,10 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl:not(.same){padding-top:20px}
   html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl:not(.same) > .gl-row.gl-r2 > .a-sz{margin-top:-15px}
   html body .ord .line-b:is(.fit-w0,.fit-w1) .gl-list .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}
+  /* the 2XL+ charges hang under their box without making the row taller (Oct 22, Nick: "why is Black a little above the
+     other lines"): an empty charge line was pushing the first color's row apart from the colors under it */
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl .a-sz .szc{position:relative}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl .a-sz .szc > :is(small.upc,.upc-btn){position:absolute;left:-4px;right:-4px;top:100%;margin-top:1px;text-align:center}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:2px}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs::before{content:"cost";font-size:10px;color:var(--ink-3)}
   html body .ord .line-b.fit-w1c .gl-list .gl .a-cs input{flex:none;width:var(--cs,44px);height:20px}
