@@ -663,7 +663,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             </div>
           </div>
           {/* phones: the filters (All / Customers / To-dos…) as one floating button instead of a second toolbar (Oct 21, Nick) */}
-          {mode === "mail" && view.kind === "inbox" && !hasSel && <FilterFab items={BK.map((b) => ({ k: b.k, label: b.label, n: ol ? bkN(b.k) : undefined }))} value={bk} onPick={(k) => { setBk(k as Bk); setOpen(null); }} />}
+          {mode === "mail" && view.kind === "inbox" && !picked && <FilterFab items={BK.map((b) => ({ k: b.k, label: b.label, n: ol ? bkN(b.k) : undefined }))} value={bk} onPick={(k) => { setBk(k as Bk); setOpen(null); }} />}
           {/* the Inbox brief: always first, stays put while the list scrolls */}
           {mode === "mail" && view.kind === "inbox" && <button type="button" className={"ibx2-briefbtn" + (briefOn ? " on" : "")} onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }} aria-pressed={briefOn}>
             {/* slim, in the FBS rainbow: a pastel fade, rainbow words, the rainbow line along the bottom (Oct 16, Nick) */}
