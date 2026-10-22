@@ -200,6 +200,16 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as readonly string[];
     return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
   })();
+  // how the garment rows fit (Oct 21, Nick): everything on one line ("w"), or the style over the color with the prices
+  // under the sizes ("h"), or the sizes under the color ("s"), from the width there is and how many sizes the group has
+  const glRef = useRef<HTMLDivElement | null>(null);
+  const [glFit, setGlFit] = useState<"w" | "h" | "s">("w");
+  useEffect(() => {
+    const el = glRef.current; if (!el || typeof ResizeObserver === "undefined") return;
+    const n = Math.max(1, groupCols.length), run = n * 38 + 12;
+    const ro = new ResizeObserver(([e]) => { const w = e.contentRect.width; setGlFit(w >= 96 + 140 + 110 + run + 58 + 44 + 70 + 90 + 24 + 64 ? "w" : w >= 140 + run + 24 + 24 ? "h" : "s"); });
+    ro.observe(el); return () => ro.disconnect();
+  }, [groupCols.length]);
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
@@ -299,7 +309,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       {/* the size run (YXS → 4XL) across the top once, every color reading straight across (Oct 21, Nick: "version
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
-      <div className={"line-b " + (groupCols.length <= 9 ? "nsz-s" : groupCols.length <= 13 ? "nsz-m" : "nsz-l")} style={{ ["--nsz" as string]: String(Math.max(1, groupCols.length)) }}>
+      <div ref={glRef} className={"line-b fit-" + glFit}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">

@@ -11625,8 +11625,8 @@ html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
    prices drop to a line under the sizes. Narrower still: the sizes go under the color. Phones keep their own layout.
    Never a sideways scroll; never a number cut off. ===== */
 @media (min-width:761px){
-  html body .ord .line-b .gl-list .gl{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;row-gap:4px;align-items:start;padding:5px 0;border-top:1px solid var(--line-2)}
-  html body .ord .line-b .gl-list.ws .gl{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"st co de sz qt ea to x"}
+  html body .ord .line-b .gl-list .gl{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;row-gap:4px;align-items:start;padding:5px 0;border-top:1px solid var(--line-2)}
+  html body .ord .line-b .gl-list.ws .gl{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"st co de sz qt ea to x"}
   html body .ord .line-b .gl-list .gl.same{padding-top:5px}
   html body .ord .line-b .gl-list .gl > .gl-sty,html body .ord .line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
   html body .ord .line-b .gl-list .gl > .gl-sty > .a-st{grid-area:st;min-width:0}
@@ -11644,8 +11644,8 @@ html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{justify-content:center}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs input{font-size:12px;color:var(--ink-3)}
   /* the header: the same columns */
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;align-items:end;padding-bottom:3px}
-  html body .ord .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"st co de sz qt ea to x"}
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;align-items:end;padding-bottom:3px}
+  html body .ord .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"st co de sz qt ea to x"}
   html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > *{padding-top:0!important}
   html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sth{grid-area:st} html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-deh{grid-area:de}
   html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sz{display:block;visibility:visible}
@@ -11659,89 +11659,11 @@ html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
   html body .ord .line-b .a-sz .szc-off .sz-off{visibility:hidden;min-height:30px}
   html body .ord .line-b .a-sz .szc input.sz,html body .ord .line-b .a-sz .szc .sz-tap{height:30px}
   /* the totals line */
-  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:8px;align-items:center}
-  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"ad ad ad ad qt ea to x"}
+  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:8px;align-items:center}
+  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"ad ad ad ad qt ea to x"}
   html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad}
   html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center} html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right}
 }
-@media (min-width:761px){ @container (max-width: 1050px){
-  html body .ord .line-b.nsz-s .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list .gl > .gl-ditto{display:none}
-  html body .ord .line-b.nsz-s .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
-  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
-  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-s .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
-  html body .ord .line-b.nsz-s .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
-} }
-@media (min-width:761px){ @container (max-width: 1200px){
-  html body .ord .line-b.nsz-m .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list .gl > .gl-ditto{display:none}
-  html body .ord .line-b.nsz-m .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
-  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
-  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-m .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
-  html body .ord .line-b.nsz-m .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
-} }
-@media (min-width:761px){ @container (max-width: 1400px){
-  html body .ord .line-b.nsz-l .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list .gl > .gl-ditto{display:none}
-  html body .ord .line-b.nsz-l .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
-  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
-  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-l .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
-  html body .ord .line-b.nsz-l .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
-} }
-@media (min-width:761px){ @container (max-width: 560px){
-  html body .ord .line-b.nsz-s .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-s .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-s .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-s .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-s .gl .a-sz .szc-off{display:none}
-  html body .ord .line-b.nsz-s .gl .a-sz .szc.ysep{margin-right:0}
-} }
-@media (min-width:761px){ @container (max-width: 700px){
-  html body .ord .line-b.nsz-m .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-m .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-m .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-m .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-m .gl .a-sz .szc-off{display:none}
-  html body .ord .line-b.nsz-m .gl .a-sz .szc.ysep{margin-right:0}
-} }
-@media (min-width:761px){ @container (max-width: 900px){
-  html body .ord .line-b.nsz-l .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-l .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-l .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-l .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-l .gl .a-sz .szc-off{display:none}
-  html body .ord .line-b.nsz-l .gl .a-sz .szc.ysep{margin-right:0}
-} }
 @media (max-width:760px){ .ord .gl-list .gl > .gl-ditto{display:none} .ord .gl-list .gl-head :is(.a-sth,.a-deh){display:none} }
 
 /* a filled-in style # and color read as plain text, no box; the box comes back on hover or while typing, so only the
@@ -11749,3 +11671,36 @@ html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
 html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus){border-color:transparent;background:transparent;box-shadow:none}
 html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus):hover{border-color:var(--line)}
 html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown){font-weight:700}
+@media (min-width:761px){
+  html body .ord .line-b.fit-h .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
+  html body .ord .line-b.fit-h .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.fit-h .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
+  html body .ord .line-b.fit-h .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.fit-h .gl-list .gl > .gl-ditto{display:none}
+  html body .ord .line-b.fit-h .gl-list .gl > .gl-sty > .a-st input{font-size:12px;padding:3px 6px;height:auto}
+  html body .ord .line-b.fit-h .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
+  html body .ord .line-b.fit-h .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
+  html body .ord .line-b.fit-h .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
+  html body .ord .line-b.fit-h .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.fit-h .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
+  html body .ord .line-b.fit-h .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"ad ad ad qt ea to x"}
+}
+@media (min-width:761px){
+  html body .ord .line-b.fit-s .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.fit-s .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.fit-s .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.fit-s .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.fit-s .gl-list .gl > .gl-ditto{display:none}
+  html body .ord .line-b.fit-s .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.fit-s .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.fit-s .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.fit-s .gl .a-sz .szc-off{display:none}
+  html body .ord .line-b.fit-s .gl .a-sz .szc.ysep{margin-right:0}
+  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"ad cs qt ea to x"}
+  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"ad qt ea to x"}
+}
+@media (min-width:761px){
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea input{width:100%;min-width:0;box-sizing:border-box}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs input{width:100%;min-width:0;box-sizing:border-box;padding:4px 3px;text-align:right}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{font-variant-numeric:tabular-nums}
+}
