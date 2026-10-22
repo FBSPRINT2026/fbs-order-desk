@@ -12074,3 +12074,6 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 /* measuring a column's natural width for double-click fit (one synchronous pass, never painted) */
 .tbl.cu-tbl.cu-measure{table-layout:auto!important;width:auto!important}
 .tbl.cu-tbl.cu-measure th,.tbl.cu-tbl.cu-measure td{white-space:nowrap!important;width:auto!important;min-width:0!important}
+/* ClickUp Jobs: a board heading inside a customer with several boards (Cedar: Bulk Orders, then Cart Orders) (Oct 22) */
+.tbl.cu-tbl tr.cu-boardrow > td:not(.cu-rail){background:var(--surface-2);font-size:12.5px;font-weight:700;color:var(--ink-2);padding-top:7px;padding-bottom:7px;text-transform:none;letter-spacing:0}
+.cu-rail-b{margin-top:6px}

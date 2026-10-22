@@ -35,8 +35,7 @@ const ago = (iso: string | null) => {
 };
 /** the fields worth showing: ticked boxes and filled-in words (not "In Printavo", it has its own tab) */
 /** ClickUp's priority flag (Oct 22, Nick: "how are we handling like the urgent flags or priority flags"): Urgent and High
- * are shown like ClickUp's flags and listed first */
-const prRank = (t: { priority?: string }) => (t.priority === "urgent" ? 0 : t.priority === "high" ? 1 : 2);
+ * are shown like ClickUp's flags (the list is in due-date order) */
 function Flag({ p }: { p?: string }) {
   if (p !== "urgent" && p !== "high") return null;
   return <span className={"cu-flag " + p} title={`Flagged ${p === "urgent" ? "Urgent" : "High"} in ClickUp`}><svg viewBox="0 0 24 24" aria-hidden><path d="M5 21V4h11l-1.5 4L16 12H5" /></svg>{p === "urgent" ? "Urgent" : "High"}</span>;
@@ -55,6 +54,11 @@ function Inv({ ours, pv }: { ours?: { id: string; number: number } | null; pv?: 
     {pv && <span className="cu-inv-r">{pv.id ? <Link href={`/shop/archive/${pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pv.number}</span></Link> : <span className="ordno">{pv.number}</span>}<span className="cu-sys old" title="Printavo (our old system)">PTV</span>{pv.status && <span className="sub cu-inv-s">{pv.status}</span>}</span>}
   </span>;
 }
+/** a job's board (its ClickUp list): "Bulk Orders", "Cart Orders", "Purchase Orders" */
+const boardOf = (t: { where_text?: string }) => String(t.where_text || "").split("›").pop()!.trim();
+/** soonest due date first, no date last, then the newest */
+const byDue = (a: { due_at: string | null; created_at_cu: string | null }, b: { due_at: string | null; created_at_cu: string | null }) =>
+  (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0) || (b.created_at_cu || "").localeCompare(a.created_at_cu || "");
 const isDoneT = (t: { status_type: string }) => /^(closed|done)$/i.test(t.status_type || "");
 const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
 
@@ -180,11 +184,25 @@ export default function ClickUpJobs() {
     .filter((t) => !team || t.team_id === team)
     .filter((t) => { const s = q.trim().toLowerCase(); return !s || [t.name, t.where_text, teams.get(t.team_id)?.name, t.creator_name, ...Object.values(t.fields)].some((x) => String(x || "").toLowerCase().includes(s)); });
   // grouped by customer (Oct 22, Nick: "automatically sort by customer and like separate them… something on the left that
-  // shows the grouping"): customers A–Z, then the soonest due first (no date last), then the newest
+  // shows the grouping"): customers A–Z; a customer with more than one board (Cedar's Bulk Orders and Cart Orders) is
+  // split under a small heading per board (Bulk first); within each, the soonest due date on top, no date last (Nick:
+  // "the one on top should be the quickest due date… Bulk, then… soonest to latest, and then Cart, soonest to latest")
   const label = (teamId: string) => { const tm = teams.get(teamId); return custName.get(tm?.customer_id || "") || tm?.name || ""; };
   const rows = [...list].sort((a, b) => label(a.team_id).localeCompare(label(b.team_id), undefined, { sensitivity: "base" }) || a.team_id.localeCompare(b.team_id)
-    || prRank(a) - prRank(b) || (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0) || (b.created_at_cu || "").localeCompare(a.created_at_cu || ""));
-  const groupSize = rows.reduce<Record<string, number>>((m, t) => { m[t.team_id] = (m[t.team_id] || 0) + 1; return m; }, {});
+    || boardOf(a).localeCompare(boardOf(b)) || byDue(a, b));
+  const boardsOf = rows.reduce<Record<string, Record<string, number>>>((m, t) => { (m[t.team_id] ||= {})[boardOf(t)] = ((m[t.team_id] || {})[boardOf(t)] || 0) + 1; return m; }, {});
+  const multi = (teamId: string) => Object.keys(boardsOf[teamId] || {}).length > 1;
+  // the table's rows: a board heading before each board of a customer that has several, then its jobs
+  type Item = { kind: "board"; team: string; board: string; n: number } | { kind: "job"; t: ClickUpTask };
+  const items: Item[] = [];
+  rows.forEach((t, i) => {
+    const prev = rows[i - 1];
+    if (multi(t.team_id) && (!prev || prev.team_id !== t.team_id || boardOf(prev) !== boardOf(t))) items.push({ kind: "board", team: t.team_id, board: boardOf(t) || "Other", n: boardsOf[t.team_id][boardOf(t)] });
+    items.push({ kind: "job", t });
+  });
+  const teamOfItem = (x: Item) => (x.kind === "job" ? x.t.team_id : x.team);
+  const groupSize = items.reduce<Record<string, number>>((m, x) => { m[teamOfItem(x)] = (m[teamOfItem(x)] || 0) + 1; return m; }, {});
+  const jobCount = rows.reduce<Record<string, number>>((m, t) => { m[t.team_id] = (m[t.team_id] || 0) + 1; return m; }, {});
   const weekOut = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const dueSoon = groups.new.filter((t) => { const d = chiDay(t.due_at); return d && d <= weekOut; }).length;
   const noCustomer = (data?.teams || []).filter((t) => !t.hidden && !t.customer_id).length;
@@ -332,7 +350,7 @@ export default function ClickUpJobs() {
         const boxes = Object.entries(boxN).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
         const board = (t: ClickUpTask) => t.where_text || "Completed jobs";
         const list2 = [...shown].sort((a, b) => board(a).localeCompare(board(b)) || Number(isDoneT(a)) - Number(isDoneT(b))
-          || (isDoneT(a) ? 0 : prRank(a) - prRank(b)) || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0)));
+          || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : byDue(a, b)));
         const size = list2.reduce<Record<string, number>>((m, t) => { m[board(t)] = (m[board(t)] || 0) + 1; return m; }, {});
         const cols = 6 + boxes.length;
         return <>
@@ -410,18 +428,22 @@ export default function ClickUpJobs() {
         <table className="tbl cu-tbl">
           <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "FBS INV#", "cu-w-inv")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
-            {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
-              const tm = teams.get(t.team_id);
-              const first = i === 0 || rows[i - 1].team_id !== t.team_id, n = groupSize[t.team_id] || 1;
+            {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : items.length ? items.map((x, i) => {
+              const team = teamOfItem(x), tm = teams.get(team);
+              const first = i === 0 || teamOfItem(items[i - 1]) !== team, n = groupSize[team] || 1, jobs = jobCount[team] || 0;
+              const rail = first && <td className="cu-rail" rowSpan={n} onClick={(e) => e.stopPropagation()}>
+                <div className="cu-rail-c">{label(team) || "—"}</div>
+                <div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div>
+                <span className="cu-rail-n">{jobs} {tab === "new" ? "new" : jobs === 1 ? "job" : "jobs"}</span>
+                {multi(team) && <div className="sub cu-rail-b">{Object.entries(boardsOf[team]).map(([b, c]) => `${c} ${b.replace(/\s*orders?$/i, "").toLowerCase() || "other"}`).join(" · ")}</div>}
+              </td>;
+              if (x.kind === "board") return <tr key={`b:${team}:${x.board}`} className={"cu-boardrow" + (first ? " cu-gstart" : "")}>{rail}<td colSpan={6}>{x.board} <span className="faint">· {x.n}</span></td></tr>;
+              const t = x.t;
               const k = data.known[t.id], ours = t.order_id ? { id: t.order_id, number: t.order_number || 0 } : k?.ours;
               const f = shownFields(t.fields).slice(0, 3);
               return <tr key={t.id} tabIndex={0} className={[first ? "cu-gstart" : "", openId === t.id ? "picked" : ""].filter(Boolean).join(" ") || undefined} onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
-                {first && <td className="cu-rail" rowSpan={n} onClick={(e) => e.stopPropagation()}>
-                  <div className="cu-rail-c">{label(t.team_id) || "—"}</div>
-                  <div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div>
-                  <span className="cu-rail-n">{n} {tab === "new" ? "new" : n === 1 ? "job" : "jobs"}</span>
-                </td>}
-                <td><div>{t.name}<Flag p={t.priority} /></div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
+                {rail}
+                <td><div>{t.name}<Flag p={t.priority} /></div><div className="sub">{[multi(team) ? "" : t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
                 <td><Inv ours={ours} pv={k?.pv ? { id: k.pv.id, number: k.pv.number, status: k.pv.status } : null} /></td>
