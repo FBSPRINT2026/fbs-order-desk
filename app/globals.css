@@ -11652,10 +11652,10 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-x{grid-area:x}
   html body .ord .line-b .gl-list .gl > .gl-ditto{grid-area:st;font-size:14px;font-weight:700;color:var(--line);white-space:nowrap}
   /* the words line up with the headings: the box sits out in the gutter */
-  html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;height:30px;padding:4px 7px;margin-left:-8px;font-family:var(--body);font-size:14px;line-height:20px;color:var(--ink);field-sizing:content;min-width:5ch;max-width:280px}
-  html body .ord .line-b .gl-list .gl .a-st input{font-weight:700}
-  html body .ord .line-b .gl-list .gl .a-br input{color:var(--ink-2);font-weight:400}
-  html body .ord .line-b .gl-list .gl .a-co input{font-weight:700;min-width:9ch}
+  html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;height:30px;padding:4px 7px;margin-left:-8px;font-family:var(--body);font-size:14px;line-height:20px;color:var(--ink);text-overflow:ellipsis}
+  html body .ord .line-b .gl-list .gl .a-st input{font-weight:700;width:calc(12ch + 16px)}
+  html body .ord .line-b .gl-list .gl .a-br input{color:var(--ink-2);font-weight:400;width:calc(15ch + 16px)}
+  html body .ord .line-b .gl-list .gl .a-co input{font-weight:700;width:calc(22ch + 16px)}
   html body .ord .line-b .gl-list .gl .a-de input{box-sizing:border-box;width:100%;height:20px;padding:0 7px;margin-left:-8px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-overflow:ellipsis}
   html body .ord .line-b .gl-list .gl .a-cs input{box-sizing:border-box;width:100%;padding:4px 4px;text-align:right;font-family:var(--body);font-size:12px;color:var(--ink-3)}
   html body .ord .line-b .gl-list .gl .a-qt input{box-sizing:border-box;width:100%;font-family:var(--body);font-size:14px;font-weight:700;color:var(--ink);text-align:center}
@@ -11693,3 +11693,4 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
 .szc > small.upc,.szc > .upc-btn{color:var(--ink-3)}
 .szc > .upc-btn.set{color:var(--ink-2);background:none}
 html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
+@media (min-width:761px){ html body .ord .line-b .gl-list .gl > .gl-ditto{width:calc(12ch + 8px);overflow:hidden;text-overflow:ellipsis} }
