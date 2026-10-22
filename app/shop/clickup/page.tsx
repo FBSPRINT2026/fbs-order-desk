@@ -69,12 +69,18 @@ export default function ClickUpJobs() {
   const groups = useMemo(() => ({
     new: all.filter((t) => t.waiting),
     made: all.filter((t) => t.order_id).sort((a, b) => (b.synced_at || "").localeCompare(a.synced_at || "")),
-    printavo: all.filter((t) => t.in_printavo && !t.order_id && !t.dismissed_at),
+    printavo: all.filter((t) => (t.in_printavo || t.pv_number) && !t.order_id && !t.dismissed_at),
     not: all.filter((t) => t.dismissed_at && !t.order_id),
   }), [all]);
   const list = tab === "boards" ? [] : groups[tab]
     .filter((t) => !team || t.team_id === team)
     .filter((t) => { const s = q.trim().toLowerCase(); return !s || [t.name, t.where_text, teams.get(t.team_id)?.name, t.creator_name, ...Object.values(t.fields)].some((x) => String(x || "").toLowerCase().includes(s)); });
+  // grouped by customer (Oct 22, Nick: "automatically sort by customer and like separate them… something on the left that
+  // shows the grouping"): customers A–Z, then the soonest due first (no date last), then the newest
+  const label = (teamId: string) => { const tm = teams.get(teamId); return custName.get(tm?.customer_id || "") || tm?.name || ""; };
+  const rows = [...list].sort((a, b) => label(a.team_id).localeCompare(label(b.team_id), undefined, { sensitivity: "base" }) || a.team_id.localeCompare(b.team_id)
+    || (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0) || (b.created_at_cu || "").localeCompare(a.created_at_cu || ""));
+  const groupSize = rows.reduce<Record<string, number>>((m, t) => { m[t.team_id] = (m[t.team_id] || 0) + 1; return m; }, {});
   const weekOut = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const dueSoon = groups.new.filter((t) => { const d = chiDay(t.due_at); return d && d <= weekOut; }).length;
   const noCustomer = (data?.teams || []).filter((t) => !t.hidden && !t.customer_id).length;
@@ -237,12 +243,17 @@ export default function ClickUpJobs() {
         <table className="tbl">
           <thead><tr><th>Customer</th><th>Job</th><th>Due</th><th>Files</th><th>Printavo #</th><th>Our #</th><th>Added</th><th /></tr></thead>
           <tbody>
-            {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : list.length ? list.map((t) => {
+            {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
               const tm = teams.get(t.team_id);
+              const first = i === 0 || rows[i - 1].team_id !== t.team_id, n = groupSize[t.team_id] || 1;
               const k = data.known[t.id], ours = t.order_id ? { id: t.order_id, number: t.order_number || 0 } : k?.ours;
               const f = shownFields(t.fields).slice(0, 3);
-              return <tr key={t.id} tabIndex={0} className={openId === t.id ? "picked" : undefined} onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
-                <td><div>{custName.get(tm?.customer_id || "") || tm?.name || "—"}</div><div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div></td>
+              return <tr key={t.id} tabIndex={0} className={[first ? "cu-gstart" : "", openId === t.id ? "picked" : ""].filter(Boolean).join(" ") || undefined} onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
+                {first && <td className="cu-rail" rowSpan={n} onClick={(e) => e.stopPropagation()}>
+                  <div className="cu-rail-c">{label(t.team_id) || "—"}</div>
+                  <div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div>
+                  <span className="cu-rail-n">{n} {tab === "new" ? "new" : n === 1 ? "job" : "jobs"}</span>
+                </td>}
                 <td><div>{t.name}</div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>

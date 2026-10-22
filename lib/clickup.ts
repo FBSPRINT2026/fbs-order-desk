@@ -65,6 +65,7 @@ export type ClickUpTaskRow = {
   fields: Record<string, string>; printavo_field: string | null; in_printavo: boolean; attachments: CuFile[]; comments: CuNote[];
   activity_id: string | null; order_id: string | null; order_number: number | null; ticked_at: string | null; tick_error: string | null;
   dismissed_at: string | null; dismissed_by: string | null; waiting: boolean; synced_at: string;
+  /** the Printavo job it was matched to (already entered: not new) */ pv_id: string | null; pv_number: string | null;
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string };
 export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number };
@@ -124,8 +125,15 @@ function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string
     synced_at: new Date().toISOString(),
   };
 }
-const waitingOf = (r: { parent: string | null; status_type: string; in_printavo: boolean; order_id?: string | null; dismissed_at?: string | null }, hidden: boolean) =>
-  !hidden && !r.parent && !isDone(r.status_type) && !r.in_printavo && !r.order_id && !r.dismissed_at;
+/**
+ * A new job to process. Not: a subtask, done, ticked In Printavo or matched to a Printavo job, made into an order, marked
+ * not an order, in a "Personal List" (ClickUp's own scratch list: McKenna's "test" / "tbd" from Mar 2024), or made more
+ * than 4 months ago (a forgotten task, not a job coming in).
+ */
+const STALE_MS = 120 * 864e5;
+const waitingOf = (r: { parent: string | null; status_type: string; in_printavo: boolean; order_id?: string | null; dismissed_at?: string | null; pv_number?: string | null; where_text?: string; created_at_cu?: string | null }, hidden: boolean) =>
+  !hidden && !r.parent && !isDone(r.status_type) && !r.in_printavo && !r.pv_number && !r.order_id && !r.dismissed_at
+  && !/(^|›\s*)personal list$/i.test(String(r.where_text || "").trim()) && !(r.created_at_cu && Date.now() - Date.parse(r.created_at_cu) > STALE_MS);
 
 /** a workspace's customer, when exactly one fits (its name, or the email domain of the people in it) */
 async function guessCustomer(admin: SupabaseClient, name: string, members: string[]) {
@@ -154,7 +162,7 @@ const keepPaths = (files: CuFile[], old: CuFile[] | null | undefined) => files.m
 /** read one task in full (and its comments) and save it; returns the row */
 export async function readClickUpTask(admin: SupabaseClient, id: string): Promise<ClickUpTaskRow | null> {
   const { data: st } = await admin.from("clickup_state").select("user_email").eq("id", 1).maybeSingle();
-  const { data: old } = await admin.from("clickup_tasks").select("team_id, order_id, dismissed_at, attachments").eq("id", id).maybeSingle();
+  const { data: old } = await admin.from("clickup_tasks").select("team_id, order_id, dismissed_at, attachments, pv_number").eq("id", id).maybeSingle();
   const tok = await tokenFor(admin, String(old?.team_id || ""));
   const t = await cu<CuTask & { team_id?: string }>(tok, `/task/${encodeURIComponent(id)}?include_markdown_description=true`);
   const comments = (await cu<{ comments: CuComment[] }>(tok, `/task/${encodeURIComponent(id)}/comment`).catch(() => ({ comments: [] }))).comments || [];
@@ -162,7 +170,7 @@ export async function readClickUpTask(admin: SupabaseClient, id: string): Promis
   const { data: team } = teamId ? await admin.from("clickup_teams").select("hidden").eq("id", teamId).maybeSingle() : { data: null };
   const row = rowOf(t, teamId, comments, String(st?.user_email || ""));
   row.attachments = keepPaths(row.attachments, old?.attachments as CuFile[] | null);
-  await admin.from("clickup_tasks").upsert({ ...row, waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at }, !!team?.hidden) });
+  await admin.from("clickup_tasks").upsert({ ...row, waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at, pv_number: old?.pv_number }, !!team?.hidden) });
   const { data } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
   return (data as ClickUpTaskRow | null) || null;
 }
@@ -239,9 +247,11 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
       } else await admin.from("clickup_teams").update({ name: team.name, members, token_key: key, seen_at: new Date().toISOString() }).eq("id", team.id);
     }
     // each workspace gets its turn (a big first read of one doesn't hold the others up)
-    const perTeam = Math.max(8, Math.floor(40 / Math.max(1, seen.length)));
-    for (const { team, tok, me } of seen) {
-      if (Date.now() > deadline || used(tok) > 60) { out.later!++; continue; }
+    // each workspace is read side by side (each has its own token and ClickUp limit), so a big first read doesn't hold
+    // the others up
+    const perTeam = 18;
+    await Promise.all(seen.map((ws) => (async ({ team, tok, me }: typeof ws) => {
+      if (Date.now() > deadline || used(tok) > 60) { out.later!++; return; }
       const hidden = !!teamRow.get(team.id)?.hidden;
       const since = cursors[team.id];
       // tasks changed since the last run (the first time: every open task)
@@ -254,9 +264,9 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         if (r.last_page === true || (r.tasks || []).length < 100) break;
       }
       tasks.sort((a, b) => ms(a.date_updated) - ms(b.date_updated));
-      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[] }>();
+      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[]; pv_number: string | null }>();
       for (let i = 0; i < tasks.length; i += 200) {
-        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting, attachments").in("id", tasks.slice(i, i + 200).map((t) => t.id));
+        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting, attachments, pv_number").in("id", tasks.slice(i, i + 200).map((t) => t.id));
         for (const r of data || []) known.set(r.id as string, r as never);
       }
       let cur = since || 0, n = 0;
@@ -272,7 +282,7 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         const comments = full ? (await cu<{ comments: CuComment[] }>(tok, `/task/${t0.id}/comment`).catch(() => ({ comments: [] }))).comments || [] : [];
         const row = rowOf(full || t0, team.id, comments, me || myEmail);
         row.attachments = keepPaths(row.attachments, k?.attachments);
-        const waiting = waitingOf({ ...row, order_id: k?.order_id, dismissed_at: k?.dismissed_at }, hidden);
+        const waiting = waitingOf({ ...row, order_id: k?.order_id, dismissed_at: k?.dismissed_at, pv_number: k?.pv_number }, hidden);
         // a new job's files come into storage now, so they're there when it's opened
         if (waiting && fileBytes > 0 && row.attachments.some((f) => !f.path)) {
           const r = await saveFiles(admin, row.id, row.attachments, tok, { bytes: fileBytes, deadline: deadline - 8000 });
@@ -285,7 +295,7 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         cur = Math.max(cur, upd);
       }
       cursors[team.id] = cur || now;
-    }
+    })(ws).catch((e) => { out.problems.push(`${ws.team.name}: ${e instanceof Error ? e.message : String(e)}`); })));
     const stats = { at: new Date().toISOString(), calls: Object.fromEntries([...calls].map(([t, c]) => [tokens.find((x) => x.token === t)?.key || "?", c])), ...out };
     await admin.from("clickup_state").update({ last_ok_at: new Date().toISOString(), last_error: out.problems.length ? out.problems.join(" · ").slice(0, 500) : null, cursors, stats }).eq("id", 1);
   } catch (e) {

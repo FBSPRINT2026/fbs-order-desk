@@ -78,6 +78,14 @@ export async function listClickUp(): Promise<{ ok: true; connected: boolean; tok
     .map((c) => ({ id: c.id, label: String(c.company || c.name || "").trim() })).filter((c) => c.label).sort((a, b) => a.label.localeCompare(b.label));
   const tasks = [...byId.values()], teamRows = (teams.data || []) as ClickUpTeamRow[];
   const known = await knownJobs(admin, tasks, teamRows).catch(() => ({} as Record<string, ClickUpKnown>));
+  // a job matched to a Printavo job is already entered: kept on it, and not new (Oct 22, Nick: "we have the Printavo
+  // number already in there, so I'm not sure why that one's under new")
+  for (const t of tasks) {
+    const pv = known[t.id]?.pv;
+    if (!pv || t.pv_number === pv.number) continue;
+    await admin.from("clickup_tasks").update({ pv_id: pv.id, pv_number: pv.number, waiting: false }).eq("id", t.id);
+    t.pv_id = pv.id; t.pv_number = pv.number; t.waiting = false;
+  }
   return { ok: true, connected: clickupTokens().length > 0, tokens: clickupTokens().length, state: (st.data as ClickUpState | null) || null, teams: teamRows, tasks, known, customers };
 }
 
@@ -95,7 +103,7 @@ export async function hideClickUpTeam(teamId: string, hidden: boolean) {
   const { error } = await admin.from("clickup_teams").update({ hidden }).eq("id", teamId);
   if (error) return { ok: false as const, error: error.message };
   if (hidden) await admin.from("clickup_tasks").update({ waiting: false }).eq("team_id", teamId);
-  else await admin.from("clickup_tasks").update({ waiting: true }).eq("team_id", teamId).is("parent", null).not("status_type", "in", "(closed,done)").eq("in_printavo", false).is("order_id", null).is("dismissed_at", null);
+  else await admin.from("clickup_tasks").update({ waiting: true }).eq("team_id", teamId).is("parent", null).not("status_type", "in", "(closed,done)").eq("in_printavo", false).is("pv_number", null).is("order_id", null).is("dismissed_at", null);
   return { ok: true as const };
 }
 
@@ -103,10 +111,10 @@ export async function hideClickUpTeam(teamId: string, hidden: boolean) {
 export async function dismissClickUpTask(id: string, dismiss: boolean) {
   const v = await who(); if (!v) return NO;
   const admin = createAdminClient();
-  const { data: t } = await admin.from("clickup_tasks").select("team_id, parent, status_type, in_printavo, order_id").eq("id", id).maybeSingle();
+  const { data: t } = await admin.from("clickup_tasks").select("team_id, parent, status_type, in_printavo, pv_number, order_id").eq("id", id).maybeSingle();
   if (!t) return { ok: false as const, error: "That ClickUp job isn't on file." };
   const { data: team } = await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle();
-  const waiting = !dismiss && !team?.hidden && !t.parent && !/^(closed|done)$/i.test(String(t.status_type)) && !t.in_printavo && !t.order_id;
+  const waiting = !dismiss && !team?.hidden && !t.parent && !/^(closed|done)$/i.test(String(t.status_type)) && !t.in_printavo && !t.pv_number && !t.order_id;
   const { error } = await admin.from("clickup_tasks").update(dismiss ? { dismissed_at: new Date().toISOString(), dismissed_by: v.email, waiting: false } : { dismissed_at: null, dismissed_by: null, waiting }).eq("id", id);
   return error ? { ok: false as const, error: error.message } : { ok: true as const };
 }

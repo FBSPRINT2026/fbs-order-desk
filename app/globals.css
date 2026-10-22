@@ -11982,3 +11982,8 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 tr.cu-off td{color:var(--ink-3)}
 .cu-known{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:14px;color:var(--ink)}
 .cu-job .mf-tray{margin:0}
+/* ClickUp Jobs: the customer band on the left of its jobs (Oct 22, Nick: "something on the left that shows the grouping") */
+.tbl tr.cu-gstart > td{border-top:1px solid var(--line)}
+.tbl td.cu-rail{vertical-align:top;background:var(--surface-2);border-left:3px solid var(--fbs-blue);border-radius:0;min-width:150px;cursor:default}
+.cu-rail-c{font-weight:700;color:var(--ink)}
+.cu-rail-n{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
