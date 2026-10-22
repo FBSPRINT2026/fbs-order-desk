@@ -1079,23 +1079,28 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                           <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
                         </div>
                       ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
-                      <div className="pt-box money-only">
-                        <div className="chips">
-                          <button type="button" className={"chip" + (o.price_type !== "wholesale" && !o.use_program ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; d.use_program = false; }); }}>Retail</button>
-                          <button type="button" className={"chip" + (o.price_type === "wholesale" && !o.use_program ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }}>Wholesale</button>
-                          {(prog || o.use_program) && <button type="button" className={"chip" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Program</button>}
-                        </div>
-                        {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <div className="faint" style={{ fontSize: 11.5 }}>Changed for this order</div>}
-                        {o.use_program && !prog && <div className="faint" style={{ fontSize: 11.5 }}>No rate card on their Program tab</div>}
-                        {o.use_program && progAll && progAll.cards.length > 1 && (
-                          <label className="prg-pick">Rate card
-                            <select value={progCard?.id || ""} onChange={(e) => patch((d) => { d.program_card = e.target.value; })}>
-                              {progAll.cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            {!o.program_card && <small className="faint">picked from the order&apos;s name</small>}
-                          </label>
-                        )}
+                    </div>
+                    {/* pricing on its own line under the customer (Oct 21, Nick: "that little retail wholesale program thing is
+                        screwing up this whole box… put program underneath"): Retail / Wholesale, then program pricing as a switch */}
+                    <div className="pt-row money-only">
+                      <span className="pt-l">Pricing</span>
+                      <div className="chips">
+                        <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
+                        <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
                       </div>
+                      {cust && o.price_type !== (cust.price_type || "retail") && <span className="faint pt-ch">Changed for this order</span>}
+                      {(prog || o.use_program) && <label className={"check pt-prog" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)">
+                        <input type="checkbox" checked={!!o.use_program} onChange={(e) => { setConfirmRetail(false); const v = e.target.checked; patch((d) => { d.use_program = v; }); }} />Program pricing
+                      </label>}
+                      {o.use_program && progAll && progAll.cards.length > 1 && (
+                        <label className="prg-pick">Rate card
+                          <select value={progCard?.id || ""} onChange={(e) => patch((d) => { d.program_card = e.target.value; })}>
+                            {progAll.cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          {!o.program_card && <small className="faint">picked from the order&apos;s name</small>}
+                        </label>
+                      )}
+                      {o.use_program && !prog && <span className="faint pt-ch">No rate card on their Program tab</span>}
                     </div>
                     {!o.use_program && progAll && progAll.applyMode === "ask" && progAll.cards.length > 0 && ["quote", "request"].includes(o.status) && (
                       <div className="prg-ask"><span><b>{cust ? custLabel(cust) : "This customer"}</b> has program pricing.</span><button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Apply program pricing</button></div>

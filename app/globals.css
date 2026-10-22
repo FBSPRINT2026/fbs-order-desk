@@ -11611,3 +11611,44 @@ html body main.main .tbl td.cu-td > div:first-child{white-space:nowrap}
    the whole status shows on hover */
 .pill-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:1400px){ main.main .tbl .pill{max-width:180px} }
+
+/* ── Order: pricing under the customer, program pricing a switch beside it (Oct 21, Nick) ── */
+.ord .pt-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-2)}
+.ord .pt-row .pt-l{font-size:12px;font-weight:700;color:var(--ink-3)}
+.ord .pt-row .chips .chip{padding:4px 12px;font-size:12.5px;min-height:0}
+.ord .pt-row .pt-ch{font-size:11.5px}
+.ord .pt-row .pt-prog{font-size:13px;font-weight:600;gap:6px}
+.ord .pt-row .pt-prog.on{color:var(--ok)}
+.ord .pt-row .prg-pick{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+
+/* ── Order top on a wide screen: the title's underline is as wide as the title, the status shows whole ── */
+html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
+@container (min-width: 1151px){ html body main.main .ord .ed-head .status-select{max-width:none} }
+
+/* ── Garments in a narrower window (Oct 21, Nick: "the price stays… even with the first descriptor… the little boxes can
+   shrink"): style · brand · description with cost / qty / each / total on the first line, the color and the sizes
+   (boxes shrinking to fit) on the second ── */
+@media (min-width:761px){
+  @container (max-width: 1000px){
+    .line-b .gl-list .gl{display:grid;grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"st br de cs qt ea to x" "co co sz sz sz sz sz sz";column-gap:8px;row-gap:6px;align-items:center}
+    .line-b .gl-list.ws .gl{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"st br de qt ea to x" "co co sz sz sz sz sz"}
+    .line-b .gl-list .gl.same{grid-template-areas:"co co . cs qt ea to x" "sz sz sz sz sz sz sz sz"}
+    .line-b .gl-list.ws .gl.same{grid-template-areas:"co co . qt ea to x" "sz sz sz sz sz sz sz"}
+    .line-b .gl-list .gl > .gl-sty,.line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
+    .line-b .gl-list .gl > .gl-sty > .a-st{grid-area:st}
+    .line-b .gl-list .gl > .gl-sty > .a-br{grid-area:br}
+    .line-b .gl-list .gl > .gl-sty > .a-de{grid-area:de}
+    .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
+    .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
+    .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{align-self:end}
+    .line-b .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co co sz cs qt ea to x"}
+    .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co co sz qt ea to x"}
+    .line-b .gl-head.gl-r2 .a-sz{display:block;visibility:hidden}
+    .line-b .gl-head.gl-r2 .a-co{visibility:hidden}
+    .line-b .gl-row.grp-total.gl-r2{grid-template-columns:110px 120px minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de de de cs qt ea to x"}
+    .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:110px 120px minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de de de qt ea to x"}
+    .line-b .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
+    .line-b .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0;max-width:52px}
+    .line-b .gl-r2 .a-sz .szc.ysep{margin-right:8px}
+  }
+}
