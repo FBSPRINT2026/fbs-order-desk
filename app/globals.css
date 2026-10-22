@@ -12047,3 +12047,7 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .cu-pin svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
 .cu-pin.on{color:var(--fbs-blue)}
 .cu-pin.on svg{fill:currentColor}
+/* ClickUp tables: borders drawn per cell (not by the table), and the band's blue edge drawn inside the cell, so a pinned
+   heading covers the rows cleanly (Oct 22, Nick: "this blue line oddity to the left of the Customer" heading) */
+.tbl.cu-tbl{border-collapse:separate;border-spacing:0}
+.tbl.cu-tbl td.cu-rail{border-left:0;box-shadow:inset 3px 0 0 var(--fbs-blue)}
