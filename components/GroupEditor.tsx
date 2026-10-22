@@ -200,36 +200,72 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as readonly string[];
     return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
   })();
-  // how the garment rows fit (Oct 22, Nick: "perfect"): the shirt on one line with its money, the description small
-  // under it, the sizes on their own line in run order ("w"); when even the run of sizes doesn't fit, the phone-style
-  // stack ("s")
+  // How the garment rows fit (Oct 22, Nick: "dynamic column widths so that as the page shrinks, everything shrinks… keep
+  // the sizes up on that row as long as possible… fill the space in widescreen"). The style, brand, color, cost, qty,
+  // each and total columns are exactly as wide as the widest value in this group (measured), the size boxes give a
+  // little (36 → 30 px) before anything moves, and then, in order:
+  //   w1  everything on one line: style · brand · color | sizes (centered in the room left) | cost · qty × each · total
+  //   w1c the same, with the gray cost tucked under the price to make room
+  //   w   the sizes on their own line under the shirt (the shirt and its money still on one line)
+  //   s   stacked, like a phone
+  // The numbers here are the same ones the CSS uses (globals.css "Garments: one grid"), set as CSS variables.
   const glRef = useRef<HTMLDivElement | null>(null);
-  const [glFit, setGlFit] = useState<"w1" | "w" | "s">("w");
-  // the columns are as wide as the longest style #, brand and color in the group (not a fixed guess), and the size boxes
-  // shrink a little before anything wraps (Oct 22, Nick: "shrink until they start to go over type")
-  const glText = g.lines.map((l) => `${l.style}\u0001${l.brand || ""}\u0001${l.color}`).join("\u0002");
+  const [glFit, setGlFit] = useState<"w1" | "w1c" | "w" | "s">("w");
+  const hasCost = !gc.wholesale && !hidePrices;
+  const glSig = JSON.stringify([groupCols, hasCost, gc.qty, gc.sub, g.lines.map((l, i) => [l.style, l.brand, l.color, l.cost, l.priceOverride, gc.lines[i]?.qty, gc.lines[i]?.sub])]);
   useEffect(() => {
-    const el = glRef.current; if (!el || typeof ResizeObserver === "undefined") return;
-    const n = Math.max(1, groupCols.length), sep = groupCols.includes("YXL") && groupCols.some((z) => !/^Y/.test(z)) ? 12 : 0;
-    const fam = getComputedStyle(el).fontFamily || "sans-serif";
+    const el = glRef.current; if (!el) return;
     const cv = document.createElement("canvas").getContext("2d");
-    const tw = (t: string, bold: boolean) => { if (!cv) return t.length * 8; cv.font = `${bold ? 700 : 400} 14px ${fam}`; return Math.ceil(cv.measureText(t || "").width); };
-    const lines = g.lines;
-    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-    const st = clamp(Math.max(...lines.map((l) => tw(l.style, true)), tw("Style #", false)) + 10, 56, 130);
-    const br = clamp(Math.max(...lines.map((l) => tw(l.brand || "", false)), 30) + 10, 40, 170);
-    const co = clamp(Math.max(...lines.map((l) => tw(l.color, true)), tw("Color", false)) + 12, 80, 210);
-    el.style.setProperty("--st", `${st}px`); el.style.setProperty("--br", `${br}px`); el.style.setProperty("--co", `${co}px`);
-    const money = (gc.wholesale ? 0 : 52) + 40 + 70 + 88 + 22, gaps = 10 * 9;
-    const fits = (w: number, box: number) => st + br + co + (n * (box + 4) + sep) + money + gaps + 12 <= w;
-    const ro = new ResizeObserver(([e]) => {
-      const w = e.contentRect.width;
-      let box = 36; while (box > 30 && !fits(w, box)) box -= 2;
-      el.style.setProperty("--szw", `${fits(w, box) ? box : 36}px`);
-      setGlFit(fits(w, box) ? "w1" : w >= Math.max(st + br + co + money + 40, n * 40 + 30) ? "w" : "s");
-    });
-    ro.observe(el); return () => ro.disconnect();
-  }, [groupCols.length, glText, gc.wholesale]); // eslint-disable-line react-hooks/exhaustive-deps
+    const textW = (node: Element, text: string) => {
+      if (!cv || !text) return 0;
+      const cs = getComputedStyle(node);
+      cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      return Math.ceil(cv.measureText(text).width);
+    };
+    // the widest value in a column (inputs: what's typed, else the placeholder), plus its padding, kept within lo…hi
+    const widest = (sel: string, pad: number, lo: number, hi: number) => {
+      let m = 0;
+      el.querySelectorAll<HTMLElement>(sel).forEach((node) => {
+        if (node instanceof HTMLInputElement) m = Math.max(m, textW(node, node.value || node.placeholder || ""));
+        else { const t = node.querySelector("b") || node; m = Math.max(m, textW(t, (t.textContent || "").trim())); }
+      });
+      return Math.max(lo, Math.min(hi, m + pad));
+    };
+    const n = Math.max(1, groupCols.length);
+    const yx = groupCols.indexOf("YXL"), sep = yx >= 0 && yx < groupCols.length - 1 ? 12 : 0;
+    const GAP = 10, X = 22;
+    const fit = () => {
+      const list = el.querySelector<HTMLElement>(".gl-list") || el;
+      const W = list.clientWidth;
+      if (!W) return;
+      const st = widest(".gl .a-st input", 12, 40, 150);
+      const br = widest(".gl .a-br input", 12, 32, 170);
+      const co = widest(".gl .a-co input", 12, 64, 230);
+      const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 76) : 0;
+      const qt = Math.max(widest(".gl .a-qt input", 10, 30, 70), widest(".grp-total > .a-qt", 6, 30, 70));
+      const ea = widest(".gl .a-ea input", 28, 56, 110);
+      const to = Math.max(widest(".gl .a-to", 6, 56, 130), widest(".grp-total > .a-to", 6, 56, 130));
+      const S = st + GAP + br + GAP + co;
+      const M = (cs ? cs + GAP : 0) + qt + GAP + ea + GAP + to + GAP + X;
+      const Mc = qt + GAP + ea + GAP + to + GAP + X;
+      const run = (b: number) => n * b + (n - 1) * 4 + sep;
+      let mode: "w1" | "w1c" | "w" | "s" = "s", box = 36;
+      for (let b = 36; b >= 30 && mode === "s"; b--) if (S + GAP + run(b) + GAP + M <= W) { mode = "w1"; box = b; }
+      if (mode === "s" && cs) for (let b = 36; b >= 30 && mode === "s"; b--) if (S + GAP + run(b) + GAP + Mc <= W) { mode = "w1c"; box = b; }
+      if (mode === "s" && S + GAP + M <= W && run(30) <= W) { mode = "w"; box = 36; while (box > 30 && run(box) > W) box--; }
+      // lots of room: the boxes grow a little, the rest is shared either side of the sizes
+      if (mode === "w1" && box === 36) box = Math.min(42, 36 + Math.floor((W - (S + GAP + run(36) + GAP + M)) / n / 3));
+      const px = (k: string, v: number) => el.style.setProperty(k, `${v}px`);
+      px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X); px("--gap", GAP); px("--szw", box);
+      setGlFit(mode);
+    };
+    fit();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => fit()) : null;
+    ro?.observe(el);
+    let live = true;
+    document.fonts?.ready?.then(() => { if (live) fit(); }).catch(() => {});
+    return () => { live = false; ro?.disconnect(); };
+  }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
@@ -329,7 +365,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       {/* the size run (YXS → 4XL) across the top once, every color reading straight across (Oct 21, Nick: "version
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
-      <div ref={glRef} className={"line-b fit-" + glFit}>
+      <div ref={glRef} className={"line-b fit-" + glFit + (hasCost ? "" : " nocs")}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">
