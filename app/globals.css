@@ -12067,3 +12067,10 @@ body.cu-resizing{cursor:col-resize;user-select:none}
    its own rounded edge (clip keeps the heading pinnable, unlike hidden) */
 .tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:first-child,.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:last-child{border-radius:0}
 .tbl-wrap.cu-fit.cu-pinhead{overflow:clip}
+/* the resize handle sits inside its own heading: hanging over the next one, the next (pinned) heading covered it and
+   only a pixel could be grabbed (Oct 22, Nick: "the cursor jumps and it doesn't just move it over") */
+.cu-rsz{right:0;width:10px}
+.cu-rsz::after{left:auto;right:0}
+/* measuring a column's natural width for double-click fit (one synchronous pass, never painted) */
+.tbl.cu-tbl.cu-measure{table-layout:auto!important;width:auto!important}
+.tbl.cu-tbl.cu-measure th,.tbl.cu-tbl.cu-measure td{white-space:nowrap!important;width:auto!important;min-width:0!important}

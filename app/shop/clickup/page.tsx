@@ -81,7 +81,7 @@ export default function ClickUpJobs() {
   const [wsQ, setWsQ] = useState("");
   // column widths, dragged on the header's right edge (Oct 22, Nick: "make the columns movable… larger or shorter"),
   // remembered in this browser; double-click the edge to put a column back
-  const [cw, setCw] = useSticky<Record<string, number>>("clickup.cols", {});
+  const [cw, setCw] = useSticky<Record<string, number>>("clickup.cols2", {});
   // the toolbar and the column headings always pinned to the top while the list scrolls (Oct 22, Nick: "make this
   // pinnable…", then "don't need that little pinned button… It'll always be pinned")
   const pin = true;
@@ -93,19 +93,51 @@ export default function ClickUpJobs() {
     return () => ro.disconnect();
   }, [ws, tab, pin]);
   const pinStyle = { ["--cu-th-top" as string]: `${pin ? tbH : 0}px` };
-  const rth = (key: string, label: ReactNode, cls = "") => (
-    <th key={key} className={cls} style={cw[key] ? { width: cw[key] } : undefined}>{label}
-      <span className="cu-rsz" title="Drag to make it wider or narrower · double-click to reset" aria-hidden
+  // Dragging a column's right edge moves just that edge, exactly with the mouse, like a divider: this column grows and
+  // the one after it shrinks (the table always fills the window, so something has to give; Oct 22, Nick: "you click
+  // on it and then you move it and the cursor jumps"). The Job column has no saved width: it takes what's left.
+  // Double-click an edge: the column fits what's in it, like Excel (Nick: "when you double click a column and it
+  // shrinks it to a reasonable size"). While dragging only the headings change; widths are saved on letting go.
+  const MIN_W = 44, JOB_MIN = 220;
+  const isJob = (k?: string | null) => !!k && /\.job$/.test(k);
+  const saveW = (ws: Record<string, number>) => setCw((m) => { const n = { ...m }; for (const [k, v] of Object.entries(ws)) if (!isJob(k)) n[k] = v; return n; });
+  const rth = (key: string, label: ReactNode, cls = "", sizable = true) => (
+    <th key={key} className={cls} data-col={key} style={cw[key] && !isJob(key) ? { width: cw[key] } : undefined}>{label}
+      {sizable && <span className="cu-rsz" title="Drag to move this edge · double-click to fit the column to what's in it" aria-hidden
         onClick={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => { e.stopPropagation(); setCw((m) => { const n = { ...m }; delete n[key]; return n; }); }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          const th = e.currentTarget.parentElement as HTMLElement, table = th.closest("table");
+          if (!table || isJob(key)) return;
+          const job = th.parentElement?.querySelector<HTMLElement>("th[data-col$='.job']");
+          const w0 = th.getBoundingClientRect().width, jobW = job ? job.getBoundingClientRect().width : 9999;
+          table.classList.add("cu-measure");
+          const natural = th.getBoundingClientRect().width;
+          table.classList.remove("cu-measure");
+          const w = Math.round(Math.max(56, Math.min(520, natural + 4, w0 + Math.max(0, jobW - JOB_MIN))));
+          th.style.width = `${w}px`; saveW({ [key]: w });
+        }}
         onPointerDown={(e) => {
           e.preventDefault(); e.stopPropagation();
-          const th = e.currentTarget.parentElement as HTMLElement, x0 = e.clientX, w0 = th.getBoundingClientRect().width;
-          const move = (ev: PointerEvent) => setCw((m) => ({ ...m, [key]: Math.max(44, Math.round(w0 + ev.clientX - x0)) }));
-          const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); document.body.classList.remove("cu-resizing"); };
+          const th = e.currentTarget.parentElement as HTMLElement, next = th.nextElementSibling as HTMLElement | null;
+          if (!next) return;
+          const k1 = th.dataset.col, k2 = next.dataset.col || "";
+          const x0 = e.clientX, w1 = th.getBoundingClientRect().width, w2 = next.getBoundingClientRect().width;
+          // how far the edge can go: neither side under its minimum (the Job column keeps 220px)
+          const lo = -(w1 - (isJob(k1) ? JOB_MIN : MIN_W)), hi = w2 - (isJob(k2) ? JOB_MIN : MIN_W);
+          let d = 0;
+          const move = (ev: PointerEvent) => {
+            d = Math.round(Math.min(hi, Math.max(lo, ev.clientX - x0)));
+            if (!isJob(k1)) th.style.width = `${w1 + d}px`;
+            if (!isJob(k2)) next.style.width = `${w2 - d}px`;
+          };
+          const up = () => {
+            window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); document.body.classList.remove("cu-resizing");
+            if (d) saveW({ ...(k1 ? { [k1]: w1 + d } : {}), ...(k2 && k2 !== "act" ? { [k2]: w2 - d } : {}) });
+          };
           document.body.classList.add("cu-resizing");
           window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
-        }} />
+        }} />}
     </th>
   );
   /** tick / untick a ClickUp box from the workspace view (Oct 22, Nick: "can we check like in Printavo here? And it'll check in ClickUp") */
