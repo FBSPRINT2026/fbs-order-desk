@@ -16,6 +16,7 @@ import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
 import CustomerPick from "@/components/CustomerPick";
+import PicZoom from "@/components/PicZoom";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { makePreview } from "@/lib/artPrep";
@@ -348,9 +349,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   // press setup for this job: what goes on each head (null = automatic, from the press defaults)
   const [setup, setSetup] = useState<Slot[] | null>(null);
   // the two side panes are tabbed so the whole studio fits the window: left = how it separates, right = what comes out
-  const [ltab0, setLtab] = useSticky<"inks" | "base" | "output">("sep.ltab", "inks");
   // two tabs: the inks, and the underbase with the output settings
-  const ltab = ltab0 === "base" ? "output" : ltab0;
   const [rtab0, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
   // two tabs: screens with their films, the press with the coach
   const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
@@ -407,9 +406,17 @@ export default function SeparationStudio({ id }: { id: string }) {
     setOrder((o as Order) || null);
     // the other print locations of this order group (front, back, sleeve…): a tab each at the top
     if (row0.order_id) {
-      const { data: sib } = await sb.from("separations").select("id, location, status, imprint_id, group_id").eq("order_id", row0.order_id).neq("status", "cancelled");
-      const groupSibs = ((sib || []) as Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id">[]).filter((x) => !row0.group_id || x.group_id === row0.group_id);
-      setSiblings(groupSibs.sort((a, b) => locRank(a.location) - locRank(b.location)));
+      // every print of the job (Oct 22, Nick: "it should just be the jobs… when you click in, you've got the front, back"),
+      // each with a small picture: its saved proof, else its art
+      const { data: sib } = await sb.from("separations").select("id, location, status, imprint_id, group_id, design_id, preview_path, channels").eq("order_id", row0.order_id).neq("status", "cancelled");
+      const all = ((sib || []) as (Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { channels: unknown[] | null })[]).map((x) => ({ ...x, screens: Array.isArray(x.channels) ? x.channels.length : 0 }));
+      const dids = [...new Set(all.filter((x) => !x.preview_path && x.design_id).map((x) => x.design_id!))];
+      const { data: dz } = dids.length ? await sb.from("designs").select("id, preview_path, file_path").in("id", dids) : { data: [] };
+      const pathOf = (x: (typeof all)[number]) => x.preview_path || (((dz || []) as { id: string; preview_path: string | null; file_path: string | null }[]).find((d) => d.id === x.design_id)?.preview_path || "");
+      const paths = [...new Set(all.map(pathOf).filter(Boolean))];
+      const { data: sg } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
+      const urlOf = new Map(paths.map((pp, i) => [pp, sg?.[i]?.signedUrl || ""]));
+      setSiblings(all.map(({ channels: _c, ...x }) => ({ ...x, pic: urlOf.get(pathOf({ ...x, channels: null })) || "" })).sort((a, b) => locRank(a.location) - locRank(b.location) || a.location.localeCompare(b.location)));
     }
     const today = new Date().toISOString().slice(0, 10);
     const ps = mergeProduction((s0?.data as { production?: unknown } | null)?.production);
@@ -795,7 +802,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- full size (for the files) ---------- */
   // the screen works on a copy of at most 2,400 px; the Illustrator file and films are separated again from the art
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
-  const [siblings, setSiblings] = useState<Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id">[]>([]);
+  const [siblings, setSiblings] = useState<(Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { screens: number; pic?: string })[]>([]);
+  const [zoom, setZoom] = useState<number | null>(null);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const orderInks = useRef<{ name: string; hex: string }[]>([]);
   /** the order's own ink name for a found color, when one is close (ΔE under 20) */
@@ -1039,6 +1047,21 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (!!st.dropBackdrop !== drop) refind.current = img;
     set({ dropBackdrop: drop });
   }
+  // a job's print follows its mockup, no question (Oct 22, Nick on #40091: "we did those edits, like removing the white
+  // background, when we created the mock-up… I don't want the production manager to make that decision"). The page box
+  // comes out unless the mockup kept that color as an ink; only art uploaded straight to Separations still asks.
+  const fromMockup = !!(order && row?.imprint_id);
+  useEffect(() => {
+    if (!backdrop || !vraw?.ok || st.dropBackdrop !== undefined || !fromMockup) return;
+    const im = orderGroups(order!).flatMap((g) => g.imprints).find((x) => x.id === row!.imprint_id) as { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined;
+    const map = im?.inkMap && (!row!.design_id || im.inkMap.design === row!.design_id) ? im.inkMap.map : {};
+    let ink: { name: string } | null = null, bd = 14;
+    for (const [src, v] of Object.entries(map)) { const d = deltaE(src, backdrop.hex); if (d < bd) { bd = d; ink = v; } }
+    const keep = !!ink && ink.name !== "none";
+    setBackdrop(!keep);
+    setMsg(keep ? `The ${backdrop.name} background prints, as on the mockup.` : `The ${backdrop.name} background was taken out, as on the mockup.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backdrop, vraw, st.dropBackdrop, fromMockup]);
   async function openFile(path: string) { const { data } = await sb.storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
 
   /* ---------- press setup: the plates on a press, in print order, the underbase just before a flash ---------- */
@@ -1085,10 +1108,11 @@ export default function SeparationStudio({ id }: { id: string }) {
             {/* whose art this is: an order's separation belongs to the order's customer; any other can be saved to one */}
             {(!row.order_id || row.customer_id) && <span className="sep-cust">· <CustomerPick compact disabled={!!row.order_id} value={row.customer_id} placeholder="Save to a customer…" onPick={(cid) => setCustomer(cid)} /></span>}
             {row.customer_id && <Link className="sep-cust-l" href={`/shop/customers/${row.customer_id}?area=artwork`} title="This customer's production files (staff only)">Production files ↗</Link>}</div>
-          <h1>{editName !== null
+          {order ? <h1>#{order.number}{order.nickname ? ` ${order.nickname}` : ""}</h1>
+            : <h1>{editName !== null
             ? <input className="sep-rename" value={editName} autoFocus aria-label="Separation name" onChange={(e) => setEditName(e.target.value)} onBlur={(e) => rename(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditName(null); }} />
-            : <button type="button" className="sep-name" title="Click to rename" onClick={() => setEditName(row.location || "")}>{row.location || "Separation"}<span className="sep-name-ed" aria-hidden>✎</span></button>}{order ? <span className="faint"> · #{order.number} {order.nickname || ""}</span> : null}</h1>
+            : <button type="button" className="sep-name" title="Click to rename" onClick={() => setEditName(row.location || "")}>{row.location || "Separation"}<span className="sep-name-ed" aria-hidden>✎</span></button>}</h1>}
         </div>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
@@ -1122,20 +1146,30 @@ export default function SeparationStudio({ id }: { id: string }) {
       {vart?.ok && vart.mockup && <div className="sep-art-note">{vart.mockup}. Check the proof: if something you need was under the shirt, upload the art without the shirt.</div>}
       {!!(row?.settings as { art?: SepArt } | undefined)?.art?.note && <div className="sep-art-note">{(row!.settings as { art: SepArt }).art.note}{(row!.settings as { art: SepArt }).art.original ? ` (Original kept: ${(row!.settings as { art: SepArt }).art.original!.name}.)` : ""}</div>}
       <div className="sep-topbar">
-      {siblings.length > 1 && (
-        <nav className="sep-locs" aria-label="Print locations on this order">
+      {order && siblings.length > 0 && (
+        <nav className="sep-locs sep-locs2" aria-label="The prints on this job">
           {siblings.map((x) => {
             const st0 = SEP_STATUS[x.status];
+            // the same spot on two groups: say which
+            const twin = siblings.filter((y) => y.location === x.location).length > 1;
+            const gname = twin ? orderGroups(order).find((g) => g.id === x.group_id)?.name || "" : "";
+            const inner = <>
+              <span className="sep-loc-pic">{x.pic ? <img src={x.pic} alt="" /> : null}</span>
+              <span className="sep-loc-t"><b>{x.location || "Print"}{gname ? <small className="sep-loc-g"> · {gname}</small> : null}</b>
+                <small>{x.screens ? `${x.screens} screen${x.screens === 1 ? "" : "s"} · ` : ""}{st0?.label}</small></span>
+            </>;
             return x.id === row.id
-              ? <span key={x.id} className="sep-loc on" aria-current="page"><b>{x.location}</b><small>{st0?.label}</small></span>
-              : <Link key={x.id} className="sep-loc" href={`/shop/separations/${x.id}`}><b>{x.location}</b><small>{st0?.label}</small></Link>;
+              ? <span key={x.id} className="sep-loc on" aria-current="page">{inner}{editName !== null
+                ? <input className="sep-rename sm" value={editName} autoFocus aria-label="Print name" onChange={(e) => setEditName(e.target.value)} onBlur={(e) => rename(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditName(null); }} />
+                : <button type="button" className="sep-loc-ed" title="Rename this print" aria-label="Rename this print" onClick={() => setEditName(row.location || "")}>✎</button>}</span>
+              : <Link key={x.id} className="sep-loc" href={`/shop/separations/${x.id}`}>{inner}</Link>;
           })}
         </nav>
       )}
       <div className="rv-seg sep-tabs">{([["studio", "Separations"], ["outside", "✦ Coach & Learning"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       </div>
 
-      {backdrop && st.dropBackdrop === undefined && vraw?.ok && (
+      {backdrop && st.dropBackdrop === undefined && vraw?.ok && !fromMockup && (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="bg-t">
           <div className="mk-modal">
             <h2 id="bg-t">Remove the {backdrop.name} background?</h2>
@@ -1160,21 +1194,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
-          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["output", "Underbase & Size"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
-          <div className="sep-pane">
-          {ltab === "inks" && <>
-          <section className="sep-card">
-            <h3>Method</h3>
-            <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
-            <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
-            {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
-            {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
-            {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
-          </section>
+          <div className="sep-pane sep-pane-all">
+          {<>
           {mocks.length > 0 && (
             <section className="sep-card">
               <h3>Mockup</h3>
-              <div className="sep-mocks">{mocks.map((m, i) => <a key={i} href={m.url} target="_blank" rel="noreferrer" title={`${m.cap || "Mockup"}: open it big`}><img src={m.url} alt={m.cap || "Mockup"} /><span>{m.cap}</span></a>)}</div>
+              <div className="sep-mocks">{mocks.map((m, i) => <button type="button" key={i} onClick={() => setZoom(i)} title={`${m.cap || "Mockup"}: see it big`}><img src={m.url} alt={m.cap || "Mockup"} /><span>{m.cap}</span></button>)}</div>
+              <PicZoom pics={mocks} at={zoom} onClose={() => setZoom(null)} />
             </section>
           )}
           <section className="sep-card">
@@ -1196,13 +1222,21 @@ export default function SeparationStudio({ id }: { id: string }) {
               : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
           </section>
           <section className="sep-card">
+            <h3>Method</h3>
+            <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
+            <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
+            {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
+            {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
+            {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
+          </section>
+          <section className="sep-card">
             <h3>Finding inks</h3>
             <label className="sep-f">Ink names<select value={st.lib} onChange={(e) => { const lib = e.target.value as Studio["lib"]; set({ lib }); setInks((l) => l.map((x) => ({ ...x, name: inkName(x.hex, lib) }))); }} title="Names every ink again"><option value="auto">Suggested</option><option value="wilflex">All standard</option><option value="pms">All PMS</option></select></label>
             <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
             <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find Inks Again</button>
           </section>
           </>}
-          {ltab === "output" && <section className="sep-card">
+          {<section className="sep-card">
             <h3>Underbase{dark ? "" : " (white shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             {res?.underbase && plates.some((p) => p.kind === "color") && (
@@ -1228,7 +1262,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             {st.method === "sim" && <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>}
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
           </section>}
-          {ltab === "output" && <section className="sep-card">
+          {<section className="sep-card">
             <h3>Size &amp; Film</h3>
             <label className="sep-f">Print width (in)<input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} /></label>
             {img && (() => {
@@ -1314,6 +1348,11 @@ export default function SeparationStudio({ id }: { id: string }) {
             <span className="spacer" />
             <label className="sep-count">Colors <select value={st.maxColors} onChange={(e) => { set({ maxColors: +e.target.value }); }}>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
             <button type="button" className="btn sm" onClick={() => findInks()} title="Separate with this many inks. Fewer than the art has: the colors left out are mixed from the other inks as halftones.">Apply</button>
+            {/* the proof's views on the same line as the inks (Oct 22, Nick: "fix the tool bars") */}
+            <div className="sep-vbar in">
+              <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
+              <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
+            </div>
           </div>
           {st.method === "spot" && fadeRows.length > 0 && (
             <div className="sep-fades">
@@ -1334,10 +1373,6 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>
           )}
           <datalist id="sep-inklist">{[...Object.keys(WILFLEX_NAMES), ...PMS_NAMES].map((n) => <option key={n} value={n} />)}</datalist>
-          <div className="sep-vbar">
-            <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
-            <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
-          </div>
           <div className={"sep-stage" + (bg === "checker" && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : bg === "checker" ? undefined : "#fff" }}>
             {films && res && <FilmsView plates={plates} w={res.w} h={res.h} onOpen={(k) => { setSolo(k); setLoupe(null); }} />}
             <div className={"sep-canvases" + (films ? " gone" : "")}>

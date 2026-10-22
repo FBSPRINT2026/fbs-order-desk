@@ -11834,8 +11834,47 @@ html body .ord .line-b .gl .ln-add{color:var(--ink-3);font-size:13px}
 html body .ord .line-b .gl > .gl-note{grid-column:1/-1;margin:4px 0 0}
 html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(100% + 8px);margin-left:-8px;min-height:30px;resize:vertical;font:13px/1.4 var(--body);color:var(--ink);padding:5px 7px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
 /* the version under the logo for everyone but the owner (Oct 22) */
-.nav-ver-all{padding:6px 12px 8px;line-height:1;display:block!important;text-align:left}
-.nav-ver-all .ver-tag{font-size:11px;color:var(--side-ink,#9aa3b2);opacity:1;display:inline-block}
+/* the version above Sign out for everyone (Oct 22): floats over the bar's top edge, so the bar keeps its height */
+.side-user{position:relative}
+.nav-ver-all{position:absolute;right:8px;bottom:100%;margin-bottom:2px;line-height:1;pointer-events:auto}
+.nav-ver-all .ver-tag{font-size:11px;color:var(--side-ink,#9aa3b2);opacity:1;display:inline-block;white-space:nowrap}
+.side.mini .nav-ver-all{display:none}
+/* ---- Separation studio by job (Oct 22, Nick: "it should just be the jobs… front, back… this whole left side looks
+   terrible… remove the scrolling and make it expand out") ---- */
+.sep-locs2{gap:8px;flex-wrap:wrap}
+.sep-locs2 .sep-loc{flex-direction:row;align-items:center;gap:10px;padding:6px 12px 6px 6px;min-width:150px;position:relative}
+.sep-loc-pic{width:46px;height:46px;flex:none;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;display:grid;place-items:center}
+.sep-loc-pic img{width:100%;height:100%;object-fit:contain}
+.sep-loc-t{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sep-loc-t b{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap}
+.sep-loc-t small{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.sep-loc-g{font-weight:500}
+.sep-loc-ed{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:2px 4px;font-size:13px;align-self:flex-start}
+.sep-loc-ed:hover{color:var(--accent)}
+.sep-rename.sm{font-size:13px;width:130px}
+.sep-topbar .sep-tabs{margin-left:auto}
+/* the left cards: all of them, stacked, the column grows instead of scrolling */
+.sep-grid{align-items:start}
+.sep-grid>.sep-side:first-child{height:auto;min-height:0}
+.sep-pane-all{flex:none;overflow:visible;min-height:0}
+.sep-mocks button{display:flex;flex-direction:column;gap:3px;color:var(--ink-3);font-size:11.5px;min-width:0;border:0;background:none;padding:0;cursor:zoom-in;text-align:left}
+.sep-mocks button:hover img{border-color:var(--accent)}
+/* the inks and the proof's views on one line */
+.sep-vbar.in{margin-left:auto;align-self:flex-end;justify-content:flex-end}
+/* half screen: the proof first, full width, the cards two across under it */
+@media (max-width:1250px){
+  .sep-grid{grid-template-columns:minmax(0,1fr)!important}
+  .sep-grid>.sep-main{order:1}
+  .sep-grid>.sep-side:first-child{order:2}
+  .sep-grid>.sep-side:first-child .sep-pane-all{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .sep-grid>.sep-side:last-child{order:3}
+}
+@media (max-width:760px){.sep-grid>.sep-side:first-child .sep-pane-all{display:flex}}
+/* the zoomed picture's close button */
+.pz-in{position:relative}
+.pz-x{position:absolute;top:10px;right:10px;z-index:2;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:16px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.pz-x:hover{border-color:var(--accent);color:var(--accent)}
+.pz-cap{font-weight:700;color:var(--ink)}
 /* separations: the order's mockups, so the film room sees what the print is for (Oct 22) */
 .sep-mocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
 .sep-mocks a{display:flex;flex-direction:column;gap:3px;text-decoration:none;color:var(--ink-3);font-size:11.5px;min-width:0}

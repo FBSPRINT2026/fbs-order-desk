@@ -346,6 +346,10 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       </div>
       )}
       <div className="side-user">
+        {/* the version for everyone, just above Sign out (Oct 22, Nick: "on Jose's computer I can't see if you've
+            updated… just above the log out button"); it takes no room, so the bottom bar stays where it was. The
+            owner has it on the Admin Tools line. */}
+        {role !== "owner" && <span className="nav-ver-all"><VersionTag /></span>}
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
         {(() => {
@@ -367,9 +371,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           <form action="/auth/signout" method="post"><button className="side-out" type="submit" data-tip="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
         </div>
       </div>
-      {/* the version for everyone, bottom left under Sign out (Oct 22, Nick: "on Jose's computer I can't see if you've
-          updated"); the owner also has it on the Admin Tools line */}
-      {role !== "owner" && <div className="nav-ver-all"><VersionTag /></div>}
       </div>
       </div>
     </aside>
