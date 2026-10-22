@@ -11947,3 +11947,9 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 .ap-specs li{margin:2px 0}
 .ap-sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;box-shadow:0 0 0 1px var(--line)}
 .ap-pic.ap-check{background:repeating-conic-gradient(#e9edf2 0 25%,#fff 0 50%) 0 0/16px 16px}
+/* where each file comes from: the email, or the old Printavo job (Oct 22) */
+.ap-src{margin:10px 0 4px;font-family:var(--body);font-size:13px;font-weight:700;color:var(--ink)}
+.ap-src .faint{font-weight:400;font-size:12px}
+.ap-sent-old .ap-sent-i{max-width:120px}
+/* the cut-out art on a dark checkerboard: light inks (cream, white) show */
+.ap-pic.ap-check{background:repeating-conic-gradient(#3a3f47 0 25%,#2c3036 0 50%) 0 0/16px 16px}

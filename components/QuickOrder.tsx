@@ -48,7 +48,7 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 /** a customer's mockup sheet: what was read off it, to confirm (Oct 22, Nick: "you just ask me, what is this?… or you
  *  confirm it: hey, this is a customer mockup with sizing and information") */
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void };
-type ArtAsk = { job: string; items: { key: string; label: string; file: { name: string; url: string; type: string } }[]; resolve: (a: "theirs" | "old") => void };
+type ArtAsk = { job: string; /** the old job's files */ old?: { name: string; url: string; type: string }[]; /** the email's files they sent */ from?: string[]; items: { key: string; label: string; file: { name: string; url: string; type: string; path?: string } }[]; resolve: (a: "theirs" | "old") => void };
 
 /** Cancel clicked: stop where it is and take back what it made */
 class Cancelled extends Error {}
@@ -152,10 +152,27 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`Reprint screen fee: ${n} screen${n === 1 ? "" : "s"} at $${g.fees.remake} instead of $${g.fees.screen}`);
       }
     }
+    // the customer sent art with a reorder: use theirs, or the old job's? (theirs is the default: it's newer)
+    let theirs = new Set<string>();
+    const sentArt = d.kind === "reorder" ? d.groups.flatMap((x) => x.imprints.map((im) => ({ x, im, path: d!.art?.[im.id] || "" }))).filter((z) => z.path) : [];
+    if (sentArt.length) {
+      note("They sent art with the email: asking you whose art to use");
+      // the old job's files, to see side by side (Oct 22, Nick: "I don't know if you took it from the original Printavo
+      // or from here. You got to ask me first what to do with all of the art")
+      const oldFiles = [...new Map(d.groups.flatMap((x) => [...(x.pvArt || []), ...(x.pvRef || [])]).map((f) => [f.path, f])).values()].slice(0, 8);
+      const { data: oldUrls } = oldFiles.length ? await createClient().storage.from("proofs").createSignedUrls(oldFiles.map((f) => f.path), 3600) : { data: [] };
+      const ans = await waitFor<"theirs" | "old">((resolve) => setArtAsk({ job: jobLabel || "the old job", resolve, old: oldFiles.map((f, i) => ({ name: f.name, url: oldUrls?.[i]?.signedUrl || "", type: /\.pdf$/i.test(f.path) ? "application/pdf" : "image/png" })), from: d!.files.filter((f) => sentArt.some((z) => z.path === f.path)).map((f) => f.name), items: sentArt.map(({ x, im, path }) => {
+        const f = d!.files.find((y) => y.path === path);
+        return { key: im.id, label: `${x.name ? `${x.name} · ` : ""}${im.location}`, file: { name: f?.name || path.split("/").pop() || "art", url: f?.url || "", type: f?.type || "", path } };
+      }) }));
+      setArtAsk(null);
+      if (ans === "old") { d = { ...d, art: {} }; did.push("You chose the old job's art over the files they sent"); }
+      else { theirs = new Set(sentArt.map((z) => z.im.id)); did.push(`Using the art they sent (${[...new Set(sentArt.map((z) => d!.files.find((y) => y.path === z.path)?.name || "art"))].join(", ")})`); }
+    }
     // a customer's mockup sheet (the art big with a spec box, then the shirt): confirm, then the art is cut off its art
     // page with the background panel taken out, the shirt page is their mockup (stamped, in Production files like any
     // customer mockup) and the PDF itself goes in Production files as the customer mockup
-    {
+    if (d.kind !== "reorder" || theirs.size || !sentArt.length) {
       const used = new Set([...Object.values(d.art || {}), ...Object.values(d.mockups || {}).flat()]);
       const sb0 = createClient();
       for (const f of d.files.filter((x) => used.has(x.path) && (/pdf/i.test(x.type) || /\.pdf$/i.test(x.name)))) {
@@ -199,19 +216,6 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         ] };
         did.push(`${f.name}: their mockup sheet. Art cut off page ${parts.artPage}${parts.background ? ", its background taken out (it doesn't print)" : ""}; page ${parts.mockupPage} is their mockup; the PDF is in Production files`);
       }
-    }
-    // the customer sent art with a reorder: use theirs, or the old job's? (theirs is the default: it's newer)
-    let theirs = new Set<string>();
-    const sentArt = d.kind === "reorder" ? d.groups.flatMap((x) => x.imprints.map((im) => ({ x, im, path: d!.art?.[im.id] || "" }))).filter((z) => z.path) : [];
-    if (sentArt.length) {
-      note("They sent art with the email: asking you whose art to use");
-      const ans = await waitFor<"theirs" | "old">((resolve) => setArtAsk({ job: jobLabel || "the old job", resolve, items: sentArt.map(({ x, im, path }) => {
-        const f = d!.files.find((y) => y.path === path);
-        return { key: im.id, label: `${x.name ? `${x.name} · ` : ""}${im.location}`, file: { name: f?.name || path.split("/").pop() || "art", url: f?.url || "", type: f?.type || "" } };
-      }) }));
-      setArtAsk(null);
-      if (ans === "old") { d = { ...d, art: {} }; did.push("You chose the old job's art over the files they sent"); }
-      else { theirs = new Set(sentArt.map((z) => z.im.id)); did.push(`Using the art they sent (${[...new Set(sentArt.map((z) => d!.files.find((y) => y.path === z.path)?.name || "art"))].join(", ")})`); }
     }
     const hasArt = (im: { id: string; design_id?: string }) => !!im.design_id || theirs.has(im.id);
     // an old Printavo job: its art from the job's files and the film
@@ -904,7 +908,7 @@ function SheetConfirm({ a, onCancel }: { a: SheetAsk; onCancel: () => void }) {
   return (
     <div className="ap" role="group" aria-label="Their mockup sheet">
       <p className="ap-q">This is their mockup sheet, with the sizing. Use it like this?</p>
-      <p className="ap-why">{a.name}: I took the art off the top{a.background ? <> and took out its background <i className="ap-sw" style={{ background: a.background }} /> (it doesn&apos;t print)</> : ""}. Their shirt page becomes the customer mockup, stamped and in Production files with the PDF.</p>
+      <p className="ap-why">From the email: <b>{a.name}</b>. I took the art off the top{a.background ? <> and took out its background <i className="ap-sw" style={{ background: a.background }} /> (it doesn&apos;t print)</> : ""}. Their shirt page becomes the customer mockup, stamped and in Production files with the PDF.</p>
       <div className="ap-sent">
         <figure className="ap-sent-i"><span className="ap-pic big ap-check"><img src={a.art} alt="" /></span><figcaption><b>The art</b><span className="faint">Cut off their sheet</span></figcaption></figure>
         {a.mockup && <figure className="ap-sent-i"><span className="ap-pic big"><img src={a.mockup} alt="" /></span><figcaption><b>Their mockup</b><span className="faint">Saved as the customer mockup</span></figcaption></figure>}
@@ -923,17 +927,25 @@ function SentArt({ a, onCancel }: { a: ArtAsk; onCancel: () => void }) {
     let live = true;
     (async () => {
       for (const it of a.items) {
-        if (!it.file.url) continue;
-        const dr = await drawFile(it.file.url, it.file.name, it.file.type).catch(() => null);
+        let url = it.file.url;
+        if (!url && it.file.path) url = (await createClient().storage.from("proofs").createSignedUrl(it.file.path, 3600)).data?.signedUrl || "";
+        if (!url) continue;
+        const dr = await drawFile(url, it.file.name, it.file.type).catch(() => null);
         if (live && dr?.asIsUrl) setPics((p) => ({ ...p, [it.key]: dr.asIsUrl }));
+      }
+      for (const [i, f] of (a.old || []).entries()) {
+        if (!f.url) continue;
+        const dr = await drawFile(f.url, f.name, f.type).catch(() => null);
+        if (live && dr?.asIsUrl) setPics((p) => ({ ...p, [`old${i}`]: dr.asIsUrl }));
       }
     })();
     return () => { live = false; };
   }, [a]);
   return (
     <div className="ap" role="group" aria-label="Their art or the old art">
-      <p className="ap-q">They sent art with this reorder. Use it, or the art on {a.job}?</p>
-      <p className="ap-why">Their files are newer, so they&apos;re picked unless you say otherwise. The old job&apos;s files still go in Production files.</p>
+      <p className="ap-q">Which art for this reorder: what they sent with the email, or what&apos;s on {a.job}?</p>
+      <p className="ap-why">Nothing is cut or changed yet. Next I&apos;ll show you what I do with the art you pick, and ask about {a.job}&apos;s other files (barcodes, labels…).</p>
+      <h4 className="ap-src">Attached to the email{a.from?.length ? <span className="faint"> · {a.from.join(", ")}</span> : null}</h4>
       <div className="ap-sent">
         {a.items.map((it) => (
           <figure key={it.key} className="ap-sent-i">
@@ -942,9 +954,20 @@ function SentArt({ a, onCancel }: { a: ArtAsk; onCancel: () => void }) {
           </figure>
         ))}
       </div>
+      {!!a.old?.length && <>
+        <h4 className="ap-src">On {a.job} (Printavo)<span className="faint"> · {a.old.length} file{a.old.length === 1 ? "" : "s"}</span></h4>
+        <div className="ap-sent ap-sent-old">
+          {a.old.map((f, i) => (
+            <figure key={i} className="ap-sent-i">
+              <span className="ap-pic">{pics[`old${i}`] ? <img src={pics[`old${i}`]} alt="" /> : <span className="faint">{f.url ? "Loading…" : "No preview"}</span>}</span>
+              <figcaption><span className="faint">{f.name}</span>{f.url && <a href={f.url} target="_blank" rel="noreferrer">Open</a>}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </>}
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel reorder</button></span>
-        <button type="button" className="btn" onClick={() => a.resolve("old")}>Use the old job&apos;s art</button>
-        <button type="button" className="btn primary" onClick={() => a.resolve("theirs")}>Use the art they sent</button></div>
+        <button type="button" className="btn" onClick={() => a.resolve("old")}>Use the art on {a.job.replace(/^(#\d+).*/, "$1")}</button>
+        <button type="button" className="btn primary" onClick={() => a.resolve("theirs")}>Use the art from the email</button></div>
     </div>
   );
 }
