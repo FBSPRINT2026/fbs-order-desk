@@ -10,7 +10,8 @@ import { setHideMoney } from "@/lib/format";
  * the database and the server still treat them as the owner).
  * `email` / `staffName` are the person really signed in (from the layout), so pages don't each ask the server again.
  */
-type Ctx = { role: string; realRole: string; viewAs: string; viewName: string; perms: Perms; email?: string; staffName?: string };
+type Ctx = { role: string; realRole: string; viewAs: string; viewName: string; perms: Perms; email?: string; staffName?: string;
+  /** their mailbox has SaneBox: News, Black Hole (off: Archive only; Oct 22, Nick: Claudia and Jose) */ sanebox?: boolean };
 const RoleCtx = createContext<Ctx>({ role: "", realRole: "", viewAs: "", viewName: "", perms: permsFor(""), email: "", staffName: "" });
 
 export function RoleProvider({ value, children }: { value: Ctx; children: React.ReactNode }) {
@@ -28,3 +29,5 @@ export const useRole = () => useContext(RoleCtx);
 export const useCan = (k: PermKey) => useContext(RoleCtx).perms[k];
 /** prices, totals, payments and sales */
 export const useSeesMoney = () => useContext(RoleCtx).perms.money;
+/** the signed-in person's mailbox has SaneBox (News, Black Hole); without it, Archive is how mail leaves the Inbox */
+export const useSaneBox = () => useContext(RoleCtx).sanebox !== false;

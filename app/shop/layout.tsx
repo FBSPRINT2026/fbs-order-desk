@@ -18,7 +18,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   // (this layout runs on every page load, so each round trip saved here is felt everywhere)
   const settingsQ = createClient().then((sb) => sb.from("settings").select("data").eq("id", 1).maybeSingle());
   settingsQ.catch(() => null); // a redirect below must not leave an unhandled rejection behind
-  const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts, cheer");
+  const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts, cheer, sanebox");
   if (!user) redirect("/login?next=/shop");
   if (!isStaff) redirect("/portal");
   const [{ data: st }, { data: team }] = await Promise.all([
@@ -46,7 +46,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const showSpanish = !["nicholas@fbsprint.com", "amanda@fbsprint.com"].includes((viewAs.includes("@") ? viewAs : email).toLowerCase());
   const people = (team || []).map((t) => ({ email: (t.email as string).toLowerCase(), name: (t.name as string) || "", role: (t.role as string) || "" }));
   return (
-    <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "" }}>
+    <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "", sanebox: (me as { sanebox?: boolean } | null)?.sanebox !== false }}>
       <div className="app">
         <ShopNav email={email} firstName={firstName} fullName={full} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>

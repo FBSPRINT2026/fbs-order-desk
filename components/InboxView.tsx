@@ -10,6 +10,7 @@ import MailContextMenu, { type CtxItem } from "@/components/MailContextMenu";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useSaneBox } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { convoKeys, groupConvos } from "@/lib/mail/convo";
@@ -1087,6 +1088,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
 function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered, autoGo, onAutoGone, convo }: { /** the press-and-hold menu: start with the Assistant listening, or Reorder; the right-click menu: Forward */ autoGo?: "ai" | "reorder" | "forward"; onAutoGone?: () => void; /** the Inbox emails in its conversation, shown at the top */ convo?: React.ReactNode; /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+  const sane = useSaneBox();
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -1298,16 +1300,16 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {moveBar || (inOutlook && <>
               <TbGroup label="Move">
                 <TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} />
-                <TbBtn icon={TbIcon.news} label="News" disabled={!!busy} title="SaneBox News: this sender's mail goes to News from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox).")} />
+                {sane && <TbBtn icon={TbIcon.news} label="News" disabled={!!busy} title="SaneBox News: this sender's mail goes to News from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox).")} />}
               </TbGroup>
-              <TbGroup label="Spam">
+              {sane && <TbGroup label="Spam">
                 {askBH ? <span className="tb-ask" role="alertdialog" aria-label="Black Hole a customer?">
                   <span><b>{who}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
                   <button type="button" className="btn sm danger" disabled={!!busy} onClick={() => { setAskBH(false); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole", confirmed: true }), "Black Hole: SaneBox won't show you this sender again."); }}>Yes, Black Hole</button>
                   <button type="button" className="btn sm ghost" onClick={() => setAskBH(false)}>Cancel</button>
                 </span>
                   : <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => (x.customer_id ? setAskBH(true) : run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again."))} />}
-              </TbGroup>
+              </TbGroup>}
             </>)}
             </TbRow>
             <TbRow line={2}>
