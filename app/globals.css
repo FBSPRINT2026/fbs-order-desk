@@ -6497,7 +6497,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-chip.on b,.mf-dd.on>.mf-chip b{color:#fff;background:var(--accent);border-radius:8px;padding:0 6px}
 .mf-dd{position:relative;flex:1 1 auto;display:flex}
 .mf-dd>.mf-chip{flex:1}
-.mf-ddm{position:fixed;z-index:70;margin-top:6px;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
+.mf-ddm{position:fixed;z-index:70;margin-top:0;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
 .mf-ddm button{display:flex;align-items:center;gap:8px;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--ink)}
 .mf-ddm button:hover{background:var(--surface-2)}
 .mf-ddm button.on{color:var(--accent);font-weight:700}
@@ -11992,3 +11992,28 @@ tr.cu-off td{color:var(--ink-3)}
 .tbl th.cu-box-h{white-space:nowrap}
 .tbl td.cu-box{text-align:center;color:var(--ok)}
 .tbl tr.cu-done-row td:not(.cu-rail){color:var(--ink-3)}
+/* New email (components/NewEmail.tsx, Oct 22) */
+.ne-panel{margin-bottom:14px}
+.ne-box{border-top:0;background:var(--surface);gap:8px}
+.ne-to{position:relative}
+.ne-hits{position:absolute;top:100%;left:40px;right:0;z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 20px rgba(20,29,43,.12);display:flex;flex-direction:column;max-height:260px;overflow:auto}
+.ne-hits button{text-align:left;background:none;border:0;padding:7px 10px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.ne-hits button:hover,.ne-hits button:focus{background:var(--surface-2)}
+.ne-files{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:13px;color:var(--ink)}
+.ne-file{display:inline-flex;gap:6px;align-items:baseline;padding:3px 8px;border:1px solid var(--line);border-radius:var(--r)}
+/* ClickUp lists fill the window, no sideways scroll (Oct 22, Nick): fixed columns, the job name wraps */
+.tbl-wrap.cu-fit{overflow-x:hidden}
+.tbl.cu-tbl{table-layout:fixed;width:100%}
+.tbl.cu-tbl td{overflow-wrap:anywhere}
+.tbl.cu-tbl th.cu-w-rail{width:170px}
+.tbl.cu-tbl th.cu-w-due{width:96px}
+.tbl.cu-tbl th.cu-w-files{width:84px}
+.tbl.cu-tbl th.cu-w-pv{width:130px}
+.tbl.cu-tbl th.cu-w-ours{width:72px}
+.tbl.cu-tbl th.cu-w-added{width:132px}
+.tbl.cu-tbl th.cu-w-status{width:130px}
+.tbl.cu-tbl th.cu-w-act{width:118px}
+.tbl.cu-tbl th.cu-box-h{width:92px;white-space:normal;line-height:1.2}
+/* a new customer (or board) starts with a blue bar and a little space (Oct 22, Nick: "they look to run together") */
+.tbl.cu-tbl tbody tr.cu-gstart:not(:first-child) > td{border-top:3px solid var(--fbs-blue);padding-top:14px}
+@media (max-width:1100px){.tbl.cu-tbl th.cu-w-added{width:0;padding:0;font-size:0}.tbl.cu-tbl td.cu-added{display:none}.tbl.cu-tbl th.cu-w-rail{width:140px}}

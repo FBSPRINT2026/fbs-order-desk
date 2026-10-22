@@ -69,6 +69,16 @@ export function FolderBar({ folders, current, onPick, onSearch, onMore }: { fold
   const sane = list.filter((f) => f.sane), rest = list.filter((f) => !main.includes(f) && !f.sane);
   const inSane = sane.find((f) => f.path === current), inRest = rest.find((f) => f.path === current);
   const pick = (p: string) => { if (sRef.current) sRef.current.open = false; if (fRef.current) fRef.current.open = false; onPick(p); };
+  // the folder menus open where they fit: under their chip, but never past the window's right edge (Oct 22, Nick: "the
+  // pop-up is outside the browser window and you can't see it")
+  const place = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    const d = e.currentTarget, m = d.querySelector<HTMLElement>(".mf-ddm"), sum = d.querySelector("summary");
+    if (!d.open || !m || !sum) return;
+    const r = sum.getBoundingClientRect(), w = Math.max(220, m.offsetWidth), vw = document.documentElement.clientWidth;
+    m.style.top = `${Math.round(r.bottom + 6)}px`;
+    m.style.left = `${Math.round(Math.max(8, Math.min(r.left, vw - w - 8)))}px`;
+    m.style.maxHeight = `${Math.max(160, Math.round(window.innerHeight - r.bottom - 20))}px`;
+  };
   const chip = (f: Folder) => (
     <button key={f.path} type="button" role="tab" aria-selected={current === f.path} className={"mf-chip" + (current === f.path ? " on" : "")} onClick={() => pick(f.path)}>
       {f.special === "\\Inbox" ? "Inbox" : folderLabel(f)}{f.unseen > 0 && f.special !== "\\Sent" && <b>{f.unseen}</b>}
@@ -78,11 +88,11 @@ export function FolderBar({ folders, current, onPick, onSearch, onMore }: { fold
     <div className="mf-bar" role="tablist" aria-label="Folders">
       {!folders ? <span className="faint mf-load">Loading folders…</span> : <>
         {main.length ? main.map(chip) : <button type="button" className={"mf-chip" + (/^inbox$/i.test(current) ? " on" : "")} onClick={() => pick("INBOX")}>Inbox</button>}
-        {sane.length > 0 && <details className={"mf-dd" + (inSane ? " on" : "")} ref={sRef}>
+        {sane.length > 0 && <details className={"mf-dd" + (inSane ? " on" : "")} ref={sRef} onToggle={place}>
           <summary className="mf-chip">{inSane ? folderLabel(inSane) : "SaneBox"} ▾{sane.reduce((n, f) => n + f.unseen, 0) > 0 && !inSane && <b>{sane.reduce((n, f) => n + f.unseen, 0)}</b>}</summary>
           <div className="mf-ddm">{sane.map((f) => <button key={f.path} type="button" className={current === f.path ? "on" : ""} onClick={() => pick(f.path)}>{folderLabel(f)}{f.unseen > 0 && <b>{f.unseen}</b>}</button>)}</div>
         </details>}
-        {rest.length > 0 && <details className={"mf-dd" + (inRest ? " on" : "")} ref={fRef}>
+        {rest.length > 0 && <details className={"mf-dd" + (inRest ? " on" : "")} ref={fRef} onToggle={place}>
           <summary className="mf-chip">{inRest ? folderLabel(inRest) : "More folders"} ▾</summary>
           <div className="mf-ddm">{rest.map((f) => <button key={f.path} type="button" className={current === f.path ? "on" : ""} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 12 }} onClick={() => pick(f.path)}>{folderLabel(f)}{f.unseen > 0 && <b>{f.unseen}</b>}</button>)}</div>
         </details>}

@@ -28,6 +28,7 @@ import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbo
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
+import NewEmail from "@/components/NewEmail";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
 
@@ -174,6 +175,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [settings, setSettings] = useState(false);
+  const [newMail, setNewMail] = useState(false); // the New email window (Oct 22)
   /** phones: this phone's email text size, and pinching the list to change it (components/MailZoom.tsx) */
   const zoomRef = useRef<HTMLElement | null>(null);
   useMailZoom(zoomRef);
@@ -558,6 +560,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
         <div><div className="eyebrow">{mode === "mail" ? "Your mailbox" : "Sales"}</div><h1>{mode === "mail" ? "Email" : "Conversations"}</h1></div>
         <div className="ibx2-status">
           {mode === "mail" && <AppStartToggle path="/shop/inbox" label="Email" />}
+          {/* New email (Oct 22, Nick: "How do you send a new email in the email client?") */}
+          {mode === "mail" && box?.enabled && st && !st.viewing && <button type="button" className="btn sm primary" onClick={() => setNewMail(true)}>New email</button>}
           {box?.enabled && <span className={"ibx2-box" + (boxStuck ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
             <i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}
@@ -571,6 +575,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && boxStuck && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
+      {newMail && <NewEmail onClose={() => setNewMail(false)} onSent={(t) => { setNewMail(false); flash(t); }} />}
       {/* right-click an email (desktop; phones press and hold for HoldMenu) */}
       {ctx && <MailContextMenu key={`${ctx.g[0].id}:${ctx.x},${ctx.y}`} at={ctx} items={ctxItems(ctx.g)} label={`Email from ${ctx.g[0].from_name || ctx.g[0].from_email || "unknown"}`} onClose={() => setCtx(null)} />}
       {afterSend && <AfterSend key={afterSend.msg + (afterSend.sent?.body.length || 0)} a={afterSend} onArchive={() => void afterArchive()} onClose={() => setAfterSend(null)} />}
@@ -594,6 +599,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             {/* Select: a small check mark beside Check now (Oct 15, Nick) */}
             {view.kind === "inbox" && <button type="button" className={"pit-ic pit-selic" + (selMode ? " on" : "")} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
             {box?.enabled && <button type="button" className="pit-ic" aria-label="Check for new email" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}><svg viewBox="0 0 24 24" aria-hidden className={busy === "check" ? "spin" : ""}><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" /></svg></button>}
+            {box?.enabled && st && !st.viewing && <button type="button" className="pit-ic" aria-label="New email" onClick={() => setNewMail(true)}><svg viewBox="0 0 24 24" aria-hidden><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z" /><path d="M13.5 7.5l3 3" /></svg></button>}
             <button type="button" className="pit-ic" aria-label="Folders and settings" onClick={() => setPSheet(true)}><svg viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg></button>
           </div>
           <form className="pit-search" onSubmit={(e) => { e.preventDefault(); if (q.trim()) void runSearch(q); }}>

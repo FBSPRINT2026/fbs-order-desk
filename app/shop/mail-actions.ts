@@ -173,6 +173,56 @@ export async function forwardEmail(input: { activityId: string; to: string; body
   } catch (e) { return fail(e); }
 }
 
+/**
+ * A new email (Oct 22, Nick: "how do you send a new email in the email client?"): to whoever you type, with Cc, a
+ * subject, your message, your signature and files you attach (uploaded to storage first, then sent from there). From
+ * your own mailbox, so it's in your Outlook Sent Items; kept on the customer's timeline when it's to a customer.
+ */
+export async function sendNewEmail(input: { to: string; cc?: string; subject: string; body: string; files?: { path: string; name: string; type?: string }[] }) {
+  try {
+    const v = await staff(), { admin, email, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
+    const addrs = (s?: string) => [...new Set((String(s || "").match(/[^\s<>,;"]+@[^\s<>,;"]+\.[a-z]{2,}/gi) || []).map((x) => x.toLowerCase()))];
+    const to = addrs(input.to).slice(0, 20);
+    if (!to.length) return { ok: false as const, error: "Who should it go to? Type an email address." };
+    const subject = String(input.subject || "").trim().slice(0, 500);
+    if (!subject) return { ok: false as const, error: "Add a subject." };
+    if (!String(input.body || "").trim() && !(input.files || []).length) return { ok: false as const, error: "Write the message first." };
+    const from = await accountForUser(admin, user!.id);
+    if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so it can go out from your address." };
+    const cc = cleanCc(addrs(input.cc), [...to, from.email]);
+    const signature = from.signature_on !== false ? from.signature_html || "" : "";
+    const page = replyHtml({ body: input.body || " ", signature, css: signature ? from.signature_css : "" });
+    const { html, attachments } = inlineImages(page);
+    const text = replyText({ body: input.body || "", signature });
+    // the files you attached (up to 20 MB in all)
+    const files: { filename: string; content: Buffer; contentType: string; contentDisposition: "attachment" }[] = [];
+    let total = 0;
+    for (const f of (input.files || []).slice(0, 15)) {
+      if (!f?.path || f.path.includes("..")) continue;
+      const { data: blob } = await admin.storage.from("proofs").download(f.path);
+      if (!blob) continue;
+      if (total + blob.size > 20_000_000) return { ok: false as const, error: "The attachments are over 20 MB. Send fewer or smaller files." };
+      total += blob.size;
+      files.push({ filename: f.name || "attachment", content: Buffer.from(await blob.arrayBuffer()), contentType: f.type || blob.type || "application/octet-stream", contentDisposition: "attachment" });
+    }
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: to.join(", "), cc: cc.join(", ") || undefined, subject, text, html, attachments: [...attachments, ...files] });
+    // the customer it's to (their email, or one of their contacts), for their timeline
+    const { data: c1 } = await admin.from("customers").select("id").in("email", to).limit(1);
+    let customerId = (c1?.[0]?.id as string) || null;
+    if (!customerId) { const { data: c2 } = await admin.from("customer_contacts").select("customer_id").in("email", to).limit(1); customerId = (c2?.[0]?.customer_id as string) || null; }
+    const saved = await saveBody(admin, { html: page, attachments: [] }, customerId || "leads").catch(() => ({}));
+    await admin.from("activities").insert({
+      customer_id: customerId, kind: "email", direction: "out", subject, body: (input.body || "").trim() || "(attachments)",
+      from_email: from.email, to_email: to.join(", "), external_id: messageId, thread_id: messageId, occurred_at: new Date().toISOString(),
+      created_by: email || "staff", ai_processed_at: new Date().toISOString(),
+      meta: { mailbox: "sent", via: "portal", new_email: true, account_id: from.id, account: from.email, ...(cc.length ? { cc } : {}), ...((input.files || []).length ? { attachments: (input.files || []).map((f) => ({ name: f.name, path: f.path, type: f.type || "" })) } : {}), ...saved, html_checked: true },
+    });
+    if (customerId) await closeWrittenTo(admin, to, new Date().toISOString(), email || "staff").catch(() => null);
+    return { ok: true as const, to };
+  } catch (e) { return fail(e); }
+}
+
 /** your signature as it'll go on replies (and whether it's on) */
 export async function getSignature() {
   try {

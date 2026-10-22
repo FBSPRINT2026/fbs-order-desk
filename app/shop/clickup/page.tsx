@@ -152,14 +152,14 @@ export default function ClickUpJobs() {
         </div>
         <div className="cu-head-acts">
           <a className="btn" href="https://app.clickup.com" target="_blank" rel="noreferrer">Open ClickUp</a>
-          <button type="button" className="btn primary" disabled={!!busy || !data?.connected} onClick={() => void checkNow()}>{busy === "Checking ClickUp…" ? busy : "Check ClickUp now"}</button>
+          <button type="button" className="btn primary" disabled={!!busy || !data?.connected} title={data?.connected ? `Checked ${ago(data.state?.last_ok_at || null)}: ${data.teams.length} workspaces. New jobs are looked for every 3 minutes.` : undefined} onClick={() => void checkNow()}>{busy === "Checking ClickUp…" ? busy : "Check ClickUp now"}</button>
         </div>
       </div>
       {data && !data.connected && <div className="banner">ClickUp isn&apos;t connected yet: add <code>CLICKUP_API_TOKEN</code> in Vercel (ClickUp → Settings → Apps → API Token).</div>}
       {data?.state?.last_error && <div className="banner">ClickUp: {data.state.last_error}</div>}
       {err && <div className="banner">{err}</div>}
       {msg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--ink)" }}>{msg}</div>}
-      {data?.connected && <p className="faint cu-checked">Checked {ago(data.state?.last_ok_at || null)}: {data.teams.length} workspace{data.teams.length === 1 ? "" : "s"} from {data.tokens} ClickUp token{data.tokens === 1 ? "" : "s"}. New jobs are looked for every 3 minutes. Each workspace needs its own token in Vercel (a CLICKUP_API_TOKEN… variable).</p>}
+      {/* the "Checked … ago" line is on the Check button's hover now (Oct 22, Nick: "don't need to see this at the top") */}
 
       <div className="stats">
         <button type="button" className="stat" onClick={() => setTab("new")}><span className={"v" + (groups.new.length ? " alert" : "")}>{groups.new.length}</span><span className="k">New jobs to process</span></button>
@@ -255,9 +255,9 @@ export default function ClickUpJobs() {
             </div>
             <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
           </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead><tr><th>Board</th><th>Job</th><th>Status</th><th>Due</th>{boxes.map((b) => <th key={b} className="cu-box-h">{b}</th>)}<th>Printavo #</th><th /></tr></thead>
+          <div className="tbl-wrap cu-fit">
+            <table className="tbl cu-tbl">
+              <thead><tr><th className="cu-w-rail">Board</th><th>Job</th><th className="cu-w-status">Status</th><th className="cu-w-due">Due</th>{boxes.map((b) => <th key={b} className="cu-box-h">{b}</th>)}<th className="cu-w-pv">Printavo #</th><th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
                   const first = i === 0 || board(list2[i - 1]) !== board(t);
@@ -312,9 +312,9 @@ export default function ClickUpJobs() {
             {data && !data.teams.length && <tr><td colSpan={4}><div className="empty">{data.connected ? "No workspaces yet: the first check of ClickUp is on its way (every 3 minutes), or press Check ClickUp now." : "Connect ClickUp first."}</div></td></tr>}
           </tbody>
         </table>
-      </div> : <div className="tbl-wrap">
-        <table className="tbl">
-          <thead><tr><th>Customer</th><th>Job</th><th>Due</th><th>Files</th><th>Printavo #</th><th>Our #</th><th>Added</th><th /></tr></thead>
+      </div> : <div className="tbl-wrap cu-fit">
+        <table className="tbl cu-tbl">
+          <thead><tr><th className="cu-w-rail">Customer</th><th>Job</th><th className="cu-w-due">Due</th><th className="cu-w-files">Files</th><th className="cu-w-pv">Printavo #</th><th className="cu-w-ours">Our #</th><th className="cu-w-added">Added</th><th className="cu-w-act" /></tr></thead>
           <tbody>
             {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
               const tm = teams.get(t.team_id);
@@ -330,9 +330,9 @@ export default function ClickUpJobs() {
                 <td><div>{t.name}</div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
-                <td className="cu-nw">{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
+                <td>{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
                 <td className="cu-nw">{ours ? <Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link> : <span className="faint">—</span>}</td>
-                <td className="cu-nw">{when(t.created_at_cu)}</td>
+                <td className="cu-nw cu-added">{when(t.created_at_cu)}</td>
                 <td className="r cu-nw">{t.order_id
                   ? <span className="faint">Made</span>
                   : <button type="button" className={"btn sm" + (t.waiting ? " primary" : "")} onClick={(e) => { e.stopPropagation(); openJob(t.id); }}>Process</button>}</td>
