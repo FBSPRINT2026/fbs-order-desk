@@ -12150,3 +12150,4 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-colors-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px}
 .mk-colors-list a{color:var(--accent);text-decoration:none}
 .mk-colors-list a:hover{text-decoration:underline}
+.mk-pdf-kind{margin:2px 0 8px;width:fit-content}

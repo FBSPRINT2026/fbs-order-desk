@@ -306,6 +306,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // Export PDF: art only, or with the company, description and print details (the choice is remembered)
   const [pdfOpen, setPdfOpen] = useState(false), [pdfBusy, setPdfBusy] = useState(false), [pdfDesc, setPdfDesc] = useState("");
   const [pdfOurs, setPdfOurs] = useSticky<boolean>("mk.pdfOurs", true), [pdfCompany, setPdfCompany] = useSticky<boolean>("mk.pdfCompany", true);
+  /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
+   *  a proof page per color, or a sales sheet with every color on one page */
+  const [pdfKind, setPdfKind] = useSticky<"proof" | "sheet">("mk.pdfKind", "proof"), [sheetShow, setSheetShow] = useSticky<"both" | "front" | "back">("mk.sheetShow", "both");
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
   const tried = useRef(new Set<string>());
@@ -1431,6 +1434,98 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setPdfBusy(false);
   }
 
+  /**
+   * A sales sheet (Oct 22, Nick: "think of it like a marketing sheet… so a customer can… take orders, mass market it
+   * out"): every color on one landscape page, in a grid, the front and back side by side (or one side) with the color's
+   * name under each, the mockup's name and garments on top. Over 16 colors goes on to another page. Just a PDF.
+   */
+  async function exportSheet(o: { ours: boolean; company: boolean; description: string; show: "both" | "front" | "back" }) {
+    const todo = lines.filter((z) => z.style && z.color);
+    if (!todo.length) return setMsg("Add a garment and color first.");
+    const vs = (o.show === "both" ? views : views.filter((v) => v === o.show));
+    const shown = vs.length ? vs : views;
+    setPdfBusy(true); setMsg("Making the sales sheet…");
+    try {
+      await loadShirtFonts().catch(() => {});
+      let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
+      if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
+      const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
+      const cust = customers.find((c) => c.id === customerId);
+      const DPI = 200, PW = 11 * DPI, PH = 8.5 * DPI, M = 0.4 * DPI, R = 1.5;
+      const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
+      const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", rule = "#DDE2EA";
+      const styles = [...new Set(todo.map((l) => [l.brand, l.style, l.garment].filter(Boolean).join(" ")))];
+      const multi = new Set(todo.map((l) => l.style.toLowerCase())).size > 1;
+      const PER = 16, pages = [];
+      for (let p0 = 0; p0 < todo.length; p0 += PER) {
+        const part = todo.slice(p0, p0 + PER);
+        const c = document.createElement("canvas"); c.width = Math.round(PW * R); c.height = Math.round(PH * R);
+        const x = c.getContext("2d")!;
+        x.scale(R, R); x.imageSmoothingQuality = "high";
+        x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
+        // header: our logo and / or their name on the left, the mockup's name and garments under it
+        let top = M;
+        if (o.ours || o.company) {
+          let lx = M;
+          if (o.ours) {
+            if (logo) { const lh = 0.45 * DPI, lw = Math.min(2.2 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); lx = M + lw + 0.3 * DPI; }
+            else { x.fillStyle = ink; x.font = font(800, 36); x.fillText(shop.name, M, M + 36); lx = M + x.measureText(shop.name).width + 0.3 * DPI; }
+          }
+          if (o.company) { if (o.ours) { x.fillStyle = rule; x.fillRect(lx - 0.15 * DPI, M + 4, 3, 0.4 * DPI); } x.fillStyle = ink; x.font = font(800, 42); x.fillText(custLabel(cust) || "", lx, M + 40); }
+          top = M + 0.58 * DPI;
+        }
+        x.fillStyle = ink; x.font = font(800, 40); x.fillText(groupName || "Mockup", M, top + 38);
+        x.fillStyle = soft; x.font = font(400, 24);
+        let head = styles.join("  ·  ");
+        while (head.length > 8 && x.measureText(head).width > PW - 2 * M) head = head.slice(0, -2);
+        x.fillText(head === styles.join("  ·  ") ? head : head + "…", M, top + 72);
+        let y = top + 72;
+        if (o.description.trim()) { x.font = font(400, 22); let t = o.description.trim(); while (t.length > 8 && x.measureText(t).width > PW - 2 * M) t = t.slice(0, -2); y += 32; x.fillText(t, M, y); }
+        if (pages.length || todo.length > PER) { x.textAlign = "right"; x.fillStyle = faint; x.font = font(400, 20); x.fillText(`Page ${pages.length + 1} of ${Math.ceil(todo.length / PER)}`, PW - M, top + 38); x.textAlign = "left"; }
+        const gridTop = y + 0.25 * DPI, gridBot = PH - M - (o.ours ? 0.35 * DPI : 0.1 * DPI);
+        // the grid: as many columns as make the shirts biggest
+        const n = shown.length, gapV = 0.08 * DPI, labelH = (multi ? 64 : 40), cg = 0.22 * DPI, rg = 0.18 * DPI;
+        const unitW = n * PHOTO_W + (n - 1) * (gapV / 1), unitH = PHOTO_H;
+        let best = { cols: 1, k: 0 };
+        for (let cols = 1; cols <= part.length; cols++) {
+          const rows = Math.ceil(part.length / cols);
+          const cw = (PW - 2 * M - (cols - 1) * cg) / cols, ch = (gridBot - gridTop - (rows - 1) * rg) / rows - labelH;
+          const k = Math.min((cw - (n - 1) * gapV) / (n * PHOTO_W), ch / unitH);
+          if (k > best.k) best = { cols, k };
+        }
+        const cols = best.cols, rows = Math.ceil(part.length / cols), k = best.k;
+        const cw = (PW - 2 * M - (cols - 1) * cg) / cols, cellH = unitH * k + labelH;
+        const usedH = rows * cellH + (rows - 1) * rg, oy0 = gridTop + Math.max(0, (gridBot - gridTop - usedH) / 2);
+        void unitW;
+        for (let i = 0; i < part.length; i++) {
+          const l = part[i], col = i % cols, row = Math.floor(i / cols);
+          // the last row is centered when it isn't full
+          const inRow = row === rows - 1 ? part.length - row * cols : cols, rowW = inRow * cw + (inRow - 1) * cg;
+          const ox = M + (PW - 2 * M - rowW) / 2 + col * (cw + cg), oy = oy0 + row * (cellH + rg);
+          const hi = await photosCanvas(l, k * R, gapV * R, shown);
+          const w = hi.width / R, h = hi.height / R;
+          x.drawImage(hi, ox + (cw - w) / 2, oy, w, h);
+          x.textAlign = "center"; x.fillStyle = ink; x.font = font(700, 26);
+          x.fillText(l.color, ox + cw / 2, oy + h + 32);
+          if (multi) { x.fillStyle = faint; x.font = font(400, 19); x.fillText([l.brand, l.style].filter(Boolean).join(" "), ox + cw / 2, oy + h + 58); }
+          x.textAlign = "left";
+        }
+        if (o.ours) {
+          x.fillStyle = rule; x.fillRect(M, PH - M - 40, PW - 2 * M, 2);
+          x.fillStyle = soft; x.font = font(600, 19);
+          x.fillText([shop.name, fmtPhone(shop.phone), shop.email].filter(Boolean).join("  ·  "), M, PH - M - 6);
+        }
+        pages.push(await canvasPage(c, 792, 612, 0.95));
+      }
+      const pdf = imagePdf(pages, `${groupName || "Mockup"} sales sheet`);
+      const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup", "sales sheet"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70)}.pdf`;
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: "application/pdf" })); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      setMsg(`Downloaded ${name}.`); setPdfOpen(false);
+    } catch (e) { setMsg("Couldn't make the sales sheet: " + (e instanceof Error ? e.message : String(e))); }
+    setPdfBusy(false);
+  }
+
   /** Double-click on a design (on the photo or in a close-up): open the ink menu for the logo color under the cursor. */
   async function pickColor(id: string, rx: number, ry: number, cx: number, cy: number) {
                   const im = imprints.find((x) => x.id === id);
@@ -2038,15 +2133,24 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
         {pdfOpen && (
           <section className="panel mk-pdf">
-            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">One page per shirt color, ready to send the customer.</span></div>
+            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">{pdfKind === "sheet" ? "Every color on one page, to sell from or send around." : "One page per shirt color, ready to send the customer."}</span></div>
+            <div className="chips mk-pdf-kind" role="group" aria-label="PDF layout">
+              <button type="button" className={"chip" + (pdfKind === "proof" ? " on" : "")} onClick={() => setPdfKind("proof")}>Proof: a page per color</button>
+              <button type="button" className={"chip" + (pdfKind === "sheet" ? " on" : "")} onClick={() => setPdfKind("sheet")}>Sales sheet: all colors on one page</button>
+            </div>
+            {pdfKind === "sheet" && views.length > 1 && (
+              <div className="chips mk-pdf-kind" role="group" aria-label="Sides to show">
+                {([["both", "Front and back"], ["front", "Front only"], ["back", "Back only"]] as const).map(([k, t]) => <button key={k} type="button" className={"chip" + (sheetShow === k ? " on" : "")} onClick={() => setSheetShow(k)}>{t}</button>)}
+              </div>
+            )}
             <div className="mk-pdf-opts">
               <label className="sep-chk"><input type="checkbox" checked={pdfOurs} onChange={(e) => setPdfOurs(e.target.checked)} /> Our logo &amp; contact (FBS)</label>
               <label className="sep-chk"><input type="checkbox" checked={pdfCompany} onChange={(e) => setPdfCompany(e.target.checked)} /> Company name ({custLabel(customers.find((c) => c.id === customerId)) || "the customer"})</label>
             </div>
-            <p className="faint mk-pdf-note">Every page has the shirts, a close-up of each print with its size and inks, and the garment and color.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
+            <p className="faint mk-pdf-note">{pdfKind === "sheet" ? `A landscape page with all ${lines.filter((z) => z.style && z.color).length} colors, each named under its shirt.` : "Every page has the shirts, a close-up of each print with its size and inks, and the garment and color."}{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
             <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc })}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
+              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => (pdfKind === "sheet" ? exportSheet({ ours: pdfOurs, company: pdfCompany, description: pdfDesc, show: sheetShow }) : exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc }))}>{pdfBusy ? "Making the PDF…" : pdfKind === "sheet" ? "Download sales sheet" : "Download PDF"}</button>
               <button type="button" className="btn ghost" onClick={() => setPdfOpen(false)}>Close</button>
             </div>
           </section>
