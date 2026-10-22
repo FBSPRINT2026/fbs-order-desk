@@ -12017,3 +12017,8 @@ tr.cu-off td{color:var(--ink-3)}
 /* a new customer (or board) starts with a blue bar and a little space (Oct 22, Nick: "they look to run together") */
 .tbl.cu-tbl tbody tr.cu-gstart:not(:first-child) > td{border-top:3px solid var(--fbs-blue);padding-top:14px}
 @media (max-width:1100px){.tbl.cu-tbl th.cu-w-added{width:0;padding:0;font-size:0}.tbl.cu-tbl td.cu-added{display:none}.tbl.cu-tbl th.cu-w-rail{width:140px}}
+/* ClickUp priority flags (Oct 22): Urgent red, High amber, like ClickUp's */
+.cu-flag{display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:12px;font-weight:700;white-space:nowrap;vertical-align:1px}
+.cu-flag svg{width:13px;height:13px;fill:currentColor;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
+.cu-flag.urgent{color:var(--danger)}
+.cu-flag.high{color:var(--warn)}

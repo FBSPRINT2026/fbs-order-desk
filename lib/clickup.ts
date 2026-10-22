@@ -53,7 +53,7 @@ type CuTask = {
   id: string; name: string; text_content?: string | null; description?: string | null; status?: { status?: string; type?: string; color?: string };
   date_created?: string; date_updated?: string; due_date?: string | null; creator?: CuUser; url?: string; parent?: string | null;
   list?: { id: string; name?: string }; folder?: { name?: string; hidden?: boolean }; space?: { id: string };
-  custom_fields?: CuField[]; attachments?: CuAtt[];
+  custom_fields?: CuField[]; attachments?: CuAtt[]; priority?: { priority?: string } | null;
 };
 type CuComment = { id: string; comment_text?: string; user?: CuUser; date?: string };
 type Team = { id: string; name: string; members?: { user?: CuUser }[] };
@@ -68,6 +68,7 @@ export type ClickUpTaskRow = {
   dismissed_at: string | null; dismissed_by: string | null; waiting: boolean; synced_at: string;
   /** the Printavo job it was matched to (already entered: not new) */ pv_id: string | null; pv_number: string | null;
   /** the ClickUp list (board) it's on */ list_id: string | null;
+  /** ClickUp priority: urgent | high | normal | low | "" */ priority: string;
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string };
 export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
@@ -115,7 +116,7 @@ function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string
   const box = printavoBox(t);
   const fields = Object.fromEntries((t.custom_fields || []).map((f) => [f.name.trim(), fieldText(f)] as const).filter((x): x is [string, string] => x[1] != null));
   return {
-    id: t.id, team_id: teamId, list_id: t.list?.id || null, where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
+    id: t.id, team_id: teamId, list_id: t.list?.id || null, priority: String(t.priority?.priority || "").toLowerCase(), where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
     url: t.url || `https://app.clickup.com/t/${t.id}`, parent: t.parent || null, status: String(t.status?.status || ""), status_type: String(t.status?.type || ""), status_color: String(t.status?.color || ""),
     due_at: iso(ms(t.due_date)), created_at_cu: iso(ms(t.date_created)), updated_at_cu: iso(ms(t.date_updated)),
     creator_name: String(t.creator?.username || ""), creator_email: String(t.creator?.email || "").toLowerCase(), description: String(t.text_content || t.description || "").trim().slice(0, 20000),
@@ -255,6 +256,15 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
     await Promise.all(seen.map((ws) => (async ({ team, tok, me }: typeof ws) => {
       if (Date.now() > deadline || used(tok) > 60) { out.later!++; return; }
       const hidden = !!teamRow.get(team.id)?.hidden;
+      // once per workspace: the priority of the open jobs read before priorities were kept (a list call or two)
+      if (!cursors[`prio:${team.id}`]) {
+        for (let page = 0; page < 5; page++) {
+          const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(tok, `/team/${team.id}/task?${new URLSearchParams({ page: String(page), subtasks: "true", include_closed: "false" })}`);
+          for (const x of (r.tasks || []).filter((y) => y.priority?.priority)) await admin.from("clickup_tasks").update({ priority: String(x.priority!.priority).toLowerCase() }).eq("id", x.id);
+          if (r.last_page === true || (r.tasks || []).length < 100) break;
+        }
+        cursors[`prio:${team.id}`] = 1;
+      }
       const since = cursors[team.id];
       // tasks changed since the last run (the first time: every open task)
       const tasks: CuTask[] = [];
@@ -266,9 +276,9 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         if (r.last_page === true || (r.tasks || []).length < 100) break;
       }
       tasks.sort((a, b) => ms(a.date_updated) - ms(b.date_updated));
-      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[]; pv_number: string | null }>();
+      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[]; pv_number: string | null; priority: string }>();
       for (let i = 0; i < tasks.length; i += 200) {
-        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting, attachments, pv_number").in("id", tasks.slice(i, i + 200).map((t) => t.id));
+        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting, attachments, pv_number, priority").in("id", tasks.slice(i, i + 200).map((t) => t.id));
         for (const r of data || []) known.set(r.id as string, r as never);
       }
       let cur = since || 0, n = 0;
@@ -277,7 +287,12 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         if (now - upd < QUIET_MS) { out.later!++; break; } // still being filled in: the next run
         if (Date.now() > deadline || used(tok) > 70 || n >= perTeam) { out.later!++; break; }
         const k = known.get(t0.id);
-        if (k?.updated_at_cu && Date.parse(k.updated_at_cu) >= upd) { cur = Math.max(cur, upd); continue; }
+        if (k?.updated_at_cu && Date.parse(k.updated_at_cu) >= upd) {
+          // read before priorities were kept: just the priority, from the list (no extra call)
+          const pr = String(t0.priority?.priority || "").toLowerCase();
+          if (pr !== (k.priority || "")) await admin.from("clickup_tasks").update({ priority: pr }).eq("id", t0.id);
+          cur = Math.max(cur, upd); continue;
+        }
         n++;
         // a closed task only needs its status; an open one is read in full (files, fields, comments)
         const full = isDone(t0.status?.type) ? null : await cu<CuTask>(tok, `/task/${t0.id}?include_markdown_description=true`);
@@ -374,6 +389,7 @@ export async function importClickUpTask(admin: SupabaseClient, id: string, by: s
   const body = [
     `This job came from ${team.name}'s ClickUp board (their job list${t.where_text ? `: ${t.where_text}` : ""}), not an email. The task's name is the job: "${t.name}".`,
     t.due_at ? `Due date on the task: ${day(Date.parse(t.due_at))}.` : "",
+    /^(urgent|high)$/.test(t.priority || "") ? `The customer flagged it ${t.priority === "urgent" ? "URGENT" : "high priority"} in ClickUp.` : "",
     `Made by ${t.creator_name || "the customer"}${t.created_at_cu ? ` on ${when(t.created_at_cu)}` : ""}.`,
     t.description ? `Notes on the task:\n${t.description}` : "",
     Object.keys(t.fields).length ? `Fields on the task:\n${Object.entries(t.fields).map(([k, v]) => `- ${k}: ${v}`).join("\n")}` : "",

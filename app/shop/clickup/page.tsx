@@ -34,6 +34,13 @@ const ago = (iso: string | null) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 };
 /** the fields worth showing: ticked boxes and filled-in words (not "In Printavo", it has its own tab) */
+/** ClickUp's priority flag (Oct 22, Nick: "how are we handling like the urgent flags or priority flags"): Urgent and High
+ * are shown like ClickUp's flags and listed first */
+const prRank = (t: { priority?: string }) => (t.priority === "urgent" ? 0 : t.priority === "high" ? 1 : 2);
+function Flag({ p }: { p?: string }) {
+  if (p !== "urgent" && p !== "high") return null;
+  return <span className={"cu-flag " + p} title={`Flagged ${p === "urgent" ? "Urgent" : "High"} in ClickUp`}><svg viewBox="0 0 24 24" aria-hidden><path d="M5 21V4h11l-1.5 4L16 12H5" /></svg>{p === "urgent" ? "Urgent" : "High"}</span>;
+}
 const isDoneT = (t: { status_type: string }) => /^(closed|done)$/i.test(t.status_type || "");
 const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
 
@@ -91,7 +98,7 @@ export default function ClickUpJobs() {
   // shows the grouping"): customers A–Z, then the soonest due first (no date last), then the newest
   const label = (teamId: string) => { const tm = teams.get(teamId); return custName.get(tm?.customer_id || "") || tm?.name || ""; };
   const rows = [...list].sort((a, b) => label(a.team_id).localeCompare(label(b.team_id), undefined, { sensitivity: "base" }) || a.team_id.localeCompare(b.team_id)
-    || (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0) || (b.created_at_cu || "").localeCompare(a.created_at_cu || ""));
+    || prRank(a) - prRank(b) || (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0) || (b.created_at_cu || "").localeCompare(a.created_at_cu || ""));
   const groupSize = rows.reduce<Record<string, number>>((m, t) => { m[t.team_id] = (m[t.team_id] || 0) + 1; return m; }, {});
   const weekOut = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const dueSoon = groups.new.filter((t) => { const d = chiDay(t.due_at); return d && d <= weekOut; }).length;
@@ -174,7 +181,7 @@ export default function ClickUpJobs() {
           <span className="faint">{[jobTeam?.name, job.where_text].filter(Boolean).join(" › ")}{job.created_at_cu ? ` · ${job.creator_name || "made"} ${when(job.created_at_cu)}` : ""}</span>
         </div>
         <div className="panel-b">
-          <div className="cu-title">{job.name}</div>
+          <div className="cu-title">{job.name}<Flag p={job.priority} /></div>
           <div className="cu-line">
             {job.due_at ? <>Due <Due date={chiDay(job.due_at)} status="" /></> : <span className="faint">No due date</span>}
             <span className="faint">·</span><span>{job.status || "open"}</span>
@@ -242,7 +249,7 @@ export default function ClickUpJobs() {
         const boxes = Object.entries(boxN).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
         const board = (t: ClickUpTask) => t.where_text || "Completed jobs";
         const list2 = [...shown].sort((a, b) => board(a).localeCompare(board(b)) || Number(isDoneT(a)) - Number(isDoneT(b))
-          || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0)));
+          || (isDoneT(a) ? 0 : prRank(a) - prRank(b)) || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0)));
         const size = list2.reduce<Record<string, number>>((m, t) => { m[board(t)] = (m[board(t)] || 0) + 1; return m; }, {});
         const cols = 6 + boxes.length;
         return <>
@@ -265,7 +272,7 @@ export default function ClickUpJobs() {
                   return <tr key={t.id} tabIndex={0} className={[first ? "cu-gstart" : "", openId === t.id ? "picked" : "", isDoneT(t) ? "cu-done-row" : ""].filter(Boolean).join(" ") || undefined}
                     onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
                     {first && <td className="cu-rail" rowSpan={size[board(t)]} onClick={(e) => e.stopPropagation()}><div className="cu-rail-c">{board(t)}</div><span className="cu-rail-n">{size[board(t)]}</span></td>}
-                    <td><div>{t.name}</div>{(t.order_number || k?.ours) && <div className="sub">Our order #{t.order_number || k?.ours?.number}</div>}</td>
+                    <td><div>{t.name}{!isDoneT(t) && <Flag p={t.priority} />}</div>{(t.order_number || k?.ours) && <div className="sub">Our order #{t.order_number || k?.ours?.number}</div>}</td>
                     <td className="cu-nw"><span className="pill" style={{ ["--sc" as string]: t.status_color || "#8a94a6" }}><span className="pill-t">{t.status || "open"}</span></span></td>
                     <td className="cu-nw">{t.due_at ? <Due date={chiDay(t.due_at)} status={isDoneT(t) ? "completed" : ""} /> : <span className="faint">—</span>}</td>
                     {boxes.map((b) => <td key={b} className="cu-box">{t.fields[b] === "✓" ? "✓" : <span className="faint">—</span>}</td>)}
@@ -327,7 +334,7 @@ export default function ClickUpJobs() {
                   <div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div>
                   <span className="cu-rail-n">{n} {tab === "new" ? "new" : n === 1 ? "job" : "jobs"}</span>
                 </td>}
-                <td><div>{t.name}</div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
+                <td><div>{t.name}<Flag p={t.priority} /></div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
                 <td>{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>

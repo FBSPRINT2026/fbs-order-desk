@@ -161,9 +161,17 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity
   const useProgram = await customerUsesProgram(admin, custId);
+  // a ClickUp job the customer flagged Urgent or High: 🚩 at the front of the job name (Oct 22, Nick: "put a little
+  // priority flag emoji in the job name when we're converting it over")
+  const cuSrc = ((a?.meta || {}) as { source?: string; clickup?: { id?: string } });
+  let flag = "";
+  if (cuSrc.source === "clickup" && cuSrc.clickup?.id) {
+    const { data: ct } = await admin.from("clickup_tasks").select("priority").eq("id", cuSrc.clickup.id).maybeSingle();
+    if (/^(urgent|high)$/.test(String(ct?.priority || ""))) flag = "🚩 ";
+  }
   const { data: o, error } = await admin.from("orders").insert({
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
-    nickname: (d.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
+    nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
@@ -173,6 +181,13 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // a job from the customer's ClickUp board (ClickUp Jobs, lib/clickup.ts)
   const cuMeta = ((a?.meta || {}) as { source?: string; clickup?: { id?: string } });
   const cuJob = cuMeta.source === "clickup" && cuMeta.clickup?.id ? { id: String(cuMeta.clickup.id), name: String(a?.subject || "") } : null;
+  // a ClickUp job flagged Urgent or High: 🚩 at the front of the order's name (Oct 22, Nick: "put a little priority flag
+  // emoji in the name when we're converting it over")
+  if (cuJob) {
+    const { data: ct } = await admin.from("clickup_tasks").select("priority").eq("id", cuJob.id).maybeSingle();
+    const nick = String(d.nickname || "").trim();
+    if (/^(urgent|high)$/.test(String(ct?.priority || "")) && !nick.startsWith("🚩")) await admin.from("orders").update({ nickname: `🚩 ${nick}`.slice(0, 120) }).eq("id", oid);
+  }
   // goods already bought for this email (Order goods, before the order existed): now they belong to it
   if (a) {
     const { data: got } = await admin.from("blank_orders").update({ order_id: oid }).eq("activity_id", a.id).is("order_id", null).select("supplier_order");
