@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
-import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
-import { custLabel } from "@/lib/format";
+import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
+import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
@@ -34,7 +34,7 @@ import { isRelabel, mainSize } from "@/components/NeckLabelPick";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
-import { canvasPage, imagePdf } from "@/lib/imagePdf";
+import { canvasPage } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
 import { ColorPicker, StylePicker } from "@/components/GroupEditor";
 import { fmtPhone } from "@/lib/phone";
@@ -1371,6 +1371,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return photosCanvas(l, h / PHOTO_H, Math.round(h * 0.03), sides);
   }
 
+  /**
+   * The proof PDF, laid out like the order's art proof (app/print/[id] ProofDoc) so both look and read the same (Oct 22,
+   * Nick: "I like what you did on the proof on the order itself… I just want to use that logic"): page 1 the first
+   * shirt big with who it's for, the prints, the garments and the approval box (fill-in checkboxes, notes, signature,
+   * name, date); then each other shirt color on its own page, full width (the same style and color once); then each
+   * print blown up on the shirt color with its size drawn on, the largest print area, placement, how it's printed and
+   * its inks. Drawn from what's on screen (the drags on each color included), at 300 dpi.
+   */
   async function exportPdf(o: { ours: boolean; company: boolean; description: string }) {
     const todo = lines.filter((z) => z.style || z.color);
     if (!todo.length) return setMsg("Add a garment and color first.");
@@ -1378,135 +1386,299 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setPdfBusy(true); setMsg("Making the PDF…");
     try {
       await loadShirtFonts().catch(() => {});
+      await Promise.all(["800 40px Archivo", '400 20px "Public Sans"', '600 20px "Public Sans"', '700 20px "Public Sans"', '800 20px "Public Sans"'].map((f) => document.fonts.load(f).catch(() => null)));
       let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
       if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
       const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
       const cust = customers.find((c) => c.id === customerId);
-      const DPI = 200, PW = 8.5 * DPI, PH = 11 * DPI, M = 0.45 * DPI;
-      const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
-      const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", rule = "#DDE2EA";
-      const prints = imprints.filter((im) => designOf(im));
-      const pages = [];
-      for (const l of todo) {
-        // drawn at 300 dpi (R × the 200-dpi layout units), every picture made at that size: sharp when zoomed in
-        const R = 1.5, c = document.createElement("canvas"); c.width = Math.round(PW * R); c.height = Math.round(PH * R);
-        const x = c.getContext("2d")!;
-        x.scale(R, R); x.imageSmoothingQuality = "high";
-        x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
-        // header: our logo (left) and/or the customer's company; the date and order on the right
-        let top = M;
-        const head = o.ours || o.company;
-        if (head) {
-          let lx = M;
-          if (o.ours) {
-            if (logo) { const lh = 0.5 * DPI, lw = Math.min(2.4 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); lx = M + lw + 0.3 * DPI; }
-            else { x.fillStyle = ink; x.font = font(800, 40); x.fillText(shop.name, M, M + 40); lx = M + x.measureText(shop.name).width + 0.3 * DPI; }
-          }
-          if (o.company) {
-            if (o.ours) { x.fillStyle = rule; x.fillRect(lx - 0.15 * DPI, M + 4, 3, 0.45 * DPI); }
-            x.fillStyle = ink; x.font = font(800, 48); x.fillText(custLabel(cust) || "", lx, M + 44);
-          }
-          x.textAlign = "right"; x.fillStyle = faint; x.font = font(700, 22); x.fillText("MOCKUP FOR APPROVAL", PW - M, M + 20);
-          x.fillStyle = soft; x.font = font(400, 24);
-          x.fillText([new Date().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }), order ? `Order #${order.number}` : ""].filter(Boolean).join("  ·  "), PW - M, M + 54);
-          x.textAlign = "left";
-          top = M + 0.62 * DPI;
-          x.fillStyle = rule; x.fillRect(M, top, PW - 2 * M, 3);
-          top += 0.12 * DPI;
-        }
-        // the mockup's name, the garment and color, and the description
-        x.fillStyle = ink; x.font = font(700, 30);
-        x.fillText(groupName || "Mockup", M, top + 32);
-        x.fillStyle = soft; x.font = font(400, 26);
-        const gtxt = [[l.brand, l.style].filter(Boolean).join(" "), l.garment, l.color ? `Color: ${l.color}` : ""].filter(Boolean).join("  ·  ");
-        x.fillText(gtxt, M, top + 66);
-        let y = top + 66;
-        if (o.description.trim()) {
-          x.font = font(400, 24); x.fillStyle = soft;
-          const words = o.description.trim().split(/\s+/); let row = "", rows = 0;
-          for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 32; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
-          if (rows < 2 && row) { y += 32; x.fillText(row, M, y); }
-        }
-        const bodyTop = y + 0.25 * DPI, bodyBot = PH - M - 0.4 * DPI;
-        // like the Mockup Creator: the shirts across the top, then each print blown up in its print area below them
-        // (the max area dashed, the art at its real size and spot), with its location, size and inks under it
-        const cols = prints.length <= 2 ? 2 : 3, rowsN = Math.max(1, Math.ceil(prints.length / cols));
-        const cGap = 0.3 * DPI, cellW = (PW - 2 * M - (cols - 1) * cGap) / cols;
-        const infoH = 0.7 * DPI;
-        const n = Math.max(1, views.length), gap = 0.3 * DPI;
-        const shirtH = Math.min(3.7 * DPI, (bodyBot - bodyTop) * (rowsN > 1 ? 0.34 : 0.44));
-        const k = Math.min((PW - 2 * M - (n - 1) * gap) / (n * PHOTO_W), shirtH / PHOTO_H);
-        const shirtsHi = await photosCanvas(l, k * R, gap * R), shirts = { width: shirtsHi.width / R, height: shirtsHi.height / R };
-        const sx = M + (PW - 2 * M - shirts.width) / 2, sy = bodyTop;
-        x.drawImage(shirtsHi, sx, sy, shirts.width, shirts.height);
-        x.fillStyle = faint; x.font = font(700, 20); x.textAlign = "center";
-        const pw = PHOTO_W * k;
-        views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 28));
+      // layout in units of 1/200": the order proof's sizes (inches, points, CSS px) turned into these
+      const DPI = 200, PW = 8.5 * DPI, PH = 11 * DPI, R = 1.5, IN = DPI, PT = DPI / 72, PX = DPI / 96;
+      const L = 0.45 * IN, CW = PW - 2 * L, TOP = 0.42 * IN, BOT = PH - 0.32 * IN;
+      const C = { ink: "#141D2B", ink2: "#3c4658", ink3: "#6b7587", line: "#d6dbe3", ok: "#1a8a5a" };
+      const body = (w: number, pt: number) => `${w} ${pt * PT}px "Public Sans", Arial, sans-serif`;
+      const disp = (pt: number) => `800 ${pt * PT}px Archivo, "Arial Narrow", sans-serif`;
+      const dark = (hex: string) => { const h = hex.replace("#", ""); if (h.length !== 6) return false; const [r, g, b2] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * b2 < 120; };
+      const prints = imprints.filter((im) => designOf(im) || im.visualOnly);
+      const MATCH_PREV = "Printed to match your previous order";
+      const sizeOf = (im: Imprint) => { const w = printWidth(im, im.location, ratioIm(im)); return { w, h: w * (ratioIm(im) || 0.6) }; };
+      const sizeLabel = (im: Imprint) => { const z = sizeOf(im); return z.w > 0 ? `${z.w.toFixed(2)}" W × ${z.h.toFixed(2)}" H` : ""; };
+      const inkNamesOf = (im: Imprint) => im.visualOnly ? [] : inkList(im).map((t) => ({ name: t.name.startsWith("As uploaded") ? "As uploaded" : t.name, hex: t.hex || "#cccccc" }));
+      // the garment pages: one per style and color (lines of the same style and color are the same picture)
+      const keyOf = (l: Line) => `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`;
+      const shirts = todo.filter((l, i) => todo.findIndex((y) => keyOf(y) === keyOf(l)) === i);
+      const capOf = (l: Line) => [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ");
+      const total = 1 + (shirts.length - 1) + prints.length;
+      const who = o.company && cust ? [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ") : "";
+      const jobName = order?.nickname || groupName || "Mockup";
+      const pages: { jpeg: Uint8Array }[] = [];
+      const fields: { page: number; kind: "check" | "text"; name: string; x: number; y: number; w: number; h: number; multi?: boolean }[] = [];
+      let pageNo = 0;
+
+      const newPage = () => {
+        const c = document.createElement("canvas"); c.width = Math.round(PW * R); c.height = Math.round(PH * R);
+        const x = c.getContext("2d")!; x.scale(R, R); x.imageSmoothingQuality = "high";
+        x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH); x.textBaseline = "alphabetic";
+        pageNo++;
+        return { c, x };
+      };
+      const wrap = (x: CanvasRenderingContext2D, t: string, w: number) => {
+        const out: string[] = []; let row = "";
+        for (const word of t.split(/\s+/).filter(Boolean)) { const tr = row ? row + " " + word : word; if (x.measureText(tr).width > w && row) { out.push(row); row = word; } else row = tr; }
+        if (row) out.push(row); return out;
+      };
+      const fit = (x: CanvasRenderingContext2D, t: string, w: number) => { if (x.measureText(t).width <= w) return t; let s2 = t; while (s2.length > 1 && x.measureText(s2 + "…").width > w) s2 = s2.slice(0, -1); return s2.trimEnd() + "…"; };
+      const rrect = (x: CanvasRenderingContext2D, rx: number, ry: number, w: number, h: number, r: number) => { x.beginPath(); x.roundRect(rx, ry, w, h, r); };
+      const lbl = (x: CanvasRenderingContext2D, t: string, lx: number, ly: number, pt = 9) => {
+        x.fillStyle = C.ink3; x.font = body(700, pt); x.letterSpacing = `${0.06 * pt * PT}px`; x.fillText(t.toUpperCase(), lx, ly); x.letterSpacing = "0px";
+      };
+      const foot = (x: CanvasRenderingContext2D) => {
+        x.fillStyle = C.ink3; x.font = body(400, 8.5);
+        x.fillText(fit(x, ["Art proof", order ? `#${order.number} ${order.nickname || ""}`.trim() : groupName, who].filter(Boolean).join(" · "), CW * 0.75), L, BOT);
+        x.textAlign = "right"; x.fillText(`Page ${pageNo} of ${total}`, PW - L, BOT); x.textAlign = "left";
+      };
+      const done = async (pg: { c: HTMLCanvasElement; x: CanvasRenderingContext2D }) => { foot(pg.x); pages.push(await canvasPage(pg.c, 612, 792, 0.95)); };
+      /** the second-page header: a big title on the left, the order on the right, a heavy rule under them */
+      const head2 = (x: CanvasRenderingContext2D, title: string, right: string) => {
+        x.fillStyle = C.ink; x.font = disp(20); x.fillText(fit(x, title, CW * 0.62), L, TOP + 20 * PT);
+        x.fillStyle = C.ink2; x.font = body(400, 11); x.textAlign = "right"; x.fillText(fit(x, right, CW * 0.36), PW - L, TOP + 20 * PT); x.textAlign = "left";
+        const y = TOP + 20 * PT + 6 * PX + 4 * PT;
+        x.fillStyle = C.ink; x.fillRect(L, y, CW, 2 * PX);
+        return y + 2 * PX;
+      };
+      /** a shirt's front and back as big as fits w × h, centered in the box */
+      const shirtsIn = async (x: CanvasRenderingContext2D, l: Line, bx: number, by: number, w: number, h: number) => {
+        const n = Math.max(1, views.length), gap = 0.2 * IN;
+        const k = Math.min((w - (n - 1) * gap) / (n * PHOTO_W), h / PHOTO_H);
+        const hi = await photosCanvas(l, k * R, gap * R), sw = hi.width / R, sh = hi.height / R;
+        const sx = bx + (w - sw) / 2, sy = by + (h - sh) / 2;
+        x.drawImage(hi, sx, sy, sw, sh);
+        return { sx, sy, sw, sh };
+      };
+
+      // ── page 1: the cover ──
+      {
+        const pg = newPage(), x = pg.x, first = shirts[0];
+        let y = TOP;
+        // the top: our logo on the left; "Art Proof", the order and the date on the right
+        if (logo) { const lh = 0.5 * IN, lw = Math.min(2.6 * IN, ((logo.naturalWidth || 4) / (logo.naturalHeight || 1)) * lh); x.drawImage(logo, L, y, lw, lh); }
+        else if (o.ours) { x.fillStyle = C.ink; x.font = disp(20); x.fillText(shop.name, L, y + 20 * PT); }
+        x.textAlign = "right";
+        x.fillStyle = C.ink; x.font = disp(22); x.fillText("Art Proof", PW - L, y + 20 * PT);
+        x.fillStyle = C.ink2; x.font = body(400, 11); x.fillText(fit(x, [order ? `#${order.number}` : "", groupName && groupName !== order?.nickname ? groupName : ""].filter(Boolean).join(" · ") || jobName, CW * 0.5), PW - L, y + (22 + 4 + 11) * PT);
+        x.fillStyle = C.ink3; x.font = body(400, 9); x.fillText(`Prepared ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, PW - L, y + (22 + 4 + 11 + 3 + 10) * PT);
         x.textAlign = "left";
-        const cuTop = sy + shirts.height + 0.45 * DPI;
-        const cellH = (bodyBot - cuTop - (rowsN - 1) * 0.2 * DPI) / rowsN, boxH = cellH - infoH - 0.35 * DPI;
-        const shirt = shirtHex(l), darkShirt = deltaE(shirt, "#000000") < 45;
-        for (let q = 0; q < prints.length; q++) {
-          const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
-          // one print alone sits in the middle
-          const ox = prints.length === 1 ? M + (PW - 2 * M - cellW) / 2 : M + col * (cellW + cGap), oy = cuTop + rw * (cellH + 0.2 * DPI);
-          const d = designOf(im), r = ratioIm(im) || 0.6, wIn = printWidth(im, im.location, ratioIm(im)), hIn = wIn * r;
-          const sp = spotFor(im.location), o = NO_OFF;
-          // heading: location and the max print area
-          x.fillStyle = ink; x.font = font(800, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
-          x.fillStyle = faint; x.font = font(400, 19); x.textAlign = "right"; x.fillText(`max ${sp.maxW}" × ${sp.maxH}"`, ox + cellW, oy + 20); x.textAlign = "left";
-          // the print area, blown up: the max area plus an inch around it, in the shirt's color
-          const spanW = sp.maxW + 2, spanH = sp.maxH + 2, PXI = Math.min(cellW / spanW, boxH / spanH);
-          const BW = spanW * PXI, BH = spanH * PXI, bx = ox + (cellW - BW) / 2, by = oy + 34;
-          x.save();
-          x.beginPath(); x.rect(bx, by, BW, BH); x.clip();
-          x.fillStyle = shirt; x.fillRect(bx, by, BW, BH);
-          const top0 = (BH - sp.maxH * PXI) / 2, ax = bx + (BW - sp.maxW * PXI) / 2, ay = by + top0;
-          x.setLineDash([10, 7]); x.lineWidth = 2.5;
-          x.strokeStyle = darkShirt ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.35)"; x.strokeRect(ax, ay, sp.maxW * PXI, sp.maxH * PXI);
-          x.setLineDash([]);
-          if (viewsFor(im.location).length > 1) {
-            // sleeves: the fold (front | back) and the hem
-            x.strokeStyle = darkShirt ? "rgba(255,255,255,.4)" : "rgba(0,0,0,.3)"; x.setLineDash([6, 6]); x.beginPath(); x.moveTo(bx + BW / 2, by); x.lineTo(bx + BW / 2, by + BH); x.stroke(); x.setLineDash([]);
-            x.strokeStyle = darkShirt ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.45)"; x.lineWidth = 3; x.beginPath(); x.moveTo(bx, ay + sp.maxH * PXI); x.lineTo(bx + BW, ay + sp.maxH * PXI); x.stroke();
+        y += Math.max(0.5 * IN, (22 + 4 + 11 + 3 + 10 + 3) * PT) + 12 * PX;
+        // who it's for, the job, in hands
+        const cols: { k: string; b: string; f: string; w: number }[] = [];
+        if (who) cols.push({ k: "For", b: cust?.company || cust?.name || "—", f: [cust?.company && cust?.name && cust.name !== cust.company ? cust.name : "", cust?.email].filter(Boolean).join(" · "), w: 1.6 });
+        cols.push({ k: "Job", b: jobName, f: [order?.po_number ? `PO ${order.po_number}` : "", o.description.trim()].filter(Boolean).join(" · "), w: 1.2 });
+        if (order) {
+          const d = parseDate(order.due_date);
+          cols.push({ k: "In hands", b: d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }).replace(",", "") : "To be set", f: ({ pickup: "Pickup", ship: "Ship", deliver: "Delivery" } as Record<string, string>)[order.delivery_method] || "Pickup", w: 0.9 });
+        }
+        x.fillStyle = C.ink; x.fillRect(L, y, CW, 2 * PX);
+        const gapC = 16 * PX, totW = cols.reduce((a, c) => a + c.w, 0), usable = CW - gapC * (cols.length - 1);
+        let cx = L, maxH = 0;
+        for (const col of cols) {
+          const w = (usable * col.w) / totW; let cy = y + 2 * PX + 8 * PX + 7.5 * PT;
+          lbl(x, col.k, cx, cy, 7.5); cy += 4 * PX + 12 * PT;
+          x.fillStyle = C.ink; x.font = body(700, 12); x.fillText(fit(x, col.b, w), cx, cy);
+          if (col.f) { x.fillStyle = C.ink3; x.font = body(400, 10); for (const r of wrap(x, col.f, w).slice(0, 2)) { cy += 2 * PX + 11.5 * PT; x.fillText(r, cx, cy); } }
+          maxH = Math.max(maxH, cy - y); cx += w + gapC;
+        }
+        y += maxH + 8 * PX;
+        x.fillStyle = C.line; x.fillRect(L, y, CW, 1 * PX); y += 1 * PX + 8 * PX;
+
+        // from the bottom up: the approval box, then the prints and garments, then the picture fills what's left
+        const okPad = 14 * PX, okW = CW - 2 * okPad;
+        x.font = body(400, 9.5);
+        const okText = wrap(x, "Spelling, art, ink colors, print sizes and placement. Ink colors are matched to the names listed (PMS or stock ink); colors on a screen or a home printer are close but not exact. Sizes are the printed size on the garment. We start production once this proof is approved.", okW);
+        const boxes = ["Approved as shown", "Approved with the changes noted", "Changes needed, send a new proof"];
+        x.font = body(400, 10);
+        const boxRows: string[][] = [[]]; { let bw = 0; for (const t of boxes) { const w = 14 * PX + 7 * PX + x.measureText(t).width + 18 * PX; if (bw + w > okW && boxRows[boxRows.length - 1].length) { boxRows.push([]); bw = 0; } boxRows[boxRows.length - 1].push(t); bw += w; } }
+        const okH = 8 * PX + 12 * PT * 1.35 + 3 * PX + okText.length * 9.5 * PT * 1.4 + 7 * PX + boxRows.length * 10 * PT * 1.6 + 8 * PX + 0.5 * IN + 32 * PX + 3 * PX + 8.5 * PT * 1.4 + 10 * PX;
+        const okY = BOT - 8.5 * PT - 6 * PX - okH;
+        // the box
+        x.strokeStyle = C.ink; x.lineWidth = 2 * PX; rrect(x, L, okY, CW, okH, 12 * PX); x.stroke();
+        let oy = okY + 8 * PX + 12 * PT;
+        x.fillStyle = C.ink; x.font = body(800, 12); x.fillText("Please check everything before you approve", L + okPad, oy);
+        oy += 0.35 * 12 * PT + 3 * PX;
+        x.fillStyle = C.ink2; x.font = body(400, 9.5); for (const r of okText) { oy += 9.5 * PT * 1.4; x.fillText(r, L + okPad, oy - 0.3 * 9.5 * PT); }
+        oy += 7 * PX;
+        x.font = body(400, 10);
+        for (const row of boxRows) {
+          let bx = L + okPad; const by = oy + 10 * PT * 1.6;
+          for (const t of row) {
+            const cb = 14 * PX, ty = by - 0.35 * 10 * PT;
+            x.strokeStyle = C.ink; x.lineWidth = 1.5 * PX; rrect(x, bx, ty - cb + 2 * PX, cb, cb, 3 * PX); x.stroke();
+            fields.push({ page: 0, kind: "check", name: ["approved", "approved-with-changes", "changes-needed"][boxes.indexOf(t)], x: bx, y: ty - cb + 2 * PX, w: cb, h: cb });
+            x.fillStyle = C.ink; x.fillText(t, bx + cb + 7 * PX, ty); bx += cb + 7 * PX + x.measureText(t).width + 18 * PX;
           }
-          const offX = o.dx / (PX_PER_IN * scale), offY = o.dy / (PX_PER_IN * scale);
-          const cx = bx + BW / 2 + offX * PXI, cy = by + (sp.top || (im.drop && !isNaN(+im.drop)) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
-          const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
-          if (art) x.drawImage(art, cx - (wIn * PXI) / 2, cy - (hIn * PXI) / 2, wIn * PXI, hIn * PXI);
-          x.restore();
-          x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(bx, by, BW, BH);
-          // under it: logo, size, inks
-          let ty = by + BH + 30;
-          x.fillStyle = ink; x.font = font(700, 22); x.fillText(`${wIn.toFixed(2)}" W × ${hIn.toFixed(2)}" H`, bx, ty);
-          if (d) { x.fillStyle = soft; x.font = font(400, 19); x.textAlign = "right"; let t = designLabel(d); while (t && x.measureText(t).width > BW * 0.5) t = t.slice(0, -2); x.fillText(t === designLabel(d) ? t : t + "…", bx + BW, ty); x.textAlign = "left"; }
-          let ix = bx; ty += 32;
-          for (const t of inkList(im).slice(0, 8)) {
-            const nm = t.name.startsWith("As uploaded") ? "As uploaded" : t.name.length > 18 ? t.name.slice(0, 17) + "…" : t.name;
-            x.font = font(400, 19); const wv = 26 + x.measureText(nm).width + 22;
-            if (ix + wv > bx + BW && ix > bx) { ix = bx; ty += 28; }
-            if (ty > oy + cellH) break;
-            x.fillStyle = t.hex || "#cccccc"; x.fillRect(ix, ty - 15, 16, 16); x.strokeStyle = "#B8C0CC"; x.lineWidth = 1.5; x.strokeRect(ix, ty - 15, 16, 16);
-            x.fillStyle = ink; x.fillText(nm, ix + 24, ty); ix += wv;
+          oy = by;
+        }
+        oy += 8 * PX;
+        x.strokeStyle = C.line; x.lineWidth = 1 * PX; rrect(x, L + okPad, oy, okW, 0.5 * IN, 6 * PX); x.stroke();
+        lbl(x, "Changes or notes", L + okPad + 7 * PX, oy + 3 * PX + 8.5 * PT, 8.5);
+        fields.push({ page: 0, kind: "text", name: "changes", x: L + okPad + 3 * PX, y: oy + 16 * PX, w: okW - 6 * PX, h: 0.5 * IN - 19 * PX, multi: true });
+        oy += 0.5 * IN + 32 * PX;
+        const sg = 18 * PX, sw0 = okW - 2 * sg, sws = [2, 1.6, 1].map((f) => (sw0 * f) / 4.6);
+        let sx = L + okPad;
+        ["Signature", "Name", "Date"].forEach((t, i) => {
+          x.fillStyle = C.ink; x.fillRect(sx, oy, sws[i], 1.5 * PX);
+          lbl(x, t, sx, oy + 3 * PX + 8.5 * PT, 8.5);
+          fields.push({ page: 0, kind: "text", name: t.toLowerCase(), x: sx, y: oy - 25 * PX, w: sws[i], h: 23 * PX });
+          sx += sws[i] + sg;
+        });
+
+        // the prints (left) and the garments (right)
+        const rowsP = prints.map((im) => ({ im, inks: inkNamesOf(im) }));
+        const hP = rowsP.reduce((a, r) => a + 3 * PX + 10.5 * PT * 1.3 + (r.inks.length ? 3 * PX + 10 * PT * 1.3 : 0), 0);
+        const garm = todo.filter((l, i) => todo.findIndex((y2) => `${y2.brand}|${y2.style}|${y2.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i);
+        const hG = garm.length * (3 * PX + 10.5 * PT * 1.3);
+        const sumH = 1 * PX + 6 * PX + 7.5 * PT * 1.3 + Math.max(hP, hG, 10.5 * PT * 1.3);
+        const sumY = okY - 10 * PX - sumH;
+        x.fillStyle = C.line; x.fillRect(L, sumY, CW, 1 * PX);
+        const pw = (CW - 20 * PX) * (1.4 / 2.4), gx = L + pw + 20 * PX, gw = CW - pw - 20 * PX;
+        let py = sumY + 1 * PX + 6 * PX + 7.5 * PT;
+        lbl(x, "Prints", L, py, 7.5); lbl(x, "Garments", gx, py, 7.5);
+        let gy = py;
+        for (const r of rowsP) {
+          py += 3 * PX + 10.5 * PT * 1.3;
+          const how = r.im.visualOnly ? MATCH_PREV : [printHow(r.im), sizeLabel(r.im)].filter(Boolean).join(" · ");
+          x.fillStyle = C.ink; x.font = body(700, 10.5); x.fillText(r.im.location, L, py);
+          const lw = x.measureText(r.im.location).width;
+          x.font = body(400, 10.5); x.fillText(fit(x, ` · ${how}`, pw - lw), L + lw, py);
+          if (r.inks.length) {
+            py += 3 * PX + 10 * PT * 1.3; let ix = L; x.font = body(400, 10);
+            for (const t of r.inks) {
+              const w = 14 * PX + 6 * PX + x.measureText(t.name).width + 12 * PX;
+              if (ix + w > L + pw) break;
+              x.fillStyle = t.hex; x.fillRect(ix, py - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(ix, py - 11 * PX, 14 * PX, 14 * PX);
+              x.fillStyle = C.ink2; x.fillText(t.name, ix + 20 * PX, py); ix += w;
+            }
           }
         }
-        // footer: how to reach us (with our logo on)
-        if (o.ours) {
-          x.fillStyle = rule; x.fillRect(M, PH - M - 52, PW - 2 * M, 2);
-          x.fillStyle = soft; x.font = font(600, 19);
-          x.fillText([shop.name, fmtPhone(shop.phone), shop.email].filter(Boolean).join("  ·  "), M, PH - M - 8);
+        if (!rowsP.length) { x.fillStyle = C.ink; x.font = body(400, 10.5); x.fillText("No prints yet.", L, py + 3 * PX + 10.5 * PT * 1.3); }
+        for (const l of garm) {
+          gy += 3 * PX + 10.5 * PT * 1.3;
+          x.fillStyle = shirtHex(l); x.fillRect(gx, gy - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(gx, gy - 11 * PX, 14 * PX, 14 * PX);
+          const st = [l.brand, l.style].filter(Boolean).join(" ") || "Garment";
+          x.fillStyle = C.ink; x.font = body(700, 10.5); x.fillText(fit(x, st, gw - 20 * PX), gx + 20 * PX, gy);
+          const sw2 = x.measureText(st).width;
+          if (l.color) { x.font = body(400, 10.5); x.fillText(fit(x, ` · ${l.color}`, Math.max(0, gw - 20 * PX - sw2)), gx + 20 * PX + sw2, gy); }
         }
-        x.fillStyle = faint; x.font = font(400, 17); x.textAlign = "right";
-        x.fillText("Please check spelling, size, placement and colors.", PW - M, PH - M - 28);
-        x.fillText("Screen colors are close to, not exactly, the printed inks.", PW - M, PH - M - 6);
-        x.textAlign = "left";
-        pages.push(await canvasPage(c, 612, 792, 0.97)); // like Illustrator's High Quality Print: 300 ppi, JPEG at Maximum
+
+        // the first shirt, as big as the space between
+        const capH = first && capOf(first) ? 4 * PX + 10.5 * PT * 1.3 : 0, heroTop = y, heroH = sumY - 8 * PX - heroTop - capH;
+        if (first) {
+          const s0 = await shirtsIn(x, first, L, heroTop, CW, heroH);
+          if (capH) { x.fillStyle = C.ink2; x.font = body(600, 10.5); x.textAlign = "center"; x.fillText(capOf(first), PW / 2, s0.sy + s0.sh + 4 * PX + 10.5 * PT); x.textAlign = "left"; }
+        }
+        await done(pg);
       }
-      const pdf = imagePdf(pages, `${groupName || "Mockup"}${o.company && cust ? " - " + custLabel(cust) : ""}`);
-      const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}.pdf`;
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: "application/pdf" })); a.download = name; a.click();
+
+      // ── the other shirt colors, one to a page, full width ──
+      for (const l of shirts.slice(1)) {
+        const pg = newPage(), x = pg.x;
+        const y = head2(x, capOf(l) || "Mockup", order ? `#${order.number} · ${order.nickname || ""}` : groupName) + 12 * PX;
+        await shirtsIn(x, l, L, y, CW, Math.min(8.6 * IN, BOT - 8.5 * PT - 14 * PX - y));
+        await done(pg);
+      }
+
+      // ── each print up close ──
+      const first = shirts[0], hex = shirtHex(first), dk = dark(hex);
+      for (let di = 0; di < prints.length; di++) {
+        const im = prints[di], pg = newPage(), x = pg.x;
+        let y = head2(x, im.location || "Print", `Print ${di + 1} of ${prints.length}${order ? ` · #${order.number}` : ""}`) + 12 * PX;
+        // the art as big as the panel takes (6.6" × 5.7"), its real measurements drawn on
+        const sz = sizeOf(im), max = spotFor(im.location);
+        const APW = 6.6, APH = 5.7, s = sz.w && sz.h ? Math.min(APW / sz.w, APH / sz.h) : 0;
+        const aw = (s ? sz.w * s : APW) * IN, ah = (s ? sz.h * s : APH) * IN, top = 0.45 * IN, panelH = 7 * IN;
+        const cxm = L + CW / 2;
+        x.save(); rrect(x, L, y, CW, panelH, 12 * PX); x.clip();
+        x.fillStyle = hex; x.fillRect(L, y, CW, panelH);
+        if (max && s > 0 && max.maxW * s < 7.4) {
+          const mw = max.maxW * s * IN, mh = max.maxH * s * IN;
+          x.setLineDash([6 * PX, 4 * PX]); x.lineWidth = 2 * PX; x.strokeStyle = dk ? "rgba(255,255,255,.4)" : "rgba(0,0,0,.3)";
+          rrect(x, cxm - mw / 2, y + top, mw, mh, 4 * PX); x.stroke(); x.setLineDash([]);
+          x.fillStyle = dk ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)"; x.font = body(400, 9);
+          x.fillText(`largest print area ${max.maxW}" × ${max.maxH}"`, cxm - mw / 2, y + top - 19 * PX + 9 * PT);
+        }
+        const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
+        if (art && s > 0) x.drawImage(art, cxm - aw / 2, y + top, aw, ah);
+        else { x.fillStyle = dk ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.5)"; x.font = body(400, 14); x.textAlign = "center"; x.fillText("Art coming", cxm, y + panelH / 2); x.textAlign = "left"; }
+        if (art && s > 0) {
+          const col = dk ? "#ffffff" : "#000000"; x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 2 * PX;
+          // width under the art: a line with end ticks, the inches under it
+          const wy = y + top + ah + 0.06 * IN, wl = cxm - aw / 2;
+          x.fillRect(wl, wy + 6 * PX, aw, 2 * PX); x.fillRect(wl, wy, 2 * PX, 12 * PX); x.fillRect(wl + aw - 2 * PX, wy, 2 * PX, 12 * PX);
+          x.font = body(800, 14); x.textAlign = "center"; x.fillText(`${sz.w.toFixed(2)}"`, cxm, wy + 12 * PX + 14 * PT); x.textAlign = "left";
+          // height to the right: a line, the inches beside it
+          const hx = cxm + aw / 2 + 0.14 * IN;
+          x.fillRect(hx, y + top, 2 * PX, ah);
+          x.textBaseline = "middle"; x.fillText(`${sz.h.toFixed(2)}"`, hx + 10 * PX, y + top + ah / 2); x.textBaseline = "alphabetic";
+        }
+        x.restore();
+        y += panelH + 12 * PX;
+        // location, print size, placement, how it's printed
+        const specs: [string, string][] = im.visualOnly ? [["Location", im.location || "—"], ["Print", MATCH_PREV]] : [
+          ["Location", im.location || "—"], ["Print size", sizeLabel(im) || "—"], ["Placement", im.drop ? `${im.drop}" below the collar` : "Standard"], ["Print", printHow(im)],
+        ];
+        const cellW = CW / 4, cellH = 7 * PX + 9 * PT * 1.35 + 1 * PX + 13 * PT * 1.35 + 7 * PX;
+        x.strokeStyle = C.ink; x.lineWidth = 2 * PX; rrect(x, L, y, CW, cellH, 10 * PX); x.stroke();
+        specs.forEach(([k, v], i) => {
+          const cx2 = L + i * cellW;
+          if (i > 0) { x.fillStyle = C.line; x.fillRect(cx2, y + 2 * PX, 1 * PX, cellH - 4 * PX); }
+          lbl(x, k, cx2 + 10 * PX, y + 7 * PX + 9 * PT);
+          let pt = 13; x.font = body(800, pt); while (pt > 9 && x.measureText(v).width > (i === specs.length - 1 && specs.length < 4 ? CW - cx2 + L : cellW) - 20 * PX) { pt -= 0.5; x.font = body(800, pt); }
+          x.fillStyle = C.ink; x.fillText(fit(x, v, cellW * (specs.length < 4 && i === specs.length - 1 ? 4 - i : 1) - 20 * PX), cx2 + 10 * PX, y + 7 * PX + 9 * PT * 1.35 + 1 * PX + 13 * PT);
+        });
+        y += cellH + 12 * PX;
+        // the inks, big swatches
+        const inks = inkNamesOf(im);
+        if (inks.length) {
+          lbl(x, im.method === "embroidery" ? "Thread colors" : "Ink colors", L, y + 9 * PT); y += 9 * PT * 1.35 + 6 * PX;
+          let ix = L; x.font = body(700, 13);
+          const sq = 26 * PX, rowH = Math.max(sq, 13 * PT * 1.35);
+          for (const t of inks) {
+            const w = sq + 8 * PX + x.measureText(t.name).width + 22 * PX;
+            if (ix + w > L + CW && ix > L) { ix = L; y += rowH + 8 * PX; }
+            if (y + rowH > BOT - 8.5 * PT - 20 * PX) break;
+            x.fillStyle = t.hex; rrect(x, ix, y, sq, sq, 6 * PX); x.fill(); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.stroke();
+            x.fillStyle = C.ink; x.textBaseline = "middle"; x.fillText(t.name, ix + sq + 8 * PX, y + sq / 2); x.textBaseline = "alphabetic";
+            ix += w;
+          }
+          y += rowH + 12 * PX;
+        }
+        // the print's notes, and when its inks change with the shirt color
+        const notes = [shopNotes(im.notes), paints[im.id]?.shirt ? "The ink colors change with the shirt color; each color's page shows its inks." : ""].filter(Boolean).join("  ");
+        if (notes && y < BOT - 8.5 * PT - 30 * PX) {
+          x.font = body(400, 11); const rows = wrap(x, notes, CW - 60 * PX);
+          x.fillStyle = C.ink; x.font = body(700, 11); x.fillText("Notes:", L, y + 11 * PT); x.font = body(400, 11);
+          rows.slice(0, Math.max(1, Math.floor((BOT - 8.5 * PT - 20 * PX - y) / (11 * PT * 1.35)))).forEach((r, i) => x.fillText(r, L + 50 * PX, y + 11 * PT + i * 11 * PT * 1.35));
+        }
+        await done(pg);
+      }
+
+      // the pages into a PDF with the approval box's fill-in fields (check a box, type the changes, sign with Acrobat)
+      const { PDFDocument, StandardFonts } = await import("pdf-lib");
+      const pdf = await PDFDocument.create();
+      const fileName = [order ? String(order.number) : "", o.company && cust ? custLabel(cust) : "", jobName, "Proof"].filter(Boolean).join(" - ").replace(/[\\/:*?"<>|#]+/g, "").replace(/\s+/g, " ").trim();
+      pdf.setTitle(fileName);
+      const form = pdf.getForm(), hv = await pdf.embedFont(StandardFonts.Helvetica), k = 612 / PW;
+      for (const [i, pgi] of pages.entries()) {
+        const page = pdf.addPage([612, 792]);
+        page.drawImage(await pdf.embedJpg(pgi.jpeg), { x: 0, y: 0, width: 612, height: 792 });
+        for (const f of fields.filter((z) => z.page === i)) {
+          const at = { x: f.x * k, y: 792 - (f.y + f.h) * k, width: f.w * k, height: f.h * k, borderWidth: 0 };
+          if (f.kind === "check") form.createCheckBox(f.name).addToPage(page, at);
+          else { const t = form.createTextField(f.name); if (f.multi) t.enableMultiline(); t.addToPage(page, { ...at, font: hv }); t.setFontSize(f.multi ? 10 : 12); }
+        }
+      }
+      const bytes = await pdf.save();
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })); a.download = `${fileName || "Proof"}.pdf`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      setMsg(`Downloaded ${name}.`); setPdfOpen(false);
+      setMsg(`Downloaded ${fileName}.pdf.`); setPdfOpen(false);
     } catch (e) { setMsg("Couldn't make the PDF: " + (e instanceof Error ? e.message : String(e))); }
     setPdfBusy(false);
   }
@@ -2126,12 +2298,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         )}
         {pdfOpen && (
           <section className="panel mk-pdf">
-            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">One page per shirt color, ready to send the customer.</span></div>
+            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">Laid out like the order's art proof, ready to send the customer.</span></div>
             <div className="mk-pdf-opts">
               <label className="sep-chk"><input type="checkbox" checked={pdfOurs} onChange={(e) => setPdfOurs(e.target.checked)} /> Our logo &amp; contact (FBS)</label>
               <label className="sep-chk"><input type="checkbox" checked={pdfCompany} onChange={(e) => setPdfCompany(e.target.checked)} /> Company name ({custLabel(customers.find((c) => c.id === customerId)) || "the customer"})</label>
             </div>
-            <p className="faint mk-pdf-note">Every page has the shirts, a close-up of each print with its size and inks, and the garment and color.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
+            <p className="faint mk-pdf-note">Page 1: the first shirt big, the prints, the garments and the approval box (they can check a box and sign in Acrobat). Then each other color on its own page, and each print blown up on its own page with its size and inks.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
             <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>
             <div className="row" style={{ gap: 8 }}>
               <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc })}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
