@@ -234,7 +234,7 @@ export default function ClickUpJobs() {
           {(() => {
             const k = data?.known[job.id] || wsData?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
             return k?.pv || ours ? <div className="cu-known">
-              {k?.pv && <span>Printavo <Link href={`/shop/archive/${k.pv.id}`}><b>#{k.pv.number}</b></Link> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
+              {k?.pv && <span>FBS INV# <Link href={`/shop/archive/${k.pv.id}`}><b>{k.pv.number}</b></Link> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
               {ours && <span>Our order <Link href={`/shop/orders/${ours.id}`}><b>#{ours.number}</b></Link></span>}
             </div> : null;
           })()}
@@ -306,7 +306,7 @@ export default function ClickUpJobs() {
           </div>
           <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
             <table className="tbl cu-tbl">
-              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, b, "cu-box-h"))}{rth("w.pv", "Printavo #", "cu-w-pv")}<th className="cu-w-act" /></tr></thead>
+              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, b, "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-pv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
                   const first = i === 0 || board(list2[i - 1]) !== board(t);
@@ -368,7 +368,7 @@ export default function ClickUpJobs() {
         </table>
       </div> : <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
         <table className="tbl cu-tbl">
-          <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "Printavo #", "cu-w-pv")}{rth("l.ours", "Our #", "cu-w-ours")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
+          <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "FBS INV#", "cu-w-pv")}{rth("l.ours", "Our #", "cu-w-ours")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
             {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
               const tm = teams.get(t.team_id);
