@@ -18,6 +18,7 @@ import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/acti
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
+import { artFromArtPdf, artFromMockupPdf } from "@/lib/printavoArt";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -319,6 +320,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
    *  a proof page per color, or a sales sheet with every color on one page */
   const [salesOpen, setSalesOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
+  const [converting, setConverting] = useState(false), convertIn = useRef<HTMLInputElement>(null);
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
@@ -1219,6 +1221,60 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       : [...xs, withNotes({ ...newImprint(z), id, design_id: d.id, size: `${wIn}" wide` })]);
     setOffsets((o) => ({ ...o, [id]: { dx: left - nb.x, dy: top - nb.y } }));
     setTab(side);
+  }
+
+  /**
+   * Convert a previous mockup (shop only, Oct 22, Nick: "take a full mock-up like this that has vector art on it, pull
+   * off the image on the front and the back, put it on the new mock-up and go"): our old Illustrator mockup sheet (PDF or
+   * PDF-compatible AI) with the shirt photos left out, each piece of art on a shirt becomes a logo on the customer's
+   * account and goes on this mockup at its measured size; the location comes from its side and size. Placement is the
+   * standard one (centered in the print area), the old drop is noted on the print. A PDF that's just the art (no shirt
+   * photos) goes on the full front.
+   */
+  async function convertMockup(f: File) {
+    if (!customerId) return setMsg("Pick the customer first. The art is saved to their account.");
+    setConverting(true); setMsg(`Pulling the art off ${f.name}…`);
+    try {
+      const buf = await f.arrayBuffer();
+      const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/ mockup$/i, "");
+      const pieces = await artFromMockupPdf(buf.slice(0), base).catch(() => []);
+      const { data: u } = await sb.auth.getUser();
+      const made: { im: Imprint; d: Design }[] = [];
+      if (pieces.length) {
+        // the biggest piece on each side first (a stray small mark never takes the main spot)
+        const order = [...pieces].sort((a, b) => Number(a.side === "back") - Number(b.side === "back") || b.widthIn * b.heightIn - a.widthIn * a.heightIn);
+        const taken = new Set<string>();
+        for (const pc of order) {
+          const loc = pc.side === "back"
+            ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
+            : pc.widthIn > 8 ? "Full Front" : pc.widthIn > 5 ? "Medium Front" : Math.abs(pc.offIn) >= 1.75 ? (pc.offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
+          if (taken.has(loc)) continue;
+          taken.add(loc);
+          const d = await uploadDesign(sb, { file: pc.file, customer_id: customerId, name: `${base} ${pc.side}`, colors: 1, notes: `Pulled from the mockup ${f.name}`, by: u.user?.email || "" });
+          made.push({ d, im: { ...newImprint(loc), design_id: d.id, size: `${pc.widthIn}" wide`, notes: `From ${f.name}: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar there; ink looks like ${pc.ink}` } });
+        }
+      } else {
+        const art = await artFromArtPdf(buf.slice(0), base).catch(() => null);
+        if (!art) { setMsg(`No art could be pulled off ${f.name}. Save it from Illustrator as a PDF (or PDF-compatible AI) and try again.`); setConverting(false); return; }
+        const d = await uploadDesign(sb, { file: art.file, customer_id: customerId, name: base, colors: 1, notes: `From ${f.name}`, by: u.user?.email || "" });
+        made.push({ d, im: { ...newImprint("Full Front"), design_id: d.id, size: '10" wide', notes: `From ${f.name}` } });
+      }
+      setDesigns((x) => [...made.map((m) => m.d), ...x]);
+      setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
+      // each print takes the same location's spot if it's there (its art replaced), else an empty spot on that side, else a new one
+      setImprints((xs) => {
+        let out = [...xs];
+        for (const { im } of made) {
+          const same = out.find((x) => x.location === im.location) || out.find((x) => !x.design_id && !qt[x.id] && sideOf(x.location) === sideOf(im.location));
+          out = same ? out.map((x) => (x.id === same.id ? { ...x, design_id: im.design_id, location: im.location, size: im.size, drop: "", notes: [x.notes, im.notes].filter(Boolean).join(". ").slice(0, 300) } : x)) : [...out, im];
+        }
+        return out;
+      });
+      setRasterOk((r) => ({ ...r, ...Object.fromEntries(made.map((m) => [m.d.id, true])) })); // drawn at 300 dpi off the vector art: no "picture file" warning
+      setTab(sideOf(made[0].im.location) as typeof curTab);
+      setMsg(`Pulled ${made.length === 1 ? "1 print" : `${made.length} prints`} off ${f.name}: ${made.map((m) => `${m.im.location} ${m.im.size}`).join(", ")}. Check the inks and sizes.`);
+    } catch (e) { setMsg("Couldn't convert that mockup: " + (e instanceof Error ? e.message : String(e))); }
+    setConverting(false);
   }
 
   async function uploadNew(im: Imprint, f: File) {
@@ -2652,7 +2708,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </div>
           ) : null; })()}
           <section className={"panel" + (ready ? "" : " mk-off") + (imprints.some((im) => im.visualOnly && !im.confirmed) ? " mk-vis-lock" : "")} inert={!ready || imprints.some((im) => im.visualOnly && !im.confirmed) || undefined}>
-            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button></div></div>
+            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button>{!portal && <><button className="btn sm" type="button" disabled={converting} title="Our old mockup (PDF or AI) with the art on the shirt photos: the front and back art comes off it and goes on this mockup" onClick={() => convertIn.current?.click()}>{converting ? "Converting…" : "Convert previous mockup"}</button><input ref={convertIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void convertMockup(f); }} /></>}</div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
