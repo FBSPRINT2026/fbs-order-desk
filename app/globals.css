@@ -11604,3 +11604,6 @@ main.main .page-head{column-gap:72px}
 html body main.main .ord .ot-nav{position:static}
 .jd-made{font-size:12px;margin-top:2px}
 .ord .ed-actions .save-state.bad{color:var(--danger);font-weight:700}
+/* Customers: the name column wraps its second line (contact · tags) instead of pushing the table off the page */
+html body main.main .tbl td.cu-td{white-space:normal;min-width:200px}
+html body main.main .tbl td.cu-td > div:first-child{white-space:nowrap}
