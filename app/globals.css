@@ -11844,7 +11844,7 @@ html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(
 .sep-locs2{gap:8px;flex-wrap:wrap}
 .sep-locs2 .sep-loc{flex-direction:row;align-items:center;gap:10px;padding:6px 12px 6px 6px;min-width:150px;position:relative}
 .sep-loc-pic{width:46px;height:46px;flex:none;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;display:grid;place-items:center}
-.sep-loc-pic img{width:100%;height:100%;object-fit:contain}
+.sep-loc-pic img{width:86%;height:86%;object-fit:contain}
 .sep-loc-t{display:flex;flex-direction:column;gap:1px;min-width:0}
 .sep-loc-t b{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap}
 .sep-loc-t small{font-size:12px;color:var(--ink-3);white-space:nowrap}

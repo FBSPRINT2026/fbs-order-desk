@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
 import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
-import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
+import { closestPms, colorHex, matchWord, repaintLogo, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
@@ -434,13 +434,33 @@ export default function SeparationStudio({ id }: { id: string }) {
       // each with a small picture: its saved proof, else its art
       const { data: sib } = await sb.from("separations").select("id, location, status, imprint_id, group_id, design_id, preview_path, channels").eq("order_id", row0.order_id).neq("status", "cancelled");
       const all = ((sib || []) as (Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { channels: unknown[] | null })[]).map((x) => ({ ...x, screens: Array.isArray(x.channels) ? x.channels.length : 0 }));
-      const dids = [...new Set(all.filter((x) => !x.preview_path && x.design_id).map((x) => x.design_id!))];
+      // the picture: the art in the mockup's inks on the shirt it goes on (Oct 22, Nick on #40092: "it should be red with
+      // white… not white with black"), else the saved proof, else the art
+      const dids = [...new Set(all.map((x) => x.design_id).filter(Boolean))] as string[];
       const { data: dz } = dids.length ? await sb.from("designs").select("id, preview_path, file_path").in("id", dids) : { data: [] };
-      const pathOf = (x: (typeof all)[number]) => x.preview_path || (((dz || []) as { id: string; preview_path: string | null; file_path: string | null }[]).find((d) => d.id === x.design_id)?.preview_path || "");
+      const artOf = (x: (typeof all)[number]) => ((dz || []) as { id: string; preview_path: string | null; file_path: string | null }[]).find((d) => d.id === x.design_id)?.preview_path || "";
+      const ord = (o as Order) || null;
+      const imOf = (x: (typeof all)[number]) => (ord ? orderGroups(ord).flatMap((g) => g.imprints).find((y) => y.id === x.imprint_id) : undefined) as { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined;
+      const mapOf = (x: (typeof all)[number]) => { const im = imOf(x), m = im?.inkMap && (!x.design_id || im.inkMap.design === x.design_id) ? im.inkMap.map : null; return m && Object.keys(m).length ? m : null; };
+      const shirtOfSib = (x: (typeof all)[number]) => {
+        if (!ord) return "";
+        const g = orderGroups(ord).find((y) => y.id === x.group_id);
+        const c = g?.lines.find((l) => l.color && Object.values(l.sizes || {}).some((q) => +(q || 0) > 0))?.color || g?.lines.find((l) => l.color)?.color || "";
+        return c ? shirtHex(c) || colorHex(c) || guessHex(c) || "" : "";
+      };
+      const pathOf = (x: (typeof all)[number]) => (mapOf(x) && artOf(x)) || x.preview_path || artOf(x);
       const paths = [...new Set(all.map(pathOf).filter(Boolean))];
       const { data: sg } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
       const urlOf = new Map(paths.map((pp, i) => [pp, sg?.[i]?.signedUrl || ""]));
-      setSiblings(all.map(({ channels: _c, ...x }) => ({ ...x, pic: urlOf.get(pathOf({ ...x, channels: null })) || "" })).sort((a, b) => locRank(a.location) - locRank(b.location) || a.location.localeCompare(b.location)));
+      const sibs = all.map(({ channels: _c, ...x }) => ({ ...x, pic: urlOf.get(pathOf({ ...x, channels: null })) || "", bg: shirtOfSib({ ...x, channels: null }) })).sort((a, b) => locRank(a.location) - locRank(b.location) || a.location.localeCompare(b.location));
+      setSiblings(sibs);
+      for (const x of sibs) {
+        const m = mapOf({ ...x, channels: null });
+        if (!m || !x.pic) continue;
+        const pic = new Image(); pic.crossOrigin = "anonymous";
+        pic.onload = () => { try { const painted = repaintLogo(pic, Object.fromEntries(Object.entries(m).map(([src, v]) => [src, v.name === "none" ? "none" : v.hex])), 160); setSiblings((xs) => xs.map((y) => (y.id === x.id ? { ...y, pic: painted } : y))); } catch { /* the plain art stays */ } };
+        pic.src = x.pic;
+      }
     }
     const today = new Date().toISOString().slice(0, 10);
     const ps = mergeProduction((s0?.data as { production?: unknown } | null)?.production);
@@ -855,7 +875,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- full size (for the files) ---------- */
   // the screen works on a copy of at most 2,400 px; the Illustrator file and films are separated again from the art
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
-  const [siblings, setSiblings] = useState<(Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { screens: number; pic?: string })[]>([]);
+  const [siblings, setSiblings] = useState<(Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { screens: number; pic?: string; bg?: string })[]>([]);
   const [zoom, setZoom] = useState<number | null>(null);
   // which settings lines are opened up (remembered, like the other toggles)
   const [more, setMore] = useSticky<string[]>("sep.more", []);
@@ -1210,7 +1230,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             const twin = siblings.filter((y) => y.location === x.location).length > 1;
             const gname = twin ? orderGroups(order).find((g) => g.id === x.group_id)?.name || "" : "";
             const inner = <>
-              <span className="sep-loc-pic">{x.pic ? <img src={x.pic} alt="" /> : null}</span>
+              <span className="sep-loc-pic" style={x.bg ? { background: x.bg } : undefined}>{x.pic ? <img src={x.pic} alt="" /> : null}</span>
               <span className="sep-loc-t"><b>{x.location || "Print"}{gname ? <small className="sep-loc-g"> · {gname}</small> : null}</b>
                 <small>{x.screens ? `${x.screens} screen${x.screens === 1 ? "" : "s"} · ` : ""}{st0?.label}</small></span>
             </>;
