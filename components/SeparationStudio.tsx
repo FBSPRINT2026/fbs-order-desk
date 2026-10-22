@@ -670,6 +670,18 @@ export default function SeparationStudio({ id }: { id: string }) {
     return out;
   }, [order, row]);
   const multiShirt = groupShirts.length > 1;
+  // the mockup(s) of the garments this print goes on, so the film room sees what it's for (Oct 22, Nick on #40092:
+  // "there's no way for Jose to know what the original shirt looks like… there's got to be a mock-up")
+  const [mocks, setMocks] = useState<{ url: string; cap: string }[]>([]);
+  useEffect(() => {
+    if (!order || !row) { setMocks([]); return; }
+    const gs = orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)));
+    const want = gs.flatMap((g) => (g.mockupThumbs || []).map((p, i) => ({ p, cap: [g.name, g.lines[i] ? [g.lines[i].style, g.lines[i].color].filter(Boolean).join(" ") : ""].filter(Boolean).join(" · ") }))).filter((x) => x.p).slice(0, 8);
+    if (!want.length) { setMocks([]); return; }
+    let live = true;
+    sb.storage.from("proofs").createSignedUrls(want.map((x) => x.p), 3600).then(({ data }) => { if (live) setMocks(want.map((x, i) => ({ url: data?.[i]?.signedUrl || "", cap: x.cap })).filter((x) => x.url)); });
+    return () => { live = false; };
+  }, [order, row]); // eslint-disable-line react-hooks/exhaustive-deps
   /** what the separator is given: with several shirt colors no ink is left to the shirt */
   const sepIn = (w: number) => ({
     ks: inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.noPrint ? true : multiShirt ? false : k.shirt })),
@@ -1159,6 +1171,12 @@ export default function SeparationStudio({ id }: { id: string }) {
             {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
             {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
           </section>
+          {mocks.length > 0 && (
+            <section className="sep-card">
+              <h3>Mockup</h3>
+              <div className="sep-mocks">{mocks.map((m, i) => <a key={i} href={m.url} target="_blank" rel="noreferrer" title={`${m.cap || "Mockup"}: open it big`}><img src={m.url} alt={m.cap || "Mockup"} /><span>{m.cap}</span></a>)}</div>
+            </section>
+          )}
           <section className="sep-card">
             <h3>Shirt</h3>
             <div className="sep-row">

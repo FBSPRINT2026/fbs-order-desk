@@ -11837,3 +11837,8 @@ html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(
 .nav-ver-all{padding:0 10px 8px;line-height:1}
 .nav-ver-all .ver-tag{font-size:10.5px}
 @media (max-width:760px){.nav-ver-all{display:none}}
+/* separations: the order's mockups, so the film room sees what the print is for (Oct 22) */
+.sep-mocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.sep-mocks a{display:flex;flex-direction:column;gap:3px;text-decoration:none;color:var(--ink-3);font-size:11.5px;min-width:0}
+.sep-mocks img{width:100%;aspect-ratio:1;object-fit:contain;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r)}
+.sep-mocks span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
