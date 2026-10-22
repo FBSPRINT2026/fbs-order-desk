@@ -6,7 +6,7 @@
  * phones) download the file instead.
  */
 type Perm = "granted" | "denied" | "prompt";
-type DirHandle = FileSystemDirectoryHandle & {
+export type DirHandle = FileSystemDirectoryHandle & {
   queryPermission?: (o: { mode: "readwrite" }) => Promise<Perm>;
   requestPermission?: (o: { mode: "readwrite" }) => Promise<Perm>;
 };
@@ -44,14 +44,28 @@ export async function pickFolder(): Promise<DirHandle> {
 export async function forgetFolder() { try { await tx("readwrite", (s) => s.delete(KEY)); } catch { /* nothing saved */ } }
 
 /**
+ * ask for the hot folder right away, while the click still counts (Oct 22, Jose on #40092: "Failed to execute
+ * 'requestPermission'… User activation is required": the films took longer to make than the browser lets a click
+ * count, so asking afterwards failed). Pass the folder already loaded on the page so nothing slow comes first.
+ */
+export async function allowFolder(h?: DirHandle | null): Promise<"granted" | "no-folder" | "denied"> {
+  const d = h || (await savedFolder());
+  if (!d) return "no-folder";
+  let p: Perm = (await d.queryPermission?.({ mode: "readwrite" })) ?? "granted";
+  if (p !== "granted") { try { p = (await d.requestPermission?.({ mode: "readwrite" })) ?? "denied"; } catch { p = "denied"; } }
+  return p === "granted" ? "granted" : "denied";
+}
+
+/**
  * write the films into the hot folder (must run from a click: the browser may ask once to allow it again).
  * "no-folder": none picked yet; "denied": the browser wasn't allowed; "gone": the folder was moved or deleted.
  */
 export async function sendToFolder(bytes: Uint8Array, name: string): Promise<"sent" | "no-folder" | "denied" | "gone"> {
   const h = await savedFolder();
   if (!h) return "no-folder";
+  // allowed already (allowFolder, at the click); asking again here would fail once the click has expired
   let p: Perm = (await h.queryPermission?.({ mode: "readwrite" })) ?? "granted";
-  if (p !== "granted") p = (await h.requestPermission?.({ mode: "readwrite" })) ?? "denied";
+  if (p !== "granted") { try { p = (await h.requestPermission?.({ mode: "readwrite" })) ?? "denied"; } catch { p = "denied"; } }
   if (p !== "granted") return "denied";
   try {
     // Chrome writes to "name.crswap" and renames it when done, so FilmMaker never picks up half a file

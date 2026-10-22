@@ -10,7 +10,7 @@ import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
-import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
+import { allowFolder, folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder, type DirHandle } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
@@ -1543,7 +1543,9 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [working, setWorking] = useState(false);
   /** the film being reprinted (0-based), while it's being made and sent */
   const [again, setAgain] = useState<number | null>(null);
-  useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => setFolder(h?.name || null)); }, []);
+  // the folder itself, loaded with the page, so Print films can ask for it the moment it's clicked
+  const handle = useRef<DirHandle | null>(null);
+  useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => { handle.current = h; setFolder(h?.name || null); }); }, []);
   const W = widthIn * 72, H = W * aspect;
   // override: nest every film on one sheet instead of trimming after each (small prints: sleeves, napes)
   const [nest, setNest] = useSticky("sep.films.nest", false);
@@ -1552,7 +1554,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   const fits = nesting ? NL.fits : B.fits;
   async function choose() {
     setErr("");
-    try { const h = await pickFolder(); setFolder(h.name); return true; }
+    try { const h = await pickFolder(); handle.current = h; setFolder(h.name); return true; }
     catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) setErr(e instanceof Error ? e.message : String(e)); return false; }
   }
   /** print every film, or `only` one again (a reprint: ran out of film, a bad film): a reprint doesn't move the
@@ -1561,6 +1563,11 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
     setErr(""); setMsg(""); setWorking(true); setAgain(only ?? null);
     try {
       if (canFolder && !folder && !(await choose())) return;
+      // ask for the folder first, while the click still counts: making the films can take longer than that
+      if (canFolder) {
+        const ok = await allowFolder(handle.current);
+        if (ok === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
+      }
       const files = await make(rollIn, only, only == null && nesting);
       const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       const many = only != null ? `film ${only + 1} of ${n} (${inks[only] || "screen"}) again` : `${files.length} film${files.length === 1 ? "" : "s"}`;
@@ -1571,7 +1578,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
         for (const f of files) {
           const r = await sendToFolder(f.bytes, f.name);
           if (r === "sent") { sent++; continue; }
-          if (r === "gone") { await forgetFolder(); setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
+          if (r === "gone") { await forgetFolder(); handle.current = null; setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
           if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
           if (r === "no-folder") break;
         }
