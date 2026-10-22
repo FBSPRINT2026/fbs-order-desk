@@ -128,7 +128,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const fromEmail = sp.get("email") || "";
   /** opened from an AI Workbench mockup card (Oct 22): its customer, garment colors and prints, set up to check and save */
   const wbChat = portal ? "" : sp.get("wb") || "", wbCard = sp.get("card") || "";
-  const wbInk = useRef<"" | "wait" | "done">(wbChat ? "wait" : "");
+  /** a saved mockup opened again to edit (Oct 22, Nick: "we definitely need to be able to edit a mock-up just like on an
+   *  order"): its shirts, prints, places and inks as saved; saving again replaces that mockup's pictures */
+  const reopenId = portal ? "" : sp.get("mockup") || "";
+  const mockSet = useRef("");
+  const wbInk = useRef<"" | "wait" | "done">(wbChat || reopenId ? "wait" : "");
   /** the customer's art review → "Make changes → change it myself": this proof's shirt and prints, saved back to the shop */
   const changeId = portal ? sp.get("change") || "" : "";
   /** the customer's art review → "See the full proof": the proof's shirt and prints in the Mockup Creator, to look at only */
@@ -345,6 +349,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const [cat, cu] = await Promise.all([sb.from("garments").select("*"), sb.from("customers").select("*")]);
       setCatalog((cat.data || []) as Garment[]);
       setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      if (!orderId && reopenId) {
+        const { data: mk } = await sb.from("mockups").select("customer_id, title, snapshot").eq("id", reopenId).maybeSingle();
+        const snap = (mk?.snapshot || null) as { set?: string; name?: string; lines?: Line[]; imprints?: Imprint[]; offsets?: Record<string, Offset>; mockupSize?: string | null } | null;
+        if (!mk || !snap?.lines?.length) { wbInk.current = "done"; setMsg(mk ? "This mockup was saved before mockups kept their setup, so it can't be opened to edit. Make it again and save: from now on it can be." : "That mockup isn't there anymore."); }
+        else {
+          mockSet.current = snap.set || reopenId;
+          setCustomerId((mk.customer_id as string) || "");
+          setGroupName(snap.name || String(mk.title || "").split(" — ")[0]);
+          setLines(snap.lines);
+          setImprints((snap.imprints || []).map((d) => ({ ...d })));
+          setOffsets(snap.offsets || {});
+          if (snap.mockupSize) setShownSize(snap.mockupSize);
+          // prints with an ink but no saved logo colors (a setup rebuilt from the pictures): painted in that ink
+          autoWant.current = Object.fromEntries((snap.imprints || []).filter((d) => !d.inkMap).map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
+          setMsg("Editing the saved mockup. Save Mockup replaces it.");
+        }
+      }
       if (!orderId && wbChat && wbCard) {
         const r = await mockupSpec(wbChat, wbCard);
         if (!r.ok) { wbInk.current = "done"; return setMsg(r.error); }
@@ -377,7 +398,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }
       }
     })();
-  }, [sb, orderId, groupId, portal, changeId, viewId, wbChat, wbCard]);
+  }, [sb, orderId, groupId, portal, changeId, viewId, wbChat, wbCard, reopenId]);
 
   // art saved without a picture to draw (a PDF / AI from an email made into a design on the server): the preview is
   // made here, once, and kept on the design, so the logo shows on the mockup instead of "No logo yet"
@@ -1604,6 +1625,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const tu = await sb.storage.from("proofs").upload(tpath, thumb, { contentType: "image/jpeg" });
         if (!tu.error) thumbs.push(tpath);
         out.push({ title, url: URL.createObjectURL(blob) });
+      }
+      // a mockup saved to the customer keeps its setup, so it can be opened and edited again like an order's; saved
+      // again, the earlier pictures of the same mockup step aside (Oct 22, Nick)
+      if (!orderId && newMockups.length) {
+        const set = mockSet.current || crypto.randomUUID();
+        mockSet.current = set;
+        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
+        await sb.from("mockups").update({ snapshot: snap }).in("id", newMockups);
+        const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
+        const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
+        if (gone.length) await sb.from("mockups").update({ archived_at: new Date().toISOString() }).in("id", gone);
       }
       if (before.length) {
         const at = new Date().toISOString();

@@ -12,7 +12,7 @@ import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
 import { logoShirtsFrom } from "@/lib/logoShirts";
 import { useSticky } from "@/lib/useSticky";
 
-type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
+type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[]; group_id?: string | null; /** saved with its setup: can be edited again */ set?: string | null };
 type Show = "all" | "logos" | "mockups";
 const STEP = 24;
 
@@ -45,7 +45,7 @@ export default function ArtworkPage() {
     const [d, c, m] = await Promise.all([
       sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }),
       sb.from("customers").select("*"),
-      sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
+      sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids,group_id,set:snapshot->>set").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
     ]);
     const list = (d.data || []) as Design[];
     const ml = oneOfEach((m.data || []) as Mock[]);
@@ -188,10 +188,13 @@ export default function ArtworkPage() {
           {mocks.length ? (
             <div className="design-grid">
               {mocks.slice(0, nM).map((m) => (
-                <a key={m.id} href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className={"design-card" + (m.starred ? " starred" : "")}>
-                  <div className="dc-img mock">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}{m.starred && <span className="dc-fav" title="Customer favorite">★</span>}</div>
-                  <div className="dc-b"><b>{m.title}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""}</span><span className="faint">{fmtDateLong(m.created_at.slice(0, 10))}</span></div>
-                </a>
+                <div key={m.id} className={"design-card mk-saved" + (m.starred ? " starred" : "")}>
+                  <a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-img mock" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}{m.starred && <span className="dc-fav" title="Customer favorite">★</span>}</a>
+                  <div className="dc-b"><b>{m.title}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""}</span><span className="faint">{fmtDateLong(m.created_at.slice(0, 10))}</span>
+                    {/* edit it again in the Mockup Creator, like an order's (Oct 22, Nick); an order's mockup is edited from its order */}
+                    {m.order_id ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}`}>Edit on the order</a>
+                      : m.set ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div>
+                </div>
               ))}
             </div>
           ) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the Mockup Creator."}</div>}

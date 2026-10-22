@@ -12143,3 +12143,7 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 /* Mockup Creator: the print just clicked on the shirt, shown in the Imprints panel (Oct 22) */
 @keyframes mkImpFlash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
 .mk-imp.mk-imp-flash { animation: mkImpFlash 1.4s ease-out; border-radius: var(--r); }
+
+/* saved mockups: Edit opens them in the Mockup Creator (Oct 22) */
+.design-card.mk-saved .dc-img{display:block}
+.design-card.mk-saved .mk-edit{align-self:flex-start;margin-top:6px}
