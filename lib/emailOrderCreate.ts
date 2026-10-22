@@ -8,6 +8,7 @@ import { trimPng } from "@/lib/pngTrim";
 import { SITE_URL } from "@/lib/config";
 import { namesForPaths } from "@/lib/printavoFileMeta";
 import { oldJobLabel } from "@/lib/printavoNames";
+import { tickInPrintavo } from "@/lib/clickup";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -169,12 +170,15 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }).select("id, number").single();
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
+  // a job from the customer's ClickUp board (ClickUp Jobs, lib/clickup.ts)
+  const cuMeta = ((a?.meta || {}) as { source?: string; clickup?: { id?: string } });
+  const cuJob = cuMeta.source === "clickup" && cuMeta.clickup?.id ? { id: String(cuMeta.clickup.id), name: String(a?.subject || "") } : null;
   // goods already bought for this email (Order goods, before the order existed): now they belong to it
   if (a) {
     const { data: got } = await admin.from("blank_orders").update({ order_id: oid }).eq("activity_id", a.id).is("order_id", null).select("supplier_order");
     if (got?.length) await admin.from("order_events").insert({ order_id: oid, kind: "blanks", detail: `Goods already ordered from S&S for this email: ${got.map((g) => g.supplier_order).join(", ")}`, actor: by });
   }
-  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : "From the customer's email (Inbox → Create order)", actor: by });
+  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? (cuJob ? ", from the customer's ClickUp job" : ", from the customer's email") : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : cuJob ? `From the customer's ClickUp job "${cuJob.name}" (ClickUp Jobs)` : "From the customer's email (Inbox → Create order)", actor: by });
   if (tookSpecs.length) await admin.from("order_events").insert({ order_id: oid, kind: "details", detail: `Specs taken from what production confirmed before: ${tookSpecs.join("; ")}`.slice(0, 2000), actor: by });
   const pn = [
     shopNote ? `From reading the email: ${shopNote}` : "",
@@ -221,6 +225,12 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const others = (meta0.reply_options?.options || []).filter((x) => x.label !== reply.label).slice(0, 3);
   await admin.from("activities").update({ order_id: oid, meta: { ...meta0, reply_options: { at: new Date().toISOString(), options: [reply, ...others] } } }).eq("id", a.id);
   await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", d.part ? `email:${d.part.anchor || a.id}:order:${d.part.key}` : `email:${a.id}:order`);
+  // made from a ClickUp job: tick its "In Printavo" box in ClickUp (Oct 22, Nick: "at the end you would go back and
+  // click the In Printavo button in ClickUp")
+  if (cuJob) {
+    const r = await tickInPrintavo(admin, cuJob.id, { id: oid, number: o.number as number }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    await admin.from("order_events").insert({ order_id: oid, kind: "clickup", detail: r.ok ? `Ticked "In Printavo" on the ClickUp job "${cuJob.name}".` : `Couldn't tick "In Printavo" on the ClickUp job "${cuJob.name}": ${r.error}`, actor: by });
+  }
   return { ok: true, id: oid, number: o.number as number };
 }
 

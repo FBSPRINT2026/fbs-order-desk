@@ -1,0 +1,244 @@
+"use client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useSticky } from "@/lib/useSticky";
+import SearchInput from "@/components/SearchInput";
+import { Due } from "@/components/bits";
+import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
+import QuickOrder from "@/components/QuickOrder";
+import EmailOrderPanel from "@/components/EmailOrderPanel";
+import type { ClickUpTeamRow } from "@/lib/clickup";
+import { dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpState, type ClickUpTask } from "./actions";
+
+/**
+ * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
+ * would you like to process this order? …let's create a new order or let's create a reorder. And then you go through
+ * the same process like you did before. The only thing at the end is you would go back and click the In Printavo
+ * button in ClickUp"). Under Shop Tools, with a count of new jobs like the Time Clock's. Every staff member sees every
+ * workspace for now. The jobs are read by lib/clickup.ts every 3 minutes; a job waits here until it's made into an
+ * order, ticked "In Printavo" in ClickUp, or marked "Not an order". Making the order ticks "In Printavo" in ClickUp.
+ */
+
+type Tab = "new" | "made" | "printavo" | "not" | "boards";
+type Data = { connected: boolean; state: ClickUpState | null; teams: ClickUpTeamRow[]; tasks: ClickUpTask[]; customers: { id: string; label: string }[] };
+
+const chiDay = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) : null);
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+const ago = (iso: string | null) => {
+  if (!iso) return "never";
+  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+};
+const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n ? `${Math.max(1, Math.round(n / 1024))} KB` : "");
+/** the fields worth showing: ticked boxes and filled-in words (not "In Printavo", it has its own tab) */
+const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
+
+export default function ClickUpJobs() {
+  const [data, setData] = useState<Data | null>(null);
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState("");
+  const [tab, setTab] = useSticky<Tab>("clickup.tab", "new");
+  const [team, setTeam] = useSticky<string>("clickup.team", "");
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [act, setAct] = useState<string | null>(null); // the job brought in (activity), for the order maker
+  const [pick, setPick] = useState(false);
+  const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
+  const [review, setReview] = useState<OrderStart | null>(null);
+  const [made, setMade] = useState<{ id: string; number: number } | null>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(async () => {
+    const r = await listClickUp();
+    if (!r.ok) { setErr(r.error); return; }
+    setErr("");
+    setData(r);
+    window.dispatchEvent(new CustomEvent("fbs:clickup-count", { detail: r.tasks.filter((t) => t.waiting).length }));
+  }, []);
+  useEffect(() => { void load(); const t = setInterval(() => void load(), 60_000); return () => clearInterval(t); }, [load]);
+  const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg((m) => (m === t ? "" : m)), 6000); };
+
+  const teams = useMemo(() => new Map((data?.teams || []).map((t) => [t.id, t])), [data]);
+  const custName = useMemo(() => new Map((data?.customers || []).map((c) => [c.id, c.label])), [data]);
+  const all = useMemo(() => (data?.tasks || []).filter((t) => !teams.get(t.team_id)?.hidden), [data, teams]);
+  const groups = useMemo(() => ({
+    new: all.filter((t) => t.waiting),
+    made: all.filter((t) => t.order_id).sort((a, b) => (b.synced_at || "").localeCompare(a.synced_at || "")),
+    printavo: all.filter((t) => t.in_printavo && !t.order_id && !t.dismissed_at),
+    not: all.filter((t) => t.dismissed_at && !t.order_id),
+  }), [all]);
+  const list = tab === "boards" ? [] : groups[tab]
+    .filter((t) => !team || t.team_id === team)
+    .filter((t) => { const s = q.trim().toLowerCase(); return !s || [t.name, t.where_text, teams.get(t.team_id)?.name, t.creator_name, ...Object.values(t.fields)].some((x) => String(x || "").toLowerCase().includes(s)); });
+  const weekOut = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const dueSoon = groups.new.filter((t) => { const d = chiDay(t.due_at); return d && d <= weekOut; }).length;
+  const noCustomer = (data?.teams || []).filter((t) => !t.hidden && !t.customer_id).length;
+  const job = openId ? (data?.tasks || []).find((t) => t.id === openId) || null : null;
+  const jobTeam = job ? teams.get(job.team_id) : undefined;
+
+  const checkNow = async () => {
+    setBusy("Checking ClickUp…");
+    const r = await fetch("/api/clickup/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { ok?: boolean; error?: string; waiting?: string; newJobs?: string[]; read?: number } | null;
+    setBusy("");
+    if (!r) flash("Couldn't reach ClickUp. Try again in a minute.");
+    else if (r.waiting) flash(r.waiting);
+    else if (!r.ok) setErr(r.error || "ClickUp didn't answer.");
+    else flash(r.newJobs?.length ? `${r.newJobs.length} new job${r.newJobs.length === 1 ? "" : "s"}: ${r.newJobs.slice(0, 3).join("; ")}` : "Checked ClickUp: nothing new.");
+    await load();
+  };
+  const openJob = (id: string) => {
+    setOpenId(id); setMade(null); setAct(null); setPick(false); setQuick(null); setReview(null);
+    setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+  const start = async (kind: "new" | "reorder") => {
+    if (!job) return;
+    setBusy("Bringing in the job and its files from ClickUp…"); setErr("");
+    const r = await processClickUpTask(job.id);
+    setBusy("");
+    if (!r.ok) { setErr(r.error); return; }
+    setAct(r.activityId);
+    if (kind === "new") setQuick({ told: "This is a new order, not a reorder of a past job.", n: Date.now() });
+    else setPick(true);
+  };
+  const madeIt = (id: string, number: number) => { setMade({ id, number }); void load(); setTimeout(() => void load(), 4000); };
+  const pickCustomer = async (teamId: string, customerId: string) => {
+    const r = await setClickUpCustomer(teamId, customerId || null);
+    if (!r.ok) setErr(r.error); else await load();
+  };
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Jobs your customers put on their ClickUp boards</div>
+          <h1>ClickUp Jobs</h1>
+        </div>
+        <div className="cu-head-acts">
+          <a className="btn" href="https://app.clickup.com" target="_blank" rel="noreferrer">Open ClickUp</a>
+          <button type="button" className="btn primary" disabled={!!busy || !data?.connected} onClick={() => void checkNow()}>{busy === "Checking ClickUp…" ? busy : "Check ClickUp now"}</button>
+        </div>
+      </div>
+      {data && !data.connected && <div className="banner">ClickUp isn&apos;t connected yet: add <code>CLICKUP_API_TOKEN</code> in Vercel (ClickUp → Settings → Apps → API Token).</div>}
+      {data?.state?.last_error && <div className="banner">ClickUp: {data.state.last_error}</div>}
+      {err && <div className="banner">{err}</div>}
+      {msg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--ink)" }}>{msg}</div>}
+      {data?.connected && <p className="faint cu-checked">Checked {ago(data.state?.last_ok_at || null)}{data.state?.user_email ? ` as ${data.state.user_email}` : ""}. New jobs are looked for every 3 minutes.</p>}
+
+      <div className="stats">
+        <button type="button" className="stat" onClick={() => setTab("new")}><span className={"v" + (groups.new.length ? " alert" : "")}>{groups.new.length}</span><span className="k">New jobs to process</span></button>
+        <button type="button" className="stat" onClick={() => setTab("new")}><span className="v">{dueSoon}</span><span className="k">New, due within 7 days</span></button>
+        <button type="button" className="stat" onClick={() => setTab("made")}><span className="v">{groups.made.length}</span><span className="k">Made into orders</span></button>
+        <button type="button" className="stat" onClick={() => setTab("boards")}><span className={"v" + (noCustomer ? " alert" : "")}>{(data?.teams || []).filter((t) => !t.hidden).length}</span><span className="k">{noCustomer ? `Workspaces · ${noCustomer} need a customer` : "Customer workspaces"}</span></button>
+      </div>
+
+      {job && <div ref={panel} className="panel cu-job">
+        <div className="panel-h">
+          <h2>{custName.get(jobTeam?.customer_id || "") || jobTeam?.name || "A customer"} uploaded a job</h2>
+          <span className="faint">{[jobTeam?.name, job.where_text].filter(Boolean).join(" › ")}{job.created_at_cu ? ` · ${job.creator_name || "made"} ${when(job.created_at_cu)}` : ""}</span>
+        </div>
+        <div className="panel-b">
+          <div className="cu-title">{job.name}</div>
+          <div className="cu-line">
+            {job.due_at ? <>Due <Due date={chiDay(job.due_at)} status="" /></> : <span className="faint">No due date</span>}
+            <span className="faint">·</span><span>{job.status || "open"}</span>
+            {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">In Printavo ✓</span></>}
+            <span className="faint">·</span><a href={job.url} target="_blank" rel="noreferrer">Open in ClickUp</a>
+          </div>
+          {shownFields(job.fields).length > 0 && <div className="cu-tags">{shownFields(job.fields).map(([k, v]) => <span key={k} className="cu-tag">{v === "✓" ? `${k} ✓` : `${k}: ${v}`}</span>)}</div>}
+          {job.description && <p className="cu-notes">{job.description}</p>}
+          {job.attachments.length > 0 && <div className="cu-sec"><div className="cu-k">{job.attachments.length} file{job.attachments.length === 1 ? "" : "s"}</div>
+            <ul className="cu-files">{job.attachments.map((f) => <li key={f.id}><a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> <span className="faint">{kb(f.size)}</span></li>)}</ul></div>}
+          {job.comments.length > 0 && <div className="cu-sec"><div className="cu-k">Comments</div>
+            <ul className="cu-comments">{job.comments.map((c, i) => <li key={i}><b>{c.who}</b> <span className="faint">{when(c.at)}</span><div>{c.text}</div></li>)}</ul></div>}
+
+          {jobTeam && !jobTeam.customer_id && <div className="cu-sec cu-cust">
+            <label>Which customer is the &ldquo;{jobTeam.name}&rdquo; workspace? <select value="" onChange={(e) => void pickCustomer(jobTeam.id, e.target.value)}>
+              <option value="">Pick the customer…</option>{data?.customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+            <span className="faint">Its jobs become this customer&apos;s orders. You only pick it once.</span>
+          </div>}
+          {jobTeam?.customer_id && jobTeam.guessed && <div className="cu-sec faint">We matched the &ldquo;{jobTeam.name}&rdquo; workspace to {custName.get(jobTeam.customer_id)}. <button type="button" className="linkbtn" onClick={() => void pickCustomer(jobTeam.id, jobTeam.customer_id!)}>That&apos;s right</button> · <button type="button" className="linkbtn" onClick={() => setTab("boards")}>Change it</button></div>}
+
+          {made || job.order_id ? <div className="cu-done">
+            Order <Link href={`/shop/orders/${made?.id || job.order_id}`}><b>#{made?.number || job.order_number}</b></Link> was made from this job.{" "}
+            {job.ticked_at ? <span>&ldquo;In Printavo&rdquo; is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick &ldquo;In Printavo&rdquo; in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking &ldquo;In Printavo&rdquo; in ClickUp…</span>}
+            <button type="button" className="btn ghost sm" onClick={() => setOpenId(null)}>Close</button>
+          </div> : <div className="cu-ask">
+            <b>Would you like to process this job?</b>
+            <div className="cu-acts">
+              <button type="button" className="btn primary" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} onClick={() => void start("new")}>Create a new order</button>
+              <button type="button" className="btn" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} onClick={() => void start("reorder")}>Create a reorder</button>
+              {job.dismissed_at
+                ? <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
+                : <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }}>Not an order</button>}
+              <button type="button" className="btn ghost" onClick={() => setOpenId(null)}>Close</button>
+            </div>
+            {busy && busy !== "Checking ClickUp…" && <div className="faint">{busy}</div>}
+          </div>}
+          {review && act && <div className="cu-sec"><EmailOrderPanel key={act + (review.job || "")} activityId={act} start={{ told: review.told, job: review.job }} onClose={() => setReview(null)} onCreated={(id, n) => { setReview(null); madeIt(id, n); }} /></div>}
+        </div>
+      </div>}
+      {pick && act && job && <OrderStartPick activityId={act} text={job.name} guess="reorder" onClose={() => setPick(false)}
+        onPick={(s) => { setPick(false); if (s.review) setReview(s); else setQuick({ ...s, n: Date.now() }); }} />}
+      {quick && act && <QuickOrder key={quick.n} activityId={act} start={quick} onClose={() => setQuick(null)}
+        onReview={() => { const s = quick; setQuick(null); setReview(s); }}
+        onCreated={(id, n) => madeIt(id, n)} />}
+
+      <div className="toolbar">
+        <div className="chips">
+          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
+            .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
+        </div>
+        {tab !== "boards" && <select aria-label="Customer" value={team} onChange={(e) => setTeam(e.target.value)}>
+          <option value="">Every customer</option>
+          {(data?.teams || []).filter((t) => !t.hidden).map((t) => <option key={t.id} value={t.id}>{custName.get(t.customer_id || "") || t.name}</option>)}
+        </select>}
+        {tab !== "boards" && <SearchInput placeholder="Search jobs" value={q} onChange={(e) => setQ(e.target.value)} />}
+      </div>
+
+      {tab === "boards" ? <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr><th>ClickUp workspace</th><th>Customer</th><th className="r">New jobs</th><th /></tr></thead>
+          <tbody>
+            {(data?.teams || []).map((t) => {
+              const n = (data?.tasks || []).filter((x) => x.team_id === t.id && x.waiting).length;
+              return <tr key={t.id} className={t.hidden ? "cu-off" : undefined}>
+                <td><div>{t.name}</div><div className="sub">{t.members.slice(0, 3).join(", ")}{t.members.length > 3 ? ` +${t.members.length - 3}` : ""}</div></td>
+                <td>
+                  <select aria-label={`Customer for ${t.name}`} value={t.customer_id || ""} onChange={(e) => void pickCustomer(t.id, e.target.value)}>
+                    <option value="">Pick the customer…</option>{data?.customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                  {t.guessed && t.customer_id && <div className="sub">Matched by the portal. <button type="button" className="linkbtn" onClick={() => void pickCustomer(t.id, t.customer_id!)}>That&apos;s right</button></div>}
+                </td>
+                <td className="r">{t.hidden ? <span className="faint">—</span> : n}</td>
+                <td className="r"><button type="button" className="btn ghost sm" title={t.hidden ? "Show this workspace's jobs again" : "Not a customer's jobs: hide it"}
+                  onClick={async () => { const r = await hideClickUpTeam(t.id, !t.hidden); if (!r.ok) setErr(r.error); else await load(); }}>{t.hidden ? "Show" : "Hide"}</button></td>
+              </tr>;
+            })}
+            {data && !data.teams.length && <tr><td colSpan={4}><div className="empty">{data.connected ? "No workspaces yet: the first check of ClickUp is on its way (every 3 minutes), or press Check ClickUp now." : "Connect ClickUp first."}</div></td></tr>}
+          </tbody>
+        </table>
+      </div> : <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr><th>Customer</th><th>Job</th><th>Due</th><th>Files</th><th>Added</th><th /></tr></thead>
+          <tbody>
+            {!data ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : list.length ? list.map((t) => {
+              const tm = teams.get(t.team_id);
+              const f = shownFields(t.fields).slice(0, 3);
+              return <tr key={t.id} tabIndex={0} className={openId === t.id ? "picked" : undefined} onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
+                <td><div>{custName.get(tm?.customer_id || "") || tm?.name || "—"}</div><div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div></td>
+                <td><div>{t.name}</div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
+                <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
+                <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
+                <td className="cu-nw">{when(t.created_at_cu)}</td>
+                <td className="r cu-nw">{t.order_id
+                  ? <Link href={`/shop/orders/${t.order_id}`} onClick={(e) => e.stopPropagation()}>#{t.order_number}</Link>
+                  : <button type="button" className={"btn sm" + (t.waiting ? " primary" : "")} onClick={(e) => { e.stopPropagation(); openJob(t.id); }}>Process</button>}</td>
+              </tr>;
+            }) : <tr><td colSpan={6}><div className="empty">{q ? `No jobs match “${q}”.` : tab === "new" ? "No new ClickUp jobs right now. New ones show up here (and as a count in the menu) within a few minutes of a customer adding them." : "Nothing here."}</div></td></tr>}
+          </tbody>
+        </table>
+      </div>}
+    </>
+  );
+}

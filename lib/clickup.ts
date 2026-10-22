@@ -1,0 +1,310 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
+ * would you like to process this order? …let's create a new order or let's create a reorder. And then you go through
+ * the same process like you did before. The only thing at the end is you would go back and click the In Printavo
+ * button in ClickUp").
+ *
+ * Phenomenal, Nine18, Cedar Promos (Peter Sleiman), Logotology, TCA, Cowboy Cool, Tigerblue and The McKenna Group each
+ * have a ClickUp workspace ("Space / Purchase Orders"). A job is a task: its name ("PO 92464 SRYG Sweatshirts",
+ * "Jackson Athletics Hoodie - JAC 100826"), a due date, notes, fields ("In Printavo", "PO Ready", "Customer Name"),
+ * the PO / work order / art attached, and comments ("Blanks tracking 1Z…").
+ *
+ *  - syncClickUp (every 3 minutes, clickup_tick, migration 185): reads every workspace the token's owner is in and
+ *    keeps clickup_teams / clickup_tasks. A job is waiting when it's open, its "In Printavo" box isn't ticked, no order
+ *    was made from it and nobody dismissed it. A task is left alone until nobody has touched it for 2 minutes
+ *    (customers make the task, then attach the PO).
+ *  - importClickUpTask: Process → the task (notes, fields, comments) and its files are read into the portal as an
+ *    email (activities, kind "clickup"), so the Inbox's order maker (OrderStartPick / QuickOrder) runs on it unchanged.
+ *  - tickInPrintavo: once the order is made (lib/emailOrderCreate.ts), the task's "In Printavo" box is ticked. That is
+ *    the only thing ever written to ClickUp.
+ */
+
+const API = "https://api.clickup.com/api/v2";
+export const clickupToken = () => (process.env.CLICKUP_API_TOKEN || "").trim();
+const QUIET_MS = 2 * 60_000;
+
+type CuUser = { id?: number; username?: string | null; email?: string | null };
+type CuField = { id: string; name: string; type: string; value?: unknown; type_config?: { options?: { id: string; name?: string; label?: string; orderindex?: number }[] } };
+type CuAtt = { id: string; title?: string; url?: string; size?: number | string; extension?: string; mimetype?: string; deleted?: boolean; hidden?: boolean; is_folder?: boolean | null };
+type CuTask = {
+  id: string; name: string; text_content?: string | null; description?: string | null; status?: { status?: string; type?: string; color?: string };
+  date_created?: string; date_updated?: string; due_date?: string | null; creator?: CuUser; url?: string; parent?: string | null;
+  list?: { id: string; name?: string }; folder?: { name?: string; hidden?: boolean }; space?: { id: string };
+  custom_fields?: CuField[]; attachments?: CuAtt[];
+};
+type CuComment = { id: string; comment_text?: string; user?: CuUser; date?: string };
+type Team = { id: string; name: string; members?: { user?: CuUser }[] };
+export type CuFile = { id: string; name: string; url: string; size: number; ext: string; type: string };
+export type CuNote = { who: string; email: string; at: string; text: string };
+export type ClickUpTaskRow = {
+  id: string; team_id: string; where_text: string; name: string; url: string; parent: string | null; status: string; status_type: string; status_color: string;
+  due_at: string | null; created_at_cu: string | null; updated_at_cu: string | null; creator_name: string; creator_email: string; description: string;
+  fields: Record<string, string>; printavo_field: string | null; in_printavo: boolean; attachments: CuFile[]; comments: CuNote[];
+  activity_id: string | null; order_id: string | null; order_number: number | null; ticked_at: string | null; tick_error: string | null;
+  dismissed_at: string | null; dismissed_by: string | null; waiting: boolean; synced_at: string;
+};
+export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string };
+export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number };
+
+let calls = 0;
+async function cu<T>(path: string, init?: { method: "POST"; body: unknown }): Promise<T> {
+  calls++;
+  const r = await fetch(API + path, {
+    method: init?.method || "GET", cache: "no-store", signal: AbortSignal.timeout(20000),
+    headers: { Authorization: clickupToken(), ...(init ? { "Content-Type": "application/json" } : {}) }, body: init ? JSON.stringify(init.body) : undefined,
+  });
+  if (r.status === 429) throw new Error("ClickUp asked us to slow down; the next run picks up from here.");
+  if (r.status === 401) throw new Error("ClickUp didn't accept the token (CLICKUP_API_TOKEN in Vercel): make a new one in ClickUp → Settings → Apps.");
+  if (!r.ok) throw new Error(`ClickUp ${path.split("?")[0]}: ${r.status} ${(await r.text().catch(() => "")).slice(0, 200)}`);
+  return r.json() as Promise<T>;
+}
+
+const ms = (s?: string | null) => (s ? Number(s) || 0 : 0);
+const iso = (t: number) => (t ? new Date(t).toISOString() : null);
+const day = (t: number) => new Date(t).toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const ours = (e?: string | null) => /@fbsprint\.com$/i.test(String(e || ""));
+const isDone = (type?: string | null) => /^(closed|done)$/i.test(String(type || ""));
+const safe = (s: string) => s.replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 120) || "file";
+
+/** a custom field as words ("✓", "Stephanie Foster", "Mon, Oct 26, 2026"); null when empty */
+function fieldText(f: CuField): string | null {
+  const v = f.value;
+  if (f.type === "checkbox") return v === true || v === "true" ? "✓" : "—";
+  if (v == null || v === "" || (Array.isArray(v) && !v.length)) return null;
+  const opts = f.type_config?.options || [];
+  if (f.type === "drop_down") { const o = opts.find((x) => x.id === v || x.orderindex === Number(v)); return o?.name || String(v); }
+  if (f.type === "labels" && Array.isArray(v)) return v.map((id) => { const o = opts.find((x) => x.id === id); return o?.label || o?.name || String(id); }).join(", ");
+  if (f.type === "date") return day(Number(v));
+  if (f.type === "users" && Array.isArray(v)) return (v as CuUser[]).map((u) => u.username || u.email || "").filter(Boolean).join(", ");
+  if (f.type === "attachment" && Array.isArray(v)) return `${v.length} file${v.length === 1 ? "" : "s"}`;
+  if (typeof v === "object") return JSON.stringify(v).slice(0, 200);
+  return String(v).slice(0, 500);
+}
+const printavoBox = (t: CuTask) => (t.custom_fields || []).find((f) => f.type === "checkbox" && /printavo/i.test(f.name));
+
+/** a task (read in full) as its row; the portal's own columns (order, dismissed, activity) aren't touched */
+function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string) {
+  const box = printavoBox(t);
+  const fields = Object.fromEntries((t.custom_fields || []).map((f) => [f.name.trim(), fieldText(f)] as const).filter((x): x is [string, string] => x[1] != null));
+  return {
+    id: t.id, team_id: teamId, where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
+    url: t.url || `https://app.clickup.com/t/${t.id}`, parent: t.parent || null, status: String(t.status?.status || ""), status_type: String(t.status?.type || ""), status_color: String(t.status?.color || ""),
+    due_at: iso(ms(t.due_date)), created_at_cu: iso(ms(t.date_created)), updated_at_cu: iso(ms(t.date_updated)),
+    creator_name: String(t.creator?.username || ""), creator_email: String(t.creator?.email || "").toLowerCase(), description: String(t.text_content || t.description || "").trim().slice(0, 20000),
+    fields, printavo_field: box?.id || null, in_printavo: !!box && (box.value === true || box.value === "true"),
+    attachments: (t.attachments || []).filter((a) => a.id && a.url && !a.deleted && !a.hidden && !a.is_folder).slice(0, 30)
+      .map((a) => ({ id: a.id, name: String(a.title || `file${a.extension ? "." + a.extension : ""}`), url: String(a.url), size: Number(a.size) || 0, ext: String(a.extension || "").toLowerCase(), type: String(a.mimetype || "") })),
+    comments: comments.filter((c) => String(c.comment_text || "").trim()).sort((a, b) => ms(a.date) - ms(b.date)).slice(-30)
+      .map((c) => ({ who: String(c.user?.username || c.user?.email || "Someone"), email: String(c.user?.email || "").toLowerCase(), at: iso(ms(c.date)) || "", text: String(c.comment_text || "").trim().slice(0, 4000), mine: String(c.user?.email || "").toLowerCase() === myEmail })),
+    synced_at: new Date().toISOString(),
+  };
+}
+const waitingOf = (r: { parent: string | null; status_type: string; in_printavo: boolean; order_id?: string | null; dismissed_at?: string | null }, hidden: boolean) =>
+  !hidden && !r.parent && !isDone(r.status_type) && !r.in_printavo && !r.order_id && !r.dismissed_at;
+
+/** a workspace's customer, when exactly one fits (its name, or the email domain of the people in it) */
+async function guessCustomer(admin: SupabaseClient, name: string, members: string[]) {
+  const GENERIC = /^(gmail|yahoo|hotmail|outlook|icloud|aol|live|me|msn|comcast|att|sbcglobal)\./i;
+  const norm = (s: string) => ` ${s.toLowerCase().replace(/&/g, " and ").replace(/['’]s\b/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\b(the|llc|inc|co|company|team|group|printing|solutions|apparel|promos?|promotions|workspace|and|fbs)\b/g, " ").replace(/\s+/g, " ").trim()} `;
+  const doms = new Set(members.map((e) => e.split("@")[1]).filter((d) => d && !GENERIC.test(d)));
+  const [{ data: cs }, { data: cc }] = await Promise.all([
+    admin.from("customers").select("id, company, name, email").limit(5000),
+    doms.size ? admin.from("customer_contacts").select("customer_id, email").limit(10000) : Promise.resolve({ data: [] as { customer_id: string; email: string }[] }),
+  ]);
+  const hits = new Set<string>();
+  const tn = norm(name);
+  for (const c of (cs || []) as { id: string; company: string | null; name: string | null; email: string | null }[]) {
+    const cn = norm(c.company || c.name || "");
+    if (cn.trim().length >= 4 && (tn.includes(cn) || cn.includes(tn.trim().length >= 4 ? tn : "\u0000"))) hits.add(c.id);
+    const d = String(c.email || "").toLowerCase().split("@")[1];
+    if (d && doms.has(d)) hits.add(c.id);
+  }
+  for (const c of (cc || []) as { customer_id: string; email: string }[]) { const d = String(c.email || "").toLowerCase().split("@")[1]; if (d && doms.has(d)) hits.add(c.customer_id); }
+  return hits.size === 1 ? [...hits][0] : null;
+}
+
+/** read one task in full (and its comments) and save it; returns the row */
+export async function readClickUpTask(admin: SupabaseClient, id: string): Promise<ClickUpTaskRow | null> {
+  const { data: st } = await admin.from("clickup_state").select("user_email, setup_at").eq("id", 1).maybeSingle();
+  const t = await cu<CuTask>(`/task/${encodeURIComponent(id)}?include_markdown_description=true`);
+  const comments = (await cu<{ comments: CuComment[] }>(`/task/${encodeURIComponent(id)}/comment`).catch(() => ({ comments: [] }))).comments || [];
+  const { data: old } = await admin.from("clickup_tasks").select("team_id, order_id, dismissed_at").eq("id", id).maybeSingle();
+  const teamId = String(old?.team_id || (t as { team_id?: string }).team_id || "");
+  const { data: team } = teamId ? await admin.from("clickup_teams").select("hidden").eq("id", teamId).maybeSingle() : { data: null };
+  const row = rowOf(t, teamId, comments, String(st?.user_email || ""));
+  await admin.from("clickup_tasks").upsert({ ...row, waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at }, !!team?.hidden) });
+  const { data } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
+  return (data as ClickUpTaskRow | null) || null;
+}
+
+export async function syncClickUp(admin: SupabaseClient, deadline: number): Promise<ClickUpRun> {
+  if (!clickupToken()) return { ok: false, waiting: "Add CLICKUP_API_TOKEN in Vercel (ClickUp → Settings → Apps → API Token)." };
+  const { data: st, error: stErr } = await admin.from("clickup_state").select("*").eq("id", 1).maybeSingle();
+  if (stErr || !st) return { ok: false, error: "The ClickUp tables aren't in the database yet (migration 185)." };
+  const now = Date.now();
+  calls = 0;
+  const out: ClickUpRun & { newJobs: string[] } = { ok: true, teams: 0, read: 0, newJobs: [], later: 0 };
+  const cursors = { ...((st.cursors || {}) as Record<string, number>) };
+  await admin.from("clickup_state").update({ last_run_at: new Date(now).toISOString() }).eq("id", 1);
+  try {
+    const me = await cu<{ user: CuUser }>("/user");
+    const myEmail = String(me.user?.email || "").toLowerCase();
+    if (myEmail !== st.user_email) await admin.from("clickup_state").update({ user_email: myEmail }).eq("id", 1);
+    // jobs already on the boards count too unless they're ticked In Printavo (Oct 22, Nick: the ticked ones "are in the
+    // works right now… some of them still need to be entered")
+    if (!st.setup_at) await admin.from("clickup_state").update({ setup_at: new Date(now).toISOString() }).eq("id", 1);
+    const { teams } = await cu<{ teams: Team[] }>("/team");
+    out.teams = teams.length;
+    const { data: had } = await admin.from("clickup_teams").select("id, customer_id, hidden").in("id", teams.map((t) => t.id));
+    const teamRow = new Map(((had || []) as { id: string; customer_id: string | null; hidden: boolean }[]).map((r) => [r.id, r]));
+    for (const team of teams) {
+      const members = (team.members || []).map((m) => String(m.user?.email || "").toLowerCase()).filter((e) => e && !ours(e) && e !== myEmail).slice(0, 50);
+      const was = teamRow.get(team.id);
+      if (!was) {
+        const guess = await guessCustomer(admin, team.name, members).catch(() => null);
+        await admin.from("clickup_teams").upsert({ id: team.id, name: team.name, members, customer_id: guess, guessed: !!guess, seen_at: new Date().toISOString() });
+        teamRow.set(team.id, { id: team.id, customer_id: guess, hidden: false });
+      } else await admin.from("clickup_teams").update({ name: team.name, members, seen_at: new Date().toISOString() }).eq("id", team.id);
+    }
+    for (const team of teams) {
+      if (Date.now() > deadline || calls > 45) { out.later!++; continue; }
+      const hidden = !!teamRow.get(team.id)?.hidden;
+      const since = cursors[team.id];
+      // tasks changed since the last run (the first time: every open task)
+      const tasks: CuTask[] = [];
+      for (let page = 0; page < 10; page++) {
+        const qs = new URLSearchParams({ page: String(page), subtasks: "true", include_closed: since ? "true" : "false", order_by: "updated" });
+        if (since) qs.set("date_updated_gt", String(since));
+        const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(`/team/${team.id}/task?${qs}`);
+        tasks.push(...(r.tasks || []));
+        if (r.last_page === true || (r.tasks || []).length < 100) break;
+      }
+      tasks.sort((a, b) => ms(a.date_updated) - ms(b.date_updated));
+      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean }>();
+      for (let i = 0; i < tasks.length; i += 200) {
+        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting").in("id", tasks.slice(i, i + 200).map((t) => t.id));
+        for (const r of data || []) known.set(r.id as string, r as never);
+      }
+      let cur = since || 0;
+      for (const t0 of tasks) {
+        const upd = ms(t0.date_updated);
+        if (now - upd < QUIET_MS) { out.later!++; break; } // still being filled in: the next run
+        if (Date.now() > deadline || calls > 55) { out.later!++; break; }
+        const k = known.get(t0.id);
+        if (k?.updated_at_cu && Date.parse(k.updated_at_cu) >= upd) { cur = Math.max(cur, upd); continue; }
+        // a closed task only needs its status; an open one is read in full (files, fields, comments)
+        const full = isDone(t0.status?.type) ? null : await cu<CuTask>(`/task/${t0.id}?include_markdown_description=true`);
+        const comments = full ? (await cu<{ comments: CuComment[] }>(`/task/${t0.id}/comment`).catch(() => ({ comments: [] }))).comments || [] : [];
+        const row = rowOf(full || t0, team.id, comments, myEmail);
+        const waiting = waitingOf({ ...row, order_id: k?.order_id, dismissed_at: k?.dismissed_at }, hidden);
+        if (full) await admin.from("clickup_tasks").upsert({ ...row, waiting });
+        else await admin.from("clickup_tasks").upsert({ id: row.id, team_id: team.id, name: row.name, url: row.url, status: row.status, status_type: row.status_type, status_color: row.status_color, created_at_cu: row.created_at_cu, updated_at_cu: row.updated_at_cu, synced_at: row.synced_at, waiting: false });
+        if (waiting && !k?.waiting) out.newJobs.push(`${team.name}: ${row.name}`);
+        out.read!++;
+        cur = Math.max(cur, upd);
+      }
+      cursors[team.id] = cur || now;
+    }
+    await admin.from("clickup_state").update({ last_ok_at: new Date().toISOString(), last_error: null, cursors, stats: { at: new Date().toISOString(), calls, ...out } }).eq("id", 1);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    out.ok = false; out.error = msg;
+    await admin.from("clickup_state").update({ last_error: msg, cursors, stats: { at: new Date().toISOString(), calls, ...out } }).eq("id", 1);
+  }
+  return out;
+}
+
+/** a file from ClickUp (the token is only ever sent to ClickUp's own hosts) */
+async function grab(url: string): Promise<Buffer | null> {
+  let host = "";
+  try { host = new URL(url).hostname; } catch { return null; }
+  const cuHost = /(^|\.)clickup(-attachments)?\.com$/i.test(host);
+  const tries: Record<string, string>[] = cuHost ? [{ Authorization: String(clickupToken()) }, {}] : [{}];
+  for (const h of tries) {
+    try {
+      const r = await fetch(url, { headers: h, signal: AbortSignal.timeout(30000) });
+      if (r.ok) { const b = Buffer.from(await r.arrayBuffer()); if (b.length) return b; }
+    } catch { /* next */ }
+  }
+  return null;
+}
+const MIME: Record<string, string> = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", ai: "application/postscript", eps: "application/postscript", svg: "image/svg+xml",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", csv: "text/csv", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", txt: "text/plain" };
+const when = (s: string) => (s ? new Date(s).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+
+/**
+ * Process: the task, read fresh, goes into the portal as an email from the customer (kind "clickup"): the notes,
+ * fields and comments as its text and every file in storage, so the Inbox's order maker reads it like any email.
+ */
+export async function importClickUpTask(admin: SupabaseClient, id: string, by: string): Promise<{ ok: true; activityId: string } | { ok: false; error: string }> {
+  if (!clickupToken()) return { ok: false, error: "ClickUp isn't connected yet (CLICKUP_API_TOKEN in Vercel)." };
+  const { data: old } = await admin.from("clickup_tasks").select("team_id, activity_id").eq("id", id).maybeSingle();
+  if (!old) return { ok: false, error: "That ClickUp job isn't on file." };
+  const { data: team } = await admin.from("clickup_teams").select("name, customer_id, members").eq("id", old.team_id).maybeSingle();
+  if (!team?.customer_id) return { ok: false, error: `Pick which customer the "${team?.name || "ClickUp"}" workspace is first.` };
+  let t: ClickUpTaskRow | null;
+  try { t = await readClickUpTask(admin, id); } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  if (!t) return { ok: false, error: "Couldn't read the job from ClickUp." };
+  // the files (kept from an earlier Process; new ones downloaded)
+  const { data: act } = t.activity_id ? await admin.from("activities").select("id, meta").eq("id", t.activity_id).maybeSingle() : { data: null };
+  const had = (((act?.meta || {}) as { attachments?: { name: string; path: string; type: string; size: number; clickup_id?: string }[] }).attachments || []);
+  const atts: { name: string; path: string; type: string; size: number; clickup_id: string }[] = [];
+  const missing: string[] = [];
+  for (const f of t.attachments.slice(0, 12)) {
+    const keep = had.find((h) => h.clickup_id === f.id);
+    if (keep) { atts.push({ ...keep, clickup_id: f.id }); continue; }
+    if (f.size > 40 * 1024 * 1024) { missing.push(`${f.name} (too big to bring in; open it in ClickUp)`); continue; }
+    const buf = await grab(f.url);
+    if (!buf) { missing.push(`${f.name} (couldn't be downloaded; open it in ClickUp)`); continue; }
+    const type = f.type || MIME[f.ext] || "application/octet-stream";
+    const path = `clickup/${t.id}/${f.id}-${safe(f.name)}`;
+    const up = await admin.storage.from("proofs").upload(path, buf, { contentType: type, upsert: true });
+    if (up.error) { missing.push(`${f.name} (couldn't be saved: ${up.error.message})`); continue; }
+    atts.push({ name: f.name, path, type, size: buf.length, clickup_id: f.id });
+  }
+  const theirComments = t.comments.filter((c) => !ours(c.email) && !(c as { mine?: boolean }).mine);
+  const body = [
+    `This job came from ${team.name}'s ClickUp board (their job list${t.where_text ? `: ${t.where_text}` : ""}), not an email. The task's name is the job: "${t.name}".`,
+    t.due_at ? `Due date on the task: ${day(Date.parse(t.due_at))}.` : "",
+    `Made by ${t.creator_name || "the customer"}${t.created_at_cu ? ` on ${when(t.created_at_cu)}` : ""}.`,
+    t.description ? `Notes on the task:\n${t.description}` : "",
+    Object.keys(t.fields).length ? `Fields on the task:\n${Object.entries(t.fields).map(([k, v]) => `- ${k}: ${v}`).join("\n")}` : "",
+    theirComments.length ? `Comments on the task:\n${theirComments.map((c) => `- ${c.who} (${when(c.at)}): ${c.text}`).join("\n")}` : "",
+    missing.length ? `Files not brought in:\n- ${missing.join("\n- ")}` : "",
+    `Open it in ClickUp: ${t.url}`,
+  ].filter(Boolean).join("\n\n");
+  const fromEmail = t.creator_email && !ours(t.creator_email) ? t.creator_email : String(((team.members || []) as string[])[0] || "");
+  const meta = { ...((act?.meta || {}) as Record<string, unknown>), source: "clickup", from_name: t.creator_name || team.name, attachments: atts, att_checked: true, clickup: { id: t.id, url: t.url, team: team.name, where: t.where_text } };
+  const row = { customer_id: team.customer_id, kind: "clickup", direction: "in", subject: t.name, body, from_email: fromEmail, to_email: "", external_id: `clickup:${t.id}`, thread_id: `clickup:${t.id}`,
+    occurred_at: t.created_at_cu || new Date().toISOString(), meta, created_by: by };
+  if (act) {
+    const { error } = await admin.from("activities").update(row).eq("id", act.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, activityId: act.id as string };
+  }
+  const { data: made, error } = await admin.from("activities").insert(row).select("id").single();
+  if (error || !made) return { ok: false, error: error?.message || "Couldn't bring the job in." };
+  await admin.from("clickup_tasks").update({ activity_id: made.id }).eq("id", t.id);
+  return { ok: true, activityId: made.id as string };
+}
+
+/** the order is made: note it on the job and tick the task's "In Printavo" box in ClickUp (the only write to ClickUp) */
+export async function tickInPrintavo(admin: SupabaseClient, taskId: string, order: { id: string; number: number }) {
+  await admin.from("clickup_tasks").update({ order_id: order.id, order_number: order.number, waiting: false }).eq("id", taskId);
+  if (!clickupToken()) return { ok: false as const, error: "ClickUp isn't connected." };
+  try {
+    let { data: t } = await admin.from("clickup_tasks").select("printavo_field").eq("id", taskId).maybeSingle();
+    if (!t?.printavo_field) { await readClickUpTask(admin, taskId); ({ data: t } = await admin.from("clickup_tasks").select("printavo_field").eq("id", taskId).maybeSingle()); }
+    if (!t?.printavo_field) throw new Error("This task has no In Printavo box to tick.");
+    await cu(`/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(t.printavo_field)}`, { method: "POST", body: { value: true } });
+    await admin.from("clickup_tasks").update({ in_printavo: true, ticked_at: new Date().toISOString(), tick_error: null }).eq("id", taskId);
+    return { ok: true as const };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await admin.from("clickup_tasks").update({ tick_error: msg.slice(0, 300) }).eq("id", taskId);
+    return { ok: false as const, error: msg };
+  }
+}
