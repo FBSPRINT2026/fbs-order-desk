@@ -1,4 +1,5 @@
 import "server-only";
+import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
@@ -249,7 +250,7 @@ function tool(finishingIds: string[]) {
         po_number: { type: "string" },
         delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
         ship_to: { type: "string" },
-        notes: { type: "string", description: "Anything else the shop should know (one or two sentences)" },
+        notes: { type: "string", description: "Anything else the shop should know (one or two sentences). For a purchase order: the PO's own notes word for word, then its other useful facts (see rule 10)" },
         garments_supplied_by: { type: "string", enum: ["customer", "shop", "unknown"], description: "customer = they buy the blanks and send them to us" },
         goods: { type: "object", properties: {
           supplier: { type: "string", description: "Where their garments come from, e.g. SanMar, S&S Activewear" },
@@ -268,6 +269,7 @@ function tool(finishingIds: string[]) {
             style: { type: "string" }, brand: { type: "string" }, description: { type: "string" }, color: { type: "string" },
             sizes: { type: "object", description: "Size code to quantity, e.g. {\"6M\":5,\"12M\":5,\"2T\":4}", additionalProperties: { type: "integer" } },
             reorder_line: { type: ["integer", "null"], description: "For a reorder: the L number of the past job's line this is" },
+            note: { type: "string", description: "A note for this line only: \"Extras\" for an extras / overage line, a product or design name the PO lists apart from the style, a size breakdown that doesn't fit our sizes (waist sizes). Empty if nothing" },
           } } },
           prints: { type: "array", items: { type: "object", properties: {
             method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, location: { type: "string" },
@@ -403,6 +405,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
 8. Read the WHOLE conversation, not just the newest email: customers decide over many emails (the garment and color picked from our options, the sizes, a price we agreed, the date they need it, then the art last). The latest decision wins (a size list sent later replaces an earlier one; the style they finally chose replaces the ones they considered). Prices and terms WE wrote are what was agreed: put them in the notes for staff, and don't ask the customer again for anything already settled in the conversation.
+${PO_RULES}
 9. Art sent as a link (a file marked "from a link", e.g. a Canva design preview): use it as the art for the mockup. A Canva preview is a picture, not a print file: say in questions that we'll need the print file (PDF or SVG) unless a real file came with it.
 Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.
 When staff tell you something about this email (which past job it is, that it's a reorder, what the customer wants changed, colors used before), it's fact: follow it over your own reading.`;
