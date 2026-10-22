@@ -475,7 +475,9 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     if (user?.email) {
       const { data: sf } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" });
       setIsAdmin(["owner", "admin"].includes((sf?.role as string) || ""));
-      if (["owner", "admin"].includes((sf?.role as string) || "") || canPay) {
+      // only with the pay permission (owners always have it; an admin with pay turned off, or an owner viewing as
+      // someone without it, doesn't load rates) (Oct 22, Nick: Claudia "shouldn't see anything about employee pay")
+      if (canPay) {
         const [{ data: pr }, { data: em }] = await Promise.all([sb.from("employee_pay").select("employee_id, rate"), sb.from("employees").select("id, first_name, last_name")]);
         setPay({ rates: Object.fromEntries(((pr || []) as { employee_id: string; rate: number | null }[]).filter((x) => x.rate != null).map((x) => [x.employee_id, +x.rate!])), names: Object.fromEntries(((em || []) as { id: string; first_name: string; last_name: string }[]).map((x) => [x.id, `${x.first_name} ${x.last_name}`.trim()])) });
       }
@@ -1613,7 +1615,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
           {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
             <div className={"ms-otline" + (ot ? " on" : "")}>
               <span className="ms-ot-i" aria-hidden>⏱</span>
-              <span><b>{ot ? `${fmtMin(ot)} of overtime this pay week` : "No overtime this pay week"}</b>{ot ? <> · {rows.filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)} ${fmtMin(r.w.ot)}`).join(", ")}{pay && known ? ` · ~$${Math.round(pay).toLocaleString()} overtime pay` : ""}{unused > 30 ? ` · ${fmtMin(unused)} of it has no jobs booked` : ""}</> : null}<small> · pay week {dayLbl(payWeekStart(today))} – {dayLbl(addDay(payWeekStart(today), 6))}</small></span>
+              <span><b>{ot ? `${fmtMin(ot)} of overtime this pay week` : "No overtime this pay week"}</b>{ot ? <> · {rows.filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)} ${fmtMin(r.w.ot)}`).join(", ")}{canPay && pay && known ? ` · ~$${Math.round(pay).toLocaleString()} overtime pay` : ""}{unused > 30 ? ` · ${fmtMin(unused)} of it has no jobs booked` : ""}</> : null}<small> · pay week {dayLbl(payWeekStart(today))} – {dayLbl(addDay(payWeekStart(today), 6))}</small></span>
               <span className="spacer" />
               <button type="button" className="linkbtn" onClick={() => setOtOpen(true)}>Details</button>
             </div>
@@ -1706,7 +1708,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
                 const byCrew = new Map<string, OtCut[]>(); for (const x of p.otCuts) byCrew.set(x.m.id, [...(byCrew.get(x.m.id) || []), x]);
                 const mins = p.otCuts.reduce((t, x) => t + x.end - x.start, 0);
                 const dollars = p.otCuts.reduce((t, x) => { const cc = crewCost(x.m); return t + ((x.end - x.start) / 60) * (cc?.perHour ?? s.labor.crewSize * s.labor.wage) * s.labor.otMultiplier; }, 0);
-                return <div className="ms-ask ok"><b>No overtime needed: {fmtMin(mins)} saved (about ${Math.round(dollars).toLocaleString()} in overtime pay).</b><span>{[...byCrew.values()].map((l) => `${crewOf(l[0].m)?.leader || shortName(l[0].m)}'s crew leaves at 40 hours: ${l.map((x) => `${dayShort(x.day)} ${clockLong(x.start)}`).join(", ")}`).join(" · ")}. Every job that makes its date with the overtime still makes it.</span></div>;
+                return <div className="ms-ask ok"><b>No overtime needed: {fmtMin(mins)} saved{canPay ? ` (about $${Math.round(dollars).toLocaleString()} in overtime pay)` : ""}.</b><span>{[...byCrew.values()].map((l) => `${crewOf(l[0].m)?.leader || shortName(l[0].m)}'s crew leaves at 40 hours: ${l.map((x) => `${dayShort(x.day)} ${clockLong(x.start)}`).join(", ")}`).join(" · ")}. Every job that makes its date with the overtime still makes it.</span></div>;
               })()}
               {p.lateAfter > p.lateBefore && <div className="ms-ask"><b>This would leave more jobs late than the schedule has now ({p.lateBefore} → {p.lateAfter}).</b><span>The way the jobs are lined up now works better than re-laying them by in-hands date. Keep it as is, or add hours (a weekend shift or overtime) and re-plan.</span></div>}
               {!p.moves.length && <div className="ms-ask ok">Nothing needs to move to another press or day. Everything not started already runs from {clockLong(now.min)} on, in in-hands order.</div>}
@@ -1998,6 +2000,7 @@ function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClos
 
 /** When Can We Print It?: quick specs in, three dates out (soonest, aggressive, regular), and the AI's pick. */
 function WhenPanel({ s, today, nowLabel, calc, onClose, method = "screen" }: { s: ProductionSettings; today: string; nowLabel: string; calc: (n: Need) => WhenResult | null; onClose: () => void; method?: MachineType }) {
+  const canPay = useCan("pay"); // labor dollars only for people who see pay
   const [v, setV] = useState<QuickJob>(() => blankQuick(method));
   const vb = VERB[v.method];
   const [needBy, setNeedBy] = useState("");
@@ -2023,7 +2026,7 @@ function WhenPanel({ s, today, nowLabel, calc, onClose, method = "screen" }: { s
     const push = (o: WhenOpt) => (o.bumped?.length ? `; pushes back ${o.bumped.length} job${o.bumped.length === 1 ? "" : "s"}${lateOf(o).length ? `, ${lateOf(o).length} would miss their date (${lateOf(o).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "; nothing moves");
     const j = await fetch("/api/production/when", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       now: nowLabel, job: `${v.qty} pcs · ${need.label || "no print locations"} · ${v.garment}${v.dark ? " · darks" : ""}${(v.speed ?? 100) !== 100 ? ` · runs at ${v.speed}% (${(v.speed ?? 100) < 100 ? "hard print" : "easy print"})` : ""}`, runTime: fmtMin(r.minutes), needBy: needBy ? d(needBy) : "",
-      soonest: `${desc(soon)}${push(soon)}; adds ${fmtMin(soon.extra || 0)} of overtime/Saturday, about ${money(soon.cost || 0)} extra labor`,
+      soonest: `${desc(soon)}${push(soon)}; adds ${fmtMin(soon.extra || 0)} of overtime/Saturday${canPay ? `, about ${money(soon.cost || 0)} extra labor` : ""}`,
       aggressive: `${desc(agg)}${push(agg)}; regular hours`,
       regular: `${desc(reg)}; fits the schedule as it is, nothing moves`,
       slow: `end of the line: in hands ${slowHands ? d(slowHands) : "?"}; after everything already booked`,
@@ -2279,6 +2282,7 @@ function OvertimePanel({ today, thisWeek, nextWeek, mult, leader, onClose, onCut
 /** Get Recommendations: the simulated options side by side, and Claude's pick (or the cheapest full fix when AI is off). */
 type Advice = { headline: string; pick: string; why: string; runnersUp?: { id: string; why: string }[]; ideas?: string[] };
 function AdvisePanel({ options, late, lateBefore, labor, otNote, machinesLabel, nowLabel, onClose, onApply }: { options: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number; labor: { crewSize: number; wage: number; otMultiplier: number }; otNote: string; machinesLabel: string; nowLabel: string; onClose: () => void; onApply: (w: WhatIf) => Promise<void> }) {
+  const canPay = useCan("pay"); // the wage and labor dollars only for people who see pay
   const [opts] = useState(options);
   const [ai, setAi] = useState<Advice | null>(null);
   const [aiState, setAiState] = useState<"loading" | "done" | "off" | "error">("loading");
@@ -2303,7 +2307,7 @@ function AdvisePanel({ options, late, lateBefore, labor, otNote, machinesLabel, 
       <div className="pp-sheet tmx-ed ms-adv" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Recommendations">
         <div className="pp-sheet-h"><b>Get Back On Track</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="tmx-ed-b">
-          <div className="faint" style={{ fontSize: 12.5 }}>{lateBefore} job{lateBefore === 1 ? "" : "s"} won&apos;t make {lateBefore === 1 ? "its" : "their"} in-hands date as planned. Each option below is a full re-plan with that change. Labor figured at crews of {labor.crewSize}, ${labor.wage}/hr, {labor.otMultiplier}× for extra hours (Settings → Production).</div>
+          <div className="faint" style={{ fontSize: 12.5 }}>{lateBefore} job{lateBefore === 1 ? "" : "s"} won&apos;t make {lateBefore === 1 ? "its" : "their"} in-hands date as planned. Each option below is a full re-plan with that change. Labor figured at crews of {labor.crewSize}{canPay ? `, $${labor.wage}/hr` : ""}, {labor.otMultiplier}× for extra hours (Settings → Production).</div>
           <div className={"ms-adv-ai " + aiState}>
             <span className="ms-adv-i" aria-hidden>✦</span>
             {aiState === "loading" && <div><b>Thinking it over…</b><span>Comparing the options.</span></div>}
@@ -2313,7 +2317,7 @@ function AdvisePanel({ options, late, lateBefore, labor, otNote, machinesLabel, 
               {!!ai.ideas?.length && <ul className="ideas">{ai.ideas.map((x, i) => <li key={i}>{x}</li>)}</ul>}
             </div>}
             {(aiState === "off" || aiState === "error") && fallback && <div>
-              <b>{fallback.lateAfter === 0 ? `Cheapest fix: ${fallback.title}${fallback.cost ? ` (~${money(fallback.cost)})` : ""}. Everything makes its date.` : `Best available: ${fallback.title}. ${fallback.lateAfter} still late (${fallback.stillLate.join(", ")}).`}</b>
+              <b>{fallback.lateAfter === 0 ? `Cheapest fix: ${fallback.title}${fallback.cost && canPay ? ` (~${money(fallback.cost)})` : ""}. Everything makes its date.` : `Best available: ${fallback.title}. ${fallback.lateAfter} still late (${fallback.stillLate.join(", ")}).`}</b>
               <span>{aiState === "off" ? `AI advice is off${aiMsg ? `: ${aiMsg}` : ""}.` : `AI advice didn't come back (${aiMsg}).`} This is the planner&apos;s own pick.</span>
             </div>}
           </div>
@@ -2322,7 +2326,7 @@ function AdvisePanel({ options, late, lateBefore, labor, otNote, machinesLabel, 
               <div key={o.id} className={"ms-adv-r" + (o.id === pickId ? " pick" : "") + (o.lateAfter === 0 ? " ok" : "")}>
                 <div className="ms-adv-t"><b>{o.title}{o.id === pickId ? <em>Recommended</em> : null}</b><small>{o.detail}{o.splits ? ` · ${o.splits} job${o.splits === 1 ? "" : "s"} split` : ""}</small></div>
                 <div className="ms-adv-n"><b className={o.lateAfter ? "bad" : "good"}>{o.lateAfter ? `${o.lateAfter} late` : "All on time"}</b><small>{o.lateAfter ? o.stillLate.slice(0, 4).join(", ") + (o.stillLate.length > 4 ? "…" : "") : `was ${lateBefore}`}</small></div>
-                <div className="ms-adv-n"><b>{o.cost ? `~${money(o.cost)}` : "$0"}</b><small>{o.addedHours ? `${o.addedHours} press-hrs extra` : "no extra hours"}</small></div>
+                <div className="ms-adv-n"><b>{!canPay ? (o.addedHours ? "Extra hours" : "No extra cost") : o.cost ? `~${money(o.cost)}` : "$0"}</b><small>{o.addedHours ? `${o.addedHours} press-hrs extra` : "no extra hours"}</small></div>
                 <button type="button" className={"btn sm" + (o.id === pickId ? " primary" : "")} disabled={!!busy} onClick={async () => { setBusy(o.id); await onApply(o); setBusy(""); }}>{busy === o.id ? "…" : "Apply"}</button>
               </div>
             ))}

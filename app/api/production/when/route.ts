@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
+import { viewerPerms } from "@/lib/access";
 
 /**
  * "When can we print it?": the calendar works out three dates for a job that isn't booked yet (absolute soonest by
@@ -11,8 +12,12 @@ import { aiState, askClaude } from "@/lib/ai/claude";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { user, isStaff } = await getViewer();
+  const { supabase, user, isStaff, email, role } = await getViewer();
   if (!user || !isStaff) return NextResponse.json({ error: "Staff only." }, { status: 401 });
+  // labor dollars come from employee pay: only for people with the pay permission (Oct 22, Nick: Claudia "shouldn't
+  // see anything about employee pay")
+  const perms = await viewerPerms(supabase, email, role);
+  const dollars = perms.pay && perms.money;
   const b = await req.json().catch(() => ({})) as Record<string, string>;
   const admin = createAdminClient();
   const st = await aiState(admin);
@@ -28,7 +33,8 @@ export async function POST(req: Request) {
       "The scheduling software already worked out four options from the live schedule: absolute soonest (jumps the line and adds overtime / a Saturday, with the extra labor cost), aggressive (jumps the line on regular hours; other jobs pushed back but none late), regular turn (fits the schedule as it is, nothing moves), and slow boat (end of the line).",
       "Recommend which date to promise. Default to the regular turn; suggest slow boat when the customer has plenty of time (it keeps room for rushes); recommend aggressive when the customer needs it sooner and it makes their date; recommend absolute soonest only when nothing else makes their date, and say what the overtime costs (and any jobs it would make late). Never promise a date the options don't support.",
       "Be brief and concrete, like a note to a salesperson. The customer line is one friendly sentence they can say or send, with the date.",
-    ].join("\n"),
+      dollars ? "" : "This note goes to someone who doesn't see labor costs: never write dollar amounts, wages or pay; say 'adds overtime' or 'about N extra hours' instead.",
+    ].filter(Boolean).join("\n"),
     prompt: [`Now: ${clip(b.now)}`, `Job: ${clip(b.job)} (about ${clip(b.runTime)} of press time)`, b.needBy ? `Customer needs it by: ${clip(b.needBy)}` : "Customer didn't give a date.", `Absolute soonest: ${clip(b.soonest)}`, `Aggressive: ${clip(b.aggressive)}`, `Regular: ${clip(b.regular)}`, `Slow boat: ${clip(b.slow)}`].join("\n"),
     tool: {
       name: "promise",

@@ -16,7 +16,8 @@ type Late = { job: string; customer: string; inHands: string; why: string; value
 
 export async function POST(req: Request) {
   const { user, isStaff, role, email, supabase } = await getViewer();
-  const crew = !!user && isStaff && !(await viewerPerms(supabase, email, role)).money;
+  const crew = !!user && isStaff && !(await viewerPerms(supabase, email, role).then((p) => p.money && p.pay));
+  // labor dollars come from employee pay: without the pay permission (or without money) the note has no dollar amounts (Oct 22)
   if (!user || !isStaff) return NextResponse.json({ error: "Staff only." }, { status: 401 });
   const body = await req.json().catch(() => ({})) as { now?: string; lateBefore?: number; late?: Late[]; options?: Opt[]; labor?: { crewSize: number; wage: number; otMultiplier: number }; machines?: string; overtime?: string };
   const opts = (body.options || []).slice(0, 14), late = (body.late || []).slice(0, 40);
