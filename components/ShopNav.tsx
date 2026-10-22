@@ -224,9 +224,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
-  const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? (
-    <a key={href} className="nav-off" title={`${label}: not on for you (Settings → User Access)`} data-tip={`${label} (not on for you)`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
-  ) : (
+  // a tool someone doesn't have isn't in their menu at all (Oct 22, Nick: Claudia "is not going to see… the time clock
+  // tool… employees… separations")
+  const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? null : (
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
       >
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
@@ -298,7 +298,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {link(["/shop", "home", "My Day"])}
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
-        {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).map((g) => (
+        {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
             {g.title === "Shop Tools"
