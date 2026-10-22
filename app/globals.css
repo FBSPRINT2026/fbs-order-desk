@@ -12037,3 +12037,13 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .cu-boxbtn:hover{border-color:var(--fbs-blue)}
 .cu-boxbtn.on{background:var(--fbs-blue);border-color:var(--fbs-blue)}
 .cu-boxbtn svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* ClickUp Jobs: the toolbar and column headings pinned to the top while the list scrolls (Oct 22) */
+.toolbar.cu-pinned{position:sticky;top:0;z-index:16;background:var(--bg);margin:0;padding:10px 0}
+.tbl-wrap.cu-fit.cu-pinhead{overflow:visible}
+.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th{position:sticky;top:var(--cu-th-top,0px);z-index:12;background:var(--surface);box-shadow:0 1px 0 var(--line),0 2px 6px rgba(20,29,43,.06)}
+.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:first-child{border-top-left-radius:var(--r)}
+.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:last-child{border-top-right-radius:var(--r)}
+.cu-pin{display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 12px;border:0;border-radius:14px;background:var(--surface);box-shadow:0 1px 3px rgba(20,29,43,.08),0 0 0 1px var(--line-2);font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.cu-pin svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.cu-pin.on{color:var(--fbs-blue)}
+.cu-pin.on svg{fill:currentColor}

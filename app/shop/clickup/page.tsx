@@ -68,6 +68,19 @@ export default function ClickUpJobs() {
   // column widths, dragged on the header's right edge (Oct 22, Nick: "make the columns movable… larger or shorter"),
   // remembered in this browser; double-click the edge to put a column back
   const [cw, setCw] = useSticky<Record<string, number>>("clickup.cols", {});
+  // the toolbar and the column headings pinned to the top while the list scrolls (Oct 22, Nick: "make this pinnable…
+  // look like the other toolbars"); on by default, remembered
+  const [pin, setPin] = useSticky<boolean>("clickup.pin", true);
+  const tbRef = useRef<HTMLDivElement | null>(null);
+  const [tbH, setTbH] = useState(0);
+  useEffect(() => {
+    const el = tbRef.current; if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setTbH(el.offsetHeight)); ro.observe(el); setTbH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [ws, tab, pin]);
+  const pinBtn = <button type="button" className={"cu-pin" + (pin ? " on" : "")} aria-pressed={pin} title={pin ? "Unpin: let the toolbar and headings scroll away" : "Pin the toolbar and column headings to the top"} onClick={() => setPin(!pin)}>
+    <svg viewBox="0 0 24 24" aria-hidden><path d="M9 4h6l-1 6 3 3H7l3-3z" /><path d="M12 13v7" /></svg><span>{pin ? "Pinned" : "Pin"}</span></button>;
+  const pinStyle = { ["--cu-th-top" as string]: `${pin ? tbH : 0}px` };
   const rth = (key: string, label: ReactNode, cls = "") => (
     <th key={key} className={cls} style={cw[key] ? { width: cw[key] } : undefined}>{label}
       <span className="cu-rsz" title="Drag to make it wider or narrower · double-click to reset" aria-hidden
@@ -281,7 +294,7 @@ export default function ClickUpJobs() {
         const size = list2.reduce<Record<string, number>>((m, t) => { m[board(t)] = (m[board(t)] || 0) + 1; return m; }, {});
         const cols = 6 + boxes.length;
         return <>
-          <div className="toolbar">
+          <div className={"toolbar" + (pin ? " cu-pinned" : "")} ref={tbRef}>
             <button type="button" className="btn sm" onClick={() => { setWs(null); setWsQ(""); }}>Back to workspaces</button>
             <span className="cu-ws-t"><b>{label(ws) || tm?.name}</b> <span className="faint">{tm?.name} · {open.length} open · {shut.length} completed{wsData?.team === ws && wsData.reading ? " · still reading older completed jobs from ClickUp" : ""}</span></span>
             <div className="chips">
@@ -289,8 +302,9 @@ export default function ClickUpJobs() {
                 .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (wsShow === k ? " on" : "")} onClick={() => setWsShow(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
             </div>
             <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
+            {pinBtn}
           </div>
-          <div className="tbl-wrap cu-fit">
+          <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
             <table className="tbl cu-tbl">
               <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, b, "cu-box-h"))}{rth("w.pv", "Printavo #", "cu-w-pv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
@@ -317,7 +331,7 @@ export default function ClickUpJobs() {
           </div>
         </>;
       })() : <>
-      <div className="toolbar">
+      <div className={"toolbar" + (pin ? " cu-pinned" : "")} ref={tbRef}>
         <div className="chips">
           {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
             .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
@@ -327,6 +341,7 @@ export default function ClickUpJobs() {
           {(data?.teams || []).filter((t) => !t.hidden).map((t) => <option key={t.id} value={t.id}>{custName.get(t.customer_id || "") || t.name}</option>)}
         </select>}
         {tab !== "boards" && <SearchInput placeholder="Search jobs" value={q} onChange={(e) => setQ(e.target.value)} />}
+        {tab !== "boards" && pinBtn}
       </div>
 
       {tab === "boards" ? <div className="tbl-wrap">
@@ -351,7 +366,7 @@ export default function ClickUpJobs() {
             {data && !data.teams.length && <tr><td colSpan={4}><div className="empty">{data.connected ? "No workspaces yet: the first check of ClickUp is on its way (every 3 minutes), or press Check ClickUp now." : "Connect ClickUp first."}</div></td></tr>}
           </tbody>
         </table>
-      </div> : <div className="tbl-wrap cu-fit">
+      </div> : <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
         <table className="tbl cu-tbl">
           <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "Printavo #", "cu-w-pv")}{rth("l.ours", "Our #", "cu-w-ours")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
