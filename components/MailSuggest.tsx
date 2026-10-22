@@ -91,7 +91,12 @@ export default function MailSuggest({ q, senders, onPick, onText }: {
         }
         for (const [k, x] of [...by].slice(0, 3)) projects.push({ key: "j" + cid + k, kind: "project", label: x.label, sub: `${top.label} · ${x.n} order${x.n === 1 ? "" : "s"}, last ${md(x.last)}`, emails: top.emails, about: k, cust: cid });
       }
-      if (live) setList([...people, ...companies, ...projects]);
+      // the most likely first (phones show only the top two, Oct 21): a name that starts with what you typed, then a
+      // name with a word that does, then the rest; projects stay last
+      const tl = term.trim().toLowerCase();
+      const rank = (x: Sug) => { const l = x.label.toLowerCase(); return l.startsWith(tl) ? 0 : l.split(/[\s.@_-]+/).some((w) => w.startsWith(tl)) ? 1 : 2; };
+      const ranked = [...people, ...companies].map((x, i) => ({ x, i, r: rank(x) })).sort((a, b) => a.r - b.r || a.i - b.i).map((y) => y.x);
+      if (live) setList([...ranked, ...projects]);
     }, 180);
     return () => { live = false; clearTimeout(t); };
   }, [term]); // eslint-disable-line react-hooks/exhaustive-deps
