@@ -42,6 +42,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const [perRow, setPerRow] = useSticky<number>("ss.perRow", 4);
   const [gap, setGap] = useSticky<number>("ss.gap", 3);
   const [size, setSize] = useSticky<number>("ss.size", 100);
+  const [pairGap, setPairGap] = useSticky<number>("ss.pairGap", 2);
   const [sides, setSides] = useSticky<Sides>("ss.sides", "both");
   const [names, setNames] = useSticky<boolean>("ss.names", true);
   const [styleUnder, setStyleUnder] = useSticky<boolean>("ss.style", false);
@@ -59,7 +60,10 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const [sel, setSel] = useState("");
   const [busy, setBusy] = useState("Drawing the shirts…");
   const [err, setErr] = useState("");
+  // each color's front and back drawn on their own, then all trimmed to the same box per side (the photos' white
+  // margins out, every color the same size), so "space between" is the real space between shirts
   const cache = useRef(new Map<string, HTMLCanvasElement>());
+  const crop = useRef<Record<string, { x: number; y: number; w: number; h: number }>>({});
   const pics = useRef(new Map<string, HTMLImageElement>());
   const logo = useRef<HTMLImageElement | null>(null);
   const boxes = useRef<{ id: string; x: number; y: number; w: number; h: number }[]>([]);
@@ -76,16 +80,29 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
       setBusy("Drawing the shirts…");
       try {
         if (shop.logoUrl && !logo.current) logo.current = await load(shop.logoUrl).catch(() => null);
-        for (const c of colors) {
-          const k = `${c.key}|${sideList.join(",")}`;
-          if (!cache.current.has(k)) cache.current.set(k, await shirts(c.key, sideList, 900));
+        for (const c of colors) for (const sd of views) {
+          const k = `${c.key}|${sd}`;
+          if (!cache.current.has(k)) cache.current.set(k, await shirts(c.key, [sd], 900));
           if (!live) return;
+        }
+        // the box around every color's shirt on each side (non-white pixels), shared by all colors
+        for (const sd of views) {
+          let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+          for (const c of colors) {
+            const cv0 = cache.current.get(`${c.key}|${sd}`); if (!cv0) continue;
+            const w = cv0.width, h = cv0.height, d = cv0.getContext("2d")!.getImageData(0, 0, w, h).data;
+            for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+              const i = (y * w + x) * 4;
+              if (d[i + 3] > 20 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+          }
+          if (x1 > x0 && y1 > y0) { const pad = 6; crop.current[sd] = { x: Math.max(0, x0 - pad), y: Math.max(0, y0 - pad), w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad }; }
         }
         setBusy(""); setTick((t) => t + 1);
       } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't draw the shirts."); setBusy(""); }
     })();
     return () => { live = false; };
-  }, [sideList.join(","), colors.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [colors.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = useMemo(() => order.map((k) => colors.find((c) => c.key === k)).filter((c): c is SheetColor => !!c && !off.has(c.key)), [order, off, colors]);
   const multiStyle = new Set(colors.map((c) => c.style)).size > 1;
@@ -118,29 +135,39 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     if (sub.trim()) { x.fillStyle = soft; x.font = font(400, Math.round(titleSize * 0.5)); y += Math.round(titleSize * 0.55); x.fillText(sub.trim(), ax, y); y += Math.round(titleSize * 0.3); }
     const footH = contact ? Math.round(H * 0.05) : 0;
     const top = y + Math.round(H * 0.025), bot = H - M - footH;
-    // the grid
+    // the grid: one unit per color (its sides side by side, trimmed), as big as fits with the spacing asked for, the
+    // whole block centered on the page (Oct 22, Nick: fewer per row should mean bigger shirts, not bigger gaps)
     const n = shown.length, cols = Math.max(1, Math.min(perRow, n || 1)), rows = Math.max(1, Math.ceil(n / cols));
     const g = (gap / 100) * W, labelH = names ? Math.round(labelSize * (styleUnder && multiStyle ? 2.4 : 1.5)) : 0;
-    const cw = (W - 2 * M - (cols - 1) * g) / cols, chMax = (bot - top - (rows - 1) * g) / rows - labelH;
-    const sample = cache.current.get(`${shown[0]?.key}|${sideList.join(",")}`);
-    const ratio = sample ? sample.width / sample.height : sideList.length * 0.8;
-    let sw = Math.min(cw, chMax * ratio), sh = sw / ratio;
-    sw *= size / 100; sh *= size / 100;
-    const cellH = sh + labelH, used = rows * cellH + (rows - 1) * g, oy = top + Math.max(0, (bot - top - used) / 2);
+    const boxes0 = sideList.map((sd) => crop.current[sd] || { x: 0, y: 0, w: 600, h: 750 });
+    const pg = (pairGap / 100) * W;
+    const uw0 = boxes0.reduce((t, b) => t + b.w, 0), uh0 = Math.max(...boxes0.map((b) => b.h));
+    // the scale k that fits cols units across and rows down
+    const kW = (W - 2 * M - (cols - 1) * g - cols * (sideList.length - 1) * pg) / (cols * uw0);
+    const kH = (bot - top - (rows - 1) * g - rows * labelH) / (rows * uh0);
+    const k = Math.max(0.05, Math.min(kW, kH)) * (size / 100);
+    const uw = uw0 * k + (sideList.length - 1) * pg, uh = uh0 * k, cellH = uh + labelH;
+    const usedH = rows * cellH + (rows - 1) * g, oy = top + Math.max(0, (bot - top - usedH) / 2);
     x.textAlign = "center";
     for (let i = 0; i < n; i++) {
       const col = i % cols, row = Math.floor(i / cols), inRow = row === rows - 1 ? n - row * cols : cols;
-      const rowW = inRow * cw + (inRow - 1) * g, cx = (W - rowW) / 2 + col * (cw + g) + cw / 2, cy = oy + row * (cellH + g);
-      const im = cache.current.get(`${shown[i].key}|${sideList.join(",")}`);
-      if (im) {
-        // white photo backgrounds blend away on a colored page
-        if (bg.toLowerCase() !== "#ffffff") { x.save(); x.globalCompositeOperation = dark(bg) ? "source-over" : "multiply"; }
-        x.drawImage(im, cx - sw / 2, cy, sw, sh);
-        if (bg.toLowerCase() !== "#ffffff") x.restore();
-      }
+      const rowW = inRow * uw + (inRow - 1) * g, ux = (W - rowW) / 2 + col * (uw + g), uy = oy + row * (cellH + g);
+      let sx = ux;
+      sideList.forEach((sd, j) => {
+        const im = cache.current.get(`${shown[i].key}|${sd}`), b = boxes0[j];
+        if (im) {
+          const dw = b.w * k, dh = b.h * k, dy = uy + (uh - dh);
+          // white photo backgrounds blend away on a colored page
+          if (bg.toLowerCase() !== "#ffffff") { x.save(); x.globalCompositeOperation = dark(bg) ? "source-over" : "multiply"; }
+          x.drawImage(im, b.x, b.y, b.w, b.h, sx, dy, dw, dh);
+          if (bg.toLowerCase() !== "#ffffff") x.restore();
+        }
+        sx += b.w * k + pg;
+      });
+      const cx = ux + uw / 2;
       if (names) {
-        x.fillStyle = ink; x.font = font(700, labelSize); x.fillText(shown[i].color, cx, cy + sh + labelSize * 1.15);
-        if (styleUnder && multiStyle) { x.fillStyle = soft; x.font = font(400, Math.round(labelSize * 0.72)); x.fillText(shown[i].style, cx, cy + sh + labelSize * 2.1); }
+        x.fillStyle = ink; x.font = font(700, labelSize); x.fillText(shown[i].color, cx, uy + uh + labelSize * 1.15);
+        if (styleUnder && multiStyle) { x.fillStyle = soft; x.font = font(400, Math.round(labelSize * 0.72)); x.fillText(shown[i].style, cx, uy + uh + labelSize * 2.1); }
       }
     }
     if (contact && shop.line) { x.fillStyle = soft; x.font = font(600, Math.round(footH * 0.42)); x.textAlign = "center"; x.fillText(shop.line, W / 2, H - M); }
@@ -230,7 +257,8 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
             <section><h3>Shirts</h3>
               <div className="chips">{(views.length > 1 ? (["both", "front", "back"] as Sides[]) : (["front"] as Sides[])).map((k) => <button key={k} type="button" className={"chip" + (sides === k || views.length < 2 ? " on" : "")} onClick={() => setSides(k)}>{k === "both" ? "Front and back" : k === "front" ? "Front" : "Back"}</button>)}</div>
               <label className="mk-f"><span>Per row: {perRow}</span><input type="range" min={1} max={8} step={1} value={perRow} onChange={(e) => setPerRow(+e.target.value)} /></label>
-              <label className="mk-f"><span>Space between: {gap === 0 ? "none" : gap < 3 ? "tight" : gap < 6 ? "medium" : "roomy"}</span><input type="range" min={0} max={10} step={0.5} value={gap} onChange={(e) => setGap(+e.target.value)} /></label>
+              <label className="mk-f"><span>Space between: {gap === 0 ? "none" : gap < 1.5 ? "tight" : gap < 4 ? "medium" : "roomy"}</span><input type="range" min={0} max={8} step={0.25} value={gap} onChange={(e) => setGap(+e.target.value)} /></label>
+              {sideList.length > 1 && <label className="mk-f"><span>Front to back: {pairGap === 0 ? "touching" : pairGap < 1.5 ? "close" : pairGap < 3.5 ? "medium" : "apart"}</span><input type="range" min={0} max={6} step={0.25} value={pairGap} onChange={(e) => setPairGap(+e.target.value)} /></label>}
               <label className="mk-f"><span>Shirt size: {size}%</span><input type="range" min={50} max={100} step={1} value={size} onChange={(e) => setSize(+e.target.value)} /></label>
               <label className="check"><input type="checkbox" checked={names} onChange={(e) => setNames(e.target.checked)} /> Color names</label>
               {names && <label className="mk-f"><span>Name size: {labelSize}</span><input type="range" min={16} max={60} step={1} value={labelSize} onChange={(e) => setLabelSize(+e.target.value)} /></label>}
