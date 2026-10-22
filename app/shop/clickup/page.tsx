@@ -54,6 +54,24 @@ function Inv({ ours, pv }: { ours?: { id: string; number: number } | null; pv?: 
     {pv && <span className="cu-inv-r">{pv.id ? <Link href={`/shop/archive/${pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pv.number}</span></Link> : <span className="ordno">{pv.number}</span>}<span className="cu-sys pv" title="Printavo (our old system)" aria-label="Printavo"><img src="/brand/printavo-p.png" alt="" /></span>{pv.status && <span className="sub cu-inv-s">{pv.status}</span>}</span>}
   </span>;
 }
+/**
+ * The job panel's title (Oct 22, Nick: "just say Logotology order, and then say something that identifies it"):
+ * "<Customer> order · <ref>". The customer is the workspace's own name ("Cedar Promos", "Tiger Blue") unless that's
+ * someone's personal workspace or all capitals ("Kenna Davidson's Workspace", "NINE18 PRINTING"): then the customer as
+ * saved here. The ref is the number in the job name: "#73437", "PO 91537", "JAC 100826", "#2842"; on a Cart board
+ * "Cart #94692111".
+ */
+const orgOf = (team: { name?: string } | undefined, saved: string) => {
+  const n = String(team?.name || "").replace(/\s*\+\s*FBS\s*$/i, "").trim();
+  return !n || /workspace$/i.test(n) || (n.length > 4 && n === n.toUpperCase()) ? saved || n : n;
+};
+const refOf = (name: string, board: string) => {
+  const s = String(name || "");
+  const hash = s.match(/#\s?(\d{3,})/), po = s.match(/\bPO\s*#?\s*(\d{3,})/i), code = s.match(/\b([A-Z]{2,5})\s?(\d{5,}[A-Z]?)\b/), num = s.match(/(\d{4,})/);
+  const r = hash ? `#${hash[1]}` : po ? `PO ${po[1]}` : code ? `${code[1]} ${code[2]}` : num ? `#${num[1]}` : "";
+  return r && /cart/i.test(board) && r.startsWith("#") ? `Cart ${r}` : r;
+};
+const uploaded = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/^(\w{3}), /, "$1 ") : "");
 /** a job's board (its ClickUp list): "Bulk Orders", "Cart Orders", "Purchase Orders" */
 const boardOf = (t: { where_text?: string }) => String(t.where_text || "").split("›").pop()!.trim();
 /** soonest due date first, no date last, then the newest */
@@ -280,8 +298,16 @@ export default function ClickUpJobs() {
 
       {job && <div ref={panel} className="panel cu-job">
         <div className="panel-h">
-          <h2>{custName.get(jobTeam?.customer_id || "") || jobTeam?.name || "A customer"} uploaded a job</h2>
-          <span className="faint">{[jobTeam?.name, job.where_text].filter(Boolean).join(" › ")}{job.created_at_cu ? ` · ${job.creator_name || "made"} ${when(job.created_at_cu)}` : ""}</span>
+          {(() => {
+            const org = orgOf(jobTeam, custName.get(jobTeam?.customer_id || "") || ""), ref = refOf(job.name, boardOf(job));
+            const boards = new Set([...(data?.tasks || []), ...(wsData?.team === job.team_id ? wsData.tasks : [])].filter((x) => x.team_id === job.team_id).map(boardOf).filter(Boolean));
+            const kind = boards.size > 1 ? boardOf(job).replace(/\s*orders?$/i, "") : "";
+            return <>
+              <h2>{org || "Customer"} order{ref ? ` · ${ref}` : ""}</h2>
+              {kind && <span className="cu-kind">{kind}</span>}
+              {job.created_at_cu && <span className="cu-upl" title={`Put on ClickUp by ${job.creator_name || "the customer"}`}>Uploaded {uploaded(job.created_at_cu)}</span>}
+            </>;
+          })()}
           {/* close at the top right (Oct 22, Nick: "I don't like it at the bottom… move the close button up to the top right") */}
           <button type="button" className="cu-x" aria-label="Close this job" title="Close" onClick={() => setOpenId(null)}>✕</button>
         </div>
@@ -290,6 +316,7 @@ export default function ClickUpJobs() {
           <div className="cu-line">
             {job.due_at ? <>Due <Due date={chiDay(job.due_at)} status="" /></> : <span className="faint">No due date</span>}
             <span className="faint">·</span><span>{job.status || "open"}</span>
+            {boardOf(job) && <><span className="faint">·</span><span>{boardOf(job)} board</span></>}
             {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">FBS Invoice # ✓</span></>}
             <span className="faint">·</span><a href={job.url} target="_blank" rel="noreferrer">Open in ClickUp</a>
           </div>
