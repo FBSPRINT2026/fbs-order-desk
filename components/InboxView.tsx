@@ -662,6 +662,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
             {mode === "mail" && sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
             </div>
           </div>
+          {/* phones: the filters (All / Customers / To-dos…) as one floating button instead of a second toolbar (Oct 21, Nick) */}
+          {mode === "mail" && view.kind === "inbox" && !hasSel && <FilterFab items={BK.map((b) => ({ k: b.k, label: b.label, n: ol ? bkN(b.k) : undefined }))} value={bk} onPick={(k) => { setBk(k as Bk); setOpen(null); }} />}
           {/* the Inbox brief: always first, stays put while the list scrolls */}
           {mode === "mail" && view.kind === "inbox" && <button type="button" className={"ibx2-briefbtn" + (briefOn ? " on" : "")} onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }} aria-pressed={briefOn}>
             {/* slim, in the FBS rainbow: a pastel fade, rainbow words, the rainbow line along the bottom (Oct 16, Nick) */}
@@ -1724,5 +1726,36 @@ function ForwardBox({ id, onDone }: { id: string; onDone: (msg: string) => void 
         {err && <span className="pv-err" style={{ margin: 0 }}>{err}</span>}
       </div>
     </div>
+  );
+}
+
+/**
+ * Phones (Oct 21, Nick: "get rid of that secondary toolbar… as soon as you… start scrolling, it should fade away"): the
+ * Inbox's filters as a small button floating at the bottom. It shows at the top of the list, fades away once you scroll,
+ * and opens the filters in a sheet. Computers keep the toolbar (the button is phone-only in CSS).
+ */
+function FilterFab({ items, value, onPick }: { items: { k: string; label: string; n?: number }[]; value: string; onPick: (k: string) => void }) {
+  const [away, setAway] = useState(false), [open, setOpen] = useState(false);
+  useEffect(() => {
+    const h = (e: Event) => { const t = e.target as HTMLElement | Document; const y = Math.max(window.scrollY, t instanceof HTMLElement ? t.scrollTop : 0); setAway(y > 24); };
+    document.addEventListener("scroll", h, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", h, { capture: true });
+  }, []);
+  const cur = items.find((i) => i.k === value) || items[0];
+  return (
+    <>
+      <button type="button" className={"ibx2-ffab" + (away && !open ? " away" : "")} onClick={() => setOpen(true)} aria-haspopup="menu" aria-label={`Filter: ${cur.label}`}>
+        <svg viewBox="0 0 24 24" aria-hidden><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        {value === "all" ? "Filter" : <>Showing: {cur.label}</>}{value !== "all" && cur.n != null && <b>{cur.n}</b>}<span aria-hidden>▾</span>
+      </button>
+      {open && <div className="pbar-bg ffab-bg" onClick={() => setOpen(false)}>
+        <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
+          <div className="ps-grab" aria-hidden />
+          <div className="pbar-t">Show</div>
+          {items.map((i) => <button key={i.k} type="button" role="menuitemradio" aria-checked={i.k === value} className={"ffab-o" + (i.k === value ? " on" : "")} onClick={() => { onPick(i.k); setOpen(false); }}>{i.label}<span>{i.n ?? ""}{i.k === value ? " ✓" : ""}</span></button>)}
+          <button type="button" className="pbar-cancel" onClick={() => setOpen(false)}>Cancel</button>
+        </div>
+      </div>}
+    </>
   );
 }

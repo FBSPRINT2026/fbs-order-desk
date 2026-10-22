@@ -11462,3 +11462,18 @@ html body .pbar .pbar-n{color:#fff}
   .cu-chev{font-size:22px;line-height:1;color:var(--ink-3)}
   .cu-cards .empty{padding:20px}
 }
+
+/* ── Inbox filters on a phone: a floating button that fades once you scroll (Oct 21, Nick) ── */
+.ibx2-ffab{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  html body:has(.pit) main.main.main:has(.ibx2-ffab) .ibx2-list .ibx2-list-h .ibx2-tabs,
+  html body main.main.main:has(.ibx2-ffab) .ibx2-list .ibx2-list-h .ibx2-tabs{display:none!important}
+  .ibx2-ffab{display:inline-flex;position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;align-items:center;gap:7px;height:40px;padding:0 16px;border:0;border-radius:999px;background:var(--ink);color:var(--surface);font:inherit;font-size:13.5px;font-weight:700;white-space:nowrap;box-shadow:0 6px 18px rgba(20,29,43,.3);transition:opacity .25s ease,transform .25s ease;cursor:pointer}
+  .ibx2-ffab.away{opacity:0;pointer-events:none;transform:translate(-50%,14px)}
+  .ibx2-ffab svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+  .ibx2-ffab b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;line-height:18px;text-align:center}
+  .ibx2-ffab > span{font-size:10px;opacity:.7}
+  html body .pbar-sheet>button.ffab-o.on{color:var(--accent);font-weight:700}
+  html body .pbar-sheet>button.ffab-o.on span{color:var(--accent)}
+}
+@media (prefers-reduced-motion:reduce){ .ibx2-ffab{transition:none} }
