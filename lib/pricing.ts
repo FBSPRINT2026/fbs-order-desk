@@ -123,6 +123,9 @@ export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | u
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+  /** a note for this line only (Oct 22, Nick: "add line item description… for each specific line"): under the line
+   *  on the order, the invoice and the work order */
+  note?: string;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */

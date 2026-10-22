@@ -212,6 +212,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   // The numbers are set as CSS variables (globals.css "Garments: one grid").
   // the group description box, opened from "+ Add group description" before anything is typed
   const [descOpen, setDescOpen] = useState(false);
+  // a line's note box, opened from its ✎ before anything is typed
+  const [noteOpen, setNoteOpen] = useState<string | null>(null);
   const glRef = useRef<HTMLDivElement | null>(null);
   const [glFit, setGlFit] = useState<"w0" | "w1" | "w1c" | "w" | "s">("w");
   const hasCost = !gc.wholesale && !hidePrices;
@@ -284,8 +286,10 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
       // each row's own style width, for the stacked layout (no gap after a short style number)
       el.querySelectorAll<HTMLElement>(".gl .a-st").forEach((c) => { const i = c.querySelector("input"); if (i) c.style.setProperty("--stw", `${Math.max(24, textW(i, i.value || i.placeholder || "") + 4)}px`); });
-      const xb = el.querySelector<HTMLElement>(".gl .a-x button");
-      X = Math.max(22, xb ? Math.ceil(xb.getBoundingClientRect().width) : 0);
+      // the ✎ and ✕ buttons side by side
+      let xw = 0;
+      el.querySelectorAll<HTMLElement>(".gl .a-x").forEach((c) => { const bs = [...c.querySelectorAll<HTMLElement>("button")]; xw = Math.max(xw, bs.reduce((a, b) => a + Math.ceil(b.getBoundingClientRect().width), 0) + Math.max(0, bs.length - 1) * 2); });
+      X = Math.max(22, xw);
       return { deB, st, br, co, cs, qt, ea, to, boxMin, own };
     };
     const fit = () => {
@@ -523,8 +527,18 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                     onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
-                  <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
+                  <div className="a-x">
+                    {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}>✎</button>}
+                    {g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
+                  </div>
                 </div>
+                {(l.note != null || noteOpen === l.id) && (
+                  <div className="gl-note">
+                    <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="A note for this line only: ship-to, packing, a name…" value={l.note || ""}
+                      onChange={(e) => update((x) => { x.lines[li].note = e.target.value; })}
+                      onBlur={(e) => { if (!e.target.value.trim()) { setNoteOpen(null); update((x) => { delete x.lines[li].note; }); } }} />
+                  </div>
+                )}
               </div>
             );
           })}

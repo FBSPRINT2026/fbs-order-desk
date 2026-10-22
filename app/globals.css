@@ -11827,3 +11827,9 @@ html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
 .grp-desc-h span{font-weight:400}
 .grp-desc-h span::before{content:"· "}
 .grp-desc textarea{box-sizing:border-box;width:100%;min-height:44px;resize:vertical;font:14px/1.45 var(--body);color:var(--ink);padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+/* a line note (Oct 22): ✎ beside the ✕ (on a computer only when you point at the line), the note under the line */
+html body .ord .line-b .gl .a-x{gap:2px}
+@media (hover:hover){html body .ord .line-b .gl:not(:hover):not(:focus-within) .ln-add{visibility:hidden}}
+html body .ord .line-b .gl .ln-add{color:var(--ink-3);font-size:13px}
+html body .ord .line-b .gl > .gl-note{grid-column:1/-1;margin:4px 0 0}
+html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(100% + 8px);margin-left:-8px;min-height:30px;resize:vertical;font:13px/1.4 var(--body);color:var(--ink);padding:5px 7px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}

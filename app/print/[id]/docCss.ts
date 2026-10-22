@@ -133,6 +133,7 @@ export const DOC_CSS = `
 .pdoc .job .t{font-size:16pt;line-height:1;grid-column:1/-1;height:var(--row);box-sizing:border-box;display:flex;align-items:center;border-bottom:1.5px solid var(--ink3)}
 /* the black line, the gray line under the name and the line under ITEM are evenly spaced (Oct 16, Nick) */
 .pdoc .job .it{margin-top:0}
+.pdoc .lnote{font-size:9pt;line-height:1.3;color:var(--ink2);font-style:italic;white-space:pre-wrap;margin-top:2px}
 .pdoc .job .gdesc{grid-column:1/-1;font-size:9.5pt;line-height:1.35;color:var(--ink2,#333);padding:5px 0 2px;white-space:pre-wrap}
 .pdoc .gdesc.wo{margin-top:8px;font-size:11pt;line-height:1.35;white-space:pre-wrap;max-width:6in}
 .pdoc .job .it th{height:var(--row);box-sizing:border-box;padding-top:0;padding-bottom:0;vertical-align:middle}
