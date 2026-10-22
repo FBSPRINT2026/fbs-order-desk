@@ -201,70 +201,117 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
   })();
   // How the garment rows fit (Oct 22, Nick: "dynamic column widths so that as the page shrinks, everything shrinks… keep
-  // the sizes up on that row as long as possible… fill the space in widescreen"). The style, brand, color, cost, qty,
-  // each and total columns are exactly as wide as the widest value in this group (measured), the size boxes give a
-  // little (36 → 30 px) before anything moves, and then, in order:
-  //   w1  everything on one line: style · brand · color | sizes (centered in the room left) | cost · qty × each · total
-  //   w1c the same, with the gray cost tucked under the price to make room
+  // the sizes up on that row as long as possible… the same thing with the pricing on the right… fill the space in
+  // widescreen"). Every column is exactly as wide as the widest thing in it for this group (measured in the page's own
+  // fonts, tabular numbers included, so a number is never cut off). Then, as the box gets narrower:
+  //   w1  one line: style · brand · color | the sizes | cost · qty × each · total. The size boxes fill the room (up to
+  //       BOXMAX, then the sizes sit centered); as it narrows the boxes shrink to what their numbers need, then the gaps
+  //   w1c the same, with the gray cost tucked under the price
   //   w   the sizes on their own line under the shirt (the shirt and its money still on one line)
-  //   s   stacked, like a phone
-  // The numbers here are the same ones the CSS uses (globals.css "Garments: one grid"), set as CSS variables.
+  //   s   stacked, like a phone (phones always stack): each row's own sizes, as big as fit on one line
+  // The numbers are set as CSS variables (globals.css "Garments: one grid").
   const glRef = useRef<HTMLDivElement | null>(null);
   const [glFit, setGlFit] = useState<"w1" | "w1c" | "w" | "s">("w");
   const hasCost = !gc.wholesale && !hidePrices;
-  const glSig = JSON.stringify([groupCols, hasCost, gc.qty, gc.sub, g.lines.map((l, i) => [l.style, l.brand, l.color, l.cost, l.priceOverride, gc.lines[i]?.qty, gc.lines[i]?.sub])]);
+  const glSig = JSON.stringify([groupCols, hasCost, gc.qty, gc.sub, g.lines.map((l, i) => [l.style, l.brand, l.color, l.cost, l.priceOverride, l.sizes, l.sizeUpSet, l.sizeUp, gc.lines[i]?.qty, gc.lines[i]?.sub, gc.lines[i]?.calcEach])]);
   useEffect(() => {
     const el = glRef.current; if (!el) return;
-    const cv = document.createElement("canvas").getContext("2d");
+    // a hidden copy of the text in the same font settings (canvas can't do tabular numbers, which are wider)
+    const probe = document.createElement("span");
+    probe.setAttribute("aria-hidden", "true"); probe.setAttribute("data-notranslate", "");
+    probe.style.cssText = "position:fixed;left:0;top:0;visibility:hidden;white-space:pre;pointer-events:none;padding:0;border:0;margin:0";
+    document.body.appendChild(probe);
     const textW = (node: Element, text: string) => {
-      if (!cv || !text) return 0;
-      const cs = getComputedStyle(node);
-      cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-      return Math.ceil(cv.measureText(text).width);
+      if (!text) return 0;
+      const cs = getComputedStyle(node), ps = probe.style;
+      ps.fontFamily = cs.fontFamily; ps.fontSize = cs.fontSize; ps.fontWeight = cs.fontWeight; ps.fontStyle = cs.fontStyle;
+      ps.fontStretch = cs.fontStretch; ps.fontVariantNumeric = cs.fontVariantNumeric; ps.fontFeatureSettings = cs.fontFeatureSettings;
+      ps.letterSpacing = cs.letterSpacing; ps.textTransform = cs.textTransform;
+      probe.textContent = text;
+      return Math.ceil(probe.getBoundingClientRect().width);
     };
-    // the widest value in a column (inputs: what's typed, else the placeholder), plus its padding, kept within lo…hi
+    // the widest value in a column (an input: what's typed, else the placeholder it shows), plus its padding, kept within lo…hi
     const widest = (sel: string, pad: number, lo: number, hi: number) => {
       let m = 0;
       el.querySelectorAll<HTMLElement>(sel).forEach((node) => {
         if (node instanceof HTMLInputElement) m = Math.max(m, textW(node, node.value || node.placeholder || ""));
-        else { const t = node.querySelector("b") || node; m = Math.max(m, textW(t, (t.textContent || "").trim())); }
+        else m = Math.max(m, textW(node, (node.textContent || "").trim()));
       });
       return Math.max(lo, Math.min(hi, m + pad));
     };
     const n = Math.max(1, groupCols.length);
     const yx = groupCols.indexOf("YXL"), sep = yx >= 0 && yx < groupCols.length - 1 ? 12 : 0;
-    const GAP = 10, X = 22;
+    const BOX = 36, BOXMAX = 46, BOXPHONE = 40, X = 22;
+    type M = { st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
+    let m: M | null = null, mPhone: boolean | null = null;
+    const measure = (): M => {
+      // text columns: the words start at the column's edge, 2px of padding after them, +3 to spare
+      const st = widest(".gl .a-st input", 5, 36, 160);
+      const br = widest(".gl .a-br input", 5, 28, 180);
+      const co = widest(".gl .a-co input", 5, 56, 240);
+      const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
+      const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
+      const ea = widest(".gl .a-ea input", 28, 54, 120);
+      const to = Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
+      // a size box is never narrower than its number (+6), its size name, or its 2XL+ charge underneath (which may use the gap)
+      const num = widest(".gl .a-sz :is(input.sz,.sz-tap)", 6, 0, 80);
+      const name = widest(".gl .a-sz .szc > span:first-child", 2, 0, 80);
+      const upc = widest(".gl .a-sz .szc > :is(small.upc,.upc-btn)", 0, 0, 80);
+      const boxMin = Math.max(26, num, name, upc - 2);
+      // the most sizes any one garment has (a stacked row shows only its own)
+      let own = 1;
+      el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
+      // each row's own style width, for the stacked layout (no gap after a short style number)
+      el.querySelectorAll<HTMLElement>(".gl .a-st").forEach((c) => { const i = c.querySelector("input"); if (i) c.style.setProperty("--stw", `${Math.max(24, textW(i, i.value || i.placeholder || "") + 4)}px`); });
+      return { st, br, co, cs, qt, ea, to, boxMin, own };
+    };
     const fit = () => {
       const list = el.querySelector<HTMLElement>(".gl-list") || el;
       const W = list.clientWidth;
       if (!W) return;
-      const st = widest(".gl .a-st input", 12, 40, 150);
-      const br = widest(".gl .a-br input", 12, 32, 170);
-      const co = widest(".gl .a-co input", 12, 64, 230);
-      const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 76) : 0;
-      const qt = Math.max(widest(".gl .a-qt input", 10, 30, 70), widest(".grp-total > .a-qt", 6, 30, 70));
-      const ea = widest(".gl .a-ea input", 28, 56, 110);
-      const to = Math.max(widest(".gl .a-to", 6, 56, 130), widest(".grp-total > .a-to", 6, 56, 130));
-      const S = st + GAP + br + GAP + co;
-      const M = (cs ? cs + GAP : 0) + qt + GAP + ea + GAP + to + GAP + X;
-      const Mc = qt + GAP + ea + GAP + to + GAP + X;
-      const run = (b: number) => n * b + (n - 1) * 4 + sep;
-      let mode: "w1" | "w1c" | "w" | "s" = "s", box = 36;
-      for (let b = 36; b >= 30 && mode === "s"; b--) if (S + GAP + run(b) + GAP + M <= W) { mode = "w1"; box = b; }
-      if (mode === "s" && cs) for (let b = 36; b >= 30 && mode === "s"; b--) if (S + GAP + run(b) + GAP + Mc <= W) { mode = "w1c"; box = b; }
-      if (mode === "s" && S + GAP + M <= W && run(30) <= W) { mode = "w"; box = 36; while (box > 30 && run(box) > W) box--; }
-      // lots of room: the boxes grow a little, the rest is shared either side of the sizes
-      if (mode === "w1" && box === 36) box = Math.min(42, 36 + Math.floor((W - (S + GAP + run(36) + GAP + M)) / n / 3));
+      const phone = typeof window.matchMedia === "function" && window.matchMedia("(max-width:760px)").matches;
+      // measured once per change (and again when the phone layout comes or goes: its fonts differ a little)
+      if (!m || mPhone !== phone) { m = measure(); mPhone = phone; }
+      const { st, br, co, cs, qt, ea, to, boxMin, own } = m;
+      const run = (b: number, sg: number) => n * b + (n - 1) * sg + sep;
+      // everything but the size boxes on one line, at a gap of g between columns and sg between sizes
+      const fixed = (g: number, sg: number, cost: boolean) => st + g + br + g + co + g + run(0, sg) + g + (cost && cs ? cs + g : 0) + qt + g + ea + g + to + g + X;
+      // tighter and tighter: [gap between columns, gap between sizes, the smallest box at that step]
+      const steps: [number, number, number][] = [[10, 4, 34], [8, 3, 31], [6, 2, 0]];
+      let mode: "w1" | "w1c" | "w" | "s" = "s", box = BOX, gap = 10, sg = 4;
+      const one = (cost: boolean) => {
+        for (const [g2, s2, t] of steps) {
+          const b = Math.floor((W - fixed(g2, s2, cost)) / n);
+          if (b >= Math.max(boxMin, t)) { box = Math.min(BOXMAX, b); gap = g2; sg = s2; return true; }
+        }
+        return false;
+      };
+      if (!phone) {
+        if (one(true)) mode = "w1";
+        else if (cs && one(false)) mode = "w1c";
+        else {
+          for (const [g2] of steps) if (st + g2 + br + g2 + co + g2 + (cs ? cs + g2 : 0) + qt + g2 + ea + g2 + to + g2 + X <= W) { mode = "w"; gap = g2; break; }
+          if (mode === "w") {
+            box = BOX; sg = 4;
+            while (box > boxMin && run(box, sg) > W) box--;
+            if (run(box, sg) > W) sg = 2;
+            if (run(box, sg) > W) mode = "s";
+          }
+        }
+      }
+      if (mode === "s") { gap = 10; sg = 4; box = Math.max(boxMin, Math.min(BOXPHONE, Math.floor((W - (own - 1) * 4) / own))); }
       const px = (k: string, v: number) => el.style.setProperty(k, `${v}px`);
-      px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X); px("--gap", GAP); px("--szw", box);
+      px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X);
+      px("--gap", gap); px("--sg", sg); px("--szw", box);
       setGlFit(mode);
     };
     fit();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => fit()) : null;
     ro?.observe(el);
     let live = true;
-    document.fonts?.ready?.then(() => { if (live) fit(); }).catch(() => {});
-    return () => { live = false; ro?.disconnect(); };
+    // the fonts arriving late change every width: measure again
+    document.fonts?.ready?.then(() => { if (live) { m = null; fit(); } }).catch(() => {});
+    return () => { live = false; ro?.disconnect(); probe.remove(); };
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
@@ -395,7 +442,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                     {lookingUp && lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Pulling from S&amp;S…</div>}
                   </div>
                   <div className="a-bd"><div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
-                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div></div>
+                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title={(l.garment ? l.garment + "\n" : "") + "Filled from the catalog. Click to change."} aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div></div>
                 </div>}
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
                 {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}

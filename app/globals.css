@@ -11651,7 +11651,7 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";flex:none;color:var(--ink-3);font-size:13px}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{grid-area:to;text-align:right;font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-x{grid-area:x;display:flex;justify-content:flex-end}
-  html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;width:calc(100% + 8px);min-width:0;max-width:none;height:30px;padding:4px 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:14px;line-height:20px;color:var(--ink);text-overflow:ellipsis}
+  html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;width:calc(100% + 8px);min-width:0;max-width:none;height:30px;padding:4px 2px 4px 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:14px;line-height:20px;color:var(--ink);text-overflow:ellipsis}
   html body .ord .line-b .gl-list .gl .a-st input{font-weight:700}
   html body .ord .line-b .gl-list .gl .a-br input{font-weight:400;color:var(--ink-2)}
   html body .ord .line-b .gl-list .gl .a-co input{font-weight:700}
@@ -11662,7 +11662,7 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl input[type=number]{-moz-appearance:textfield;appearance:textfield}
   html body .ord .line-b .gl-list .gl input[type=number]::-webkit-inner-spin-button,html body .ord .line-b .gl-list .gl input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   /* the sizes */
-  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
+  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:var(--sg,4px);margin:0;align-items:flex-start}
   html body .ord .line-b .a-sz .szc{flex:0 0 var(--szw,36px);width:var(--szw,36px);min-width:var(--szw,36px);max-width:var(--szw,36px);gap:2px}
   html body .ord .line-b .a-sz .szc > span:first-child{display:block;height:13px;line-height:13px;font-family:var(--body);font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)}
   html body .ord .line-b .a-sz .szc-off{visibility:hidden}
@@ -11705,14 +11705,14 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl-head + .gl{border-top:0}
   html body .ord .line-b .gl-list .gl.same{border-top:0;padding-top:0}
   html body .ord .line-b .gl-list .gl > .gl-ditto{display:none!important}
-  html body .ord .line-b .gl-list .gl > .gl-sty{display:flex!important;flex-wrap:wrap;align-items:center;gap:0 10px;max-width:none}
+  html body .ord .line-b .gl-list .gl > .gl-sty{display:flex!important;flex-wrap:wrap;align-items:center;gap:0 6px;max-width:none}
   html body .ord .line-b .gl-list .gl > .gl-sty > *{grid-area:auto!important}
   html body .ord .line-b .gl-list .gl > .gl-sty > .a-st{flex:0 0 auto}
   html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd{display:contents!important}
   html body .ord .line-b .gl-list .gl > .gl-sty .a-br{flex:1 1 auto;min-width:0}
   html body .ord .line-b .gl-list .gl > .gl-sty .a-de{flex:1 1 100%;min-width:0}
   html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;height:30px;padding:4px 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:14px;color:var(--ink)}
-  html body .ord .line-b .gl-list .gl .a-st input{font-weight:700;width:calc(var(--st,96px) + 8px)}
+  html body .ord .line-b .gl-list .gl .a-st input{font-weight:700;width:calc(var(--stw,var(--st,96px)) + 8px);padding-right:2px}
   html body .ord .line-b .gl-list .gl .a-br input{font-weight:400;color:var(--ink-2);width:calc(100% + 8px)}
   html body .ord .line-b .gl-list .gl .a-co input{font-weight:700;width:calc(100% + 8px)}
   html body .ord .line-b .gl-list .gl .a-de input{box-sizing:border-box;width:calc(100% + 8px);height:18px;padding:0 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:12px;color:var(--ink-3)}
@@ -11722,19 +11722,23 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{order:1;flex:1 1 auto}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-x{order:2;flex:none}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{order:3;flex:1 1 100%;justify-self:auto}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs{order:4;margin-left:auto;flex:none}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{order:5;flex:none}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea{order:6;flex:none;display:flex!important;align-items:center;gap:6px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs{order:4;margin-left:auto;flex:none;display:flex!important;flex-direction:row!important;align-items:center;gap:4px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{order:5;flex:none;display:block!important}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea{order:6;flex:none;display:flex!important;flex-direction:row!important;align-items:center;gap:6px}
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{display:inline!important;content:"×";color:var(--ink-3);border:0!important;margin:0!important;font-size:13px}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;min-width:84px;text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
-  html body .ord .line-b .gl-list .gl .a-cs input{box-sizing:border-box;width:52px;height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
-  html body .ord .line-b .gl-list .gl .a-qt input{box-sizing:border-box;width:44px;height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
-  html body .ord .line-b .gl-list .gl .a-ea input{box-sizing:border-box;width:64px;flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;display:block!important;min-width:var(--to,84px);text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
+  html body .ord .line-b .gl-list .gl .a-cs input{box-sizing:border-box;width:var(--cs,52px);height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
+  html body .ord .line-b .gl-list .gl .a-qt input{box-sizing:border-box;width:var(--qt,44px);height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
+  html body .ord .line-b .gl-list .gl .a-ea input{box-sizing:border-box;width:calc(var(--ea,76px) - 12px);flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
   html body .ord .line-b .gl-list .gl input[type=number]{-moz-appearance:textfield;appearance:textfield}
   html body .ord .line-b .gl-list .gl .a-sz .szrow{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0}
-  html body .ord .line-b .gl-list .gl .a-sz .szc{flex:0 0 38px;width:38px;min-width:38px;max-width:38px}
+  html body .ord .line-b .gl-list .gl .a-sz .szc{flex:0 0 var(--szw,38px);width:var(--szw,38px);min-width:var(--szw,38px);max-width:var(--szw,38px)}
   html body .ord .line-b .gl-list .gl .a-sz .szc-off{display:none!important}
   html body .ord .line-b .gl-list .gl .a-sz .szc.ysep{margin-right:0}
+  html body .ord .line-b .gl-list .gl .a-sz .szc.ysep::after{display:none}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs::before{display:inline!important;content:"cost";font-size:10px;color:var(--ink-3)}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz + .a-qt{margin-left:auto}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to b{font-size:14px;line-height:30px}
   html body .ord .line-b .gl-list .gl .a-sz .szc > span:first-child{display:block!important;font-family:var(--body);font-size:10.5px;font-weight:700;color:var(--ink-3)}
   html body .ord .line-b .gl-list .gl .a-sz .szc > :is(small.upc,.upc-btn){display:block!important;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none}
 }
@@ -11743,14 +11747,14 @@ html body .ord .line-b.fit-s .gl-list .gl{display:block!important;padding:10px 0
 html body .ord .line-b.fit-s .gl-list .gl-head + .gl{border-top:0}
 html body .ord .line-b.fit-s .gl-list .gl.same{border-top:0;padding-top:0}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-ditto{display:none!important}
-html body .ord .line-b.fit-s .gl-list .gl > .gl-sty{display:flex!important;flex-wrap:wrap;align-items:center;gap:0 10px;max-width:none}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-sty{display:flex!important;flex-wrap:wrap;align-items:center;gap:0 6px;max-width:none}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-sty > *{grid-area:auto!important}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-sty > .a-st{flex:0 0 auto}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-sty > .a-bd{display:contents!important}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-sty .a-br{flex:1 1 auto;min-width:0}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-sty .a-de{flex:1 1 100%;min-width:0}
 html body .ord .line-b.fit-s .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;height:30px;padding:4px 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:14px;color:var(--ink)}
-html body .ord .line-b.fit-s .gl-list .gl .a-st input{font-weight:700;width:calc(var(--st,96px) + 8px)}
+html body .ord .line-b.fit-s .gl-list .gl .a-st input{font-weight:700;width:calc(var(--stw,var(--st,96px)) + 8px);padding-right:2px}
 html body .ord .line-b.fit-s .gl-list .gl .a-br input{font-weight:400;color:var(--ink-2);width:calc(100% + 8px)}
 html body .ord .line-b.fit-s .gl-list .gl .a-co input{font-weight:700;width:calc(100% + 8px)}
 html body .ord .line-b.fit-s .gl-list .gl .a-de input{box-sizing:border-box;width:calc(100% + 8px);height:18px;padding:0 7px;margin:0 0 0 -8px;font-family:var(--body);font-size:12px;color:var(--ink-3)}
@@ -11760,19 +11764,23 @@ html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > *::before{display:no
 html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-co{order:1;flex:1 1 auto}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-x{order:2;flex:none}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-sz{order:3;flex:1 1 100%;justify-self:auto}
-html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-cs{order:4;margin-left:auto;flex:none}
-html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-qt{order:5;flex:none}
-html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-ea{order:6;flex:none;display:flex!important;align-items:center;gap:6px}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-cs{order:4;margin-left:auto;flex:none;display:flex!important;flex-direction:row!important;align-items:center;gap:4px}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-qt{order:5;flex:none;display:block!important}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-ea{order:6;flex:none;display:flex!important;flex-direction:row!important;align-items:center;gap:6px}
 html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{display:inline!important;content:"×";color:var(--ink-3);border:0!important;margin:0!important;font-size:13px}
-html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;min-width:84px;text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
-html body .ord .line-b.fit-s .gl-list .gl .a-cs input{box-sizing:border-box;width:52px;height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
-html body .ord .line-b.fit-s .gl-list .gl .a-qt input{box-sizing:border-box;width:44px;height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
-html body .ord .line-b.fit-s .gl-list .gl .a-ea input{box-sizing:border-box;width:64px;flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;display:block!important;min-width:var(--to,84px);text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
+html body .ord .line-b.fit-s .gl-list .gl .a-cs input{box-sizing:border-box;width:var(--cs,52px);height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
+html body .ord .line-b.fit-s .gl-list .gl .a-qt input{box-sizing:border-box;width:var(--qt,44px);height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
+html body .ord .line-b.fit-s .gl-list .gl .a-ea input{box-sizing:border-box;width:calc(var(--ea,76px) - 12px);flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
 html body .ord .line-b.fit-s .gl-list .gl input[type=number]{-moz-appearance:textfield;appearance:textfield}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szrow{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0}
-html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc{flex:0 0 38px;width:38px;min-width:38px;max-width:38px}
+html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc{flex:0 0 var(--szw,38px);width:var(--szw,38px);min-width:var(--szw,38px);max-width:var(--szw,38px)}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc-off{display:none!important}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc.ysep{margin-right:0}
+html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc.ysep::after{display:none}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-cs::before{display:inline!important;content:"cost";font-size:10px;color:var(--ink-3)}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-sz + .a-qt{margin-left:auto}
+html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-to b{font-size:14px;line-height:30px}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc > span:first-child{display:block!important;font-family:var(--body);font-size:10.5px;font-weight:700;color:var(--ink-3)}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc > :is(small.upc,.upc-btn){display:block!important;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none}
 html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;grid-template-areas:"lb qt to" "ad ad ad"!important;gap:8px 14px!important;align-items:baseline!important;padding-top:10px}
