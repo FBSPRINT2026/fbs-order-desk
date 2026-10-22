@@ -255,7 +255,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       // (Oct 22, Nick: "the colors still sync up… white and royal, white and Kelly, and the next white and royal all line
       // up"): the color column starts at the same place on every row; the room a short style/brand doesn't need sits
       // before the color. On the widest screens the description moves up between the brand and the color (fit-w0).
-      const ownDe = (i: HTMLInputElement | null) => (i && i.value ? textW(i, i.value) + 5 : 0);
+      const ownDe = (i: HTMLInputElement | null) => (i && i.value ? textW(i, i.value) + 11 : 0); // 7px padding each side, less the 8px it reaches left
       let lead = { st: 0, br: 0, de: 0 };
       const per = [...el.querySelectorAll<HTMLElement>(".gl-list > .gl")].map((r) => {
         if (!r.classList.contains("same")) lead = { st: Math.max(24, own1(r.querySelector(".a-st input"))), br: Math.max(20, own1(r.querySelector(".a-br input"))), de: ownDe(r.querySelector(".a-de input")) };
