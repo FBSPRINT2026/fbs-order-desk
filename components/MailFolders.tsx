@@ -382,7 +382,59 @@ export function fitWidth(f: HTMLIFrameElement, d: Document) {
   if (!b) return;
   b.style.zoom = "";
   const w = f.clientWidth, sw = Math.max(d.documentElement.scrollWidth, b.scrollWidth);
-  if (w > 0 && sw > w + 2) b.style.zoom = String(Math.max(0.35, w / sw));
+  const base = w > 0 && sw > w + 2 ? Math.max(0.35, w / sw) : 1;
+  // phones: the reader's own zoom on top (FrameZoom: pinch or − / +); wider than the screen then scrolls sideways
+  const k = +(f.dataset.k || 1) || 1;
+  f.dataset.base = String(base);
+  if (base * k !== 1) b.style.zoom = String(base * k);
+}
+
+/**
+ * Phones (Oct 21, Nick: "we need some sort of zoom… an email from Honey and I can't see what it says"): zoom an email in
+ * and out, by pinching it or with the small − / + by the bottom bar (shown while the email is on screen). Wide emails
+ * are shrunk to fit the phone; zoomed in, they scroll sideways. Back to fit on the next email.
+ */
+export function FrameZoom({ frame, fit, doc }: { frame: React.RefObject<HTMLIFrameElement | null>; fit: () => void; doc: string }) {
+  const [k, setK] = useState(1), [seen, setSeen] = useState(false);
+  const kRef = useRef(1);
+  const apply = (v: number) => { const x = Math.min(3, Math.max(1, +v.toFixed(2))); kRef.current = x; setK(x); const f = frame.current; if (f) { f.dataset.k = String(x); fit(); } };
+  useEffect(() => { kRef.current = 1; setK(1); if (frame.current) frame.current.dataset.k = "1"; }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  // only while this email is on screen
+  useEffect(() => {
+    const f = frame.current; if (!f || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setSeen(e.isIntersecting), { threshold: 0.05 });
+    io.observe(f); return () => io.disconnect();
+  }, [frame, doc]);
+  // pinch inside the email
+  useEffect(() => {
+    const f = frame.current; if (!f || !window.matchMedia?.("(pointer: coarse)").matches) return;
+    let d: Document | null = null, p: { dist: number; k: number; base: number } | null = null, now = 1;
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const start = (e: TouchEvent) => { if (e.touches.length === 2) { p = { dist: dist(e.touches), k: kRef.current, base: +(f.dataset.base || 1) || 1 }; now = p.k; } };
+    const move = (e: TouchEvent) => {
+      if (!p || e.touches.length !== 2 || !d?.body) return;
+      e.preventDefault();
+      now = Math.min(3, Math.max(1, p.k * (dist(e.touches) / p.dist)));
+      d.body.style.zoom = String(p.base * now);
+    };
+    const end = (e: TouchEvent) => { if (p && e.touches.length < 2) { p = null; apply(now); } };
+    const hook = () => {
+      d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end);
+      d = f.contentDocument; if (!d) return;
+      d.addEventListener("touchstart", start, { passive: true }); d.addEventListener("touchmove", move, { passive: false });
+      d.addEventListener("touchend", end); d.addEventListener("touchcancel", end);
+    };
+    hook(); f.addEventListener("load", hook);
+    return () => { f.removeEventListener("load", hook); d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end); };
+  }, [frame, doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!seen) return null;
+  return (
+    <div className="mfz" role="group" aria-label="Zoom the email">
+      <button type="button" onClick={() => apply(k - 0.25)} disabled={k <= 1} aria-label="Zoom out">−</button>
+      <button type="button" className="mfz-v" onClick={() => apply(1)} title="Fit to the screen">{k === 1 ? "Fit" : `${Math.round(k * 100)}%`}</button>
+      <button type="button" onClick={() => apply(k + 0.25)} disabled={k >= 3} aria-label="Zoom in">+</button>
+    </div>
+  );
 }
 
 export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back, ai, aiCount }: { /** the AI section's button(s), e.g. Assistant (Oct 14) */ ai?: React.ReactNode;
@@ -519,6 +571,7 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
     <div className="ibx-html">
       <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
       <QuoteToggle html={doc} frame={ref} fit={fit} />
+      <FrameZoom frame={ref} fit={fit} doc={doc} />
       <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
     </div>
   );

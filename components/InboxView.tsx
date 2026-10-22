@@ -21,7 +21,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { FileTray, msgFiles, type MailFile, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { FileTray, FrameZoom, msgFiles, type MailFile, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -598,6 +598,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <form className="pit-search" onSubmit={(e) => { e.preventDefault(); if (q.trim()) void runSearch(q); }}>
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (!e.target.value.trim()) setSugOpen(false); }} placeholder="Search people" aria-label="Search all mail" enterKeyHint="search" />
+            {/* an X to get out of a search in one tap (Oct 21, Nick: "a little X button so that you can exit out") */}
+            {(q || view.kind === "search") && <button type="button" className="pit-x" aria-label="Clear the search" onClick={() => { if (view.kind === "search") backFromSearch(); else { setQ(""); setSugOpen(false); } }}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg></button>}
             {q.trim().length >= 2 && <button type="button" className={"sug-tg" + (sugOpen ? " on" : "")} onClick={() => setSugOpen((x) => !x)} aria-expanded={sugOpen} aria-label={sugOpen ? "Hide suggestions" : "Show suggestions: people, customers, projects"} title={sugOpen ? "Hide suggestions" : "Suggestions: people, customers, projects"}><svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>}
           </form>
           {sugOpen && drop == null && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
@@ -1036,7 +1038,7 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
             <FileTray files={files} inBar note={full ? undefined : "Open these in Outlook for now."} />
             {full ? <MailFrame html={full.html} text={full.text} /> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
-              <QuoteToggle html={doc} frame={ref} fit={fit} />
+              <QuoteToggle html={doc} frame={ref} fit={fit} /><FrameZoom frame={ref} fit={fit} doc={doc} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
             </div> : <div className="lm-text">{m.text || "(no text)"}</div>}
           </>}
@@ -1567,7 +1569,7 @@ function EmailBody({ x }: { x: Act }) {
   return (
     <div className="ibx-html">
       <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
-      <QuoteToggle html={doc} frame={ref} fit={fit} />
+      <QuoteToggle html={doc} frame={ref} fit={fit} /><FrameZoom frame={ref} fit={fit} doc={doc} />
       <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
     </div>
   );
