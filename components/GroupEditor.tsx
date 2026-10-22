@@ -240,7 +240,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       return Math.max(lo, Math.min(hi, m + pad));
     };
     const n = Math.max(1, groupCols.length);
-    const yx = groupCols.indexOf("YXL"), sep = yx >= 0 && yx < groupCols.length - 1 ? 12 : 0;
+    // the youth/adult divider: 12px at the normal size gap, 10 and 8 as it tightens
+    const yx = groupCols.indexOf("YXL"), hasSep = yx >= 0 && yx < groupCols.length - 1;
+    const sepOf = (sg: number) => (hasSep ? sg * 2 + 4 : 0);
     const BOX = 36, BOXMAX = 46, BOXPHONE = 40, X = 22;
     type M = { st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
     let m: M | null = null, mPhone: boolean | null = null;
@@ -267,7 +269,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       const num = Math.max(widest(".gl .a-sz input.sz", 6, 0, 80), widest(".gl .a-sz .sz-tap", 8, 0, 80));
       const name = widest(".gl .a-sz .szc > span:first-child", 2, 0, 80);
       const upc = widest(".gl .a-sz .szc > :is(small.upc,.upc-btn)", 0, 0, 80);
-      const boxMin = Math.max(26, num, name, upc - 2);
+      const boxMin = Math.max(24, num, name, upc - 2);
       // the most sizes any one garment has (a stacked row shows only its own)
       let own = 1;
       el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
@@ -283,7 +285,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       // measured once per change (and again when the phone layout comes or goes: its fonts differ a little)
       if (!m || mPhone !== phone) { m = measure(); mPhone = phone; }
       const { st, br, co, cs, qt, ea, to, boxMin, own } = m;
-      const run = (b: number, sg: number) => n * b + (n - 1) * sg + sep;
+      const run = (b: number, sg: number) => n * b + (n - 1) * sg + sepOf(sg);
       // everything but the size boxes on one line, at a gap of g between columns and sg between sizes
       const fixed = (g: number, sg: number, cost: boolean) => st + g + br + g + co + g + run(0, sg) + g + (cost && cs ? cs + g : 0) + qt + g + ea + g + to + g + X;
       // tighter and tighter: [gap between columns, gap between sizes, the smallest box at that step]
@@ -319,7 +321,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       }
       const px = (k: string, v: number) => el.style.setProperty(k, `${v}px`);
       px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X);
-      px("--gap", gap); px("--sg", sg); px("--szw", box); px("--dew", dew);
+      px("--gap", gap); px("--sg", sg); px("--szw", box); px("--dew", dew); px("--sep", sepOf(sg) || 12);
       setGlFit(mode);
     };
     fit();

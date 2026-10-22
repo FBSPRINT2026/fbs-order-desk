@@ -11666,7 +11666,8 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .a-sz .szc{flex:0 0 var(--szw,36px);width:var(--szw,36px);min-width:var(--szw,36px);max-width:var(--szw,36px);gap:2px}
   html body .ord .line-b .a-sz .szc > span:first-child{display:block;height:13px;line-height:13px;font-family:var(--body);font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)}
   html body .ord .line-b .a-sz .szc-off{visibility:hidden}
-  html body .ord .line-b .a-sz .szc.ysep{margin-right:12px}
+  html body .ord .line-b .a-sz .szc.ysep{margin-right:var(--sep,12px)}
+  html body .ord .line-b .a-sz .szc.ysep::after{right:calc(var(--sep,12px) / -2 - 2px)}
   html body .ord .line-b .a-sz .szc :is(input.sz,.sz-tap){height:30px;padding:0;font-family:var(--body);font-size:13px}
   html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:12px;line-height:12px;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none;white-space:nowrap}
   html body .ord .line-b .gl.same .a-sz .szc > span:first-child{display:none}
