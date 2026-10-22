@@ -11834,9 +11834,8 @@ html body .ord .line-b .gl .ln-add{color:var(--ink-3);font-size:13px}
 html body .ord .line-b .gl > .gl-note{grid-column:1/-1;margin:4px 0 0}
 html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(100% + 8px);margin-left:-8px;min-height:30px;resize:vertical;font:13px/1.4 var(--body);color:var(--ink);padding:5px 7px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
 /* the version under the logo for everyone but the owner (Oct 22) */
-.nav-ver-all{padding:0 10px 8px;line-height:1}
-.nav-ver-all .ver-tag{font-size:10.5px}
-@media (max-width:760px){.nav-ver-all{display:none}}
+.nav-ver-all{padding:6px 12px 8px;line-height:1;display:block!important;text-align:left}
+.nav-ver-all .ver-tag{font-size:11px;color:var(--side-ink,#9aa3b2);opacity:1;display:inline-block}
 /* separations: the order's mockups, so the film room sees what the print is for (Oct 22) */
 .sep-mocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
 .sep-mocks a{display:flex;flex-direction:column;gap:3px;text-decoration:none;color:var(--ink-3);font-size:11.5px;min-width:0}

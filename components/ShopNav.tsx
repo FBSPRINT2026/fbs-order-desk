@@ -274,9 +274,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {/* phones: "On the go", moving (Oct 15, Nick) */}
         <span className="tag-go" aria-hidden><span className="tag-k" data-notranslate>{[...(brand.sideTagline || "Shop Management")].map((ch, i) => <span key={i}>{ch === " " ? "\u00a0" : ch}</span>)}</span><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
       </Link>
-      {/* the version for everyone, under the logo (Oct 22, Nick: "show the version number for everyone… on Jose's computer
-          I can't see if you've updated"); the owner has it on the Admin Tools line */}
-      {role !== "owner" && <div className="nav-ver-all"><VersionTag /></div>}
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
       </button>
@@ -370,6 +367,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           <form action="/auth/signout" method="post"><button className="side-out" type="submit" data-tip="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
         </div>
       </div>
+      {/* the version for everyone, bottom left under Sign out (Oct 22, Nick: "on Jose's computer I can't see if you've
+          updated"); the owner also has it on the Admin Tools line */}
+      {role !== "owner" && <div className="nav-ver-all"><VersionTag /></div>}
       </div>
       </div>
     </aside>
