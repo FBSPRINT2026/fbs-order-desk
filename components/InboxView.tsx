@@ -1182,8 +1182,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // emails waiting on an answer get their suggested answers straight away (written once, then kept with the email)
   // (no suggested answers fetched up front any more: Oct 14)
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
-  const crmFiles: MailFile[] = (x.meta?.attachments || []).map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, onOpen: () => void urlFor(f.path) }));
-  async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
+  // plain links (a signed URL fetched after the tap is blocked as a pop-up on phones, Oct 21)
+  const crmFiles: MailFile[] = (x.meta?.attachments || []).map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (r.ok && key === "arch") cheerWin("archived"); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;

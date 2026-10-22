@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
+import { fileHeaders } from "@/lib/fileOpen";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cfgOf } from "@/lib/mail/config";
 import { mailboxToRead, VIEWING_NO } from "@/lib/mail/viewing";
@@ -176,12 +177,12 @@ export async function GET(req: Request) {
     if (what === "ewsatt") {
       const a = await ewsAttachment(acct, q.get("id") || "");
       if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
-      return new Response(new Uint8Array(a.content), { headers: { "Content-Type": a.type, "Content-Disposition": `${/^(image\/|application\/pdf)/.test(a.type) ? "inline" : "attachment"}; filename="${a.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, max-age=86400" } });
+      { const b = new Uint8Array(a.content); return new Response(b, { headers: fileHeaders(b, a.name, a.type, "private, max-age=86400") }); }
     }
     if (what === "attachment") {
       const a = await withBox(acct, (c) => getAttachment(c, path, uid, Number(q.get("i") || 0)));
       if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
-      return new Response(new Uint8Array(a.content), { headers: { "Content-Type": a.type, "Content-Disposition": `${/^(image\/|application\/pdf)/.test(a.type) ? "inline" : "attachment"}; filename="${a.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, no-store" } });
+      { const b = new Uint8Array(a.content); return new Response(b, { headers: fileHeaders(b, a.name, a.type) }); }
     }
     // search: the last 45 days from the cache (instant); older mail on request, live
     if (what === "search") {
