@@ -243,7 +243,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     // the youth/adult divider: 12px at the normal size gap, 10 and 8 as it tightens
     const yx = groupCols.indexOf("YXL"), hasSep = yx >= 0 && yx < groupCols.length - 1;
     const sepOf = (sg: number) => (hasSep ? sg * 2 + 4 : 0);
-    const BOX = 36, BOXMAX = 46, BOXPHONE = 40, X = 22;
+    const BOX = 36, BOXMAX = 46, BOXPHONE = 40;
+    let X = 22; // the remove button's column, measured below
     type M = { deB: number; st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
     let m: M | null = null, mPhone: boolean | null = null;
     const measure = (): M => {
@@ -281,6 +282,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
       // each row's own style width, for the stacked layout (no gap after a short style number)
       el.querySelectorAll<HTMLElement>(".gl .a-st").forEach((c) => { const i = c.querySelector("input"); if (i) c.style.setProperty("--stw", `${Math.max(24, textW(i, i.value || i.placeholder || "") + 4)}px`); });
+      const xb = el.querySelector<HTMLElement>(".gl .a-x button");
+      X = Math.max(22, xb ? Math.ceil(xb.getBoundingClientRect().width) : 0);
       return { deB, st, br, co, cs, qt, ea, to, boxMin, own };
     };
     const fit = () => {
@@ -311,7 +314,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         else if (one(true)) mode = "w1";
         else if (cs && one(false)) mode = "w1c";
         else {
-          for (const [g2] of steps) if (st + g2 + br + g2 + co + g2 + (cs ? cs + g2 : 0) + qt + g2 + ea + g2 + to + g2 + X <= W) { mode = "w"; gap = g2; break; }
+          // the shirt line: the empty middle column has a gap on each side
+          for (const [g2] of steps) if (st + g2 + br + g2 + co + g2 + g2 + (cs ? cs + g2 : 0) + qt + g2 + ea + g2 + to + g2 + X <= W) { mode = "w"; gap = g2; break; }
           if (mode === "w") {
             box = BOX; sg = 4;
             while (box > boxMin && run(box, sg) > W) box--;
