@@ -1762,8 +1762,11 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
       if (canFolder) {
         // one at a time, in print order, so FilmMaker queues them 1, 2, 3…
         let sent = 0;
+        // a new name every time (Oct 22, #40091: printed once, then "Aborted due to security policy" and FilmMaker's
+        // "Unknown error"): sending the same name again wrote over the file FilmMaker already had open
+        const d0 = new Date(), stamp = [d0.getHours(), d0.getMinutes(), d0.getSeconds()].map((v) => String(v).padStart(2, "0")).join("");
         for (const f of files) {
-          const r = await sendToFolder(f.bytes, f.name);
+          const r = await sendToFolder(f.bytes, f.name.replace(/(\.[a-z0-9]+)$/i, `-${stamp}$1`));
           if (r === "sent") { sent++; continue; }
           if (r === "gone") { await forgetFolder(); handle.current = null; setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
           if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
