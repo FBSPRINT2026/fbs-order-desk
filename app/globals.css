@@ -11493,6 +11493,8 @@ html body .pbar .pbar-n{color:#fff}
   html body .msug .msug-t{font-size:14px}
   html body .msug .msug-t > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   html body .msug .msug-t small,html body .msug .msug-sec{display:none}
-  html body .msug .msug-i:not(.all):nth-of-type(n+6){display:none}
+  /* just the two most likely (Oct 21, Nick: "don't return too many… covers up the email"); the keyboard's Search key searches all mail */
+  html body .msug .msug-i:not(.all):nth-of-type(n+3),html body .msug .msug-i.all{display:none}
+  html body .msug{padding:2px}
 }
 @media (prefers-reduced-motion:reduce){ .pit-drop-w{animation:none} }
