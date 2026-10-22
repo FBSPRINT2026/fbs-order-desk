@@ -11435,13 +11435,21 @@ html body .pbar .pbar-n{color:#fff}
 
 /* ── Customers list on a phone: one clear card per customer (Oct 21, Nick) ── */
 .cu-cards{display:none}
+.cu-star{display:inline-flex;align-items:center;justify-content:center;border:0;background:none;padding:0;font:inherit;line-height:1;color:var(--ink-3);cursor:pointer}
+.cu-star.on{color:var(--warn)}
+.cu-star.sm{width:20px;margin-right:4px;font-size:15px;vertical-align:-1px}
+.cu-star:hover{color:var(--warn)}
 @media (max-width:760px) and (pointer:coarse){
   html body main.main .cu-tblw{display:none!important}
-  html body main.main .cu-cards{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
-  .cu-card{display:flex;align-items:center;gap:12px;width:100%;padding:12px 12px 12px 14px;border:0;border-bottom:1px solid var(--line);background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
-  .cu-card:last-child{border-bottom:0}
-  .cu-card:active{background:var(--surface-2)}
-  .cu-av{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:700}
+  html body main.main .cu-cards{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:clip}
+  .cu-card{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:var(--surface)}
+  .cu-card:has(+ .cu-let),.cu-card:last-child{border-bottom:0}
+  .cu-go{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:11px 12px 11px 2px;border:0;background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+  .cu-go:active{background:var(--surface-2)}
+  .cu-let{position:sticky;top:var(--phone-top,64px);z-index:2;padding:5px 14px;background:var(--bg);border-bottom:1px solid var(--line);border-top:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink-3)}
+  .cu-let:first-child{border-top:0}
+  .cu-let.fav{color:var(--warn)}
+  .cu-star{flex:none;width:44px;font-size:21px}
   .cu-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .cu-n{display:flex;align-items:center;gap:6px;min-width:0}
   .cu-n b{font-size:15.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
