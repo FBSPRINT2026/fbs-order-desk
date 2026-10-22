@@ -11671,22 +11671,22 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:12px;line-height:12px;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none;white-space:nowrap}
   html body .ord .line-b .gl.same .a-sz .szc > span:first-child{display:none}
   /* one line */
-  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz cs qt ea to x" "de de de sz . . . . ."}
-  html body .ord .line-b.fit-w1.nocs .gl-list .gl{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz . . . ."}
+  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz cs qt ea to x" "de de de sz . . . . ."}
+  html body .ord .line-b.fit-w1.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz . . . ."}
   html body .ord .line-b.fit-w1 .gl-list .gl.same{grid-template-areas:"st br co sz cs qt ea to x"}
   html body .ord .line-b.fit-w1.nocs .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x"}
-  html body .ord .line-b.fit-w1c .gl-list .gl{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz . cs . ."}
-  html body .ord .line-b.fit-w1c .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x" ". . . sz . cs . ."}
+  html body .ord .line-b.fit-w1c .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz cs cs . ."}
+  html body .ord .line-b.fit-w1c .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x" ". . . sz cs cs . ."}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:center;align-self:start}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same){padding-top:20px}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same) > .gl-row.gl-r2 > .a-sz{margin-top:-15px}
   html body .ord .line-b.fit-w1 .gl-list .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:2px}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs::before{content:"cost";font-size:10px;color:var(--ink-3)}
-  html body .ord .line-b.fit-w1c .gl-list .gl .a-cs input{flex:0 1 auto;width:calc(var(--cs,44px) - 4px);height:20px}
+  html body .ord .line-b.fit-w1c .gl-list .gl .a-cs input{flex:none;width:var(--cs,44px);height:20px}
   /* the sizes on their own line */
-  html body .ord .line-b.fit-w .gl-list .gl{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . cs qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
-  html body .ord .line-b.fit-w.nocs .gl-list .gl{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . qt ea to x" "de de de de . . . ." "sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b.fit-w .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . cs qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b.fit-w.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . qt ea to x" "de de de de . . . ." "sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl.same{grid-template-areas:"st br co . cs qt ea to x" "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w.nocs .gl-list .gl.same{grid-template-areas:"st br co . qt ea to x" "sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:start;margin-top:6px}

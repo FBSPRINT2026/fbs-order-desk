@@ -245,10 +245,19 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     type M = { st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
     let m: M | null = null, mPhone: boolean | null = null;
     const measure = (): M => {
-      // text columns: the words start at the column's edge, 2px of padding after them, +3 to spare
-      const st = widest(".gl .a-st input", 5, 36, 160);
-      const br = widest(".gl .a-br input", 5, 28, 180);
-      const co = widest(".gl .a-co input", 5, 56, 240);
+      // the words of each row sit close together ("245 Tultex White/ Royal", Nick: "shrink between 245 Tultex and the
+      // color"): each row's style and brand columns are as wide as its own words (2px of padding after them, +3 to
+      // spare), the colors of one style keep their first row's widths so they line up under it, and every row's color
+      // column ends at the same place, so the sizes still start at the same place on every row
+      const own1 = (i: HTMLInputElement | null) => (i ? textW(i, i.value || i.placeholder || "") + 5 : 0);
+      let lead = { st: 0, br: 0 };
+      const per = [...el.querySelectorAll<HTMLElement>(".gl-list > .gl")].map((r) => {
+        if (!r.classList.contains("same")) lead = { st: Math.max(24, own1(r.querySelector(".a-st input"))), br: Math.max(20, own1(r.querySelector(".a-br input"))) };
+        return { r, st: lead.st, br: lead.br, co: Math.max(44, own1(r.querySelector(".a-co input"))) };
+      });
+      const T0 = Math.max(120, ...per.map((x) => x.st + x.br + x.co));
+      per.forEach((x) => { x.r.style.setProperty("--str", `${x.st}px`); x.r.style.setProperty("--brr", `${x.br}px`); x.r.style.setProperty("--cor", `${T0 - x.st - x.br}px`); });
+      const st = per[0]?.st ?? 60, br = per[0]?.br ?? 60, co = T0 - st - br;
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       const ea = widest(".gl .a-ea input", 28, 54, 120);
