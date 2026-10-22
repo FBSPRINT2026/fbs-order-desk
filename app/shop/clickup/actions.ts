@@ -24,6 +24,8 @@ export type ClickUpKnown = { pv?: { id: string; number: string; status: string; 
  * same customer's Printavo jobs and our orders (Printavo 34668's PO is "2842 Leaps & Bounds"). The best match wins:
  * most numbers found, then most words in common, then the newest.
  */
+const TOOL_ONLY_FROM = Date.parse("2026-10-22T20:00:00Z");
+
 async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: ClickUpTaskRow[], teams: ClickUpTeamRow[]) {
   const custOf = new Map(teams.map((t) => [t.id, t.customer_id]));
   const custs = [...new Set(tasks.map((t) => custOf.get(t.team_id)).filter((x): x is string => !!x))];
@@ -36,15 +38,31 @@ async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: Cli
   ]);
   const nums = (s: string) => [...new Set((s.match(/\d{3,10}/g) || []).filter((n) => !/^20[2-3]\d$/.test(n)))];
   const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^\d+$/.test(w)));
+  // a job code ("HUD 102026", "JAC 100826", "AMS 43142") must match whole, letters and number together: McKenna's codes
+  // are the school + the date, so "HUD 102026" and "LCHS 102026" share the number (Oct 22: Hudson Band was taken for
+  // Printavo 34716, LCHS Band State). "PO" / "SO" before a number is just the label, not a code.
+  const codes = (s: string) => [...s.matchAll(/\b([A-Za-z]{2,5})[\s-]?(\d{5,}[A-Za-z]?)\b/g)].filter((m) => !/^(po|so|no|inv)$/i.test(m[1])).map((m) => (m[1] + m[2]).toUpperCase());
+  // a 6-digit number that reads as a date (MMDDYY) isn't enough on its own
+  const dateLike = (n: string) => /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{2}$/.test(n);
   const score = (task: string, text: string) => {
-    const hit = nums(task).filter((n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(text)).length;
-    if (!hit) return 0;
-    const a = words(task), b = words(text);
-    return hit * 100 + [...a].filter((w) => b.has(w)).length;
+    const a = words(task), b = words(text), common = [...a].filter((w) => b.has(w)).length;
+    const tc = codes(task);
+    if (tc.length) {
+      const xc = new Set(codes(text));
+      const hit = tc.filter((c) => xc.has(c)).length;
+      return hit ? hit * 100 + common : 0;
+    }
+    const hits = nums(task).filter((n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(text));
+    if (!hits.length || (hits.every(dateLike) && !common)) return 0;
+    return hits.length * 100 + common;
   };
   for (const t of tasks) {
     const c = custOf.get(t.team_id);
     if (!c || !nums(t.name).length) continue;
+    // from Oct 22 2026, 3 PM Central on, ClickUp jobs are only entered through this tool, so a new one is never
+    // looked for in Printavo: it's New until it's made into an order here (Nick: "anything that comes over from here
+    // on out is going to be new")
+    if (t.created_at_cu && Date.parse(t.created_at_cu) >= TOOL_ONLY_FROM) continue;
     let best: { s: number; at: string; pv: ClickUpKnown["pv"] } | null = null;
     for (const o of (pv || []).filter((x) => x.customer_id === c)) {
       const sc = score(t.name, `${o.po_number || ""} ${o.nickname || ""}`);
@@ -82,6 +100,15 @@ export async function listClickUp(): Promise<{ ok: true; connected: boolean; tok
   // number already in there, so I'm not sure why that one's under new")
   for (const t of tasks) {
     const pv = known[t.id]?.pv;
+    // a match made before that no longer holds is undone, and the job is new again if it otherwise would be
+    if (!pv && t.pv_number) {
+      const hidden = !!teamRows.find((x) => x.id === t.team_id)?.hidden;
+      const waiting = !hidden && !t.parent && !/^(closed|done)$/i.test(t.status_type) && !t.in_printavo && !t.order_id && !t.dismissed_at
+        && !/(^|›\s*)personal list$/i.test(String(t.where_text || "").trim()) && !(t.created_at_cu && Date.now() - Date.parse(t.created_at_cu) > 120 * 864e5);
+      await admin.from("clickup_tasks").update({ pv_id: null, pv_number: null, waiting }).eq("id", t.id);
+      t.pv_id = null; t.pv_number = null; t.waiting = waiting;
+      continue;
+    }
     if (!pv || t.pv_number === pv.number) continue;
     await admin.from("clickup_tasks").update({ pv_id: pv.id, pv_number: pv.number, waiting: false }).eq("id", t.id);
     t.pv_id = pv.id; t.pv_number = pv.number; t.waiting = false;
