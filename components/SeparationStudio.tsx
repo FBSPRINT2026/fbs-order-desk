@@ -1823,7 +1823,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
             <span className="faint">{NL.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used · saves {Math.max(0, n * B.lengthIn - total).toFixed(1)}&quot; over trimming each</span>
           </> : <span className="pv-err">These films are too wide to nest on the {rollIn}&quot; roll. Turn off nesting.</span>) : B.fits ? <>
             <b>{n} film{n === 1 ? "" : "s"}, one per screen · {total.toFixed(1)}&quot; of film</b>
-            <span>{B.rot ? "Turned sideways (too wide for the roll upright)" : "Upright"}, {B.lengthIn.toFixed(1)}&quot; each, trimmed after each one</span>
+            <span>{B.why === "saves" ? `Turned -90° to save film (${B.savedIn.toFixed(1)}" less each)` : B.rot ? "Turned sideways (too wide for the roll upright)" : "Upright"}, {B.lengthIn.toFixed(1)}&quot; each, trimmed after each one</span>
             <span className="faint">{B.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used · targets top and bottom, ¾&quot; from the art</span>
           </> : <span className="pv-err">The film is {B.widthIn.toFixed(1)}&quot; across even turned sideways: too big for the {rollIn}&quot; roll. Make the print smaller.</span>}
         </div>
@@ -1857,7 +1857,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
       <details className="pf-setup">
         <summary className="faint">Set up the film PC (once)</summary>
         <ol>
-          <li><b>FilmMaker queue for films:</b> the Epson, media = {rollIn || 17}&quot; roll film, black only (composite, no separations), scale 100% (never fit to page), and &quot;Enable application halftoning&quot; on so it keeps our dots. Layout Manager: Layout mode <i>Auto Page</i> with &quot;Remove White Space from Bottom&quot; on, so the Epson trims after every film. Leave rotation off: the portal turns a film only when it&apos;s too wide for the roll.</li>
+          <li><b>FilmMaker queue for films:</b> the Epson, media = {rollIn || 17}&quot; roll film, black only (composite, no separations), scale 100% (never fit to page), and &quot;Enable application halftoning&quot; on so it keeps our dots. Layout Manager: Layout mode <i>Auto Page</i> with &quot;Remove White Space from Bottom&quot; on, so the Epson trims after every film. Leave rotation off: the portal turns a film -90° itself whenever that saves film (or it&apos;s too wide for the roll).</li>
           <li><b>FilmMaker: hot folder.</b> Queue → Properties → Hot Folders: check &quot;Enable queue hot folder&quot;, type the folder&apos;s full path in the browse box (its folder list can come up blank), and check &quot;Delete file after processed by queue&quot;. The shop uses <code>Dropbox\FILM DIRECT TO PRINT</code> so any computer can send films; on the film PC that folder must be <i>Make available offline</i> (green check) or the browser can&apos;t save into it.</li>
           <li><b>Dot gain:</b> the dots already allow for it (&quot;Dot gain on press&quot;, 15%), so the film template&apos;s Press Calibration curve stays straight. Keep its film Calibration / ink density so blacks come out dense.</li>
           <li><b>Film DPI:</b> set Film DPI (Output, above) to what FilmMaker prints at on the Epson (usually 720 or 1440) so the dots aren&apos;t resized.</li>

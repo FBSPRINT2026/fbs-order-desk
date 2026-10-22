@@ -118,11 +118,16 @@ export const FILM_GAP = 54;           // pt: ¾" from the art's edge to where a 
 export const FILM_TARGET = 21;        // pt: target arm (crosshair half-length); the circle is half of it
 export const FILM_SIDE = 18;          // pt: ¼" at the sides (no marks there)
 const ROLL_EDGE_IN = 0.4;             // in: the printer's own margins
-/** the page one film needs: upright if it fits across the roll, else a quarter turn */
+/**
+ * the page one film needs: turned a quarter turn (-90°) whenever that uses less film and still fits across the roll
+ * (Oct 22, Nick: "we need to auto-rotate -90 degrees if it can save film"), or when it's too wide for the roll upright
+ */
+export const ROTATE_MIN_SAVE = 18; // pt: turn it only when that saves at least ¼" of film
 export function filmBox(artW: number, artH: number, rollIn: number) {
   const mt = FILM_GAP + 2 * FILM_TARGET + 6, bw = artW + 2 * FILM_SIDE, bh = artH + 2 * mt, P = (rollIn - ROLL_EDGE_IN) * 72;
-  const rot = bw > P, w = rot ? bh : bw, h = rot ? bw : bh;
-  return { rot, mt, w, h, fits: w <= P, widthIn: w / 72, lengthIn: h / 72 };
+  const tooWide = bw > P, saves = !tooWide && bh <= P && bh - bw >= ROTATE_MIN_SAVE;
+  const rot = tooWide || saves, w = rot ? bh : bw, h = rot ? bw : bh;
+  return { rot, why: (tooWide ? "wide" : saves ? "saves" : "") as "" | "wide" | "saves", savedIn: saves ? (bh - bw) / 72 : 0, mt, w, h, fits: w <= P, widthIn: w / 72, lengthIn: h / 72 };
 }
 /** one film's marks, label and art, in its own frame (art at FILM_SIDE, mt), drawing image /Im{i} */
 function filmDraw(p: FilmPage, tag: string, marks: FilmMarks, i: number, mt: number) {
@@ -177,7 +182,8 @@ const sheetPdf = (W: number, H: number, content: string, imgs: FilmPage[], title
 /** one film as a page: just the film, upright unless too wide for the roll */
 function filmSheet(p: FilmPage, rollIn: number, tag: string, marks: FilmMarks): Sheet {
   const B = filmBox(p.widthIn * 72, p.heightIn * 72, rollIn);
-  const place = B.rot ? `q 0 1 -1 0 ${(B.w).toFixed(2)} 0 cm\n` : `q 1 0 0 1 0 0 cm\n`;
+  // turned -90° (clockwise): the film's top runs down the right side of the page
+  const place = B.rot ? `q 0 -1 1 0 0 ${(B.h).toFixed(2)} cm\n` : `q 1 0 0 1 0 0 cm\n`;
   return { W: B.w, H: B.h, content: place + filmDraw(p, tag, marks, 0, B.mt) + "Q\n", imgs: [p] };
 }
 /** every film in one PDF, a page each in print order, the same films Print films sends (the Films PDF download) */
