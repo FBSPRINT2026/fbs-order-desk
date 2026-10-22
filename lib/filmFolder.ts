@@ -60,7 +60,7 @@ export async function allowFolder(h?: DirHandle | null): Promise<"granted" | "no
  * write the films into the hot folder (must run from a click: the browser may ask once to allow it again).
  * "no-folder": none picked yet; "denied": the browser wasn't allowed; "gone": the folder was moved or deleted.
  */
-export async function sendToFolder(bytes: Uint8Array, name: string): Promise<"sent" | "no-folder" | "denied" | "gone"> {
+export async function sendToFolder(bytes: Uint8Array, name: string): Promise<"sent" | "no-folder" | "denied" | "gone" | "blocked"> {
   const h = await savedFolder();
   if (!h) return "no-folder";
   // allowed already (allowFolder, at the click); asking again here would fail once the click has expired
@@ -75,6 +75,9 @@ export async function sendToFolder(bytes: Uint8Array, name: string): Promise<"se
     return "sent";
   } catch (e) {
     if (e instanceof DOMException && e.name === "NotFoundError") return "gone";
+    // the browser's own check on the saved file stopped it ("Aborted due to security policy": Chrome's download
+    // protection, or a rule set on this computer): the portal can't get past it, so the caller downloads instead
+    if (e instanceof DOMException && (e.name === "AbortError" || /security policy/i.test(e.message))) return "blocked";
     throw e;
   }
 }

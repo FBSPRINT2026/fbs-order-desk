@@ -1767,6 +1767,13 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
           if (r === "sent") { sent++; continue; }
           if (r === "gone") { await forgetFolder(); handle.current = null; setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
           if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
+          // Oct 22, #40091: "Aborted due to security policy": this browser's check refused the hot folder. Don't stop
+          // with nothing: the films download, to be dropped into the hot folder by hand
+          if (r === "blocked") {
+            for (const g of files.slice(sent)) download(g.bytes, g.name);
+            setErr(`This browser's security check wouldn't let the portal save into the hot folder${sent ? ` after ${sent} film${sent === 1 ? "" : "s"}` : ""}, so the rest were downloaded instead (${files.length - sent}). Move them from Downloads into the FilmMaker hot folder. If this keeps happening on the film PC, tell Nick.`);
+            done(); return;
+          }
           if (r === "no-folder") break;
         }
         if (sent === files.length) { setMsg(only != null ? `Sent ${many} to FilmMaker at ${at}.` : nesting ? `Sent ${n} films nested on one sheet to FilmMaker at ${at}: cut them apart by hand.` : `Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); done(); return; }
