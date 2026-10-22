@@ -51,7 +51,7 @@ function Inv({ ours, pv }: { ours?: { id: string; number: number } | null; pv?: 
   if (!ours && !pv) return <span className="faint">—</span>;
   return <span className="cu-inv">
     {ours && <span className="cu-inv-r"><Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link><span className="cu-sys new" title="Made in our new system (this portal)">New system</span></span>}
-    {pv && <span className="cu-inv-r">{pv.id ? <Link href={`/shop/archive/${pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pv.number}</span></Link> : <span className="ordno">{pv.number}</span>}<span className="cu-sys old" title="Printavo (our old system)">PTV</span>{pv.status && <span className="sub cu-inv-s">{pv.status}</span>}</span>}
+    {pv && <span className="cu-inv-r">{pv.id ? <Link href={`/shop/archive/${pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pv.number}</span></Link> : <span className="ordno">{pv.number}</span>}<span className="cu-sys pv" title="Printavo (our old system)" aria-label="Printavo"><img src="/brand/printavo-p.png" alt="" /></span>{pv.status && <span className="sub cu-inv-s">{pv.status}</span>}</span>}
   </span>;
 }
 /** a job's board (its ClickUp list): "Bulk Orders", "Cart Orders", "Purchase Orders" */
