@@ -16,6 +16,7 @@ import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
+import SalesSheet from "@/components/SalesSheet";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -312,7 +313,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [pdfOurs, setPdfOurs] = useSticky<boolean>("mk.pdfOurs", true), [pdfCompany, setPdfCompany] = useSticky<boolean>("mk.pdfCompany", true);
   /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
    *  a proof page per color, or a sales sheet with every color on one page */
-  const [pdfKind, setPdfKind] = useSticky<"proof" | "sheet">("mk.pdfKind", "proof"), [sheetShow, setSheetShow] = useSticky<"both" | "front" | "back">("mk.sheetShow", "both");
+  const [salesOpen, setSalesOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
   const tried = useRef(new Set<string>());
@@ -807,7 +809,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // bounced from color to color, and Heather Orchid's front came out smaller than its back).
     const g = garmentFor(l);
     const sib = g ? lines.filter((x) => garmentFor(x)?.id === g.id) : [l];
-    const rs = (["front", "back"] as View[]).flatMap((pv) => sib.map((x) => fits[photo(x, pv)])).filter((p): p is Fit => !!p && !p.flat && !!p.body);
+    // the scale comes from the fronts and is used on the backs too, so a color's front and back show at the same size
+    // (Oct 22, Nick: Heather Mustard's back came out lower and longer than its front; the reference shirt's back photo
+    // is framed smaller than its front, so measuring each side against its own reference made them differ)
+    const readings = (pv: View) => sib.map((x) => fits[photo(x, pv)]).filter((p): p is Fit => !!p && !p.flat && !!p.body);
+    const rs = readings("front").length ? readings("front") : readings("back");
     const med = (a: number[]) => { const b2 = [...a].sort((x2, y2) => x2 - y2); return b2[b2.length >> 1]; };
     const s0 = rs.length ? med(rs.map((p) => p.s)) : f.s, z0 = rs.length ? med(rs.map((p) => p.zs || p.s)) : f.zs || f.s;
     return { ...f, s: s0, zs: z0, neck: undefined };
@@ -1196,7 +1202,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
-      const nm = normOf(fit, v);
+      const nm = normOf(fit, "front");
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
       // fitted inside the frame the way it was measured and is shown on screen (object-fit: contain), not stretched: a SanMar
       // photo (2:3) stretched to the 4:5 frame came out 20% wider than the S&S shirts next to it (Oct 20, PC55RS)
@@ -1279,7 +1285,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
-    const nm = normOf(fit, v);
+    const nm = normOf(fit, "front");
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * nm.z * (p.rot ? 1.35 : 1.12)));
     const cx = nm.tx + nm.z * (p.x + p.w / 2), cy = nm.ty + nm.z * (p.y + p.h / 2);
     const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
@@ -1291,6 +1297,22 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * size, inks), and the garment. Our logo and contact, and the customer's company name, are each on or off (an FBS
    * proof with no company name, or the company's own name with no FBS logo, or both).
    */
+  /** Sales tools → Sales sheet creator (components/SalesSheet.tsx): the shop's name, contact and logo for it */
+  async function openSheet() {
+    let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
+    const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
+    if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) };
+    setSheetShop({ name: shop.name, line: [shop.name, fmtPhone(shop.phone), shop.email].filter(Boolean).join("  ·  "), logoUrl: shop.logoUrl || "/brand/fbs-logo.svg" });
+    setSheetOpen(true);
+  }
+  /** one color's shirts side by side, about h px tall, for the sales sheet */
+  async function sheetShirts(key: string, sides: View[], h: number) {
+    const l = lines.find((x) => x.id === key);
+    if (!l) throw new Error("That color isn't on the mockup anymore.");
+    await loadShirtFonts().catch(() => {});
+    return photosCanvas(l, h / PHOTO_H, Math.round(h * 0.03), sides);
+  }
+
   async function exportPdf(o: { ours: boolean; company: boolean; description: string }) {
     const todo = lines.filter((z) => z.style || z.color);
     if (!todo.length) return setMsg("Add a garment and color first.");
@@ -1428,98 +1450,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       setMsg(`Downloaded ${name}.`); setPdfOpen(false);
     } catch (e) { setMsg("Couldn't make the PDF: " + (e instanceof Error ? e.message : String(e))); }
-    setPdfBusy(false);
-  }
-
-  /**
-   * A sales sheet (Oct 22, Nick: "think of it like a marketing sheet… so a customer can… take orders, mass market it
-   * out"): every color on one landscape page, in a grid, the front and back side by side (or one side) with the color's
-   * name under each, the mockup's name and garments on top. Over 16 colors goes on to another page. Just a PDF.
-   */
-  async function exportSheet(o: { ours: boolean; company: boolean; description: string; show: "both" | "front" | "back" }) {
-    const todo = lines.filter((z) => z.style && z.color);
-    if (!todo.length) return setMsg("Add a garment and color first.");
-    const vs = (o.show === "both" ? views : views.filter((v) => v === o.show));
-    const shown = vs.length ? vs : views;
-    setPdfBusy(true); setMsg("Making the sales sheet…");
-    try {
-      await loadShirtFonts().catch(() => {});
-      let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
-      if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
-      const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
-      const cust = customers.find((c) => c.id === customerId);
-      const DPI = 200, PW = 11 * DPI, PH = 8.5 * DPI, M = 0.4 * DPI, R = 1.5;
-      const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
-      const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", rule = "#DDE2EA";
-      const styles = [...new Set(todo.map((l) => [l.brand, l.style, l.garment].filter(Boolean).join(" ")))];
-      const multi = new Set(todo.map((l) => l.style.toLowerCase())).size > 1;
-      const PER = 16, pages = [];
-      for (let p0 = 0; p0 < todo.length; p0 += PER) {
-        const part = todo.slice(p0, p0 + PER);
-        const c = document.createElement("canvas"); c.width = Math.round(PW * R); c.height = Math.round(PH * R);
-        const x = c.getContext("2d")!;
-        x.scale(R, R); x.imageSmoothingQuality = "high";
-        x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
-        // header: our logo and / or their name on the left, the mockup's name and garments under it
-        let top = M;
-        if (o.ours || o.company) {
-          let lx = M;
-          if (o.ours) {
-            if (logo) { const lh = 0.45 * DPI, lw = Math.min(2.2 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); lx = M + lw + 0.3 * DPI; }
-            else { x.fillStyle = ink; x.font = font(800, 36); x.fillText(shop.name, M, M + 36); lx = M + x.measureText(shop.name).width + 0.3 * DPI; }
-          }
-          if (o.company) { if (o.ours) { x.fillStyle = rule; x.fillRect(lx - 0.15 * DPI, M + 4, 3, 0.4 * DPI); } x.fillStyle = ink; x.font = font(800, 42); x.fillText(custLabel(cust) || "", lx, M + 40); }
-          top = M + 0.58 * DPI;
-        }
-        x.fillStyle = ink; x.font = font(800, 40); x.fillText(groupName || "Mockup", M, top + 38);
-        x.fillStyle = soft; x.font = font(400, 24);
-        let head = styles.join("  ·  ");
-        while (head.length > 8 && x.measureText(head).width > PW - 2 * M) head = head.slice(0, -2);
-        x.fillText(head === styles.join("  ·  ") ? head : head + "…", M, top + 72);
-        let y = top + 72;
-        if (o.description.trim()) { x.font = font(400, 22); let t = o.description.trim(); while (t.length > 8 && x.measureText(t).width > PW - 2 * M) t = t.slice(0, -2); y += 32; x.fillText(t, M, y); }
-        if (pages.length || todo.length > PER) { x.textAlign = "right"; x.fillStyle = faint; x.font = font(400, 20); x.fillText(`Page ${pages.length + 1} of ${Math.ceil(todo.length / PER)}`, PW - M, top + 38); x.textAlign = "left"; }
-        const gridTop = y + 0.25 * DPI, gridBot = PH - M - (o.ours ? 0.35 * DPI : 0.1 * DPI);
-        // the grid: as many columns as make the shirts biggest
-        const n = shown.length, gapV = 0.08 * DPI, labelH = (multi ? 64 : 40), cg = 0.22 * DPI, rg = 0.18 * DPI;
-        const unitW = n * PHOTO_W + (n - 1) * (gapV / 1), unitH = PHOTO_H;
-        let best = { cols: 1, k: 0 };
-        for (let cols = 1; cols <= part.length; cols++) {
-          const rows = Math.ceil(part.length / cols);
-          const cw = (PW - 2 * M - (cols - 1) * cg) / cols, ch = (gridBot - gridTop - (rows - 1) * rg) / rows - labelH;
-          const k = Math.min((cw - (n - 1) * gapV) / (n * PHOTO_W), ch / unitH);
-          if (k > best.k) best = { cols, k };
-        }
-        const cols = best.cols, rows = Math.ceil(part.length / cols), k = best.k;
-        const cw = (PW - 2 * M - (cols - 1) * cg) / cols, cellH = unitH * k + labelH;
-        const usedH = rows * cellH + (rows - 1) * rg, oy0 = gridTop + Math.max(0, (gridBot - gridTop - usedH) / 2);
-        void unitW;
-        for (let i = 0; i < part.length; i++) {
-          const l = part[i], col = i % cols, row = Math.floor(i / cols);
-          // the last row is centered when it isn't full
-          const inRow = row === rows - 1 ? part.length - row * cols : cols, rowW = inRow * cw + (inRow - 1) * cg;
-          const ox = M + (PW - 2 * M - rowW) / 2 + col * (cw + cg), oy = oy0 + row * (cellH + rg);
-          const hi = await photosCanvas(l, k * R, gapV * R, shown);
-          const w = hi.width / R, h = hi.height / R;
-          x.drawImage(hi, ox + (cw - w) / 2, oy, w, h);
-          x.textAlign = "center"; x.fillStyle = ink; x.font = font(700, 26);
-          x.fillText(l.color, ox + cw / 2, oy + h + 32);
-          if (multi) { x.fillStyle = faint; x.font = font(400, 19); x.fillText([l.brand, l.style].filter(Boolean).join(" "), ox + cw / 2, oy + h + 58); }
-          x.textAlign = "left";
-        }
-        if (o.ours) {
-          x.fillStyle = rule; x.fillRect(M, PH - M - 40, PW - 2 * M, 2);
-          x.fillStyle = soft; x.font = font(600, 19);
-          x.fillText([shop.name, fmtPhone(shop.phone), shop.email].filter(Boolean).join("  ·  "), M, PH - M - 6);
-        }
-        pages.push(await canvasPage(c, 792, 612, 0.95));
-      }
-      const pdf = imagePdf(pages, `${groupName || "Mockup"} sales sheet`);
-      const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup", "sales sheet"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70)}.pdf`;
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: "application/pdf" })); a.download = name; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      setMsg(`Downloaded ${name}.`); setPdfOpen(false);
-    } catch (e) { setMsg("Couldn't make the sales sheet: " + (e instanceof Error ? e.message : String(e))); }
     setPdfBusy(false);
   }
 
@@ -1932,7 +1862,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
-      const nm = normOf(fit, v);
+      const nm = normOf(fit, "front");
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
@@ -2118,7 +2048,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={async () => {
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{!portal && <span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
+          {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
+          <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={async () => {
           setAdjust(false);
           const vis = imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed);
           saveOk.current = false;
@@ -2128,26 +2060,22 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }}>{saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
       </div>
 
+        {sheetOpen && (
+          <SalesSheet colors={lines.filter((z) => z.style && z.color).map((z) => ({ key: z.id, color: z.color, style: [z.brand, z.style].filter(Boolean).join(" ") }))}
+            views={views as ("front" | "back")[]} shirts={sheetShirts} title0={groupName} customer={custLabel(customers.find((c) => c.id === customerId)) || ""}
+            shop={sheetShop} onClose={() => setSheetOpen(false)} />
+        )}
         {pdfOpen && (
           <section className="panel mk-pdf">
-            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">{pdfKind === "sheet" ? "Every color on one page, to sell from or send around." : "One page per shirt color, ready to send the customer."}</span></div>
-            <div className="chips mk-pdf-kind" role="group" aria-label="PDF layout">
-              <button type="button" className={"chip" + (pdfKind === "proof" ? " on" : "")} onClick={() => setPdfKind("proof")}>Proof: a page per color</button>
-              <button type="button" className={"chip" + (pdfKind === "sheet" ? " on" : "")} onClick={() => setPdfKind("sheet")}>Sales sheet: all colors on one page</button>
-            </div>
-            {pdfKind === "sheet" && views.length > 1 && (
-              <div className="chips mk-pdf-kind" role="group" aria-label="Sides to show">
-                {([["both", "Front and back"], ["front", "Front only"], ["back", "Back only"]] as const).map(([k, t]) => <button key={k} type="button" className={"chip" + (sheetShow === k ? " on" : "")} onClick={() => setSheetShow(k)}>{t}</button>)}
-              </div>
-            )}
+            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">One page per shirt color, ready to send the customer.</span></div>
             <div className="mk-pdf-opts">
               <label className="sep-chk"><input type="checkbox" checked={pdfOurs} onChange={(e) => setPdfOurs(e.target.checked)} /> Our logo &amp; contact (FBS)</label>
               <label className="sep-chk"><input type="checkbox" checked={pdfCompany} onChange={(e) => setPdfCompany(e.target.checked)} /> Company name ({custLabel(customers.find((c) => c.id === customerId)) || "the customer"})</label>
             </div>
-            <p className="faint mk-pdf-note">{pdfKind === "sheet" ? `A landscape page with all ${lines.filter((z) => z.style && z.color).length} colors, each named under its shirt.` : "Every page has the shirts, a close-up of each print with its size and inks, and the garment and color."}{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
+            <p className="faint mk-pdf-note">Every page has the shirts, a close-up of each print with its size and inks, and the garment and color.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
             <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => (pdfKind === "sheet" ? exportSheet({ ours: pdfOurs, company: pdfCompany, description: pdfDesc, show: sheetShow }) : exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc }))}>{pdfBusy ? "Making the PDF…" : pdfKind === "sheet" ? "Download sales sheet" : "Download PDF"}</button>
+              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc })}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
               <button type="button" className="btn ghost" onClick={() => setPdfOpen(false)}>Close</button>
             </div>
           </section>
@@ -2256,8 +2184,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), v)}
-                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => setNeck(line, y) } : undefined} cx={normOf(fitFor(line, v), v).z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
+              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), "front")}
+                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => setNeck(line, y) } : undefined} cx={normOf(fitFor(line, v), "front").z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
                 areaEdit={grid && !!line && !!garmentFor(line) && !!fitFor(line, v) && !fitFor(line, v)?.flat}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
                 areaNote={grid && line && adjOf(line, v) ? <span className="mk-areanote">Print area set by hand for {line.style}{lines.length > 1 ? " (this garment only)" : ""} · <button type="button" className="linkbtn" onClick={() => resetArea(line, v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
@@ -2699,7 +2627,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
         onPointerCancel={(e) => { pts.current.delete(e.pointerId); if (pinch.current && pts.current.size < 2) { const id = pinch.current.id; pinch.current = null; onEnd?.(id); } drag.current = null; }}
         onPointerLeave={(e) => { if (e.pointerType === "touch") return; const d = drag.current; drag.current = null; if (d && onEnd && !d.mode.startsWith("area") && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
         onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg") || (e.target as HTMLElement).classList.contains("mk-norm")) setSel(""); }}>
-        <div className="mk-norm" style={norm && norm.z !== 1 ? { transform: `translate(${(norm.tx / PHOTO_W) * 100}%, ${(norm.ty / PHOTO_H) * 100}%) scale(${norm.z})` } : undefined}>
+        <div className="mk-norm" style={norm && (norm.z !== 1 || norm.tx || norm.ty) ? { transform: `translate(${(norm.tx / PHOTO_W) * 100}%, ${(norm.ty / PHOTO_H) * 100}%) scale(${norm.z})` } : undefined}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
         {grid && items.map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit && !it.p.clip ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
           title={areaEdit && !it.p.clip ? "Drag to line the print area up on this shirt (saved for this style). Drag the corner to size it." : undefined}
