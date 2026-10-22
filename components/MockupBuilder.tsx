@@ -825,10 +825,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const au = photo(a, v), r = regs[`${au}>${u}`], A = au !== u ? baseFit(a, v) : null, own = fits[u] || measured || null;
       if (r && A && own && !own.flat && r.iou >= 0.82) {
         const back = (q: { x: number; y: number; rot: number }) => ({ x: (q.x - r.bx) / r.a, y: (q.y - r.by) / r.a, rot: q.rot });
-        return { ...own, s: A.s / r.a, zs: (A.zs || A.s) / r.a, cx: (A.cx - r.bx) / r.a, top: (A.top - r.by) / r.a, neck: undefined, sleeve: { left: back(A.sleeve.left), right: back(A.sleeve.right) } };
+        return { ...own, s: A.s / r.a, zs: (A.zs || A.s) / r.a, cx: (A.cx - r.bx) / r.a, top: (A.top - r.by) / r.a, neck: A.neck != null ? (A.neck - r.by) / r.a : undefined, sleeve: { left: back(A.sleeve.left), right: back(A.sleeve.right) } };
       }
     }
     return baseFit(l, v, measured);
+  };
+  /** the line whose print areas (set by hand) a color follows: the template's once it's laid over it */
+  const settingsLine = (l: Line | undefined, v: View): Line | undefined => {
+    const a = anchorLine;
+    if (!l || !a || a.id === l.id) return l;
+    const r = regs[`${photo(a, v)}>${photo(l, v)}`];
+    return r && r.iou >= 0.82 ? a : l;
   };
   /** one photo's own reading (the template's, or a color not laid over it yet) */
   const baseFit = (l: Line, v: View, measured?: Fit | null): Fit | null => {
@@ -850,7 +857,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const rs = readings("front").length ? readings("front") : readings("back");
     const med = (a: number[]) => { const b2 = [...a].sort((x2, y2) => x2 - y2); return b2[b2.length >> 1]; };
     const s0 = rs.length ? med(rs.map((p) => p.s)) : f.s, z0 = rs.length ? med(rs.map((p) => p.zs || p.s)) : f.zs || f.s;
-    return { ...f, s: s0, zs: z0, neck: undefined };
+    // a neckline set by hand stays (Oct 22, Nick: "the human eye sees it relative to the neck seam"); the automatic
+    // readings were what moved shirts around
+    const hand = v === "front" ? necks[neckKey(u)] : undefined;
+    return { ...f, s: s0, zs: z0, neck: hand?.source === "staff" ? hand.neck : undefined };
   };
   /** where this photo's neckline reading came from, for the label on the line */
   const neckTag = (l: Line) => { const x = necks[neckKey(photo(l, "front"))]; return x?.source === "staff" ? "set by hand" : x ? "AI" : "auto"; };
@@ -910,7 +920,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** move / resize one style's print areas on one side (photo pixels; k = how much bigger), and save it for next time */
   const nudgeArea = (l: Line | undefined, v: View, dxPx: number, dyPx: number, kMul = 1) => {
-    const g = l && garmentFor(l), fit = l && fitFor(l, v);
+    const fit = l && fitFor(l, v);
+    l = settingsLine(l, v); // a color laid over the template moves the template's print area (it's the one it follows)
+    const g = l && garmentFor(l);
     if (!g || !fit || fit.flat) return;
     const cur = adjOf(l, v) || { dx: 0, dy: 0, k: 1 };
     const s0 = fit.zs || fit.s || 1;
@@ -1041,7 +1053,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const wIn = printWidth(im, im.location, ratioIm(im), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const vv = view || viewsFor(im.location)[0];
-    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, on || line, vv), bd);
+    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, settingsLine(on || line, vv), vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
     const o0 = NO_OFF, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
@@ -1143,7 +1155,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const labShirt = (side: Side): LabShirt | null => {
     if (side === "sleeve" || !line) return null;
     const v = side as View;
-    const af = adjusted(fitFor(line, v), line, v);
+    const af = adjusted(fitFor(line, v), settingsLine(line, v), v);
     const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, af) : basePlacement("Full Back", 13, 18 / 13, null, scale, v, af);
     return { src: photo(line, v), hex: shirtHex(line), area: b.area, label: `${v === "front" ? "Front" : "Back"} of the ${[line.color, line.style].filter(Boolean).join(" ") || "shirt"}` };
   };
@@ -1903,7 +1915,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       { const cr = containRect(bg); g.drawImage(bg, (nm.tx + nm.z * cr.x) * BD_K, (nm.ty + nm.z * cr.y) * BD_K, cr.w * nm.z * BD_K, cr.h * nm.z * BD_K); }
       // the print area, dashed, with its name and size (light lines on a dark shirt, dark on a light one)
       const bd = bodyFor(l), sp = spotFor(loc, bd);
-      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, adjusted(fit, l, v), bd);
+      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, adjusted(fit, settingsLine(l, v), v), bd);
       const ax = (nm.tx + nm.z * b.area.x) * BD_K, ay = (nm.ty + nm.z * b.area.y) * BD_K, aw = b.area.w * nm.z * BD_K, ah = b.area.h * nm.z * BD_K;
       const hx = shirtHex(l).replace("#", ""), lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
       const ink = lum < 0.55 ? "rgba(255,255,255,0.85)" : "rgba(40,48,60,0.7)";
@@ -1948,7 +1960,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const toPhoto = (X: number, Y: number) => ({ x: (X / B.k - B.tx) / B.z, y: (Y / B.k - B.ty) / B.z });
     const tl = toPhoto(x0 * f, y0 * f), br = toPhoto((x1 + 1) * f, (y1 + 1) * f);
     const pw = br.x - tl.x, ph = br.y - tl.y, rr = ph / (pw || 1);
-    const fit = adjusted(fitFor(l, v), l, v), sc = scaleOf(bdy);
+    const fit = adjusted(fitFor(l, v), settingsLine(l, v), v), sc = scaleOf(bdy);
     const start = imprints.find((x) => x.id === imId)?.location || (v === "back" ? "Full Back" : "Full Front");
     const ppiPhoto = basePlacement(start, 1, rr, null, sc, v, fit, bdy).w || PX_PER_IN * sc;
     let wIn = Math.round((pw / ppiPhoto) * 100) / 100;
@@ -2219,10 +2231,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
               <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), "front")}
-                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => setNeck(line, y) } : undefined} cx={normOf(fitFor(line, v), "front").z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
+                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={normOf(fitFor(line, v), "front").z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
                 areaEdit={grid && !!line && !!garmentFor(line) && !!fitFor(line, v) && !fitFor(line, v)?.flat}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
-                areaNote={grid && line && adjOf(line, v) ? <span className="mk-areanote">Print area set by hand for {line.style}{lines.length > 1 ? " (this garment only)" : ""} · <button type="button" className="linkbtn" onClick={() => resetArea(line, v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
+                areaNote={grid && line && adjOf(settingsLine(line, v), v) ? <span className="mk-areanote">Print area set by hand{settingsLine(line, v) !== line ? ` on the first color (${settingsLine(line, v)!.style} ${settingsLine(line, v)!.color}); every color follows it` : ` for ${line.style}`} · <button type="button" className="linkbtn" onClick={() => resetArea(settingsLine(line, v), v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
                 corner={<>
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
