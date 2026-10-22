@@ -204,11 +204,13 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   // under it, the sizes on their own line in run order ("w"); when even the run of sizes doesn't fit, the phone-style
   // stack ("s")
   const glRef = useRef<HTMLDivElement | null>(null);
-  const [glFit, setGlFit] = useState<"w" | "s">("w");
+  const [glFit, setGlFit] = useState<"w1" | "w" | "s">("w");
   useEffect(() => {
     const el = glRef.current; if (!el || typeof ResizeObserver === "undefined") return;
-    const need = Math.max(560, Math.max(1, groupCols.length) * 38 + 30);
-    const ro = new ResizeObserver(([e]) => setGlFit(e.contentRect.width >= need ? "w" : "s"));
+    const run = Math.max(1, groupCols.length) * 40 + 16;
+    // wide: the sizes sit in the middle of the shirt line (Oct 22, Nick: "as you get room… go to one line and fill the space")
+    const one = 440 + run + 300 + 130, need = Math.max(560, run + 30);
+    const ro = new ResizeObserver(([e]) => { const w = e.contentRect.width; setGlFit(w >= one ? "w1" : w >= need ? "w" : "s"); });
     ro.observe(el); return () => ro.disconnect();
   }, [groupCols.length]);
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)

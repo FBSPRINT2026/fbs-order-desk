@@ -11694,3 +11694,14 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
 .szc > .upc-btn.set{color:var(--ink-2);background:none}
 html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
 @media (min-width:761px){ html body .ord .line-b .gl-list .gl > .gl-ditto{width:calc(12ch + 8px);overflow:hidden;text-overflow:ellipsis} }
+
+/* wide enough: the sizes sit in the middle of the shirt line, the description under the shirt (Oct 22, Nick) */
+@media (min-width:761px){
+  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:auto auto auto auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"st br co sz . cs qt ea to x" "de de de sz . . . . . .";align-items:center}
+  html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:auto auto auto auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"st br co sz . qt ea to x" "de de de sz . . . . ."}
+  html body .ord .line-b.fit-w1 .gl-list .gl.same{grid-template-areas:"st co co sz . cs qt ea to x"}
+  html body .ord .line-b.fit-w1 .gl-list.ws .gl.same{grid-template-areas:"st co co sz . qt ea to x"}
+  html body .ord .line-b.fit-w1 .gl-list .gl > .gl-row.gl-r2 > .a-sz{margin-top:0;align-self:center;padding-left:6px}
+  html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:auto auto auto auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad . cs qt ea to x"}
+  html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:auto auto auto auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad . qt ea to x"}
+}
