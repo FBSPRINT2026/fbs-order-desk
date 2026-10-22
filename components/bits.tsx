@@ -13,7 +13,8 @@ export function pvStatusOf(o: { number?: number | null; printavo_id?: string | n
 /** pv: Printavo's own status (pvStatusOf), shown instead of ours to the shop; customers keep the friendly words */
 export function Pill({ status, portal = false, pv }: { status: string; portal?: boolean; pv?: string | null }) {
   const s = ST[status] || ST.quote;
-  return <span className="pill" style={{ ["--sc" as string]: s.c }} title={pv && !portal ? "Printavo's status (this job is run from Printavo)" : undefined}>{portal ? s.portal : pv || s.label}</span>;
+  const text = portal ? s.portal : pv || s.label;
+  return <span className="pill" style={{ ["--sc" as string]: s.c }} title={pv && !portal ? `${text}: Printavo's status (this job is run from Printavo)` : text}><span className="pill-t">{text}</span></span>;
 }
 
 export function Due({ date, status }: { date: string | null; status: string }) {

@@ -11607,3 +11607,7 @@ html body main.main .ord .ot-nav{position:static}
 /* Customers: the name column wraps its second line (contact · tags) instead of pushing the table off the page */
 html body main.main .tbl td.cu-td{white-space:normal;min-width:200px}
 html body main.main .tbl td.cu-td > div:first-child{white-space:nowrap}
+/* a long status in a list (Printavo's "SP - Ready for Production / Scheduling") is cut short in a narrower window;
+   the whole status shows on hover */
+.pill-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1400px){ main.main .tbl .pill{max-width:180px} }
