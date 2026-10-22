@@ -41,7 +41,7 @@ export async function emailChatThread(admin: SupabaseClient, activityId: string)
  * id>" reads it from the 45-day cache (or the mailbox) and finds the sender among the customers when they're one.
  */
 export type ActRow = { id: string | null; customer_id: string | null; order_id: string | null; subject: string | null; body: string | null; from_email: string | null; occurred_at: string; meta: unknown; direction: string };
-async function inboxAsActivity(admin: SupabaseClient, inboxId: string): Promise<ActRow | null> {
+export async function inboxAsActivity(admin: SupabaseClient, inboxId: string): Promise<ActRow | null> {
   const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id, from_email, subject, received_at").eq("id", inboxId).maybeSingle();
   if (!r) return null;
   const { data: c } = await admin.from("mail_cache").select("body_text").eq("account_id", r.account_id).eq("message_id", r.message_id).is("gone_at", null).limit(1).maybeSingle();

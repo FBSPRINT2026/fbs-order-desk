@@ -48,6 +48,18 @@ export async function getChat(id: string) {
   } catch (e) { return fail(e); }
 }
 
+/** the Workbench chat this person has on an email (Inbox Assistant, Oct 22): its messages with fresh links, or none yet.
+ *  `can` is false when the Workbench isn't on for them (the Assistant then sticks to quick answers). */
+export async function emailWorkChat(emailKey: string) {
+  try {
+    const { admin, email } = await me();
+    const { data } = await admin.from("ai_chats").select("id").eq("owner", email).eq("email_key", emailKey).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    if (!data) return { ok: true as const, can: true, id: "", messages: [] as WBMsg[] };
+    const r = await getChat(data.id as string);
+    return r.ok ? { ok: true as const, can: true, id: r.id, messages: r.messages } : { ok: true as const, can: true, id: "", messages: [] as WBMsg[] };
+  } catch { return { ok: true as const, can: false, id: "", messages: [] as WBMsg[] }; }
+}
+
 /** where the page uploads a file the person dropped in */
 export async function uploadTarget(name: string, size: number) {
   try {

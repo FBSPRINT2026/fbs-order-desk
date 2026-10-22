@@ -213,13 +213,13 @@ function Msg({ m, chatId, onCard }: { m: WBMsg; chatId: string; onCard: (c: WBCa
             : <a key={f.id} href={f.url || undefined} target="_blank" rel="noreferrer" className="wb-mdoc" title={f.id}>{f.name}</a>)}
         </div>
       ) : null}
-      {m.text && <div className="wb-text">{plain(m.text)}</div>}
+      {m.text && <div className="wb-text">{m.seed ? "Started from an email in the Inbox (its text and attachments)." : plain(m.text)}</div>}
       {m.cards?.map((c) => <Card key={c.id} card={c} chatId={chatId} onCard={onCard} />)}
     </div>
   );
 }
 
-function Card({ card, chatId, onCard, pending }: { card: WBCard; chatId: string; onCard: (c: WBCard) => void; pending?: boolean }) {
+export function Card({ card, chatId, onCard, pending }: { card: WBCard; chatId: string; onCard: (c: WBCard) => void; pending?: boolean }) {
   return card.kind === "mockups" ? <Mockups card={card} chatId={chatId} onCard={onCard} pending={pending} /> : <OrderCard card={card} chatId={chatId} onCard={onCard} pending={pending} />;
 }
 
