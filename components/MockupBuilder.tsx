@@ -1533,12 +1533,30 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the prints (left) and the garments (right)
         const rowsP = prints.map((im) => ({ im, inks: inkNamesOf(im) }));
         const hP = rowsP.reduce((a, r) => a + 3 * PX + 10.5 * PT * 1.3 + (r.inks.length ? 3 * PX + 10 * PT * 1.3 : 0), 0);
+        // the garments: each style once with its colors under it, each with a swatch, wrapping (Oct 22: 11 colors cut off)
         const garm = todo.filter((l, i) => todo.findIndex((y2) => `${y2.brand}|${y2.style}|${y2.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i);
-        const hG = garm.length * (3 * PX + 10.5 * PT * 1.3);
+        const pw = (CW - 20 * PX) * (1.4 / 2.4), gx = L + pw + 20 * PX, gw = CW - pw - 20 * PX, rowG = 10.5 * PT * 1.3 + 3 * PX;
+        const byStyle: { st: string; ls: Line[] }[] = [];
+        for (const l of garm) { const st = [l.brand, l.style].filter(Boolean).join(" ") || "Garment"; const g = byStyle.find((z) => z.st === st); if (g) g.ls.push(l); else byStyle.push({ st, ls: [l] }); }
+        /** where each color chip goes (x offset, row) under its style; draws when asked */
+        const flow = (ls: Line[], draw?: { x0: number; y0: number }) => {
+          x.font = body(400, 10); let ix = 0, row = 0;
+          for (const l of ls) {
+            const t = l.color || "—", w = 14 * PX + 6 * PX + x.measureText(t).width + 14 * PX;
+            if (ix + w > gw && ix > 0) { ix = 0; row++; }
+            if (draw) {
+              const yy = draw.y0 + row * rowG;
+              x.fillStyle = shirtHex(l); x.fillRect(draw.x0 + ix, yy - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(draw.x0 + ix, yy - 11 * PX, 14 * PX, 14 * PX);
+              x.fillStyle = C.ink2; x.fillText(fit(x, t, gw - 20 * PX), draw.x0 + ix + 20 * PX, yy);
+            }
+            ix += w;
+          }
+          return row + 1;
+        };
+        const hG = byStyle.reduce((a, g) => a + rowG + flow(g.ls) * rowG, 0);
         const sumH = 1 * PX + 6 * PX + 7.5 * PT * 1.3 + Math.max(hP, hG, 10.5 * PT * 1.3);
         const sumY = okY - 10 * PX - sumH;
         x.fillStyle = C.line; x.fillRect(L, sumY, CW, 1 * PX);
-        const pw = (CW - 20 * PX) * (1.4 / 2.4), gx = L + pw + 20 * PX, gw = CW - pw - 20 * PX;
         let py = sumY + 1 * PX + 6 * PX + 7.5 * PT;
         lbl(x, "Prints", L, py, 7.5); lbl(x, "Garments", gx, py, 7.5);
         let gy = py;
@@ -1559,13 +1577,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           }
         }
         if (!rowsP.length) { x.fillStyle = C.ink; x.font = body(400, 10.5); x.fillText("No prints yet.", L, py + 3 * PX + 10.5 * PT * 1.3); }
-        for (const l of garm) {
-          gy += 3 * PX + 10.5 * PT * 1.3;
-          x.fillStyle = shirtHex(l); x.fillRect(gx, gy - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(gx, gy - 11 * PX, 14 * PX, 14 * PX);
-          const st = [l.brand, l.style].filter(Boolean).join(" ") || "Garment";
-          x.fillStyle = C.ink; x.font = body(700, 10.5); x.fillText(fit(x, st, gw - 20 * PX), gx + 20 * PX, gy);
-          const sw2 = x.measureText(st).width;
-          if (l.color) { x.font = body(400, 10.5); x.fillText(fit(x, ` · ${l.color}`, Math.max(0, gw - 20 * PX - sw2)), gx + 20 * PX + sw2, gy); }
+        for (const g of byStyle) {
+          gy += rowG;
+          x.fillStyle = C.ink; x.font = body(700, 10.5); x.fillText(fit(x, g.st, gw), gx, gy);
+          const n = flow(g.ls, { x0: gx, y0: gy + rowG });
+          gy += n * rowG;
         }
 
         // the first shirt, as big as the space between
