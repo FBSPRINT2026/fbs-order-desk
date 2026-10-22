@@ -11822,11 +11822,13 @@ html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
 /* the group description (Oct 22): a quiet link by the group name, then a box under it */
 .line-h .grp-desc-add{all:unset;cursor:pointer;font-size:12.5px;color:var(--accent);white-space:nowrap;padding:2px 4px;border-radius:6px}
 .line-h .grp-desc-add:hover{background:var(--surface-2)}
-.grp-desc{margin:4px 0 10px}
-.grp-desc-h{display:block;font-size:12px;color:var(--ink-3);margin:0 0 3px}
-.grp-desc-h span{font-weight:400}
-.grp-desc-h span::before{content:"· "}
-.grp-desc textarea{box-sizing:border-box;width:100%;min-height:44px;resize:vertical;font:14px/1.45 var(--body);color:var(--ink);padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+/* the group description: inside the group like the Garments section, same edges and the order page's input look (Oct 22,
+   Nick: "goes all the way to the edge and has a weird bubble") */
+html body .ord .grp-desc{padding:12px 14px 0;margin:0;display:flex;flex-direction:column;gap:6px}
+html body .ord .grp-desc .grp-desc-h{display:flex;align-items:baseline;gap:8px;margin:0}
+html body .ord .grp-desc .grp-desc-h small{font-family:var(--body);font-size:12px;font-weight:400;color:var(--ink-3);letter-spacing:0}
+html body .ord .grp-desc textarea{box-sizing:border-box;width:100%;min-height:40px;resize:vertical;font:14px/1.45 var(--body);color:var(--ink);padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);box-shadow:none;outline:0}
+html body .ord .grp-desc textarea:focus{border-color:var(--accent)}
 /* a line note (Oct 22): ✎ beside the ✕ (on a computer only when you point at the line), the note under the line */
 html body .ord .line-b .gl .a-x{gap:2px}
 @media (hover:hover){html body .ord .line-b .gl:not(:hover):not(:focus-within) .ln-add{visibility:hidden}}

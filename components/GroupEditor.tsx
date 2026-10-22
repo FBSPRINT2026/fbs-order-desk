@@ -450,7 +450,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       </div>
       {(g.description != null || descOpen) && (
         <div className="grp-desc">
-          <label className="grp-desc-h" htmlFor={`gd-${g.id}`}>Group description <span>prints on the quote, invoice and work order</span></label>
+          <label className="lbl gsec grp-desc-h" htmlFor={`gd-${g.id}`}>Description <small className="faint">Prints on the quote, invoice and work order</small></label>
           <textarea id={`gd-${g.id}`} rows={2} autoFocus={descOpen && g.description == null} placeholder="Everything in this group: how it's packed, what it's for, anything the prints and garments don't say"
             value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
             onBlur={(e) => { if (!e.target.value.trim()) { setDescOpen(false); update((x) => { delete x.description; }); } }} />
