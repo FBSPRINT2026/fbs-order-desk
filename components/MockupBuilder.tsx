@@ -31,7 +31,7 @@ import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -122,6 +122,10 @@ const nearestBrand = (hex: string, b: { colors: BrandInk[] }) => b.colors.filter
 /** close-ups and the print spec never move off the center of the print area (Oct 22, Nick: "the image always has to be
  *  in the center of the close-ups"); a drag only lines the logo up on the shirt picture */
 const NO_OFF = { dx: 0, dy: 0 } as const;
+/** every shirt photo shown exactly as the supplier sends it (Oct 22, Nick: "reset the images back to how you first had
+ *  them… the fresh images that you pulled in from S&S and SanMar… the same size front to back"): no zoom or shift.
+ *  Zooming each photo to a reference shirt made backs lower and bigger than fronts. */
+const RAW = { z: 1, tx: 0, ty: 0 };
 
 export default function MockupBuilder({ portal = false, backHref }: { portal?: boolean; backHref?: string }) {
   const sp = useSearchParams();
@@ -860,7 +864,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // a neckline set by hand stays (Oct 22, Nick: "the human eye sees it relative to the neck seam"); the automatic
     // readings were what moved shirts around
     const hand = v === "front" ? necks[neckKey(u)] : undefined;
-    return { ...f, s: s0, zs: z0, neck: hand?.source === "staff" ? hand.neck : undefined };
+    void hand; // necklines set by hand are kept (necks) but not used for now (Oct 22, Nick: "save that so we can go back to it")
+    return { ...f, s: s0, zs: z0, neck: undefined };
   };
   /** where this photo's neckline reading came from, for the label on the line */
   const neckTag = (l: Line) => { const x = necks[neckKey(photo(l, "front"))]; return x?.source === "staff" ? "set by hand" : x ? "AI" : "auto"; };
@@ -911,8 +916,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return saved && (saved.dx || saved.dy || (saved.k && saved.k !== 1)) ? saved : null;
   };
   /** the photo's fit with this style's hand adjustment (for placing prints; the photo's zoom uses the plain fit) */
+  /** print areas set by hand are kept on the garment (mockup_fit) but not used for now (Oct 22, Nick: start from the
+   *  supplier's photos; a drag lines the logo up on the picture instead) */
+  const USE_HAND_AREAS = false;
   const adjusted = (fit: Fit | null | undefined, l: Line | undefined, v: View): Fit | null | undefined => {
-    const a = fit && !fit.flat ? adjOf(l, v) : null;
+    const a = USE_HAND_AREAS && fit && !fit.flat ? adjOf(l, v) : null;
     if (!a || !fit) return fit;
     const zs = fit.zs || fit.s;
     return { ...fit, cx: fit.cx + a.dx * zs, top: fit.top + a.dy * zs, ...(fit.neck != null ? { neck: fit.neck + a.dy * zs } : {}), s: fit.s * (a.k || 1), ...(fit.zs ? { zs: fit.zs } : {}) };
@@ -1250,7 +1258,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
-      const nm = normOf(fit, "front");
+      const nm = RAW;
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
       // fitted inside the frame the way it was measured and is shown on screen (object-fit: contain), not stretched: a SanMar
       // photo (2:3) stretched to the 4:5 frame came out 20% wider than the S&S shirts next to it (Oct 20, PC55RS)
@@ -1333,7 +1341,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
-    const nm = normOf(fit, "front");
+    const nm = RAW;
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * nm.z * (p.rot ? 1.35 : 1.12)));
     const cx = nm.tx + nm.z * (p.x + p.w / 2), cy = nm.ty + nm.z * (p.y + p.h / 2);
     const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
@@ -1910,7 +1918,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
-      const nm = normOf(fit, "front");
+      const nm = RAW;
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
@@ -2232,11 +2240,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), "front")}
-                neckLine={v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={normOf(fitFor(line, v), "front").z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
-                areaEdit={grid && !!line && !!garmentFor(line) && !!fitFor(line, v) && !fitFor(line, v)?.flat}
+              <Stage key={v} grid={grid} norm={RAW}
+                neckLine={USE_HAND_AREAS && v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={fitFor(line, v)?.cx}
+                areaEdit={false}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
-                areaNote={grid && line && adjOf(settingsLine(line, v), v) ? <span className="mk-areanote">Print area set by hand{settingsLine(line, v) !== line ? ` on the first color (${settingsLine(line, v)!.style} ${settingsLine(line, v)!.color}); every color follows it` : ` for ${line.style}`} · <button type="button" className="linkbtn" onClick={() => resetArea(settingsLine(line, v), v)}>Back to automatic</button></span> : grid && line && garmentFor(line) && fitFor(line, v) && !fitFor(line, v)?.flat ? <span className="mk-areanote faint">Drag the dashed box to line it up on this shirt; drag its corner to size it. Saved for {line.style}.</span> : undefined}
+                areaNote={undefined}
                 corner={<>
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
