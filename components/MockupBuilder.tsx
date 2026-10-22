@@ -589,6 +589,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [paints]);
 
   /** Set several logo colors at once (e.g. every color to its closest standard ink). */
+  /** a logo clicked on the shirt (Oct 22, Nick: "when you click a logo, the right panel should come up for whatever
+   *  you're clicking"): the Imprints panel turns to its side (Front / Back / Sleeves) and brings its print into view */
+  function showImprint(id: string) {
+    const im = imprints.find((x) => x.id === id);
+    if (!im) return;
+    const side = sideOf(im.location);
+    setTab(side);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-imp="${CSS.escape(id)}"]`) as HTMLElement | null;
+      if (!el) return;
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.classList.remove("mk-imp-flash"); void el.offsetWidth; el.classList.add("mk-imp-flash");
+    }, 60);
+  }
   function setInks(id: string, picks: Record<string, { name: string; hex: string } | null>) {
     setPaints((p) => {
       const pt = p[id];
@@ -2106,7 +2120,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   guardSize(id, () => { if (old.clip) growTo(im, inches); else settle(im, inches); });
                 }}
                 onEnd={settleHere}
-                onPick={pickColor} />
+                onPick={pickColor}
+                onSelect={showImprint} />
             ))}
             {neckSet && line && (
               <div className="mk-neck-card" title="Private Label: the maker's tag cut out and their label printed inside the neck">
@@ -2297,7 +2312,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => {
                 const p = place(im);
                 return (
-                  <div key={im.id} className="mk-imp">
+                  <div key={im.id} className="mk-imp" data-imp={im.id}>
                     <div className="mk-imp-top">
                       <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -2434,7 +2449,7 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, areaEdit, onArea, areaNote, neckLine }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, onSelect, areaEdit, onArea, areaNote, neckLine }: {
   /** the bottom of the sewn neckline on this photo (shown with the print areas; drag it to fix it, saved for this photo) */
   neckLine?: { y: number; tag: string; onSet: (y: number) => void };
   /** the dashed print areas can be dragged (moves this style's prints) and resized from the corner */ areaEdit?: boolean;
@@ -2446,6 +2461,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
+  /** a logo was clicked: the Imprints panel shows it */ onSelect?: (id: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize" | "neck"; w: number; el?: HTMLElement } | null>(null);
@@ -2546,6 +2562,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
             onPointerDown={(e) => {
               e.stopPropagation();
               endTip();
+              onSelect?.(it.id);
               if (it.locked) return;
               // double-click (two quick clicks in the same spot) opens the color menu for the color under the cursor
               const now = Date.now(), last = lastDown.current;

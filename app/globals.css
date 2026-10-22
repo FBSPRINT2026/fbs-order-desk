@@ -12139,3 +12139,7 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .cu-job .panel-h{align-items:center}
 .cu-kind{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);white-space:nowrap}
 .cu-upl{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+
+/* Mockup Creator: the print just clicked on the shirt, shown in the Imprints panel (Oct 22) */
+@keyframes mkImpFlash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
+.mk-imp.mk-imp-flash { animation: mkImpFlash 1.4s ease-out; border-radius: var(--r); }
