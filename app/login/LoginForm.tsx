@@ -9,6 +9,9 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  // staff can sign in with a password they set in the shop menu (Oct 22, Nick); customers keep the emailed code
+  const staff = /@fbsprint\.com$/i.test(email.trim());
   const [stage, setStage] = useState<"email" | "code">("email");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(linkError ? "That sign-in link expired or was already used. Enter your email to get a new one." : "");
@@ -18,6 +21,13 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
     e.preventDefault();
     setBusy(true);
     setErr("");
+    if (staff && password) {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      setBusy(false);
+      if (error) setErr(error.message.includes("rate") ? "Too many tries. Wait a minute, then try again." : "That email and password didn't match. No password yet? Leave it empty and we'll email you a code.");
+      else { router.replace(safeNext); router.refresh(); }
+      return;
+    }
     const site = SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
@@ -48,14 +58,20 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
         <form onSubmit={sendCode} className="stack">
           <div>
             <h1>Sign In</h1>
-            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. We&apos;ll send a sign-in link and a 6-digit code. No password needed.</p>
+            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Type your password, or leave it empty and we'll email you a code." : <>We&apos;ll send a sign-in link and a 6-digit code. No password needed.</>}</p>
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>
             <input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           </div>
+          {staff && (
+            <div className="field">
+              <label htmlFor="password">Password</label>
+              <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Empty: email me a code" />
+            </div>
+          )}
           {err && <div className="err">{err}</div>}
-          <button className="btn primary" disabled={busy} type="submit">{busy ? "Sending…" : "Email me a sign-in code"}</button>
+          <button className="btn primary" disabled={busy} type="submit">{busy ? (staff && password ? "Signing in…" : "Sending…") : staff && password ? "Sign in" : "Email me a sign-in code"}</button>
         </form>
       ) : (
         <form onSubmit={verify} className="stack">

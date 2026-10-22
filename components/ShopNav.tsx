@@ -18,6 +18,7 @@ import { ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
+import PasswordButton from "@/components/PasswordButton";
 import TimeBubble from "@/components/time/TimeBubble";
 import { useSticky } from "@/lib/useSticky";
 
@@ -377,6 +378,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           <button type="button" className="nav-add-sc" onClick={() => { setAddOpen(true); setAdding(null); }} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>
           {/* report a problem with a screenshot: everyone, beside Sign out (Oct 16, Nick) */}
           <SupportButton email={email} />
+          {/* set your own password for signing in (Oct 22, Nick) */}
+          <PasswordButton />
           {/* sign out: a door with an arrow going out (Oct 16, Nick) */}
           <form action="/auth/signout" method="post"><button className="side-out" type="submit" data-tip="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
         </div>
