@@ -535,7 +535,10 @@ export function frameHeight(d: Document) {
   const rg = d.createRange(); rg.selectNodeContents(d.body);
   const end = rg.getBoundingClientRect().bottom + top;
   const bpad = parseFloat(d.defaultView?.getComputedStyle(d.body).paddingBottom || "0") || 0;
-  return Math.ceil(end > 20 ? end + bpad * Math.max(1, z) : h * Math.max(1, z)) + pad + 4;
+  const byRange = end > 20 ? Math.ceil(end + bpad * z) + pad + 4 : 0;
+  // the body's own height is before its zoom (fitWidth sets height:auto on it, so it's the content's)
+  const byBox = Math.ceil(h * z) + pad + 4;
+  return Math.max(byRange, byBox);
 }
 const QUOTED = /<blockquote|gmail_quote|yahoo_quoted|divRplyFwdMsg|appendonsend/i;
 /** "Show the earlier emails" under an email whose quoted replies are folded away (PHONE_MAIL_CSS) */
