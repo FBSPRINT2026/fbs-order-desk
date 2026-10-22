@@ -274,6 +274,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {/* phones: "On the go", moving (Oct 15, Nick) */}
         <span className="tag-go" aria-hidden><span className="tag-k" data-notranslate>{[...(brand.sideTagline || "Shop Management")].map((ch, i) => <span key={i}>{ch === " " ? "\u00a0" : ch}</span>)}</span><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
       </Link>
+      {/* the version for everyone, under the logo (Oct 22, Nick: "show the version number for everyone… on Jose's computer
+          I can't see if you've updated"); the owner has it on the Admin Tools line */}
+      {role !== "owner" && <div className="nav-ver-all"><VersionTag /></div>}
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
       </button>

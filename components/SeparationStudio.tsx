@@ -80,6 +80,28 @@ const shirtOf = (st: Studio) => st.garment || "#000000";
 const lpiOf = (st: Studio, key: string) => st.lpiFor?.[key] ?? st.lpi;
 const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, garment: shirtOf(st), dropGarment: !!st.garment && st.dropGarment, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
   fine: ptPx(st.finePt ?? FINE_PT, w, st.widthIn), fineChoke: ptPx(st.fineChokePt ?? FINE_CHOKE_PT, w, st.widthIn), bump: ptPx(st.bumpPt ?? BUMP_PT, w, st.widthIn) });
+/**
+ * The inks as the mockup shows them (Oct 22, Nick on #40091 / #40092: the black and white Boneyard logo was changed to
+ * all white in the mockup, but separations brought in the art as uploaded: "you've got to bring in the version that it
+ * became"). The Mockup Creator saves each logo color's ink on the print (imprint.inkMap): every ink found in the art takes
+ * the mockup's ink, and colors that became the same ink print on one screen.
+ */
+function inksAsOnMockup(list: SepInk[], im: { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined, designId: string | null): { list: SepInk[]; note: string } {
+  const map = im?.inkMap && (!designId || im.inkMap.design === designId) ? im.inkMap.map : null;
+  if (!map || !Object.keys(map).length) return { list, note: "" };
+  const out: SepInk[] = [], said: string[] = [];
+  for (const k of list) {
+    let best: { name: string; hex: string } | null = null, bd = 14;
+    for (const [src, v] of Object.entries(map)) { const d = deltaE(src, k.hex); if (d < bd) { bd = d; best = v; } }
+    if (!best) { out.push(k); continue; }
+    if (best.name === "none") { out.push({ ...k, shirt: true }); said.push(`${k.name} → not printed`); continue; }
+    const same = out.find((x) => x.name.trim().toLowerCase() === best!.name.trim().toLowerCase());
+    if (same) { same.also = [...(same.also || []), k.hex, ...(k.also || [])]; said.push(`${k.name} → ${best.name} (one screen)`); continue; }
+    if (k.name !== best.name) said.push(`${k.name} → ${best.name}`);
+    out.push({ ...k, name: best.name });
+  }
+  return { list: out, note: said.length ? `Inks as on the mockup: ${said.join(", ")}.` : "" };
+}
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
 const OUT_PPI = 400, OUT_MAX_SIDE = 7200, OUT_MAX_PX = 36e6;
@@ -420,7 +442,11 @@ export default function SeparationStudio({ id }: { id: string }) {
       }
       if (used.length) { setSt((s) => ({ ...s, ...p })); lessonNote.current = `Started from what the coach learned: ${used.join(" · ")}`; setMsg(lessonNote.current); }
     }
-    if (saved.inks?.length) setInks(saved.inks);
+    // not on film yet: the inks follow the mockup (a separation opened before the mockup changed the colors)
+    if (saved.inks?.length) {
+      const m = ["requested", "in_progress"].includes(row0.status) ? inksAsOnMockup(saved.inks, im, row0.design_id) : { list: saved.inks, note: "" };
+      setInks(m.list); if (m.note) setMsg(m.note);
+    }
     if (saved.order) setOrderKeys(saved.order);
     if (saved.mesh) setMesh(saved.mesh);
     if (saved.names) setNames(saved.names);
@@ -564,6 +590,14 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- find inks (first time, or on request) ---------- */
   // auto: find as many inks as the art needs and set the Colors count to that; otherwise use the Colors count (fewer
   // than the art has: the inks easiest to mix from the others are left out and printed as halftones of them)
+  // the inks as the mockup shows them (Oct 22, Nick on #40091 / #40092: the black and white Boneyard logo was changed to
+  // all white in the mockup, but separations brought in the art as uploaded: "you've got to bring in the version that it
+  // became"). The Mockup Creator saves each logo color's ink on the print (imprint.inkMap): every ink found in the art
+  // takes the mockup's ink, and colors that became the same ink print on one screen
+  const asOnMockup = (list: SepInk[]) => {
+    const im = order && row?.imprint_id ? orderGroups(order).flatMap((g) => g.imprints).find((x) => x.id === row.imprint_id) : undefined;
+    return inksAsOnMockup(list, im, row?.design_id || null);
+  };
   const findInks = useCallback((method = st.method, auto = false, fromPlan = false) => {
     const px = pxRef.current; if (!px) return;
     // sim tries every candidate ink against the whole art (a few seconds): let the page say so first
@@ -578,11 +612,12 @@ export default function SeparationStudio({ id }: { id: string }) {
         if (!plan) plan = planPrint(px, { garment: shirtOf(st), lib: st.lib, method: fromPlan ? undefined : method });
         const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
         const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const dd = deltaE(hex, sh.fill); if (dd < bd) { bd = dd; best = sh.ink!; } } return best; };
-        const list = plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || orderName(k.hex) || k.name }));
+        const m = asOnMockup(plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || orderName(k.hex) || k.name })));
+        const list = m.list;
         setSt((x) => ({ ...x, method: plan!.method, maxColors: Math.max(1, list.length) }));
         setNatural(list.length);
         setInks(list);
-        setMsg((fromPlan && !fresh ? `From the logo's print plan (same as the mockup): ${plan.why}` : plan.why) + (lessonNote.current ? ` ${lessonNote.current}` : ""));
+        setMsg((fromPlan && !fresh ? `From the logo's print plan (same as the mockup): ${plan.why}` : plan.why) + (m.note ? ` ${m.note}` : "") + (lessonNote.current ? ` ${lessonNote.current}` : ""));
         lessonNote.current = "";
         if (fresh && fromPlan && d0?.id) { sb.from("designs").update({ print_plan: plan }).eq("id", d0.id).then(() => {}); d0.print_plan = plan; }
         setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
@@ -605,11 +640,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       // vector art with spot swatches (.ai / PDF): an ink that is one of the art's swatches takes the swatch's name
       const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
       const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const d = deltaE(hex, sh.fill); if (d < bd) { bd = d; best = sh.ink!; } } return best; };
-      const list: SepInk[] = f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || orderName(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) }));
+      const m = asOnMockup(f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || orderName(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) })));
+      const list: SepInk[] = m.list;
+      if (m.note) setMsg(m.note);
       setInks(list);
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
-  }, [st.method, st.garment, st.maxColors, st.lib, vart, sb, inks]);
+  }, [st.method, st.garment, st.maxColors, st.lib, vart, sb, inks, order, row]); // eslint-disable-line react-hooks/exhaustive-deps
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
   useEffect(() => {
     if (!pxTick) return;
@@ -617,12 +654,34 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (!inks.length) { const fresh = freshFind.current; freshFind.current = false; findInks(st.method, true, !fresh); }
   }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the shirts this print goes on (Oct 22, Nick on #40092: Battle of the Boneyard prints on Athletic Heather AND
+  // Scarlet: "the way you had it was going to knock out the gray because it goes on the gray, but it also goes on the
+  // black, so it would have printed wrong"). One set of screens prints every shirt in the group, so with more than one
+  // shirt color nothing is left to the shirt: every color prints
+  const groupShirts = useMemo(() => {
+    if (!order || !row) return [] as { name: string; hex: string }[];
+    // the row's group, and any other group printing the same art in the same spot (they share the screens)
+    const gs = orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)));
+    const out: { name: string; hex: string }[] = [];
+    for (const c of [...new Set(gs.flatMap((g) => g.lines).filter((l) => Object.values(l.sizes || {}).some((q) => +(q || 0) > 0)).map((l) => l.color).filter(Boolean))]) {
+      const hex = shirtHex(c) || colorHex(c) || guessHex(c);
+      if (hex && !out.some((o) => deltaE(o.hex, hex) < 12)) out.push({ name: c, hex });
+    }
+    return out;
+  }, [order, row]);
+  const multiShirt = groupShirts.length > 1;
+  /** what the separator is given: with several shirt colors no ink is left to the shirt */
+  const sepIn = (w: number) => ({
+    ks: inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: multiShirt ? false : k.shirt })),
+    so: { ...sepOpts(st, w), ...(multiShirt ? { dropGarment: false } : {}) } as SepSettings,
+  });
+
   /* ---------- separate (a moment after anything changes) ---------- */
   useEffect(() => {
     const px = pxRef.current; if (!px || !inks.length) return;
     setBusy("Separating…");
     const t = setTimeout(() => {
-      const ks = inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.shirt })), so = sepOpts(st, px.w);
+      const { ks, so } = sepIn(px.w);
       const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
@@ -630,7 +689,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.blackOver, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.blackOver, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain, multiShirt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
   // suggested mesh per screen from its smallest detail (156 unless the detail is very small; the base matches the
@@ -739,13 +798,13 @@ export default function SeparationStudio({ id }: { id: string }) {
     return { side: Math.round(side), ppi: Math.round((side * (nw / long)) / st.widthIn) };
   }, [img, vart, st.widthIn]);
   async function fullSep() {
-    const key = JSON.stringify([inks, st, names, mesh, orderKeys, !!vart?.ok]);
+    const key = JSON.stringify([inks, st, names, mesh, orderKeys, !!vart?.ok, multiShirt]);
     if (hiRef.current?.key === key) return hiRef.current;
     if (!img || !pxRef.current) throw new Error("The art isn't loaded yet.");
     setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
     const { side, ppi } = outSize();
     const px = pixelsOf(img, st.removeBg && !vart?.ok, !!vart, side);
-    const ks = inks.map((x) => ({ hex: x.hex, name: x.name, fadeTo: x.fadeTo, also: x.also, shirt: x.shirt })), so = sepOpts(st, px.w);
+    const { ks, so } = sepIn(px.w);
     const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
     // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
@@ -1114,6 +1173,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                 {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([c]) => <option key={c} value={c}>{c}</option>)}</optgroup>)}
               </select>
             </div>
+            {multiShirt && <div className="sep-tip sep-multi"><b>Goes on {groupShirts.length} shirt colors:</b> {groupShirts.map((x, k) => <span key={x.hex}>{k ? ", " : ""}<button type="button" className="linkbtn" title={`Show the proof on ${x.name}`} onClick={() => set({ garment: x.hex })}><i className="sep-bgask-sw sm" style={{ background: x.hex }} /> {x.name}</button></span>)}. One set of screens prints them all, so no color is left to the shirt: every color prints.</div>}
             {noShirt ? <p className="sep-help">No shirt picked yet: worked out as a dark shirt with an underbase (head 1), and every color prints. Pick the shirt to leave the colors that match it to the shirt.</p>
               : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
           </section>
@@ -1221,8 +1281,8 @@ export default function SeparationStudio({ id }: { id: string }) {
                   // UB: white underbase under this color (dark shirts); black never, and not on a color left to the shirt
                   const key = "c" + k.hex.slice(1), never = neverBase(k.hex), ub = !on && !never && (st.baseFor?.[key] ?? baseByDefault(k.hex));
                   return <div className="sep-chip-ft">
-                    <label className={"sep-chip-shirt" + (on ? " on" : "")} title={on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
-                      <input type="checkbox" checked={on} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt
+                    <label className={"sep-chip-shirt" + (on ? " on" : "") + (multiShirt ? " off" : "")} title={multiShirt ? `This print goes on ${groupShirts.map((x) => x.name).join(" and ")} shirts: one set of screens prints them all, so every color prints` : on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
+                      <input type="checkbox" checked={on} disabled={multiShirt} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt
                     </label>
                     {res?.underbase && <label className={"sep-chip-shirt" + (ub ? " on" : "") + (never || on ? " off" : "")} title={never ? "Black never gets underbase (black ink on white bubbles)" : on ? "Left to the shirt: not printed, so no underbase" : ub ? "White underbase prints under this color. Uncheck to print it straight on the shirt." : "No underbase: prints straight on the shirt. Check to put white under it."}>
                       <input type="checkbox" checked={ub} disabled={never || on} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [key]: e.target.checked } })} /> UB
