@@ -42,6 +42,9 @@ type ConfirmItem = { gi: number; ii: number; design: string; location: string; s
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
+/** a reorder email that came with art: theirs, or the old job's (Oct 22, Nick: "he actually attached all the art. We
+ *  could have just used it, but you ignored it because you treated it as a reorder") */
+type ArtAsk = { job: string; items: { key: string; label: string; file: { name: string; url: string; type: string } }[]; resolve: (a: "theirs" | "old") => void };
 
 /** Cancel clicked: stop where it is and take back what it made */
 class Cancelled extends Error {}
@@ -58,6 +61,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [done, setDone] = useState(false);
   const [help, setHelp] = useState<Help | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [artAsk, setArtAsk] = useState<ArtAsk | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
   const [pause, setPause] = useState<null | { made: Made | null; i: number; resolve: (v: void) => void }>(null);
@@ -110,7 +114,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: part ? "" : start.told || "", job: part ? part.job : start.job || null, reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: part ? "" : start.told || "", job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
@@ -119,7 +123,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     const did: string[] = [];
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
-    const jobLabel = (job?.label || part?.jobLabel || "").replace(/\s*\(Printavo\)$/, "");
+    // several past jobs in one order (Hutchins T10A + T11A): all of them
+    const jobs = (d.reorderJobs || []).map((ref) => (g.past || []).find((p) => p.ref === ref)).filter(Boolean) as PastJob[];
+    const jobLabel = (jobs.length > 1 ? jobs.map((j) => j.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")).join(" and ") : (job?.label || part?.jobLabel || "")).replace(/\s*\(Printavo\)$/, "");
     // the shirt colors: the style's real color names (the closest one when not an exact match)
     step(`${of}Checking the shirt colors…`);
     const cc = await checkColors(d.groups).catch(() => ({ rows: [], ask: [] }));
@@ -141,6 +147,20 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`Reprint screen fee: ${n} screen${n === 1 ? "" : "s"} at $${g.fees.remake} instead of $${g.fees.screen}`);
       }
     }
+    // the customer sent art with a reorder: use theirs, or the old job's? (theirs is the default: it's newer)
+    let theirs = new Set<string>();
+    const sentArt = d.kind === "reorder" ? d.groups.flatMap((x) => x.imprints.map((im) => ({ x, im, path: d!.art?.[im.id] || "" }))).filter((z) => z.path) : [];
+    if (sentArt.length) {
+      note("They sent art with the email: asking you whose art to use");
+      const ans = await waitFor<"theirs" | "old">((resolve) => setArtAsk({ job: jobLabel || "the old job", resolve, items: sentArt.map(({ x, im, path }) => {
+        const f = d!.files.find((y) => y.path === path);
+        return { key: im.id, label: `${x.name ? `${x.name} · ` : ""}${im.location}`, file: { name: f?.name || path.split("/").pop() || "art", url: f?.url || "", type: f?.type || "" } };
+      }) }));
+      setArtAsk(null);
+      if (ans === "old") { d = { ...d, art: {} }; did.push("You chose the old job's art over the files they sent"); }
+      else { theirs = new Set(sentArt.map((z) => z.im.id)); did.push(`Using the art they sent (${[...new Set(sentArt.map((z) => d!.files.find((y) => y.path === z.path)?.name || "art"))].join(", ")})`); }
+    }
+    const hasArt = (im: { id: string; design_id?: string }) => !!im.design_id || theirs.has(im.id);
     // an old Printavo job: its art from the job's files and the film
     let films: { id: string; name: string }[] = [];
     const why: string[] = [];
@@ -151,7 +171,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // Printavo and say, hey, what's this? Full front? …and it's on a background. Yep."). Without files: the art and
     // size from the film, as before.
     const pvAll = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:") && d.groups.some((x) => (x.pvRef || []).length + (x.pvArt || []).length > 0);
-    if (!pvAll && d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
+    if (!pvAll && d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !hasArt(im)))) {
       step(`${of}Pulling the art from ${jobLabel || "the old job"}…`);
       try {
         const had = new Set(d.groups.flatMap((x) => x.imprints.map((im) => im.design_id || "")));
@@ -187,8 +207,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // it's done in Printavo"). Any reorder: when a print still has no art ("give us some sort of error… help me out").
     const isPv = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:");
     const all = d.groups.flatMap((grp, gi) => grp.imprints.map((im, ii) => ({ gi, ii, im, grp })));
-    const missing = d.kind === "reorder" && g.customer?.id ? all.filter(({ im }) => !im.design_id) : [];
-    const targets = isPv && g.customer?.id ? all : missing;
+    const missing = d.kind === "reorder" && g.customer?.id ? all.filter(({ im }) => !hasArt(im)) : [];
+    // their own art is settled: the Resolution Center asks only about the rest
+    const targets = isPv && g.customer?.id ? all.filter(({ im }) => !theirs.has(im.id)) : missing;
     const replaced: string[] = [];
     const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
     if (targets.length && (missing.length || (isPv && files.length))) {
@@ -331,7 +352,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           if (many && m) { finishSteps(); await waitFor<void>((resolve) => setPause({ made: m, i, resolve })); setPause(null); }
         } catch (e) {
           if (e instanceof Cancelled || stopped.current) {
-            setConfirm(null); setHelp(null);
+            setConfirm(null); setHelp(null); setArtAsk(null);
             const ids = [...made0.current]; made0.current = new Set();
             if (ids.length) await discardDraftArt(ids).catch(() => null);
             return;
@@ -395,6 +416,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           <p className="dla-sub">This takes about a minute. Nothing is sent to the customer.</p>
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
+        {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}
         {!many && made.map((m) => (
@@ -817,6 +839,39 @@ function trimToArt(c: HTMLCanvasElement) {
  * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
  * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
  */
+/** the customer's art with a reorder: drawn large, theirs or the old job's */
+function SentArt({ a, onCancel }: { a: ArtAsk; onCancel: () => void }) {
+  const [pics, setPics] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      for (const it of a.items) {
+        if (!it.file.url) continue;
+        const dr = await drawFile(it.file.url, it.file.name, it.file.type).catch(() => null);
+        if (live && dr?.asIsUrl) setPics((p) => ({ ...p, [it.key]: dr.asIsUrl }));
+      }
+    })();
+    return () => { live = false; };
+  }, [a]);
+  return (
+    <div className="ap" role="group" aria-label="Their art or the old art">
+      <p className="ap-q">They sent art with this reorder. Use it, or the art on {a.job}?</p>
+      <p className="ap-why">Their files are newer, so they&apos;re picked unless you say otherwise. The old job&apos;s files still go in Production files.</p>
+      <div className="ap-sent">
+        {a.items.map((it) => (
+          <figure key={it.key} className="ap-sent-i">
+            <span className="ap-pic big">{pics[it.key] ? <img src={pics[it.key]} alt="" /> : <span className="faint">{it.file.url ? "Loading…" : "No preview"}</span>}</span>
+            <figcaption><b>{it.label}</b><span className="faint">{it.file.name}</span>{it.file.url && <a href={it.file.url} target="_blank" rel="noreferrer">Open</a>}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel reorder</button></span>
+        <button type="button" className="btn" onClick={() => a.resolve("old")}>Use the old job&apos;s art</button>
+        <button type="button" className="btn primary" onClick={() => a.resolve("theirs")}>Use the art they sent</button></div>
+    </div>
+  );
+}
+
 function ArtConfirm({ c, onCancel }: { c: Confirm; onCancel: () => void }) {
   const [rows, setRows] = useState(c.items.map((x) => ({ ...x })));
   const [pics, setPics] = useState<Record<string, string>>({});

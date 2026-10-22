@@ -124,21 +124,33 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
 
   const st = STATUSES.find((x) => x.k === input.status) || STATUSES.find((x) => x.k === "quote")!;
   const reorderOf = d.kind === "reorder" && d.reorderOf ? d.reorderOf : null;
-  let fromLabel = "";
-  if (reorderOf?.startsWith("o:")) { const { data: o } = await admin.from("orders").select("number").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `#${o.number}`; }
-  // the old Printavo job's notes carried over to production (ticked, else the ones about the print)
-  let carried = "";
-  if (reorderOf?.startsWith("a:")) {
-    const { data: o } = await admin.from("archived_orders").select("visual_id, data").eq("id", reorderOf.slice(2)).maybeSingle();
-    if (o) {
-      fromLabel = `Printavo #${o.visual_id}`;
-      const od = (o.data || {}) as { customerNote?: string; productionNote?: string };
-      const n = { customer: oldNoteText(od.customerNote), production: oldNoteText(od.productionNote) };
-      carried = carryOf(d, n).filter((k) => n[k]).map((k) => `${k === "customer" ? "Customer note" : "Production note"} on ${fromLabel}:\n${n[k].slice(0, 1500)}`).join("\n\n");
+  // one order reordering several past jobs (Oct 22, Hutchins T10A #33633 + T11A #33676): each one's label, notes and
+  // confirmed specs, for its own groups
+  const refs = reorderOf ? [...new Set([reorderOf, ...(d.reorderJobs || [])])] : [];
+  const labels: string[] = [], carriedParts: string[] = [];
+  let tookSpecs: string[] = [];
+  for (const ref of refs) {
+    let label = "";
+    if (ref.startsWith("o:")) { const { data: o } = await admin.from("orders").select("number").eq("id", ref.slice(2)).maybeSingle(); if (o) label = `#${o.number}`; }
+    // the old Printavo job's notes carried over to production (ticked, else the ones about the print)
+    if (ref.startsWith("a:")) {
+      const { data: o } = await admin.from("archived_orders").select("visual_id, data").eq("id", ref.slice(2)).maybeSingle();
+      if (o) {
+        label = `Printavo #${o.visual_id}`;
+        const od = (o.data || {}) as { customerNote?: string; productionNote?: string };
+        const n = { customer: oldNoteText(od.customerNote), production: oldNoteText(od.productionNote) };
+        const c = carryOf(d, n).filter((k) => n[k]).map((k) => `${k === "customer" ? "Customer note" : "Production note"} on ${label}:\n${n[k].slice(0, 1500)}`).join("\n\n");
+        if (c) carriedParts.push(c);
+      }
     }
+    if (!label) continue;
+    labels.push(label);
+    // a reorder of a job production already confirmed: its prints take the confirmed specs, not guesses (lib/designSpecs.ts)
+    const mine = refs.length > 1 ? groups.filter((g) => g.reorderFrom === ref) : groups;
+    if (mine.length) tookSpecs = [...tookSpecs, ...(await applyConfirmedSpecs(admin, custId, label, mine))];
   }
-  // a reorder of a job production already confirmed: its prints take the confirmed specs, not guesses (lib/designSpecs.ts)
-  const tookSpecs = reorderOf && fromLabel ? await applyConfirmedSpecs(admin, custId, fromLabel, groups) : [];
+  const fromLabel = labels.join(" and ");
+  const carried = carriedParts.join("\n\n");
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
   // the AI's notes are for the shop (what it noticed reading the email), not the customer: they go in the internal
   // production notes, never the order's notes, which print on the quote and invoice (Oct 20, Nick: #40089's quote showed

@@ -158,6 +158,8 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   pvArt?: { path: string; name: string; /** what it is in the new order's Production files (lib/productionFileKinds.ts) */ kind?: string; note?: string }[];
   /** a reorder of an old Printavo job: its mockup pictures (ours, not the customer's), kept in production files */
   pvRef?: { path: string; name: string }[];
+  /** a reorder of several past jobs in one order: the past job (PastJob.ref) this group repeats */
+  reorderFrom?: string;
   /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing).
    *  Set from the garments' fabric by the order editor unless staff set it by hand (specialtyInkSet) */ specialtyInk?: boolean;
   /** staff ticked / unticked specialty ink themselves: the garments no longer decide */ specialtyInkSet?: boolean;

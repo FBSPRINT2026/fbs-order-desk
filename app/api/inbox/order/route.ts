@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const part = await partOf(admin, String(b.activity || ""), typeof b.part === "string" ? b.part : "");
   if (b.part && !part) return NextResponse.json({ error: "That order isn't in this email's plan any more. Close it and start again." }, { status: 400 });
-  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff", { told: typeof b.told === "string" ? b.told : "", jobRef: typeof b.job === "string" ? b.job : part?.job || null, reorderOk: !!b.reorderOk || !!(part?.job && !b.job), lookedUp: b.lookedUp && typeof b.lookedUp === "object" ? b.lookedUp : null, part });
+  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff", { told: typeof b.told === "string" ? b.told : "", jobRef: typeof b.job === "string" ? b.job : part?.job || null, jobRefs: Array.isArray(b.jobs) ? b.jobs.filter((x: unknown): x is string => typeof x === "string").slice(0, 6) : [], reorderOk: !!b.reorderOk || !!(part?.job && !b.job), lookedUp: b.lookedUp && typeof b.lookedUp === "object" ? b.lookedUp : null, part });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   const files = await signed(admin, r.draft.files);
   return NextResponse.json({ draft: { ...r.draft, files }, files, past: r.past });

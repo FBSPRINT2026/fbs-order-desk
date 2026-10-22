@@ -11804,3 +11804,18 @@ html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;font-s
 .szc > small.upc,.szc > .upc-btn{color:var(--ink-3)}
 .szc > .upc-btn.set{color:var(--ink-2);background:none}
 html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
+
+/* a reorder email that came with art: their art or the old job's (QuickOrder SentArt, Oct 22) */
+.ap-sent{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:10px 0 4px}
+.ap-sent-i{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ap-sent-i figcaption{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--ink-3);min-width:0}
+.ap-sent-i figcaption b{font-size:14px;color:var(--ink)}
+.ap-sent-i figcaption .faint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the order start chooser: tick several past jobs to reorder them together (Oct 22) */
+.osp-jobrow{display:flex;align-items:stretch;gap:6px}
+.osp-jobrow > .osp-job{flex:1 1 auto;min-width:0}
+.osp-tick{display:flex;align-items:center;padding:0 2px 0 4px;cursor:pointer}
+.osp-tick input{width:16px;height:16px;margin:0}
+.osp-jobrow.on > .osp-job{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.osp-multi{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);font-size:13px}
+.osp-multi > span{flex:1 1 200px;min-width:0}

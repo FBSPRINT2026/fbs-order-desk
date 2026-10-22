@@ -10,7 +10,7 @@ import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
  *  - Reorder of a past job: their jobs, the ones whose name is in the email first.
  *  - Reorder, let the AI find the job.
  */
-export type OrderStart = { told?: string; job?: string; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[];
+export type OrderStart = { told?: string; job?: string; /** several past jobs reordered together in one order (a group per design) */ jobs?: string[]; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[];
   /** open the full form to check every detail before it's made (otherwise it's made in one go, QuickOrder) */ review?: boolean };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
@@ -30,6 +30,11 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
   }, [activityId]);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
+  // several jobs ticked: one order reordering them together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676,
+  // "is there an option when we create a reorder to select multiple orders and bring those in as different line items?")
+  const [sel, setSel] = useState<PastJob[]>([]);
+  const tick = (p: PastJob) => setSel((x) => (x.some((y) => y.ref === p.ref) ? x.filter((y) => y.ref !== p.ref) : [...x, p]));
+  const name = (p: PastJob) => p.label.replace(/\s*\(Printavo\)$/, "");
   useEffect(() => {
     let live = true;
     fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (!live) return; setPast(Array.isArray(j?.past) ? j.past : []); if (j?.draft && !j.created) setReady({ draft: j.draft, created: j.created }); }).catch(() => { if (live) { setPast([]); setErr("Couldn't load their past jobs."); } });
@@ -100,13 +105,26 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
         </div>
         {past === null ? <p className="faint">Loading their past jobs…</p> : err ? <p className="err">{err}</p> : list.length === 0 ? <p className="faint">{q ? "No job matches." : "No past jobs on file for this customer."}</p> : (
           <div className="osp-list">
-            {list.slice(0, 40).map(({ p, hit }) => (
-              <button key={p.ref} type="button" className={"osp-job" + (hit ? " hit" : "")} onClick={() => onPick({ job: p.ref, told: `This is a reorder of ${p.label.replace(/\s*\(Printavo\)$/, "")}.` })}>
-                <b>{p.label.replace(/\s*\(Printavo\)$/, "")}</b>
-                <span className="faint">{fmt(p.date)} · {p.qty.toLocaleString("en-US")} pcs{p.ref.startsWith("a:") ? " · Printavo" : ""}</span>
-                {hit > 0 && <em>Named in the email</em>}
-              </button>
-            ))}
+            {list.slice(0, 40).map(({ p, hit }) => {
+              const on = sel.some((y) => y.ref === p.ref);
+              return (
+                <div key={p.ref} className={"osp-jobrow" + (on ? " on" : "")}>
+                  <label className="osp-tick" title="Tick several jobs to reorder them together in one order"><input type="checkbox" checked={on} onChange={() => tick(p)} aria-label={`Add ${name(p)} to one reorder`} /></label>
+                  <button type="button" className={"osp-job" + (hit ? " hit" : "")} onClick={() => (sel.length ? tick(p) : onPick({ job: p.ref, told: `This is a reorder of ${name(p)}.` }))}>
+                    <b>{name(p)}</b>
+                    <span className="faint">{fmt(p.date)} · {p.qty.toLocaleString("en-US")} pcs{p.ref.startsWith("a:") ? " · Printavo" : ""}</span>
+                    {hit > 0 && <em>Named in the email</em>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {sel.length > 0 && (
+          <div className="osp-multi">
+            <span>{sel.length === 1 ? `${name(sel[0])}: tick another job to reorder them together` : `One order, a group for each: ${sel.map((p) => name(p).replace(/^(#\d+).*/, "$1")).join(" + ")}`}</span>
+            <button type="button" className="btn ghost sm" onClick={() => setSel([])}>Clear</button>
+            <button type="button" className="btn primary sm" onClick={() => onPick(sel.length === 1 ? { job: sel[0].ref, told: `This is a reorder of ${name(sel[0])}.` } : { job: sel[0].ref, jobs: sel.map((p) => p.ref), told: `This is ONE order that reorders these past jobs together, each design its own group: ${sel.map(name).join("; ")}.` })}>{sel.length === 1 ? "Reorder it" : `Reorder these ${sel.length} together`}</button>
           </div>
         )}
         <div className="dla-acts"><button type="button" className="eo-link osp-review" onClick={() => onPick({ review: true })} title="The AI's reading in a form you check and fix before the order is made">Check every detail first</button><span className="spacer" /><button type="button" className="btn ghost" onClick={onClose}>Cancel</button></div>

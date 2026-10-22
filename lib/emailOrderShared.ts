@@ -41,6 +41,10 @@ export type EODraft = {
   mockups: Record<string, string[]>;
   /** the past job a reorder copies (PastJob.ref) */
   reorderOf: string | null;
+  /** one order reordering several past jobs (one per design): every job's ref, the first is reorderOf */
+  reorderJobs?: string[];
+  /** a reorder where the customer attached the art: staff choose their files or the old jobs' (QuickOrder asks) */
+  emailArt?: boolean;
   questions: string[];
   /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */
   artNotes?: string[];

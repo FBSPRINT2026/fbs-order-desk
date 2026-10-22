@@ -31,6 +31,8 @@ type AiGroup = Omit<PGroup, "garments" | "prints"> & {
   garments?: (NonNullable<PGroup["garments"]>[number] & { reorder_line?: number | null })[];
   prints?: (NonNullable<PGroup["prints"]>[number] & { art_file?: number | null; width_in?: number | null; drop_in?: number | null })[];
   mockup_files?: number[]; finishing?: string[];
+  /** an order that reorders several past jobs (one per design): the J number this group repeats */
+  reorder_of?: number | null;
 };
 type AiOrder = Omit<ProposedOrder, "groups"> & {
   kind: "new" | "reorder"; reorder_of?: number | null; summary?: string;
@@ -275,6 +277,7 @@ function tool(finishingIds: string[]) {
             drop_in: { type: ["number", "null"], description: "Only when the customer states how far below the collar the print goes; otherwise null (we use our standard placement)." },
           } } },
           mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
+          reorder_of: { type: ["integer", "null"], description: "A reorder of several past jobs in one order (one per design): the J number of the past job THIS group repeats" },
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
         } } },
         questions: { type: "array", items: { type: "string" }, description: "What we still need to ask the customer, in plain words" },
@@ -314,7 +317,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 }
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
-export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
   const cv = await emailConversation(admin, activityId);
@@ -363,13 +366,16 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
   let past = [...(told || memText ? await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")}`, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
-  if (picked) past = [picked, ...past.filter((j) => j !== picked)];
+  // several jobs picked together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676: "create an order out of a
+  // reorder from two separate Printavos"): all of them first, J1, J2…
+  const pickedAll = [...new Set([...(picked ? [picked.ref] : []), ...(o.jobRefs || [])])].map((ref) => past.find((j) => j.ref === ref)).filter((j): j is PastJob => !!j);
+  if (pickedAll.length) past = [...pickedAll, ...past.filter((j) => !pickedAll.includes(j))];
   // facts the note points to that have to be looked up online ("we used the LA Lakers PMS colors")
   // (looked up first by the panel, so staff see it while the email is read)
   const lookedUp = told && o.lookedUp?.text ? { text: String(o.lookedUp.text).slice(0, 600), sources: (o.lookedUp.sources || []).slice(0, 3).map((x) => ({ title: String(x.title || "").slice(0, 120), url: String(x.url || "") })).filter((x) => /^https?:\/\//.test(x.url)) } : null;
   const staffSays = [
     o.part ? `This conversation holds ${o.part.of} separate orders, one per design. THIS order is only "${o.part.label}": use only its files (listed above) and only what the emails say about it.${o.part.pieces ? ` Its size sheets total ${o.part.pieces} pieces.` : ""} When several size sheets (e.g. one for the store and one for their warehouse) list the same style, color and size, add the quantities together into one garment line.${o.part.changes ? ` What's different from the past job: ${o.part.changes}` : " It's an exact reprint of the past job: same prints, inks and placement."}` : "",
-    picked ? `Staff confirmed: this is a reorder of ${picked.label} (J1).` : "",
+    pickedAll.length > 1 ? `Staff confirmed: this is ONE order that reorders ${pickedAll.length} past jobs together: ${pickedAll.map((j, i) => `${j.label} (J${i + 1})`).join(", ")}. Each design is its own group; set each group's reorder_of to the J number of the job it repeats.` : picked ? `Staff confirmed: this is a reorder of ${picked.label} (J1).` : "",
     picked?.ref.startsWith("o:") ? "That order was made in our own system: its art, prints, inks, placement and mockups are on file and are reused exactly. Only the quantities (and any change the customer asks for) are new; don't ask about the art." : "",
     told,
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
@@ -383,11 +389,13 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
 More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like 3-6M or 6-12M are written as the top month (6M, 12M).
 
 Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
-1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm.
+0. Before taking any numbers, read the email like a person: how is it laid out, and why? Look at the headings and at what repeats. When the same designs come again under headings such as store or location names (e.g. ****Frisco**** then ****McKinney****, "see break out by location"), departments, people or ship-to places, that's ONE order broken out by those headings, not separate garments and never to be added together: make ONE group per design (name the group with the design, e.g. "T10A Autumn Tee"), and in it one garment line per heading, with the heading as that line's description (e.g. "Frisco"). The same style and color under two headings is two lines. When you can't tell what a heading or split means, keep the parts apart anyway and ask in questions what it is. Check your totals against any the customer gives ("T10A total tees 348").
+1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's.
 2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
 4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front, or Center Chest only for a small logo (under about 5" wide on an adult, about a quarter of the chest width or less). On toddler, infant and youth garments judge by the share of the chest, not inches: a print across half or more of a toddler's chest is Full Front. Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
+4c. A customer's setup PDF often has two pages: the art page (the art shown big, often on a black or colored background with a note like "BLACK DOES NOT PRINT", and a spec box naming the location such as "Front screenprint", the size like 11.75"w x 6.25"t and the ink colors) and a mockup page (the design on the garment, with the style and color). Take the location, size and inks from the spec box (that size is the customer's own), use the PDF as the print's art_file AND as the group's mockup_files. The background color isn't an ink.
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -456,9 +464,47 @@ ${staffSays}` : ""}`;
   const finIds = new Set((settings.finishing || []).map((f) => f.id));
   let groups: Group[] = [];
   // the J number of the past job; the model sometimes gives the job's own number instead (#33729), so that's matched too
-  const ro = Math.floor(+(p.reorder_of || 0));
-  const job = p.kind === "reorder" && ro > 0 ? (ro <= past.length ? past[ro - 1] : past.find((j) => new RegExp(`^#${ro}\\b`).test(j.label))) : undefined;
-  if (job) {
+  const jobAt = (n0?: number | null) => { const n = Math.floor(+(n0 || 0)); return n > 0 ? (n <= past.length ? past[n - 1] : past.find((j) => new RegExp(`^#${n}\\b`).test(j.label))) : undefined; };
+  const groupJobs = (p.groups || []).map((pg) => (p.kind === "reorder" ? jobAt(pg.reorder_of) : undefined));
+  const job = p.kind === "reorder" ? jobAt(p.reorder_of) || groupJobs.find(Boolean) : undefined;
+  // THE READING LEADS (Oct 22, Nick on Hutchins: T10A and T11A broken out by Frisco and McKinney, art attached; the
+  // reorder copied one old job and squeezed every garment into its one print, dropping T10A and the art he sent):
+  // when the email reorders several designs (several past jobs, or several groups with their own art), the order is
+  // built the way the email reads, one group per design with its lines, and each group borrows from its own old job
+  // (inks, its files for the Resolution Center, finishing) only what the email doesn't give
+  const emailArt = (p.groups || []).some((pg) => (pg.prints || []).some((pr) => !!fileAt(pr.art_file)));
+  const distinctJobs = new Set(groupJobs.filter(Boolean).map((j) => j!.ref));
+  const readingLeads = p.kind === "reorder" && (p.groups || []).length >= 2 && (distinctJobs.size >= 2 || emailArt);
+  const reorderJobs = [...new Set([job?.ref, ...groupJobs.map((j) => j?.ref)].filter((x): x is string => !!x))];
+  if (readingLeads) {
+    (p.groups || []).forEach((pg, i) => {
+      const [g] = proposalToGroups({ groups: [pg] });
+      if (!g) return;
+      const j = groupJobs[i] || ((p.groups || []).length === 1 || distinctJobs.size <= 1 ? job : undefined);
+      // the old job's group for these garments (same style), else its first
+      const sk = (st: string) => (st || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const old = j ? j.groups.find((og) => og.lines.some((ol) => g.lines.some((l) => sk(l.style) && sk(l.style) === sk(ol.style)))) || j.groups[0] : undefined;
+      if (old) {
+        if (!g.imprints.length) g.imprints = old.imprints.map((im) => ({ ...JSON.parse(JSON.stringify(im)), id: uid() }));
+        else g.imprints.forEach((im, k) => {
+          const was = old.imprints.find((x) => x.location === im.location) || old.imprints[k];
+          if (!was) return;
+          if (!im.inks && was.inks) im.inks = was.inks;
+          if (was.design_id && !fileAt(pg.prints?.[k]?.art_file)) im.design_id = was.design_id;
+          im.notes = [im.notes, `Reorder of ${j!.label.replace(/\s*\(Printavo\)$/, "")}`].filter(Boolean).join(". ").slice(0, 300);
+        });
+        if (old.pvArt?.length) g.pvArt = JSON.parse(JSON.stringify(old.pvArt));
+        if (old.pvRef?.length) g.pvRef = JSON.parse(JSON.stringify(old.pvRef));
+        if (!(pg.finishing || []).length && old.finishing?.length) g.finishing = [...old.finishing];
+        g.reorderFrom = j!.ref;
+      }
+      (pg.prints || []).slice(0, 10).forEach((pr, k) => { const f = fileAt(pr.art_file); const im = g.imprints[k]; if (f && im) { art[im.id] = f; if (im.size && String(pr.size || "").trim()) im.sizeFrom = "customer"; } });
+      const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
+      if (ms.length) mockups[g.id] = [...new Set(ms)];
+      if ((pg.finishing || []).length) g.finishing = (pg.finishing || []).filter((x) => finIds.has(x));
+      groups.push(g);
+    });
+  } else if (job) {
     // the past job, copied, with the new quantities on the lines they named
     groups = JSON.parse(JSON.stringify(job.groups)) as Group[];
     // our mockup of each line goes with it (a portal order's mockups are copied, not made again: Oct 20, Nick)
@@ -592,7 +638,7 @@ ${staffSays}` : ""}`;
     delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
     ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60), notes: (p.notes || "").slice(0, 2000),
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
-    groups, art, mockups, reorderOf: job?.ref || null,
+    groups, art, mockups, reorderOf: job?.ref || null, ...(reorderJobs.length > 1 ? { reorderJobs } : {}), ...(readingLeads && emailArt ? { emailArt: true } : {}),
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
     ...(told ? { told } : {}), ...(p.kind === "reorder" || picked ? { looksReorder: true } : {}),
     ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}), ...(o.part ? { part: o.part } : {}),
