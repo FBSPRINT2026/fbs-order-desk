@@ -12,6 +12,7 @@ import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
 import { type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSticky } from "@/lib/useSticky";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -121,6 +122,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
+  // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
+  const [progOpen, setProgOpen] = useSticky("order.programOpen", false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
   // the customer's program: every rate card (Nine18 has one per location or brand), the design prices and whether new
   // orders take it by themselves; prog = the card this order uses (picked on the order, else guessed from its name)
@@ -1099,12 +1102,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                         </label>
                       )}
                       {o.use_program && !prog && <span className="faint pt-ch">No rate card on their Program tab</span>}
+                      {o.use_program && prog && <button type="button" className="pt-applied" onClick={() => setProgOpen(!progOpen)} aria-expanded={progOpen} title={progOpen ? "Hide the program pricing details" : "Show how the program prices this order"}>
+                        <span className="pt-dot" aria-hidden />Program pricing applied<span className="pt-car" aria-hidden>{progOpen ? "▴" : "▾"}</span>
+                      </button>}
                     </div>
                     {!o.use_program && progAll && progAll.applyMode === "ask" && progAll.cards.length > 0 && ["quote", "request"].includes(o.status) && (
                       <div className="prg-ask"><span><b>{cust ? custLabel(cust) : "This customer"}</b> has program pricing.</span><button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Apply program pricing</button></div>
                     )}
-                    {o.use_program && prog && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
-                    {o.use_program && prog && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
+                    {o.use_program && prog && progOpen && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
+                    {o.use_program && prog && progOpen && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
                       onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
                       onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.cards.length || r.items.length)) setProgAll({ cards: r.cards, items: r.items, applyMode: r.applyMode }); }); }} />}
                     {/* the "Last time…" past-price line is gone (Oct 15, Nick: it matched a job they had never printed) */}
