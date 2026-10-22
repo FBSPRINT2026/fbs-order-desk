@@ -11712,19 +11712,19 @@ html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
    between them, and only the first one shows the size names */
 @media (min-width:761px){
   html body .ord .line-b .gl .a-st input{width:110px!important}
-  html body .ord .line-b .gl .a-br input{width:130px!important}
+  html body .ord .line-b .gl .a-br input{width:156px!important}
   html body .ord .line-b .gl .a-co input{width:190px!important}
   html body .ord .line-b .gl > .gl-ditto{width:102px!important;visibility:hidden}
-  html body .ord .line-b.fit-w .gl-list .gl,html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:102px 122px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px}
-  html body .ord .line-b.fit-w .gl-list.ws .gl,html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:102px 122px 182px auto minmax(0,1fr) 44px 80px 92px 24px}
+  html body .ord .line-b.fit-w .gl-list .gl,html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px}
+  html body .ord .line-b.fit-w .gl-list.ws .gl,html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 44px 80px 92px 24px}
   html body .ord .line-b.fit-w .gl-list .gl{grid-template-areas:"st br co . . cs qt ea to x" "de de de de . . . . . ." "sz sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list.ws .gl{grid-template-areas:"st br co . . qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl.same{grid-template-areas:"st br co . . cs qt ea to x" "sz sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list.ws .gl.same{grid-template-areas:"st br co . . qt ea to x" "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w1 .gl-list .gl.same{grid-template-areas:"st br co sz . cs qt ea to x"}
   html body .ord .line-b.fit-w1 .gl-list.ws .gl.same{grid-template-areas:"st br co sz . qt ea to x"}
-  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:102px 122px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad cs qt ea to x"}
-  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2.ws,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:102px 122px 182px auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad qt ea to x"}
+  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad cs qt ea to x"}
+  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2.ws,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad qt ea to x"}
   html body .ord .line-b .gl-list .gl.same{border-top:0;padding-top:0}
   html body .ord .line-b .gl-list .gl:has(+ .gl.same){padding-bottom:4px}
   html body .ord .line-b:is(.fit-w,.fit-w1) .gl.same .a-sz .szc > span:first-child{display:none}
