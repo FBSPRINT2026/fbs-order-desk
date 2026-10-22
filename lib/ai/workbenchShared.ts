@@ -26,7 +26,12 @@ export type WBMockItem = {
 
 export type WBCard =
   | { id: string; kind: "order"; draft: EODraft; customer: { id: string; label: string } | null; choices: { id: string; label: string }[]; created?: { id: string; number: number } }
-  | { id: string; kind: "mockups"; garment: string; items: WBMockItem[]; missing: string[] };
+  | { id: string; kind: "mockups"; garment: string; items: WBMockItem[]; missing: string[]; spec?: MockSpec };
+
+/** what a mockup card was made from, so the Mockup Creator can open set up the same way (Oct 22, Nick: "use our
+ *  mockup builder… and auto build some mockups"): the customer, the garment, its colors, and each print */
+export type MockSpec = { customer_id: string | null; style: string; brand: string; colors: string[];
+  prints: { design_id?: string; file?: string; location: string; ink?: string; widthIn?: number }[] };
 
 export type WBMsg = { role: "user" | "assistant"; text: string; files?: WBFile[]; cards?: WBCard[]; at: string; error?: boolean;
   /** the email a chat started from, handed to the AI first (Inbox Assistant, Oct 22); not shown as a message */ seed?: boolean };

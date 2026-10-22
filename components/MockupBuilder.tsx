@@ -15,6 +15,7 @@ import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/po
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
+import { mockupSpec } from "@/app/shop/ai/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -125,6 +126,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const auto = sp.get("auto") === "1";
   /** opened from an email (Inbox → Edit details): carried on to the order, which offers "Save & back to email" */
   const fromEmail = sp.get("email") || "";
+  /** opened from an AI Workbench mockup card (Oct 22): its customer, garment colors and prints, set up to check and save */
+  const wbChat = portal ? "" : sp.get("wb") || "", wbCard = sp.get("card") || "";
+  const wbInk = useRef<"" | "wait" | "done">(wbChat ? "wait" : "");
   /** the customer's art review → "Make changes → change it myself": this proof's shirt and prints, saved back to the shop */
   const changeId = portal ? sp.get("change") || "" : "";
   /** the customer's art review → "See the full proof": the proof's shirt and prints in the Mockup Creator, to look at only */
@@ -341,6 +345,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const [cat, cu] = await Promise.all([sb.from("garments").select("*"), sb.from("customers").select("*")]);
       setCatalog((cat.data || []) as Garment[]);
       setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      if (!orderId && wbChat && wbCard) {
+        const r = await mockupSpec(wbChat, wbCard);
+        if (!r.ok) { wbInk.current = "done"; return setMsg(r.error); }
+        setCustomerId(r.customerId);
+        setLines(r.lines);
+        setImprints(r.imprints.map((d) => ({ ...d })));
+        autoWant.current = Object.fromEntries(r.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
+        setMsg("Set up by the AI Workbench. Check it, then Save Mockup.");
+      }
       if (orderId) {
         const { data } = await sb.from("orders").select("*").eq("id", orderId).maybeSingle();
         if (!data) return setMsg("Order not found.");
@@ -364,7 +377,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }
       }
     })();
-  }, [sb, orderId, groupId, portal, changeId, viewId]);
+  }, [sb, orderId, groupId, portal, changeId, viewId, wbChat, wbCard]);
 
   // art saved without a picture to draw (a PDF / AI from an email made into a design on the server): the preview is
   // made here, once, and kept on the design, so the logo shows on the mockup instead of "No logo yet"
@@ -1898,6 +1911,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     sizerShown.current = true;
     setSizer({ ids, i: 0, pick: null });
   }, [ready, imprints, designs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // opened from the AI Workbench: once every logo is loaded, one-color prints get their ink (the logo "in black"), the
+  // same way auto mode does; nothing is saved until staff click Save Mockup
+  useEffect(() => {
+    if (wbInk.current !== "wait" || !ready || !imprints.length || imprints.some((im) => !designOf(im) || paints[im.id]?.design !== im.design_id)) return;
+    wbInk.current = "done";
+    for (const im of imprints) {
+      const want = autoWant.current[im.id], pt = paints[im.id];
+      if (im.method !== "screen" || !want || want.colors !== 1 || !want.inks || !pt) continue;
+      const name = want.inks.split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
+      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, { name, hex }])));
+    }
+  }, [ready, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // auto mode (from Inbox → Create order): once the shirt and every logo are loaded, set one-color prints to their
   // ink, save, and move on. Gives up after 30 s with the reason, leaving everything as it is to finish by hand.

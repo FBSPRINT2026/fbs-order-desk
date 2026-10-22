@@ -274,7 +274,11 @@ function Mockups({ card, chatId, onCard, pending }: { card: Extract<WBCard, { ki
     <div className="wb-card">
       <div className="wb-card-h">
         <div><b>Mockups</b><span>{card.garment} · {card.items.length} picture{card.items.length === 1 ? "" : "s"}</span></div>
-        {pics.some(Boolean) && <button type="button" className="btn ghost sm" onClick={downloadAll}>Download all</button>}
+        <div className="row">
+          {/* the real Mockup Creator, set up like this card: check it and save to the customer (Oct 22, Nick) */}
+          {card.spec && chatId && !pending && <a className="btn primary sm" href={`/shop/artwork/mockup?wb=${encodeURIComponent(chatId)}&card=${encodeURIComponent(card.id)}`} target="_blank" rel="noreferrer" title={card.spec.customer_id ? "Opens the Mockup Creator with this customer, garment, colors and prints set up; check it and click Save Mockup" : "Tell the Workbench which customer these are for first"}>Open in Mockup Creator</a>}
+          {pics.some(Boolean) && <button type="button" className="btn ghost sm" onClick={downloadAll}>Download all</button>}
+        </div>
       </div>
       <div className="wb-mocks">
         {card.items.map((it, i) => (

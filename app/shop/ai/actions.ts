@@ -3,7 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
-import type { WBCard, WBMsg } from "@/lib/ai/workbenchShared";
+import type { WBCard, WBFile, WBMsg } from "@/lib/ai/workbenchShared";
+import { newImprint, type Imprint } from "@/lib/pricing";
 
 /** AI Workbench (Oct 13): each person's chats, file uploads, and the cards' buttons (create the quote, keep mockups) */
 async function me() {
@@ -134,5 +135,47 @@ export async function saveMockups(chatId: string, cardId: string, saved: { i: nu
     for (const s of saved) { const it = got.card.items[s.i]; if (it && s.path.startsWith(`ai/mockups/${chatId}/`)) it.saved = s.path; }
     await saveMsgs(admin, chatId, got.msgs);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * A Workbench mockup card, set up in the Mockup Creator (Oct 22, Nick: "use our mockup builder like we would do on a
+ * reorder or a new order… and auto build some mockups"): the customer, the garment in each color, and each print with
+ * its design, place, size and ink. Art dropped in the chat is saved to the customer's artwork first (an art file
+ * already saved under the same name is used again), like Upload Logo does. Staff check it and click Save Mockup.
+ */
+export async function mockupSpec(chatId: string, cardId: string) {
+  try {
+    const { admin, email } = await me();
+    const got = await loadCard(admin, email, chatId, cardId);
+    if (!got || got.card.kind !== "mockups" || !got.card.spec) return { ok: false as const, error: "That mockup card can't be opened in the Mockup Creator (made before Oct 22): ask the Workbench to make it again." };
+    const sp = got.card.spec;
+    if (!sp.customer_id) return { ok: false as const, error: "Tell the Workbench which customer these are for, then open them again." };
+    const files = got.msgs.flatMap((m) => m.files || []) as WBFile[];
+    const imprints: Imprint[] = [];
+    for (const p of sp.prints) {
+      let designId = p.design_id || "";
+      if (!designId && p.file) {
+        const f = files.find((x) => x.id === p.file);
+        if (!f) continue;
+        const { data: had } = await admin.from("designs").select("id").eq("customer_id", sp.customer_id).eq("file_name", f.name).is("archived_at", null).order("number", { ascending: false }).limit(1).maybeSingle();
+        if (had) designId = had.id as string;
+        else {
+          const to = `designs/${crypto.randomUUID()}/${safe(f.name)}`;
+          if ((await admin.storage.from("proofs").copy(f.path, to)).error) continue;
+          let pv: string | null = /^image\/(png|jpe?g|gif|webp)$/i.test(f.type) ? to : null;
+          if (!pv && f.preview?.path) { const pto = `${to.replace(/\.[^./]+$/, "")}-preview.png`; if (!(await admin.storage.from("proofs").copy(f.preview.path, pto)).error) pv = pto; }
+          const { data: d } = await admin.from("designs").insert({ customer_id: sp.customer_id, name: f.name.replace(/\.[^.]+$/, "").slice(0, 120), file_path: to, file_name: f.name, file_type: f.type || "", preview_path: pv, method: "screen", colors: p.ink ? 1 : null, inks: p.ink || "", notes: "From the AI Workbench", created_by: email }).select("id").single();
+          if (d) designId = d.id as string;
+        }
+      }
+      if (!designId) continue;
+      imprints.push({ ...newImprint(p.location), design_id: designId, ...(p.ink ? { colors: 1, inks: p.ink } : {}), ...(p.widthIn ? { size: `${p.widthIn}" wide` } : {}) } as Imprint);
+    }
+    if (!imprints.length) return { ok: false as const, error: "None of the art on that card could be set up." };
+    const { data: gs } = await admin.from("garments").select("id, style, brand").ilike("style", sp.style).limit(5);
+    const g = (gs || []).find((x) => !sp.brand || String(x.brand || "").toLowerCase().includes(sp.brand.toLowerCase().split(" ")[0])) || (gs || [])[0];
+    const lines = sp.colors.map((c) => ({ id: crypto.randomUUID().slice(0, 8), style: sp.style, brand: sp.brand, color: c, garment: (g?.id as string) || "" }));
+    return { ok: true as const, customerId: sp.customer_id, lines, imprints };
   } catch (e) { return fail(e); }
 }
