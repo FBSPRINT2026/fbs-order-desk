@@ -42,7 +42,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const [perRow, setPerRow] = useSticky<number>("ss.perRow", 4), [autoRow, setAutoRow] = useSticky<boolean>("ss.autoRow", true);
   const [gap, setGap] = useSticky<number>("ss.gap", 3);
   const [size, setSize] = useSticky<number>("ss.size", 100);
-  const [pairGap, setPairGap] = useSticky<number>("ss.pairGap", 2);
+  const [pairGap, setPairGap] = useSticky<number>("ss.pairGap", 2), [margin, setMargin] = useSticky<number>("ss.margin", 4.5);
   const [sides, setSides] = useSticky<Sides>("ss.sides", "both");
   const [names, setNames] = useSticky<boolean>("ss.names", true);
   const [styleUnder, setStyleUnder] = useSticky<boolean>("ss.style", false);
@@ -85,6 +85,25 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
           if (!cache.current.has(k)) cache.current.set(k, await shirts(c.key, [sd], 900));
           if (!live) return;
         }
+        // the photo's white background made see-through, from the edges in (it stops at the shirt's outline, so a white
+        // shirt keeps its body): shirts can overlap and sit on any page color
+        for (const c of colors) for (const sd of views) {
+          const key = `${c.key}|${sd}`, cv0 = cache.current.get(key); if (!cv0 || (cv0 as HTMLCanvasElement & { clear?: boolean }).clear) continue;
+          const w = cv0.width, h = cv0.height, x2 = cv0.getContext("2d")!, img = x2.getImageData(0, 0, w, h), d = img.data;
+          const seen = new Uint8Array(w * h), st: number[] = [];
+          const bgl = (i: number) => d[i * 4] >= 250 && d[i * 4 + 1] >= 250 && d[i * 4 + 2] >= 250;
+          for (let xx = 0; xx < w; xx++) { st.push(xx, (h - 1) * w + xx); }
+          for (let yy = 0; yy < h; yy++) { st.push(yy * w, yy * w + w - 1); }
+          while (st.length) {
+            const i = st.pop()!; if (seen[i]) continue; seen[i] = 1;
+            if (!bgl(i)) continue;
+            d[i * 4 + 3] = 0;
+            const xx = i % w, yy = (i / w) | 0;
+            if (xx > 0) st.push(i - 1); if (xx < w - 1) st.push(i + 1); if (yy > 0) st.push(i - w); if (yy < h - 1) st.push(i + w);
+          }
+          x2.putImageData(img, 0, 0);
+          (cv0 as HTMLCanvasElement & { clear?: boolean }).clear = true;
+        }
         // each shirt trimmed to its own outline (the photos' white margins out; 6210 and 3001 photos are framed
         // differently, so one shared box left gaps): all drawn at one scale, standing on the same line
         for (const c of colors) for (const sd of views) {
@@ -114,7 +133,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     const x = c.getContext("2d")!;
     x.imageSmoothingQuality = "high";
     x.fillStyle = bg; x.fillRect(0, 0, W, H);
-    const M = Math.round(Math.min(W, H) * 0.045);
+    const M = Math.round(Math.min(W, H) * (margin / 100));
     const font = (w: number, s: number) => `${w} ${s}px Helvetica, Arial, sans-serif`;
     const ax = align === "center" ? W / 2 : M;
     x.textAlign = align; x.textBaseline = "alphabetic";
@@ -163,18 +182,17 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
       const rowW = inRow * uw + (inRow - 1) * g, ux = (W - rowW) / 2 + col * (uw + g), uy = oy + row * (cellH + g);
       const bs = sideList.map((sd) => boxOf(shown[i].key, sd));
       const pairW = bs.reduce((t, b) => t + b.w * k, 0) + (ns - 1) * pg;
-      let sx = ux + (uw - pairW) / 2;
-      sideList.forEach((sd, j) => {
-        const im = cache.current.get(`${shown[i].key}|${sd}`), b = bs[j];
-        if (im) {
-          const dw = b.w * k, dh = b.h * k, dy = uy + (uh - dh);
-          // white photo backgrounds blend away on a colored page
-          if (bg.toLowerCase() !== "#ffffff") { x.save(); x.globalCompositeOperation = dark(bg) ? "source-over" : "multiply"; }
-          x.drawImage(im, b.x, b.y, b.w, b.h, sx, dy, dw, dh);
-          if (bg.toLowerCase() !== "#ffffff") x.restore();
-        }
-        sx += b.w * k + pg;
-      });
+      const x0 = ux + (uw - pairW) / 2, xs: number[] = [];
+      { let sx = x0; for (const b of bs) { xs.push(sx); sx += b.w * k + pg; } }
+      // overlapping (front to back below zero): the back goes behind, the front on top
+      const order = sideList.map((sd, j) => j);
+      if (pg < 0) order.reverse();
+      for (const j of order) {
+        const sd = sideList[j], im = cache.current.get(`${shown[i].key}|${sd}`), b = bs[j];
+        if (!im) continue;
+        const dw = b.w * k, dh = b.h * k, dy = uy + (uh - dh);
+        x.drawImage(im, b.x, b.y, b.w, b.h, xs[j], dy, dw, dh);
+      }
       const cx = ux + uw / 2;
       if (names) {
         x.fillStyle = ink; x.font = font(700, labelSize); x.fillText(shown[i].color, cx, uy + uh + labelSize * 1.15);
@@ -262,6 +280,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
         <div className="ss-body">
           <aside className="ss-ctl">
             <section><h3>Page</h3>
+              <label className="mk-f"><span>Page margin: {margin < 2 ? "thin" : margin < 4 ? "small" : margin < 6 ? "medium" : "wide"}</span><input type="range" min={0.5} max={8} step={0.25} value={margin} onChange={(e) => setMargin(+e.target.value)} /></label>
               <label className="mk-f"><span>Size</span><select value={page} onChange={(e) => setPage(e.target.value as PageKey)}>{(Object.keys(PAGES) as PageKey[]).map((k) => <option key={k} value={k}>{PAGES[k].label}</option>)}</select></label>
               <div className="ss-row"><span>Background</span>{["#ffffff", "#f3f1ec", "#e9edf2", "#141d2b"].map((c) => <button key={c} type="button" className={"ss-sw" + (bg === c ? " on" : "")} style={{ background: c }} aria-label={`Background ${c}`} onClick={() => setBg(c)} />)}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} aria-label="Background color" /></div>
             </section>
@@ -270,7 +289,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
               <label className="check"><input type="checkbox" checked={autoRow} onChange={(e) => setAutoRow(e.target.checked)} /> Per row: Auto (biggest shirts)</label>
               {!autoRow && <label className="mk-f"><span>Per row: {perRow}</span><input type="range" min={1} max={8} step={1} value={perRow} onChange={(e) => setPerRow(+e.target.value)} /></label>}
               <label className="mk-f"><span>Space between: {gap === 0 ? "none" : gap < 1.5 ? "tight" : gap < 4 ? "medium" : "roomy"}</span><input type="range" min={0} max={8} step={0.25} value={gap} onChange={(e) => setGap(+e.target.value)} /></label>
-              {sideList.length > 1 && <label className="mk-f"><span>Front to back: {pairGap === 0 ? "touching" : pairGap < 1.5 ? "close" : pairGap < 3.5 ? "medium" : "apart"}</span><input type="range" min={0} max={6} step={0.25} value={pairGap} onChange={(e) => setPairGap(+e.target.value)} /></label>}
+              {sideList.length > 1 && <label className="mk-f"><span>Front to back: {pairGap < 0 ? "overlapping" : pairGap === 0 ? "touching" : pairGap < 1.5 ? "close" : pairGap < 3.5 ? "medium" : "apart"}</span><input type="range" min={-8} max={6} step={0.25} value={pairGap} onChange={(e) => setPairGap(+e.target.value)} /></label>}
               <label className="mk-f"><span>Shirt size: {size}%</span><input type="range" min={50} max={100} step={1} value={size} onChange={(e) => setSize(+e.target.value)} /></label>
               <label className="check"><input type="checkbox" checked={names} onChange={(e) => setNames(e.target.checked)} /> Color names</label>
               {names && <label className="mk-f"><span>Name size: {labelSize}</span><input type="range" min={16} max={60} step={1} value={labelSize} onChange={(e) => setLabelSize(+e.target.value)} /></label>}
