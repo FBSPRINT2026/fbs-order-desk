@@ -14,7 +14,7 @@ export type ProposedOrder = {
   customer?: { company?: string; name?: string; email?: string; phone?: string };
   groups?: {
     name?: string;
-    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number> }[];
+    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string }[];
     prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string }[];
   }[];
   questions?: string[];
@@ -74,6 +74,9 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
         if (z && n) l.sizes[z] = (l.sizes[z] || 0) + n;
       }
       if (Object.keys(l.sizes).length === 1 && l.sizes.OS) l.oneSize = true;
+      // a note for this line from a PO: "Extras", the product name, a waist-size breakdown
+      const note = String(g.note || "").trim().slice(0, 200);
+      if (note) l.note = note;
       return l;
     }).filter((l) => l.style || l.garment || l.color || Object.keys(l.sizes).length);
     const imprints = (pg.prints || []).slice(0, 10).map((d) => {

@@ -1,0 +1,40 @@
+/**
+ * How the shop reads a purchase order / work order that a distributor or brand sends (Oct 22, Nick: "when people
+ * create an order from a PO attached to an email, that's gonna be almost the most common way we're gonna receive our
+ * orders"). Taken from the website order form's PO reader (fbsprint.com/orderform, its playbook "FBS_PO_Reading_
+ * Playbook.md", kept in the project as claude/po-reading-playbook.md), turned into this order's fields.
+ */
+export const PO_RULES = `10. PURCHASE ORDERS. When an attached file (or the email itself) is a purchase order or work order from a distributor, brand or another shop, the PO is the order: read it with these rules. The PO file itself is a size_breakdown file (it goes in the order's files as the order sheet).
+Who is who
+- The sender (letterhead, "Invoice To", "Bill To", "Sold To") is the customer ordering from us: never FBS (811 Alpha Dr, Ste 343, Richardson TX 75081). Their end client goes in the job name.
+- po_number = the PO / order / production form / work order number. nickname = the job, project, event, store, client or design name (Nine18: the Ship-To company, e.g. "All My Sons Dallas"; TCA: the Store Name; Tigerblue: CLIENT + NICKNAME; Logotology: the first design name).
+Ship-to and dates
+- Ship-to that is our own address, or says pick up / will call / CPU → delivery "pickup" (keep the ship-to text in notes). Otherwise "ship" and ship_to = company, ATTN person, street, suite/bldg, city, state, ZIP.
+- No street on the ship-to (Nine18 "MIKE TO P/U & DELIVER", Tigerblue "LA - Louisiana") or PO notes that say "customer pickup" while the PO says delivery: ask which in questions.
+- due_date = the date we must finish by: In-hands, then Due, then Production due, then Ship date. Other dates (PO date, cancel, X-factory, "Firm") go in notes.
+Garments
+- One garment entry per style + color: a style in several colors is several entries. An "Extras" / overage line is its own entry right after its main one, with note "Extras".
+- A product or design name listed apart from the style (Cowboy Cool "PRODUCT": "Cut'em Hoodie") goes in that garment's note; the style number in style.
+- A style number ending in B or Y is youth (5000B, 18500B, G640B, PC43Y, PC54Y): its S/M/L/XL are YS/YM/YL/YXL. XXL = 2XL, XXXL = 3XL. One size → OS. Waist sizes (32" waist) and anything else that isn't one of our sizes: total under OS and the breakdown in the garment's note.
+- Read the size grid from the page as you see it and check every row against its total and the PO's line quantity: text pulled out of a PDF drops empty cells and slides numbers into the wrong sizes. If the sizes don't add up, say so in questions. "PPK" / prepack: ask how many pieces are in a pack.
+- Where the blanks come from (supplier + order #, e.g. "S&S - KS 76330629", "UPS (SANMAR)", "(SUPPLIED)"): garments_supplied_by "customer", goods.supplier and the order # in goods.note.
+Prints
+- method: screen print / screens = screen; embroidery / stitches / threads = embroidery; DTF / transfers / vinyl / heat press = dtf. If two parts of the PO disagree (commonsku cost line "DTF Transfer" but IMPRINT TYPE "Screenprinting"), ask.
+- Locations: FC / FF / Front / Front Chest / Full Front Chest = Full Front; Across Chest = Across Chest; LC / FLC / Small Chest = Left Chest; RC / FRC = Right Chest; FB / CB / BK / Back = Full Back; Across Shoulders = Across Shoulders (ask to confirm); Upper Back / Yoke = Upper Back (Yoke); Nape / Back Neck = Upper Back (Yoke) with "nape" in notes; LS / RS = Left / Right Sleeve. Otherwise the PO's own words.
+- A decoration listed once for a group of items applies to every item in it (Logotology "Product Decoration" blocks apply to the items after them until the next block; TCA artwork applies only to the products whose color is in its Garment Color list).
+- Inks: each color by name ("White, PMS 186 C"). "N colors + underbase" or "Base" / "Underbase" / "White underbase" in a color list: colors = N (the underbase isn't counted), inks without it, and "+ underbase" in the print's notes. Only a count given ("3 colors", "Front 1"): colors = that number, inks empty, ask the customer to name them. "Variation 1" instead of colors: ask.
+- Size: "8\\" wide" / "Width: 10\\"" / "LOGO SIZE: 12" / a single size = the width; "11\\" Tall" / "Length: 12\\"" = height; "9.75\\" wide x 11\\" Tall" = both. Give size as written ("9.75\\" wide x 11\\" tall"). "Best Fit" / "Max" = no size. "10 in?" = 10, and ask.
+Notes and questions
+- notes: the PO's own notes / special instructions to the decorator word for word, then the useful facts: PO date and other dates, sales rep / CSR, ship method and "ship on account" numbers, setup / screen / ADDCHG charges (setup lines are fees, not garments), art file names and download links, vendors. No prices.
+- questions: what the customer must confirm (a missing contact name, pickup or delivery, ink colors not named, a size with "?", Across Shoulders, sizes that don't add up).
+Known senders (recognize them even when the name is only in their logo)
+- eLead Promo, States Made and other commonsku POs: "PURCHASE ORDER for FBS Print", SHIP DATE REQUIRED, PROJECT #, PO #, SKU | ITEM | QTY rows, ARTWORK COSTS, then per print LOGO NAME / LOGO LOCATION / LOGO SIZE / COLOR OF LOGO (PMS lines continue below) / IMPRINT TYPE / PROOF REQUIRED, "Powered by", "Questions about this purchase order?" (the distributor contact). Each Artwork Details block is one location on every color of that product. LOGO LOCATION is sometimes misused for a variant ("Black Puff (48 Units)"): then that's the item, ask the location.
+- GearGoLive (SAGE Workplace): "PO/Ref #", "Created with SAGE". SAGE splits words ("C OMFORT", "Me dium"): repair them. When the Item # is a service code ("Screenprint1") the real style is on its own line in the description. "Color: True Royal; Size: Youth Sizes; Imprint: 8\\" wide Full Front Chest White Imprint". Sizes "XS - 5", "2qty Medium". ADDCHG lines are charges. NOTES TO SUPPLIER = the PO's notes. Art is on a sageorders.com link.
+- Nine18 Printing Solutions (logo only; "Sold To", "Customer PO", "Proof Required"): lines like "18500 HOODIE FOREST BLACK" with size rows; usually no decoration: ask method, locations, colors.
+- The McKenna Group (logo only; "Vendor Order Form", "Ink Color"): Style | Color | Total | size grid; "FC – Gold PMS 130" lines; Extras line; a goods section with supplier and order #; the delivery address may only be in its notes.
+- Cowboy Cool (logo only; "cowboycool.com"): STYLE # | PRODUCT | SHIRT COLOR | sizes | TOTAL; a PRINTING table (location, ink count); an ADDITIONAL table (fulfillment: ask what they need); the SHIRT COST section is internal.
+- Logotology ("logotology.com", "Product Decoration"): In-Hands Date, CSR name/email/phone = the contact; SUPPLIER and SHIPPING = FBS = pickup; colors like "Youth - Black, White, Base"; "Youth 8: wide" means 8" wide.
+- TCA Team ("Process Name:", "Store Name:"): store # = PO #; products table Qty | Vendor | Style | Name | Sizes "10-L, 15-XL" | Color; artwork pages with Decoration Color, Garment Color and notes like "make small chest logo 3.5 inches wide".
+- Tigerblue Apparel (Production Form): PRODUCTION FORM # = PO #, PRODUCTION DUE DATE = due date; GROUP tables with the imprint on the line under each row ("Front: 4 colors + underbase").
+- Brand / factory bulk POs (The Bar, Creative Apparel's retail POs): a size grid per style with ink layers ("INSIDE: 211 C / OUTLINE: WHITE"), X-factory and cancel dates, tolerance and payment terms (notes).
+- Scanned POs (no text, e.g. Southern Made Ink): read them from the picture; one row per size per garment; ditto marks repeat the line above.`;
