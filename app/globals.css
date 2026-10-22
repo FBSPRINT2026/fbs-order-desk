@@ -12062,3 +12062,8 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .cu-sys.new{background:var(--accent-soft);color:var(--accent)}
 .cu-sys.old{background:var(--warn-soft);color:var(--warn)}
 .cu-known{align-items:baseline}
+/* the pinned heading had rounded top corners; with rows scrolled under it, the customer band's blue edge showed through
+   that corner and down beside it (Oct 22, Nick: "this blue line oddity"). Square corners, and the table's box clips to
+   its own rounded edge (clip keeps the heading pinnable, unlike hidden) */
+.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:first-child,.tbl-wrap.cu-pinhead .tbl.cu-tbl thead th:last-child{border-radius:0}
+.tbl-wrap.cu-fit.cu-pinhead{overflow:clip}
