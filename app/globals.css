@@ -11672,33 +11672,38 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:12px;line-height:12px;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none;white-space:nowrap}
   html body .ord .line-b .gl.same .a-sz .szc > span:first-child{display:none}
   /* one line */
-  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz cs qt ea to x" "de de de sz . . . . ."}
-  html body .ord .line-b.fit-w1.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz . . . ."}
+  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz cs qt ea to x" "de de de sz . . . . ."}
+  html body .ord .line-b.fit-w1.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz . . . ."}
   html body .ord .line-b.fit-w1 .gl-list .gl.same{grid-template-areas:"st br co sz cs qt ea to x"}
   html body .ord .line-b.fit-w1.nocs .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x"}
-  html body .ord .line-b.fit-w1c .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz cs cs . ."}
+  html body .ord .line-b.fit-w1c .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co sz qt ea to x" "de de de sz cs cs . ."}
   html body .ord .line-b.fit-w1c .gl-list .gl.same{grid-template-areas:"st br co sz qt ea to x" ". . . sz cs cs . ."}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:center;align-self:start}
+  /* everything on one line, the description between the brand and the color (Oct 22, Nick) */
+  html body .ord .line-b.fit-w0 .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr0,var(--br,110px)) var(--der,120px) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br de co sz cs qt ea to x"}
+  html body .ord .line-b.fit-w0.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr0,var(--br,110px)) var(--der,120px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br de co sz qt ea to x"}
+  html body .ord .line-b.fit-w0 .gl-list .gl:not(.same):has(.a-sz .szc:not(.szc-off) > .upc-btn){padding-bottom:16px}
+  html body .ord .line-b.fit-w0 .gl-list .gl .a-de{align-self:center}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:center;align-self:start}
   html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl .a-de input{width:calc(max(100%, var(--dew,0px)) + 8px)}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same){padding-top:20px}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c) .gl-list .gl:not(.same) > .gl-row.gl-r2 > .a-sz{margin-top:-15px}
-  html body .ord .line-b.fit-w1 .gl-list .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl:not(.same){padding-top:20px}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c) .gl-list .gl:not(.same) > .gl-row.gl-r2 > .a-sz{margin-top:-15px}
+  html body .ord .line-b:is(.fit-w0,.fit-w1) .gl-list .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:2px}
   html body .ord .line-b.fit-w1c .gl-list .gl > .gl-row.gl-r2 > .a-cs::before{content:"cost";font-size:10px;color:var(--ink-3)}
   html body .ord .line-b.fit-w1c .gl-list .gl .a-cs input{flex:none;width:var(--cs,44px);height:20px}
   /* the sizes on their own line */
-  html body .ord .line-b.fit-w .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . cs qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
-  html body .ord .line-b.fit-w.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--cor,var(--co,150px)) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . qt ea to x" "de de de de . . . ." "sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b.fit-w .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . cs qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b.fit-w.nocs .gl-list .gl{grid-template-columns:var(--str,var(--st,96px)) var(--brr,var(--br,110px)) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"st br co . qt ea to x" "de de de de . . . ." "sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl.same{grid-template-areas:"st br co . cs qt ea to x" "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w.nocs .gl-list .gl.same{grid-template-areas:"st br co . qt ea to x" "sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl > .gl-row.gl-r2 > .a-sz{justify-self:start;margin-top:6px}
   /* the totals line, on the same columns */
-  html body .ord .line-b:is(.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:var(--gap,10px);align-items:center;padding-top:8px}
-  html body .ord .line-b:is(.fit-w1,.fit-w).nocs .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1c .gl-row.grp-total.gl-r2{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"ad ad ad ad qt ea to x"}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad;display:flex;align-items:center;gap:10px;min-width:0}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-de .lbl2{margin-left:auto;white-space:nowrap}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center;font-size:14px;font-weight:700}
-  html body .ord .line-b:is(.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right;font-size:14px;font-weight:700;white-space:nowrap}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--cs,48px) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:var(--gap,10px);align-items:center;padding-top:8px}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w).nocs .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1c .gl-row.grp-total.gl-r2{grid-template-columns:var(--st,96px) var(--br,110px) var(--co,150px) minmax(0,1fr) var(--qt,40px) var(--ea,64px) var(--to,84px) var(--x,22px);grid-template-areas:"ad ad ad ad qt ea to x"}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad;display:flex;align-items:center;gap:10px;min-width:0}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-de .lbl2{margin-left:auto;white-space:nowrap}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center;font-size:14px;font-weight:700}
+  html body .ord .line-b:is(.fit-w0,.fit-w1,.fit-w1c,.fit-w) .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right;font-size:14px;font-weight:700;white-space:nowrap}
 }
 /* stacked: a narrow box on a computer, and every phone */
 @media (max-width:760px){

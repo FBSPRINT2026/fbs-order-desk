@@ -211,7 +211,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   //   s   stacked, like a phone (phones always stack): each row's own sizes, as big as fit on one line
   // The numbers are set as CSS variables (globals.css "Garments: one grid").
   const glRef = useRef<HTMLDivElement | null>(null);
-  const [glFit, setGlFit] = useState<"w1" | "w1c" | "w" | "s">("w");
+  const [glFit, setGlFit] = useState<"w0" | "w1" | "w1c" | "w" | "s">("w");
   const hasCost = !gc.wholesale && !hidePrices;
   const glSig = JSON.stringify([groupCols, hasCost, gc.qty, gc.sub, g.lines.map((l, i) => [l.style, l.brand, l.color, l.cost, l.priceOverride, l.sizes, l.sizeUpSet, l.sizeUp, gc.lines[i]?.qty, gc.lines[i]?.sub, gc.lines[i]?.calcEach])]);
   useEffect(() => {
@@ -244,7 +244,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const yx = groupCols.indexOf("YXL"), hasSep = yx >= 0 && yx < groupCols.length - 1;
     const sepOf = (sg: number) => (hasSep ? sg * 2 + 4 : 0);
     const BOX = 36, BOXMAX = 46, BOXPHONE = 40, X = 22;
-    type M = { st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
+    type M = { deB: number; st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
     let m: M | null = null, mPhone: boolean | null = null;
     const measure = (): M => {
       // the words of each row sit close together ("245 Tultex White/ Royal", Nick: "shrink between 245 Tultex and the
@@ -252,14 +252,20 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       // spare), the colors of one style keep their first row's widths so they line up under it, and every row's color
       // column ends at the same place, so the sizes still start at the same place on every row
       const own1 = (i: HTMLInputElement | null) => (i ? textW(i, i.value || i.placeholder || "") + 5 : 0);
-      let lead = { st: 0, br: 0 };
+      // (Oct 22, Nick: "the colors still sync up… white and royal, white and Kelly, and the next white and royal all line
+      // up"): the color column starts at the same place on every row; the room a short style/brand doesn't need sits
+      // before the color. On the widest screens the description moves up between the brand and the color (fit-w0).
+      const ownDe = (i: HTMLInputElement | null) => (i && i.value ? textW(i, i.value) + 5 : 0);
+      let lead = { st: 0, br: 0, de: 0 };
       const per = [...el.querySelectorAll<HTMLElement>(".gl-list > .gl")].map((r) => {
-        if (!r.classList.contains("same")) lead = { st: Math.max(24, own1(r.querySelector(".a-st input"))), br: Math.max(20, own1(r.querySelector(".a-br input"))) };
-        return { r, st: lead.st, br: lead.br, co: Math.max(44, own1(r.querySelector(".a-co input"))) };
+        if (!r.classList.contains("same")) lead = { st: Math.max(24, own1(r.querySelector(".a-st input"))), br: Math.max(20, own1(r.querySelector(".a-br input"))), de: ownDe(r.querySelector(".a-de input")) };
+        return { r, ...lead, co: Math.max(44, own1(r.querySelector(".a-co input"))) };
       });
-      const T0 = Math.max(120, ...per.map((x) => x.st + x.br + x.co));
-      per.forEach((x) => { x.r.style.setProperty("--str", `${x.st}px`); x.r.style.setProperty("--brr", `${x.br}px`); x.r.style.setProperty("--cor", `${T0 - x.st - x.br}px`); });
-      const st = per[0]?.st ?? 60, br = per[0]?.br ?? 60, co = T0 - st - br;
+      const A = Math.max(80, ...per.map((x) => x.st + x.br)); // style + brand, the widest row
+      const B = Math.max(80, ...per.map((x) => x.st + x.br + x.de)); // style + brand + description
+      const coMax = Math.max(44, ...per.map((x) => x.co));
+      per.forEach((x) => { const v = (k: string, n: number) => x.r.style.setProperty(k, `${n}px`); v("--str", x.st); v("--brr", A - x.st); v("--brr0", x.br); v("--der", B - x.st - x.br); });
+      const st = per[0]?.st ?? 60, br = A - st, co = coMax, deB = B - A;
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       const ea = widest(".gl .a-ea input", 28, 54, 120);
@@ -275,7 +281,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
       // each row's own style width, for the stacked layout (no gap after a short style number)
       el.querySelectorAll<HTMLElement>(".gl .a-st").forEach((c) => { const i = c.querySelector("input"); if (i) c.style.setProperty("--stw", `${Math.max(24, textW(i, i.value || i.placeholder || "") + 4)}px`); });
-      return { st, br, co, cs, qt, ea, to, boxMin, own };
+      return { deB, st, br, co, cs, qt, ea, to, boxMin, own };
     };
     const fit = () => {
       const list = el.querySelector<HTMLElement>(".gl-list") || el;
@@ -284,22 +290,25 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       const phone = typeof window.matchMedia === "function" && window.matchMedia("(max-width:760px)").matches;
       // measured once per change (and again when the phone layout comes or goes: its fonts differ a little)
       if (!m || mPhone !== phone) { m = measure(); mPhone = phone; }
-      const { st, br, co, cs, qt, ea, to, boxMin, own } = m;
+      const { deB, st, br, co, cs, qt, ea, to, boxMin, own } = m;
       const run = (b: number, sg: number) => n * b + (n - 1) * sg + sepOf(sg);
       // everything but the size boxes on one line, at a gap of g between columns and sg between sizes
-      const fixed = (g: number, sg: number, cost: boolean) => st + g + br + g + co + g + run(0, sg) + g + (cost && cs ? cs + g : 0) + qt + g + ea + g + to + g + X;
+      // w0 has the description on the shirt line too: one more column and gap
+      const fixed = (g: number, sg: number, cost: boolean, w0 = false) => st + g + br + g + (w0 ? deB + g : 0) + co + g + run(0, sg) + g + (cost && cs ? cs + g : 0) + qt + g + ea + g + to + g + X;
       // tighter and tighter: [gap between columns, gap between sizes, the smallest box at that step]
       const steps: [number, number, number][] = [[10, 4, 34], [8, 3, 31], [6, 2, 0]];
-      let mode: "w1" | "w1c" | "w" | "s" = "s", box = BOX, gap = 10, sg = 4;
-      const one = (cost: boolean) => {
+      let mode: "w0" | "w1" | "w1c" | "w" | "s" = "s", box = BOX, gap = 10, sg = 4;
+      const one = (cost: boolean, w0 = false) => {
         for (const [g2, s2, t] of steps) {
-          const b = Math.floor((W - fixed(g2, s2, cost)) / n);
+          const b = Math.floor((W - fixed(g2, s2, cost, w0)) / n);
           if (b >= Math.max(boxMin, t)) { box = Math.min(BOXMAX, b); gap = g2; sg = s2; return true; }
         }
         return false;
       };
       if (!phone) {
-        if (one(true)) mode = "w1";
+        // everything on one line whenever it fits (Oct 22, Nick: "when you have the ability to make everything one line")
+        if (deB > 0 && one(true, true)) mode = "w0";
+        else if (one(true)) mode = "w1";
         else if (cs && one(false)) mode = "w1c";
         else {
           for (const [g2] of steps) if (st + g2 + br + g2 + co + g2 + (cs ? cs + g2 : 0) + qt + g2 + ea + g2 + to + g2 + X <= W) { mode = "w"; gap = g2; break; }
