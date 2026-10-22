@@ -69,6 +69,7 @@ export type ClickUpTaskRow = {
   /** the Printavo job it was matched to (already entered: not new) */ pv_id: string | null; pv_number: string | null;
   /** the ClickUp list (board) it's on */ list_id: string | null;
   /** ClickUp priority: urgent | high | normal | low | "" */ priority: string;
+  /** its check box fields by name → ClickUp field id */ field_ids: Record<string, string>;
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string };
 export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
@@ -120,7 +121,8 @@ function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string
     url: t.url || `https://app.clickup.com/t/${t.id}`, parent: t.parent || null, status: String(t.status?.status || ""), status_type: String(t.status?.type || ""), status_color: String(t.status?.color || ""),
     due_at: iso(ms(t.due_date)), created_at_cu: iso(ms(t.date_created)), updated_at_cu: iso(ms(t.date_updated)),
     creator_name: String(t.creator?.username || ""), creator_email: String(t.creator?.email || "").toLowerCase(), description: String(t.text_content || t.description || "").trim().slice(0, 20000),
-    fields, printavo_field: box?.id || null, in_printavo: !!box && (box.value === true || box.value === "true"),
+    fields, printavo_field: box?.id || null,
+    field_ids: Object.fromEntries((t.custom_fields || []).filter((f) => f.type === "checkbox").map((f) => [f.name.trim(), f.id])), in_printavo: !!box && (box.value === true || box.value === "true"),
     attachments: (t.attachments || []).filter((a) => a.id && a.url && !a.deleted && !a.hidden && !a.is_folder).slice(0, 30)
       .map((a): CuFile => ({ id: a.id, name: String(a.title || `file${a.extension ? "." + a.extension : ""}`), url: String(a.url), size: Number(a.size) || 0, ext: String(a.extension || "").toLowerCase(), type: String(a.mimetype || "") })),
     comments: comments.filter((c) => String(c.comment_text || "").trim()).sort((a, b) => ms(a.date) - ms(b.date)).slice(-30)
@@ -451,5 +453,28 @@ export async function setClickUpDone(admin: SupabaseClient, taskId: string, done
     const row = { status: to.status, status_type: to.type, status_color: to.color || "", updated_at_cu: new Date().toISOString() };
     await admin.from("clickup_tasks").update({ ...row, waiting: done ? false : waitingOf({ ...(t as never as { parent: string | null; in_printavo: boolean }), ...row, order_id: t.order_id, dismissed_at: t.dismissed_at, pv_number: t.pv_number, where_text: t.where_text, created_at_cu: t.created_at_cu }, !!team?.hidden) }).eq("id", taskId);
     return { ok: true, status: to.status };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/**
+ * Tick or untick one of a job's ClickUp check boxes from the workspace view (Oct 22, Nick: "can we check like in
+ * Printavo here? And it'll check in ClickUp"): In Printavo, PO Ready, High Profile… Writes only that field.
+ */
+export async function setClickUpBox(admin: SupabaseClient, taskId: string, name: string, on: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const cols = "team_id, field_ids, fields, parent, status_type, order_id, dismissed_at, pv_number, where_text, created_at_cu";
+    let { data: t } = await admin.from("clickup_tasks").select(cols).eq("id", taskId).maybeSingle();
+    if (!t) return { ok: false, error: "That ClickUp job isn't on file." };
+    if (!(t.field_ids as Record<string, string> | null)?.[name]) { await readClickUpTask(admin, taskId); ({ data: t } = await admin.from("clickup_tasks").select(cols).eq("id", taskId).maybeSingle()); }
+    const fid = (t?.field_ids as Record<string, string> | null)?.[name];
+    if (!t || !fid) return { ok: false, error: `This job has no "${name}" box in ClickUp.` };
+    await cu(await tokenFor(admin, String(t.team_id)), `/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(fid)}`, { method: "POST", body: { value: on } });
+    const fields = { ...((t.fields || {}) as Record<string, string>), [name]: on ? "✓" : "—" };
+    const isPv = /printavo/i.test(name);
+    const { data: team } = await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle();
+    const next = { fields, ...(isPv ? { in_printavo: on } : {}) };
+    const inPv = isPv ? on : Object.entries(fields).some(([k, v]) => /printavo/i.test(k) && v === "✓");
+    await admin.from("clickup_tasks").update({ ...next, waiting: waitingOf({ parent: t.parent as string | null, status_type: String(t.status_type), in_printavo: inPv, order_id: t.order_id as string | null, dismissed_at: t.dismissed_at as string | null, pv_number: t.pv_number as string | null, where_text: String(t.where_text || ""), created_at_cu: t.created_at_cu as string | null }, !!team?.hidden) }).eq("id", taskId);
+    return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

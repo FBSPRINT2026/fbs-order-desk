@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clickupTokens, ensureClickUpFiles, importClickUpTask, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
+import { clickupTokens, ensureClickUpFiles, importClickUpTask, setClickUpBox, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
 
 /** ClickUp Jobs (app/shop/clickup/page.tsx): the customers' ClickUp jobs, read by lib/clickup.ts */
 
@@ -156,4 +156,10 @@ export async function clickUpWorkspace(teamId: string): Promise<{ ok: true; team
 export async function markClickUpDone(id: string, done: boolean) {
   const v = await who(); if (!v) return NO;
   return setClickUpDone(createAdminClient(), id, done);
+}
+
+/** tick / untick one of the job's check boxes in ClickUp (In Printavo, PO Ready…) */
+export async function tickClickUpBox(id: string, name: string, on: boolean) {
+  const v = await who(); if (!v) return NO;
+  return setClickUpBox(createAdminClient(), id, String(name).slice(0, 120), !!on);
 }

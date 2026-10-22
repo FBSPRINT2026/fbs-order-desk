@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
@@ -9,7 +9,7 @@ import QuickOrder from "@/components/QuickOrder";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
-import { clickUpFiles, clickUpWorkspace, markClickUpDone, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
+import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -65,6 +65,34 @@ export default function ClickUpJobs() {
   const [wsData, setWsData] = useState<{ team: string; tasks: ClickUpTask[]; known: Record<string, ClickUpKnown>; reading: boolean } | null>(null);
   const [wsShow, setWsShow] = useSticky<"open" | "done" | "all">("clickup.ws.show", "open");
   const [wsQ, setWsQ] = useState("");
+  // column widths, dragged on the header's right edge (Oct 22, Nick: "make the columns movable… larger or shorter"),
+  // remembered in this browser; double-click the edge to put a column back
+  const [cw, setCw] = useSticky<Record<string, number>>("clickup.cols", {});
+  const rth = (key: string, label: ReactNode, cls = "") => (
+    <th key={key} className={cls} style={cw[key] ? { width: cw[key] } : undefined}>{label}
+      <span className="cu-rsz" title="Drag to make it wider or narrower · double-click to reset" aria-hidden
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => { e.stopPropagation(); setCw((m) => { const n = { ...m }; delete n[key]; return n; }); }}
+        onPointerDown={(e) => {
+          e.preventDefault(); e.stopPropagation();
+          const th = e.currentTarget.parentElement as HTMLElement, x0 = e.clientX, w0 = th.getBoundingClientRect().width;
+          const move = (ev: PointerEvent) => setCw((m) => ({ ...m, [key]: Math.max(44, Math.round(w0 + ev.clientX - x0)) }));
+          const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); document.body.classList.remove("cu-resizing"); };
+          document.body.classList.add("cu-resizing");
+          window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+        }} />
+    </th>
+  );
+  /** tick / untick a ClickUp box from the workspace view (Oct 22, Nick: "can we check like in Printavo here? And it'll check in ClickUp") */
+  const toggleBox = async (t: ClickUpTask, name: string) => {
+    const on = t.fields[name] !== "✓";
+    const put = (v: string) => setWsData((d) => (d ? { ...d, tasks: d.tasks.map((x) => (x.id === t.id ? { ...x, fields: { ...x.fields, [name]: v } } : x)) } : d));
+    put(on ? "✓" : "—");
+    const r = await tickClickUpBox(t.id, name, on);
+    if (!r.ok) { put(on ? "—" : "✓"); setErr(r.error); return; }
+    flash(`${on ? "Ticked" : "Unticked"} "${name}" on "${t.name}" in ClickUp.`);
+    if (/printavo/i.test(name)) void load();
+  };
   const loadWs = useCallback(async (id: string) => {
     const r = await clickUpWorkspace(id);
     if (!r.ok) { setErr(r.error); return; }
@@ -264,7 +292,7 @@ export default function ClickUpJobs() {
           </div>
           <div className="tbl-wrap cu-fit">
             <table className="tbl cu-tbl">
-              <thead><tr><th className="cu-w-rail">Board</th><th>Job</th><th className="cu-w-status">Status</th><th className="cu-w-due">Due</th>{boxes.map((b) => <th key={b} className="cu-box-h">{b}</th>)}<th className="cu-w-pv">Printavo #</th><th className="cu-w-act" /></tr></thead>
+              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, b, "cu-box-h"))}{rth("w.pv", "Printavo #", "cu-w-pv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
                   const first = i === 0 || board(list2[i - 1]) !== board(t);
@@ -275,7 +303,11 @@ export default function ClickUpJobs() {
                     <td><div>{t.name}{!isDoneT(t) && <Flag p={t.priority} />}</div>{(t.order_number || k?.ours) && <div className="sub">Our order #{t.order_number || k?.ours?.number}</div>}</td>
                     <td className="cu-nw"><span className="pill" style={{ ["--sc" as string]: t.status_color || "#8a94a6" }}><span className="pill-t">{t.status || "open"}</span></span></td>
                     <td className="cu-nw">{t.due_at ? <Due date={chiDay(t.due_at)} status={isDoneT(t) ? "completed" : ""} /> : <span className="faint">—</span>}</td>
-                    {boxes.map((b) => <td key={b} className="cu-box">{t.fields[b] === "✓" ? "✓" : <span className="faint">—</span>}</td>)}
+                    {boxes.map((b) => <td key={b} className="cu-box" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" className={"cu-boxbtn" + (t.fields[b] === "✓" ? " on" : "")} aria-pressed={t.fields[b] === "✓"} disabled={!!busy}
+                        title={`${t.fields[b] === "✓" ? "Untick" : "Tick"} "${b}" in ClickUp`} aria-label={`${b}: ${t.fields[b] === "✓" ? "ticked" : "not ticked"}`} onClick={() => void toggleBox(t, b)}>
+                        {t.fields[b] === "✓" && <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
+                      </button></td>)}
                     <td className="cu-nw">{pvNo ? (pvId ? <Link href={`/shop/archive/${pvId}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pvNo}</span></Link> : <span className="ordno">{pvNo}</span>) : <span className="faint">—</span>}</td>
                     <td className="r cu-nw"><button type="button" className="btn sm" disabled={!!busy} onClick={(e) => { e.stopPropagation(); void toggleDone(t); }}>{isDoneT(t) ? "Reopen" : "Mark complete"}</button></td>
                   </tr>;
@@ -321,7 +353,7 @@ export default function ClickUpJobs() {
         </table>
       </div> : <div className="tbl-wrap cu-fit">
         <table className="tbl cu-tbl">
-          <thead><tr><th className="cu-w-rail">Customer</th><th>Job</th><th className="cu-w-due">Due</th><th className="cu-w-files">Files</th><th className="cu-w-pv">Printavo #</th><th className="cu-w-ours">Our #</th><th className="cu-w-added">Added</th><th className="cu-w-act" /></tr></thead>
+          <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "Printavo #", "cu-w-pv")}{rth("l.ours", "Our #", "cu-w-ours")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
             {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
               const tm = teams.get(t.team_id);
