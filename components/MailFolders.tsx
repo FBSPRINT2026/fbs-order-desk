@@ -380,12 +380,14 @@ export function MoveBar({ folders, busy, onMove, here, known }: { folders: Folde
 export function fitWidth(f: HTMLIFrameElement, d: Document) {
   const b = d.body;
   if (!b) return;
-  b.style.zoom = "";
+  b.style.zoom = ""; b.style.removeProperty("width"); b.style.removeProperty("min-width");
   const w = f.clientWidth, sw = Math.max(d.documentElement.scrollWidth, b.scrollWidth);
   const base = w > 0 && sw > w + 2 ? Math.max(0.35, w / sw) : 1;
-  // phones: the reader's own zoom on top (FrameZoom: pinch or − / +); wider than the screen then scrolls sideways
+  // phones: the reader's own zoom on top (FrameZoom: pinch or − / +). A designed email (tables, a newsletter) keeps
+  // its layout and scrolls sideways, like pinching in Safari; a plain one just gets bigger text that still wraps
   const k = +(f.dataset.k || 1) || 1;
   f.dataset.base = String(base);
+  if (k > 1 && (base < 1 || d.querySelector("table"))) { const bw = `${Math.round(b.getBoundingClientRect().width / base)}px`; b.style.setProperty("width", bw, "important"); b.style.setProperty("min-width", bw, "important"); }
   if (base * k !== 1) b.style.zoom = String(base * k);
 }
 
