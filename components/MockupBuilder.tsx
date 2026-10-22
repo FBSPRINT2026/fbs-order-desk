@@ -680,7 +680,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * Put a print at this size with its top-left here, and let the location follow on its own:
    * drag a small logo to the side and it's a left chest, to the middle a center chest, grow it and it becomes a medium or full front.
    */
-  const settle = (im: Imprint, wantW: number, at = refPos(im)) => {
+  // resizing keeps the logo where it's been dragged to on the picture (refPos is the spec spot, without the drag)
+  const settle = (im: Imprint, wantW: number, at = ((p, o) => ({ left: p.left + o.dx, top: p.top + o.dy }))(refPos(im), offsets[im.id] || NO_OFF)) => {
     const sp = spotFor(im.location);
     if (sp.wrap) return growTo(im, wantW);
     const d = designOf(im), r = ratioIm(im) || 0.6;
@@ -1156,7 +1157,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
                     onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
-                    onEnd={() => settleHere(im.id)} />
+                    onEnd={() => {}} />
                   </div>
                 );
   };
@@ -2274,7 +2275,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   // a size the customer asked for: ask before the first change (the drag stops until they say yes)
                   guardSize(id, () => { if (old.clip) growTo(im, inches); else settle(im, inches); });
                 }}
-                onEnd={settleHere}
+                // letting go leaves the logo where it was dragged on the picture: no snapping back, no change of
+                // location (Oct 22, Nick: "when I move the logo on the shirt, it just snaps it back")
+                onEnd={() => {}}
                 onPick={pickColor}
                 onSelect={showImprint} />
             ))}
