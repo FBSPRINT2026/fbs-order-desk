@@ -9,7 +9,7 @@ import QuickOrder from "@/components/QuickOrder";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
-import { clickUpFiles, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
+import { clickUpFiles, clickUpWorkspace, markClickUpDone, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -34,6 +34,7 @@ const ago = (iso: string | null) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 };
 /** the fields worth showing: ticked boxes and filled-in words (not "In Printavo", it has its own tab) */
+const isDoneT = (t: { status_type: string }) => /^(closed|done)$/i.test(t.status_type || "");
 const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
 
 export default function ClickUpJobs() {
@@ -52,6 +53,17 @@ export default function ClickUpJobs() {
   const [made, setMade] = useState<{ id: string; number: number } | null>(null);
   const [files, setFiles] = useState<{ id: string; list: CuFile[]; busy: boolean; err?: string } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // a customer's whole workspace (Workspaces tab → click one): every job, open and completed, by board
+  const [ws, setWs] = useState<string | null>(null);
+  const [wsData, setWsData] = useState<{ team: string; tasks: ClickUpTask[]; known: Record<string, ClickUpKnown>; reading: boolean } | null>(null);
+  const [wsShow, setWsShow] = useSticky<"open" | "done" | "all">("clickup.ws.show", "open");
+  const [wsQ, setWsQ] = useState("");
+  const loadWs = useCallback(async (id: string) => {
+    const r = await clickUpWorkspace(id);
+    if (!r.ok) { setErr(r.error); return; }
+    setWsData({ team: id, tasks: r.tasks, known: r.known, reading: r.reading });
+  }, []);
+  useEffect(() => { if (!ws) return; void loadWs(ws); const t = setInterval(() => void loadWs(ws), 60_000); return () => clearInterval(t); }, [ws, loadWs]);
 
   const load = useCallback(async () => {
     const r = await listClickUp();
@@ -84,9 +96,19 @@ export default function ClickUpJobs() {
   const weekOut = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const dueSoon = groups.new.filter((t) => { const d = chiDay(t.due_at); return d && d <= weekOut; }).length;
   const noCustomer = (data?.teams || []).filter((t) => !t.hidden && !t.customer_id).length;
-  const job = openId ? (data?.tasks || []).find((t) => t.id === openId) || null : null;
+  const job = openId ? (data?.tasks || []).find((t) => t.id === openId) || wsData?.tasks.find((t) => t.id === openId) || null : null;
   const jobTeam = job ? teams.get(job.team_id) : undefined;
 
+  /** Mark complete / Reopen: the job's status in ClickUp (Oct 22, Nick: "if we mark something complete, it auto-completes") */
+  const toggleDone = async (t: ClickUpTask) => {
+    const done = !isDoneT(t);
+    setBusy(done ? "Marking it complete in ClickUp…" : "Reopening it in ClickUp…"); setErr("");
+    const r = await markClickUpDone(t.id, done);
+    setBusy("");
+    if (!r.ok) { setErr(r.error); return; }
+    flash(`"${t.name}" is ${done ? "complete" : "open again"} in ClickUp (${r.status}).`);
+    await load(); if (ws) await loadWs(ws);
+  };
   const checkNow = async () => {
     setBusy("Checking ClickUp…");
     const r = await fetch("/api/clickup/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { ok?: boolean; error?: string; waiting?: string; newJobs?: string[]; read?: number } | null;
@@ -100,7 +122,7 @@ export default function ClickUpJobs() {
   const openJob = (id: string) => {
     setOpenId(id); setMade(null); setAct(null); setPick(false); setQuick(null); setReview(null);
     // the files, like an email's attachments: copied into the portal if the reader hasn't yet
-    const t = data?.tasks.find((x) => x.id === id);
+    const t = data?.tasks.find((x) => x.id === id) || wsData?.tasks.find((x) => x.id === id);
     setFiles({ id, list: t?.attachments || [], busy: !!t?.attachments.some((f) => !f.path) });
     if (t?.attachments.some((f) => !f.path)) void clickUpFiles(id).then((r) => setFiles((cur) => (cur?.id !== id ? cur : r.ok ? { id, list: r.files, busy: false } : { ...cur, busy: false, err: r.error })));
     setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
@@ -162,7 +184,7 @@ export default function ClickUpJobs() {
           {shownFields(job.fields).length > 0 && <div className="cu-tags">{shownFields(job.fields).map(([k, v]) => <span key={k} className="cu-tag">{v === "✓" ? `${k} ✓` : `${k}: ${v}`}</span>)}</div>}
           {job.description && <p className="cu-notes">{job.description}</p>}
           {(() => {
-            const k = data?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
+            const k = data?.known[job.id] || wsData?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
             return k?.pv || ours ? <div className="cu-known">
               {k?.pv && <span>Printavo <Link href={`/shop/archive/${k.pv.id}`}><b>#{k.pv.number}</b></Link> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
               {ours && <span>Our order <Link href={`/shop/orders/${ours.id}`}><b>#{ours.number}</b></Link></span>}
@@ -183,6 +205,7 @@ export default function ClickUpJobs() {
           {made || job.order_id ? <div className="cu-done">
             Order <Link href={`/shop/orders/${made?.id || job.order_id}`}><b>#{made?.number || job.order_number}</b></Link> was made from this job.{" "}
             {job.ticked_at ? <span>&ldquo;In Printavo&rdquo; is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick &ldquo;In Printavo&rdquo; in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking &ldquo;In Printavo&rdquo; in ClickUp…</span>}
+            <button type="button" className="btn ghost sm" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
             <button type="button" className="btn ghost sm" onClick={() => setOpenId(null)}>Close</button>
           </div> : <div className="cu-ask">
             <b>Would you like to process this job?</b>
@@ -192,6 +215,7 @@ export default function ClickUpJobs() {
               {job.dismissed_at
                 ? <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
                 : <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }}>Not an order</button>}
+              <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
               <button type="button" className="btn ghost" onClick={() => setOpenId(null)}>Close</button>
             </div>
             {busy && busy !== "Checking ClickUp…" && <div className="faint">{busy}</div>}
@@ -205,6 +229,55 @@ export default function ClickUpJobs() {
         onReview={() => { const s = quick; setQuick(null); setReview(s); }}
         onCreated={(id, n) => madeIt(id, n)} />}
 
+      {ws ? (() => {
+        const tm = teams.get(ws);
+        const tasks = wsData?.team === ws ? wsData.tasks : null;
+        const open = (tasks || []).filter((t) => !isDoneT(t)), shut = (tasks || []).filter(isDoneT);
+        const s0 = wsQ.trim().toLowerCase();
+        const shown = (wsShow === "open" ? open : wsShow === "done" ? shut : tasks || [])
+          .filter((t) => !s0 || [t.name, t.where_text, t.status, t.creator_name, t.pv_number, ...Object.values(t.fields)].some((x) => String(x || "").toLowerCase().includes(s0)));
+        // the check boxes the boards use most (In Printavo, PO Ready, Embroidery Order…) as columns, like ClickUp
+        const boxN: Record<string, number> = {};
+        for (const t of tasks || []) for (const [k, v] of Object.entries(t.fields)) if (v === "✓" || v === "—") boxN[k] = (boxN[k] || 0) + 1;
+        const boxes = Object.entries(boxN).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
+        const board = (t: ClickUpTask) => t.where_text || "Completed jobs";
+        const list2 = [...shown].sort((a, b) => board(a).localeCompare(board(b)) || Number(isDoneT(a)) - Number(isDoneT(b))
+          || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : (a.due_at ? (b.due_at ? a.due_at.localeCompare(b.due_at) : -1) : b.due_at ? 1 : 0)));
+        const size = list2.reduce<Record<string, number>>((m, t) => { m[board(t)] = (m[board(t)] || 0) + 1; return m; }, {});
+        const cols = 6 + boxes.length;
+        return <>
+          <div className="toolbar">
+            <button type="button" className="btn sm" onClick={() => { setWs(null); setWsQ(""); }}>Back to workspaces</button>
+            <span className="cu-ws-t"><b>{label(ws) || tm?.name}</b> <span className="faint">{tm?.name} · {open.length} open · {shut.length} completed{wsData?.team === ws && wsData.reading ? " · still reading older completed jobs from ClickUp" : ""}</span></span>
+            <div className="chips">
+              {([["open", "Open", open.length], ["done", "Completed", shut.length], ["all", "All", (tasks || []).length]] as ["open" | "done" | "all", string, number][])
+                .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (wsShow === k ? " on" : "")} onClick={() => setWsShow(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
+            </div>
+            <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
+          </div>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Board</th><th>Job</th><th>Status</th><th>Due</th>{boxes.map((b) => <th key={b} className="cu-box-h">{b}</th>)}<th>Printavo #</th><th /></tr></thead>
+              <tbody>
+                {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
+                  const first = i === 0 || board(list2[i - 1]) !== board(t);
+                  const k = wsData?.known[t.id], pvNo = t.pv_number || k?.pv?.number, pvId = t.pv_id || k?.pv?.id;
+                  return <tr key={t.id} tabIndex={0} className={[first ? "cu-gstart" : "", openId === t.id ? "picked" : "", isDoneT(t) ? "cu-done-row" : ""].filter(Boolean).join(" ") || undefined}
+                    onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
+                    {first && <td className="cu-rail" rowSpan={size[board(t)]} onClick={(e) => e.stopPropagation()}><div className="cu-rail-c">{board(t)}</div><span className="cu-rail-n">{size[board(t)]}</span></td>}
+                    <td><div>{t.name}</div>{(t.order_number || k?.ours) && <div className="sub">Our order #{t.order_number || k?.ours?.number}</div>}</td>
+                    <td className="cu-nw"><span className="pill" style={{ ["--sc" as string]: t.status_color || "#8a94a6" }}><span className="pill-t">{t.status || "open"}</span></span></td>
+                    <td className="cu-nw">{t.due_at ? <Due date={chiDay(t.due_at)} status={isDoneT(t) ? "completed" : ""} /> : <span className="faint">—</span>}</td>
+                    {boxes.map((b) => <td key={b} className="cu-box">{t.fields[b] === "✓" ? "✓" : <span className="faint">—</span>}</td>)}
+                    <td className="cu-nw">{pvNo ? (pvId ? <Link href={`/shop/archive/${pvId}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pvNo}</span></Link> : <span className="ordno">{pvNo}</span>) : <span className="faint">—</span>}</td>
+                    <td className="r cu-nw"><button type="button" className="btn sm" disabled={!!busy} onClick={(e) => { e.stopPropagation(); void toggleDone(t); }}>{isDoneT(t) ? "Reopen" : "Mark complete"}</button></td>
+                  </tr>;
+                }) : <tr><td colSpan={cols}><div className="empty">{s0 ? `No jobs match “${wsQ}”.` : wsShow === "done" ? (wsData?.reading ? "Completed jobs are still being read in from ClickUp." : "No completed jobs.") : "No open jobs in this workspace."}</div></td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>;
+      })() : <>
       <div className="toolbar">
         <div className="chips">
           {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
@@ -223,16 +296,16 @@ export default function ClickUpJobs() {
           <tbody>
             {(data?.teams || []).map((t) => {
               const n = (data?.tasks || []).filter((x) => x.team_id === t.id && x.waiting).length;
-              return <tr key={t.id} className={t.hidden ? "cu-off" : undefined}>
+              return <tr key={t.id} tabIndex={0} className={t.hidden ? "cu-off" : undefined} title="Open this workspace" onClick={() => { setWs(t.id); setOpenId(null); }} onKeyDown={(e) => e.key === "Enter" && setWs(t.id)}>
                 <td><div>{t.name}</div><div className="sub">{t.members.slice(0, 3).join(", ")}{t.members.length > 3 ? ` +${t.members.length - 3}` : ""}</div></td>
-                <td>
+                <td onClick={(e) => e.stopPropagation()}>
                   <select aria-label={`Customer for ${t.name}`} value={t.customer_id || ""} onChange={(e) => void pickCustomer(t.id, e.target.value)}>
                     <option value="">Pick the customer…</option>{data?.customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
                   {t.guessed && t.customer_id && <div className="sub">Matched by the portal. <button type="button" className="linkbtn" onClick={() => void pickCustomer(t.id, t.customer_id!)}>That&apos;s right</button></div>}
                 </td>
                 <td className="r">{t.hidden ? <span className="faint">—</span> : n}</td>
-                <td className="r"><button type="button" className="btn ghost sm" title={t.hidden ? "Show this workspace's jobs again" : "Not a customer's jobs: hide it"}
+                <td className="r cu-nw" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => { setWs(t.id); setOpenId(null); }}>Open</button> <button type="button" className="btn ghost sm" title={t.hidden ? "Show this workspace's jobs again" : "Not a customer's jobs: hide it"}
                   onClick={async () => { const r = await hideClickUpTeam(t.id, !t.hidden); if (!r.ok) setErr(r.error); else await load(); }}>{t.hidden ? "Show" : "Hide"}</button></td>
               </tr>;
             })}
@@ -268,6 +341,7 @@ export default function ClickUpJobs() {
           </tbody>
         </table>
       </div>}
+      </>}
     </>
   );
 }

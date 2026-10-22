@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clickupTokens, ensureClickUpFiles, importClickUpTask, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
+import { clickupTokens, ensureClickUpFiles, importClickUpTask, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
 
 /** ClickUp Jobs (app/shop/clickup/page.tsx): the customers' ClickUp jobs, read by lib/clickup.ts */
 
@@ -132,4 +132,28 @@ export async function clickUpFiles(id: string): Promise<{ ok: true; files: CuFil
     const t = await ensureClickUpFiles(createAdminClient(), id);
     return t ? { ok: true, files: t.attachments } : { ok: false, error: "That ClickUp job isn't on file." };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/**
+ * A customer's whole workspace (Oct 22, Nick: "click on their workspace and view it kind of like you do in ClickUp…
+ * everything that's in there, all that's completed, not completed"): every job on file, open and completed (completed
+ * ones of the last 3 years are read in by the reader, a few hundred a run), with the Printavo / our order matches.
+ */
+export async function clickUpWorkspace(teamId: string): Promise<{ ok: true; team: ClickUpTeamRow | null; tasks: ClickUpTask[]; known: Record<string, ClickUpKnown>; reading: boolean } | { ok: false; error: string }> {
+  const v = await who(); if (!v) return NO;
+  const admin = createAdminClient();
+  const [{ data: team }, { data: tasks, error }] = await Promise.all([
+    admin.from("clickup_teams").select("*").eq("id", teamId).maybeSingle(),
+    admin.from("clickup_tasks").select("*").eq("team_id", teamId).is("parent", null).order("created_at_cu", { ascending: false }).limit(3000),
+  ]);
+  if (error) return { ok: false, error: error.message };
+  const rows = (tasks || []) as ClickUpTaskRow[];
+  const known = team ? await knownJobs(admin, rows, [team as ClickUpTeamRow]).catch(() => ({} as Record<string, ClickUpKnown>)) : {};
+  return { ok: true, team: (team as ClickUpTeamRow | null) || null, tasks: rows.map((t) => ({ ...t, description: t.description.slice(0, 2000) })), known, reading: !!team && !(team as { backfill_done_at?: string | null }).backfill_done_at };
+}
+
+/** Mark complete / Reopen: the job's status in ClickUp (its board's own complete / open status) */
+export async function markClickUpDone(id: string, done: boolean) {
+  const v = await who(); if (!v) return NO;
+  return setClickUpDone(createAdminClient(), id, done);
 }

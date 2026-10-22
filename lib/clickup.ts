@@ -44,6 +44,7 @@ async function tokenFor(admin: SupabaseClient, teamId: string) {
   return (all.find((t) => t.key === data?.token_key) || all[0])?.token || "";
 }
 const QUIET_MS = 2 * 60_000;
+const BACKFILL_MS = 3 * 365.25 * 864e5; // the workspace view keeps 3 years of completed jobs
 
 type CuUser = { id?: number; username?: string | null; email?: string | null };
 type CuField = { id: string; name: string; type: string; value?: unknown; type_config?: { options?: { id: string; name?: string; label?: string; orderindex?: number }[] } };
@@ -66,14 +67,15 @@ export type ClickUpTaskRow = {
   activity_id: string | null; order_id: string | null; order_number: number | null; ticked_at: string | null; tick_error: string | null;
   dismissed_at: string | null; dismissed_by: string | null; waiting: boolean; synced_at: string;
   /** the Printavo job it was matched to (already entered: not new) */ pv_id: string | null; pv_number: string | null;
+  /** the ClickUp list (board) it's on */ list_id: string | null;
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string };
-export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number };
+export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
 
 /** ClickUp calls per token this run (ClickUp allows 100 a minute per token) */
 const calls = new Map<string, number>();
 const used = (tok: string) => calls.get(tok) || 0;
-async function cu<T>(tok: string, path: string, init?: { method: "POST"; body: unknown }): Promise<T> {
+async function cu<T>(tok: string, path: string, init?: { method: "POST" | "PUT"; body: unknown }): Promise<T> {
   calls.set(tok, used(tok) + 1);
   const r = await fetch(API + path, {
     method: init?.method || "GET", cache: "no-store", signal: AbortSignal.timeout(20000),
@@ -113,7 +115,7 @@ function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string
   const box = printavoBox(t);
   const fields = Object.fromEntries((t.custom_fields || []).map((f) => [f.name.trim(), fieldText(f)] as const).filter((x): x is [string, string] => x[1] != null));
   return {
-    id: t.id, team_id: teamId, where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
+    id: t.id, team_id: teamId, list_id: t.list?.id || null, where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
     url: t.url || `https://app.clickup.com/t/${t.id}`, parent: t.parent || null, status: String(t.status?.status || ""), status_type: String(t.status?.type || ""), status_color: String(t.status?.color || ""),
     due_at: iso(ms(t.due_date)), created_at_cu: iso(ms(t.date_created)), updated_at_cu: iso(ms(t.date_updated)),
     creator_name: String(t.creator?.username || ""), creator_email: String(t.creator?.email || "").toLowerCase(), description: String(t.text_content || t.description || "").trim().slice(0, 20000),
@@ -289,12 +291,34 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
           row.attachments = r.files; fileBytes -= r.used;
         }
         if (full) await admin.from("clickup_tasks").upsert({ ...row, waiting });
-        else await admin.from("clickup_tasks").upsert({ id: row.id, team_id: team.id, name: row.name, url: row.url, status: row.status, status_type: row.status_type, status_color: row.status_color, created_at_cu: row.created_at_cu, updated_at_cu: row.updated_at_cu, synced_at: row.synced_at, waiting: false });
+        else { const { attachments: _a, comments: _c, ...info } = row; void _a; void _c; await admin.from("clickup_tasks").upsert({ ...info, waiting: false }); }
         if (waiting && !k?.waiting) out.newJobs.push(`${team.name}: ${row.name}`);
         out.read!++;
         cur = Math.max(cur, upd);
       }
       cursors[team.id] = cur || now;
+      // the workspace view: completed jobs of the last 3 years read in, 2 pages (200 jobs) a run, job info only (files
+      // open from ClickUp when one is opened); open ones are the reader's above
+      if (!teamRow.get(team.id)?.hidden && Date.now() < deadline - 10000) {
+        const { data: bf } = await admin.from("clickup_teams").select("backfill_page, backfill_done_at").eq("id", team.id).maybeSingle();
+        if (bf && !bf.backfill_done_at) {
+          let page = Number(bf.backfill_page) || 0, done = false;
+          for (let k = 0; k < 2 && Date.now() < deadline - 8000; k++, page++) {
+            const qs = new URLSearchParams({ page: String(page), subtasks: "false", include_closed: "true", order_by: "created", date_created_gt: String(Math.round(now - BACKFILL_MS)) });
+            const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(tok, `/team/${team.id}/task?${qs}`);
+            const shut = (r.tasks || []).filter((x) => isDone(x.status?.type));
+            if (shut.length) {
+              const { data: have } = await admin.from("clickup_tasks").select("id").in("id", shut.map((x) => x.id));
+              const got = new Set((have || []).map((x) => x.id as string));
+              const fresh = shut.filter((x) => !got.has(x.id)).map((x) => { const { attachments: _a, comments: _c, ...info } = rowOf(x, team.id, [], me || myEmail); void _a; void _c; return { ...info, waiting: false }; });
+              if (fresh.length) await admin.from("clickup_tasks").upsert(fresh);
+              out.backfilled = (out.backfilled || 0) + fresh.length;
+            }
+            if (r.last_page === true || (r.tasks || []).length < 100) { done = true; page++; break; }
+          }
+          await admin.from("clickup_teams").update({ backfill_page: page, ...(done ? { backfill_done_at: new Date().toISOString() } : {}) }).eq("id", team.id);
+        }
+      }
     })(ws).catch((e) => { out.problems.push(`${ws.team.name}: ${e instanceof Error ? e.message : String(e)}`); })));
     const stats = { at: new Date().toISOString(), calls: Object.fromEntries([...calls].map(([t, c]) => [tokens.find((x) => x.token === t)?.key || "?", c])), ...out };
     await admin.from("clickup_state").update({ last_ok_at: new Date().toISOString(), last_error: out.problems.length ? out.problems.join(" · ").slice(0, 500) : null, cursors, stats }).eq("id", 1);
@@ -388,4 +412,28 @@ export async function tickInPrintavo(admin: SupabaseClient, taskId: string, orde
     await admin.from("clickup_tasks").update({ tick_error: msg.slice(0, 300) }).eq("id", taskId);
     return { ok: false as const, error: msg };
   }
+}
+
+/**
+ * Mark complete / Reopen from the workspace view (Oct 22, Nick: "if we mark something complete, it auto-completes" in
+ * ClickUp): the task is set to its board's own closed status (or its first open one), the way ClickUp's Mark Complete
+ * does. Writes only the status.
+ */
+export async function setClickUpDone(admin: SupabaseClient, taskId: string, done: boolean): Promise<{ ok: true; status: string } | { ok: false; error: string }> {
+  try {
+    let { data: t } = await admin.from("clickup_tasks").select("team_id, list_id, order_id, dismissed_at, pv_number, in_printavo, parent, where_text, created_at_cu").eq("id", taskId).maybeSingle();
+    if (!t) return { ok: false, error: "That ClickUp job isn't on file." };
+    if (!t.list_id) { await readClickUpTask(admin, taskId); ({ data: t } = await admin.from("clickup_tasks").select("team_id, list_id, order_id, dismissed_at, pv_number, in_printavo, parent, where_text, created_at_cu").eq("id", taskId).maybeSingle()); }
+    if (!t?.list_id) return { ok: false, error: "Couldn't tell which ClickUp board this job is on." };
+    const tok = await tokenFor(admin, String(t.team_id));
+    const list = await cu<{ statuses?: { status: string; type: string; color?: string; orderindex?: number }[] }>(tok, `/list/${encodeURIComponent(t.list_id)}`);
+    const sts = [...(list.statuses || [])].sort((a, b) => (a.orderindex ?? 0) - (b.orderindex ?? 0));
+    const to = done ? sts.find((x) => x.type === "closed") || sts.find((x) => x.type === "done") : sts.find((x) => x.type === "open") || sts[0];
+    if (!to) return { ok: false, error: `That ClickUp board has no ${done ? "complete" : "open"} status.` };
+    await cu(tok, `/task/${encodeURIComponent(taskId)}`, { method: "PUT", body: { status: to.status } });
+    const { data: team } = await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle();
+    const row = { status: to.status, status_type: to.type, status_color: to.color || "", updated_at_cu: new Date().toISOString() };
+    await admin.from("clickup_tasks").update({ ...row, waiting: done ? false : waitingOf({ ...(t as never as { parent: string | null; in_printavo: boolean }), ...row, order_id: t.order_id, dismissed_at: t.dismissed_at, pv_number: t.pv_number, where_text: t.where_text, created_at_cu: t.created_at_cu }, !!team?.hidden) }).eq("id", taskId);
+    return { ok: true, status: to.status };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

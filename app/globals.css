@@ -11987,3 +11987,8 @@ tr.cu-off td{color:var(--ink-3)}
 .tbl td.cu-rail{vertical-align:top;background:var(--surface-2);border-left:3px solid var(--fbs-blue);border-radius:0;min-width:150px;cursor:default}
 .cu-rail-c{font-weight:700;color:var(--ink)}
 .cu-rail-n{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+/* ClickUp workspace view (Oct 22): the whole workspace, by board, like ClickUp's list */
+.cu-ws-t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--ink)}
+.tbl th.cu-box-h{white-space:nowrap}
+.tbl td.cu-box{text-align:center;color:var(--ok)}
+.tbl tr.cu-done-row td:not(.cu-rail){color:var(--ink-3)}
