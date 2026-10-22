@@ -82,9 +82,9 @@ export default function ClickUpJobs() {
   // column widths, dragged on the header's right edge (Oct 22, Nick: "make the columns movable… larger or shorter"),
   // remembered in this browser; double-click the edge to put a column back
   const [cw, setCw] = useSticky<Record<string, number>>("clickup.cols", {});
-  // the toolbar and the column headings pinned to the top while the list scrolls (Oct 22, Nick: "make this pinnable…
-  // look like the other toolbars"); on by default, remembered
-  const [pin, setPin] = useSticky<boolean>("clickup.pin", true);
+  // the toolbar and the column headings always pinned to the top while the list scrolls (Oct 22, Nick: "make this
+  // pinnable…", then "don't need that little pinned button… It'll always be pinned")
+  const pin = true;
   const tbRef = useRef<HTMLDivElement | null>(null);
   const [tbH, setTbH] = useState(0);
   useEffect(() => {
@@ -92,8 +92,6 @@ export default function ClickUpJobs() {
     const ro = new ResizeObserver(() => setTbH(el.offsetHeight)); ro.observe(el); setTbH(el.offsetHeight);
     return () => ro.disconnect();
   }, [ws, tab, pin]);
-  const pinBtn = <button type="button" className={"cu-pin" + (pin ? " on" : "")} aria-pressed={pin} title={pin ? "Unpin: let the toolbar and headings scroll away" : "Pin the toolbar and column headings to the top"} onClick={() => setPin(!pin)}>
-    <svg viewBox="0 0 24 24" aria-hidden><path d="M9 4h6l-1 6 3 3H7l3-3z" /><path d="M12 13v7" /></svg><span>{pin ? "Pinned" : "Pin"}</span></button>;
   const pinStyle = { ["--cu-th-top" as string]: `${pin ? tbH : 0}px` };
   const rth = (key: string, label: ReactNode, cls = "") => (
     <th key={key} className={cls} style={cw[key] ? { width: cw[key] } : undefined}>{label}
@@ -314,7 +312,6 @@ export default function ClickUpJobs() {
                 .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (wsShow === k ? " on" : "")} onClick={() => setWsShow(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
             </div>
             <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
-            {pinBtn}
           </div>
           <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
             <table className="tbl cu-tbl">
@@ -353,7 +350,6 @@ export default function ClickUpJobs() {
           {(data?.teams || []).filter((t) => !t.hidden).map((t) => <option key={t.id} value={t.id}>{custName.get(t.customer_id || "") || t.name}</option>)}
         </select>}
         {tab !== "boards" && <SearchInput placeholder="Search jobs" value={q} onChange={(e) => setQ(e.target.value)} />}
-        {tab !== "boards" && pinBtn}
       </div>
 
       {tab === "boards" ? <div className="tbl-wrap">
