@@ -11861,15 +11861,49 @@ html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(
 .sep-mocks button:hover img{border-color:var(--accent)}
 /* the inks and the proof's views on one line */
 .sep-vbar.in{margin-left:auto;align-self:flex-end;justify-content:flex-end}
-/* half screen: the proof first, full width, the cards two across under it */
+/* the settings: one line each, the rest behind the chevron (Oct 22, Nick) */
+.sep-set{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:2px 12px}
+.sep-sr{padding:8px 0;border-top:1px solid var(--line-2,var(--line))}
+.sep-sr:first-child{border-top:0}
+.sep-sr-h{display:grid;grid-template-columns:68px minmax(0,1fr) 22px;align-items:center;gap:8px;min-height:30px}
+.sep-sr-l{font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap}
+.sep-sr-m{display:flex;align-items:center;gap:6px;min-width:0}
+.sep-sr-m>select{flex:1;min-width:0}
+.sep-sr-m .sep-row{flex:1;min-width:0}
+.sep-sr-m .sep-row select{flex:1;min-width:0}
+.sep-sr-m .sep-shirt-sw{width:30px;height:28px}
+.sep-sr-m>.rv-seg{flex:1;min-width:0}
+.sep-sr-m>.rv-seg button{padding-left:4px;padding-right:4px;white-space:nowrap}
+.sep-sr-num{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.sep-sr-num input{width:62px}
+.sep-sr-sum{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sep-sr-num+.sep-sr-sum{margin-left:auto}
+.sep-sr-more{border:0;background:none;color:var(--ink-3);width:22px;height:22px;padding:0;display:grid;place-items:center;border-radius:6px;cursor:pointer}
+.sep-sr-more:hover{color:var(--accent);background:var(--surface-2)}
+.sep-sr-more.none{cursor:default;background:none}
+.sep-sr.open .sep-sr-more svg{transform:rotate(180deg)}
+.sep-sr-b{display:flex;flex-direction:column;gap:8px;padding:8px 0 2px}
+.sep-sr>.sep-help,.sep-sr>.sep-tip,.sep-sr>.sep-multi2{margin-top:6px}
+.sep-multi2{font-size:12px;color:var(--ink-3);line-height:1.45}
+/* the mockups on the job line, between the print tabs and Separations / Coach */
+.sep-mockstrip{display:flex;gap:6px;align-items:center;margin:0 auto}
+.sep-mockstrip>button{width:46px;height:46px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);cursor:zoom-in;overflow:hidden;flex:none}
+.sep-mockstrip>button:hover{border-color:var(--accent)}
+.sep-mockstrip img{width:100%;height:100%;object-fit:cover;display:block}
+.sep-mockstrip+.sep-tabs{margin-left:0}
+/* half screen: the settings stay beside the proof, screens and films under them */
 @media (max-width:1250px){
-  .sep-grid{grid-template-columns:minmax(0,1fr)!important}
+  .sep-grid{grid-template-columns:250px minmax(0,1fr)}
+  .sep-grid>.sep-side:last-child{grid-column:1/-1}
+}
+/* phone: the proof first, then the settings */
+@media (max-width:760px){
+  .sep-grid{grid-template-columns:minmax(0,1fr)}
   .sep-grid>.sep-main{order:1}
   .sep-grid>.sep-side:first-child{order:2}
-  .sep-grid>.sep-side:first-child .sep-pane-all{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
   .sep-grid>.sep-side:last-child{order:3}
+  .sep-mockstrip{margin:0}
 }
-@media (max-width:760px){.sep-grid>.sep-side:first-child .sep-pane-all{display:flex}}
 /* the zoomed picture's close button */
 .pz-in{position:relative}
 .pz-x{position:absolute;top:10px;right:10px;z-index:2;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:16px;line-height:1;cursor:pointer;display:grid;place-items:center}
