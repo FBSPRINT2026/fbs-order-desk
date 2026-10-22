@@ -5759,7 +5759,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 @media (max-width:1280px){ .ed-grid{grid-template-columns:minmax(0,1fr)} .ed-aside{position:static} }
 .app{overflow-x:clip}
 .main{overflow-wrap:break-word}
-.main a[href^="mailto:"],.main td,.main dd{overflow-wrap:anywhere}
+/* break long words only when they must: "anywhere" let table columns shrink to one letter wide in a half-screen window
+   (Oct 21, Nick: the Orders and Customers lists); phones keep it */
+.main a[href^="mailto:"],.main td,.main dd{overflow-wrap:break-word}
+@media (max-width:760px){ .main a[href^="mailto:"],.main td,.main dd{overflow-wrap:anywhere} }
 .pv-dates{min-width:0}
 .pv-tbl th,.pv-tbl td{word-break:normal}
 
@@ -11580,3 +11583,19 @@ html body .pbar .pbar-n{color:#fff}
   html body .ord .line-b .gl-r2 .a-sz .szrow{flex-wrap:wrap}
   html body .ord .line-b .gl-r2 .a-sz .szc{flex:1 1 40px;min-width:38px}
 }
+
+/* ── Half-screen windows (Oct 21, Nick: "look at the different pages… what all are kind of messed up in this view") ── */
+@container (max-width: 1150px){
+  html body main.main .ord .ed-head .ed-actions{max-width:480px}
+  html body main.main .ord .ed-head .ed-actions > .status-select{max-width:340px}
+}
+/* Production calendar: the tab rows give way to their dropdowns when tight (the one-look toolbar style had un-hidden them) */
+@container (max-width: 1180px){ html body main.main .ms-head .ms-full{display:none!important} }
+/* a page's title underline runs past the title: keep its buttons clear of it */
+main.main .page-head{column-gap:72px}
+/* My Day's replies: the name and subject get the room; the buttons go under them when it's narrow */
+.db-reply{flex-wrap:wrap}
+.db-reply .db-main{flex:1 1 150px;min-width:150px}
+.db-reply .db-side{margin-left:auto}
+/* Customers: a long email address stays on one line, cut short */
+.cu-em{max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
