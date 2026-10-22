@@ -11477,3 +11477,22 @@ html body .pbar .pbar-n{color:#fff}
   html body .pbar-sheet>button.ffab-o.on span{color:var(--accent)}
 }
 @media (prefers-reduced-motion:reduce){ .ibx2-ffab{transition:none} }
+
+/* ── Phone email: search drops in under the folder strip; suggestions kept small (Oct 21, Nick) ── */
+.pit-drop-w{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  .pit-drop-w{display:block;position:fixed;left:0;right:0;z-index:31;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:0 8px 18px rgba(20,29,43,.12);animation:pitDrop .16s ease-out}
+  @keyframes pitDrop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  html body .pit-drop-w .pit-search.pit-drop{margin:0;display:flex}
+  .pit-drop-x{flex:none;border:0;background:none;font:inherit;font-size:14px;font-weight:700;color:var(--accent);padding:0 0 0 4px;cursor:pointer}
+  html body .pit-drop-w .msug{position:static;margin-top:6px;box-shadow:none;max-height:38vh;overflow-y:auto}
+  /* suggestions on a phone: one short line each, five at most */
+  html body .msug .msug-i{padding:7px 8px;gap:9px}
+  html body .msug .msug-av{width:26px;height:26px;font-size:10.5px}
+  html body .msug .msug-av svg{width:14px;height:14px}
+  html body .msug .msug-t{font-size:14px}
+  html body .msug .msug-t > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body .msug .msug-t small,html body .msug .msug-sec{display:none}
+  html body .msug .msug-i:not(.all):nth-of-type(n+6){display:none}
+}
+@media (prefers-reduced-motion:reduce){ .pit-drop-w{animation:none} }

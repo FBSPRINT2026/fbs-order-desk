@@ -182,6 +182,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
    *  circles on the Inbox's emails, then one move for all of them */
   /** the search suggestions under the search box (components/MailSuggest.tsx) */
   const [sugOpen, setSugOpen] = useState(false);
+  // phones: the strip's search button drops a search bar right under the strip, wherever you are (Oct 21, Nick)
+  const [drop, setDrop] = useState<number | null>(null);
+  const closeDrop = () => { setDrop(null); setSugOpen(false); };
   const [selMode, setSelMode] = useState(false), [chosen, setChosen] = useState<Set<string>>(new Set()), [bulk, setBulk] = useState(""), [bhAsk, setBhAsk] = useState(0);
   // the list can be hidden to give the email more room (remembered)
   // the list always shows beside the email (Oct 14: the hide arrow is gone)
@@ -346,6 +349,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
+  useEffect(() => { if (picked) { setDrop(null); setSugOpen(false); } }, [picked]);
   // the email showing goes in the address (see the link handler above), so a reload comes back to it
   useEffect(() => {
     if (!urlDone.current) return;
@@ -633,8 +637,22 @@ export default function InboxView({ mode }: { mode: Mode }) {
         </div>;
       })()}
       {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }}
-        onSearch={() => { window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => document.querySelector<HTMLInputElement>(".pit-search input")?.focus(), 350); }}
+        onSearch={() => {
+          if (drop != null) { closeDrop(); return; }
+          const top = document.querySelector<HTMLInputElement>(".pit-search:not(.pit-drop) input");
+          // the search box at the top is on screen: just use it
+          if (top && top.getBoundingClientRect().top > 60 && top.getBoundingClientRect().bottom < window.innerHeight / 2) { top.focus(); return; }
+          setDrop(Math.round(document.querySelector(".mf-bar")?.getBoundingClientRect().bottom || 110));
+        }}
         onMore={() => setPSheet(true)} />}
+      {mode === "mail" && drop != null && <div className="pit-drop-w" style={{ top: drop }}>
+        <form className="pit-search pit-drop" onSubmit={(e) => { e.preventDefault(); if (q.trim()) { closeDrop(); window.scrollTo({ top: 0 }); void runSearch(q); } }}>
+          <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input type="search" autoFocus value={q} onChange={(e) => { setQ(e.target.value); setSugOpen(e.target.value.trim().length >= 2); }} placeholder="Search mail" aria-label="Search all mail" enterKeyHint="search" />
+          <button type="button" className="pit-drop-x" onClick={() => { closeDrop(); setQ(""); }}>Cancel</button>
+        </form>
+        {sugOpen && q.trim().length >= 2 && <MailSuggest q={q} senders={senders} onPick={(p) => { closeDrop(); window.scrollTo({ top: 0 }); setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => { closeDrop(); window.scrollTo({ top: 0 }); void runSearch(t); }} />}
+      </div>}
       <div ref={fitRef} className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
         {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
