@@ -284,8 +284,13 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     const extra: string[][] = [];
     // every mockup on its own page, the full width of the page, all the same size (Oct 20, Nick: "I'd like the shirt
     // images to be larger")
-    for (let i = 1; i < mk.length; i++) extra.push([mk[i]]);
-    return { mk, extra, prints: g.imprints.length };
+    // one page per garment, not per line: lines of the same style and color (Hutchins' Frisco and McKinney, both
+    // Heather Autumn) are the same picture (Oct 22, Nick on #40096: "there's two black shirts… two autumn shirts")
+    const shown0 = g.lines.filter((l) => l.style || l.color);
+    const key = (i: number) => { const l = shown0[i]; return l ? `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}` : `#${i}`; };
+    const seen = new Set([key(0)]), idx: number[] = [];
+    for (let i = 1; i < mk.length; i++) { const k = key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
+    return { mk, extra, idx, prints: g.imprints.length };
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
@@ -294,7 +299,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   return (
     <>
       {groups.map((g, gi) => {
-        const { mk, extra } = plan[gi];
+        const { mk, extra, idx } = plan[gi];
         const hex = p.hexes[gi] || "#9aa1ab";
         const shown = g.lines.filter((l) => l.style || l.color);
         const lines = shown.filter((l) => lineQty(l) > 0 || shown.length === 1);
@@ -337,7 +342,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 </div>
                 <div>
                   <div className="lbl">Garments</div>
-                  {lines.map((l) => <div className="pf-pr" key={l.id}><Swatch c={colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
+                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => <div className="pf-pr" key={l.id}><Swatch c={colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
                 </div>
               </div>
               <div className="pf-ok">
@@ -358,8 +363,8 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
             </section>
             {extra.map((pair, xi) => (
               <section className="sheet pf" key={"m" + xi}>
-                <div className="p2h"><div className="t disp">{capOf(1 + xi) || "Mockup"}{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
-                {pair.map((u, ui) => { const i = 1 + xi + ui; return <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>; })}
+                <div className="p2h"><div className="t disp">{capOf(idx[xi]) || "Mockup"}{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
+                {pair.map((u) => <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>)}
                 {foot()}
               </section>
             ))}
