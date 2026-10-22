@@ -11634,8 +11634,8 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
   html body .ord .line-b .a-sz .szc-off .sz-off::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--line)}
 }
 @media (min-width:761px){ @container (max-width: 900px){
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
   html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
   html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
   html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
@@ -11644,8 +11644,8 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
   html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
 } }
 @media (min-width:761px){ @container (max-width: 1060px){
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
   html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
   html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
   html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
@@ -11654,8 +11654,8 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
   html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
 } }
 @media (min-width:761px){ @container (max-width: 1260px){
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
   html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
   html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
   html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
@@ -11664,24 +11664,24 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
   html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
 } }
 @media (min-width:761px){ @container (max-width: 470px){
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
   html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{display:none}
   html body .ord .line-b.nsz-s .gl .a-sz .szc > span:first-child{display:block}
   html body .ord .line-b.nsz-s .gl .a-sz .szrow{flex-wrap:wrap}
   html body .ord .line-b.nsz-s .gl .a-sz .szc-off{display:none}
 } }
 @media (min-width:761px){ @container (max-width: 600px){
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
   html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{display:none}
   html body .ord .line-b.nsz-m .gl .a-sz .szc > span:first-child{display:block}
   html body .ord .line-b.nsz-m .gl .a-sz .szrow{flex-wrap:wrap}
   html body .ord .line-b.nsz-m .gl .a-sz .szc-off{display:none}
 } }
 @media (min-width:761px){ @container (max-width: 760px){
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
   html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{display:none}
   html body .ord .line-b.nsz-l .gl .a-sz .szc > span:first-child{display:block}
   html body .ord .line-b.nsz-l .gl .a-sz .szrow{flex-wrap:wrap}
@@ -11697,3 +11697,5 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 .gl-addm > summary{list-style:none;cursor:pointer}
 .gl-addm > summary::-webkit-details-marker{display:none}
 .gl-addm .ot-menu{left:0;right:auto;top:calc(100% + 4px);bottom:auto;min-width:220px}
+html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){white-space:nowrap}
+html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
