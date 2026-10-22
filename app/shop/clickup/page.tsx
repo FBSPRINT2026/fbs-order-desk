@@ -364,7 +364,7 @@ export default function ClickUpJobs() {
             <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
           </div>
           <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
-            <table className="tbl cu-tbl">
+            <table className="tbl cu-tbl" data-keep>
               <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, boxName(b), "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-inv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
@@ -376,7 +376,7 @@ export default function ClickUpJobs() {
                     <td><div>{t.name}{!isDoneT(t) && <Flag p={t.priority} />}</div></td>
                     <td className="cu-nw"><span className="pill" style={{ ["--sc" as string]: t.status_color || "#8a94a6" }}><span className="pill-t">{t.status || "open"}</span></span></td>
                     <td className="cu-nw">{t.due_at ? <Due date={chiDay(t.due_at)} status={isDoneT(t) ? "completed" : ""} /> : <span className="faint">—</span>}</td>
-                    {boxes.map((b) => <td key={b} className="cu-box" onClick={(e) => e.stopPropagation()}>
+                    {boxes.map((b) => <td key={b} className="cu-box" data-l data-box={boxName(b)} onClick={(e) => e.stopPropagation()}>
                       <button type="button" className={"cu-boxbtn" + (t.fields[b] === "✓" ? " on" : "")} aria-pressed={t.fields[b] === "✓"} disabled={!!busy}
                         title={`${t.fields[b] === "✓" ? "Untick" : "Tick"} "${boxName(b)}" in ClickUp`} aria-label={`${boxName(b)}: ${t.fields[b] === "✓" ? "ticked" : "not ticked"}`} onClick={() => void toggleBox(t, b)}>
                         {t.fields[b] === "✓" && <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
@@ -425,7 +425,7 @@ export default function ClickUpJobs() {
           </tbody>
         </table>
       </div> : <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
-        <table className="tbl cu-tbl">
+        <table className="tbl cu-tbl" data-keep>
           <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "FBS INV#", "cu-w-inv")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
             {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : items.length ? items.map((x, i) => {
