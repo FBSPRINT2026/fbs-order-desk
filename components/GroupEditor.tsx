@@ -200,14 +200,15 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as readonly string[];
     return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
   })();
-  // how the garment rows fit (Oct 21, Nick): everything on one line ("w"), or the style over the color with the prices
-  // under the sizes ("h"), or the sizes under the color ("s"), from the width there is and how many sizes the group has
+  // how the garment rows fit (Oct 22, Nick: "perfect"): the shirt on one line with its money, the description small
+  // under it, the sizes on their own line in run order ("w"); when even the run of sizes doesn't fit, the phone-style
+  // stack ("s")
   const glRef = useRef<HTMLDivElement | null>(null);
-  const [glFit, setGlFit] = useState<"w" | "h" | "s">("w");
+  const [glFit, setGlFit] = useState<"w" | "s">("w");
   useEffect(() => {
     const el = glRef.current; if (!el || typeof ResizeObserver === "undefined") return;
-    const n = Math.max(1, groupCols.length), run = n * 38 + 12;
-    const ro = new ResizeObserver(([e]) => { const w = e.contentRect.width; setGlFit(w >= 96 + 140 + 110 + run + 58 + 44 + 70 + 90 + 24 + 64 ? "w" : w >= 140 + run + 24 + 24 ? "h" : "s"); });
+    const need = Math.max(560, Math.max(1, groupCols.length) * 38 + 30);
+    const ro = new ResizeObserver(([e]) => setGlFit(e.contentRect.width >= need ? "w" : "s"));
     ro.observe(el); return () => ro.disconnect();
   }, [groupCols.length]);
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)

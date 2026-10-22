@@ -11618,89 +11618,78 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){white-space:nowrap}
 html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
 
-/* ===== Garments, like a Printavo line item (Oct 21, Nick: "ok lets try this version"). One row per color: style #,
-   color, a short gray description, a box under each size (the sizes named once at the top, in order, a line between
-   youth and adult, blank where the style doesn't come in that size), then cost, qty, each, total. The next color of
-   the same style shows the style # grayed, like a ditto mark. Narrower: the style sits small over the color and the
-   prices drop to a line under the sizes. Narrower still: the sizes go under the color. Phones keep their own layout.
-   Never a sideways scroll; never a number cut off. ===== */
-@media (min-width:761px){
-  html body .ord .line-b .gl-list .gl{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;row-gap:4px;align-items:start;padding:5px 0;border-top:1px solid var(--line-2)}
-  html body .ord .line-b .gl-list.ws .gl{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"st co de sz qt ea to x"}
-  html body .ord .line-b .gl-list .gl.same{padding-top:5px}
-  html body .ord .line-b .gl-list .gl > .gl-sty,html body .ord .line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
-  html body .ord .line-b .gl-list .gl > .gl-sty > .a-st{grid-area:st;min-width:0}
-  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd{grid-area:de;min-width:0;display:flex;align-items:center;gap:6px;min-height:32px}
-  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd > .a-br{flex:0 1 auto;max-width:45%;min-width:0}
-  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd > .a-de{flex:1 1 0;min-width:0}
-  html body .ord .line-b .gl-list .gl > .gl-sty .a-bd input.pre{font-size:12px;color:var(--ink-3);padding:4px 4px;height:auto;width:100%;text-overflow:ellipsis}
-  html body .ord .line-b .gl-list .gl > .gl-sty .a-br input.pre{field-sizing:content;min-width:3ch;max-width:100%}
-  html body .ord .line-b .gl-list .gl > .gl-ditto{grid-area:st;align-self:center;font-weight:700;font-size:12.5px;color:var(--line);padding-left:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{grid-area:co;min-width:0}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{grid-area:sz}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to,.a-x){min-height:32px;display:flex;align-items:center}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > :is(.a-ea,.a-to){justify-content:flex-end}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{justify-content:center}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs input{font-size:12px;color:var(--ink-3)}
-  /* the header: the same columns */
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;align-items:end;padding-bottom:3px}
-  html body .ord .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"st co de sz qt ea to x"}
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > *{padding-top:0!important}
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sth{grid-area:st} html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-deh{grid-area:de}
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sz{display:block;visibility:visible}
-  /* the size run: fixed boxes, so the header and every row line up */
-  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
-  html body .ord .line-b .a-sz .szc{flex:0 0 34px;width:34px;min-width:34px;max-width:34px}
-  html body .ord .line-b .a-sz .szc.ysep{margin-right:10px}
-  html body .ord .line-b .a-sz .szh .szc > span{font-size:10.5px}
-  html body .ord .line-b .gl .a-sz .szc > span:first-child{display:none}
-  html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:11px;line-height:11px;overflow:hidden}
-  html body .ord .line-b .a-sz .szc-off .sz-off{visibility:hidden;min-height:30px}
-  html body .ord .line-b .a-sz .szc input.sz,html body .ord .line-b .a-sz .szc .sz-tap{height:30px}
-  /* the totals line */
-  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 70px 90px 24px;grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:8px;align-items:center}
-  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 70px 90px 24px;grid-template-areas:"ad ad ad ad qt ea to x"}
-  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad}
-  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center} html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right}
-}
-@media (max-width:760px){ .ord .gl-list .gl > .gl-ditto{display:none} .ord .gl-list .gl-head :is(.a-sth,.a-deh){display:none} }
-
 /* a filled-in style # and color read as plain text, no box; the box comes back on hover or while typing, so only the
    size boxes stand out (Oct 21, Nick: "once you fill in the styles, the bubble should disappear") */
 html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus){border-color:transparent;background:transparent;box-shadow:none}
 html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus):hover{border-color:var(--line)}
 html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown){font-weight:700}
+
+/* ===== Garments (Oct 22, Nick: "perfect"). Line 1: the shirt (style #, brand, color) with cost, qty × each, total on
+   the right. Line 2: the description, small and gray. Line 3: the sizes in run order (YXS → 4XL) with their names over
+   the boxes, a size the style doesn't come in left blank so S sits under S on every shirt. The text in the style, brand,
+   color and description boxes lines up with the headings (the box reaches out into the gutter, not the words). The
+   house fonts: 14px for the shirt and money, 12px gray for the description, small gray caps for the size names. ===== */
 @media (min-width:761px){
-  html body .ord .line-b.fit-h .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
-  html body .ord .line-b.fit-h .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.fit-h .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
-  html body .ord .line-b.fit-h .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
-  html body .ord .line-b.fit-h .gl-list .gl > .gl-ditto{display:none}
-  html body .ord .line-b.fit-h .gl-list .gl > .gl-sty > .a-st input{font-size:12px;padding:3px 6px;height:auto}
-  html body .ord .line-b.fit-h .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
-  html body .ord .line-b.fit-h .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
-  html body .ord .line-b.fit-h .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
-  html body .ord .line-b.fit-h .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.fit-h .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
-  html body .ord .line-b.fit-h .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"ad ad ad qt ea to x"}
+  html body .ord .line-b .gl-list .gl-row.gl-head{display:none}
+  html body .ord .line-b .gl-list .gl{display:grid;grid-template-columns:auto auto auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"st br co . cs qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz";column-gap:12px;row-gap:0;align-items:center;padding:10px 0 9px;border-top:1px solid var(--line-2)}
+  html body .ord .line-b .gl-list.ws .gl{grid-template-columns:auto auto auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"st br co . qt ea to x" "de de de de . . . ." "sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b .gl-list .gl.same{grid-template-areas:"st co co . cs qt ea to x" "sz sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b .gl-list.ws .gl.same{grid-template-areas:"st co co . qt ea to x" "sz sz sz sz sz sz sz sz"}
+  html body .ord .line-b .gl-list .gl:first-child{border-top:0}
+  html body .ord .line-b .gl-list .gl > .gl-sty,html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd,html body .ord .line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
+  html body .ord .line-b .gl-list .gl .a-st{grid-area:st;min-width:0;position:relative}
+  html body .ord .line-b .gl-list .gl .a-br{grid-area:br;min-width:0}
+  html body .ord .line-b .gl-list .gl .a-de{grid-area:de;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{grid-area:co;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{grid-area:sz;margin-top:7px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs{grid-area:cs}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{grid-area:qt;text-align:center}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea{grid-area:ea;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";color:var(--ink-3);font-size:13px}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{grid-area:to;text-align:right;font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to b{font-weight:700}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-x{grid-area:x}
+  html body .ord .line-b .gl-list .gl > .gl-ditto{grid-area:st;font-size:14px;font-weight:700;color:var(--line);white-space:nowrap}
+  /* the words line up with the headings: the box sits out in the gutter */
+  html body .ord .line-b .gl-list .gl :is(.a-st,.a-br,.a-co) input{box-sizing:border-box;height:30px;padding:4px 7px;margin-left:-8px;font-family:var(--body);font-size:14px;line-height:20px;color:var(--ink);field-sizing:content;min-width:5ch;max-width:280px}
+  html body .ord .line-b .gl-list .gl .a-st input{font-weight:700}
+  html body .ord .line-b .gl-list .gl .a-br input{color:var(--ink-2);font-weight:400}
+  html body .ord .line-b .gl-list .gl .a-co input{font-weight:700;min-width:9ch}
+  html body .ord .line-b .gl-list .gl .a-de input{box-sizing:border-box;width:100%;height:20px;padding:0 7px;margin-left:-8px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-overflow:ellipsis}
+  html body .ord .line-b .gl-list .gl .a-cs input{box-sizing:border-box;width:100%;padding:4px 4px;text-align:right;font-family:var(--body);font-size:12px;color:var(--ink-3)}
+  html body .ord .line-b .gl-list .gl .a-qt input{box-sizing:border-box;width:100%;font-family:var(--body);font-size:14px;font-weight:700;color:var(--ink);text-align:center}
+  html body .ord .line-b .gl-list .gl .a-ea input{box-sizing:border-box;width:64px;height:30px;padding:4px 7px;text-align:right;font-family:var(--body);font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:7px;box-shadow:none}
+  html body .ord .line-b .gl-list .gl .a-ea input.ov{border-color:var(--line);background:var(--surface);font-weight:700}
+  html body .ord .line-b .gl-list .gl .a-ea .prg-tag{display:none}
+  /* the sizes: their names over the boxes, in run order */
+  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
+  html body .ord .line-b .a-sz .szc{flex:0 0 36px;width:36px;min-width:36px;max-width:36px;gap:2px}
+  html body .ord .line-b .a-sz .szc > span:first-child{display:block;font-family:var(--body);font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)}
+  html body .ord .line-b .a-sz .szc-off{visibility:hidden}
+  html body .ord .line-b .a-sz .szc.ysep{margin-right:12px}
+  html body .ord .line-b .a-sz .szc input.sz,html body .ord .line-b .a-sz .szc .sz-tap{height:30px;font-family:var(--body);font-size:13px}
+  html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:12px;line-height:12px;font-family:var(--body);font-size:10px;color:var(--ink-3);background:none}
+  html body .ord .line-b .a-sz .szc > .upc-btn.set{color:var(--ink-2);font-weight:700}
+  /* the totals line: the same columns */
+  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:auto auto auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:12px;align-items:center}
+  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:auto auto auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad qt ea to x"}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center;font-size:14px;font-weight:700}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right;font-size:14px;font-weight:700}
+  /* too narrow for the run of sizes: the phone-style stack */
+  html body .ord .line-b.fit-s .gl-list .gl{grid-template-columns:minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"st st br br br x" "co co co co co ." "de de de de de ." "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.fit-s .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"st br br br x" "co co co co ." "de de de de ." "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.fit-s .gl-list .gl.same{grid-template-areas:"st co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.fit-s .gl-list.ws .gl.same{grid-template-areas:"st co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.fit-s .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.fit-s .a-sz .szc-off{display:none}
+  html body .ord .line-b.fit-s .a-sz .szc.ysep{margin-right:0}
+  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad cs qt ea to x"}
+  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad qt ea to x"}
 }
-@media (min-width:761px){
-  html body .ord .line-b.fit-s .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.fit-s .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.fit-s .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
-  html body .ord .line-b.fit-s .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
-  html body .ord .line-b.fit-s .gl-list .gl > .gl-ditto{display:none}
-  html body .ord .line-b.fit-s .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.fit-s .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.fit-s .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.fit-s .gl .a-sz .szc-off{display:none}
-  html body .ord .line-b.fit-s .gl .a-sz .szc.ysep{margin-right:0}
-  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 58px 44px 70px 90px 24px;grid-template-areas:"ad cs qt ea to x"}
-  html body .ord .line-b.fit-s .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 70px 90px 24px;grid-template-areas:"ad qt ea to x"}
-}
-@media (min-width:761px){
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea input{width:100%;min-width:0;box-sizing:border-box}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs input{width:100%;min-width:0;box-sizing:border-box;padding:4px 3px;text-align:right}
-  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{font-variant-numeric:tabular-nums}
-}
+@media (max-width:760px){ .ord .gl-list .gl > .gl-ditto{display:none} }
+/* calmer extra charges everywhere: small gray, not orange and blue */
+.szc > small.upc,.szc > .upc-btn{color:var(--ink-3)}
+.szc > .upc-btn.set{color:var(--ink-2);background:none}
+html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
