@@ -242,7 +242,7 @@ function Mockups({ card, chatId, onCard, pending }: { card: Extract<WBCard, { ki
           for (const p of it.prints) {
             if (!p.art) throw new Error("no art link");
             const art = p.doc ? await docPicture(p.art, p.doc) : p.art;
-            blob = await renderMockup({ photo, art, location: p.location, widthIn: p.widthIn, youth: it.youth, size: 1000 });
+            blob = await renderMockup({ photo, art, location: p.location, widthIn: p.widthIn, youth: it.youth, size: 1000, ink: p.ink });
             photo = URL.createObjectURL(blob);
           }
           if (blob) { blobs.push({ i, blob }); setPics((x) => x.map((v, j) => (j === i ? photo : v))); }

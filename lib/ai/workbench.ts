@@ -9,6 +9,7 @@ import { ssConfigured, ssLookup, ssSearch } from "@/lib/ss";
 import { spotFor, ssImg } from "@/lib/mockup";
 import { LOCATIONS, SIZES, type Garment, type Group } from "@/lib/pricing";
 import type { EODraft, EOFile } from "@/lib/emailOrderShared";
+import { colorHex } from "@/lib/inkColors";
 import { drawablePath, isArtDoc, isArtPicture, type WBCard, type WBEvent, type WBFile, type WBMockItem, type WBMsg } from "@/lib/ai/workbenchShared";
 
 /**
@@ -48,6 +49,11 @@ const TOOLS = [
     }, required: ["email_id"] },
   },
   {
+    name: "customer_artwork",
+    description: "A customer's saved artwork (designs D-xxxxx in the shop's system), with a picture of each. Use whenever the user means art 'in our system', 'their artwork files', 'the logo we have', or sends a screenshot of the art library: find the design the screenshot shows and use it by its D number. Never use a screenshot of art as the art.",
+    input_schema: { type: "object", properties: { customer_id: { type: "string", description: "From find_customers" }, query: { type: "string", description: "Words in the design's name, optional" } }, required: ["customer_id"] },
+  },
+  {
     name: "make_mockups",
     description: "Make product mockups: the uploaded art printed on a garment, one picture per color (and per side when there are front and back prints). The pictures are drawn on the user's screen as a card they can download and save.",
     input_schema: { type: "object", properties: {
@@ -55,7 +61,9 @@ const TOOLS = [
       brand: { type: "string", description: "Garment brand, e.g. 'Gildan'" },
       colors: { type: "array", items: { type: "string" }, description: "Garment colors, using the names find_garment returned when you have them" },
       prints: { type: "array", items: { type: "object", properties: {
-        file: { type: "string", description: "The file id of the art (f1, f2…): a picture, or an .ai / EPS / PDF that has a picture made of it" },
+        file: { type: "string", description: "The file id of the art (f1, f2…): a picture, or an .ai / EPS / PDF that has a picture made of it. Leave out when using design." },
+        design: { type: "string", description: "A saved design's number from customer_artwork, e.g. 'D-10078': its art is used" },
+        ink: { type: "string", description: "Print the art as this ONE ink color, when the user says so ('in black', 'white', 'PMS 186'). Leave out for full color / as is." },
         location: { type: "string", description: `Where it prints: ${LOCATIONS.join(", ")}` },
         width_in: { type: "number", description: "Print width in inches, if the user said; otherwise leave it out for the usual size" },
       }, required: ["file", "location"] } },
@@ -128,6 +136,24 @@ export async function emailFiles(admin: SupabaseClient, a: { id: string; from_em
 
 async function runTool(name: string, input: Record<string, unknown>, c: Ctx): Promise<string | Block[]> {
   const { admin } = c;
+  if (name === "customer_artwork") {
+    const cid = String(input.customer_id || "").trim();
+    if (!cid) return "Give a customer_id (find_customers first).";
+    let q = admin.from("designs").select("number, name, file_name, preview_path, method, colors, inks, starred").eq("customer_id", cid).is("archived_at", null).order("starred", { ascending: false }).order("number", { ascending: false }).limit(24);
+    const w = clean(String(input.query || ""));
+    if (w) q = q.ilike("name", `%${w}%`);
+    const { data } = await q;
+    if (!data?.length) return `No saved artwork for that customer${w ? ` matching "${w}"` : ""}.`;
+    const blocks: Block[] = [{ type: "text", text: `Their saved artwork (use by D number in make_mockups):\n${data.map((d) => `D-${d.number} "${d.name}" (${d.file_name || "file"}; ${d.method || "screen"}, ${d.colors || "?"} color${d.colors === 1 ? "" : "s"}${d.inks ? `, inks ${d.inks}` : ""})${d.preview_path ? "" : " — no picture"}`).join("\n")}` }];
+    for (const d of data.filter((x) => x.preview_path).slice(0, 8)) {
+      const { data: f } = await admin.storage.from("proofs").download(d.preview_path as string).then((r) => r, () => ({ data: null }));
+      if (!f || f.size > 3.5e6) continue;
+      const t = (f.type || "image/png").toLowerCase();
+      if (!/^image\/(png|jpeg|gif|webp)$/.test(t)) continue;
+      blocks.push({ type: "text", text: `D-${d.number} "${d.name}":` }, { type: "image", source: { type: "base64", media_type: t, data: Buffer.from(await f.arrayBuffer()).toString("base64") } });
+    }
+    return blocks;
+  }
   if (name === "customer_emails") {
     const days = Math.min(365, Math.max(1, Math.floor(+(input.days || 60)) || 60));
     let q = admin.from("activities").select("id, direction, occurred_at, subject, from_email, body, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - days * 86400_000).toISOString()).order("occurred_at", { ascending: false }).limit(15);
@@ -196,16 +222,32 @@ async function runTool(name: string, input: Record<string, unknown>, c: Ctx): Pr
     const ci = g.color_images || {};
     const names = Object.keys(ci);
     if (!names.length) return `${g.brand} ${g.style} has no color photos to make mockups with.`;
-    const prints = (Array.isArray(input.prints) ? input.prints : []).slice(0, 6) as { file?: string; location?: string; width_in?: number }[];
+    const prints = (Array.isArray(input.prints) ? input.prints : []).slice(0, 6) as { file?: string; design?: string; ink?: string; location?: string; width_in?: number }[];
     const ps: WBMockItem["prints"] = [];
     const bad: string[] = [];
+    const inkOf = (name?: string) => {
+      const n = String(name || "").trim();
+      if (!n) return {};
+      const basic: Record<string, string> = { black: "#111111", white: "#ffffff", red: "#c8102e", navy: "#1f2a44", royal: "#1d4f91", gold: "#ffb81c", "athletic gold": "#ffb81c", grey: "#8a8d8f", gray: "#8a8d8f", silver: "#a2a9ad", green: "#00843d", orange: "#ff8200", maroon: "#6d2c41", purple: "#5f259f", pink: "#e0457b", yellow: "#ffd100", brown: "#5c4033", cream: "#f3e9d2", tan: "#c4a77d" };
+      const hex = colorHex(n) || colorHex(n.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())) || basic[n.toLowerCase()] || "";
+      return hex ? { ink: hex, inkName: n } : {};
+    };
     for (const p of prints) {
+      if (p.design) {
+        const num = parseInt(String(p.design).replace(/\D/g, ""), 10);
+        const { data: d } = num ? await admin.from("designs").select("number, name, file_path, file_type, file_name, preview_path").eq("number", num).maybeSingle() : { data: null };
+        const path = (d?.preview_path as string) || (d && /png|jpe?g|webp|gif/i.test(`${d.file_type} ${d.file_name}`) ? (d.file_path as string) : "");
+        if (!d || !path) { bad.push(`${p.design}: ${d ? "no picture of that design" : "no such design"}`); continue; }
+        const loc = LOCATIONS.find((l) => l.toLowerCase() === String(p.location || "").toLowerCase()) || String(p.location || "Full Front");
+        ps.push({ file: `D-${d.number}`, artPath: path, location: loc, widthIn: typeof p.width_in === "number" && p.width_in > 0 && p.width_in < 20 ? p.width_in : undefined, ...inkOf(p.ink) });
+        continue;
+      }
       const f = c.files.find((x) => x.id === p.file);
       if (!f) { bad.push(`${p.file}: no such file`); continue; }
       const draw = drawablePath(f), convert = !draw && isArtDoc(f) && !/\.(psd|cdr)$/i.test(f.name);
       if (!draw && !convert) { bad.push(`${f.name}: no picture of it could be made here (${isArtDoc(f) ? "an older Illustrator / EPS / Photoshop file" : f.type || "another kind of file"}); ask for a PNG, or the .ai saved PDF-compatible`); continue; }
       const loc = LOCATIONS.find((l) => l.toLowerCase() === String(p.location || "").toLowerCase()) || String(p.location || "Full Front");
-      ps.push({ file: f.id, artPath: draw || f.path, ...(convert ? { doc: f.name } : {}), location: loc, widthIn: typeof p.width_in === "number" && p.width_in > 0 && p.width_in < 20 ? p.width_in : undefined });
+      ps.push({ file: f.id, artPath: draw || f.path, ...(convert ? { doc: f.name } : {}), location: loc, widthIn: typeof p.width_in === "number" && p.width_in > 0 && p.width_in < 20 ? p.width_in : undefined, ...inkOf(p.ink) });
     }
     if (!ps.length) return `No art to put on the shirt. ${bad.join(". ")}`;
     const signed = await c.sign(ps.map((p) => p.artPath));
@@ -268,7 +310,7 @@ async function runTool(name: string, input: Record<string, unknown>, c: Ctx): Pr
   return `Unknown tool ${name}.`;
 }
 
-const STATUS: Record<string, string> = { find_customers: "Looking up the customer…", customer_jobs: "Reading their past jobs…", get_job: "Looking up the job…", find_garment: "Finding the garment…", customer_emails: "Reading their emails…", use_email_files: "Bringing in the email's files…", make_mockups: "Setting up the mockups…", propose_order: "Putting the order together…", web_search: "Searching the web…" };
+const STATUS: Record<string, string> = { find_customers: "Looking up the customer…", customer_jobs: "Reading their past jobs…", get_job: "Looking up the job…", find_garment: "Finding the garment…", customer_artwork: "Opening their artwork…", customer_emails: "Reading their emails…", use_email_files: "Bringing in the email's files…", make_mockups: "Setting up the mockups…", propose_order: "Putting the order together…", web_search: "Searching the web…" };
 
 /** a file the AI can look at: pictures, PDFs and the text of spreadsheets / documents */
 async function fileBlocks(admin: SupabaseClient, f: WBFile): Promise<Block[]> {
@@ -332,6 +374,9 @@ What you can do: answer questions; read the files they drop in (logos, spreadshe
 - When they mention emails or art a client sent: find_customers, then customer_emails, then use_email_files on the email(s) with the art. Never say you can't see email.
 How to work:
 - Do the task. Don't ask permission for lookups; ask only when an answer would change the result (which customer, which garment when none is named for mockups — then default to Gildan 5000 and say so).
+- Their art in our system: when they mean the customer's saved artwork ("the logo in our system", "their artwork files", a screenshot of the art library), find_customers then customer_artwork, pick the design that matches, and use it with design: "D-…". A screenshot of the library only tells you which design; never put the screenshot itself on a shirt.
+- Ink: "in black" / "white" / a PMS means the art prints as that one ink: set ink on that print. Otherwise leave ink out.
+- A reference mockup picture (shirts in many colors) tells you the garment colors and placement to copy; it is not art.
 - Mockups: use find_garment first when the color names may not match the supplier's; prints on the front and back of the same shirt go in one make_mockups call. Logos can be PNG/JPG/WebP/SVG, or an .ai / EPS / PDF you were shown a picture of.
 - Orders from a spreadsheet or list: read every row; add up sizes per garment and color; put garments that share the same prints in one group; list anything unclear in questions. Find the customer with find_customers first when they named one. Use a test customer only if they say it's a test.
 - You can't send email, place goods orders, take payments, or create anything yourself: the cards' buttons do that when the user clicks. Never say something was created unless the history says it was.
