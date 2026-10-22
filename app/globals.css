@@ -11743,3 +11743,9 @@ html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
   html body .ord .line-b.nsz-l .gl .a-sz .szc.ysep{margin-right:0}
 } }
 @media (max-width:760px){ .ord .gl-list .gl > .gl-ditto{display:none} .ord .gl-list .gl-head :is(.a-sth,.a-deh){display:none} }
+
+/* a filled-in style # and color read as plain text, no box; the box comes back on hover or while typing, so only the
+   size boxes stand out (Oct 21, Nick: "once you fill in the styles, the bubble should disappear") */
+html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus){border-color:transparent;background:transparent;box-shadow:none}
+html body .ord .gl :is(.a-st input[aria-label="Style number"],.a-co input[aria-label="Color"]):not(:placeholder-shown):not(:focus):hover{border-color:var(--line)}
+html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown){font-weight:700}
