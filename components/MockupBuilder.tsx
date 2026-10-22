@@ -17,6 +17,7 @@ import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
+import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -796,8 +797,41 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** `measured`: a reading made just now for a photo not measured on screen yet (saving, PDF), with the same neckline
    *  rules applied, so the saved pictures line up exactly like the screen (Oct 22, Nick: the saved PBC mockups' front
    *  and back weren't level: saving used the automatic neckline instead of the one set by hand) */
+  // the first color is the template; every other color's photo is laid over it (lib/mockupRegister.ts), so its prints
+  // land in exactly the same spot on the shirt (Oct 22, Nick: "take the first one… lay a shirt outline over it… every
+  // time I add a color, fit the new graphic to that template"). key: template photo > this photo
+  const [regs, setRegs] = useState<Record<string, Reg | null>>({});
+  const anchorLine = lines.find((x) => x.style && x.color && !isBag(x));
+  useEffect(() => {
+    const a = anchorLine; if (!a) return;
+    for (const l of lines) {
+      if (l.id === a.id || !l.style || !l.color || isBag(l)) continue;
+      for (const v of ["front", "back"] as View[]) {
+        const au = photo(a, v), u = photo(l, v), key = `${au}>${u}`;
+        const fa = fits[au], fo = fits[u];
+        if (key in regs || au === u || !fa?.mask || !fo?.mask || fa.flat || fo.flat) continue;
+        setRegs((r) => ({ ...r, [key]: null }));
+        registerMasks(fa.mask, fo.mask).then((res) => setRegs((r) => ({ ...r, [key]: res }))).catch(() => {});
+      }
+    }
+  }, [fits, lines, anchorLine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const fitFor = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     if (!l) return null;
+    const u = photo(l, v);
+    if (u.startsWith("data:")) return null;
+    // laid over the template: the template's reading, moved onto this photo (a good fit only: most of the outline covered)
+    const a = anchorLine;
+    if (a && a.id !== l.id) {
+      const au = photo(a, v), r = regs[`${au}>${u}`], A = au !== u ? baseFit(a, v) : null, own = fits[u] || measured || null;
+      if (r && A && own && !own.flat && r.iou >= 0.82) {
+        const back = (q: { x: number; y: number; rot: number }) => ({ x: (q.x - r.bx) / r.a, y: (q.y - r.by) / r.a, rot: q.rot });
+        return { ...own, s: A.s / r.a, zs: (A.zs || A.s) / r.a, cx: (A.cx - r.bx) / r.a, top: (A.top - r.by) / r.a, neck: undefined, sleeve: { left: back(A.sleeve.left), right: back(A.sleeve.right) } };
+      }
+    }
+    return baseFit(l, v, measured);
+  };
+  /** one photo's own reading (the template's, or a color not laid over it yet) */
+  const baseFit = (l: Line, v: View, measured?: Fit | null): Fit | null => {
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
     const f = fits[u] || measured || null;
