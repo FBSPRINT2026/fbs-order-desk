@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
@@ -102,6 +102,21 @@ function inksAsOnMockup(list: SepInk[], im: { inkMap?: { design: string; map: Re
     out.push({ ...k, name: best.name });
   }
   return { list: out, note: said.length ? `Inks as on the mockup: ${said.join(", ")}.` : "" };
+}
+/** one setting on one line: its name, its main control, and ⌄ for the rest */
+function SetRow({ k, label, main, note, open, onToggle, children }: { k: string; label: string; main: ReactNode; note?: ReactNode; open: string[]; onToggle: (k: string) => void; children?: ReactNode }) {
+  const on = open.includes(k);
+  return (
+    <div className={"sep-sr" + (on ? " open" : "")}>
+      <div className="sep-sr-h">
+        <span className="sep-sr-l">{label}</span>
+        <div className="sep-sr-m">{main}</div>
+        {children ? <button type="button" className="sep-sr-more" aria-expanded={on} aria-label={on ? `Less ${label}` : `More ${label}`} title={on ? "Less" : "More"} onClick={() => onToggle(k)}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button> : <span className="sep-sr-more none" />}
+      </div>
+      {note}
+      {on && children ? <div className="sep-sr-b">{children}</div> : null}
+    </div>
+  );
 }
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
@@ -804,6 +819,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
   const [siblings, setSiblings] = useState<(Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id" | "design_id" | "preview_path"> & { screens: number; pic?: string })[]>([]);
   const [zoom, setZoom] = useState<number | null>(null);
+  // which settings lines are opened up (remembered, like the other toggles)
+  const [more, setMore] = useSticky<string[]>("sep.more", []);
+  const toggleMore = (k: string) => setMore(more.includes(k) ? more.filter((x) => x !== k) : [...more, k]);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const orderInks = useRef<{ name: string; hex: string }[]>([]);
   /** the order's own ink name for a found color, when one is close (ΔE under 20) */
@@ -1166,6 +1184,8 @@ export default function SeparationStudio({ id }: { id: string }) {
           })}
         </nav>
       )}
+      {mocks.length > 0 && <div className="sep-mockstrip" aria-label="Mockups">{mocks.map((m, i) => <button type="button" key={i} onClick={() => setZoom(i)} title={`${m.cap || "Mockup"}: see it big`}><img src={m.url} alt={m.cap || "Mockup"} /></button>)}
+        <PicZoom pics={mocks} at={zoom} onClose={() => setZoom(null)} /></div>}
       <div className="rv-seg sep-tabs">{([["studio", "Separations"], ["outside", "✦ Coach & Learning"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       </div>
 
@@ -1193,78 +1213,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       </div> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
       <div className="sep-grid">
         {/* settings */}
+        {/* the settings, one line each (Oct 22, Nick: "the underbase tools… the size… have to remain on top… the toolbar
+            under method two lines and weird"): the main control on its line, the rest behind ⌄ */}
         <aside className="sep-side">
-          <div className="sep-pane sep-pane-all">
-          {<>
-          {mocks.length > 0 && (
-            <section className="sep-card">
-              <h3>Mockup</h3>
-              <div className="sep-mocks">{mocks.map((m, i) => <button type="button" key={i} onClick={() => setZoom(i)} title={`${m.cap || "Mockup"}: see it big`}><img src={m.url} alt={m.cap || "Mockup"} /><span>{m.cap}</span></button>)}</div>
-              <PicZoom pics={mocks} at={zoom} onClose={() => setZoom(null)} />
-            </section>
-          )}
-          <section className="sep-card">
-            <h3>Shirt</h3>
-            <div className="sep-row">
-              {/* no shirt picked: an empty swatch (every color prints); tap it for any color */}
-              <label className={"sep-shirt-sw" + (noShirt ? " none" : "")} style={noShirt ? undefined : { background: st.garment }} title={noShirt ? "No shirt picked: every color prints. Tap for any color." : `Shirt ${st.garment}. Tap for any color.`}>
-                <input type="color" value={st.garment || "#ffffff"} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
-              </label>
-              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? shirtHex(v) || colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
-                <option value="">All colors printed</option>
-                {!noShirt && <option value="_">{shirtLabel}</option>}
-                {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
-                {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([c]) => <option key={c} value={c}>{c}</option>)}</optgroup>)}
-              </select>
-            </div>
-            {multiShirt && <div className="sep-tip sep-multi"><b>Goes on {groupShirts.length} shirt colors:</b> {groupShirts.map((x, k) => <span key={x.hex}>{k ? ", " : ""}<button type="button" className="linkbtn" title={`Show the proof on ${x.name}`} onClick={() => set({ garment: x.hex })}><i className="sep-bgask-sw sm" style={{ background: x.hex }} /> {x.name}</button></span>)}. One set of screens prints them all, so no color is left to the shirt: every color prints.</div>}
-            {noShirt ? <p className="sep-help">No shirt picked yet: worked out as a dark shirt with an underbase (head 1), and every color prints. Pick the shirt to leave the colors that match it to the shirt.</p>
-              : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
-          </section>
-          <section className="sep-card">
-            <h3>Method</h3>
-            <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
-            <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
-            {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
-            {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
-            {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
-          </section>
-          <section className="sep-card">
-            <h3>Finding inks</h3>
-            <label className="sep-f">Ink names<select value={st.lib} onChange={(e) => { const lib = e.target.value as Studio["lib"]; set({ lib }); setInks((l) => l.map((x) => ({ ...x, name: inkName(x.hex, lib) }))); }} title="Names every ink again"><option value="auto">Suggested</option><option value="wilflex">All standard</option><option value="pms">All PMS</option></select></label>
-            <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
-            <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find Inks Again</button>
-          </section>
-          </>}
-          {<section className="sep-card">
-            <h3>Underbase{dark ? "" : " (white shirt)"}</h3>
-            <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
-            {res?.underbase && plates.some((p) => p.kind === "color") && (
-              <div className="sep-basefor">
-                <div className="sep-f-h">Underbase under each color</div>
-                {plates.filter((p) => p.kind === "color").map((p) => {
-                  const art = "#" + p.key.slice(1), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
-                  return <label key={p.key} className={"sep-chk" + (never ? " faint" : "")} title={never ? "Black never gets underbase: black ink on white bubbles" : on ? "Uncheck to print this color straight on the shirt (no white under it)" : "Check to put white underbase under this color"}>
-                    <input type="checkbox" checked={on} disabled={never} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} />
-                    <span className="sep-sw" style={{ background: p.hex }} /> <span data-notranslate>{p.name}</span>{never ? " (black: never)" : !on ? " (straight on the shirt)" : ""}</label>;
-                })}
-              </div>
-            )}
-            <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
-            {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">
-              <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top gets a small stroke instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
-              {on && <>
-                <label className="sep-f" title="Parts of the art thinner than this count as fine detail">Thinner than <input type="range" min={0.5} max={4} step={0.25} value={st.finePt ?? FINE_PT} onChange={(e) => set({ finePt: +e.target.value })} /> <b>{st.finePt ?? FINE_PT} pt</b></label>
-                <label className="sep-f" title="How far the base is pulled in on fine detail (instead of the full choke)">Base choke there <input type="range" min={0} max={Math.max(0.25, st.chokePt ?? CHOKE_PT)} step={0.05} value={Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} onChange={(e) => set({ fineChokePt: +e.target.value })} /> <b>{Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} pt</b></label>
-                <label className="sep-f" title="A stroke on the top color on fine detail, so it covers the white's edge">Color stroke <input type="range" min={0} max={1} step={0.05} value={st.bumpPt ?? BUMP_PT} onChange={(e) => set({ bumpPt: +e.target.value })} /> <b>{st.bumpPt ?? BUMP_PT} pt</b></label>
-              </>}
-            </div>); })()}
-            {st.method === "sim" && <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>}
-            <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
-          </section>}
-          {<section className="sep-card">
-            <h3>Size &amp; Film</h3>
-            <label className="sep-f">Print width (in)<input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} /></label>
+          <div className="sep-set">
+            <SetRow k="size" label="Size" open={more} onToggle={toggleMore} main={<>
+              <label className="sep-sr-num"><input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} aria-label="Print width in inches" />in wide</label>
+              <span className="sep-sr-sum">{st.dpi} dpi</span></>}>
             {img && (() => {
               // pictures can't be blown up (Separo can't either): say how sharp the art is at this print size
               if (vart?.ok) return <div className="sep-res ok">Vector art: sharp at any size.</div>;
@@ -1291,7 +1246,65 @@ export default function SeparationStudio({ id }: { id: string }) {
               <label className="sep-chk"><input type="checkbox" checked={st.cropMarks !== false} onChange={(e) => set({ cropMarks: e.target.checked })} /> Crop marks</label>
               <label className="sep-chk"><input type="checkbox" checked={st.regMarks !== false} onChange={(e) => set({ regMarks: e.target.checked })} /> Registration targets</label>
             </div>
-          </section>}
+            </SetRow>
+            <SetRow k="base" label="Underbase" open={more} onToggle={toggleMore} main={
+              <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>}
+              note={!dark ? <p className="sep-help">Light shirt: no underbase on Auto.</p> : null}>
+            {res?.underbase && plates.some((p) => p.kind === "color") && (
+              <div className="sep-basefor">
+                <div className="sep-f-h">Underbase under each color</div>
+                {plates.filter((p) => p.kind === "color").map((p) => {
+                  const art = "#" + p.key.slice(1), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
+                  return <label key={p.key} className={"sep-chk" + (never ? " faint" : "")} title={never ? "Black never gets underbase: black ink on white bubbles" : on ? "Uncheck to print this color straight on the shirt (no white under it)" : "Check to put white underbase under this color"}>
+                    <input type="checkbox" checked={on} disabled={never} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} />
+                    <span className="sep-sw" style={{ background: p.hex }} /> <span data-notranslate>{p.name}</span>{never ? " (black: never)" : !on ? " (straight on the shirt)" : ""}</label>;
+                })}
+              </div>
+            )}
+            <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
+            {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">
+              <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top gets a small stroke instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
+              {on && <>
+                <label className="sep-f" title="Parts of the art thinner than this count as fine detail">Thinner than <input type="range" min={0.5} max={4} step={0.25} value={st.finePt ?? FINE_PT} onChange={(e) => set({ finePt: +e.target.value })} /> <b>{st.finePt ?? FINE_PT} pt</b></label>
+                <label className="sep-f" title="How far the base is pulled in on fine detail (instead of the full choke)">Base choke there <input type="range" min={0} max={Math.max(0.25, st.chokePt ?? CHOKE_PT)} step={0.05} value={Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} onChange={(e) => set({ fineChokePt: +e.target.value })} /> <b>{Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} pt</b></label>
+                <label className="sep-f" title="A stroke on the top color on fine detail, so it covers the white's edge">Color stroke <input type="range" min={0} max={1} step={0.05} value={st.bumpPt ?? BUMP_PT} onChange={(e) => set({ bumpPt: +e.target.value })} /> <b>{st.bumpPt ?? BUMP_PT} pt</b></label>
+              </>}
+            </div>); })()}
+            {st.method === "sim" && <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>}
+            <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
+            </SetRow>
+            <SetRow k="method" label="Method" open={more} onToggle={toggleMore} main={
+              <div className="rv-seg sep-full">{([["spot", "Spot", "Spot color: flat colors, solid screens. Logos, text, cartoon art."], ["sim", "Sim process", "Simulated process: photos and painted art, a few bright inks in halftones mixed on the shirt."]] as const).map(([k, l, t]) => <button key={k} type="button" title={t} className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>}
+              note={<>
+              {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
+              </>}>
+              <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
+            </SetRow>
+            <SetRow k="shirt" label="Shirt" open={more} onToggle={toggleMore} main={<div className="sep-row">
+              {/* no shirt picked: an empty swatch (every color prints); tap it for any color */}
+              <label className={"sep-shirt-sw" + (noShirt ? " none" : "")} style={noShirt ? undefined : { background: st.garment }} title={noShirt ? "No shirt picked: every color prints. Tap for any color." : `Shirt ${st.garment}. Tap for any color.`}>
+                <input type="color" value={st.garment || "#ffffff"} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
+              </label>
+              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? shirtHex(v) || colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
+                <option value="">All colors printed</option>
+                {!noShirt && <option value="_">{shirtLabel}</option>}
+                {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
+                {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([c]) => <option key={c} value={c}>{c}</option>)}</optgroup>)}
+              </select>
+            </div>}
+              note={multiShirt ? <div className="sep-multi2">On {groupShirts.length} shirts: {groupShirts.map((x, k) => <span key={x.hex}>{k ? ", " : ""}<button type="button" className="linkbtn" title={`Show the proof on ${x.name}`} onClick={() => set({ garment: x.hex })}><i className="sep-bgask-sw sm" style={{ background: x.hex }} /> {x.name}</button></span>)}. One set of screens, so every color prints.</div> : null}>
+              {noShirt ? <p className="sep-help">No shirt picked yet: worked out as a dark shirt with an underbase (head 1), and every color prints. Pick the shirt to leave the colors that match it to the shirt.</p>
+                : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} disabled={multiShirt} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
+            </SetRow>
+            <SetRow k="art" label="Art" open={more} onToggle={toggleMore} main={<span className="sep-sr-sum">{vart?.ok ? "Vector" : vart ? "Traced picture" : "Picture"}{backdrop && vraw?.ok ? (st.dropBackdrop ? ` · ${backdrop.name} background out` : ` · ${backdrop.name} background prints`) : ""}{fromMockup ? " · as on the mockup" : ""}</span>}>
+              {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
+              {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
+            </SetRow>
+            <SetRow k="inks" label="Inks" open={more} onToggle={toggleMore} main={<>
+              <select value={st.lib} aria-label="Ink names" onChange={(e) => { const lib = e.target.value as Studio["lib"]; set({ lib }); setInks((l) => l.map((x) => ({ ...x, name: inkName(x.hex, lib) }))); }} title="Names every ink again"><option value="auto">Suggested</option><option value="wilflex">All standard</option><option value="pms">All PMS</option></select>
+              <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find again</button></>}>
+              <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
+            </SetRow>
           </div>
         </aside>
 
