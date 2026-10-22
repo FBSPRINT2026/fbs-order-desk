@@ -11554,36 +11554,6 @@ html body .pbar .pbar-n{color:#fff}
   html body main.main .ord .ed-head .ed-actions .btn{padding:5px 10px;font-size:12.5px;min-height:0}
   html body main.main .ord .ed-head .ed-title h1{font-size:clamp(20px,3.2cqi,28px)}
 }
-/* sizes: their own line under the color, cost, qty, each and total once the row gets narrow (sooner with youth sizes) */
-@container (max-width: 1000px){
-  .gl-list .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co cs qt ea to x" "sz sz sz sz sz sz"}
-  .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co qt ea to x" "sz sz sz sz sz"}
-  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:0}
-  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:8px}
-  .gl-head.gl-r2 .a-sz{display:none}
-  .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de cs qt ea to x"}
-  .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de qt ea to x"}
-  .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
-  .line-b .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
-  .line-b .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0}
-}
-@container (max-width: 1250px){
-  .line-b.many .gl-list .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co cs qt ea to x" "sz sz sz sz sz sz"}
-  .line-b.many .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co qt ea to x" "sz sz sz sz sz"}
-  .line-b.many .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:0}
-  .line-b.many .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:8px}
-  .line-b.many .gl-head.gl-r2 .a-sz{display:none}
-  .line-b.many .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de cs qt ea to x"}
-  .line-b.many .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de qt ea to x"}
-  .line-b.many .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
-  .line-b.many .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
-  .line-b.many .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0}
-}
-@media (max-width:760px){
-  html body .ord .line-b .gl-r2 .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b .gl-r2 .a-sz .szc{flex:1 1 40px;min-width:38px}
-}
-
 /* ── Half-screen windows (Oct 21, Nick: "look at the different pages… what all are kind of messed up in this view") ── */
 @container (max-width: 1150px){
   html body main.main .ord .ed-head .ed-actions{max-width:480px}
@@ -11625,41 +11595,95 @@ html body main.main .tbl td.cu-td > div:first-child{white-space:nowrap}
 html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 @container (min-width: 1151px){ html body main.main .ord .ed-head .status-select{max-width:none} }
 
-/* ── Garments in a narrower window (Oct 21, Nick: "the price stays… even with the first descriptor… the little boxes can
-   shrink"): style · brand · description with cost / qty / each / total on the first line, the color and the sizes
-   (boxes shrinking to fit) on the second ── */
-@media (min-width:761px){
-  @container (max-width: 1000px){
-    .line-b .gl-list .gl{display:grid;grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"st br de cs qt ea to x" "co sz sz sz sz sz sz sz";column-gap:8px;row-gap:6px;align-items:center}
-    .line-b .gl-list.ws .gl{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"st br de qt ea to x" "co sz sz sz sz sz sz"}
-    .line-b .gl-list .gl.same{grid-template-areas:"co co . cs qt ea to x" "sz sz sz sz sz sz sz sz"}
-    .line-b .gl-list.ws .gl.same{grid-template-areas:"co co . qt ea to x" "sz sz sz sz sz sz sz"}
-    .line-b .gl-list .gl > .gl-sty,.line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
-    .line-b .gl-list .gl > .gl-sty > .a-st{grid-area:st}
-    .line-b .gl-list .gl > .gl-sty > .a-br{grid-area:br}
-    .line-b .gl-list .gl > .gl-sty > .a-de{grid-area:de}
-    .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
-    .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
-    .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{align-self:end}
-    .line-b .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co co sz cs qt ea to x"}
-    .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co co sz qt ea to x"}
-    .line-b .gl-head.gl-r2 .a-sz{display:block;visibility:hidden}
-    .line-b .gl-head.gl-r2 .a-co{visibility:hidden}
-    .line-b .gl-row.grp-total.gl-r2{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de de de cs qt ea to x"}
-    .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(96px,120px) minmax(70px,120px) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de de de qt ea to x"}
-    .line-b .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
-    .line-b .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0;max-width:52px}
-    .line-b .gl-r2 .a-sz .szc.ysep{margin-right:8px}
-  }
-}
-
 /* size boxes: the number always shows whole (Oct 21, Nick: "you can never have the numbers getting cut off"): no spin
    arrows taking room, no "…", and a box never narrower than two digits */
 .szc input.sz{-moz-appearance:textfield;appearance:textfield;text-overflow:clip!important;padding-left:0!important;padding-right:0!important}
 .szc input.sz::-webkit-inner-spin-button,.szc input.sz::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-html body .line-b .gl-r2 .a-sz .szc{min-width:30px}
 /* the order's left column: Customer and Job details side by side only when there's room for both (Oct 21, Nick:
    "set some minimum widths… Furry Feline… so vertically") */
 .ord .ed-grid > .stack{container-type:inline-size}
 @container (max-width: 760px){ html body main.main .ord .top2{grid-template-columns:minmax(0,1fr)} }
 .ord .cust-card{min-width:160px}
+
+/* ===== Garments: the size run (Oct 21, Nick picked "version one"). The run YXS → 4XL across the top once, in size
+   order, with a line between youth and adult; each color reads straight across under it; a dot where that style
+   doesn't come in the size. Wide: color, sizes, cost, qty, each, total on one line. Narrower: the prices drop to their
+   own line under the sizes, right-aligned, the run unchanged. Narrower still (and phones): the phone layout. Never a
+   sideways scroll, never a number cut off. ===== */
+@media (min-width:761px){
+  html body .ord .line-b .gl-list .gl-row.gl-r2{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz cs qt ea to x";column-gap:10px;row-gap:4px;align-items:start}
+  html body .ord .line-b .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(120px,170px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz qt ea to x"}
+  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"de de cs qt ea to x";column-gap:10px;align-items:center}
+  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,170px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"de de qt ea to x"}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
+  html body .ord .line-b .gl-list .gl-row.gl-r2 > *{padding-top:0!important}
+  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea,.a-to,.a-x){min-height:34px;display:flex;align-items:center}
+  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-ea,.a-to){justify-content:flex-end}
+  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt{justify-content:center}
+  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > .a-ea{flex-direction:column;align-items:flex-end;justify-content:center;gap:1px}
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{align-items:end}
+  html body .ord .line-b .gl-head.gl-r2 .a-sz{display:block;visibility:visible}
+  /* the run: same boxes in the header and every row, so the columns line up */
+  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
+  html body .ord .line-b .a-sz .szc{flex:1 1 0;min-width:30px;max-width:46px}
+  html body .ord .line-b .a-sz .szc.ysep{margin-right:10px}
+  html body .ord .line-b .a-sz .szh .szc > span{font-size:10.5px}
+  html body .ord .line-b .gl .a-sz .szc > span:first-child{display:none}
+  html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:11px;line-height:11px;overflow:hidden}
+  html body .ord .line-b .a-sz .szc-off .sz-off{border:0;background:none;opacity:1;min-height:34px;display:flex;align-items:center;justify-content:center}
+  html body .ord .line-b .a-sz .szc-off .sz-off::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--line)}
+}
+@media (min-width:761px){ @container (max-width: 900px){
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
+} }
+@media (min-width:761px){ @container (max-width: 1060px){
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
+} }
+@media (min-width:761px){ @container (max-width: 1260px){
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
+} }
+@media (min-width:761px){ @container (max-width: 470px){
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-s .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-s .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-s .gl .a-sz .szc-off{display:none}
+} }
+@media (min-width:761px){ @container (max-width: 600px){
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-m .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-m .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-m .gl .a-sz .szc-off{display:none}
+} }
+@media (min-width:761px){ @container (max-width: 760px){
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-l .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-l .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-l .gl .a-sz .szc-off{display:none}
+} }

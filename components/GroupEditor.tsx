@@ -297,12 +297,14 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
-      {/* many size columns (youth + adult): the sizes get their own line sooner, so they never wrap (Oct 21, Nick) */}
-      <div className={"line-b" + (groupCols.length > 9 ? " many" : "")}>
+      {/* the size run (YXS → 4XL) across the top once, every color reading straight across (Oct 21, Nick: "version
+          one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
+      <div className={"line-b " + (groupCols.length <= 9 ? "nsz-s" : groupCols.length <= 13 ? "nsz-m" : "nsz-l")} style={{ ["--nsz" as string]: String(Math.max(1, groupCols.length)) }}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">
-            <span className="a-co">Color</span><span className="a-sz">Sizes</span>
+            <span className="a-co">Color</span>
+            <span className="a-sz">{groupCols.length ? <span className="szrow szh">{groupCols.map((z, zi) => <span key={z} className={"szc" + (z === "YXL" && zi < groupCols.length - 1 ? " ysep" : "")}><span>{z}</span></span>)}</span> : "Sizes"}</span>
             {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
