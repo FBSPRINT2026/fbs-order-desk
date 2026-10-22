@@ -12053,3 +12053,12 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .tbl.cu-tbl td.cu-rail{border-left:0;box-shadow:inset 3px 0 0 var(--fbs-blue)}
 /* ClickUp Jobs: an FBS invoice that started in Printavo (Oct 22, Nick: "a little symbol" by orders from Printavo) */
 .cu-pvtag{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;line-height:16px;padding:0 6px;border-radius:999px;background:var(--warn-soft);color:var(--warn);vertical-align:1px;white-space:nowrap}
+/* ClickUp Jobs: one FBS invoice column, each number tagged New system (portal) or Old system (Printavo) (Oct 22) */
+.tbl.cu-tbl th.cu-w-inv{width:190px}
+.cu-inv{display:flex;flex-direction:column;gap:3px}
+.cu-inv-r{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px}
+.cu-inv-s{flex-basis:100%}
+.cu-sys{display:inline-block;font-size:11px;font-weight:700;line-height:16px;padding:0 6px;border-radius:999px;white-space:nowrap}
+.cu-sys.new{background:var(--accent-soft);color:var(--accent)}
+.cu-sys.old{background:var(--warn-soft);color:var(--warn)}
+.cu-known{align-items:baseline}

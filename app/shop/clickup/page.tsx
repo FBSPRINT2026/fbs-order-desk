@@ -41,6 +41,20 @@ function Flag({ p }: { p?: string }) {
   if (p !== "urgent" && p !== "high") return null;
   return <span className={"cu-flag " + p} title={`Flagged ${p === "urgent" ? "Urgent" : "High"} in ClickUp`}><svg viewBox="0 0 24 24" aria-hidden><path d="M5 21V4h11l-1.5 4L16 12H5" /></svg>{p === "urgent" ? "Urgent" : "High"}</span>;
 }
+/** what staff see instead of "In Printavo" on this page (Oct 22, Nick: "it shouldn't say In Printavo, it should say FBS
+ * invoice number") */
+const boxName = (b: string) => (/in printavo/i.test(b) ? "FBS Invoice #" : b);
+/**
+ * The FBS invoice number(s) for a job, each tagged with where it lives (Oct 22, Nick: "an indicator whether it's in our
+ * new system or our old system for my staff"): an order made in the portal = New system, a Printavo job = Old system.
+ */
+function Inv({ ours, pv }: { ours?: { id: string; number: number } | null; pv?: { id?: string | null; number: string; status?: string } | null }) {
+  if (!ours && !pv) return <span className="faint">—</span>;
+  return <span className="cu-inv">
+    {ours && <span className="cu-inv-r"><Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link><span className="cu-sys new" title="Made in our new system (this portal)">New system</span></span>}
+    {pv && <span className="cu-inv-r">{pv.id ? <Link href={`/shop/archive/${pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pv.number}</span></Link> : <span className="ordno">{pv.number}</span>}<span className="cu-sys old" title="Entered in our old system (Printavo)">Old system</span>{pv.status && <span className="sub cu-inv-s">{pv.status}</span>}</span>}
+  </span>;
+}
 const isDoneT = (t: { status_type: string }) => /^(closed|done)$/i.test(t.status_type || "");
 const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
 
@@ -103,7 +117,7 @@ export default function ClickUpJobs() {
     put(on ? "✓" : "—");
     const r = await tickClickUpBox(t.id, name, on);
     if (!r.ok) { put(on ? "—" : "✓"); setErr(r.error); return; }
-    flash(`${on ? "Ticked" : "Unticked"} "${name}" on "${t.name}" in ClickUp.`);
+    flash(`${on ? "Ticked" : "Unticked"} "${boxName(name)}" on "${t.name}" in ClickUp.`);
     if (/printavo/i.test(name)) void load();
   };
   const loadWs = useCallback(async (id: string) => {
@@ -226,16 +240,14 @@ export default function ClickUpJobs() {
           <div className="cu-line">
             {job.due_at ? <>Due <Due date={chiDay(job.due_at)} status="" /></> : <span className="faint">No due date</span>}
             <span className="faint">·</span><span>{job.status || "open"}</span>
-            {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">In Printavo ✓</span></>}
+            {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">FBS Invoice # ✓</span></>}
             <span className="faint">·</span><a href={job.url} target="_blank" rel="noreferrer">Open in ClickUp</a>
           </div>
           {shownFields(job.fields).length > 0 && <div className="cu-tags">{shownFields(job.fields).map(([k, v]) => <span key={k} className="cu-tag">{v === "✓" ? `${k} ✓` : `${k}: ${v}`}</span>)}</div>}
           {job.description && <p className="cu-notes">{job.description}</p>}
           {(() => {
             const k = data?.known[job.id] || wsData?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
-            return k?.pv || ours ? <div className="cu-known">
-              {k?.pv && <span>FBS INV# <Link href={`/shop/archive/${k.pv.id}`}><b>{k.pv.number}</b></Link><span className="cu-pvtag" title="This order started in Printavo">Printavo</span> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
-              {ours && <span>Our order <Link href={`/shop/orders/${ours.id}`}><b>#{ours.number}</b></Link></span>}
+            return k?.pv || ours ? <div className="cu-known"><span className="faint">FBS Invoice #</span><Inv ours={ours} pv={k?.pv ? { id: k.pv.id, number: k.pv.number, status: [k.pv.name, k.pv.status].filter(Boolean).join(" · ") } : null} />
             </div> : null;
           })()}
           {files?.id === job.id && files.list.length > 0 ? <div className="cu-sec"><FileTray files={asMail(files.list)} note={files.busy ? "Bringing the files in from ClickUp…" : files.err ? `Some files open in ClickUp: ${files.err}` : undefined} /></div>
@@ -252,7 +264,7 @@ export default function ClickUpJobs() {
 
           {made || job.order_id ? <div className="cu-done">
             Order <Link href={`/shop/orders/${made?.id || job.order_id}`}><b>#{made?.number || job.order_number}</b></Link> was made from this job.{" "}
-            {job.ticked_at ? <span>&ldquo;In Printavo&rdquo; is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick &ldquo;In Printavo&rdquo; in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking &ldquo;In Printavo&rdquo; in ClickUp…</span>}
+            {job.ticked_at ? <span>The &ldquo;FBS Invoice #&rdquo; box is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick the &ldquo;FBS Invoice #&rdquo; box in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking the &ldquo;FBS Invoice #&rdquo; box in ClickUp…</span>}
             <button type="button" className="btn ghost sm" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
             <button type="button" className="btn ghost sm" onClick={() => setOpenId(null)}>Close</button>
           </div> : <div className="cu-ask">
@@ -306,7 +318,7 @@ export default function ClickUpJobs() {
           </div>
           <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
             <table className="tbl cu-tbl">
-              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, b, "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-pv")}<th className="cu-w-act" /></tr></thead>
+              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, boxName(b), "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-inv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
                   const first = i === 0 || board(list2[i - 1]) !== board(t);
@@ -314,15 +326,15 @@ export default function ClickUpJobs() {
                   return <tr key={t.id} tabIndex={0} className={[first ? "cu-gstart" : "", openId === t.id ? "picked" : "", isDoneT(t) ? "cu-done-row" : ""].filter(Boolean).join(" ") || undefined}
                     onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
                     {first && <td className="cu-rail" rowSpan={size[board(t)]} onClick={(e) => e.stopPropagation()}><div className="cu-rail-c">{board(t)}</div><span className="cu-rail-n">{size[board(t)]}</span></td>}
-                    <td><div>{t.name}{!isDoneT(t) && <Flag p={t.priority} />}</div>{(t.order_number || k?.ours) && <div className="sub">Our order #{t.order_number || k?.ours?.number}</div>}</td>
+                    <td><div>{t.name}{!isDoneT(t) && <Flag p={t.priority} />}</div></td>
                     <td className="cu-nw"><span className="pill" style={{ ["--sc" as string]: t.status_color || "#8a94a6" }}><span className="pill-t">{t.status || "open"}</span></span></td>
                     <td className="cu-nw">{t.due_at ? <Due date={chiDay(t.due_at)} status={isDoneT(t) ? "completed" : ""} /> : <span className="faint">—</span>}</td>
                     {boxes.map((b) => <td key={b} className="cu-box" onClick={(e) => e.stopPropagation()}>
                       <button type="button" className={"cu-boxbtn" + (t.fields[b] === "✓" ? " on" : "")} aria-pressed={t.fields[b] === "✓"} disabled={!!busy}
-                        title={`${t.fields[b] === "✓" ? "Untick" : "Tick"} "${b}" in ClickUp`} aria-label={`${b}: ${t.fields[b] === "✓" ? "ticked" : "not ticked"}`} onClick={() => void toggleBox(t, b)}>
+                        title={`${t.fields[b] === "✓" ? "Untick" : "Tick"} "${boxName(b)}" in ClickUp`} aria-label={`${boxName(b)}: ${t.fields[b] === "✓" ? "ticked" : "not ticked"}`} onClick={() => void toggleBox(t, b)}>
                         {t.fields[b] === "✓" && <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
                       </button></td>)}
-                    <td className="cu-nw">{pvNo ? <>{pvId ? <Link href={`/shop/archive/${pvId}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pvNo}</span></Link> : <span className="ordno">{pvNo}</span>}<span className="cu-pvtag" title="This order started in Printavo">Printavo</span></> : <span className="faint">—</span>}</td>
+                    <td><Inv ours={t.order_id ? { id: t.order_id, number: t.order_number || 0 } : k?.ours} pv={pvNo ? { id: pvId, number: pvNo } : null} /></td>
                     <td className="r cu-nw"><button type="button" className="btn sm" disabled={!!busy} onClick={(e) => { e.stopPropagation(); void toggleDone(t); }}>{isDoneT(t) ? "Reopen" : "Mark complete"}</button></td>
                   </tr>;
                 }) : <tr><td colSpan={cols}><div className="empty">{s0 ? `No jobs match “${wsQ}”.` : wsShow === "done" ? (wsData?.reading ? "Completed jobs are still being read in from ClickUp." : "No completed jobs.") : "No open jobs in this workspace."}</div></td></tr>}
@@ -333,7 +345,7 @@ export default function ClickUpJobs() {
       })() : <>
       <div className={"toolbar" + (pin ? " cu-pinned" : "")} ref={tbRef}>
         <div className="chips">
-          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
+          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "FBS Invoice #", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
             .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
         </div>
         {tab !== "boards" && <select aria-label="Customer" value={team} onChange={(e) => setTeam(e.target.value)}>
@@ -368,7 +380,7 @@ export default function ClickUpJobs() {
         </table>
       </div> : <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
         <table className="tbl cu-tbl">
-          <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "FBS INV#", "cu-w-pv")}{rth("l.ours", "Our #", "cu-w-ours")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
+          <thead><tr>{rth("l.cust", "Customer", "cu-w-rail")}{rth("l.job", "Job")}{rth("l.due", "Due", "cu-w-due")}{rth("l.files", "Files", "cu-w-files")}{rth("l.pv", "FBS INV#", "cu-w-inv")}{rth("l.added", "Added", "cu-w-added")}<th className="cu-w-act" /></tr></thead>
           <tbody>
             {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : rows.length ? rows.map((t, i) => {
               const tm = teams.get(t.team_id);
@@ -384,8 +396,7 @@ export default function ClickUpJobs() {
                 <td><div>{t.name}<Flag p={t.priority} /></div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
-                <td>{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link><span className="cu-pvtag" title="This order started in Printavo">Printavo</span>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
-                <td className="cu-nw">{ours ? <Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link> : <span className="faint">—</span>}</td>
+                <td><Inv ours={ours} pv={k?.pv ? { id: k.pv.id, number: k.pv.number, status: k.pv.status } : null} /></td>
                 <td className="cu-nw cu-added">{when(t.created_at_cu)}</td>
                 <td className="r cu-nw">{t.order_id
                   ? <span className="faint">Made</span>
