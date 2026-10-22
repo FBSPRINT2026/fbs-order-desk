@@ -2119,7 +2119,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       </div>
 
         {sheetOpen && (
-          <SalesSheet colors={lines.filter((z) => z.style && z.color).map((z) => ({ key: z.id, color: z.color, style: [z.brand, z.style].filter(Boolean).join(" ") }))}
+          <SalesSheet colors={lines.filter((z) => z.style && z.color).map((z) => ({ key: z.id, color: z.color, style: [z.brand, z.style].filter(Boolean).join(" "), hex: shirtHex(z) }))}
+            arts={imprints.filter((im) => designOf(im) && artUrl(im)).map((im) => ({ label: im.location, url: artUrl(im) }))}
             views={views as ("front" | "back")[]} shirts={sheetShirts} title0={groupName} customer={custLabel(customers.find((c) => c.id === customerId)) || ""}
             shop={sheetShop} onClose={() => setSheetOpen(false)} />
         )}

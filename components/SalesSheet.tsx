@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
 
-export type SheetColor = { key: string; color: string; style: string };
+export type SheetColor = { key: string; color: string; style: string; /** the shirt's color, for the art close-up */ hex?: string };
 type Sides = "both" | "front" | "back";
 type Item = { id: string; kind: "text"; text: string; x: number; y: number; size: number; color: string; bold: boolean; align: CanvasTextAlign }
   | { id: string; kind: "pic"; src: string; name: string; x: number; y: number; w: number };
@@ -33,7 +33,8 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 const load = (src: string) => new Promise<HTMLImageElement>((ok, no) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = () => no(new Error("picture")); im.src = src; });
 const dark = (hex: string) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex); if (!m) return false; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) < 110; };
 
-export default function SalesSheet({ colors, views, shirts, title0, customer, shop, onClose }: {
+export default function SalesSheet({ colors, views, shirts, title0, customer, shop, onClose, arts = [] }: {
+  /** the prints' art as it prints (inks applied), for the art close-up */ arts?: { label: string; url: string }[];
   colors: SheetColor[];
   /** the sides this mockup has prints on */ views: ("front" | "back")[];
   /** one color's shirt(s) side by side, drawn about `h` px tall */ shirts: (key: string, sides: ("front" | "back")[], h: number) => Promise<HTMLCanvasElement>;
@@ -69,10 +70,20 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   const [sel, setSel] = useState("");
   const [busy, setBusy] = useState("Drawing the shirts…");
   const [err, setErr] = useState("");
+  // a featured section on top (Oct 22, Nick: "add a close-up of front and back… or add a close-up of art… and then the
+  // images below it"), and the download's format and resolution ("I need to control the resolution")
+  const [feature, setFeature] = useSticky<"none" | "pair" | "art">("ss.feature", "none");
+  const [featKey, setFeatKey] = useState(colors[0]?.key || "");
+  const [featSize, setFeatSize] = useSticky<"big" | "medium" | "small">("ss.featSize", "medium");
+  const [fmt, setFmt] = useSticky<"png" | "jpg" | "pdf">("ss.fmt", "png");
+  const [res, setRes] = useSticky<number>("ss.res", 3);
+  const artImgs = useRef(new Map<string, HTMLImageElement>());
   // each color's front and back drawn on their own, then all trimmed to the same box per side (the photos' white
   // margins out, every color the same size), so "space between" is the real space between shirts
+  type Store = { cache: Map<string, HTMLCanvasElement>; f: number };
   const cache = useRef(new Map<string, HTMLCanvasElement>());
   const crop = useRef<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  const base: Store = { cache: cache.current, f: 1 };
   const pics = useRef(new Map<string, HTMLImageElement>());
   const logo = useRef<HTMLImageElement | null>(null);
   const boxes = useRef<{ id: string; x: number; y: number; w: number; h: number }[]>([]);
@@ -94,25 +105,8 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
           if (!cache.current.has(k)) cache.current.set(k, await shirts(c.key, [sd], 900));
           if (!live) return;
         }
-        // the photo's white background made see-through, from the edges in (it stops at the shirt's outline, so a white
-        // shirt keeps its body): shirts can overlap and sit on any page color
-        for (const c of colors) for (const sd of views) {
-          const key = `${c.key}|${sd}`, cv0 = cache.current.get(key); if (!cv0 || (cv0 as HTMLCanvasElement & { clear?: boolean }).clear) continue;
-          const w = cv0.width, h = cv0.height, x2 = cv0.getContext("2d")!, img = x2.getImageData(0, 0, w, h), d = img.data;
-          const seen = new Uint8Array(w * h), st: number[] = [];
-          const bgl = (i: number) => d[i * 4] >= 250 && d[i * 4 + 1] >= 250 && d[i * 4 + 2] >= 250;
-          for (let xx = 0; xx < w; xx++) { st.push(xx, (h - 1) * w + xx); }
-          for (let yy = 0; yy < h; yy++) { st.push(yy * w, yy * w + w - 1); }
-          while (st.length) {
-            const i = st.pop()!; if (seen[i]) continue; seen[i] = 1;
-            if (!bgl(i)) continue;
-            d[i * 4 + 3] = 0;
-            const xx = i % w, yy = (i / w) | 0;
-            if (xx > 0) st.push(i - 1); if (xx < w - 1) st.push(i + 1); if (yy > 0) st.push(i - w); if (yy < h - 1) st.push(i + w);
-          }
-          x2.putImageData(img, 0, 0);
-          (cv0 as HTMLCanvasElement & { clear?: boolean }).clear = true;
-        }
+        for (const c of colors) for (const sd of views) { const cv0 = cache.current.get(`${c.key}|${sd}`); if (cv0) clearBg(cv0); }
+        for (const a of arts) if (a.url && !artImgs.current.has(a.url)) { const im = await load(a.url).catch(() => null); if (im) artImgs.current.set(a.url, im); }
         // each shirt trimmed to its own outline (the photos' white margins out; 6210 and 3001 photos are framed
         // differently, so one shared box left gaps): all drawn at one scale, standing on the same line
         for (const c of colors) for (const sd of views) {
@@ -132,21 +126,56 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     return () => { live = false; };
   }, [colors.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** the photo's white background made see-through, from the edges in (it stops at the shirt's outline, so a white
+   *  shirt keeps its body): shirts can overlap and sit on any page color */
+  function clearBg(cv0: HTMLCanvasElement) {
+    const z = cv0 as HTMLCanvasElement & { clear?: boolean }; if (z.clear) return;
+    const w = cv0.width, h = cv0.height, x2 = cv0.getContext("2d")!, img = x2.getImageData(0, 0, w, h), d = img.data;
+    const seen = new Uint8Array(w * h), st: number[] = [];
+    const bgl = (i: number) => d[i * 4] >= 250 && d[i * 4 + 1] >= 250 && d[i * 4 + 2] >= 250;
+    for (let xx = 0; xx < w; xx++) { st.push(xx, (h - 1) * w + xx); }
+    for (let yy = 0; yy < h; yy++) { st.push(yy * w, yy * w + w - 1); }
+    while (st.length) {
+      const i = st.pop()!; if (seen[i]) continue; seen[i] = 1;
+      if (!bgl(i)) continue;
+      d[i * 4 + 3] = 0;
+      const xx = i % w, yy = (i / w) | 0;
+      if (xx > 0) st.push(i - 1); if (xx < w - 1) st.push(i + 1); if (yy > 0) st.push(i - w); if (yy < h - 1) st.push(i + w);
+    }
+    x2.putImageData(img, 0, 0);
+    z.clear = true;
+  }
+  /** the shirts drawn again, bigger, for a sharp high-resolution download (the same photos, so the same trims × f) */
+  async function hiStore(f: number): Promise<Store> {
+    const st: Store = { cache: new Map(), f };
+    for (const c of shown) for (const sd of views) {
+      const cv0 = await shirts(c.key, [sd], Math.round(900 * f));
+      clearBg(cv0); st.cache.set(`${c.key}|${sd}`, cv0);
+    }
+    return st;
+  }
+
   const shown = useMemo(() => order.map((k) => colors.find((c) => c.key === k)).filter((c): c is SheetColor => !!c && !off.has(c.key)), [order, off, colors]);
   const multiStyle = new Set(colors.map((c) => c.style)).size > 1;
 
   /** the whole sheet on a canvas, at full size; "fits the shirts" is drawn once tall to measure, then at its height */
-  function draw(c: HTMLCanvasElement) {
+  function sheetSize() {
     let W: number = PAGES[page].w, H: number = PAGES[page].h;
     if (page === "custom") { W = cust.w; H = cust.h; }
-    if (page === "fit") { W = Math.max(400, Math.min(4000, fitW || 1200)); const end = paint(c, W, W * 6, true); H = Math.round(end); }
-    paint(c, W, H, page === "fit");
-    if (dims.w !== W || dims.h !== H) setDims({ w: W, h: H });
+    return { W, H };
   }
-  /** draws the sheet at W × H; returns where the content ends (fit: the height the sheet needs) */
-  function paint(c: HTMLCanvasElement, W: number, H: number, fit: boolean): number {
-    c.width = W; c.height = H;
+  /** R: resolution (2 = twice the pixels each way); st: the shirts drawn at that size */
+  function draw(c: HTMLCanvasElement, R = 1, st: Store = base) {
+    let { W, H } = sheetSize();
+    if (page === "fit") { W = Math.max(400, Math.min(4000, fitW || 1200)); const end = paint(c, W, W * 6, true, 1, base); H = Math.round(end); }
+    paint(c, W, H, page === "fit", R, st);
+    if (R === 1 && (dims.w !== W || dims.h !== H)) setDims({ w: W, h: H });
+  }
+  /** draws the sheet at W × H (× R pixels); returns where the content ends (fit: the height the sheet needs) */
+  function paint(c: HTMLCanvasElement, W: number, H: number, fit: boolean, R = 1, st: Store = base): number {
+    c.width = Math.round(W * R); c.height = Math.round(H * R);
     const x = c.getContext("2d")!;
+    x.setTransform(R, 0, 0, R, 0, 0);
     x.imageSmoothingQuality = "high";
     x.fillStyle = bg; x.fillRect(0, 0, W, H);
     const S = fit ? W : Math.min(W, H);
@@ -170,13 +199,53 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     if (title.trim()) { x.fillStyle = ink; x.font = font(800, titleSize); y += titleSize; x.fillText(title.trim(), ax, y); y += Math.round(titleSize * 0.35); }
     if (sub.trim()) { x.fillStyle = soft; x.font = font(400, Math.round(titleSize * 0.5)); y += Math.round(titleSize * 0.55); x.fillText(sub.trim(), ax, y); y += Math.round(titleSize * 0.3); }
     const footH = contact ? Math.round(S * 0.05) : 0;
-    const top = y + Math.round(S * 0.025), bot = H - M - footH;
+    const boxOf = (k0: string, sd: string) => crop.current[`${k0}|${sd}`] || { x: 0, y: 0, w: 600, h: 750 };
+    const pg = (pairGap / 100) * W;
+    const shirtAt = (key: string, b: { x: number; y: number; w: number; h: number }, dx: number, dy: number, dw: number, dh: number) => {
+      const im = st.cache.get(key); if (!im) return;
+      x.drawImage(im, b.x * st.f, b.y * st.f, b.w * st.f, b.h * st.f, dx, dy, dw, dh);
+    };
+    // the featured section: one color's front and back big, or the art up close on its shirt color
+    let fTop = y + Math.round(S * 0.025);
+    const fk = shown.find((c0) => c0.key === featKey) || shown[0];
+    if (feature !== "none" && fk) {
+      const fh = fit ? W * { big: 0.62, medium: 0.46, small: 0.32 }[featSize] : (H - fTop - M - footH) * { big: 0.55, medium: 0.42, small: 0.3 }[featSize];
+      const lab = Math.round(labelSize * 1.6), boxH = fh - lab;
+      x.textAlign = "center";
+      if (feature === "pair") {
+        const bs = views.map((sd) => boxOf(fk.key, sd)), gp = Math.max(pg, S * 0.02);
+        let kf = boxH / Math.max(...bs.map((b) => b.h));
+        const totW = (k1: number) => bs.reduce((t, b) => t + b.w * k1, 0) + (bs.length - 1) * gp;
+        if (totW(kf) > W - 2 * M) kf = (W - 2 * M - (bs.length - 1) * gp) / bs.reduce((t, b) => t + b.w, 0);
+        let sx = (W - totW(kf)) / 2;
+        const order0 = views.map((_, j) => j); if (pg < 0) order0.reverse();
+        const xs0: number[] = []; for (const b of bs) { xs0.push(sx); sx += b.w * kf + gp; }
+        for (const j of order0) { const b = bs[j]; shirtAt(`${fk.key}|${views[j]}`, b, xs0[j], fTop + boxH - b.h * kf, b.w * kf, b.h * kf); }
+        if (names) { x.fillStyle = ink; x.font = font(700, Math.round(labelSize * 1.1)); x.fillText(fk.color, W / 2, fTop + boxH + labelSize * 1.25); }
+      } else {
+        // the art on a panel of the shirt's color
+        const pw = W - 2 * M, px = M, r = Math.round(S * 0.02);
+        x.fillStyle = fk.hex || "#d9d4ca";
+        x.beginPath(); x.roundRect(px, fTop, pw, boxH, r); x.fill();
+        const ims = arts.map((a) => ({ a, im: artImgs.current.get(a.url) })).filter((z): z is { a: { label: string; url: string }; im: HTMLImageElement } => !!z.im);
+        const pad = boxH * 0.1, cellW = (pw - pad * (ims.length + 1)) / Math.max(1, ims.length), cellH = boxH - pad * 2 - (ims.length > 1 ? labelSize * 1.2 : 0);
+        ims.forEach(({ a, im }, i) => {
+          const rr = (im.naturalHeight || 1) / (im.naturalWidth || 1);
+          let w = cellW, h = w * rr; if (h > cellH) { h = cellH; w = h / rr; }
+          const cx = px + pad + i * (cellW + pad) + cellW / 2;
+          x.drawImage(im, cx - w / 2, fTop + pad + (cellH - h) / 2, w, h);
+          if (ims.length > 1) { x.fillStyle = dark(fk.hex || "#ffffff") ? "#ffffff" : "#141D2B"; x.font = font(600, Math.round(labelSize * 0.8)); x.fillText(a.label, cx, fTop + boxH - pad * 0.6); }
+        });
+        if (names) { x.fillStyle = ink; x.font = font(700, Math.round(labelSize * 1.1)); x.fillText(`The art · shown on ${fk.color}`, W / 2, fTop + boxH + labelSize * 1.25); }
+      }
+      fTop += fh + Math.round(S * 0.03);
+    }
+    const top = fTop, bot = H - M - footH;
     // the grid: one unit per color (its sides side by side, trimmed), as big as fits with the spacing asked for, the
     // whole block centered on the page (Oct 22, Nick: fewer per row should mean bigger shirts, not bigger gaps)
     const n = shown.length;
     const g = (gap / 100) * W, labelH = names ? Math.round(labelSize * (styleUnder && multiStyle ? 2.4 : 1.5)) : 0;
-    const pg = (pairGap / 100) * W, ns = sideList.length;
-    const boxOf = (k0: string, sd: string) => crop.current[`${k0}|${sd}`] || { x: 0, y: 0, w: 600, h: 750 };
+    const ns = sideList.length;
     // the widest and tallest color sets the slot every color is drawn in
     const uw0 = Math.max(1, ...shown.map((c) => sideList.reduce((t, sd) => t + boxOf(c.key, sd).w, 0)));
     const uh0 = Math.max(1, ...shown.map((c) => Math.max(...sideList.map((sd) => boxOf(c.key, sd).h))));
@@ -207,10 +276,9 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
       const order = sideList.map((sd, j) => j);
       if (pg < 0) order.reverse();
       for (const j of order) {
-        const sd = sideList[j], im = cache.current.get(`${shown[i].key}|${sd}`), b = bs[j];
-        if (!im) continue;
+        const sd = sideList[j], b = bs[j];
         const dw = b.w * k, dh = b.h * k, dy = uy + (uh - dh);
-        x.drawImage(im, b.x, b.y, b.w, b.h, xs[j], dy, dw, dh);
+        shirtAt(`${shown[i].key}|${sd}`, b, xs[j], dy, dw, dh);
       }
       const cx = ux + uw / 2;
       if (names) {
@@ -273,19 +341,24 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   };
   const moveColor = (k: string, by: number) => setOrder((o) => { const i = o.indexOf(k), j = i + by; if (i < 0 || j < 0 || j >= o.length) return o; const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n; });
 
-  async function download(kind: "png" | "pdf") {
-    setBusy(kind === "png" ? "Making the picture…" : "Making the PDF…");
+  async function download() {
+    setBusy(fmt === "pdf" ? "Making the PDF…" : "Making the picture…");
     try {
-      const c = document.createElement("canvas"); const was = sel; setSel(""); draw(c); setSel(was);
-      const base = `${[customer, title || "sales sheet"].filter(Boolean).join(" ")}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "sales-sheet";
+      // bigger than 1×: the shirts are drawn again at that size, so it's really sharper, not a stretched picture
+      const R = Math.max(1, Math.min(4, res || 1));
+      const st = R > 1.4 ? await hiStore(Math.min(3, R)) : base;
+      const c = document.createElement("canvas"); draw(c, R, st);
+      const name = `${[customer, title || "sales sheet"].filter(Boolean).join(" ")}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "sales-sheet";
       let blob: Blob;
-      if (kind === "png") blob = await new Promise<Blob>((ok) => c.toBlob((b) => ok(b!), "image/png"));
-      else blob = new Blob([imagePdf([await canvasPage(c, P.pt[0], P.pt[1], 0.95)], title || "Sales sheet") as BlobPart], { type: "application/pdf" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${base}.${kind}`; a.click();
+      if (fmt === "png") blob = await new Promise<Blob>((ok) => c.toBlob((b2) => ok(b2!), "image/png"));
+      else if (fmt === "jpg") blob = await new Promise<Blob>((ok) => c.toBlob((b2) => ok(b2!), "image/jpeg", 0.93));
+      else blob = new Blob([imagePdf([await canvasPage(c, P.pt[0], P.pt[1], 0.97)], title || "Sales sheet") as BlobPart], { type: "application/pdf" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}.${fmt}`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't make it."); }
     setBusy("");
   }
+
 
   return (
     <div className="ss-back" role="dialog" aria-modal="true" aria-label="Sales sheet creator">
@@ -293,8 +366,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
         <div className="ss-head">
           <div><h2>Sales sheet creator</h2><span className="faint">{shown.length} of {colors.length} colors · drag text and pictures on the sheet</span></div>
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="btn" disabled={!!busy} onClick={() => void download("pdf")}>Download PDF</button>
-            <button type="button" className="btn primary" disabled={!!busy} onClick={() => void download("png")}>Download picture (PNG)</button>
+            <button type="button" className="btn primary" disabled={!!busy} onClick={() => void download()}>Download {fmt.toUpperCase()} · {res}×</button>
             <button type="button" className="btn ghost" onClick={onClose}>Close</button>
           </div>
         </div>
@@ -306,6 +378,20 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
               {page === "fit" && <label className="mk-f"><span>Width: {fitW} px (the height follows the shirts)</span><input type="range" min={600} max={2400} step={50} value={fitW} onChange={(e) => setFitW(+e.target.value)} /></label>}
               {page === "custom" && <div className="ss-row"><label className="mk-f" style={{ width: 90 }}><span>Width</span><input type="number" min={300} max={4000} value={cust.w} onChange={(e) => setCust({ ...cust, w: Math.max(300, Math.min(4000, +e.target.value || 300)) })} /></label><span>×</span><label className="mk-f" style={{ width: 90 }}><span>Height</span><input type="number" min={300} max={4000} value={cust.h} onChange={(e) => setCust({ ...cust, h: Math.max(300, Math.min(4000, +e.target.value || 300)) })} /></label><span className="faint">or drag the sheet&apos;s corner</span></div>}
               <div className="ss-row"><span>Background</span>{["#ffffff", "#f3f1ec", "#e9edf2", "#141d2b"].map((c) => <button key={c} type="button" className={"ss-sw" + (bg === c ? " on" : "")} style={{ background: c }} aria-label={`Background ${c}`} onClick={() => setBg(c)} />)}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} aria-label="Background color" /></div>
+            </section>
+            <section><h3>Featured on top</h3>
+              <div className="chips">{([["none", "None"], ["pair", "Front and back close-up"], ["art", "Art close-up"]] as const).map(([k, t]) => <button key={k} type="button" className={"chip" + (feature === k ? " on" : "")} onClick={() => setFeature(k)}>{t}</button>)}</div>
+              {feature !== "none" && <>
+                <label className="mk-f"><span>Show it on</span><select value={featKey} onChange={(e) => setFeatKey(e.target.value)}>{colors.map((c) => <option key={c.key} value={c.key}>{c.color}{multiStyle ? ` · ${c.style}` : ""}</option>)}</select></label>
+                <div className="chips">{(["big", "medium", "small"] as const).map((k) => <button key={k} type="button" className={"chip" + (featSize === k ? " on" : "")} onClick={() => setFeatSize(k)}>{k === "big" ? "Big" : k === "medium" ? "Medium" : "Small"}</button>)}</div>
+                {feature === "art" && !arts.length && <span className="faint">No art on this mockup yet.</span>}
+                <span className="faint">Tip: set the shirts below to Front only for a tidy grid.</span>
+              </>}
+            </section>
+            <section><h3>Download</h3>
+              <div className="chips">{(["png", "jpg", "pdf"] as const).map((k) => <button key={k} type="button" className={"chip" + (fmt === k ? " on" : "")} onClick={() => setFmt(k)}>{k.toUpperCase()}</button>)}</div>
+              <div className="ss-row"><span>Resolution</span>{[1, 2, 3, 4].map((r) => <button key={r} type="button" className={"chip" + (res === r ? " on" : "")} onClick={() => setRes(r)}>{r}×</button>)}</div>
+              <span className="faint">{Math.round(P.w * res).toLocaleString()} × {Math.round(P.h * res).toLocaleString()} px · about {Math.max(1, Math.round((P.w * P.h * res * res * (fmt === "png" ? 1.1 : fmt === "jpg" ? 0.22 : 0.3)) / 1e6))} MB{fmt === "pdf" ? " · full quality" : ""}</span>
             </section>
             <section><h3>Shirts</h3>
               <div className="chips">{(views.length > 1 ? (["both", "front", "back"] as Sides[]) : (["front"] as Sides[])).map((k) => <button key={k} type="button" className={"chip" + (sides === k || views.length < 2 ? " on" : "")} onClick={() => setSides(k)}>{k === "both" ? "Front and back" : k === "front" ? "Front" : "Back"}</button>)}</div>
