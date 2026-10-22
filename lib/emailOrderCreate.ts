@@ -212,7 +212,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const to = `art/${oid}/${Date.now().toString(36)}-${safe(f.name)}`;
     const cp = await admin.storage.from("proofs").copy(f.path, to);
     if (cp.error) continue;
-    await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "", ...(f.role === "sheet" ? { category: "order_sheet" } : {}) });
+    await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "", ...(f.role === "sheet" ? { category: "order_sheet" } : f.kind ? { category: f.kind } : {}) });
   }
   if (!a) return { ok: true, id: oid, number: o.number as number };
   // the email's suggested answer becomes the order confirmation (Nick, Oct 7): thanks, the link, what we have, approve?

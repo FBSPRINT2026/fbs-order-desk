@@ -25,7 +25,7 @@ import { isPicture, looksLikeSignature, oldNoteText, type EODraft, type EOFile, 
  */
 
 type Att = { name: string; path: string; type: string; size: number };
-type AiFile = { file: number; role: "art" | "mockup" | "size_breakdown" | "signature" | "other"; what?: string };
+type AiFile = { file: number; role: "art" | "mockup" | "setup_sheet" | "size_breakdown" | "signature" | "other"; what?: string; art_page?: number | null; mockup_page?: number | null };
 type PGroup = NonNullable<ProposedOrder["groups"]>[number];
 type AiGroup = Omit<PGroup, "garments" | "prints"> & {
   garments?: (NonNullable<PGroup["garments"]>[number] & { reorder_line?: number | null })[];
@@ -233,7 +233,7 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
 
 // ---------- the AI ----------
 
-const FILE_ROLE = { type: "string", enum: ["art", "mockup", "size_breakdown", "signature", "other"] };
+const FILE_ROLE = { type: "string", enum: ["art", "mockup", "setup_sheet", "size_breakdown", "signature", "other"] };
 function tool(finishingIds: string[]) {
   return {
     name: "propose_order",
@@ -258,6 +258,8 @@ function tool(finishingIds: string[]) {
         } },
         files: { type: "array", description: "Every attached file and what it is", items: { type: "object", properties: {
           file: { type: "integer" }, role: FILE_ROLE, what: { type: "string", description: "A few words, e.g. 'print art, 2 colors', 'sizes per style'" },
+          art_page: { type: ["integer", "null"], description: "setup_sheet only: the page with the art shown big and the spec box (1 = first page)" },
+          mockup_page: { type: ["integer", "null"], description: "setup_sheet only: the page with the design on the garment" },
         }, required: ["file", "role"] } },
         groups: { type: "array", items: { type: "object", properties: {
           name: { type: "string" },
@@ -392,11 +394,11 @@ More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like
 Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
 0. Before taking any numbers, read the email like a person: how is it laid out, and why? Look at the headings and at what repeats. When the same designs come again under headings such as store or location names (e.g. ****Frisco**** then ****McKinney****, "see break out by location"), departments, people or ship-to places, that's ONE order broken out by those headings, not separate garments and never to be added together: make ONE group per design (name the group with the design, e.g. "T10A Autumn Tee"), and in it one garment line per heading, with the heading as that line's description (e.g. "Frisco"). The same style and color under two headings is two lines. When you can't tell what a heading or split means, keep the parts apart anyway and ask in questions what it is. Check your totals against any the customer gives ("T10A total tees 348").
 1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's.
-2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
+2. Say what every attached file is: art (the print file: just the design, nothing else on the page), mockup (the design shown on a garment), setup_sheet (the customer's own mockup sheet: the art shown big, usually on a flat background panel with a note like "BACKGROUND DOES NOT PRINT", a spec box with the location, the size and the inks (Pantone / PMS), and the design on the garment, often on a second page; give art_page and mockup_page), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
 4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front, or Center Chest only for a small logo (under about 5" wide on an adult, about a quarter of the chest width or less). On toddler, infant and youth garments judge by the share of the chest, not inches: a print across half or more of a toddler's chest is Full Front. Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
-4c. A customer's setup PDF often has two pages: the art page (the art shown big, often on a black or colored background with a note like "BLACK DOES NOT PRINT", and a spec box naming the location such as "Front screenprint", the size like 11.75"w x 6.25"t and the ink colors) and a mockup page (the design on the garment, with the style and color). Take the location, size and inks from the spec box (that size is the customer's own), use the PDF as the print's art_file AND as the group's mockup_files. The background color isn't an ink. On a reorder, what the customer's own files show (the spec box, their mockup) wins over the old job's location, size and inks: use theirs, and say in notes what the old job had.
+4c. A setup_sheet (a customer's mockup sheet) often has two pages: the art page (the art shown big, often on a black or colored background with a note like "BLACK DOES NOT PRINT", and a spec box naming the location such as "Front screenprint", the size like 11.75"w x 6.25"t and the ink colors) and a mockup page (the design on the garment, with the style and color). Take the location, size and inks from the spec box (that size is the customer's own), use the PDF as the print's art_file AND as the group's mockup_files (staff cut the art off the art page). Give the size as written (11.5"w x 10.4"t → size "11.5\" wide", width_in 11.5) and each ink by its Pantone name (inks "Pantone 7499, Pantone 7597", colors 2). Take the garment's style and color from the mockup page when the email doesn't say. The background color isn't an ink. On a reorder, what the customer's own files show (the spec box, their mockup) wins over the old job's location, size and inks: use theirs, and say in notes what the old job had.
 5. Garments that share the same prints are one group, with the mockup files for them. Instructions for a whole group (rolled and rubber-banded, tagged with UPCs, boxed by location) go in that group's description.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -456,8 +458,10 @@ ${staffSays}` : ""}`;
   }
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
     const t = (p.files || []).find((x) => x.file === i + 1);
-    const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
-    return { path: f.path, name: f.name, type: f.type, size: f.size, role, what: t?.what || "" };
+    const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : t?.role === "setup_sheet" ? "art" : "other";
+    // a customer's mockup sheet (art page + garment page): staff confirm, and the art is cut off its art page
+    const sheet = t?.role === "setup_sheet" ? { artPage: Math.max(1, Math.round(+(t.art_page || 1))), mockupPage: Math.max(1, Math.round(+(t.mockup_page || (t.art_page === 2 ? 1 : 2)))) } : undefined;
+    return { path: f.path, name: f.name, type: f.type, size: f.size, role, what: t?.what || "", ...(sheet ? { sheet } : {}) };
   });
   const fileAt = (n?: number | null) => (n && files[n - 1] && files[n - 1].role !== "signature" ? files[n - 1].path : "");
 

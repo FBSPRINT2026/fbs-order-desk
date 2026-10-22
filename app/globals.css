@@ -11942,3 +11942,8 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 .sep-mocks a{display:flex;flex-direction:column;gap:3px;text-decoration:none;color:var(--ink-3);font-size:11.5px;min-width:0}
 .sep-mocks img{width:100%;aspect-ratio:1;object-fit:contain;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r)}
 .sep-mocks span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* a customer's mockup sheet, to confirm (Oct 22): the art cut off it on a checkerboard (its background is gone), the specs read off it */
+.ap-specs{margin:6px 0 2px;padding-left:18px;font-size:13px;color:var(--ink)}
+.ap-specs li{margin:2px 0}
+.ap-sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;box-shadow:0 0 0 1px var(--line)}
+.ap-pic.ap-check{background:repeating-conic-gradient(#e9edf2 0 25%,#fff 0 50%) 0 0/16px 16px}

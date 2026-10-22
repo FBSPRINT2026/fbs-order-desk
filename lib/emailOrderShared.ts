@@ -8,7 +8,11 @@ import type { Group } from "@/lib/pricing";
  *  - Reorder: a past job (portal order or Printavo invoice) copied with the new quantities.
  */
 export type EOFile = { path: string; name: string; type: string; size: number; role: "art" | "mockup" | "sheet" | "signature" | "other"; what?: string; url?: string;
-  /** a PNG picture of an .ai / EPS / PDF (made in the browser): the design's preview, so mockups work right away */ preview?: string };
+  /** a PNG picture of an .ai / EPS / PDF (made in the browser): the design's preview, so mockups work right away */ preview?: string;
+  /** a customer's mockup sheet (Oct 22, Hutchins' setup PDF): the page with the art and spec box, the garment page */
+  sheet?: { artPage: number; mockupPage: number };
+  /** its label in the order's Production files (lib/productionFileKinds.ts), e.g. "customer_mockup" */
+  kind?: string };
 /** a past job of this customer that a reorder can start from */
 export type PastJob = {
   /** "o:<order id>" or "a:<archived order id>" */ ref: string;

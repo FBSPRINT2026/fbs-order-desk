@@ -10,6 +10,7 @@ import { LOCATIONS } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
+import { looksLikeSheet, splitSheet } from "@/lib/setupSheet";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
@@ -35,7 +36,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
 type HelpAns = { picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
@@ -44,6 +45,9 @@ type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => 
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 /** a reorder email that came with art: theirs, or the old job's (Oct 22, Nick: "he actually attached all the art. We
  *  could have just used it, but you ignored it because you treated it as a reorder") */
+/** a customer's mockup sheet: what was read off it, to confirm (Oct 22, Nick: "you just ask me, what is this?… or you
+ *  confirm it: hey, this is a customer mockup with sizing and information") */
+type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void };
 type ArtAsk = { job: string; items: { key: string; label: string; file: { name: string; url: string; type: string } }[]; resolve: (a: "theirs" | "old") => void };
 
 /** Cancel clicked: stop where it is and take back what it made */
@@ -62,6 +66,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [help, setHelp] = useState<Help | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [artAsk, setArtAsk] = useState<ArtAsk | null>(null);
+  const [sheetAsk, setSheetAsk] = useState<SheetAsk | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
   const [pause, setPause] = useState<null | { made: Made | null; i: number; resolve: (v: void) => void }>(null);
@@ -147,6 +152,54 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`Reprint screen fee: ${n} screen${n === 1 ? "" : "s"} at $${g.fees.remake} instead of $${g.fees.screen}`);
       }
     }
+    // a customer's mockup sheet (the art big with a spec box, then the shirt): confirm, then the art is cut off its art
+    // page with the background panel taken out, the shirt page is their mockup (stamped, in Production files like any
+    // customer mockup) and the PDF itself goes in Production files as the customer mockup
+    {
+      const used = new Set([...Object.values(d.art || {}), ...Object.values(d.mockups || {}).flat()]);
+      const sb0 = createClient();
+      for (const f of d.files.filter((x) => used.has(x.path) && (/pdf/i.test(x.type) || /\.pdf$/i.test(x.name)))) {
+        guard();
+        const { data: blob } = await sb0.storage.from("proofs").download(f.path);
+        if (!blob) continue;
+        const buf = await blob.arrayBuffer();
+        const pages = f.sheet || (await looksLikeSheet(buf));
+        if (!pages) continue;
+        step(`${of}Reading their mockup sheet ${f.name}…`);
+        const ims = d.groups.flatMap((x) => x.imprints.filter((im) => d!.art?.[im.id] === f.path).map((im) => ({ x, im })));
+        const widthIn = ims.map(({ im }) => parseFloat(String(im.size || ""))).find((n) => n > 0);
+        const parts = await splitSheet(buf, { ...pages, widthIn, name: f.name });
+        guard();
+        if (!parts) continue;
+        const gs = [...new Set(ims.map(({ x }) => x))];
+        const specs = [
+          ...ims.map(({ im }) => [im.location, im.size, im.colors ? `${im.colors} color${+im.colors === 1 ? "" : "s"}${im.inks ? `: ${im.inks}` : ""}` : im.inks].filter(Boolean).join(" · ")),
+          ...gs.flatMap((x) => [...new Set(x.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ")))]).filter(Boolean),
+        ];
+        const artUrl = URL.createObjectURL(parts.art), mockUrl = parts.mockup ? URL.createObjectURL(parts.mockup) : "";
+        note("Found their mockup sheet: checking with you");
+        const ans = await waitFor<"sheet" | "art">((resolve) => setSheetAsk({ name: f.name, art: artUrl, mockup: mockUrl, background: parts.background, specs, resolve }));
+        setSheetAsk(null);
+        if (ans === "art") { did.push(`${f.name}: used as the art, as sent (you said it's not a mockup sheet)`); continue; }
+        const key = `designs/sheet-${crypto.randomUUID().slice(0, 8)}`, base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "-").slice(0, 60);
+        const artPath = `${key}/${base}-art.png`, mockPath = `${key}/${base}-mockup.png`;
+        const upA = await sb0.storage.from("proofs").upload(artPath, parts.art, { contentType: "image/png" });
+        if (upA.error) { did.push(`${f.name}: the art couldn't be cut off it (${upA.error.message}): the PDF is used as sent`); continue; }
+        const upM = parts.mockup ? await sb0.storage.from("proofs").upload(mockPath, parts.mockup, { contentType: "image/png" }) : { error: { message: "no shirt page" } };
+        const art2: Record<string, string> = {};
+        for (const [k, v] of Object.entries(d.art || {})) art2[k] = v === f.path ? artPath : v;
+        const mock2: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(d.mockups || {})) mock2[k] = [...new Set(v.map((p0) => (p0 === f.path ? (upM.error ? "" : mockPath) : p0)).filter(Boolean))];
+        // the shirt page is the mockup of every group printing this art
+        if (!upM.error) for (const x of gs) mock2[x.id] = [...new Set([...(mock2[x.id] || []), mockPath])];
+        d = { ...d, art: art2, mockups: mock2, files: [
+          ...d.files.map((x) => (x.path === f.path ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)),
+          { path: artPath, name: `${base} art.png`, type: "image/png", size: parts.art.size, role: "art" as const, what: "art cut off their mockup sheet" },
+          ...(upM.error ? [] : [{ path: mockPath, name: `${base} mockup.png`, type: "image/png", size: parts.mockup!.size, role: "mockup" as const, what: "their mockup page" }]),
+        ] };
+        did.push(`${f.name}: their mockup sheet. Art cut off page ${parts.artPage}${parts.background ? ", its background taken out (it doesn't print)" : ""}; page ${parts.mockupPage} is their mockup; the PDF is in Production files`);
+      }
+    }
     // the customer sent art with a reorder: use theirs, or the old job's? (theirs is the default: it's newer)
     let theirs = new Set<string>();
     const sentArt = d.kind === "reorder" ? d.groups.flatMap((x) => x.imprints.map((im) => ({ x, im, path: d!.art?.[im.id] || "" }))).filter((z) => z.path) : [];
@@ -212,11 +265,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const targets = isPv && g.customer?.id ? all.filter(({ im }) => !theirs.has(im.id)) : missing;
     const replaced: string[] = [];
     const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
-    if (targets.length && (missing.length || (isPv && files.length))) {
+    // their art covers every print, but the old job had other files (barcodes, labels…): still ask what each one is
+    // (Oct 22, Nick: "if you use the new customer's art, you should probably still ask me… what to do with the other
+    // art… some of it we might need to keep")
+    const othersOnly = !targets.length && isPv && files.length > 0 && theirs.size > 0;
+    if ((targets.length && (missing.length || (isPv && files.length))) || othersOnly) {
       if (pvAll) step(`${of}Asking you about the files on ${jobLabel || "the old job"}…`);
       note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
       const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), method: im.method, dark: grp.lines.some((l) => l.color && !LIGHTISH.test(l.color)), ...(im.design_id ? { design: im.design_id } : {}) }));
-      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
+      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, ...(othersOnly ? { settled: sentArt.map((z) => `${z.x.name ? `${z.x.name} · ` : ""}${z.im.location}`) } : {}), lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
       setHelp(null);
       const made = new Map<File, string>();
       // a picked file or upload saved as their logo (once per file)
@@ -352,7 +409,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           if (many && m) { finishSteps(); await waitFor<void>((resolve) => setPause({ made: m, i, resolve })); setPause(null); }
         } catch (e) {
           if (e instanceof Cancelled || stopped.current) {
-            setConfirm(null); setHelp(null); setArtAsk(null);
+            setConfirm(null); setHelp(null); setArtAsk(null); setSheetAsk(null);
             const ids = [...made0.current]; made0.current = new Set();
             if (ids.length) await discardDraftArt(ids).catch(() => null);
             return;
@@ -416,6 +473,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           <p className="dla-sub">This takes about a minute. Nothing is sent to the customer.</p>
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
+        {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}
@@ -707,8 +765,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
-      <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
-      <p className="ap-why">{stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
+      {help.settled?.length ? <p className="ap-q">They sent new art for {help.settled.join(", ")}. {olds0.length === 1 ? "This file is" : `These ${olds0.length} files are`} on {help.job} too: keep any you still need?</p> : null}
+      {!help.settled?.length && <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>}
+      <p className="ap-why">{help.settled?.length ? "Barcodes, labels, packing sheets…: mark them Production file and they go with this order. The old art they replaced: Not needed (or Production file to keep it for reference)." : stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
       {stage === "details" && (() => {
         const spots = [...new Map(help.prints.map((p) => [p.location, p])).values()];
         // one line per question (Oct 20, Nick: "once you click I know, put it on the right instead of below where it
@@ -817,6 +876,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           ? (() => {
             const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1));
             if (n > 1 && i < n - 1) return <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button>;
+            if (!help.prints.length) return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => finish("skip")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Done ›"}</button>;
             return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => setStage("details")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Next: how it printed ›"}</button>;
           })()
           : <button type="button" className="btn primary" disabled={knowLeft > 0} onClick={() => finish("skip")}>{knowLeft > 0 ? `Answer the colors (${knowLeft} left)` : !given.length ? "Make it without art for now" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
@@ -839,6 +899,23 @@ function trimToArt(c: HTMLCanvasElement) {
  * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
  * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
  */
+/** a customer's mockup sheet: the art cut off it, their shirt page and the specs read off it, to confirm */
+function SheetConfirm({ a, onCancel }: { a: SheetAsk; onCancel: () => void }) {
+  return (
+    <div className="ap" role="group" aria-label="Their mockup sheet">
+      <p className="ap-q">This is their mockup sheet, with the sizing. Use it like this?</p>
+      <p className="ap-why">{a.name}: I took the art off the top{a.background ? <> and took out its background <i className="ap-sw" style={{ background: a.background }} /> (it doesn&apos;t print)</> : ""}. Their shirt page becomes the customer mockup, stamped and in Production files with the PDF.</p>
+      <div className="ap-sent">
+        <figure className="ap-sent-i"><span className="ap-pic big ap-check"><img src={a.art} alt="" /></span><figcaption><b>The art</b><span className="faint">Cut off their sheet</span></figcaption></figure>
+        {a.mockup && <figure className="ap-sent-i"><span className="ap-pic big"><img src={a.mockup} alt="" /></span><figcaption><b>Their mockup</b><span className="faint">Saved as the customer mockup</span></figcaption></figure>}
+      </div>
+      {a.specs.length > 0 && <ul className="ap-specs">{a.specs.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+      <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
+        <button type="button" className="btn" onClick={() => a.resolve("art")}>No, it&apos;s just art</button>
+        <button type="button" className="btn primary" onClick={() => a.resolve("sheet")}>Yes, that&apos;s right</button></div>
+    </div>
+  );
+}
 /** the customer's art with a reorder: drawn large, theirs or the old job's */
 function SentArt({ a, onCancel }: { a: ArtAsk; onCancel: () => void }) {
   const [pics, setPics] = useState<Record<string, string>>({});
