@@ -87,7 +87,8 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       return im;
     });
     if (!lines.length && !imprints.length) continue;
-    groups.push({ id: uid(), name: (pg.name || "").slice(0, 60) || undefined, lines: lines.length ? lines : [newGLine()], imprints });
+    const description = String((pg as { description?: string }).description || "").trim().slice(0, 600);
+    groups.push({ id: uid(), name: (pg.name || "").slice(0, 60) || undefined, ...(description ? { description } : {}), lines: lines.length ? lines : [newGLine()], imprints });
   }
   return groups;
 }

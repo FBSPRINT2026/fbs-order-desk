@@ -125,6 +125,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                     {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
                     {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
                   </div>
+                  {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
                 </div>
                 <div className="due"><div className="lbl">In hands</div><div className="d disp">{due || "NOT SET"}</div>{dueSub && <small>{dueSub}</small>}</div>
                 <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
@@ -463,6 +464,7 @@ export function InvoiceDoc(p: DocData) {
           <div className="job" key={g.id}>
             {/* the group's name across the top, the mockup level with the items table (Oct 16, Nick) */}
             <div className="t disp">{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname)}</div>
+            {g.description?.trim() && <div className="gdesc">{g.description.trim()}</div>}
             {pic ? <img className="pic" src={pic} alt="Mockup" /> : <div className="pic none">Mockup coming</div>}
             <div>
               <table className="it">

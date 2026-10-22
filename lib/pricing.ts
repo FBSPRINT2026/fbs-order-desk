@@ -141,7 +141,11 @@ export type GLine = {
   progOff?: boolean;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[];
+export type Group = { id: string; name?: string;
+  /** a longer description of everything in the group (Oct 22, Nick: "a more detailed description for a group… that's
+   *  not just the group name"): under the name on the order, the quote, the invoice and the work order */
+  description?: string;
+  lines: GLine[]; imprints: Imprint[]; finishing?: string[];
   /** finishing made up on this order (a label and a price per piece), ticked by id in `finishing` like the list's */
   customFin?: Finishing[];
   /** the tag print's price a piece on this job (Private Label / relabel), typed on the group's imprints; the list's when not set */

@@ -210,6 +210,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   //   w   the sizes on their own line under the shirt (the shirt and its money still on one line)
   //   s   stacked, like a phone (phones always stack): each row's own sizes, as big as fit on one line
   // The numbers are set as CSS variables (globals.css "Garments: one grid").
+  // the group description box, opened from "+ Add group description" before anything is typed
+  const [descOpen, setDescOpen] = useState(false);
   const glRef = useRef<HTMLDivElement | null>(null);
   const [glFit, setGlFit] = useState<"w0" | "w1" | "w1c" | "w" | "s">("w");
   const hasCost = !gc.wholesale && !hidePrices;
@@ -437,10 +439,19 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
+        {g.description == null && !descOpen && <button type="button" className="grp-desc-add" onClick={() => setDescOpen(true)}>+ Add group description</button>}
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
+      {(g.description != null || descOpen) && (
+        <div className="grp-desc">
+          <label className="grp-desc-h" htmlFor={`gd-${g.id}`}>Group description <span>prints on the quote, invoice and work order</span></label>
+          <textarea id={`gd-${g.id}`} rows={2} autoFocus={descOpen && g.description == null} placeholder="Everything in this group: how it's packed, what it's for, anything the prints and garments don't say"
+            value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
+            onBlur={(e) => { if (!e.target.value.trim()) { setDescOpen(false); update((x) => { delete x.description; }); } }} />
+        </div>
+      )}
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       {/* the size run (YXS → 4XL) across the top once, every color reading straight across (Oct 21, Nick: "version
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
