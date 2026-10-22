@@ -87,6 +87,17 @@ export default function ArtworkPage() {
   const logos = designs.filter((d) => !!d.archived_at === archived && (!cust || d.customer_id === cust) && hit(d.number, d.name, d.file_name, d.inks, d.notes, custLabel(byId[d.customer_id || ""])));
   const mocks = mockups.filter((m) => (!cust || m.customer_id === cust) && hit(m.title, custLabel(byId[m.customer_id || ""]), m.order_id ? orderNo[m.order_id] : "", ...(m.design_ids || []).map((id) => designs.find((d) => d.id === id)?.number)));
   const liveLogos = designs.filter((d) => !d.archived_at).length;
+  // one card per mockup, its colors listed under it (Oct 22, Nick: "they should all be one mock-up with all the different
+  // versions and colors underneath it"): the pictures of one save (same setup, or the same name saved in the same minute)
+  const mockName = (m: Mock) => m.title.split(" — ")[0];
+  const mockColor = (m: Mock) => m.title.split(" — ").slice(1).join(" — ");
+  const mockSets: Mock[][] = [];
+  { const at = new Map<string, Mock[]>();
+    for (const m of mocks) {
+      const k = m.set ? `s:${m.set}` : m.order_id ? `o:${m.order_id}:${m.group_id || ""}:${m.created_at.slice(0, 16)}` : `n:${m.customer_id}:${mockName(m)}:${m.created_at.slice(0, 16)}`;
+      const g = at.get(k); if (g) g.push(m); else { const n = [m]; at.set(k, n); mockSets.push(n); }
+    }
+    for (const g of mockSets) g.sort((a, b) => a.created_at.localeCompare(b.created_at)); }
 
   async function save() {
     if (!form?.file) return setMsg("Choose a file to upload.");
@@ -134,7 +145,7 @@ export default function ArtworkPage() {
         <label className="aa-search"><SearchInput placeholder="Search logos and mockups" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <select aria-label="Filter by customer" value={cust} onChange={(e) => setCust(e.target.value)} style={{ maxWidth: 240 }}><option value="">All customers</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
         <div className="chips">
-          {(["all", "logos", "mockups"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "logos" ? `Logos (${logos.length})` : `Mockups (${mocks.length})`}</button>)}
+          {(["all", "logos", "mockups"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "logos" ? `Logos (${logos.length})` : `Mockups (${mockSets.length})`}</button>)}
         </div>
         {show !== "mockups" && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> Archived logos</label>}
       </div>
@@ -184,21 +195,22 @@ export default function ArtworkPage() {
 
       {show !== "logos" && (
         <section className="art-sec">
-          <div className="aa-sec-h"><h3>Mockups</h3><span className="faint">{mocks.length} {q || cust ? "match" + (mocks.length === 1 ? "" : "es") : "total"}</span></div>
+          <div className="aa-sec-h"><h3>Mockups</h3><span className="faint">{mockSets.length} {q || cust ? "match" + (mockSets.length === 1 ? "" : "es") : "total"}</span></div>
           {mocks.length ? (
             <div className="design-grid">
-              {mocks.slice(0, nM).map((m) => (
-                <div key={m.id} className={"design-card mk-saved" + (m.starred ? " starred" : "")}>
-                  <a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-img mock" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}{m.starred && <span className="dc-fav" title="Customer favorite">★</span>}</a>
-                  <div className="dc-b"><b>{m.title}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""}</span><span className="faint">{fmtDateLong(m.created_at.slice(0, 10))}</span>
+              {mockSets.slice(0, nM).map((g) => { const m = g[0]; return (
+                <div key={m.id} className={"design-card mk-saved" + (g.some((x) => x.starred) ? " starred" : "")}>
+                  <a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-img mock" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}{g.some((x) => x.starred) && <span className="dc-fav" title="Customer favorite">★</span>}</a>
+                  <div className="dc-b"><b>{mockName(m)}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""} · {fmtDateLong(m.created_at.slice(0, 10))}</span>
+                    {g.length > 1 || mockColor(m) ? <ul className="mk-colors-list">{g.map((x) => <li key={x.id}><a href={mUrls[x.id]?.full} target="_blank" rel="noreferrer" title="Open this color's picture">{mockColor(x) || "Picture"}</a></li>)}</ul> : null}
                     {/* edit it again in the Mockup Creator, like an order's (Oct 22, Nick); an order's mockup is edited from its order */}
                     {m.order_id ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}`}>Edit on the order</a>
                       : m.set ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div>
                 </div>
-              ))}
+              ); })}
             </div>
           ) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the Mockup Creator."}</div>}
-          {mocks.length > nM && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNM(nM + STEP)}>Show more mockups ({mocks.length - nM} more)</button>}
+          {mockSets.length > nM && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNM(nM + STEP)}>Show more mockups ({mockSets.length - nM} more)</button>}
         </section>
       )}
     </>

@@ -784,11 +784,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [necks, setNecks] = useState<Record<string, { neck: number; source: string }>>({});
   const neckAsked = useRef(new Set<string>());
   const neckKey = (u: string) => { try { const q = new URL(u, "https://x.invalid").searchParams; return q.get("p") || q.get("u") || u; } catch { return u; } };
-  const fitFor = (l: Line | undefined, v: View): Fit | null => {
+  /** `measured`: a reading made just now for a photo not measured on screen yet (saving, PDF), with the same neckline
+   *  rules applied, so the saved pictures line up exactly like the screen (Oct 22, Nick: the saved PBC mockups' front
+   *  and back weren't level: saving used the automatic neckline instead of the one set by hand) */
+  const fitFor = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     if (!l) return null;
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
-    const f = fits[u] || null;
+    const f = fits[u] || measured || null;
     if (!f || f.flat || !f.body || v !== "front") return f;
     const own = necks[neckKey(u)];
     if (own) return { ...f, neck: own.neck };
@@ -1191,7 +1194,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
-      const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
+      const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
       const nm = normOf(fit, v);
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
@@ -1273,7 +1276,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const v = viewsFor(im.location)[0]; if (!v) return null;
     const u = photo(l, v);
     const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
-    const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
+    const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
     const nm = normOf(fit, v);
@@ -1836,7 +1839,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const W = PHOTO_W * BD_K, H = PHOTO_H * BD_K;
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
-      const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
+      const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       const nm = normOf(fit, v);
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
