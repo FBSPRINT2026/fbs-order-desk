@@ -478,3 +478,35 @@ export async function setClickUpBox(admin: SupabaseClient, taskId: string, name:
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * How big a 3-year backup of the files would be (Oct 22, Nick: "pulling all the info from ClickUp from the last 3 years,
+ * what that would take size-wise"): per workspace, a random sample of its jobs of the last 3 years is opened and their
+ * file lists read (names and sizes only; nothing is downloaded or changed), then scaled up to all of its jobs.
+ */
+export async function sizeClickUp(admin: SupabaseClient, perTeam: number, deadline: number) {
+  const since = new Date(Date.now() - 3 * 365.25 * 864e5).toISOString();
+  const { data: teams } = await admin.from("clickup_teams").select("id, name, hidden").eq("hidden", false);
+  const out = await Promise.all(((teams || []) as { id: string; name: string }[]).map(async (t) => {
+    const tok = await tokenFor(admin, t.id);
+    const { count } = await admin.from("clickup_tasks").select("id", { count: "exact", head: true }).eq("team_id", t.id).is("parent", null).gte("created_at_cu", since);
+    const { data: ids } = await admin.from("clickup_tasks").select("id").eq("team_id", t.id).is("parent", null).gte("created_at_cu", since).limit(3000);
+    const pool = ((ids || []) as { id: string }[]).map((x) => x.id).sort(() => Math.random() - 0.5).slice(0, perTeam);
+    let sampled = 0, files = 0, bytes = 0, biggest = 0, withFiles = 0;
+    const types: Record<string, number> = {};
+    for (const id of pool) {
+      if (Date.now() > deadline) break;
+      const d = await cu<CuTask>(tok, `/task/${encodeURIComponent(id)}`).catch(() => null);
+      if (!d) continue;
+      sampled++;
+      const fs = (d.attachments || []).filter((a) => !a.deleted && !a.is_folder);
+      if (fs.length) withFiles++;
+      for (const a of fs) { const n = Number(a.size) || 0; files++; bytes += n; biggest = Math.max(biggest, n); const e = String(a.extension || "?").toLowerCase(); types[e] = (types[e] || 0) + n; }
+    }
+    const jobs = count || 0, k = sampled ? jobs / sampled : 0;
+    return { workspace: t.name, jobs3y: jobs, sampled, sampleFiles: files, sampleMB: Math.round(bytes / 1e5) / 10, withFilesPct: sampled ? Math.round((withFiles / sampled) * 100) : 0,
+      estFiles: Math.round(files * k), estGB: Math.round((bytes * k) / 1e8) / 10, biggestMB: Math.round(biggest / 1e5) / 10,
+      byType: Object.fromEntries(Object.entries(types).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([e, n]) => [e, Math.round(n / 1e5) / 10])) };
+  }));
+  return { at: new Date().toISOString(), perTeam, workspaces: out, jobs3y: out.reduce((s, x) => s + x.jobs3y, 0), estFiles: out.reduce((s, x) => s + x.estFiles, 0), estGB: Math.round(out.reduce((s, x) => s + x.estGB, 0) * 10) / 10 };
+}
