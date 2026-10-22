@@ -211,7 +211,6 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   //   s   stacked, like a phone (phones always stack): each row's own sizes, as big as fit on one line
   // The numbers are set as CSS variables (globals.css "Garments: one grid").
   // the group description box, opened from "+ Add group description" before anything is typed
-  const [descOpen, setDescOpen] = useState(false);
   // a line's note box, opened from its ✎ before anything is typed
   const [noteOpen, setNoteOpen] = useState<string | null>(null);
   const glRef = useRef<HTMLDivElement | null>(null);
@@ -443,19 +442,15 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
-        {g.description == null && !descOpen && <button type="button" className="grp-desc-add" onClick={() => setDescOpen(true)}>+ Add group description</button>}
+        {/* the group description, right on the group's line (Oct 22, Nick: "move it where you have the add group
+            description… if you put in a little text, it just goes right there"); it prints on the quote, invoice and work order */}
+        <textarea className="grp-desc-in" rows={1} aria-label="Group description" title="Group description: prints on the quote, invoice and work order" placeholder="+ Add group description"
+          value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
+          onBlur={(e) => { if (!e.target.value.trim() && g.description != null) update((x) => { delete x.description; }); }} />
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
-      {(g.description != null || descOpen) && (
-        <div className="grp-desc">
-          <label className="lbl gsec grp-desc-h" htmlFor={`gd-${g.id}`}>Description <small className="faint">Prints on the quote, invoice and work order</small></label>
-          <textarea id={`gd-${g.id}`} rows={2} autoFocus={descOpen && g.description == null} placeholder="Everything in this group: how it's packed, what it's for, anything the prints and garments don't say"
-            value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
-            onBlur={(e) => { if (!e.target.value.trim()) { setDescOpen(false); update((x) => { delete x.description; }); } }} />
-        </div>
-      )}
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       {/* the size run (YXS → 4XL) across the top once, every color reading straight across (Oct 21, Nick: "version
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
@@ -528,13 +523,13 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">
-                    {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}>✎</button>}
+                    {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 6h14M5 11h14M5 16h8" /></svg></button>}
                     {g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
                   </div>
                 </div>
                 {(l.note != null || noteOpen === l.id) && (
                   <div className="gl-note">
-                    <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="A note for this line only: ship-to, packing, a name…" value={l.note || ""}
+                    <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="Line description: ship-to, packing, a name…" value={l.note || ""}
                       onChange={(e) => update((x) => { x.lines[li].note = e.target.value; })}
                       onBlur={(e) => { if (!e.target.value.trim()) { setNoteOpen(null); update((x) => { delete x.lines[li].note; }); } }} />
                   </div>
