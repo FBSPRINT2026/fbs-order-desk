@@ -234,7 +234,7 @@ export default function ClickUpJobs() {
           {(() => {
             const k = data?.known[job.id] || wsData?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
             return k?.pv || ours ? <div className="cu-known">
-              {k?.pv && <span>FBS INV# <Link href={`/shop/archive/${k.pv.id}`}><b>{k.pv.number}</b></Link> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
+              {k?.pv && <span>FBS INV# <Link href={`/shop/archive/${k.pv.id}`}><b>{k.pv.number}</b></Link><span className="cu-pvtag" title="This order started in Printavo">Printavo</span> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
               {ours && <span>Our order <Link href={`/shop/orders/${ours.id}`}><b>#{ours.number}</b></Link></span>}
             </div> : null;
           })()}
@@ -322,7 +322,7 @@ export default function ClickUpJobs() {
                         title={`${t.fields[b] === "✓" ? "Untick" : "Tick"} "${b}" in ClickUp`} aria-label={`${b}: ${t.fields[b] === "✓" ? "ticked" : "not ticked"}`} onClick={() => void toggleBox(t, b)}>
                         {t.fields[b] === "✓" && <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
                       </button></td>)}
-                    <td className="cu-nw">{pvNo ? (pvId ? <Link href={`/shop/archive/${pvId}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pvNo}</span></Link> : <span className="ordno">{pvNo}</span>) : <span className="faint">—</span>}</td>
+                    <td className="cu-nw">{pvNo ? <>{pvId ? <Link href={`/shop/archive/${pvId}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{pvNo}</span></Link> : <span className="ordno">{pvNo}</span>}<span className="cu-pvtag" title="This order started in Printavo">Printavo</span></> : <span className="faint">—</span>}</td>
                     <td className="r cu-nw"><button type="button" className="btn sm" disabled={!!busy} onClick={(e) => { e.stopPropagation(); void toggleDone(t); }}>{isDoneT(t) ? "Reopen" : "Mark complete"}</button></td>
                   </tr>;
                 }) : <tr><td colSpan={cols}><div className="empty">{s0 ? `No jobs match “${wsQ}”.` : wsShow === "done" ? (wsData?.reading ? "Completed jobs are still being read in from ClickUp." : "No completed jobs.") : "No open jobs in this workspace."}</div></td></tr>}
@@ -384,7 +384,7 @@ export default function ClickUpJobs() {
                 <td><div>{t.name}<Flag p={t.priority} /></div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
-                <td>{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
+                <td>{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link><span className="cu-pvtag" title="This order started in Printavo">Printavo</span>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
                 <td className="cu-nw">{ours ? <Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link> : <span className="faint">—</span>}</td>
                 <td className="cu-nw cu-added">{when(t.created_at_cu)}</td>
                 <td className="r cu-nw">{t.order_id

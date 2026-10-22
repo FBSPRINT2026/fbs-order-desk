@@ -12051,3 +12051,5 @@ body.cu-resizing{cursor:col-resize;user-select:none}
    heading covers the rows cleanly (Oct 22, Nick: "this blue line oddity to the left of the Customer" heading) */
 .tbl.cu-tbl{border-collapse:separate;border-spacing:0}
 .tbl.cu-tbl td.cu-rail{border-left:0;box-shadow:inset 3px 0 0 var(--fbs-blue)}
+/* ClickUp Jobs: an FBS invoice that started in Printavo (Oct 22, Nick: "a little symbol" by orders from Printavo) */
+.cu-pvtag{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;line-height:16px;padding:0 6px;border-radius:999px;background:var(--warn-soft);color:var(--warn);vertical-align:1px;white-space:nowrap}
