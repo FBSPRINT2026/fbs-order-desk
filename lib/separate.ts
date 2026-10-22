@@ -318,6 +318,8 @@ export function gradientShare(px: Px, colors: string[]): number {
 
 /* ---------- 2–5. plates ---------- */
 export type SepInk = { hex: string; name: string;
+  /** the mockup took this color out of the logo (Mockup Creator: "none"): never printed, whatever the shirt */
+  noPrint?: boolean;
   /** a fade (gradient) in the art runs from this ink to these (their art colors): pixels along it print as the two
    *  inks' halftones crossing over, never as a mix of other inks */
   fadeTo?: string[];

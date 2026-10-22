@@ -94,7 +94,7 @@ function inksAsOnMockup(list: SepInk[], im: { inkMap?: { design: string; map: Re
     let best: { name: string; hex: string } | null = null, bd = 14;
     for (const [src, v] of Object.entries(map)) { const d = deltaE(src, k.hex); if (d < bd) { bd = d; best = v; } }
     if (!best) { out.push(k); continue; }
-    if (best.name === "none") { out.push({ ...k, shirt: true }); said.push(`${k.name} → not printed`); continue; }
+    if (best.name === "none") { out.push({ ...k, shirt: true, noPrint: true }); said.push(`${k.name} → not printed (taken out on the mockup)`); continue; }
     const same = out.find((x) => x.name.trim().toLowerCase() === best!.name.trim().toLowerCase());
     if (same) { same.also = [...(same.also || []), k.hex, ...(k.also || [])]; said.push(`${k.name} → ${best.name} (one screen)`); continue; }
     if (k.name !== best.name) said.push(`${k.name} → ${best.name}`);
@@ -672,7 +672,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const multiShirt = groupShirts.length > 1;
   /** what the separator is given: with several shirt colors no ink is left to the shirt */
   const sepIn = (w: number) => ({
-    ks: inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: multiShirt ? false : k.shirt })),
+    ks: inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.noPrint ? true : multiShirt ? false : k.shirt })),
     so: { ...sepOpts(st, w), ...(multiShirt ? { dropGarment: false } : {}) } as SepSettings,
   });
 
