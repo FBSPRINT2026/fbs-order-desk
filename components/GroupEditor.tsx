@@ -297,7 +297,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
-      <div className="line-b">
+      {/* many size columns (youth + adult): the sizes get their own line sooner, so they never wrap (Oct 21, Nick) */}
+      <div className={"line-b" + (groupCols.length > 9 ? " many" : "")}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">

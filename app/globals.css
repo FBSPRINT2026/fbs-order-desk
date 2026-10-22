@@ -11537,3 +11537,46 @@ html body .pbar .pbar-n{color:#fff}
 .ot-info .save-state.busy{color:var(--ink-3)}
 .ot-info .save-state.bad{color:var(--danger);font-weight:700}
 .ot-info-1{display:flex;align-items:baseline;gap:8px;justify-content:space-between;width:100%}
+
+/* ── Order page in a half-screen window (Oct 21, Nick): the job name on the left, the status (and the info box) over
+   the buttons on the right, smaller; the sizes on their own line, never wrapping ── */
+.ord .ed-head{container-type:inline-size}
+.ed-br{display:none}
+@container (max-width: 1150px){
+  html body main.main .ord .ed-head .ed-actions{flex-wrap:wrap;justify-content:flex-end;row-gap:6px;gap:6px;max-width:420px}
+  html body main.main .ord .ed-head .ed-actions > *{order:4}
+  html body main.main .ord .ed-head .ed-actions > .status-select{order:1;max-width:300px;flex:0 1 auto;min-width:0}
+  html body main.main .ord .ed-head .ed-actions > .ot-info{order:2}
+  html body main.main .ord .ed-head .ed-actions > .ed-br{order:3;display:block;flex-basis:100%;height:0}
+  html body main.main .ord .ed-head .ed-actions .btn{padding:5px 10px;font-size:12.5px;min-height:0}
+  html body main.main .ord .ed-head .ed-title h1{font-size:clamp(20px,3.2cqi,28px)}
+}
+/* sizes: their own line under the color, cost, qty, each and total once the row gets narrow (sooner with youth sizes) */
+@container (max-width: 1000px){
+  .gl-list .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co cs qt ea to x" "sz sz sz sz sz sz"}
+  .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co qt ea to x" "sz sz sz sz sz"}
+  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:0}
+  .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:8px}
+  .gl-head.gl-r2 .a-sz{display:none}
+  .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de cs qt ea to x"}
+  .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de qt ea to x"}
+  .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
+  .line-b .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
+  .line-b .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0}
+}
+@container (max-width: 1250px){
+  .line-b.many .gl-list .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"co cs qt ea to x" "sz sz sz sz sz sz"}
+  .line-b.many .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"co qt ea to x" "sz sz sz sz sz"}
+  .line-b.many .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > :is(.a-co,.a-cs,.a-qt,.a-ea,.a-x){padding-top:0}
+  .line-b.many .gl-list .gl-row.gl-r2:not(.gl-head):not(.grp-total) > .a-to{padding-top:8px}
+  .line-b.many .gl-head.gl-r2 .a-sz{display:none}
+  .line-b.many .gl-row.grp-total.gl-r2{grid-template-columns:minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"de cs qt ea to x"}
+  .line-b.many .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"de qt ea to x"}
+  .line-b.many .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
+  .line-b.many .gl-r2 .a-sz .szrow{flex-wrap:nowrap}
+  .line-b.many .gl-r2 .a-sz .szc{flex:1 1 0;min-width:0}
+}
+@media (max-width:760px){
+  html body .ord .line-b .gl-r2 .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b .gl-r2 .a-sz .szc{flex:1 1 40px;min-width:38px}
+}

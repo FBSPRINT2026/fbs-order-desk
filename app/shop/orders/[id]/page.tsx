@@ -905,6 +905,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
+          <span className="ed-br" aria-hidden />
           <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} />
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">Documents ▾</summary>
