@@ -274,7 +274,8 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
 type PvLine = { description?: string; color?: string; items?: number | null; category?: string | null };
 type PvImprint = { column?: string; details?: string; typeOfWork?: string };
 const title = (t: string) => t.trim().toLowerCase().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-const LOCS: [RegExp, string | null][] = [[/left\s*chest/i, "Left Chest"], [/right\s*chest/i, "Right Chest"], [/nape(\s*of\s*(the\s*)?neck)?|back\s*neck/i, "Nape"], [/(left|right)\s*(arm\s*)?sleeve/i, null], [/sleeve/i, "Sleeve"], [/pocket/i, "Pocket"], [/(full\s*)?back/i, "Back"], [/(full\s*)?front/i, "Front"]];
+const LOCS: [RegExp, string | null][] = [[/left\s*chest/i, "Left Chest"], [/right\s*chest/i, "Right Chest"], [/nape(\s*of\s*(the\s*)?neck)?|back\s*neck/i, "Nape"], [/(left|right)\s*(arm\s*)?sleeve/i, null], [/sleeve/i, "Sleeve"], [/pocket/i, "Pocket"], [/\b(full\s*)?back\b/i, "Back"], [/\b(full\s*)?front\b/i, "Front"]];
+// whole words only (Oct 22: Hutchins #33676's "McKinney Backstock" line was read as a Full Back print)
 /** Locations named in free text, in the order they appear ("LEFT CHEST AND BACK" → Left Chest, Back). */
 function locsIn(text: string): string[] {
   const hits: { at: number; end: number; name: string }[] = [];
