@@ -1222,7 +1222,9 @@ export default function SeparationStudio({ id }: { id: string }) {
           })}
         </nav>
       )}
-      {mocks.length > 0 && <div className="sep-mockstrip" aria-label="Mockups">{mocks.map((m, i) => <button type="button" key={i} onClick={() => setZoom(i)} title={`${m.cap || "Mockup"}: see it big`}><img src={m.url} alt={m.cap || "Mockup"} /></button>)}
+      {mocks.length > 0 && <div className="sep-mockstrip" aria-label="Mockups from the order">
+        {/* says what these are (Oct 22, Nick: "they're just kind of floating there") */}
+        <span className="sep-mockstrip-l"><b>Order mockups</b><small>Click to zoom</small></span>{mocks.map((m, i) => <button type="button" key={i} onClick={() => setZoom(i)} title={`${m.cap || "Mockup"}: see it big`}><img src={m.url} alt={m.cap || "Mockup"} /></button>)}
         <PicZoom pics={mocks} at={zoom} onClose={() => setZoom(null)} /></div>}
       <div className="rv-seg sep-tabs">{([["studio", "Separations"], ["outside", "✦ Coach & Learning"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       </div>
