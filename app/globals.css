@@ -11605,88 +11605,6 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 @container (max-width: 760px){ html body main.main .ord .top2{grid-template-columns:minmax(0,1fr)} }
 .ord .cust-card{min-width:160px}
 
-/* ===== Garments: the size run (Oct 21, Nick picked "version one"). The run YXS → 4XL across the top once, in size
-   order, with a line between youth and adult; each color reads straight across under it; a dot where that style
-   doesn't come in the size. Wide: color, sizes, cost, qty, each, total on one line. Narrower: the prices drop to their
-   own line under the sizes, right-aligned, the run unchanged. Narrower still (and phones): the phone layout. Never a
-   sideways scroll, never a number cut off. ===== */
-@media (min-width:761px){
-  html body .ord .line-b .gl-list .gl-row.gl-r2{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"co sz cs qt ea to x";column-gap:10px;row-gap:4px;align-items:start}
-  html body .ord .line-b .gl-list.ws .gl-row.gl-r2{grid-template-columns:minmax(120px,170px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"co sz qt ea to x"}
-  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 64px 48px 84px 96px 28px;grid-template-areas:"de de cs qt ea to x";column-gap:10px;align-items:center}
-  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,170px) minmax(0,1fr) 48px 84px 96px 28px;grid-template-areas:"de de qt ea to x"}
-  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:de}
-  html body .ord .line-b .gl-list .gl-row.gl-r2 > *{padding-top:0!important}
-  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea,.a-to,.a-x){min-height:34px;display:flex;align-items:center}
-  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-ea,.a-to){justify-content:flex-end}
-  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt{justify-content:center}
-  html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > .a-ea{flex-direction:column;align-items:flex-end;justify-content:center;gap:1px}
-  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{align-items:end}
-  html body .ord .line-b .gl-head.gl-r2 .a-sz{display:block;visibility:visible}
-  /* the run: same boxes in the header and every row, so the columns line up */
-  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
-  html body .ord .line-b .a-sz .szc{flex:1 1 0;min-width:30px;max-width:46px}
-  html body .ord .line-b .a-sz .szc.ysep{margin-right:10px}
-  html body .ord .line-b .a-sz .szh .szc > span{font-size:10.5px}
-  html body .ord .line-b .gl .a-sz .szc > span:first-child{display:none}
-  html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:11px;line-height:11px;overflow:hidden}
-  html body .ord .line-b .a-sz .szc-off .sz-off{border:0;background:none;opacity:1;min-height:34px;display:flex;align-items:center;justify-content:center}
-  html body .ord .line-b .a-sz .szc-off .sz-off::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--line)}
-}
-@media (min-width:761px){ @container (max-width: 900px){
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
-} }
-@media (min-width:761px){ @container (max-width: 1060px){
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
-} }
-@media (min-width:761px){ @container (max-width: 1260px){
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz sz x" ". . cs qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(96px,150px) minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co sz sz sz sz x" ". . qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(96px,150px) minmax(0,1fr) 28px;grid-template-areas:"co sz x"}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to){display:none}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt,.a-ea)::before{font-size:10px;font-weight:700;color:var(--ink-3);margin-right:6px}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > .a-cs::before{content:"COST"}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > .a-qt::before{content:"QTY"}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){flex-direction:row}
-} }
-@media (min-width:761px){ @container (max-width: 470px){
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
-  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-s .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-s .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-s .gl .a-sz .szc-off{display:none}
-} }
-@media (min-width:761px){ @container (max-width: 600px){
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
-  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-m .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-m .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-m .gl .a-sz .szc-off{display:none}
-} }
-@media (min-width:761px){ @container (max-width: 760px){
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 104px 84px 84px 96px 28px;grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" ". cs qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list.ws .gl-row.gl-r2:not(.gl-head){grid-template-columns:minmax(0,1fr) 84px 84px 96px 28px;grid-template-areas:"co co co co x" "sz sz sz sz sz" ". qt ea to ."}
-  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{display:none}
-  html body .ord .line-b.nsz-l .gl .a-sz .szc > span:first-child{display:block}
-  html body .ord .line-b.nsz-l .gl .a-sz .szrow{flex-wrap:wrap}
-  html body .ord .line-b.nsz-l .gl .a-sz .szc-off{display:none}
-} }
 
 /* program pricing: one quiet status on the pricing line; its details open under it (Oct 21, Nick) */
 .ord .pt-row .pt-applied{margin-left:auto;display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 0;font:inherit;font-size:12.5px;font-weight:700;color:var(--ok);cursor:pointer}
@@ -11699,3 +11617,129 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 .gl-addm .ot-menu{left:0;right:auto;top:calc(100% + 4px);bottom:auto;min-width:220px}
 html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){white-space:nowrap}
 html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}
+
+/* ===== Garments, like a Printavo line item (Oct 21, Nick: "ok lets try this version"). One row per color: style #,
+   color, a short gray description, a box under each size (the sizes named once at the top, in order, a line between
+   youth and adult, blank where the style doesn't come in that size), then cost, qty, each, total. The next color of
+   the same style shows the style # grayed, like a ditto mark. Narrower: the style sits small over the color and the
+   prices drop to a line under the sizes. Narrower still: the sizes go under the color. Phones keep their own layout.
+   Never a sideways scroll; never a number cut off. ===== */
+@media (min-width:761px){
+  html body .ord .line-b .gl-list .gl{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;row-gap:4px;align-items:start;padding:5px 0;border-top:1px solid var(--line-2)}
+  html body .ord .line-b .gl-list.ws .gl{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"st co de sz qt ea to x"}
+  html body .ord .line-b .gl-list .gl.same{padding-top:5px}
+  html body .ord .line-b .gl-list .gl > .gl-sty,html body .ord .line-b .gl-list .gl > .gl-row.gl-r2{display:contents}
+  html body .ord .line-b .gl-list .gl > .gl-sty > .a-st{grid-area:st;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd{grid-area:de;min-width:0;display:flex;align-items:center;gap:6px;min-height:32px}
+  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd > .a-br{flex:0 1 auto;max-width:45%;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-sty > .a-bd > .a-de{flex:1 1 0;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-sty .a-bd input.pre{font-size:12px;color:var(--ink-3);padding:4px 4px;height:auto;width:100%;text-overflow:ellipsis}
+  html body .ord .line-b .gl-list .gl > .gl-sty .a-br input.pre{field-sizing:content;min-width:3ch;max-width:100%}
+  html body .ord .line-b .gl-list .gl > .gl-ditto{grid-area:st;align-self:center;font-weight:700;font-size:12.5px;color:var(--line);padding-left:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > *{padding-top:0!important}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-co{grid-area:co;min-width:0}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-sz{grid-area:sz}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > :is(.a-cs,.a-qt,.a-ea,.a-to,.a-x){min-height:32px;display:flex;align-items:center}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > :is(.a-ea,.a-to){justify-content:flex-end}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-qt{justify-content:center}
+  html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-cs input{font-size:12px;color:var(--ink-3)}
+  /* the header: the same columns */
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"st co de sz cs qt ea to x";column-gap:8px;align-items:end;padding-bottom:3px}
+  html body .ord .line-b .gl-list.ws .gl-row.gl-head.gl-r2{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"st co de sz qt ea to x"}
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > *{padding-top:0!important}
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sth{grid-area:st} html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-deh{grid-area:de}
+  html body .ord .line-b .gl-list .gl-row.gl-head.gl-r2 > .a-sz{display:block;visibility:visible}
+  /* the size run: fixed boxes, so the header and every row line up */
+  html body .ord .line-b .a-sz .szrow{display:flex;flex-wrap:nowrap;gap:4px;margin:0;align-items:flex-start}
+  html body .ord .line-b .a-sz .szc{flex:0 0 34px;width:34px;min-width:34px;max-width:34px}
+  html body .ord .line-b .a-sz .szc.ysep{margin-right:10px}
+  html body .ord .line-b .a-sz .szh .szc > span{font-size:10.5px}
+  html body .ord .line-b .gl .a-sz .szc > span:first-child{display:none}
+  html body .ord .line-b .a-sz .szc > :is(small.upc,.upc-btn){height:11px;line-height:11px;overflow:hidden}
+  html body .ord .line-b .a-sz .szc-off .sz-off{visibility:hidden;min-height:30px}
+  html body .ord .line-b .a-sz .szc input.sz,html body .ord .line-b .a-sz .szc .sz-tap{height:30px}
+  /* the totals line */
+  html body .ord .line-b .gl-row.grp-total.gl-r2{display:grid;grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad ad cs qt ea to x";column-gap:8px;align-items:center}
+  html body .ord .line-b .gl-row.grp-total.gl-r2.ws{grid-template-columns:96px minmax(120px,160px) minmax(110px,1fr) auto 44px 66px 86px 24px;grid-template-areas:"ad ad ad ad qt ea to x"}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-de{grid-area:ad}
+  html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-qt{grid-area:qt;text-align:center} html body .ord .line-b .gl-row.grp-total.gl-r2 > .a-to{grid-area:to;text-align:right}
+}
+@media (min-width:761px){ @container (max-width: 1050px){
+  html body .ord .line-b.nsz-s .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-s .gl-list .gl > .gl-ditto{display:none}
+  html body .ord .line-b.nsz-s .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
+  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
+  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-s .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-s .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
+  html body .ord .line-b.nsz-s .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
+} }
+@media (min-width:761px){ @container (max-width: 1200px){
+  html body .ord .line-b.nsz-m .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-m .gl-list .gl > .gl-ditto{display:none}
+  html body .ord .line-b.nsz-m .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
+  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
+  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-m .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-m .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
+  html body .ord .line-b.nsz-m .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
+} }
+@media (min-width:761px){ @container (max-width: 1400px){
+  html body .ord .line-b.nsz-l .gl-list .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st sz . . . . . x" "co sz . . . . . x" "de de de cs qt ea to .";row-gap:2px}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st sz . . . . x" "co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl.same{grid-template-areas:"co sz . . . . . x" "de de de cs qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl.same{grid-template-areas:"co sz . . . . x" "de de de qt ea to ."}
+  html body .ord .line-b.nsz-l .gl-list .gl > .gl-ditto{display:none}
+  html body .ord .line-b.nsz-l .gl-list .gl > .gl-sty > .a-st input{font-size:12px;font-weight:700;padding:3px 6px;height:auto}
+  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-sz{align-self:end}
+  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{content:"×";margin-right:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-l .gl-list .gl > .gl-row.gl-r2 > .a-to::before{content:"=";margin-right:auto;padding-left:6px;color:var(--ink-3)}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr);grid-template-areas:"co sz ."}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2 > :is(.a-sth,.a-deh,.a-cs,.a-qt,.a-ea,.a-to){display:none}
+  html body .ord .line-b.nsz-l .gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"ad ad ad cs qt ea to x"}
+  html body .ord .line-b.nsz-l .gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,150px) auto minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"ad ad ad qt ea to x"}
+} }
+@media (min-width:761px){ @container (max-width: 560px){
+  html body .ord .line-b.nsz-s .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-s .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-s .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-s .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-s .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-s .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-s .gl .a-sz .szc-off{display:none}
+  html body .ord .line-b.nsz-s .gl .a-sz .szc.ysep{margin-right:0}
+} }
+@media (min-width:761px){ @container (max-width: 700px){
+  html body .ord .line-b.nsz-m .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-m .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-m .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-m .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-m .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-m .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-m .gl .a-sz .szc-off{display:none}
+  html body .ord .line-b.nsz-m .gl .a-sz .szc.ysep{margin-right:0}
+} }
+@media (min-width:761px){ @container (max-width: 900px){
+  html body .ord .line-b.nsz-l .gl-list .gl{grid-template-columns:minmax(0,1fr) 58px 44px 66px 86px 24px;grid-template-areas:"st st st st st x" "co co co co co ." "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl{grid-template-columns:minmax(0,1fr) 44px 66px 86px 24px;grid-template-areas:"st st st st x" "co co co co ." "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-l .gl-list .gl.same{grid-template-areas:"co co co co co x" "sz sz sz sz sz sz" "de de cs qt ea to"}
+  html body .ord .line-b.nsz-l .gl-list.ws .gl.same{grid-template-areas:"co co co co x" "sz sz sz sz sz" "de de qt ea to"}
+  html body .ord .line-b.nsz-l .gl-list .gl-row.gl-head.gl-r2{display:none}
+  html body .ord .line-b.nsz-l .gl .a-sz .szc > span:first-child{display:block}
+  html body .ord .line-b.nsz-l .gl .a-sz .szrow{flex-wrap:wrap}
+  html body .ord .line-b.nsz-l .gl .a-sz .szc-off{display:none}
+  html body .ord .line-b.nsz-l .gl .a-sz .szc.ysep{margin-right:0}
+} }
+@media (max-width:760px){ .ord .gl-list .gl > .gl-ditto{display:none} .ord .gl-list .gl-head :is(.a-sth,.a-deh){display:none} }

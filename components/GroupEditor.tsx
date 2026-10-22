@@ -303,7 +303,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">
+            <span className="a-sth">Style</span>
             <span className="a-co">Color</span>
+            <span className="a-deh">Description</span>
             <span className="a-sz">{groupCols.length ? <span className="szrow szh">{groupCols.map((z, zi) => <span key={z} className={"szc" + (z === "YXL" && zi < groupCols.length - 1 ? " ysep" : "")}><span>{z}</span></span>)}</span> : "Sizes"}</span>
             {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
@@ -326,9 +328,11 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                       onPickSS={(h) => onLookup ? onLookup(h.style, h.styleID || undefined, h.supplier).then((gm) => { if (gm) onStyle(li, gm.style, gm); }) : Promise.resolve()} />
                     {lookingUp && lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Pulling from S&amp;S…</div>}
                   </div>
-                  <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
-                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                  <div className="a-bd"><div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
+                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div></div>
                 </div>}
+                {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
+                {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}
                 <div className="gl-row gl-r2">
                   <div className="a-co">
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
