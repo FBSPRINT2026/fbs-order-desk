@@ -125,7 +125,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [searchAll, setSearchAll] = useState(false);
   const searchRun = useRef<{ n: number; ac: AbortController | null }>({ n: 0, ac: null });
   /** `who`: a person or customer picked from the suggestions (their addresses); `term` is then their name, for the heading */
-  const runSearch = async (term: string, who?: string[], about?: { words: string; cust?: string }) => {
+  // "Messages in this conversation" (Oct 22, Nick: Peticolas "club logo" pulled up NBA, golf clubs…): only conversations
+  // with the same subject (Re: / Fw: aside), with that person
+  const subjKey = (t: string) => t.replace(/^\s*((re|fw|fwd|aw|sv)\s*(\[\d+\])?\s*:\s*)+/i, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const convoOnly = useRef("");
+  const keepConvo = (cs: Convo[]) => { const only = convoOnly.current; return only ? cs.filter((c) => subjKey(c.subject || "") === only || c.msgs?.some((m) => subjKey(m.subject || "") === only)) : cs; };
+  const runSearch = async (term: string, who?: string[], about?: { words: string; cust?: string }, sameSubject?: string) => {
+    convoOnly.current = sameSubject ? subjKey(sameSubject) : "";
+    const keep = keepConvo;
     if (term.trim().length < 2) return;
     setSugOpen(false);
     // where Back goes (Oct 15, Nick: "a quick back button to get back to where you were, Inbox or Sent")
@@ -143,12 +150,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
     let done = false, shown = false;
     void mailBox<{ convos: Convo[]; ews?: boolean }>({ ...params, quick: 1 }, ac.signal).then((r) => {
       if (!current() || done || !r.ews || !r.convos.length) return;
-      shown = true; setConvos(r.convos); setSearchAll(true); setSNote("Still searching the rest of your mailbox…");
+      shown = true; setConvos(keep(r.convos)); setSearchAll(true); setSNote("Still searching the rest of your mailbox…");
     }).catch(() => null);
     try {
       const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>(params, ac.signal);
       if (!current()) return;
-      done = true; setConvos(r.convos); setSearchAll(!!r.all); setSNote(r.all && r.partial ? "Some folders didn't answer, so there may be more." : "");
+      done = true; setConvos(keep(r.convos)); setSearchAll(!!r.all); setSNote(r.all && r.partial ? "Some folders didn't answer, so there may be more." : "");
     }
     catch (e) {
       if (!current()) return;
@@ -165,7 +172,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setOlderBusy(true); setSNote("");
     try {
       const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; indexing?: { indexed: number; total: number } | null }>({ do: "search", q: term.trim(), older: 1 });
-      setConvos((cur) => { const have = new Set((cur || []).map((c) => c.key)); return [...(cur || []), ...r.convos.filter((c) => !have.has(c.key))]; });
+      setConvos((cur) => { const have = new Set((cur || []).map((c) => c.key)); return [...(cur || []), ...keepConvo(r.convos).filter((c) => !have.has(c.key))]; });
       // older mail is searched from the kept headers; while they're still being filled in, say how far along
       const pct = r.indexing && r.indexing.total ? Math.floor((100 * r.indexing.indexed) / r.indexing.total) : null;
       const still = pct != null ? ` Older mail is still being read in (${pct}% so far), so there may be more: try again later.` : "";
@@ -446,7 +453,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       { key: "bh", label: "Black Hole", icon: TbIcon.ban, danger: true, onPick: bh },
       "-",
       { key: "find", label: "Find related", icon: <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>, sub: [
-        { key: "f-convo", label: "Messages in this conversation", disabled: subj.length < 2, onPick: () => { setQ(subj); void runSearch(subj); } },
+        { key: "f-convo", label: "Messages in this conversation", disabled: subj.length < 2, onPick: () => { setQ(subj); void runSearch(subj, i.from_email ? [i.from_email.toLowerCase()] : undefined, i.from_email ? { words: subj } : undefined, subj); } },
         { key: "f-from", label: `Messages from ${name || "this sender"}`, disabled: !i.from_email, onPick: () => { setQ(name || i.from_email); void runSearch(name || i.from_email, [i.from_email.toLowerCase()]); } },
       ] },
     ];
