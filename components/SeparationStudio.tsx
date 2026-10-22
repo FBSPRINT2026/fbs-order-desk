@@ -802,11 +802,39 @@ export default function SeparationStudio({ id }: { id: string }) {
     x.putImageData(d, 0, 0);
   }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.lpiFor, st.angle, st.dot, st.method]);
 
+  // "Original" and Compare show the art as it became on the mockup (Oct 22, Nick on #40091: "this original versus compare
+  // mode… it's got the black"): each logo color in the mockup's ink, colors taken out on the mockup see-through
+  const mockMap = useMemo(() => {
+    if (!order || !row?.imprint_id) return null;
+    const im = orderGroups(order).flatMap((g) => g.imprints).find((x) => x.id === row.imprint_id) as { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined;
+    const m = im?.inkMap && (!row.design_id || im.inkMap.design === row.design_id) ? im.inkMap.map : null;
+    return m && Object.keys(m).length ? m : null;
+  }, [order, row]);
   useEffect(() => {
     const c = cvOrig.current, px = pxRef.current; if (!c || !px) return;
     c.width = px.w; c.height = px.h;
-    c.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(px.data), px.w, px.h), 0, 0);
-  }, [pxTick, view]);
+    const data = new Uint8ClampedArray(px.data);
+    if (mockMap) {
+      const rgb = (h: string) => { const v = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
+      const pairs = Object.entries(mockMap).map(([src, v]) => ({ s: rgb(src), t: v.name === "none" ? null : rgb(v.hex || colorHex(v.name) || src) }));
+      const memo = new Map<number, number[] | null | undefined>();
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+        let out = memo.get(key);
+        if (!memo.has(key)) {
+          let best = -1, bd = Infinity;
+          for (let j = 0; j < pairs.length; j++) { const q = pairs[j].s, dd = (data[i] - q[0]) ** 2 + (data[i + 1] - q[1]) ** 2 + (data[i + 2] - q[2]) ** 2; if (dd < bd) { bd = dd; best = j; } }
+          out = best < 0 || bd > 70 * 70 ? undefined : pairs[best].t ? [0, 1, 2].map((q) => Math.max(0, Math.min(255, data[i + q] + pairs[best].t![q] - pairs[best].s[q]))) : null;
+          memo.set(key, out);
+        }
+        if (out === undefined) continue;
+        if (out === null) { data[i + 3] = 0; continue; }
+        data[i] = out[0]; data[i + 1] = out[1]; data[i + 2] = out[2];
+      }
+    }
+    c.getContext("2d")!.putImageData(new ImageData(data, px.w, px.h), 0, 0);
+  }, [pxTick, view, mockMap]);
 
   // eyedropper: click the preview to add that color from the art as an ink
   const onPick = (e: MouseEvent<HTMLCanvasElement>) => {
@@ -1229,7 +1257,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           <div className="sep-set">
             <SetRow k="size" label="Size" open={more} onToggle={toggleMore} main={<>
               <label className="sep-sr-num"><input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} aria-label="Print width in inches" />in wide</label>
-              <span className="sep-sr-sum">{st.dpi} dpi</span></>}>
+</>}>
             {img && (() => {
               // pictures can't be blown up (Separo can't either): say how sharp the art is at this print size
               if (vart?.ok) return <div className="sep-res ok">Vector art: sharp at any size.</div>;
@@ -1412,7 +1440,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <small>{loupe ? <>{LOUPE_IN}&quot; of film at {st.dpi} dpi{(st.method === "sim" || plates.find((p) => p.key === solo)?.tonal) ? `, ${st.lpi} lpi ${DOT_NAME[st.dot || "ellipse"]} dots` : ", solid"}. Click elsewhere to move.</> : "Film close-up"}</small>
             </div>
           )}
-          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>{view === "films" ? "Back to all films" : "Back to the proof"}</button></> : films ? <>The films, in print order: black = ink, exactly what prints on each screen. Halftone screens show their tone here; click a film to see it bigger and its real dots up close.</> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${shirtLabel} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
+          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>{view === "films" ? "Back to all films" : "Back to the proof"}</button></> : films ? <>The films, in print order: black = ink, exactly what prints on each screen. Halftone screens show their tone here; click a film to see it bigger and its real dots up close.</> : view === "compare" ? <>Left of the line: {mockMap ? "the art as on the mockup" : "the original art"}. Right: how it prints.</> : <>{view === "original" ? (mockMap ? "The art as on the mockup" : "The original art") : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${shirtLabel} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
         {/* screens, press, films, coach */}
