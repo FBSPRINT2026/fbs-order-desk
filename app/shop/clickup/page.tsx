@@ -40,9 +40,9 @@ function Flag({ p }: { p?: string }) {
   if (p !== "urgent" && p !== "high") return null;
   return <span className={"cu-flag " + p} title={`Flagged ${p === "urgent" ? "Urgent" : "High"} in ClickUp`}><svg viewBox="0 0 24 24" aria-hidden><path d="M5 21V4h11l-1.5 4L16 12H5" /></svg>{p === "urgent" ? "Urgent" : "High"}</span>;
 }
-/** what staff see instead of "In Printavo" on this page (Oct 22, Nick: "it shouldn't say In Printavo, it should say FBS
- * invoice number") */
-const boxName = (b: string) => (/in printavo/i.test(b) ? "FBS Invoice #" : b);
+/** a ClickUp box keeps its own name: "In Printavo" is the box staff tick; the FBS INV# column next to it is the number
+ * (Oct 22, Nick: "The fourth column over should say in Printavo") */
+const boxName = (b: string) => b;
 /**
  * The FBS invoice number(s) for a job, each tagged with where it lives (Oct 22, Nick: "an indicator whether it's in our
  * new system or our old system for my staff"): an order made in the portal = New system, a Printavo job = Old system.
@@ -317,7 +317,7 @@ export default function ClickUpJobs() {
             {job.due_at ? <>Due <Due date={chiDay(job.due_at)} status="" /></> : <span className="faint">No due date</span>}
             <span className="faint">·</span><span>{job.status || "open"}</span>
             {boardOf(job) && <><span className="faint">·</span><span>{boardOf(job)} board</span></>}
-            {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">FBS Invoice # ✓</span></>}
+            {job.in_printavo && <><span className="faint">·</span><span className="cu-tag">In Printavo ✓</span></>}
             <span className="faint">·</span><a href={job.url} target="_blank" rel="noreferrer">Open in ClickUp</a>
           </div>
           {shownFields(job.fields).length > 0 && <div className="cu-tags">{shownFields(job.fields).map(([k, v]) => <span key={k} className="cu-tag">{v === "✓" ? `${k} ✓` : `${k}: ${v}`}</span>)}</div>}
@@ -341,7 +341,7 @@ export default function ClickUpJobs() {
 
           {made || job.order_id ? <div className="cu-done">
             Order <Link href={`/shop/orders/${made?.id || job.order_id}`}><b>#{made?.number || job.order_number}</b></Link> was made from this job.{" "}
-            {job.ticked_at ? <span>The &ldquo;FBS Invoice #&rdquo; box is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick the &ldquo;FBS Invoice #&rdquo; box in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking the &ldquo;FBS Invoice #&rdquo; box in ClickUp…</span>}
+            {job.ticked_at ? <span>The &ldquo;In Printavo&rdquo; box is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick the &ldquo;In Printavo&rdquo; box in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking the &ldquo;In Printavo&rdquo; box in ClickUp…</span>}
             <button type="button" className="btn ghost sm" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
           </div> : <div className="cu-ask">
             <b>Would you like to process this job?</b>
@@ -419,7 +419,7 @@ export default function ClickUpJobs() {
       })() : <>
       <div className={"toolbar" + (pin ? " cu-pinned" : "")} ref={tbRef}>
         <div className="chips">
-          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "FBS Invoice #", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
+          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
             .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
         </div>
         {tab !== "boards" && <select aria-label="Customer" value={team} onChange={(e) => setTeam(e.target.value)}>
