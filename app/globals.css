@@ -11705,3 +11705,4 @@ html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
   html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:auto auto auto auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad . cs qt ea to x"}
   html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:auto auto auto auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad . qt ea to x"}
 }
+@media (min-width:761px){ html body .ord .line-b .gl-row.grp-total.gl-r2 > .gl-foot{display:flex;align-items:center;gap:10px} html body .ord .line-b .gl-row.grp-total.gl-r2 > .gl-foot .lbl2{margin-left:auto} }
