@@ -205,14 +205,31 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   // stack ("s")
   const glRef = useRef<HTMLDivElement | null>(null);
   const [glFit, setGlFit] = useState<"w1" | "w" | "s">("w");
+  // the columns are as wide as the longest style #, brand and color in the group (not a fixed guess), and the size boxes
+  // shrink a little before anything wraps (Oct 22, Nick: "shrink until they start to go over type")
+  const glText = g.lines.map((l) => `${l.style}\u0001${l.brand || ""}\u0001${l.color}`).join("\u0002");
   useEffect(() => {
     const el = glRef.current; if (!el || typeof ResizeObserver === "undefined") return;
-    const run = Math.max(1, groupCols.length) * 40 + 16;
-    // wide: the sizes sit in the middle of the shirt line (Oct 22, Nick: "as you get room… go to one line and fill the space")
-    const one = 440 + run + 300 + 130, need = Math.max(560, run + 30);
-    const ro = new ResizeObserver(([e]) => { const w = e.contentRect.width; setGlFit(w >= one ? "w1" : w >= need ? "w" : "s"); });
+    const n = Math.max(1, groupCols.length), sep = groupCols.includes("YXL") && groupCols.some((z) => !/^Y/.test(z)) ? 12 : 0;
+    const fam = getComputedStyle(el).fontFamily || "sans-serif";
+    const cv = document.createElement("canvas").getContext("2d");
+    const tw = (t: string, bold: boolean) => { if (!cv) return t.length * 8; cv.font = `${bold ? 700 : 400} 14px ${fam}`; return Math.ceil(cv.measureText(t || "").width); };
+    const lines = g.lines;
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    const st = clamp(Math.max(...lines.map((l) => tw(l.style, true)), tw("Style #", false)) + 10, 56, 130);
+    const br = clamp(Math.max(...lines.map((l) => tw(l.brand || "", false)), 30) + 10, 40, 170);
+    const co = clamp(Math.max(...lines.map((l) => tw(l.color, true)), tw("Color", false)) + 12, 80, 210);
+    el.style.setProperty("--st", `${st}px`); el.style.setProperty("--br", `${br}px`); el.style.setProperty("--co", `${co}px`);
+    const money = (gc.wholesale ? 0 : 52) + 40 + 70 + 88 + 22, gaps = 10 * 9;
+    const fits = (w: number, box: number) => st + br + co + (n * (box + 4) + sep) + money + gaps + 12 <= w;
+    const ro = new ResizeObserver(([e]) => {
+      const w = e.contentRect.width;
+      let box = 36; while (box > 30 && !fits(w, box)) box -= 2;
+      el.style.setProperty("--szw", `${fits(w, box) ? box : 36}px`);
+      setGlFit(fits(w, box) ? "w1" : w >= Math.max(st + br + co + money + 40, n * 40 + 30) ? "w" : "s");
+    });
     ro.observe(el); return () => ro.disconnect();
-  }, [groupCols.length]);
+  }, [groupCols.length, glText, gc.wholesale]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices

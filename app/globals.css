@@ -11711,22 +11711,33 @@ html body .ord .line-b .gl :is(.style-menu,.color-menu){min-width:280px}
    every row's color and sizes start at the same place; the colors of a style sit together under it with no lines
    between them, and only the first one shows the size names */
 @media (min-width:761px){
-  html body .ord .line-b .gl .a-st input{width:110px!important}
-  html body .ord .line-b .gl .a-br input{width:156px!important}
-  html body .ord .line-b .gl .a-co input{width:190px!important}
-  html body .ord .line-b .gl > .gl-ditto{width:102px!important;visibility:hidden}
-  html body .ord .line-b.fit-w .gl-list .gl,html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px}
-  html body .ord .line-b.fit-w .gl-list.ws .gl,html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 44px 80px 92px 24px}
+  html body .ord .line-b .gl > .gl-ditto{width:var(--st,102px)!important;visibility:hidden}
+  html body .ord .line-b.fit-w .gl-list .gl,html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--st,102px) var(--br,148px) var(--co,182px) auto minmax(0,1fr) 56px 44px 80px 92px 24px}
+  html body .ord .line-b.fit-w .gl-list.ws .gl,html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:var(--st,102px) var(--br,148px) var(--co,182px) auto minmax(0,1fr) 44px 80px 92px 24px}
   html body .ord .line-b.fit-w .gl-list .gl{grid-template-areas:"st br co . . cs qt ea to x" "de de de de . . . . . ." "sz sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list.ws .gl{grid-template-areas:"st br co . . qt ea to x" "de de de de . . . . ." "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list .gl.same{grid-template-areas:"st br co . . cs qt ea to x" "sz sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w .gl-list.ws .gl.same{grid-template-areas:"st br co . . qt ea to x" "sz sz sz sz sz sz sz sz sz"}
   html body .ord .line-b.fit-w1 .gl-list .gl.same{grid-template-areas:"st br co sz . cs qt ea to x"}
   html body .ord .line-b.fit-w1 .gl-list.ws .gl.same{grid-template-areas:"st br co sz . qt ea to x"}
-  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad cs qt ea to x"}
-  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2.ws,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:102px 148px 182px auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad qt ea to x"}
+  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:var(--st,102px) var(--br,148px) var(--co,182px) auto minmax(0,1fr) 56px 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad cs qt ea to x"}
+  html body .ord .line-b.fit-w .gl-row.grp-total.gl-r2.ws,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:var(--st,102px) var(--br,148px) var(--co,182px) auto minmax(0,1fr) 44px 80px 92px 24px;grid-template-areas:"ad ad ad ad ad qt ea to x"}
   html body .ord .line-b .gl-list .gl.same{border-top:0;padding-top:0}
   html body .ord .line-b .gl-list .gl:has(+ .gl.same){padding-bottom:4px}
   html body .ord .line-b:is(.fit-w,.fit-w1) .gl.same .a-sz .szc > span:first-child{display:none}
   html body .ord .line-b.fit-w1 .gl.same .a-sz .szc > :is(small.upc,.upc-btn){display:none}
+}
+
+/* columns sized to the group's own words, size boxes that give a little before anything wraps (Oct 22, Nick) */
+@media (min-width:761px){
+  html body .ord .line-b .gl .a-st input{width:calc(var(--st,102px) + 8px)!important}
+  html body .ord .line-b .gl .a-br input{width:calc(var(--br,148px) + 8px)!important}
+  html body .ord .line-b .gl .a-co input{width:calc(var(--co,182px) + 8px)!important}
+  html body .ord .line-b.fit-w1 .gl-list .gl,html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{column-gap:10px}
+  html body .ord .line-b.fit-w1 .gl-list .gl{grid-template-columns:var(--st) var(--br) var(--co) auto minmax(0,1fr) 52px 40px 70px 88px 22px}
+  html body .ord .line-b.fit-w1 .gl-list.ws .gl{grid-template-columns:var(--st) var(--br) var(--co) auto minmax(0,1fr) 40px 70px 88px 22px}
+  html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2{grid-template-columns:var(--st) var(--br) var(--co) auto minmax(0,1fr) 52px 40px 70px 88px 22px}
+  html body .ord .line-b.fit-w1 .gl-row.grp-total.gl-r2.ws{grid-template-columns:var(--st) var(--br) var(--co) auto minmax(0,1fr) 40px 70px 88px 22px}
+  html body .ord .line-b.fit-w1 .a-sz .szc{flex-basis:var(--szw,36px);width:var(--szw,36px);min-width:var(--szw,36px);max-width:var(--szw,36px)}
+  html body .ord .line-b.fit-w1 .gl .a-ea input{width:62px}
 }
