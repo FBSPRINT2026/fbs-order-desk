@@ -7,7 +7,7 @@ import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
 import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
-import { stampOrderMockups } from "@/lib/mockupStamp";
+import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
@@ -116,6 +116,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     } finally { setLookingUp(""); }
   }
   const [art, setArt] = useState<(ArtFile & { url?: string })[]>([]);
+  // a stamped customer mockup's picture without the stamp (Oct 22, Nick: "a button… you have to hold it down so you can
+  // see it, but then when you release it, it pops back up"): the customer's original file, signed when it's on the page
+  const [plain, setPlain] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const stamped = art.map((a) => ({ a, k: a.file_path.match(/custmockup-([a-z0-9]+)\.jpg$/)?.[1] })).filter((x) => x.k && !plain[x.a.id]);
+    if (!stamped.length || !o) return;
+    const origs = (o.groups || []).flatMap((g) => g.customerMockups || []).map((m) => m.path);
+    const pairs = stamped.map(({ a, k }) => ({ id: a.id, path: origs.find((p0) => stampKey(p0) === k) })).filter((x): x is { id: string; path: string } => !!x.path);
+    if (!pairs.length) return;
+    void sb.storage.from("proofs").createSignedUrls(pairs.map((x) => x.path), 3600).then(({ data }) => {
+      setPlain((m) => ({ ...m, ...Object.fromEntries(pairs.map((x, i) => [x.id, data?.[i]?.signedUrl || ""]).filter(([, u]) => u)) }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [art, o?.groups]);
   const guessed = useRef(false);
   const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType }>(null);
   const [saveState, setSaveState] = useState("");
@@ -1320,7 +1334,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note }))}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) }))}
             onFileNote={(f, t) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
             onCategory={(f, c) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>

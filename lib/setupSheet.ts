@@ -8,6 +8,7 @@
  * PNGs; the AI reads the specs.
  */
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
+import { PHOTO_H, PHOTO_W, measureGarment } from "@/lib/mockup";
 
 type PdfPage = { getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> }; getTextContent: () => Promise<{ items: { str?: string }[] }> };
 type PdfDoc = { numPages: number; getPage: (n: number) => Promise<PdfPage> };
@@ -144,4 +145,67 @@ export async function splitSheet(data: ArrayBuffer, o: { artPage?: number; mocku
     if (mockupPage !== artPage) mockup = await toFile(await draw(await doc.getPage(mockupPage), 2000), `${base} mockup.png`);
     return { art, mockup, background, artPage, mockupPage };
   } catch { return null; }
+}
+
+const loadImage = (src: string) => new Promise<HTMLImageElement>((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
+
+/**
+ * Where their mockup puts the print (Oct 22, Nick on Hutchins T11A: "theirs is lower on the shirt than ours… match the
+ * customer's mockup placement, not just, oh, it's full front"). The spec box gives the print's real width, so the
+ * mockup page has its own ruler: the art's width on the picture is that many inches. The drop is measured from the
+ * bottom of the front neckline (the same seam every drop is measured from) to the top of the art.
+ */
+export async function measureDrop(mockup: File, widthIn: number): Promise<{ dropIn: number } | null> {
+  if (!(widthIn > 0)) return null;
+  const url = URL.createObjectURL(mockup);
+  try {
+    const img = await loadImage(url);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const c0 = document.createElement("canvas"); c0.width = iw; c0.height = ih;
+    const x0c = c0.getContext("2d", { willReadFrequently: true })!;
+    x0c.fillStyle = "#fff"; x0c.fillRect(0, 0, iw, ih); x0c.drawImage(img, 0, 0);
+    const d0 = x0c.getImageData(0, 0, iw, ih).data;
+    const ink = (i: number) => Math.min(d0[i], d0[i + 1], d0[i + 2]) < 235;
+    // the shirt: rows and columns full of it (the title lines at the top corner don't count)
+    const rows: number[] = [], cols = new Array(iw).fill(0);
+    for (let y = 0; y < ih; y++) { let n = 0; for (let x = 0; x < iw; x++) if (ink((y * iw + x) * 4)) { n++; cols[x]++; } rows.push(n); }
+    const y0 = rows.findIndex((n) => n > iw * 0.25), y1 = ih - 1 - [...rows].reverse().findIndex((n) => n > iw * 0.25);
+    const xa = cols.findIndex((n) => n > ih * 0.15), xb = iw - 1 - [...cols].reverse().findIndex((n) => n > ih * 0.15);
+    if (y0 < 0 || xa < 0 || y1 <= y0 || xb <= xa) return null;
+    // back up to the collar (the shoulders are what fills a quarter of a row first)
+    let top = y0; while (top > 0 && rows[top - 1] > iw * 0.03) top--;
+    const pad = Math.round((xb - xa) * 0.04);
+    const cx0 = Math.max(0, xa - pad), cy0 = Math.max(0, top - pad), cw = Math.min(iw, xb + pad) - cx0, ch = Math.min(ih, y1 + pad) - cy0;
+    const crop = document.createElement("canvas"); crop.width = cw; crop.height = ch;
+    const cx = crop.getContext("2d")!; cx.fillStyle = "#fff"; cx.fillRect(0, 0, cw, ch); cx.drawImage(c0, cx0, cy0, cw, ch, 0, 0, cw, ch);
+    const shirt = await loadImage(crop.toDataURL("image/png"));
+    const fit = measureGarment(shirt, "front", { tee: true });
+    if (!fit?.neck) return null;
+    // the same frame measureGarment works in
+    const W = PHOTO_W, H = PHOTO_H, k = Math.min(W / cw, H / ch), dw = cw * k, dh = ch * k, ox = (W - dw) / 2, oy = (H - dh) / 2;
+    const f = document.createElement("canvas"); f.width = W; f.height = H;
+    const fx = f.getContext("2d", { willReadFrequently: true })!; fx.fillStyle = "#fff"; fx.fillRect(0, 0, W, H); fx.drawImage(crop, ox, oy, dw, dh);
+    const d = fx.getImageData(0, 0, W, H).data;
+    const L = fit.body ? fit.body.l + 6 : ox + dw * 0.22, R = fit.body ? fit.body.r - 6 : ox + dw * 0.78, hem = fit.body ? fit.body.hem : oy + dh;
+    // the shirt's color: the most common color across the chest
+    const tally = new Map<number, number>();
+    for (let y = Math.round(fit.neck + 20); y < hem; y += 3) for (let x = Math.round(L); x < R; x += 3) { const i = (y * W + x) * 4; const q = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4); tally.set(q, (tally.get(q) || 0) + 1); }
+    const q = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (q == null) return null;
+    const sc = [((q >> 8) & 15) * 16 + 8, ((q >> 4) & 15) * 16 + 8, (q & 15) * 16 + 8];
+    const art = (i: number) => Math.abs(d[i] - sc[0]) + Math.abs(d[i + 1] - sc[1]) + Math.abs(d[i + 2] - sc[2]) > 110;
+    // the art: the first band of rows below the neckline with ink that isn't the shirt
+    let artTop = -1, artBot = -1, ax0 = W, ax1 = -1, gap = 0;
+    for (let y = Math.round(fit.neck + 6); y < hem; y++) {
+      let n = 0, a = W, b = -1;
+      for (let x = Math.round(L); x < R; x++) if (art((y * W + x) * 4)) { n++; if (x < a) a = x; if (x > b) b = x; }
+      if (n >= 3) { if (artTop < 0) artTop = y; artBot = y; gap = 0; if (a < ax0) ax0 = a; if (b > ax1) ax1 = b; }
+      else if (artTop >= 0 && ++gap > 40) break;
+    }
+    if (artTop < 0 || ax1 - ax0 < 20) return null;
+    const ppi = (ax1 - ax0) / widthIn, drop = (artTop - fit.neck) / ppi;
+    if (!(drop >= 0 && drop <= 10)) return null;
+    void artBot;
+    return { dropIn: Math.round(drop * 4) / 4 };
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
 }

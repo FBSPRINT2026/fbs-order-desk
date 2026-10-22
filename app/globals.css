@@ -11953,3 +11953,6 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 .ap-sent-old .ap-sent-i{max-width:120px}
 /* the cut-out art on a dark checkerboard: light inks (cream, white) show */
 .ap-pic.ap-check{background:repeating-conic-gradient(#3a3f47 0 25%,#2c3036 0 50%) 0 0/16px 16px}
+/* hold to see a customer mockup without its stamp (Oct 22) */
+.pv-zoom-bar .pv-peek{all:unset;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;font-weight:700;font-size:13px;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:6px 12px}
+.pv-zoom-bar .pv-peek.on{background:var(--accent);border-color:var(--accent)}

@@ -10,7 +10,7 @@ import { LOCATIONS } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
-import { looksLikeSheet, splitSheet } from "@/lib/setupSheet";
+import { looksLikeSheet, measureDrop, splitSheet } from "@/lib/setupSheet";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
@@ -336,14 +336,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const pages = f.sheet || (await looksLikeSheet(buf));
         if (!pages) continue;
         step(`${of}Reading their mockup sheet ${f.name}…`);
-        const ims = d.groups.flatMap((x) => x.imprints.filter((im) => d!.art?.[im.id] === f.path).map((im) => ({ x, im })));
+        const ims: { x: Group; im: Group["imprints"][number] }[] = d.groups.flatMap((x) => x.imprints.filter((im) => d!.art?.[im.id] === f.path).map((im) => ({ x, im })));
         const widthIn = ims.map(({ im }) => parseFloat(String(im.size || ""))).find((n) => n > 0);
         const parts = await splitSheet(buf, { ...pages, widthIn, name: f.name });
         guard();
         if (!parts) continue;
-        const gs = [...new Set(ims.map(({ x }) => x))];
+        const gs: Group[] = [...new Set(ims.map(({ x }) => x))];
+        // where their mockup puts it: the drop below the neckline, measured with the spec box's width as the ruler
+        const place = parts.mockup && widthIn ? await measureDrop(parts.mockup, widthIn).catch(() => null) : null;
         const specs = [
-          ...ims.map(({ im }) => [im.location, im.size, im.colors ? `${im.colors} color${+im.colors === 1 ? "" : "s"}${im.inks ? `: ${im.inks}` : ""}` : im.inks].filter(Boolean).join(" · ")),
+          ...ims.map(({ im }) => [im.location, im.size, place ? `${place.dropIn}" below the collar, as on their mockup` : "", im.colors ? `${im.colors} color${+im.colors === 1 ? "" : "s"}${im.inks ? `: ${im.inks}` : ""}` : im.inks].filter(Boolean).join(" · ")),
           ...gs.flatMap((x) => [...new Set(x.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ")))]).filter(Boolean),
         ];
         const artUrl = URL.createObjectURL(parts.art), mockUrl = parts.mockup ? URL.createObjectURL(parts.mockup) : "";
@@ -362,6 +364,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         for (const [k, v] of Object.entries(d.mockups || {})) mock2[k] = [...new Set(v.map((p0) => (p0 === f.path ? (upM.error ? "" : mockPath) : p0)).filter(Boolean))];
         // the shirt page is the mockup of every group printing this art
         if (!upM.error) for (const x of gs) mock2[x.id] = [...new Set([...(mock2[x.id] || []), mockPath])];
+        // their placement on the prints made from this sheet
+        if (place) {
+          const ids = new Set(ims.map(({ im }) => im.id));
+          d = { ...d, groups: d.groups.map((x) => ({ ...x, imprints: x.imprints.map((im) => (ids.has(im.id) ? { ...im, drop: String(place.dropIn), notes: [im.notes, `Placement from their mockup: ${place.dropIn}" below the collar`].filter(Boolean).join(". ").slice(0, 300) } : im)) })) };
+        }
         d = { ...d, art: art2, mockups: mock2, files: [
           ...d.files.map((x) => (x.path === f.path ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)),
           { path: artPath, name: `${base} art.png`, type: "image/png", size: parts.art.size, role: "art" as const, what: "art cut off their mockup sheet" },

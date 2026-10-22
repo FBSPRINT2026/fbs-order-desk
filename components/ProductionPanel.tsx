@@ -4,7 +4,7 @@ import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
-export type ProdFile = { id: string; name: string; url?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null };
+export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0, 4).toUpperCase();
@@ -21,6 +21,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
   const [over, setOver] = useState(false);
   const [armed, setArmed] = useState("");
   const [zoom, setZoom] = useState<ProdFile | null>(null);
+  const [peek, setPeek] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const edit = !!onNote;
   return (
@@ -76,8 +77,11 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
       </div>
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label={zoom.name} onClick={() => setZoom(null)}>
-          <img src={zoom.url} alt={zoom.name} onClick={(e) => e.stopPropagation()} />
-          <div className="pv-zoom-bar" onClick={(e) => e.stopPropagation()}><a href={zoom.url} target="_blank" rel="noreferrer">Open full size</a><a href={downloadUrl(zoom.url, zoom.fileName || zoom.name)} target="_blank" rel="noreferrer">Download</a><button type="button" className="btn" onClick={() => setZoom(null)}>Close</button></div>
+          <img src={peek && zoom.plain ? zoom.plain : zoom.url} alt={zoom.name} onClick={(e) => e.stopPropagation()} />
+          {zoom.plain && <img src={zoom.plain} alt="" hidden />}
+          <div className="pv-zoom-bar" onClick={(e) => e.stopPropagation()}>{zoom.plain && <button type="button" className={"pv-peek" + (peek ? " on" : "")} title="Hold to see it without the Customer supplied mockup stamp; let go and the stamp comes back"
+            onPointerDown={(e) => { e.preventDefault(); setPeek(true); }} onPointerUp={() => setPeek(false)} onPointerLeave={() => setPeek(false)} onPointerCancel={() => setPeek(false)}
+            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setPeek(true); } }} onKeyUp={() => setPeek(false)} onBlur={() => setPeek(false)}>{peek ? "Showing it without the stamp" : "Hold to hide the stamp"}</button>}<a href={zoom.url} target="_blank" rel="noreferrer">Open full size</a><a href={downloadUrl(zoom.url, zoom.fileName || zoom.name)} target="_blank" rel="noreferrer">Download</a><button type="button" className="btn" onClick={() => setZoom(null)}>Close</button></div>
         </div>
       )}
     </section>
