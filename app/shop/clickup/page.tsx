@@ -7,8 +7,9 @@ import { Due } from "@/components/bits";
 import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
-import type { ClickUpTeamRow } from "@/lib/clickup";
-import { dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpState, type ClickUpTask } from "./actions";
+import { FileTray, type MailFile } from "@/components/MailFolders";
+import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
+import { clickUpFiles, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -20,7 +21,10 @@ import { dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, s
  */
 
 type Tab = "new" | "made" | "printavo" | "not" | "boards";
-type Data = { connected: boolean; state: ClickUpState | null; teams: ClickUpTeamRow[]; tasks: ClickUpTask[]; customers: { id: string; label: string }[] };
+type Data = { connected: boolean; tokens: number; state: ClickUpState | null; teams: ClickUpTeamRow[]; tasks: ClickUpTask[]; known: Record<string, ClickUpKnown>; customers: { id: string; label: string }[] };
+/** a task's files as an email's attachments (stored copies open in the portal; until then, in ClickUp) */
+const asMail = (files: CuFile[]): MailFile[] => files.map((f) => ({ key: f.id, name: f.name, size: f.size, type: f.type,
+  href: f.path ? `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` : f.url }));
 
 const chiDay = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) : null);
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -29,7 +33,6 @@ const ago = (iso: string | null) => {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 };
-const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n ? `${Math.max(1, Math.round(n / 1024))} KB` : "");
 /** the fields worth showing: ticked boxes and filled-in words (not "In Printavo", it has its own tab) */
 const shownFields = (f: Record<string, string>) => Object.entries(f).filter(([k, v]) => v !== "—" && !/printavo/i.test(k));
 
@@ -47,6 +50,7 @@ export default function ClickUpJobs() {
   const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
   const [review, setReview] = useState<OrderStart | null>(null);
   const [made, setMade] = useState<{ id: string; number: number } | null>(null);
+  const [files, setFiles] = useState<{ id: string; list: CuFile[]; busy: boolean; err?: string } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -89,6 +93,10 @@ export default function ClickUpJobs() {
   };
   const openJob = (id: string) => {
     setOpenId(id); setMade(null); setAct(null); setPick(false); setQuick(null); setReview(null);
+    // the files, like an email's attachments: copied into the portal if the reader hasn't yet
+    const t = data?.tasks.find((x) => x.id === id);
+    setFiles({ id, list: t?.attachments || [], busy: !!t?.attachments.some((f) => !f.path) });
+    if (t?.attachments.some((f) => !f.path)) void clickUpFiles(id).then((r) => setFiles((cur) => (cur?.id !== id ? cur : r.ok ? { id, list: r.files, busy: false } : { ...cur, busy: false, err: r.error })));
     setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
   const start = async (kind: "new" | "reorder") => {
@@ -123,7 +131,7 @@ export default function ClickUpJobs() {
       {data?.state?.last_error && <div className="banner">ClickUp: {data.state.last_error}</div>}
       {err && <div className="banner">{err}</div>}
       {msg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--ink)" }}>{msg}</div>}
-      {data?.connected && <p className="faint cu-checked">Checked {ago(data.state?.last_ok_at || null)}{data.state?.user_email ? ` as ${data.state.user_email}` : ""}. New jobs are looked for every 3 minutes.</p>}
+      {data?.connected && <p className="faint cu-checked">Checked {ago(data.state?.last_ok_at || null)}: {data.teams.length} workspace{data.teams.length === 1 ? "" : "s"} from {data.tokens} ClickUp token{data.tokens === 1 ? "" : "s"}. New jobs are looked for every 3 minutes. Each workspace needs its own token in Vercel (a CLICKUP_API_TOKEN… variable).</p>}
 
       <div className="stats">
         <button type="button" className="stat" onClick={() => setTab("new")}><span className={"v" + (groups.new.length ? " alert" : "")}>{groups.new.length}</span><span className="k">New jobs to process</span></button>
@@ -147,8 +155,15 @@ export default function ClickUpJobs() {
           </div>
           {shownFields(job.fields).length > 0 && <div className="cu-tags">{shownFields(job.fields).map(([k, v]) => <span key={k} className="cu-tag">{v === "✓" ? `${k} ✓` : `${k}: ${v}`}</span>)}</div>}
           {job.description && <p className="cu-notes">{job.description}</p>}
-          {job.attachments.length > 0 && <div className="cu-sec"><div className="cu-k">{job.attachments.length} file{job.attachments.length === 1 ? "" : "s"}</div>
-            <ul className="cu-files">{job.attachments.map((f) => <li key={f.id}><a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> <span className="faint">{kb(f.size)}</span></li>)}</ul></div>}
+          {(() => {
+            const k = data?.known[job.id], ours = job.order_id ? { id: job.order_id, number: job.order_number || 0 } : k?.ours;
+            return k?.pv || ours ? <div className="cu-known">
+              {k?.pv && <span>Printavo <Link href={`/shop/archive/${k.pv.id}`}><b>#{k.pv.number}</b></Link> <span className="faint">{k.pv.name}{k.pv.status ? ` · ${k.pv.status}` : ""}</span></span>}
+              {ours && <span>Our order <Link href={`/shop/orders/${ours.id}`}><b>#{ours.number}</b></Link></span>}
+            </div> : null;
+          })()}
+          {files?.id === job.id && files.list.length > 0 ? <div className="cu-sec"><FileTray files={asMail(files.list)} note={files.busy ? "Bringing the files in from ClickUp…" : files.err ? `Some files open in ClickUp: ${files.err}` : undefined} /></div>
+            : !job.attachments.length && <div className="cu-sec faint">No files on this job in ClickUp.</div>}
           {job.comments.length > 0 && <div className="cu-sec"><div className="cu-k">Comments</div>
             <ul className="cu-comments">{job.comments.map((c, i) => <li key={i}><b>{c.who}</b> <span className="faint">{when(c.at)}</span><div>{c.text}</div></li>)}</ul></div>}
 
@@ -220,22 +235,25 @@ export default function ClickUpJobs() {
         </table>
       </div> : <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Customer</th><th>Job</th><th>Due</th><th>Files</th><th>Added</th><th /></tr></thead>
+          <thead><tr><th>Customer</th><th>Job</th><th>Due</th><th>Files</th><th>Printavo #</th><th>Our #</th><th>Added</th><th /></tr></thead>
           <tbody>
-            {!data ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : list.length ? list.map((t) => {
+            {!data ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : list.length ? list.map((t) => {
               const tm = teams.get(t.team_id);
+              const k = data.known[t.id], ours = t.order_id ? { id: t.order_id, number: t.order_number || 0 } : k?.ours;
               const f = shownFields(t.fields).slice(0, 3);
               return <tr key={t.id} tabIndex={0} className={openId === t.id ? "picked" : undefined} onClick={() => openJob(t.id)} onKeyDown={(e) => e.key === "Enter" && openJob(t.id)}>
                 <td><div>{custName.get(tm?.customer_id || "") || tm?.name || "—"}</div><div className="sub">{tm?.customer_id ? tm.name : "Pick the customer"}</div></td>
                 <td><div>{t.name}</div><div className="sub">{[t.where_text, ...f.map(([k, v]) => (v === "✓" ? `${k} ✓` : `${k}: ${v}`))].filter(Boolean).join(" · ")}</div></td>
                 <td>{t.due_at ? <Due date={chiDay(t.due_at)} status={t.order_id ? "completed" : ""} /> : <span className="faint">No date</span>}</td>
                 <td>{t.attachments.length ? `${t.attachments.length} file${t.attachments.length === 1 ? "" : "s"}` : <span className="faint">None</span>}{t.comments.length ? <div className="sub">{t.comments.length} comment{t.comments.length === 1 ? "" : "s"}</div> : null}</td>
+                <td className="cu-nw">{k?.pv ? <><Link href={`/shop/archive/${k.pv.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{k.pv.number}</span></Link>{k.pv.status && <div className="sub">{k.pv.status}</div>}</> : <span className="faint">—</span>}</td>
+                <td className="cu-nw">{ours ? <Link href={`/shop/orders/${ours.id}`} onClick={(e) => e.stopPropagation()}><span className="ordno">{ours.number}</span></Link> : <span className="faint">—</span>}</td>
                 <td className="cu-nw">{when(t.created_at_cu)}</td>
                 <td className="r cu-nw">{t.order_id
-                  ? <Link href={`/shop/orders/${t.order_id}`} onClick={(e) => e.stopPropagation()}>#{t.order_number}</Link>
+                  ? <span className="faint">Made</span>
                   : <button type="button" className={"btn sm" + (t.waiting ? " primary" : "")} onClick={(e) => { e.stopPropagation(); openJob(t.id); }}>Process</button>}</td>
               </tr>;
-            }) : <tr><td colSpan={6}><div className="empty">{q ? `No jobs match “${q}”.` : tab === "new" ? "No new ClickUp jobs right now. New ones show up here (and as a count in the menu) within a few minutes of a customer adding them." : "Nothing here."}</div></td></tr>}
+            }) : <tr><td colSpan={8}><div className="empty">{q ? `No jobs match “${q}”.` : tab === "new" ? "No new ClickUp jobs right now. New ones show up here (and as a count in the menu) within a few minutes of a customer adding them." : "Nothing here."}</div></td></tr>}
           </tbody>
         </table>
       </div>}

@@ -11980,3 +11980,5 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 .cu-bad{color:var(--danger)}
 .cu-nw{white-space:nowrap}
 tr.cu-off td{color:var(--ink-3)}
+.cu-known{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:14px;color:var(--ink)}
+.cu-job .mf-tray{margin:0}
