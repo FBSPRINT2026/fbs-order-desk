@@ -119,8 +119,8 @@ const keepCount = (x: { colors?: number; confirm?: { ink?: boolean } | null; con
 const nearestBrand = (hex: string, b: { colors: BrandInk[] }) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
 
 /** portal = the customer's own builder: their account only, no order, saved through the portal's server actions. */
-/** prints don't move off the center of their print area (Oct 22, Nick: "we should never drag something to the left or
- *  to the right"): no drag offsets; size is still changed from the corner */
+/** close-ups and the print spec never move off the center of the print area (Oct 22, Nick: "the image always has to be
+ *  in the center of the close-ups"); a drag only lines the logo up on the shirt picture */
 const NO_OFF = { dx: 0, dy: 0 } as const;
 
 export default function MockupBuilder({ portal = false, backHref }: { portal?: boolean; backHref?: string }) {
@@ -1055,7 +1055,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const vv = view || viewsFor(im.location)[0];
     const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, settingsLine(on || line, vv), vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
-    const o0 = NO_OFF, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
+    // a hand drag lines the logo up on the shirt picture only (Oct 22, Nick: "locks in the close-up… then we just drag
+    // to visually align it on the mockup… that shouldn't matter for our proofing"): close-ups and the print spec stay put
+    const o0 = offsets[im.id] || NO_OFF, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -1143,7 +1145,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
-                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
                     onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
                     onEnd={() => settleHere(im.id)} />
@@ -1459,7 +1461,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             x.strokeStyle = darkShirt ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.45)"; x.lineWidth = 3; x.beginPath(); x.moveTo(bx, ay + sp.maxH * PXI); x.lineTo(bx + BW, ay + sp.maxH * PXI); x.stroke();
           }
           const offX = o.dx / (PX_PER_IN * scale), offY = o.dy / (PX_PER_IN * scale);
-          const cx = bx + BW / 2 + offX * PXI, cy = by + (im.drop && !isNaN(+im.drop) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
+          const cx = bx + BW / 2 + offX * PXI, cy = by + (sp.top || (im.drop && !isNaN(+im.drop)) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
           const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
           if (art) x.drawImage(art, cx - (wIn * PXI) / 2, cy - (hIn * PXI) / 2, wIn * PXI, hIn * PXI);
           x.restore();
