@@ -1155,6 +1155,31 @@ function TagTile({ set, size, shirtHex }: { set: NeckLabelSet; size: string; shi
     labelFor(set, size, shirtHex).then((c) => { if (off) return; if (c) { setU(c.toDataURL("image/png")); setNone(false); } else { setU(""); setNone(true); } }).catch(() => { if (!off) setNone(true); });
     return () => { off = true; };
   }, [set, size, shirtHex]);
-  // eslint-disable-next-line @next/next/no-img-element
-  return u ? <img src={u} alt={`${set.name || "Tag"}, as it prints`} /> : <span>{none ? "No picture of the tag" : ""}</span>;
+  // click to see it big (Oct 21, Nick: "you should be able to zoom in on the tag print")
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (!big) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setBig(false); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [big]);
+  if (!u) return <span>{none ? "No picture of the tag" : ""}</span>;
+  return <>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={u} alt={`${set.name || "Tag"}, as it prints`} className="tag-zoomable" title="See it bigger" onClick={() => setBig(true)} />
+    {big && (
+      <div className="mkz" role="dialog" aria-modal="true" aria-label="Tag print" onClick={() => setBig(false)}>
+        <div className="mkz-in" onClick={(e) => e.stopPropagation()}>
+          <div className="mkz-pic" style={{ background: shirtHex }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt={`${set.name || "Tag"}, as it prints`} className="tag-big" />
+          </div>
+          <div className="mkz-bar">
+            <b>{set.name || "Tag print"}</b><span className="faint">&nbsp;· size {size} · inside the neck</span>
+            <span className="spacer" />
+            <button type="button" className="btn sm" onClick={() => setBig(false)}>Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>;
 }

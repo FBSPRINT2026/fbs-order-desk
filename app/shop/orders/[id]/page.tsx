@@ -895,7 +895,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         : <BackLink href="/shop/orders" label="Orders" />}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
-          <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
           <h1>{o.nickname || "Untitled Job"}<span className="ot-no"> – #{o.number}</span>{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className="ed-actions">
@@ -935,7 +934,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <button type="button" className="danger" onClick={del}>Delete order</button>
             </div>
           </details>
-          <span className="save-state">{saveState}</span>
+          {/* what it is, when it was made, and saved (Oct 21, Nick: "move that invoice created thing… a little box where
+              you have it say saved") */}
+          <span className="ot-info" title={o.approved_at ? `Approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : undefined}>
+            <span className="ot-info-1"><b>{o.type === "quote" ? "Quote" : "Invoice"}</b><span className={"save-state" + (/failed/i.test(saveState) ? " bad" : /…/.test(saveState) ? " busy" : "")} title={saveState}>{/failed/i.test(saveState) ? "Not saved" : saveState || "Saved"}</span></span>
+            <span>Created {fmtDate(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</span>
+          </span>
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
