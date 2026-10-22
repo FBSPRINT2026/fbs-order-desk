@@ -11599,3 +11599,8 @@ main.main .page-head{column-gap:72px}
 .db-reply .db-side{margin-left:auto}
 /* Customers: a long email address stays on one line, cut short */
 .cu-em{max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* the order's section tabs scroll away with the page (Oct 21, Nick: "you're pinning that for some reason") */
+html body main.main .ord .ot-nav{position:static}
+.jd-made{font-size:12px;margin-top:2px}
+.ord .ed-actions .save-state.bad{color:var(--danger);font-weight:700}

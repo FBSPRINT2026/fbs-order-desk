@@ -935,12 +935,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <button type="button" className="danger" onClick={del}>Delete order</button>
             </div>
           </details>
-          {/* what it is, when it was made, and saved (Oct 21, Nick: "move that invoice created thing… a little box where
-              you have it say saved") */}
-          <span className="ot-info" title={o.approved_at ? `Approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : undefined}>
-            <span className="ot-info-1"><b>{o.type === "quote" ? "Quote" : "Invoice"}</b><span className={"save-state" + (/failed/i.test(saveState) ? " bad" : /…/.test(saveState) ? " busy" : "")} title={saveState}>{/failed/i.test(saveState) ? "Not saved" : saveState || "Saved"}</span></span>
-            <span>Created {fmtDate(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</span>
-          </span>
+          {/* only while saving or when a save failed (Oct 21, Nick: "I really don't like that invoice saved created button") */}
+          {(/…/.test(saveState) || /failed/i.test(saveState)) && <span className={"save-state" + (/failed/i.test(saveState) ? " bad" : "")} title={saveState}>{/failed/i.test(saveState) ? "Not saved" : saveState}</span>}
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
@@ -1165,6 +1161,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
                   </div>
                 )}
+                <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>
             </section>
           </div>
