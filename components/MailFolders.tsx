@@ -402,7 +402,7 @@ export function FrameZoom({ frame, fit, doc }: { frame: React.RefObject<HTMLIFra
   // only while this email is on screen
   useEffect(() => {
     const f = frame.current; if (!f || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setSeen(e.isIntersecting), { threshold: 0.05 });
+    const io = new IntersectionObserver(([e]) => setSeen(e.isIntersecting), { threshold: 0 });
     io.observe(f); return () => io.disconnect();
   }, [frame, doc]);
   // pinch inside the email
@@ -417,15 +417,28 @@ export function FrameZoom({ frame, fit, doc }: { frame: React.RefObject<HTMLIFra
       now = Math.min(3, Math.max(1, p.k * (dist(e.touches) / p.dist)));
       d.body.style.zoom = String(p.base * now);
     };
-    const end = (e: TouchEvent) => { if (p && e.touches.length < 2) { p = null; apply(now); } };
+    // a double tap: zoom in to 200%, again back to fit (like Safari)
+    let tap = { t: 0, x: 0, y: 0 }, one: { x: number; y: number; moved: boolean } | null = null;
+    const startOne = (e: TouchEvent) => { one = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false } : null; };
+    const moveOne = (e: TouchEvent) => { if (one && e.touches.length === 1 && Math.hypot(e.touches[0].clientX - one.x, e.touches[0].clientY - one.y) > 10) one.moved = true; };
+    const end = (e: TouchEvent) => {
+      if (p && e.touches.length < 2) { p = null; apply(now); one = null; return; }
+      if (!one || one.moved || e.touches.length) { one = null; return; }
+      const t = Date.now(), near = Math.hypot(one.x - tap.x, one.y - tap.y) < 30;
+      if (t - tap.t < 320 && near) { e.preventDefault(); apply(kRef.current > 1 ? 1 : 2); tap = { t: 0, x: 0, y: 0 }; }
+      else tap = { t, x: one.x, y: one.y };
+      one = null;
+    };
     const hook = () => {
       d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end);
+      d?.removeEventListener("touchstart", startOne); d?.removeEventListener("touchmove", moveOne);
       d = f.contentDocument; if (!d) return;
       d.addEventListener("touchstart", start, { passive: true }); d.addEventListener("touchmove", move, { passive: false });
-      d.addEventListener("touchend", end); d.addEventListener("touchcancel", end);
+      d.addEventListener("touchstart", startOne, { passive: true }); d.addEventListener("touchmove", moveOne, { passive: true });
+      d.addEventListener("touchend", end, { passive: false }); d.addEventListener("touchcancel", end);
     };
     hook(); f.addEventListener("load", hook);
-    return () => { f.removeEventListener("load", hook); d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end); };
+    return () => { f.removeEventListener("load", hook); d?.removeEventListener("touchstart", startOne); d?.removeEventListener("touchmove", moveOne); d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end); };
   }, [frame, doc]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!seen) return null;
   return (
