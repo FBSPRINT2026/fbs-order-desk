@@ -8,6 +8,7 @@ import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
 import VoiceDraft, { SayButton, startListening, type Draft } from "@/components/VoiceDraft";
 import { cheerWin } from "@/components/Cheer";
 import { createClient } from "@/lib/supabase/client";
+import { useSaneBox } from "@/components/RoleContext";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -286,6 +287,8 @@ export function PPick({ icon, label, items, empty, extra }: { icon: React.ReactN
  * microphone sit in the AI card at the top of the email. A button an email can't use stays in its place, greyed out.
  */
 function PhoneBar({ a }: { a: PhoneActs }) {
+  // no SaneBox on this person's mailbox (Claudia, Jose): Archive only, no News or Black Hole (Oct 22, Nick)
+  const sane = useSaneBox();
   const [sheet, setSheet] = useState<"" | "move" | "more" | "bh" | "files">("");
   const files = a.files || [];
   const [askBH, setAskBH] = useState(false);
@@ -299,7 +302,7 @@ function PhoneBar({ a }: { a: PhoneActs }) {
     <>
       <nav className="pbar" aria-label="Email actions">
         <button type="button" className="pbar-b" disabled={off} onClick={() => mv("archive", "Archived.")}>{TbIcon.archive}<span>Archive</span></button>
-        <button type="button" className="pbar-b danger" disabled={off} onClick={() => (a.known ? (setSheet("bh"), setAskBH(true)) : mv("blackhole", bh))}>{TbIcon.ban}<span>Black Hole</span></button>
+        {sane && <button type="button" className="pbar-b danger" disabled={off} onClick={() => (a.known ? (setSheet("bh"), setAskBH(true)) : mv("blackhole", bh))}>{TbIcon.ban}<span>Black Hole</span></button>}
         <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => { a.reply?.(); window.scrollTo({ top: 0 }); }}>{TbIcon.reply}<span>Reply</span></button>
         <button type="button" className="pbar-b" disabled={!a.forward} onClick={() => a.forward?.()}>{TbIcon.forward}<span>Forward</span></button>
         {files.length > 0 && <button type="button" className="pbar-b pbar-files" onClick={() => setSheet("files")} aria-label={`Attachments (${files.length})`}><i className="pbar-ico">{TbIcon.clip}<b className="pbar-n">{files.length}</b></i><span>Files</span></button>}
@@ -315,13 +318,13 @@ function PhoneBar({ a }: { a: PhoneActs }) {
             {files.some((f) => f.href) && <button type="button" className="btn ps-save" onClick={() => saveAll(files)}>{TbIcon.download} Save all</button>}
           </> : sheet === "move" ? <>
             <div className="pbar-t">Move to</div>
-            <button type="button" role="menuitem" disabled={off} onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>
+            {sane && <button type="button" role="menuitem" disabled={off} onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>}
             {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={off} onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
             {!others.length && <span className="faint" style={{ padding: 12 }}>Loading folders…</span>}
           </> : <>
             {sheet === "more" && a.more?.(close)}
             {sheet === "more" && <PSec label="Move">
-              <PTile icon={TbIcon.news} label="News" disabled={off} onClick={() => mv("news", "Moved to News.")} />
+              {sane && <PTile icon={TbIcon.news} label="News" disabled={off} onClick={() => mv("news", "Moved to News.")} />}
               <PTile icon={TbIcon.move} label="Move to…" disabled={off} onClick={() => setSheet("move")} />
               {a.ask && !a.ask.openChat && <PTile icon={<span className="pbar-ic" aria-hidden>✦</span>} label="Say a reply" onClick={() => { close(); setVoice({ l: startListening() }); }} />}
             </PSec>}
@@ -342,6 +345,7 @@ function PhoneBar({ a }: { a: PhoneActs }) {
 export function MoveBar({ folders, busy, onMove, here, known }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string, confirmed?: boolean) => void; here?: string;
   /** the sender is a customer (their name): Black Hole asks first (Oct 14, Nick: "keep you from black holing a known customer") */ known?: string }) {
   const [askBH, setAskBH] = useState(false);
+  const sane = useSaneBox();
   const bh = () => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.", true);
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
   return (
@@ -349,21 +353,21 @@ export function MoveBar({ folders, busy, onMove, here, known }: { folders: Folde
     {/* Move (Oct 14, Nick: Email · Move · Spam · Actions) */}
     <TbGroup label="Move">
       <TbBtn icon={TbIcon.archive} label="Archive" kind="strong" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Move it to Archive, like Outlook's Archive button" />
-      <TbBtn icon={TbIcon.news} label="News" disabled={busy} onClick={() => onMove("news", "Moved to News.")} title="SaneBox News: this sender's mail goes to News from now on" />
+      {sane && <TbBtn icon={TbIcon.news} label="News" disabled={busy} onClick={() => onMove("news", "Moved to News.")} title="SaneBox News: this sender's mail goes to News from now on" />}
       <TbMenu icon={TbIcon.move} label="Move">{(close) => <>
         {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={busy} onClick={() => { close(); onMove(f.path, `Moved to ${folderLabel(f)}.`); }} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 10 }}>{folderLabel(f)}</button>)}
         {!others.length && <span className="faint" style={{ padding: 8 }}>Loading folders…</span>}
       </>}</TbMenu>
     </TbGroup>
-    {/* Spam */}
-    <TbGroup label="Spam">
+    {/* Spam: SaneBox's Black Hole (only when their mailbox has SaneBox) */}
+    {sane && <TbGroup label="Spam">
       {askBH && known ? <span className="tb-ask" role="alertdialog" aria-label="Black Hole a customer?">
         <span><b>{known}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
         <button type="button" className="btn sm danger" disabled={busy} onClick={() => { setAskBH(false); bh(); }}>Yes, Black Hole</button>
         <button type="button" className="btn sm ghost" onClick={() => setAskBH(false)}>Cancel</button>
       </span>
         : <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => (known ? setAskBH(true) : onMove("blackhole", "Black Hole: SaneBox won't show you this sender again."))} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />}
-    </TbGroup>
+    </TbGroup>}
     </>
   );
 }
