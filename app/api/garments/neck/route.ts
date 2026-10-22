@@ -27,13 +27,20 @@ export async function GET(req: Request) {
   if (sp.get("todo")) {
     if (!v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
     const admin = createAdminClient();
-    const [{ data: gs }, { data: done }] = await Promise.all([
-      admin.from("garments").select("brand, style, description, color_images").not("color_images", "is", null),
-      admin.from("garment_necks").select("photo"),
+    // every row, a thousand at a time (Oct 22, Nick: "it just keeps refreshing the same shirts over and over"): the
+    // database hands back at most 1,000 rows per ask, so past 1,000 saved necks the newest ones looked unset again
+    const every = async <T,>(q: (a: number, b: number) => PromiseLike<{ data: T[] | null }>) => {
+      const out: T[] = [];
+      for (let a = 0; ; a += 1000) { const { data } = await q(a, a + 999); out.push(...(data || [])); if (!data || data.length < 1000) break; }
+      return out;
+    };
+    const [gs, done] = await Promise.all([
+      every<{ brand: string | null; style: string | null; description: string | null; color_images: unknown }>((a, b) => admin.from("garments").select("brand, style, description, color_images").not("color_images", "is", null).order("id").range(a, b)),
+      every<{ photo: string }>((a, b) => admin.from("garment_necks").select("photo").order("photo").range(a, b)),
     ]);
     const have = new Set((done || []).map((r) => r.photo as string)), seen = new Set<string>();
     const all: { photo: string; brand: string; style: string; color: string }[] = [];
-    for (const g of (gs || []).sort((a, b) => `${a.brand} ${a.style}`.localeCompare(`${b.brand} ${b.style}`))) {
+    for (const g of gs.sort((a, b) => `${a.brand} ${a.style}`.localeCompare(`${b.brand} ${b.style}`))) {
       if (/(tote|bag|cap|hat|beanie|apron|towel|blanket|sock)/i.test(String(g.description || ""))) continue;
       for (const [color, ci] of Object.entries((g.color_images || {}) as Record<string, { front?: string }>)) {
         const photo = key(ci?.front);
