@@ -12022,3 +12022,7 @@ tr.cu-off td{color:var(--ink-3)}
 .cu-flag svg{width:13px;height:13px;fill:currentColor;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
 .cu-flag.urgent{color:var(--danger)}
 .cu-flag.high{color:var(--warn)}
+/* ClickUp tables: text wraps inside its column (the shop rule keeps every row's first cell on one line, which is the
+   customer band here, and the job name in the rows under it), so nothing runs into the next column (Oct 22) */
+html body main.main .tbl.cu-tbl td{white-space:normal}
+html body main.main .tbl.cu-tbl td.cu-nw,html body main.main .tbl.cu-tbl td.r{white-space:nowrap}
