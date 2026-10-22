@@ -39,7 +39,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
 }) {
   const [page, setPage] = useSticky<PageKey>("ss.page", "landscape");
   const [bg, setBg] = useSticky<string>("ss.bg", "#ffffff");
-  const [perRow, setPerRow] = useSticky<number>("ss.perRow", 4);
+  const [perRow, setPerRow] = useSticky<number>("ss.perRow", 4), [autoRow, setAutoRow] = useSticky<boolean>("ss.autoRow", true);
   const [gap, setGap] = useSticky<number>("ss.gap", 3);
   const [size, setSize] = useSticky<number>("ss.size", 100);
   const [pairGap, setPairGap] = useSticky<number>("ss.pairGap", 2);
@@ -85,18 +85,18 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
           if (!cache.current.has(k)) cache.current.set(k, await shirts(c.key, [sd], 900));
           if (!live) return;
         }
-        // the box around every color's shirt on each side (non-white pixels), shared by all colors
-        for (const sd of views) {
+        // each shirt trimmed to its own outline (the photos' white margins out; 6210 and 3001 photos are framed
+        // differently, so one shared box left gaps): all drawn at one scale, standing on the same line
+        for (const c of colors) for (const sd of views) {
+          const key = `${c.key}|${sd}`, cv0 = cache.current.get(key); if (!cv0 || crop.current[key]) continue;
           let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
-          for (const c of colors) {
-            const cv0 = cache.current.get(`${c.key}|${sd}`); if (!cv0) continue;
-            const w = cv0.width, h = cv0.height, d = cv0.getContext("2d")!.getImageData(0, 0, w, h).data;
-            for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
-              const i = (y * w + x) * 4;
-              if (d[i + 3] > 20 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-            }
+          const w = cv0.width, h = cv0.height, d = cv0.getContext("2d")!.getImageData(0, 0, w, h).data;
+          for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+            const i = (y * w + x) * 4;
+            if (d[i + 3] > 20 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
           }
-          if (x1 > x0 && y1 > y0) { const pad = 6; crop.current[sd] = { x: Math.max(0, x0 - pad), y: Math.max(0, y0 - pad), w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad }; }
+          const pad = 4;
+          crop.current[key] = x1 > x0 && y1 > y0 ? { x: Math.max(0, x0 - pad), y: Math.max(0, y0 - pad), w: Math.min(w, x1 - x0 + 2 * pad), h: Math.min(h, y1 - y0 + 2 * pad) } : { x: 0, y: 0, w, h };
         }
         setBusy(""); setTick((t) => t + 1);
       } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't draw the shirts."); setBusy(""); }
@@ -137,24 +137,35 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     const top = y + Math.round(H * 0.025), bot = H - M - footH;
     // the grid: one unit per color (its sides side by side, trimmed), as big as fits with the spacing asked for, the
     // whole block centered on the page (Oct 22, Nick: fewer per row should mean bigger shirts, not bigger gaps)
-    const n = shown.length, cols = Math.max(1, Math.min(perRow, n || 1)), rows = Math.max(1, Math.ceil(n / cols));
+    const n = shown.length;
     const g = (gap / 100) * W, labelH = names ? Math.round(labelSize * (styleUnder && multiStyle ? 2.4 : 1.5)) : 0;
-    const boxes0 = sideList.map((sd) => crop.current[sd] || { x: 0, y: 0, w: 600, h: 750 });
-    const pg = (pairGap / 100) * W;
-    const uw0 = boxes0.reduce((t, b) => t + b.w, 0), uh0 = Math.max(...boxes0.map((b) => b.h));
-    // the scale k that fits cols units across and rows down
-    const kW = (W - 2 * M - (cols - 1) * g - cols * (sideList.length - 1) * pg) / (cols * uw0);
-    const kH = (bot - top - (rows - 1) * g - rows * labelH) / (rows * uh0);
-    const k = Math.max(0.05, Math.min(kW, kH)) * (size / 100);
-    const uw = uw0 * k + (sideList.length - 1) * pg, uh = uh0 * k, cellH = uh + labelH;
+    const pg = (pairGap / 100) * W, ns = sideList.length;
+    const boxOf = (k0: string, sd: string) => crop.current[`${k0}|${sd}`] || { x: 0, y: 0, w: 600, h: 750 };
+    // the widest and tallest color sets the slot every color is drawn in
+    const uw0 = Math.max(1, ...shown.map((c) => sideList.reduce((t, sd) => t + boxOf(c.key, sd).w, 0)));
+    const uh0 = Math.max(1, ...shown.map((c) => Math.max(...sideList.map((sd) => boxOf(c.key, sd).h))));
+    const fitK = (cols: number) => {
+      const rows = Math.max(1, Math.ceil(n / cols));
+      const kW = (W - 2 * M - (cols - 1) * g - cols * (ns - 1) * pg) / (cols * uw0);
+      const kH = (bot - top - (rows - 1) * g - rows * labelH) / (rows * uh0);
+      return Math.min(kW, kH);
+    };
+    // per row: as asked, or (Auto) whatever makes the shirts biggest
+    let cols = Math.max(1, Math.min(perRow || 1, n || 1));
+    if (autoRow) { let best = 0; for (let c2 = 1; c2 <= Math.max(1, n); c2++) { const k2 = fitK(c2); if (k2 > best + 1e-6) { best = k2; cols = c2; } } }
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const k = Math.max(0.05, fitK(cols)) * (size / 100);
+    const uw = uw0 * k + (ns - 1) * pg, uh = uh0 * k, cellH = uh + labelH;
     const usedH = rows * cellH + (rows - 1) * g, oy = top + Math.max(0, (bot - top - usedH) / 2);
     x.textAlign = "center";
     for (let i = 0; i < n; i++) {
       const col = i % cols, row = Math.floor(i / cols), inRow = row === rows - 1 ? n - row * cols : cols;
       const rowW = inRow * uw + (inRow - 1) * g, ux = (W - rowW) / 2 + col * (uw + g), uy = oy + row * (cellH + g);
-      let sx = ux;
+      const bs = sideList.map((sd) => boxOf(shown[i].key, sd));
+      const pairW = bs.reduce((t, b) => t + b.w * k, 0) + (ns - 1) * pg;
+      let sx = ux + (uw - pairW) / 2;
       sideList.forEach((sd, j) => {
-        const im = cache.current.get(`${shown[i].key}|${sd}`), b = boxes0[j];
+        const im = cache.current.get(`${shown[i].key}|${sd}`), b = bs[j];
         if (im) {
           const dw = b.w * k, dh = b.h * k, dy = uy + (uh - dh);
           // white photo backgrounds blend away on a colored page
@@ -256,7 +267,8 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
             </section>
             <section><h3>Shirts</h3>
               <div className="chips">{(views.length > 1 ? (["both", "front", "back"] as Sides[]) : (["front"] as Sides[])).map((k) => <button key={k} type="button" className={"chip" + (sides === k || views.length < 2 ? " on" : "")} onClick={() => setSides(k)}>{k === "both" ? "Front and back" : k === "front" ? "Front" : "Back"}</button>)}</div>
-              <label className="mk-f"><span>Per row: {perRow}</span><input type="range" min={1} max={8} step={1} value={perRow} onChange={(e) => setPerRow(+e.target.value)} /></label>
+              <label className="check"><input type="checkbox" checked={autoRow} onChange={(e) => setAutoRow(e.target.checked)} /> Per row: Auto (biggest shirts)</label>
+              {!autoRow && <label className="mk-f"><span>Per row: {perRow}</span><input type="range" min={1} max={8} step={1} value={perRow} onChange={(e) => setPerRow(+e.target.value)} /></label>}
               <label className="mk-f"><span>Space between: {gap === 0 ? "none" : gap < 1.5 ? "tight" : gap < 4 ? "medium" : "roomy"}</span><input type="range" min={0} max={8} step={0.25} value={gap} onChange={(e) => setGap(+e.target.value)} /></label>
               {sideList.length > 1 && <label className="mk-f"><span>Front to back: {pairGap === 0 ? "touching" : pairGap < 1.5 ? "close" : pairGap < 3.5 ? "medium" : "apart"}</span><input type="range" min={0} max={6} step={0.25} value={pairGap} onChange={(e) => setPairGap(+e.target.value)} /></label>}
               <label className="mk-f"><span>Shirt size: {size}%</span><input type="range" min={50} max={100} step={1} value={size} onChange={(e) => setSize(+e.target.value)} /></label>
