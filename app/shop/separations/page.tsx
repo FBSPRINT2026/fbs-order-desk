@@ -8,28 +8,37 @@ import { fmtDate } from "@/lib/format";
 import { ARCHIVE_DAYS, ART_ACCEPT, ART_KINDS, SEP_STATUS, sepStage, prepareSepArt, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
 import { vartSvg } from "@/lib/epsVector";
 import CustomerPick from "@/components/CustomerPick";
+import { orderGroups } from "@/lib/pricing";
+import { colorHex, deltaE, repaintLogo } from "@/lib/inkColors";
+import { guessHex, shirtHex } from "@/lib/mockup";
 
 /**
- * Separations queue (Production → Separations): every imprint waiting for films, from "Request Separations" on an
- * order, or from art uploaded right here (no order needed). Open one to separate it here, or upload what came back
- * from Separo.
+ * Separations queue (Production → Separations): one row per job (Oct 22, Nick: "you shouldn't separate the separations
+ * by location. It should just be the jobs… with the front, the back… little label"). Each print is a small picture of
+ * the art as on the mockup (its inks, on the shirt color); a print going on two shirt colors shows both. Art uploaded
+ * here without an order is its own row.
  */
 const TABS = [["working", "Working"], ["printed", "Printed"], ["archived", "Archived"], ["all", "All"]] as const;
 type Tab = (typeof TABS)[number][0];
+type OrderLite = { id: string; number: number; nickname: string; due_date: string | null; groups: unknown; lines: unknown };
+/** print order: front ones, then back, then sleeves and the rest */
+const locRank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder/.test(l) ? 2 : /front|chest|pocket|vertical/.test(l) ? 1 : 4; };
+const loadImg = (url: string) => new Promise<HTMLImageElement>((ok, no) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = no; im.src = url; });
 
 export default function SeparationsPage() {
   const sb = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<SepRow[] | null>(null);
-  const [orders, setOrders] = useState<Record<string, { number: number; nickname: string; due_date: string | null }>>({});
+  const [orders, setOrders] = useState<Record<string, OrderLite>>({});
   const [cust, setCust] = useState<Record<string, string>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [tab, setTab] = useSticky<Tab>("sep.tab.list2", "working");
   const [q, setQ] = useState("");
-  // archive / restore straight from the list (the row moves tabs)
-  async function setStage(r: SepRow, status: SepRow["status"]) {
-    setRows((xs) => (xs || []).map((x) => (x.id === r.id ? { ...x, status, updated_at: new Date().toISOString() } : x)));
-    const { error } = await sb.from("separations").update({ status, updated_at: new Date().toISOString() }).eq("id", r.id);
-    if (error) setRows((xs) => (xs || []).map((x) => (x.id === r.id ? r : x)));
+  // archive / restore straight from the list: the whole job's prints (the row moves tabs)
+  async function setStage(rs: SepRow[], status: SepRow["status"]) {
+    const ids = new Set(rs.map((r) => r.id)), at = new Date().toISOString();
+    setRows((xs) => (xs || []).map((x) => (ids.has(x.id) ? { ...x, status, updated_at: at } : x)));
+    const { error } = await sb.from("separations").update({ status, updated_at: at }).in("id", [...ids]);
+    if (error) setRows((xs) => (xs || []).map((x) => rs.find((r) => r.id === x.id) || x));
   }
 
   useEffect(() => { (async () => {
@@ -40,25 +49,68 @@ export default function SeparationsPage() {
     setRows(list);
     const oids = [...new Set(list.map((r) => r.order_id).filter(Boolean))] as string[], cids = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
     const [{ data: o }, { data: c }] = await Promise.all([
-      oids.length ? sb.from("orders").select("id, number, nickname, due_date").in("id", oids) : Promise.resolve({ data: [] }),
+      oids.length ? sb.from("orders").select("id, number, nickname, due_date, groups, lines").in("id", oids) : Promise.resolve({ data: [] }),
       cids.length ? sb.from("customers").select("id, company, name").in("id", cids) : Promise.resolve({ data: [] }),
     ]);
-    setOrders(Object.fromEntries(((o || []) as { id: string; number: number; nickname: string; due_date: string | null }[]).map((x) => [x.id, x])));
+    const om = Object.fromEntries(((o || []) as OrderLite[]).map((x) => [x.id, x]));
+    setOrders(om);
     setCust(Object.fromEntries(((c || []) as { id: string; company: string; name: string }[]).map((x) => [x.id, x.company || x.name])));
-    // a small picture: the saved proof, else the design
+    // a small picture: the saved proof (how it prints), else the art repainted in the mockup's inks
     const upArt = (r: SepRow) => { const a = (r.settings as { art?: { path: string; preview?: string } }).art; return a?.preview || a?.path; };
     const dids = [...new Set(list.filter((r) => !r.preview_path && !upArt(r) && r.design_id).map((r) => r.design_id))] as string[];
     const { data: ds } = dids.length ? await sb.from("designs").select("id, preview_path, file_path").in("id", dids) : { data: [] };
-    const pathOf = new Map<string, string>();
-    for (const r of list) { const d = ((ds || []) as { id: string; preview_path: string; file_path: string }[]).find((x) => x.id === r.design_id); const p = r.preview_path || upArt(r) || d?.preview_path || d?.file_path; if (p) pathOf.set(r.id, p); }
-    const paths = [...new Set(pathOf.values())];
-    if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); const m = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""])); setThumbs(Object.fromEntries([...pathOf].map(([id, p]) => [id, m.get(p) || ""]))); }
+    const pathOf = new Map<string, { p: string; art: boolean }>();
+    for (const r of list) {
+      const d = ((ds || []) as { id: string; preview_path: string; file_path: string }[]).find((x) => x.id === r.design_id);
+      const p = r.preview_path || upArt(r) || d?.preview_path || d?.file_path;
+      if (p) pathOf.set(r.id, { p, art: !r.preview_path && !upArt(r) });
+    }
+    const paths = [...new Set([...pathOf.values()].map((x) => x.p))];
+    if (!paths.length) return;
+    const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
+    const m = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""]));
+    setThumbs(Object.fromEntries([...pathOf].map(([id, x]) => [id, m.get(x.p) || ""])));
+    // the design's art in the inks picked on the mockup (#40091: the black and white logo printed all white)
+    for (const r of list) {
+      const x = pathOf.get(r.id), url = x && m.get(x.p);
+      if (!x?.art || !url || !r.order_id || !om[r.order_id]) continue;
+      const im = orderGroups(om[r.order_id] as never).flatMap((g) => g.imprints).find((y) => y.id === r.imprint_id) as { inkMap?: { design: string; map: Record<string, { name: string; hex: string }> } } | undefined;
+      const map = im?.inkMap && (!r.design_id || im.inkMap.design === r.design_id) ? im.inkMap.map : null;
+      if (!map || !Object.keys(map).length) continue;
+      try {
+        const pic = await loadImg(url);
+        const painted = repaintLogo(pic, Object.fromEntries(Object.entries(map).map(([src, v]) => [src, v.name === "none" ? "none" : v.hex])), 240);
+        setThumbs((t) => ({ ...t, [r.id]: painted }));
+      } catch { /* the plain art stays */ }
+    }
   })(); }, [sb]);
 
+  /** the shirt colors a print goes on: its group, and any group printing the same art in the same spot */
+  const shirtsOf = (r: SepRow): { name: string; hex: string }[] => {
+    const o = r.order_id ? orders[r.order_id] : null, out: { name: string; hex: string }[] = [];
+    const add = (c: string) => { const hex = shirtHex(c) || colorHex(c) || guessHex(c); if (hex && !out.some((x) => deltaE(x.hex, hex) < 12)) out.push({ name: c, hex }); };
+    if (o) {
+      const gs = orderGroups(o as never).filter((g) => g.id === r.group_id || (!!r.design_id && g.imprints.some((im) => im.design_id === r.design_id && im.location === r.location)));
+      for (const c of new Set(gs.flatMap((g) => g.lines).filter((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)).map((l) => l.color).filter(Boolean))) add(c);
+    }
+    if (!out.length && r.garment_color) add(r.garment_color);
+    return out;
+  };
+
   const inTab = (r: SepRow, t: Tab) => (t === "all" ? sepStage(r.status) !== "archived" : sepStage(r.status) === t);
-  const shown = (rows || []).filter((r) => inTab(r, tab))
-    .filter((r) => { const s = q.trim().toLowerCase(); if (!s) return true; const o = r.order_id ? orders[r.order_id] : null; return [`s-${r.number}`, o ? `#${o.number} ${o.nickname}` : "", cust[r.customer_id || ""] || "", r.location, r.garment_color].join(" ").toLowerCase().includes(s); });
-  const count = (t: Tab) => (rows || []).filter((r) => inTab(r, t)).length;
+  // one row per job: its prints in this tab, front first
+  const jobs = useMemo(() => {
+    const by = new Map<string, SepRow[]>();
+    for (const r of (rows || []).filter((x) => inTab(x, tab))) { const k = r.order_id || r.id; by.set(k, [...(by.get(k) || []), r]); }
+    return [...by.values()].map((rs) => rs.sort((a, b) => locRank(a.location) - locRank(b.location) || a.location.localeCompare(b.location)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, tab]);
+  const shown = jobs.filter((rs) => {
+    const s = q.trim().toLowerCase(); if (!s) return true;
+    const r = rs[0], o = r.order_id ? orders[r.order_id] : null;
+    return [o ? `#${o.number} ${o.nickname}` : "", cust[r.customer_id || ""] || "", ...rs.map((x) => `s-${x.number} ${x.location} ${x.garment_color}`)].join(" ").toLowerCase().includes(s);
+  });
+  const count = (t: Tab) => new Set((rows || []).filter((r) => inTab(r, t)).map((r) => r.order_id || r.id)).size;
 
   return (
     <>
@@ -72,22 +124,38 @@ export default function SeparationsPage() {
         <input className="tmx-q" type="search" placeholder="Order, customer, location…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search separations" />
       </div>
       {!rows ? <div className="empty">Loading…</div> : !shown.length ? <div className="empty">{tab === "working" ? "Nothing being worked on. Request separations from an approved order, or upload an image above." : tab === "archived" ? `Nothing archived in the last ${ARCHIVE_DAYS} days.` : "Nothing here."}</div> : (
-        <div className="sep-q">{shown.map((r) => {
-          const o = r.order_id ? orders[r.order_id] : null, st = SEP_STATUS[r.status];
-          const due = r.due_date || o?.due_date;
+        <div className="sep-q">{shown.map((rs) => {
+          const r = rs[0], o = r.order_id ? orders[r.order_id] : null;
+          const stage = rs.some((x) => sepStage(x.status) === "working") ? "working" : rs.some((x) => sepStage(x.status) === "printed") ? "printed" : "archived";
+          const st = SEP_STATUS[stage === "working" ? "in_progress" : stage === "printed" ? "films" : "cancelled"];
+          const due = rs.map((x) => x.due_date).find(Boolean) || o?.due_date;
+          const screens = rs.reduce((n, x) => n + (x.channels?.length || 0), 0);
+          const shirtNames = [...new Set(rs.flatMap((x) => shirtsOf(x).map((c) => c.name)))];
           return (
-            <Link key={r.id} href={`/shop/separations/${r.id}`} className="sep-qi">
-              <span className="sep-qt" style={{ background: r.garment_color ? undefined : "var(--surface-2)" }}>{thumbs[r.id] ? <img src={thumbs[r.id]} alt="" /> : <span className="faint">No art</span>}</span>
+            <Link key={r.id} href={`/shop/separations/${r.id}`} className="sep-qi sep-qj">
+              <span className="sep-qps">{rs.map((x) => {
+                const sh = shirtsOf(x);
+                const bg = sh.length > 1 ? `linear-gradient(135deg, ${sh[0].hex} 0 50%, ${sh[1].hex} 50% 100%)` : sh[0]?.hex || "var(--surface-2)";
+                return (
+                  <span key={x.id} className="sep-qp" title={`${x.location || "Print"}${sh.length ? ` on ${sh.map((c) => c.name).join(" and ")}` : ""}`}>
+                    <span className="sep-qt" style={{ background: bg }}>
+                      {thumbs[x.id] ? <img src={thumbs[x.id]} alt="" /> : <span className="faint">No art</span>}
+                      {sh.length > 1 && <span className="sep-qdots">{sh.map((c) => <i key={c.hex} style={{ background: c.hex }} />)}</span>}
+                    </span>
+                    <small>{x.location || "Print"}</small>
+                  </span>
+                );
+              })}</span>
               <span className="sep-qb">
-                <b>{o ? `#${o.number}` : `S-${r.number}`} · {r.location || "Imprint"}</b>
-                <span>{o ? <>{cust[r.customer_id || ""] || ""}{o.nickname ? ` · ${o.nickname}` : ""}</> : cust[r.customer_id || ""] || <span className="faint">Uploaded art · no order</span>}</span>
-                <small className="faint">{r.garment_color || "—"}{r.channels.length ? ` · ${r.channels.length} screen${r.channels.length === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
+                <b>{o ? `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}` : `S-${r.number} · ${r.location || "Uploaded art"}`}</b>
+                <span>{cust[r.customer_id || ""] || (o ? "" : <span className="faint">Uploaded art · no order</span>)}</span>
+                <small className="faint">{shirtNames.length ? `${shirtNames.length > 1 ? `${shirtNames.length} shirts: ` : ""}${shirtNames.join(", ")}` : "—"}{screens ? ` · ${screens} screen${screens === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
               </span>
               <span className="sep-qr">
                 <span className="pill" style={{ ["--sc" as string]: st.c }}>{st.label}</span>
-                {sepStage(r.status) === "archived"
-                  ? <button type="button" className="btn sm ghost sep-qa" title="Back to Working" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(r, "in_progress"); }}>Restore</button>
-                  : <button type="button" className="btn icon ghost sm sep-qa" title="Archive (not using it): kept in Archived for 30 days" aria-label={`Archive S-${r.number}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(r, "cancelled"); }}>
+                {stage === "archived"
+                  ? <button type="button" className="btn sm ghost sep-qa" title="Back to Working" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(rs, "in_progress"); }}>Restore</button>
+                  : <button type="button" className="btn icon ghost sm sep-qa" title="Archive this job's separations (not using them): kept in Archived for 30 days" aria-label={o ? `Archive #${o.number}` : `Archive S-${r.number}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(rs, "cancelled"); }}>
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>
                   </button>}
               </span>
