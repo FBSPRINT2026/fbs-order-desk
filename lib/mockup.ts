@@ -575,8 +575,10 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   const aw = spot.maxW * ppi, ah = spot.maxH * ppi;
   const cx = CENTER_X + (spot.dx || 0) * ppi;
   const top = COLLAR_Y[spot.view] + (dropIn ?? spot.drop ?? 3) * ppi;
-  // art sits in the middle of the print area; full front/back (or a set drop) start at the top instead
-  const artY = dropIn != null || spot.top ? top : top + Math.max(0, (ah - h) / 2);
+  // art sits in the middle of its print area, every location (Oct 22, Nick: "the logos should always stay in the center
+  // of the blown up area… if you're doing a full back, it should be right in the center of the full back"); only a drop
+  // set by hand starts it at that distance from the collar instead
+  const artY = dropIn != null ? top : top + Math.max(0, (ah - h) / 2);
   // move from the reference photo onto this photo's shirt
   // down from this photo's neckline when it was found (the same distance on every shirt), else from the collar top
   // where things sit follows the photo's own scale (zs); how big prints are follows the print scale (k). The same on

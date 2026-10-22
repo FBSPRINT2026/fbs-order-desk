@@ -117,6 +117,10 @@ const keepCount = (x: { colors?: number; confirm?: { ink?: boolean } | null; con
 const nearestBrand = (hex: string, b: { colors: BrandInk[] }) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
 
 /** portal = the customer's own builder: their account only, no order, saved through the portal's server actions. */
+/** prints don't move off the center of their print area (Oct 22, Nick: "we should never drag something to the left or
+ *  to the right"): no drag offsets; size is still changed from the corner */
+const NO_OFF = { dx: 0, dy: 0 } as const;
+
 export default function MockupBuilder({ portal = false, backHref }: { portal?: boolean; backHref?: string }) {
   const sp = useSearchParams();
   const orderId = portal ? "" : sp.get("order") || "";
@@ -662,7 +666,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const d = designOf(im), r = ratioIm(im) || 0.6;
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const b = basePlacement(im.location, printWidth(im, im.location, ratioIm(im)), r, drop, scale);
-    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    const o = NO_OFF;
     return { left: b.x + o.dx, top: b.y + o.dy };
   };
   /**
@@ -795,25 +799,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
     const f = fits[u] || measured || null;
-    if (!f || f.flat || !f.body || v !== "front") return f;
-    const own = necks[neckKey(u)];
-    if (own) return { ...f, neck: own.neck };
-    // Many S&S styles use one computer-made photo for every color (Oct 20, Nick: "the 6210 … all the images are exactly
-    // the same"): colors whose shirt outline matches to the pixel share a neckline (one fixed by hand counts for all of
-    // them, else the middle reading), so one hard color (white on white) can't put its print somewhere else. Photos
-    // laid flat by hand (the Bella onesies) differ, and keep their own.
-    const g = garmentFor(l), fb = f.body;
-    if (!g) return f;
-    const near = (a: number, b: number) => Math.abs(a - b) <= 3;
-    const peers = [...new Set(lines.filter((x) => garmentFor(x)?.id === g.id).map((x) => photo(x, v)))]
-      .filter((pu) => { const p = fits[pu]; return !!p && !p.flat && !!p.body && near(p.top, f.top) && near(p.body.l, fb.l) && near(p.body.r, fb.r) && near(p.body.hem, fb.hem); });
-    const fixed = peers.map((pu) => necks[neckKey(pu)]).filter(Boolean);
-    const byHand = fixed.find((x) => x.source === "staff") || fixed[0];
-    if (byHand) return { ...f, neck: byHand.neck };
-    const ns = peers.map((pu) => fits[pu]?.neck).filter((n): n is number => n != null).sort((a, b) => a - b);
-    if (peers.length < 3 || ns.length * 2 <= peers.length) return f;
-    const mid = ns[ns.length >> 1];
-    return f.neck != null && Math.abs(f.neck - mid) <= 4 ? f : { ...f, neck: mid };
+    if (!f || f.flat || !f.body) return f;
+    // every color of one style is the same shirt from the same photo shoot (Oct 22, Nick: "these are the exact same
+    // shirts… block the first one… and you should be able to do the rest"): one scale for all its colors, front and back
+    // (the middle of their readings), lined up by each photo's own shirt outline, not its neckline seam. Reading each
+    // color on its own (and by its neckline) shrank or moved some shirts by up to 2" (Peticolas PBC: the logo
+    // bounced from color to color, and Heather Orchid's front came out smaller than its back).
+    const g = garmentFor(l);
+    const sib = g ? lines.filter((x) => garmentFor(x)?.id === g.id) : [l];
+    const rs = (["front", "back"] as View[]).flatMap((pv) => sib.map((x) => fits[photo(x, pv)])).filter((p): p is Fit => !!p && !p.flat && !!p.body);
+    const med = (a: number[]) => { const b2 = [...a].sort((x2, y2) => x2 - y2); return b2[b2.length >> 1]; };
+    const s0 = rs.length ? med(rs.map((p) => p.s)) : f.s, z0 = rs.length ? med(rs.map((p) => p.zs || p.s)) : f.zs || f.s;
+    return { ...f, s: s0, zs: z0, neck: undefined };
   };
   /** where this photo's neckline reading came from, for the label on the line */
   const neckTag = (l: Line) => { const x = necks[neckKey(photo(l, "front"))]; return x?.source === "staff" ? "set by hand" : x ? "AI" : "auto"; };
@@ -1006,7 +1003,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const vv = view || viewsFor(im.location)[0];
     const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, on || line, vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
-    const o0 = offsets[im.id] || { dx: 0, dy: 0 }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
+    const o0 = NO_OFF, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -1087,14 +1084,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const closeUp = (im: Imprint, size: number) => {
                 const d = designOf(im); const r = ratioIm(im) || 0.6;
                 const wIn = printWidth(im, im.location, ratioIm(im));
-                const o = offsets[im.id] || { dx: 0, dy: 0 };
+                const o = NO_OFF;
                 const sp = spotFor(im.location);
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
-                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
                     onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
                     onEnd={() => settleHere(im.id)} />
@@ -1374,7 +1371,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // one print alone sits in the middle
           const ox = prints.length === 1 ? M + (PW - 2 * M - cellW) / 2 : M + col * (cellW + cGap), oy = cuTop + rw * (cellH + 0.2 * DPI);
           const d = designOf(im), r = ratioIm(im) || 0.6, wIn = printWidth(im, im.location, ratioIm(im)), hIn = wIn * r;
-          const sp = spotFor(im.location), o = offsets[im.id] || { dx: 0, dy: 0 };
+          const sp = spotFor(im.location), o = NO_OFF;
           // heading: location and the max print area
           x.fillStyle = ink; x.font = font(800, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
           x.fillStyle = faint; x.font = font(400, 19); x.textAlign = "right"; x.fillText(`max ${sp.maxW}" × ${sp.maxH}"`, ox + cellW, oy + 20); x.textAlign = "left";
@@ -1394,7 +1391,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             x.strokeStyle = darkShirt ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.45)"; x.lineWidth = 3; x.beginPath(); x.moveTo(bx, ay + sp.maxH * PXI); x.lineTo(bx + BW, ay + sp.maxH * PXI); x.stroke();
           }
           const offX = o.dx / (PX_PER_IN * scale), offY = o.dy / (PX_PER_IN * scale);
-          const cx = bx + BW / 2 + offX * PXI, cy = by + (sp.top || (im.drop && !isNaN(+im.drop)) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
+          const cx = bx + BW / 2 + offX * PXI, cy = by + (im.drop && !isNaN(+im.drop) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
           const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
           if (art) x.drawImage(art, cx - (wIn * PXI) / 2, cy - (hIn * PXI) / 2, wIn * PXI, hIn * PXI);
           x.restore();
