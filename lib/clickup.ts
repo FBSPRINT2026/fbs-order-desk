@@ -379,3 +379,46 @@ export async function tickInPrintavo(admin: SupabaseClient, taskId: string, orde
     return { ok: false as const, error: msg };
   }
 }
+
+/**
+ * How big a backup would be (Oct 22, Nick: "back up all the jobs from the last, let's say, 3 years somewhere in our
+ * database?"): per workspace, every task made in the last `years` (open and closed) counted by year, and a sample of
+ * them read in full to estimate the files (how many, how big). Reads only.
+ */
+export async function countClickUp(admin: SupabaseClient, years: number, deadline: number) {
+  const tokens = clickupTokens();
+  const { data: teams } = await admin.from("clickup_teams").select("id, name, token_key");
+  const since = Date.now() - years * 365.25 * 864e5;
+  const per = await Promise.all(((teams || []) as { id: string; name: string; token_key: string }[]).map(async (t) => {
+    const tok = (tokens.find((x) => x.key === t.token_key) || tokens[0])?.token || "";
+    const out = { name: t.name, tasks: 0, open: 0, byYear: {} as Record<string, number>, pages: 0, more: false, sample: 0, sampleFiles: 0, sampleBytes: 0, estFiles: 0, estGB: 0, error: "" };
+    const ids: string[] = [];
+    try {
+      for (let page = 0; page < 60; page++) {
+        if (Date.now() > deadline - 15000) { out.more = true; break; }
+        const qs = new URLSearchParams({ page: String(page), subtasks: "true", include_closed: "true", date_created_gt: String(Math.round(since)) });
+        const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(tok, `/team/${t.id}/task?${qs}`);
+        out.pages++;
+        for (const x of r.tasks || []) {
+          out.tasks++; if (!isDone(x.status?.type)) out.open++;
+          const y = new Date(ms(x.date_created)).getFullYear(); out.byYear[y] = (out.byYear[y] || 0) + 1;
+          ids.push(x.id);
+        }
+        if (r.last_page === true || (r.tasks || []).length < 100) break;
+        if (page === 59) out.more = true;
+      }
+      // a sample read in full for the files (spread across the years)
+      const step = Math.max(1, Math.floor(ids.length / 10));
+      for (let i = 0; i < ids.length && out.sample < 10 && Date.now() < deadline - 8000; i += step) {
+        const d = await cu<CuTask>(tok, `/task/${ids[i]}`).catch(() => null);
+        if (!d) continue;
+        out.sample++;
+        const fs = (d.attachments || []).filter((a) => !a.deleted && !a.is_folder);
+        out.sampleFiles += fs.length; out.sampleBytes += fs.reduce((s, a) => s + (Number(a.size) || 0), 0);
+      }
+      if (out.sample) { out.estFiles = Math.round((out.sampleFiles / out.sample) * out.tasks); out.estGB = Math.round(((out.sampleBytes / out.sample) * out.tasks) / 1e8) / 10; }
+    } catch (e) { out.error = e instanceof Error ? e.message : String(e); }
+    return out;
+  }));
+  return { years, at: new Date().toISOString(), workspaces: per, tasks: per.reduce((s, x) => s + x.tasks, 0), estFiles: per.reduce((s, x) => s + x.estFiles, 0), estGB: Math.round(per.reduce((s, x) => s + x.estGB, 0) * 10) / 10 };
+}
