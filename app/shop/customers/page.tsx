@@ -71,12 +71,10 @@ export default function CustomersPage() {
       {/* phones (Oct 21, Nick: "can't tell what a customer is or whether the next line is"): one card per customer */}
       <div className="cu-cards" role="list">
         {loading ? <div className="empty">Loading…</div> : list.length ? list.map((c, i) => {
-          const s = stats[c.id] || { n: 0, spent: 0, owed: 0 };
           const name = c.company || c.name || "Unnamed";
           const fav = isFav(c), sec = fav ? "★ Favorites" : letter(c);
           const prev = i > 0 ? (isFav(list[i - 1]) ? "★ Favorites" : letter(list[i - 1])) : "";
           const who = [c.company && c.name ? c.name : "", c.email || fmtPhone(c.phone) || ""].filter(Boolean).join(" · ");
-          const fuLate = c.next_follow_up ? (daysUntil(c.next_follow_up) ?? 1) <= 0 : false;
           return [
             sec !== prev ? <div key={"h" + c.id} className={"cu-let" + (fav ? " fav" : "")} role="presentation">{sec}</div> : null,
             <div key={c.id} role="listitem" className="cu-card">
@@ -85,9 +83,8 @@ export default function CustomersPage() {
                 <span className="cu-mid">
                   <span className="cu-n"><b>{name}</b>{c.price_type === "wholesale" && <span className="tag i">Wholesale</span>}</span>
                   {who && <span className="cu-s">{who}</span>}
-                  <span className="cu-m">{s.n ? `${s.n} order${s.n === 1 ? "" : "s"}` : "No orders yet"}{s.spent > 0.004 ? ` · ${money(s.spent)}` : ""}{c.next_follow_up && <span className={fuLate ? "due-late" : ""}> · Follow up {fmtDate(c.next_follow_up)}</span>}</span>
                 </span>
-                <span className="cu-r">{s.owed > 0.004 ? <span className="bal">{money(s.owed)}</span> : null}<span className="cu-chev" aria-hidden>›</span></span>
+                <span className="cu-r"><span className="cu-chev" aria-hidden>›</span></span>
               </button>
             </div>,
           ];
