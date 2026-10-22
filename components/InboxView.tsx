@@ -600,7 +600,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (!e.target.value.trim()) setSugOpen(false); }} placeholder="Search people" aria-label="Search all mail" enterKeyHint="search" />
             {q.trim().length >= 2 && <button type="button" className={"sug-tg" + (sugOpen ? " on" : "")} onClick={() => setSugOpen((x) => !x)} aria-expanded={sugOpen} aria-label={sugOpen ? "Hide suggestions" : "Show suggestions: people, customers, projects"} title={sugOpen ? "Hide suggestions" : "Suggestions: people, customers, projects"}><svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>}
           </form>
-          {sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
+          {sugOpen && drop == null && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
           {box?.enabled && <div className={"pit-chk" + (boxStuck ? " bad" : "")}><i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}</div>}
           {view.kind === "inbox" && <div className="pit-ai">
             <button type="button" className="pit-ai-h" onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }}><span className="eh-ai-orb" aria-hidden>✦</span>Inbox summary<span className="pit-go" aria-hidden>›</span></button>
@@ -677,7 +677,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               {mode === "mail" && q.trim().length >= 2 && <button type="button" className={"sug-tg" + (sugOpen ? " on" : "")} onClick={() => setSugOpen((x) => !x)} aria-expanded={sugOpen} aria-label={sugOpen ? "Hide suggestions" : "Show suggestions: people, customers, projects"} title={sugOpen ? "Hide suggestions" : "Suggestions: people, customers, projects (or press the down arrow key)"}><svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>}
               {mode === "mail" && view.kind === "inbox" && <button type="button" className={"btn sm ghost ibx2-selbtn" + (selMode ? " on" : "")} title={selMode ? "Done selecting" : "Select emails"} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
               
-            {mode === "mail" && sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
+            {mode === "mail" && sugOpen && drop == null && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
             </div>
           </div>
           {/* phones: the filters (All / Customers / To-dos…) as one floating button instead of a second toolbar (Oct 21, Nick) */}
