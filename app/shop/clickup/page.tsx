@@ -282,6 +282,8 @@ export default function ClickUpJobs() {
         <div className="panel-h">
           <h2>{custName.get(jobTeam?.customer_id || "") || jobTeam?.name || "A customer"} uploaded a job</h2>
           <span className="faint">{[jobTeam?.name, job.where_text].filter(Boolean).join(" › ")}{job.created_at_cu ? ` · ${job.creator_name || "made"} ${when(job.created_at_cu)}` : ""}</span>
+          {/* close at the top right (Oct 22, Nick: "I don't like it at the bottom… move the close button up to the top right") */}
+          <button type="button" className="cu-x" aria-label="Close this job" title="Close" onClick={() => setOpenId(null)}>✕</button>
         </div>
         <div className="panel-b">
           <div className="cu-title">{job.name}<Flag p={job.priority} /></div>
@@ -314,7 +316,6 @@ export default function ClickUpJobs() {
             Order <Link href={`/shop/orders/${made?.id || job.order_id}`}><b>#{made?.number || job.order_number}</b></Link> was made from this job.{" "}
             {job.ticked_at ? <span>The &ldquo;FBS Invoice #&rdquo; box is ticked in ClickUp.</span> : job.tick_error ? <span className="cu-bad">Couldn&apos;t tick the &ldquo;FBS Invoice #&rdquo; box in ClickUp: {job.tick_error}</span> : <span className="faint">Ticking the &ldquo;FBS Invoice #&rdquo; box in ClickUp…</span>}
             <button type="button" className="btn ghost sm" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
-            <button type="button" className="btn ghost sm" onClick={() => setOpenId(null)}>Close</button>
           </div> : <div className="cu-ask">
             <b>Would you like to process this job?</b>
             <div className="cu-acts">
@@ -324,7 +325,6 @@ export default function ClickUpJobs() {
                 ? <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
                 : <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }}>Not an order</button>}
               <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
-              <button type="button" className="btn ghost" onClick={() => setOpenId(null)}>Close</button>
             </div>
             {busy && busy !== "Checking ClickUp…" && <div className="faint">{busy}</div>}
           </div>}
