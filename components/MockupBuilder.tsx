@@ -2506,7 +2506,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     const l0 = lines[gr.idx[0]], g = garmentFor(l0), ids = gr.idx.map((i) => lines[i].id);
                     const have = gr.idx.map((i) => lines[i].color).filter(Boolean);
                     return (
-                      <div key={gr.key} className="mk-gar-row">
+                      <div key={l0.id} className="mk-gar-row">
                         <div className="mk-style">
                           <StylePicker value={l0.style} catalog={catalog} busy={!!lookingUp}
                             onType={(v) => setLines((ls) => ls.map((x) => (ids.includes(x.id) ? { ...x, style: v, brand: "", garment: "" } : x)))}
@@ -2786,73 +2786,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
         </div>}
         <div className="mk-side stack">
-          {!portal && (
-            <section className={"panel mk-help" + (helpOpen ? "" : " closed")}
-              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
-              onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); void helperRead(f); } }}>
-              <div className="panel-h"><h2>Helper</h2><button type="button" className="lc-link" onClick={() => setHelpOpen(!helpOpen)}>{helpOpen ? "Hide" : "Show"}</button></div>
-              {helpOpen && <div className="panel-b">
-                {!helper && <>
-                  <p className="faint mk-help-t">Art that came already on a mockup (ours, the customer&apos;s, or a design sheet)? I&apos;ll take the art off the shirts, show you what I found, and put it on this mockup.</p>
-                  <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
-                  <span className="faint mk-help-d">or drop the PDF / AI file here</span>
-                </>}
-                <input ref={helpIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
-                {helper && <>
-                  <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>
-                  {helper.busy && <p className="faint mk-help-t">{helper.busy}</p>}
-                  {helper.err && <p className="err mk-help-t">{helper.err}</p>}
-                  {!helper.busy && helper.rows.length > 0 && <>
-                    <p className="mk-help-q">
-                      {(() => { const f = helper.rows.filter((r) => r.side === "front").length, b = helper.rows.filter((r) => r.side === "back").length; const say = (n: number, w: string) => (n ? `${n === 1 ? "a" : n} ${w} print${n === 1 ? "" : "s"}` : ""); return `I found ${[say(f, "front"), say(b, "back")].filter(Boolean).join(" and ")}${helper.kind === "drawn" ? " on drawn shirts" : helper.kind === "art" ? " (just the art, no shirt)" : ""}.`; })()}
-                      {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
-                      {" "}Check where each goes, its size and inks.
-                    </p>
-                    {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
-                        want me to apply the mask to this mockup?") */}
-                    {brandMask && helper.rows.some((r) => r.mask) && (
-                      <div className="mk-help-know">
-                        <p>I know {custLabel(customers.find((c) => c.id === customerId)) || "this customer"}: their distress mask was on this art. I took it off and kept the art underneath. Put their mask back on this mockup?</p>
-                        <div className="row" style={{ gap: 6 }}>
-                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "brand") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "brand"))}>Yes, their mask</button>
-                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "none") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "none"))}>No, keep it clean</button>
-                        </div>
-                      </div>
-                    )}
-                    {!brandMask && helper.rows.some((r) => r.mask) && <p className="faint mk-help-t">There&apos;s a distress texture over this art. I took it off; it&apos;s on each print below (Distress). Save it as their mask and it goes on every logo of theirs.</p>}
-                    {helper.rows.map((r) => (
-                      <div key={r.key} className={"mk-help-r" + (r.use ? "" : " off")}>
-                        <label className="mk-help-use"><input type="checkbox" checked={r.use} onChange={(e) => helpSet(r.key, { use: e.target.checked })} /></label>
-                        {/* on the mockup's shirt color when there is one: the distress shows as that color through the ink */}
-                        <div className={"mk-help-pic" + (r.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
-                        <div className="mk-help-b">
-                          <div className="row" style={{ gap: 6 }}>
-                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>
-                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
-                          </div>
-                          <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
-                          {(r.mask || brandMask) && <div className="mk-help-ds">
-                            <span className="faint">Distress</span>
-                            <select aria-label="Distress" value={r.distress} onChange={(e) => void helpDistress(r, e.target.value as HelpRow["distress"])}>
-                              <option value="none">None (clean)</option>
-                              {brandMask && <option value="brand">Their mask (brand standards)</option>}
-                              {r.mask && <option value="file">The texture in this file{r.maskPpi && r.maskPpi < 100 ? ` (low-res, ${r.maskPpi} ppi)` : ""}</option>}
-                            </select>
-                            {r.mask && !brandMask && customerId && <button type="button" className="lc-link" title="Saved in their brand standards: laid over every logo of theirs from now on" onClick={() => void saveBrandMask(r)}>Save as their mask</button>}
-                          </div>}
-                          <div className="mk-help-inks">{helper.inkOpts.map((n) => { const on = r.inks.includes(n); return <button key={n} type="button" className={"chip" + (on ? " on" : "")} onClick={() => helpSet(r.key, { inks: on ? r.inks.filter((x) => x !== n) : [...r.inks, n] })}><i style={{ background: colorHex(n) || "#ccc" }} />{n}</button>; })}</div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="row" style={{ gap: 8 }}>
-                      <button type="button" className="btn primary sm" disabled={!customerId || !helper.rows.some((r) => r.use)} title={customerId ? undefined : "Pick the customer first"} onClick={() => void helperApply()}>Put on the mockup</button>
-                      <span className="faint mk-help-d">{helper.kind === "drawn" ? "Sizes are read off a drawn shirt: close, not exact." : "Placed centered in each print area, like every print."}</span>
-                    </div>
-                  </>}
-                </>}
-              </div>}
-            </section>
-          )}
           {custMocks.length > 0 && (
             <section className="panel mk-cust">
               <div className="panel-h"><h2>Customer&apos;s mockup</h2><span className="faint" style={{ fontSize: 12 }}>Match this</span></div>
@@ -3010,6 +2943,74 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             </div>
           </section>
+          {/* the Helper at the bottom, under Need more than a logo (Oct 22, Nick) */}
+          {!portal && (
+            <section className={"panel mk-help" + (helpOpen ? "" : " closed")}
+              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+              onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); void helperRead(f); } }}>
+              <div className="panel-h"><h2>Helper</h2><button type="button" className="lc-link" onClick={() => setHelpOpen(!helpOpen)}>{helpOpen ? "Hide" : "Show"}</button></div>
+              {helpOpen && <div className="panel-b">
+                {!helper && <>
+                  <p className="faint mk-help-t">Art that came already on a mockup (ours, the customer&apos;s, or a design sheet)? I&apos;ll take the art off the shirts, show you what I found, and put it on this mockup.</p>
+                  <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
+                  <span className="faint mk-help-d">or drop the PDF / AI file here</span>
+                </>}
+                <input ref={helpIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
+                {helper && <>
+                  <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>
+                  {helper.busy && <p className="faint mk-help-t">{helper.busy}</p>}
+                  {helper.err && <p className="err mk-help-t">{helper.err}</p>}
+                  {!helper.busy && helper.rows.length > 0 && <>
+                    <p className="mk-help-q">
+                      {(() => { const f = helper.rows.filter((r) => r.side === "front").length, b = helper.rows.filter((r) => r.side === "back").length; const say = (n: number, w: string) => (n ? `${n === 1 ? "a" : n} ${w} print${n === 1 ? "" : "s"}` : ""); return `I found ${[say(f, "front"), say(b, "back")].filter(Boolean).join(" and ")}${helper.kind === "drawn" ? " on drawn shirts" : helper.kind === "art" ? " (just the art, no shirt)" : ""}.`; })()}
+                      {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
+                      {" "}Check where each goes, its size and inks.
+                    </p>
+                    {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
+                        want me to apply the mask to this mockup?") */}
+                    {brandMask && helper.rows.some((r) => r.mask) && (
+                      <div className="mk-help-know">
+                        <p>I know {custLabel(customers.find((c) => c.id === customerId)) || "this customer"}: their distress mask was on this art. I took it off and kept the art underneath. Put their mask back on this mockup?</p>
+                        <div className="row" style={{ gap: 6 }}>
+                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "brand") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "brand"))}>Yes, their mask</button>
+                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "none") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "none"))}>No, keep it clean</button>
+                        </div>
+                      </div>
+                    )}
+                    {!brandMask && helper.rows.some((r) => r.mask) && <p className="faint mk-help-t">There&apos;s a distress texture over this art. I took it off; it&apos;s on each print below (Distress). Save it as their mask and it goes on every logo of theirs.</p>}
+                    {helper.rows.map((r) => (
+                      <div key={r.key} className={"mk-help-r" + (r.use ? "" : " off")}>
+                        <label className="mk-help-use"><input type="checkbox" checked={r.use} onChange={(e) => helpSet(r.key, { use: e.target.checked })} /></label>
+                        {/* on the mockup's shirt color when there is one: the distress shows as that color through the ink */}
+                        <div className={"mk-help-pic" + (r.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
+                        <div className="mk-help-b">
+                          <div className="row" style={{ gap: 6 }}>
+                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>
+                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
+                          </div>
+                          <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
+                          {(r.mask || brandMask) && <div className="mk-help-ds">
+                            <span className="faint">Distress</span>
+                            <select aria-label="Distress" value={r.distress} onChange={(e) => void helpDistress(r, e.target.value as HelpRow["distress"])}>
+                              <option value="none">None (clean)</option>
+                              {brandMask && <option value="brand">Their mask (brand standards)</option>}
+                              {r.mask && <option value="file">The texture in this file{r.maskPpi && r.maskPpi < 100 ? ` (low-res, ${r.maskPpi} ppi)` : ""}</option>}
+                            </select>
+                            {r.mask && !brandMask && customerId && <button type="button" className="lc-link" title="Saved in their brand standards: laid over every logo of theirs from now on" onClick={() => void saveBrandMask(r)}>Save as their mask</button>}
+                          </div>}
+                          <div className="mk-help-inks">{helper.inkOpts.map((n) => { const on = r.inks.includes(n); return <button key={n} type="button" className={"chip" + (on ? " on" : "")} onClick={() => helpSet(r.key, { inks: on ? r.inks.filter((x) => x !== n) : [...r.inks, n] })}><i style={{ background: colorHex(n) || "#ccc" }} />{n}</button>; })}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="row" style={{ gap: 8 }}>
+                      <button type="button" className="btn primary sm" disabled={!customerId || !helper.rows.some((r) => r.use)} title={customerId ? undefined : "Pick the customer first"} onClick={() => void helperApply()}>Put on the mockup</button>
+                      <span className="faint mk-help-d">{helper.kind === "drawn" ? "Sizes are read off a drawn shirt: close, not exact." : "Placed centered in each print area, like every print."}</span>
+                    </div>
+                  </>}
+                </>}
+              </div>}
+            </section>
+          )}
         </div>
       </div>
     </BrandCtx.Provider>

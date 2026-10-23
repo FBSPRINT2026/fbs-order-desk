@@ -12254,3 +12254,13 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .cpk-chip.field .cpk-n{flex:1;max-width:none}
 .cpk.field{width:100%;min-width:0}
 .cpk-list button.on{background:var(--surface-2)}
+
+/* Mockup Creator top: customer, mockup name and the garments on one line (Oct 22, Nick: "it should always be one line…
+   type in 6210, pick the color, and it drops it down below") */
+@media (min-width:901px){
+  .mk-setup{flex-wrap:nowrap;align-items:flex-start}
+  .mk-setup>.mk-f:not(.mk-gar){flex:0 0 auto;width:240px}
+  .mk-setup>.mk-f:not(.mk-gar):nth-child(2){width:200px}
+  .mk-setup .mk-gar{flex:1 1 auto;min-width:0}
+  .mk-setup .mk-gar-row:first-of-type{padding-top:0}
+}
