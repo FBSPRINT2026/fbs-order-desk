@@ -215,7 +215,7 @@ export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: 
  * 100B came out about half again too big: 97% of the chest instead of ~70%).
  */
 const HOOD_FROM_SHADOW = false;
-export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean } = {}): Fit | null {
+export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean; /** a hoodie (its description says so) */ hood?: boolean } = {}): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
@@ -280,8 +280,12 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
     let mx = 0; for (let y = T; y <= B; y++) if (L[y] >= 0) mx = Math.max(mx, R[y] - L[y]);
     let yS = -1; for (let y = T; y <= B; y++) if (L[y] >= 0 && R[y] - L[y] >= 0.7 * mx) { yS = y; break; }
     const off = yS > 0 ? (yS - T) / (B - T) : 0;
-    if (off > 0.13 && off < 0.3) { const hEff = (B - yS) / (1 - 0.085); ps = Math.min(ps, hEff / ref.h); hoodTo = yS; }
+    if (off > 0.13 && off < 0.3) hoodTo = yS;
   }
+  // a hoodie: its photo's height runs from the top of the hood, about 9% more than the garment itself, so every hoodie
+  // (whatever color, however its hood lies in the photo) has its prints drawn that much smaller (Oct 23, Nick: "it
+  // shouldn't be that big on the hoodies"; the 3719 and 3739 next to the 3945 crew)
+  if (opts.hood && !cut) ps = Math.min(ps, sh * 0.915);
   // a hoodie's back: the hood lies over the top of the back, so a print there goes behind it (Oct 23, Nick: "instead of
   // dropping the print way down lower below the hood… clip the art only in the mockup so that it appears to go behind
   // the hood"). The hood's bottom edge is the dark shadow line it casts across the back; everything above it, across the
