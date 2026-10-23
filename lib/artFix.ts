@@ -10,7 +10,7 @@ import { detectColors } from "@/lib/inkColors";
  * (specs.artFixes) so the proof and the work order can say it.
  *   - one_black: every near-black (a gray-black like #231F20 next to pure black) becomes one solid black
  *   - flatten: every pixel becomes one of the logo's own solid colors, or the shirt (left out); no shading, no soft edge
- *   - remove_hairline: a line or gap too thin to print (under about 0.016" at the print's size) is filled in with what's
+ *   - remove_hairline: a line or gap too thin to print (under about 0.025" at the print's size) is filled in with what's
  *     around it
  */
 export type ArtAction = "one_black" | "flatten" | "remove_hairline";
@@ -68,9 +68,10 @@ export function fixPixels(img: ImageData, actions: ArtAction[], o: { palette: st
     }
     cls[j] = c;
   }
-  // a hairline: any color (or gap) thinner than about 0.016" at the print's size is given what's around it
+  // a hairline: any color (or gap) thinner than about 0.025" at the print's size is given what's around it
   if (actions.includes("remove_hairline")) {
-    const r = Math.max(1, Math.round(0.008 * o.ppi));
+    // up to about 0.025" wide (Oct 23: Hudson's white outline was 6 px at 292 px an inch, 0.02", and 0.008 left it)
+    const r = Math.max(1, Math.round(0.0125 * o.ppi));
     const gone = new Uint8Array(W * H);
     for (let k = -1; k < pal.length; k++) {
       const m = new Uint8Array(W * H); let any = false;

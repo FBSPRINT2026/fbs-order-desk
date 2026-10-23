@@ -108,7 +108,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
    *  updated in real time"): the Mockup Creator runs out of sight, saves, and says so; then the order shows the new ones */
   const [remaking, setRemaking] = useState(false);
   async function remakeMockups(groupIds: string[]) {
-    if (!groupIds.length || onMockupPage) return;
+    if (!groupIds.length) return;
     setRemaking(true);
     for (const gid of groupIds) {
       await new Promise<void>((res) => {
@@ -125,6 +125,17 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     }
     setRemaking(false); setStale(false);
     void load(); pageReloads(orderId);
+  }
+
+  /** a change the mockup shows (a print's inks, size, spot; a garment's color): its mockup is made again too */
+  async function remakeFor(cs: OrderChange[]) {
+    if (!o) return;
+    const ids = new Set<string>();
+    for (const c of cs) {
+      const g = c.what === "print" ? o.groups.find((x) => x.imprints.some((im) => im.id === c.id)) : c.what === "line" && c.field === "color" ? o.groups.find((x) => x.lines.some((l) => l.id === c.id)) : null;
+      if (g && (g.mockupThumbs || []).length && c.field !== "underbase" && c.field !== "colors") ids.add(g.id);
+    }
+    await remakeMockups([...ids]);
   }
 
   /** the art fixes, drawn on each logo here, then said on its print */
@@ -166,6 +177,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
       setText("");
       if (x.applied.length) pageReloads(orderId);
       void runArt(ri, x.art);
+      if (x.applied.length && !x.art.length) void remakeFor(x.changes);
       void load();
     }
     if (x.lesson) setLesson({ on: true, text: x.lesson });
@@ -185,6 +197,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     setRounds((rs) => rs.map((x, i) => (i !== ri ? x : { ...x, applied: r.applied, art: art.map((a) => ({ ...a, state: "doing" as const })), suggest: [] })));
     if (r.applied.length) pageReloads(orderId);
     void runArt(ri, art);
+    if (r.applied.length && !art.length) void remakeFor(ch);
     void load();
   }
 

@@ -518,6 +518,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const g = data ? orderGroups(data as Order).find((x) => x.id === groupId) || orderGroups(data as Order)[0] : null;
       if (!g) return;
       setImprints((xs) => xs.map((x) => { const n = g.imprints.find((y) => y.id === x.id); return n ? { ...x, inks: n.inks, colors: n.colors, size: n.size, drop: n.drop, location: n.location, underbase: n.underbase, inkMap: n.inkMap, design_id: n.design_id } : x; }));
+      // the logo's picked inks (the color dropdowns and the paint on the shirt) follow (Oct 23: "change the white screen to
+      // yellow"… the order said Yellow, the shirt here stayed white)
+      for (const n of g.imprints) if (n.inkMap?.map && n.inkMap.design === n.design_id) setInks(n.id, Object.fromEntries(Object.entries(n.inkMap.map).map(([k, v]) => [k, { name: v.name, hex: v.hex }])));
       setLines((ls) => ls.map((l) => { const n = g.lines.find((y) => y.id === l.id); return n ? { ...l, color: n.color, style: n.style, brand: n.brand } : l; }));
     };
     window.addEventListener("fbs:order-changed", on);
