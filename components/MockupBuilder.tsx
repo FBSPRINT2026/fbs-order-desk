@@ -288,6 +288,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const autoWant = useRef<Record<string, { colors: number; inks: string }>>({});
   /** the sizes on the order (2T, 3T, 4T…): one screen prints them all, so prints are capped to the smallest */
   const [ordered, setOrdered] = useState<string[]>([]);
+  /** the sizes ordered on each garment line (line id → sizes): a style only shows on sizes it was ordered in */
+  const [orderedBy, setOrderedBy] = useState<Record<string, string[]>>({});
   /** the size the mockup is shown on, picked from the sizes ordered (null = the middle size); saved with the mockup */
   const [shownSize, setShownSize] = useState<string | null>(null);
   /** prints whose size the customer specified: changing it asks first ("Are you sure you want to override?") */
@@ -435,6 +437,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setImprints(g.imprints.map((d) => ({ ...d })));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
+          setOrderedBy(Object.fromEntries(g.lines.map((l) => [l.id, Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)])));
           if (g.mockupSize) setShownSize(g.mockupSize);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
@@ -1018,10 +1021,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // The garment the mockup is shown on: its middle size (2T-5T → 3T, adult → Large) and that size's measurements
   // (supplier size chart, else typical). The photo scale and every print area follow it, so a toddler tee isn't sized
   // like an adult Gildan 5000.
-  const runSizes = sortSizes(ordered);
+  // the sizes of this garment's style on the order (Oct 22, Nick: a 6210 offered youth sizes because the 5000B on the
+  // same order had them, and the mockup was sized as a youth shirt): every line of the same style, else the whole order
+  const sizesOf = (l?: Line) => {
+    if (!l) return sortSizes(ordered);
+    const st = (l.style || "").trim().toLowerCase();
+    const mine = [...new Set(lines.filter((x) => (x.style || "").trim().toLowerCase() === st).flatMap((x) => orderedBy[x.id] || []))];
+    // never a size the style isn't made in (the catalog's sizes, when it has them)
+    const made = garmentFor(l)?.sizes;
+    const list = mine.length ? mine : Object.keys(orderedBy).length ? [] : ordered;
+    const kept = made?.length ? list.filter((z) => made.some((m) => m.toUpperCase() === z.toUpperCase())) : list;
+    return sortSizes(kept.length ? kept : list);
+  };
+  const runSizes = sizesOf(lines[active] || lines[0]);
   const bodyFor = (l?: Line): Body => {
     const g = l ? garmentFor(l) : null;
-    const b = shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, runSizes);
+    const own = l ? sizesOf(l) : runSizes;
+    const b = shownSize && own.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, own);
     if (!l || !isBag(l)) return b;
     // a bag or tote: its max print area is the bag less 1.5" all around (a 13" × 13" tote takes 10" × 10")
     const bw = bagWidth(l), bl = bagLength(l), r2 = (v: number) => Math.max(2, Math.round(v * 2) / 2);
