@@ -881,6 +881,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // our own FBS mockup sheet among the old job's files (the blank template, filled in: "Front Imprint · SIZE: W 3" ·
   // COLORS 1. PMS 534C…"): read for its writing as soon as it's open; null = not one of ours
   const [sheets, setSheets] = useState<Record<string, Partial<Record<string, SheetSpec>> | null | "reading">>({});
+  // the old job's paperwork set to Not needed by itself (its PO, its work order)
+  const autoNone = useRef(new Set<string>());
   const [films, setFilms] = useState<null | { busy?: boolean; note?: string; list: { id: string; name: string }[] }>(null);
   // what each file is: a print's key, "mockup" or "none"; and whether its background comes off
   const [as, setAs] = useState<Record<string, string>>({});
@@ -1063,7 +1065,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       // the old job's purchase order and work order: the customer's new ones replace them (Oct 23, Nick: "you've got to
       // ignore that old purchase order by default. The new one overrides it")
       // "Same thing with the work order too": both are replaced by the new ones on this email or job
-      if (/purchase[\s_-]*order|work[\s_-]*order|(^|[^a-z])[pw]\.?o\.?[\s_#-]*\d/i.test(f.name)) setAs((a) => (a[k] ? a : { ...a, [k]: "none" }));
+      if (/purchase[\s_-]*order|work[\s_-]*order|(^|[^a-z])[pw]\.?o\.?[\s_#-]*\d/i.test(f.name)) { autoNone.current.add(k); setAs((a) => (a[k] ? a : { ...a, [k]: "none" })); }
       if (!f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) { setSheets((x) => ({ ...x, [k]: null })); continue; }
       setSheets((x) => ({ ...x, [k]: "reading" }));
       void f.d.raw.arrayBuffer().then((b) => sizesOnSheet(b)).then((r) => { const has = Object.keys(r).length > 0; setSheets((x) => ({ ...x, [k]: has ? r : null })); if (has) setAs((a) => (a[k] ? a : { ...a, [k]: "mockup" })); }).catch(() => setSheets((x) => ({ ...x, [k]: null })));
@@ -1194,24 +1196,39 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     const k0 = sheetKeys[0], f0 = (old || [])[+k0.slice(1)];
     const specs = sheetKeys.flatMap((k) => Object.entries(sheets[k] as Partial<Record<string, SheetSpec>>).map(([side, v]) => ({ side, v: v! })));
     const arts = sheetKeys.flatMap((k) => pulls[k]?.pieces || []);
-    const skipped = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => as[k] === "none").map(({ f }) => f.name);
-    const others = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => !sheetKeys.includes(k) && as[k] !== "none").map(({ f }) => f.name);
+    const skipped = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => as[k] === "none" && autoNone.current.has(k)).map(({ f }) => f.name);
+    // any other file (barcodes, other art…): the only thing asked (Oct 23, Nick: "if you see any other files, that's the
+    // only time you should ask. Like, if you see a barcode, what do I do with this barcode?")
+    const others = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => !sheetKeys.includes(k) && !(as[k] === "none" && autoNone.current.has(k)));
+    const left = others.filter(({ k }) => !as[k]).length;
+    const job = help.job.replace(/^(#\d+).*/, "$1");
     return (
       <div className="ap arc" role="group" aria-label="Our mockup sheet">
-        <p className="ap-q">{help.job.replace(/^(#\d+).*/, "$1")} has our FBS mockup sheet, so I have everything for this reorder.</p>
-        <p className="ap-why">Check what I took from it, then continue. Nothing to sort out file by file.</p>
+        <p className="ap-q">{job} has our FBS mockup sheet. Here&apos;s what I&apos;ll do:</p>
+        <ul className="arc-sheet-l">
+          {specs.map((x, i) => <li key={i} data-notranslate>Use its <b>{x.side}</b> art at <b>{x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}</b>{x.v.inks?.length ? <> in <b>{x.v.inks.map(stockName).join(" and ")}</b></> : null}</li>)}
+          {skipped.length > 0 && <li data-notranslate>Ignore the old {skipped.length === 1 ? "paperwork" : "work order and purchase order"} ({skipped.join(", ")}): the new ones on this job replace {skipped.length === 1 ? "it" : "them"}</li>}
+        </ul>
         <div className="arc-sheet">
-          <figure><span className="ap-pic big">{f0?.d?.asIsUrl ? <img src={f0.d.asIsUrl} alt="" /> : null}</span><figcaption data-notranslate>Our mockup sheet<br />{f0?.name}</figcaption></figure>
+          <figure><span className="ap-pic big">{f0?.d?.asIsUrl ? <img src={f0.d.asIsUrl} alt="" /> : null}</span><figcaption data-notranslate>Our mockup sheet · {f0?.name}</figcaption></figure>
           {arts.map((x, i) => <figure key={i}><span className="ap-pic big ap-check"><img src={x.url} alt="" /></span><figcaption>The art, pulled off it</figcaption></figure>)}
         </div>
-        <ul className="arc-sheet-l">
-          {specs.map((x, i) => <li key={i} data-notranslate><b>{x.side[0].toUpperCase() + x.side.slice(1)}</b>: {x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}{x.v.inks?.length ? `, ${x.v.inks.map(stockName).join(", ")}` : ""}</li>)}
-          {skipped.length > 0 && <li data-notranslate><b>Left out:</b> {skipped.join(", ")} <span className="faint">(the old paperwork: the new PO and work order replace it)</span></li>}
-          {others.length > 0 && <li data-notranslate><b>Kept in Production files:</b> {others.join(", ")}</li>}
-        </ul>
+        {others.length > 0 && <div className="arc-others">
+          <p className="ap-q">{others.length === 1 ? "There's one more file on it. What do I do with it?" : `There are ${others.length} more files on it. What do I do with them?`}</p>
+          {others.map(({ f, k }) => (
+            <div key={k} className="arc-other">
+              <span className="ap-pic">{f.d?.asIsUrl ? <img src={f.d.asIsUrl} alt="" /> : null}</span>
+              <span className="arc-other-n"><span data-notranslate>{f.name}</span>{aiG[f.path]?.kind && aiG[f.path].kind !== "?" ? <span className="faint">Looks like {prodKindLabel(aiG[f.path].kind).toLowerCase()}</span> : null}</span>
+              <span className="arc-chips">
+                <button type="button" className={"chip" + (as[k] === "production" ? " on" : "")} onClick={() => setAs((a) => ({ ...a, [k]: "production" }))}>Keep in Production files</button>
+                <button type="button" className={"chip" + (as[k] === "none" ? " on" : "")} onClick={() => setAs((a) => ({ ...a, [k]: "none" }))}>Not needed</button>
+              </span>
+            </div>
+          ))}
+        </div>}
         <div className="ap-foot">
           <span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel reorder</button><button type="button" className="ap-link" onClick={() => setSheetOff(true)}>Something&apos;s wrong: go through the files myself</button></span>
-          <button type="button" className="btn primary" onClick={goodToGo}>Use it and continue ›</button>
+          <button type="button" className="btn primary" disabled={left > 0} onClick={goodToGo}>{left > 0 ? `Say what ${left === 1 ? "the other file is" : `the ${left} other files are`}` : "Go ahead ›"}</button>
         </div>
       </div>
     );
