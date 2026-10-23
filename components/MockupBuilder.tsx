@@ -32,6 +32,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { loadInkFormulas } from "@/lib/inkFormulas";
+import { levelBack } from "@/lib/levelBack";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -857,11 +858,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
     // a bag with no back photo: its back looks like its front (same bag, other side), never a drawn tee
     const p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
-    if (p) return ssImg(p);
+    if (p) { const u = ssImg(p); return view === "back" ? leveled[u] || u : u; }
     // no photo of this color: the style's own photo dyed to it, once it's made (below), not a drawn tee
     const t = g && l.color ? tinted[`${g.style}|${colorKey(l.color)}|${view}`] : "";
     return t || teeSvg(guessHex(l.color), view, isHeather(l.color));
   };
+  // a sweatshirt's or hoodie's back photo drawn at the size of its front (lib/levelBack.ts, Oct 23 Bella 3945)
+  const [leveled, setLeveled] = useState<Record<string, string>>({});
+  const leveling = useRef(new Set<string>());
+  useEffect(() => {
+    for (const l of lines) {
+      const g = garmentFor(l); if (!g || !l.color || isBag(l)) continue;
+      const desc = `${g.description || ""} ${l.garment || ""}`;
+      if (isShortSleeveTee(desc) || !/sweat|crew|fleece|hood|pullover/i.test(desc)) continue;
+      const ci = g.color_images?.[l.color] || Object.entries(g.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
+      if (!ci?.front || !ci.back) continue;
+      const fu = ssImg(ci.front), bu = ssImg(ci.back);
+      if (leveling.current.has(bu)) continue;
+      leveling.current.add(bu);
+      void levelBack(fu, bu).then((u) => { if (u) setLeveled((x) => ({ ...x, [bu]: u })); }).catch(() => null);
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   // colors the supplier has no photo of (Oct 22, Nick: 64400 Neon Blue showed a gray drawn tee): dye the style's photo
   const [tinted, setTinted] = useState<Record<string, string>>({});
   const tinting = useRef(new Set<string>()), photoQ = useRef<Promise<unknown>>(Promise.resolve());
