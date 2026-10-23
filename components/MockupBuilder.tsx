@@ -2090,6 +2090,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   saveRef.current = (f?: boolean) => { saveAll(!!f); };
   const autoSave = useRef<() => Promise<boolean>>(async () => false);
   autoSave.current = async () => { saveOk.current = false; await saveAll(true); return saveOk.current; };
+  // after Save mockups to order: seconds left before going back to the order (null: not counting)
+  const [backIn, setBackIn] = useState<number | null>(null);
+  useEffect(() => {
+    if (backIn == null || !orderId) return;
+    if (backIn <= 0) { location.assign(`/shop/orders/${orderId}`); return; }
+    const t = setTimeout(() => setBackIn((x) => (x == null ? null : x - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [backIn, orderId]);
   async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
     // a visual-only reorder print keeps its colors as uploaded on purpose (production sets the inks on the run): not asked
@@ -2587,14 +2595,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{!portal && <span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
           {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
-          <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={async () => {
+          <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
+          // counting down back to the order: a click stays here
+          if (backIn != null) { setBackIn(null); setMsg("Saved. Staying here."); return; }
           setAdjust(false);
           const vis = imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed);
           saveOk.current = false;
           await saveAll(vis);
-          // a visual mockup saved: straight back to the order, loaded fresh so the new mockup shows (Oct 20, Nick)
-          if (vis && saveOk.current && orderId && !portal) { setMsg("Saved. Opening the order…"); setTimeout(() => location.assign(`/shop/orders/${orderId}`), 600); }
-        }}>{saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
+          // saved to an order: back to it in 3 seconds, loaded fresh so the new mockup shows, unless the button is
+          // clicked again (Oct 23, Nick: "a 3-second countdown to return to the order, unless you click it again… just
+          // like the archive email button")
+          if (saveOk.current && orderId && !portal) setBackIn(3);
+        }}>{backIn != null ? `Back to the order in ${backIn}… (click to stay)` : saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
       </div>
 
         {sheetOpen && (

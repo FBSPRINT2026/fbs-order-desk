@@ -12473,3 +12473,5 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .rv .rv-print{margin-top:8px}
 .rv .rv-c:disabled{cursor:default;opacity:1}
 .rv .rv-ch .rv-txt{flex:1 1 180px;width:auto;margin-top:0}
+/* Save mockups to order: counting down back to the order (a click stays); the bar empties as it counts */
+.btn.primary.mk-back-cd{background:linear-gradient(90deg,var(--accent-hover) calc(var(--cd,1) * 100%),var(--accent) 0);transition:background .9s linear}
