@@ -450,7 +450,9 @@ async function templateFor(page: Page, n: number): Promise<Page | null> {
     const sc2 = all ? hit / all : 0;
     if (sc2 > bs) { bs = sc2; best = tp; }
   }
-  return bs > 0.4 ? best : null;
+  // the same page size as our sized proof is ours already (Oct 23, Nick: "visually… it's our mock-up"); of the same-size
+  // templates, the closest (All Star #34528's back page scored 0.399: its big navy print covers the template's lines)
+  return best;
 }
 
 async function drawnPage(page: Page, name: string, tpl: Page | null = null, pageNo = 1): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
