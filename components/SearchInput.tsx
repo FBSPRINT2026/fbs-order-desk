@@ -38,35 +38,50 @@ export function MicButton({ target, onDone, append = false, keepListening = fals
   const [ok, setOk] = useState(false);
   const [on, setOn] = useState(false);
   const rec = useRef<Rec>(null);
+  const want = useRef(false); // still wanted on (keepListening restarts after the browser's own stop)
   const startRef = useRef<() => void>(() => {});
   const onRef = useRef(false); onRef.current = on;
-  useEffect(() => { setOk(!!speechApi()); return () => { try { rec.current?.abort(); } catch { /* already stopped */ } }; }, []);
+  useEffect(() => { setOk(!!speechApi()); return () => { want.current = false; try { rec.current?.abort(); } catch { /* already stopped */ } }; }, []);
   const seen = useRef(autoStart); // only a new press starts it, never the value it mounted with
   useEffect(() => { if (!ok || !autoStart || autoStart === seen.current) return; seen.current = autoStart; if (!onRef.current) startRef.current(); }, [autoStart, ok]);
-  useEffect(() => { if (off && onRef.current) { try { rec.current?.stop(); } catch { /* already stopped */ } } }, [off]);
+  useEffect(() => { if (off && onRef.current) { want.current = false; try { rec.current?.stop(); } catch { /* already stopped */ } } }, [off]);
   if (!ok) return null;
 
+  // keepListening: on until it's clicked off. The browser ends a recognition by itself after a pause, so it's started
+  // again right away, keeping what was said (Oct 23, Nick: "the microphone… keeps turning off before I'm done talking…
+  // because I'm pausing")
   const toggle = () => {
-    if (on) { rec.current?.stop(); return; }
+    if (on) { want.current = false; rec.current?.stop(); return; }
     const S = speechApi(); if (!S) return;
-    const r = new S(); rec.current = r;
-    r.lang = "en-US"; r.interimResults = true; r.continuous = keepListening; r.maxAlternatives = 1;
     let said = "";
     const before = append ? (target()?.value || "").replace(/\s+$/, "") : "";
     const join = (t: string) => (before && t ? `${before} ${t}` : before || t);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    r.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) said += t; else interim += t;
-      }
-      const el = target(); if (el) typeInto(el, join((said + interim).trim()));
+    want.current = true;
+    const startRec = () => {
+      const r = new S(); rec.current = r;
+      r.lang = "en-US"; r.interimResults = true; r.continuous = keepListening; r.maxAlternatives = 1;
+      const base = said;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      r.onresult = (e: any) => {
+        let fin = "", interim = "";
+        for (let i = 0; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) fin += t; else interim += t;
+        }
+        said = (base && fin ? `${base.replace(/\s+$/, "")} ${fin.replace(/^\s+/, "")}` : base + fin);
+        const el = target(); if (el) typeInto(el, join(`${said} ${interim}`.replace(/\s+/g, " ").trim()));
+      };
+      r.onend = () => {
+        if (keepListening && want.current) { setTimeout(() => { if (want.current) { try { startRec(); } catch { want.current = false; setOn(false); } } }, 120); return; }
+        want.current = false; setOn(false);
+        const el = target(); if (said.trim() && el) { el.focus(); onDone?.(el.value); }
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      r.onerror = (e: any) => { if (e?.error === "not-allowed" || e?.error === "service-not-allowed" || e?.error === "audio-capture") want.current = false; };
+      r.start();
     };
-    r.onend = () => { setOn(false); const el = target(); if (said.trim() && el) { el.focus(); onDone?.(el.value); } };
-    r.onerror = () => setOn(false);
     setOn(true);
-    try { r.start(); } catch { setOn(false); }
+    try { startRec(); } catch { want.current = false; setOn(false); }
   };
   startRef.current = toggle;
 
