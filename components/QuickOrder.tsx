@@ -524,6 +524,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // art on a solid box (Oct 23, Nick on Tongue in Cheek: "do I remove the background and make it a two-color print?
     // Because it's on a black shirt"): the box found on the art's picture, its other colors counted without the shirt's,
     // and asked at the check, with taking it out as the guess
+    const boxedOut: { group: string; location: string }[] = [];
     for (const x of d.groups) {
       const shirt = guessHex(x.lines.find((l) => l.color)?.color || "White"), shirtName = x.lines.find((l) => l.color)?.color || "white";
       for (const im of x.imprints) {
@@ -537,6 +538,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         // it… yellow on a yellow shirt… only time you might be unsure is a heathered shirt"): out without asking
         if (b.sameAsShirt && !isHeather(shirtName)) {
           const id = im.id;
+          boxedOut.push({ group: x.name || "", location: im.location });
           d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, colors: n || z.colors, ...(list ? { inks: list } : {}), notes: [z.notes, `The ${b.bgName.toLowerCase()} box behind the art is the shirt's color: taken out, the shirt shows through, ${n} color${n === 1 ? "" : "s"}`].filter(Boolean).join(". ").slice(0, 300) })) })) };
           did.push(`${im.location}: the ${b.bgName.toLowerCase()} box behind the art is the shirt's color, so it's out: ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`);
           continue;
@@ -546,6 +548,12 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           : `${im.location}: the art is on a ${b.bgName.toLowerCase()} box. Take it out (${n} color${n === 1 ? "" : "s"}) or print the box?`;
         d = { ...d, check: [...(d.check || []), { q, guess: "Take it out", about: x.name, local: `bg:${im.id}|${n}|${list}|${b.bgName}`, choices: [{ label: `Take it out: ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}` }, { label: `Print the box: ${n + 1} colors` }] }] };
       }
+    }
+    // the reader's own questions about those prints' colors (count the black outline? confirm Black, White, Red?) are
+    // settled by that: not asked
+    if (boxedOut.length) {
+      const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      d = { ...d, check: (d.check || []).filter((c) => c.local || !boxedOut.some((b) => (!c.about || !b.group || sameName(c.about, b.group)) && new RegExp(esc(b.location), "i").test(c.q) && /colou?rs?\b|inks?\b|black|outline|base/i.test(c.q))) };
     }
     // the check, at the end, with pictures (Oct 23, Nick: "you don't ask until you get to the end and you've read all the
     // data and we've identified all the mockups and work orders… maybe it would be more visual"): each group as a card,
