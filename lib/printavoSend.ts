@@ -268,6 +268,18 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     await admin.from("orders").update({ printavo_state: state }).eq("id", inp.orderId);
   }
   await admin.from("order_events").insert({ order_id: inp.orderId, kind: "printavo", detail: `Sent to Printavo as #${made.visualId} (${state.status})`, actor: inp.by });
+  // our status follows the Printavo status it was sent with, right away (Oct 23, Nick: "I sent 40133 to Printavo, and
+  // it's still showing up as a quote"): it only followed at the next Printavo sync before
+  {
+    const want = ourStatusFor(String(state.status || ""), "quote");
+    if (want && !statusErr) {
+      const { data: cur } = await admin.from("orders").select("status").eq("id", inp.orderId).maybeSingle();
+      if (cur && cur.status !== want) {
+        await admin.from("orders").update({ status: want, type: ST[want].type }).eq("id", inp.orderId);
+        await admin.from("order_events").insert({ order_id: inp.orderId, kind: "status", detail: want, actor: `Printavo: ${state.status}` });
+      }
+    }
+  }
   await fixConfirmationReply(admin, inp.orderId, number, String(made.visualId || ""), made.publicUrl);
   // Printavo numbers it from its own counter: give it our number so both systems match (#40003 is #40003)
   let visualId = String(made.visualId || ""), numberError = "", total = made.total;
