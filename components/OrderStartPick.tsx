@@ -21,6 +21,11 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
    *  pop-up on the right, like Claude in Chrome… so I can still click the attachments") */ dock?: boolean; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string } }) {
   const [past, setPast] = useState<PastJob[] | null>(null);
+  // "same as order 85254", "screen print process same as PO 85254", "like job #31174": the past job a new order points at
+  const like = (() => {
+    const m = (text || "").match(/\b(?:same|like|match(?:es|ing)?)\b[^.\n]{0,40}?\b(?:order|po|job|invoice)\s*#?\s*(\d{4,6})\b/i);
+    return m ? m[1] : "";
+  })();
   // the order already read in the background (lib/ai/prepareOrders.ts): one click to open it ready to approve
   const [ready, setReady] = useState<{ draft: EODraft; created: string | null } | null>(null);
   // how many orders the email holds (Oct 20, Nick: Dear Heart's one email = four reorders, one per design)
@@ -139,12 +144,18 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
           </button>
         )}
         {suggested && <button type="button" className="osp-big sug osp-sugg" onClick={() => onPick({ told: suggested.told, job: suggested.job })}><b>{suggested.label}</b><span>What the Assistant suggested</span></button>}
+        {/* a new order that points at a past job ("not a repeat… screen print process same as order 85254"): its own choice,
+            so it's clear it's new art printed the way that job was (Oct 23, Nick: "I don't think it's going to be clear for my
+            employees to choose either new order or reorder in this situation") */}
+        {like && <button type="button" className="osp-big sug osp-sugg" onClick={() => onPick({ told: `This is a NEW order (their new art), printed the same way as their order ${like} (find that job: ${like} may be their PO number on it). Copy how it printed (inks, size, placement) onto the matching prints.` })}>
+          <b>New order, printed like their order {like}</b><span>The art and garments from these files; the inks, size and placement from that past job, where the prints match</span>
+        </button>}
         <div className="osp-two">
-          <button type="button" className={"osp-big" + (guess === "new" ? " sug" : "")} onClick={() => onPick({ told: "This is a new order, not a reorder of a past job." })}>
-            <b>New order</b><span>Built from this email and its files</span>{guess === "new" && <em>The AI&apos;s guess</em>}
+          <button type="button" className={"osp-big" + (guess === "new" && !like ? " sug" : "")} onClick={() => onPick({ told: "This is a new order, not a reorder of a past job." })}>
+            <b>New order</b><span>New art or garments, built from these files. A past job they mention is used for how it printed</span>{guess === "new" && !like && <em>The AI&apos;s guess</em>}
           </button>
           <button type="button" className={"osp-big" + (guess === "reorder" ? " sug" : "")} onClick={() => onPick({ told: "This is a reorder of a past job: find the job it repeats." })}>
-            <b>Reorder: find the job</b><span>The AI picks which past job it repeats</span>{guess === "reorder" && <em>The AI&apos;s guess</em>}
+            <b>Reorder: the same job again</b><span>Exactly like a past job: same art, same mockup, new sizes. The AI picks which job</span>{guess === "reorder" && <em>The AI&apos;s guess</em>}
           </button>
         </div>
         <div className="osp-h">
