@@ -22,7 +22,7 @@ import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
-import { guessHex, shirtBg } from "@/lib/mockup";
+import { guessHex, isHeather, shirtBg } from "@/lib/mockup";
 import { knockOut } from "@/lib/artPrep";
 import { inkName, planPrint, pxOfImage } from "@/lib/printPlan";
 
@@ -533,8 +533,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         guard();
         if (!b) continue;
         const n = b.inks.length, list = b.inks.join(", ");
+        // the shirt's own color never prints (Oct 23, Nick: "black on a black shirt, you should always think I'm removing
+        // it… yellow on a yellow shirt… only time you might be unsure is a heathered shirt"): out without asking
+        if (b.sameAsShirt && !isHeather(shirtName)) {
+          const id = im.id;
+          d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, colors: n || z.colors, ...(list ? { inks: list } : {}), notes: [z.notes, `The ${b.bgName.toLowerCase()} box behind the art is the shirt's color: taken out, the shirt shows through, ${n} color${n === 1 ? "" : "s"}`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+          did.push(`${im.location}: the ${b.bgName.toLowerCase()} box behind the art is the shirt's color, so it's out: ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`);
+          continue;
+        }
         const q = b.sameAsShirt
-          ? `${im.location}: the art is on a ${b.bgName.toLowerCase()} box, the ${shirtName} shirt's color. Take it out and print ${n} color${n === 1 ? "" : "s"}?`
+          ? `${im.location}: the art is on a ${b.bgName.toLowerCase()} box on a heathered ${shirtName} shirt. Take it out and print ${n} color${n === 1 ? "" : "s"}?`
           : `${im.location}: the art is on a ${b.bgName.toLowerCase()} box. Take it out (${n} color${n === 1 ? "" : "s"}) or print the box?`;
         d = { ...d, check: [...(d.check || []), { q, guess: "Take it out", about: x.name, local: `bg:${im.id}|${n}|${list}|${b.bgName}`, choices: [{ label: `Take it out: ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}` }, { label: `Print the box: ${n + 1} colors` }] }] };
       }
