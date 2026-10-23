@@ -653,7 +653,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         for (const im of x.imprints) {
           if (im.method && im.method !== "screen") continue;
           const n = inkNames(im.inks || "").filter((t) => !/underbase/i.test(t)).length;
-          if (!n || im.underbase === false) continue;
+          if (!n || im.printStyle === "fashion") continue;
           const asked = qs.filter(({ c }) => counts(c.q, n).includes(n + 1) && (!c.about || !/(front|back|sleeve|chest)/i.test(c.q) || new RegExp(im.location.split(/\s+/)[0], "i").test(c.q) || !d!.groups.some((g2) => sameName(c.about, g2.name || ""))));
           if (!asked.length && +im.colors !== n + 1 && saidColors.get(im.id) !== n + 1) continue;
           asked.forEach(({ i }) => drop.add(i));
