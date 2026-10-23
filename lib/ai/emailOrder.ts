@@ -424,6 +424,12 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
+  // the past job whose mockup is the picture in their email (app/api/inbox/order/look): first, and said so
+  const lookRef = ((a as { meta?: { look?: { ref?: string; why?: string } } }).meta?.look?.ref) || "";
+  if (lookRef) {
+    const lj = past.find((j) => j.ref === lookRef);
+    if (lj) past = [{ ...lj, note: [`The picture in the email is this job's mockup (${(a as { meta?: { look?: { why?: string } } }).meta?.look?.why || "the same design"}).`, lj.note].filter(Boolean).join(" ") }, ...past.filter((j) => j !== lj)];
+  }
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
   // several jobs picked together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676: "create an order out of a
   // reorder from two separate Printavos"): all of them first, J1, J2…

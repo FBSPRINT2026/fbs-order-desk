@@ -70,6 +70,15 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
   // each past job's mockup, to see which one it is (Oct 23, Nick: "they're all named very similar… I should be able to
   // click… the picture attached… and say yep, this is the reorder")
   const [pics, setPics] = useState<Record<string, { thumb: string; full: string; pdf: boolean }>>({});
+  // the picture in their email matched to a past job's mockup (Oct 23, Nick: Peticolas sent the Velvet Hammer mockup
+  // we'd sent him: "that visual should be matched… this is the last one that used this artwork")
+  const [look, setLook] = useState<null | "wait" | { ref?: string; label?: string; why?: string; sure?: string; none?: boolean }>("wait");
+  useEffect(() => {
+    let live = true;
+    fetch("/api/inbox/order/look", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId }) }).then((r) => r.json())
+      .then((j) => { if (live) setLook(j && !j.error ? j : null); }).catch(() => { if (live) setLook(null); });
+    return () => { live = false; };
+  }, [activityId]);
   const [big, setBig] = useState<{ ref: string; url: string } | null>(null);
   const picRefs = list.slice(0, 40).map(({ p }) => p.ref).filter((r) => !(r in pics)).join(",");
   useEffect(() => {
@@ -123,6 +132,12 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
             </button>
           );
         })()}
+        {look === "wait" && <p className="osp-plan-wait">Comparing the picture in the email with their past jobs&apos; mockups…</p>}
+        {look && look !== "wait" && look.ref && (
+          <button type="button" className="osp-big sug osp-sugg" onClick={() => onPick({ job: look.ref, told: `This is a reorder of ${look.label}: the picture in the email is its mockup.` })}>
+            <b>Reorder {look.label}: the same mockup as their picture</b><span>{look.why}{look.sure === "low" ? " (not sure: check it)" : ""}</span>
+          </button>
+        )}
         {suggested && <button type="button" className="osp-big sug osp-sugg" onClick={() => onPick({ told: suggested.told, job: suggested.job })}><b>{suggested.label}</b><span>What the Assistant suggested</span></button>}
         <div className="osp-two">
           <button type="button" className={"osp-big" + (guess === "new" ? " sug" : "")} onClick={() => onPick({ told: "This is a new order, not a reorder of a past job." })}>
@@ -150,7 +165,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
                     <b>{name(p)}</b>
                     <span className="faint">{fmt(p.date)} · {p.qty.toLocaleString("en-US")} pcs{p.ref.startsWith("a:") ? " · Printavo" : ""}</span>
                     {what(p) && <span className="osp-what" data-notranslate>{what(p)}</span>}
-                    {hit > 0 && <em>Named in the email</em>}
+                    {look && look !== "wait" && look.ref === p.ref ? <em>Matches their picture</em> : hit > 0 && <em>Named in the email</em>}
                   </button>
                   {big?.ref === p.ref && <div className="osp-big-pic"><img src={big.url} alt={`The mockup of ${name(p)}`} /><button type="button" className="btn sm primary" onClick={() => onPick({ job: p.ref, told: `This is a reorder of ${name(p)}.` })}>Reorder this one</button></div>}
                 </div>
