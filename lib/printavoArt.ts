@@ -30,21 +30,39 @@ const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
  * (Oct 23, Nick on PO 92785: the back was measured off #32303's sheet at 14" wide, which we can't even print; the sheet
  * says W 10"). By side: front, back, left/right sleeve.
  */
-export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", { w: number; h?: number; inks?: string[] }>>> {
+/** one side of our mockup sheet: its size, its inks, and the screens that aren't inks (a white underbase, halftones) */
+export type SheetSide = { w: number; h?: number; inks?: string[]; ub?: boolean; halftones?: boolean; /** an ink's own note ("Navy: match trim") */ notes?: string[] };
+export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", SheetSide>>> {
   const doc = await openDoc(buf);
-  const out: Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", { w: number; h?: number; inks?: string[] }>> = {};
+  const out: Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", SheetSide>> = {};
   for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
     const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
     const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
-    for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(.{0,160})/gi)) {
+    for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(?=(.{0,160}))/gi)) { // each side found, even one inside the side before's 160 letters
       const side = m[1].toLowerCase() as keyof typeof out;
       // this side's part only: up to the next "… Imprint" or the sheet's own text
       const part = m[2].split(/\b(?:front|back|left sleeve|right sleeve)\s+imprint\b|the above|standard imprint/i)[0];
-      const sz = part.match(/\bW\s*:?\s*(\d+(?:\.\d+)?)\s*["”″]?(?:\s*(?:x|×)?\s*H\s*:?\s*(\d+(?:\.\d+)?))?/i);
-      // its inks as listed ("COLORS 1. WHITE 2. SCARLET RED")
+      // its size, however the sheet writes it (Oct 23, #34528 All Star: "SIZE: 3.75”" and "SIZE: 11” X 15”"; HALFF:
+      // "SIZE: W 3” H 0.7”"); 0 = a side not used
+      const q = `["”″']?`;
+      const sz = part.match(new RegExp(`\\bW\\s*:?\\s*(\\d+(?:\\.\\d+)?)\\s*${q}(?:\\s*(?:x|×)?\\s*H\\s*:?\\s*(\\d+(?:\\.\\d+)?))?`, "i"))
+        || part.match(new RegExp(`\\bsize\\s*:?\\s*(\\d+(?:\\.\\d+)?)\\s*${q}(?:\\s*(?:x|×|by)\\s*(\\d+(?:\\.\\d+)?)\\s*${q})?`, "i"));
+      // its inks as listed ("COLORS 1. WHITE 2. SCARLET RED", "1. NAVY (MATCH TRIM) 2. GOLD 3. HALFTONES 4. UNDERBASE"):
+      // the underbase and halftones are screens, not inks; a note in brackets stays with its ink
       const cl = part.match(/colou?rs?\s*:?\s*(.+)$/i)?.[1] || "";
-      const inks = [...cl.matchAll(/\d+\.\s*([A-Za-z][A-Za-z0-9 #\-]*?)(?=\s+\d+\.|\s*$)/g)].map((x) => x[1].trim().toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase())).filter((x) => x && !/^n\/?a$/i.test(x)).slice(0, 12);
-      if (sz && !out[side] && +sz[1] > 0 && +sz[1] < 20) out[side] = { w: +sz[1], ...(sz[2] ? { h: +sz[2] } : {}), ...(inks.length ? { inks } : {}) };
+      const listed = [...cl.matchAll(/\d+\.\s*([A-Za-z][A-Za-z0-9 #&\/\-()]*?)(?=\s+\d+\.|\s*$)/g)].map((x) => x[1].trim()).filter((x) => x && !/^n\/?a$/i.test(x));
+      const tc = (t: string) => t.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
+      let ub = false, halftones = false;
+      const inks: string[] = [], notes: string[] = [];
+      for (const x of listed) {
+        if (/^(white\s+)?under\s*-?base$/i.test(x)) { ub = true; continue; }
+        if (/^half\s*-?tones?$/i.test(x)) { halftones = true; continue; }
+        const nm = tc(x.replace(/\s*\(.*?\)\s*/g, " ").trim()), br = x.match(/\((.*?)\)/)?.[1];
+        if (!nm) continue;
+        inks.push(nm);
+        if (br) notes.push(`${nm}: ${br.toLowerCase()}`);
+      }
+      if (sz && !out[side] && +sz[1] > 0 && +sz[1] < 20) out[side] = { w: +sz[1], ...(sz[2] && +sz[2] > 0 ? { h: +sz[2] } : {}), ...(inks.length ? { inks: inks.slice(0, 8) } : {}), ...(ub ? { ub } : {}), ...(halftones ? { halftones } : {}), ...(notes.length ? { notes } : {}) };
     }
   }
   return out;

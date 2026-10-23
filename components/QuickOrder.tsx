@@ -18,7 +18,7 @@ import type { ArtPiece } from "@/lib/printavoArt";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
-import { pdfPicture, sizesOnSheet } from "@/lib/printavoArt";
+import { pdfPicture, sizesOnSheet, type SheetSide } from "@/lib/printavoArt";
 import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
@@ -58,10 +58,10 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 /** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
  *  and whether to remember it for this customer */
 /** one print as our FBS mockup sheet writes it: "Front Imprint · SIZE: W 3" H 0.7" · COLORS 1. PMS 534C 2. PMS 2178C" */
-type SheetSpec = { w: number; h?: number; inks?: string[] };
+type SheetSpec = SheetSide;
 type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string>; /** each print's size and inks as the check left them */ specs?: Record<string, Spec> };
 /** a print's size and inks at the check, and how they were arrived at */
-type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; /** a white underbase under the inks, and why */ ub?: boolean; ubWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
+type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; /** a white underbase under the inks, and why */ ub?: boolean; ubWhy?: string; /** screens that aren't inks (halftones): counted with the inks */ extra?: number; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
 type ReviewAsk = { d: EODraft; customer: string; again: boolean; resolve: (a: ReviewAns) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
@@ -330,7 +330,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             const inks = [...new Set((pu.sheet.inks || []).map(stockName))];
             if (+im.colors > 0) saidColors.set(im.id, +im.colors);
             // the sheet has the size and inks: nothing for production to confirm ("Reorder details needed" was on #40119)
-            setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length, confirm: undefined } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}`);
+            // its halftones are a screen of their own (counted as a color), its underbase is the white underbase (Oct 23,
+            // All Star #34528: "1. NAVY (MATCH TRIM) 2. GOLD 3. HALFTONES 4. UNDERBASE")
+            const extra = pu.sheet.halftones ? 1 : 0, more = [pu.sheet.halftones ? "halftones" : "", pu.sheet.ub ? "white underbase" : ""].filter(Boolean);
+            setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length + extra, confirm: undefined } : {}), ...(pu.sheet.ub ? { underbase: true } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}${more.length ? ` + ${more.join(" + ")}` : ""}${pu.sheet.notes?.length ? ` (${pu.sheet.notes.join("; ")})` : ""}`);
             did.push(`${im.location}: from our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
             continue;
           }
@@ -657,7 +660,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         for (const im of x.imprints) {
           if (im.method && im.method !== "screen") continue;
           const n = inkNames(im.inks || "").filter((t) => !/underbase/i.test(t)).length;
-          if (!n || im.printStyle === "fashion") continue;
+          if (!n || im.printStyle === "fashion" || im.underbase === true) continue; // our sheet already said it
           const asked = qs.filter(({ c }) => counts(c.q, n).includes(n + 1) && (!c.about || !/(front|back|sleeve|chest)/i.test(c.q) || new RegExp(im.location.split(/\s+/)[0], "i").test(c.q) || !d!.groups.some((g2) => sameName(c.about, g2.name || ""))));
           if (!asked.length && +im.colors !== n + 1 && saidColors.get(im.id) !== n + 1) continue;
           asked.forEach(({ i }) => drop.add(i));
@@ -677,7 +680,12 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const sp: Spec = { ...(howGot.get(im.id) || {}) }, w = parseFloat(String(im.size || "")), r = ratioOf.get(im.id);
         // set from our own mockup sheet in the Resolution Center
         const fromSheet = (im.notes || "").match(/From our mockup sheet ([^:]+): ([\d.]+)" wide/);
-        if (fromSheet) { sp.sizeWhy ||= `Our mockup sheet ${fromSheet[1]}: W ${fromSheet[2]}"`; if (im.inks) sp.inksWhy ||= `Our mockup sheet ${fromSheet[1]}`; }
+        if (fromSheet) {
+          sp.sizeWhy ||= `Our mockup sheet ${fromSheet[1]}: W ${fromSheet[2]}"`;
+          if (im.inks) sp.inksWhy ||= `Our mockup sheet ${fromSheet[1]}`;
+          if (/\+ halftones/.test(im.notes || "")) { sp.extra = 1; sp.inksWhy = `${sp.inksWhy || "Our mockup sheet"}, plus halftones`; }
+          if (im.underbase === true && /\+ (halftones \+ )?white underbase/.test(im.notes || "")) { sp.ub = true; sp.ubWhy = "Our mockup sheet lists a white underbase"; }
+        }
         if (w > 0) { sp.size = w; sp.sizeWhy ||= im.sizeFrom === "customer" ? "Their PO or email gives this size" : im.aiPlace ? "Read off their mockup" : "From the order"; }
         else { const rule = sizeRule(im.location, r); sp.size = rule.w; sp.sizeWhy = `${/best fit/i.test(im.notes || "") ? `"Best fit" on their paperwork: ` : ""}${rule.why}`; }
         if (im.inks && !/simulated/i.test(im.inks)) { sp.inks = im.inks; sp.inksWhy ||= "Named on their paperwork"; }
@@ -723,7 +731,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const was = d.specs?.[id];
         const inks = (sp.inks || "").split(/\s*,\s*/).map((t) => t.trim()).filter(Boolean).map(stockName);
         const changed = !!was && (was.size !== sp.size || (was.inks || "") !== (sp.inks || ""));
-        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, ...(sp.size && sp.size > 0 ? { size: `${sp.size}" wide`, ...(changed ? { sizeFrom: "staff" as const } : {}) } : {}), ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}), ...(changed ? { notes: [z.notes, `Set at the check: ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`].filter(Boolean).join(". ").slice(0, 300) } : {}) })) })) };
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, ...(sp.size && sp.size > 0 ? { size: `${sp.size}" wide`, ...(changed ? { sizeFrom: "staff" as const } : {}) } : {}), ...(inks.length ? { inks: inks.join(", "), colors: inks.length + (sp.extra || 0) } : {}), ...(changed ? { notes: [z.notes, `Set at the check: ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`].filter(Boolean).join(". ").slice(0, 300) } : {}) })) })) };
         if (changed) did.push(`${y0(d, id)}: you set ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
         if (was?.ubWhy && !sp.ub) {
           d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, underbase: false, notes: [z.notes, "No underbase (set at the check)"].filter(Boolean).join(". ").slice(0, 300) })) })) };
@@ -1261,7 +1269,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       <div className="ap arc" role="group" aria-label="Our mockup sheet">
         <p className="ap-q">{job} has our FBS mockup sheet. Here&apos;s what I&apos;ll do:</p>
         <ul className="arc-sheet-l">
-          {specs.map((x, i) => <li key={i} data-notranslate>Use its <b>{x.side}</b> art at <b>{x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}</b>{x.v.inks?.length ? <> in <b>{x.v.inks.map(stockName).join(" and ")}</b></> : null}</li>)}
+          {specs.map((x, i) => <li key={i} data-notranslate>Use its <b>{x.side}</b> art at <b>{x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}</b>{x.v.inks?.length ? <> in <b>{x.v.inks.map(stockName).join(" and ")}</b></> : null}{x.v.halftones || x.v.ub ? <>, with {[x.v.halftones ? "halftones" : "", x.v.ub ? "a white underbase" : ""].filter(Boolean).join(" and ")}</> : null}{x.v.notes?.length ? <span className="faint"> ({x.v.notes.join("; ")})</span> : null}</li>)}
           {skipped.length > 0 && <li data-notranslate>Ignore the old {skipped.length === 1 ? "paperwork" : "work order and purchase order"} ({skipped.join(", ")}): the new ones on this job replace {skipped.length === 1 ? "it" : "them"}</li>}
         </ul>
         <div className="arc-sheet">
@@ -1626,7 +1634,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
           </section>
         );
       })}
-      <div className="rv-sum"><span className="faint">I&apos;ll make</span>{d.groups.map((g) => <div key={g.id} data-notranslate>{[...g.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => `${im.location} ${sp[im.id]?.size ? `${sp[im.id]!.size}"` : ""}${sp[im.id]?.inks ? ` · ${sp[im.id]!.inks}` : ""}${sp[im.id]?.ub ? " + white underbase" : ""}`).join("  ·  ")}{d.groups.length > 1 ? ` (${g.name || g.lines.map((l) => l.color).join(", ")})` : ""}</div>)}</div>
+      <div className="rv-sum"><span className="faint">I&apos;ll make</span>{d.groups.map((g) => <div key={g.id} data-notranslate>{[...g.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => `${im.location} ${sp[im.id]?.size ? `${sp[im.id]!.size}"` : ""}${sp[im.id]?.inks ? ` · ${sp[im.id]!.inks}` : ""}${sp[im.id]?.extra ? " + halftones" : ""}${sp[im.id]?.ub ? " + white underbase" : ""}`).join("  ·  ")}{d.groups.length > 1 ? ` (${g.name || g.lines.map((l) => l.color).join(", ")})` : ""}</div>)}</div>
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
         <button type="button" className="btn primary" onClick={() => a.resolve({ answers: checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })), art, specs: sp })}>{answered && !a.again ? "Use my answers" : "Make the order"}</button></div>
     </div>
