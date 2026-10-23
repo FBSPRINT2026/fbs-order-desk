@@ -143,6 +143,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Inbox → Create order: build and save this group's mockup by itself (the art at the size and place the AI read from
    *  the customer's mockup, one-color prints in their ink), then go on to the next group, then the order */
   const auto = sp.get("auto") === "1";
+  // made again out of sight after the order check changed the art (OrderReview): save, tell the page, stay put
+  const quiet = auto && sp.get("quiet") === "1";
   /** opened from an email (Inbox → Edit details): carried on to the order, which offers "Save & back to email" */
   const fromEmail = sp.get("email") || "";
   /** opened from an AI Workbench mockup card (Oct 22): its customer, garment colors and prints, set up to check and save */
@@ -2674,6 +2676,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const ok = await autoSave.current();
       if (!ok) { autoState.current = "stuck"; return; }
       autoState.current = "done";
+      if (quiet) { try { window.parent.postMessage({ type: "fbs:mockup-saved", order: o.id, group: groupId }, location.origin); } catch { /* */ } return; }
       const gs = orderGroups(o), at = gs.findIndex((x) => x.id === groupId);
       const next = gs.slice(at + 1).find((x) => x.imprints.some((d) => d.design_id) && !x.mockupAt);
       setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");

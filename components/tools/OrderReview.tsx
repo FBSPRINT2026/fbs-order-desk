@@ -104,11 +104,35 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   /** what's been said and done so far, for the next ask */
   const earlier = rounds.map((r) => `- Staff: ${r.you} → ${[...r.applied, ...r.art.filter((a) => a.state !== "error").map((a) => a.say)].join("; ") || r.reply.slice(0, 300)}`).join("\n");
 
+  /** the mockup pictures made again with the fixed art (Oct 23, Nick: "the little visual thumbnails that blow up didn't get
+   *  updated in real time"): the Mockup Creator runs out of sight, saves, and says so; then the order shows the new ones */
+  const [remaking, setRemaking] = useState(false);
+  async function remakeMockups(groupIds: string[]) {
+    if (!groupIds.length || onMockupPage) return;
+    setRemaking(true);
+    for (const gid of groupIds) {
+      await new Promise<void>((res) => {
+        const f = document.createElement("iframe");
+        f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
+        f.style.cssText = "position:fixed;left:-12000px;top:0;width:1400px;height:900px;border:0;opacity:0;pointer-events:none";
+        const end = () => { window.removeEventListener("message", on); clearTimeout(t); f.remove(); res(); };
+        const on = (e: MessageEvent) => { if (e.origin === location.origin && e.data?.type === "fbs:mockup-saved" && e.data.group === gid) end(); };
+        const t = setTimeout(end, 60_000);
+        window.addEventListener("message", on);
+        f.src = `/shop/artwork/mockup?order=${orderId}&group=${gid}&auto=1&quiet=1`;
+        document.body.appendChild(f);
+      });
+    }
+    setRemaking(false); setStale(false);
+    void load(); pageReloads(orderId);
+  }
+
   /** the art fixes, drawn on each logo here, then said on its print */
   async function runArt(ri: number, art: OrderChange[]) {
     if (!o || !art.length) return;
     const byPrint = new Map<string, OrderChange[]>();
     for (const c of art) byPrint.set(c.id, [...(byPrint.get(c.id) || []), c]);
+    const fixedGroups = new Set<string>();
     for (const [pid, cs] of byPrint) {
       const g = o.groups.find((x) => x.imprints.some((im) => im.id === pid)), im = g?.imprints.find((x) => x.id === pid);
       const mark = (state: "done" | "error", e?: string) => setRounds((rs) => rs.map((r, i) => (i !== ri ? r : { ...r, art: r.art.map((a) => (a.id === pid ? { ...a, state, err: e } : a)) })));
@@ -117,8 +141,10 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
       if (!f.ok) { mark("error", f.error); continue; }
       for (const c of cs) await noteArtChange(orderId, pid, c.say).catch(() => null);
       mark("done"); setStale(true);
+      if ((g.mockupThumbs || []).length) fixedGroups.add(g.id);
     }
     void load(); pageReloads(orderId);
+    void remakeMockups([...fixedGroups]);
   }
 
   async function ask(m: "review" | "change") {
@@ -240,7 +266,8 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
           );
         })}
         {busy && <>{pending && <div className="bub me"><p>{pending}</p></div>}<div className="bub them typing" aria-label={busy}><i /><i /><i /></div></>}
-        {stale && !working && <p className="bub-note">{onMockupPage ? "The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too." : <>The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</>}</p>}
+        {remaking && <p className="bub-note">Making the mockup again with the new art…</p>}
+        {stale && !working && !remaking && <p className="bub-note">{onMockupPage ? "The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too." : <>The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</>}</p>}
         {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
         {lastRule && <p className="bub-note">For tonight&apos;s review: {lastRule}</p>}
         {err && <div className="err">{err}</div>}
@@ -280,6 +307,7 @@ export function openOrderCheck(orderId: string, did?: string[]) {
 export function OrderCheckDock() {
   const [st, setSt] = useState<DockState | null>(null);
   useEffect(() => {
+    if (window.self !== window.top) return; // the Mockup Creator made out of sight (remakeMockups): no second check in it
     try { const x = sessionStorage.getItem(DOCK_KEY); if (x) setSt(JSON.parse(x) as DockState); } catch { /* */ }
     const on = (e: Event) => setSt((e as CustomEvent<DockState | null>).detail);
     window.addEventListener("fbs:order-check", on);
