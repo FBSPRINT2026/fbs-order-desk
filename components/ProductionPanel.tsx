@@ -4,7 +4,7 @@ import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
-export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null };
+export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled or removed here (a job photo) */ readOnly?: boolean };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0, 4).toUpperCase();
@@ -46,20 +46,20 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
                   {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
-                {onCategory && !f.category && f.guess && f.guess !== "?" && (
+                {!f.readOnly && onCategory && !f.category && f.guess && f.guess !== "?" && (
                   <div className="prod-guess">Looks like <b>{prodKindLabel(f.guess)}</b> <button type="button" className="linkish ok" onClick={() => onCategory(f, f.guess!)}>Yes</button></div>
                 )}
-                {onCategory ? (() => { const g = !f.category ? (f.guess && f.guess !== "?" ? f.guess : guessProdKind(f.name)) : ""; return (
+                {f.readOnly ? <div className="prod-kind set">Photo</div> : onCategory ? (() => { const g = !f.category ? (f.guess && f.guess !== "?" ? f.guess : guessProdKind(f.name)) : ""; return (
                   <select className={"prod-kind" + (f.category ? " set" : "")} value={f.category || ""} onChange={(e) => onCategory(f, e.target.value || null)} aria-label={`What ${f.name} is`} title={f.category ? PROD_KINDS.find((x) => x.k === f.category)?.hint : g ? `Looks like: ${prodKindLabel(g)}` : "Say what this file is"}>
                     <option value="">{g ? `Label it (${prodKindLabel(g)}?)` : "Label it…"}</option>
                     {PROD_KINDS.map((k) => <option key={k.k} value={k.k}>{k.label}</option>)}
                   </select>); })() : f.category ? <div className="prod-kind set">{prodKindLabel(f.category)}</div> : null}
                 <div className="prod-type faint">{fileTypeOf(f.name, f.mime)}</div>
-                {onFileNote ? <input className="prod-fnote" defaultValue={f.note || ""} placeholder="Add a note…" aria-label={`Note on ${f.name}`} onBlur={(e) => { const t = e.target.value.trim(); if (t !== (f.note || "")) onFileNote(f, t); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                {onFileNote && !f.readOnly ? <input className="prod-fnote" defaultValue={f.note || ""} placeholder="Add a note…" aria-label={`Note on ${f.name}`} onBlur={(e) => { const t = e.target.value.trim(); if (t !== (f.note || "")) onFileNote(f, t); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : f.note ? <div className="prod-fnote ro">{f.note}</div> : null}
                 <div className="prod-facts">
                   {f.url && <a href={downloadUrl(f.url, f.fileName || f.name)} target="_blank" rel="noreferrer" download={f.fileName || f.name}>Download</a>}
-                  {onRemove && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}
+                  {onRemove && !f.readOnly && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}
                 </div>
               </div>
             ))}
@@ -95,11 +95,24 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
 const thumbCache = new Map<string, Promise<string>>();
 function pdfThumb(url: string, name: string): Promise<string> {
   if (!thumbCache.has(url)) thumbCache.set(url, (async () => {
+    // the first page as it is, the whole page, like a file preview (Oct 23, Nick: "the little thumbnails aren't working
+    // like they should"): the art preparer cut a mockup sheet down to a speck); the art preparer stays the fallback
     try {
-      const blob = await (await fetch(url)).blob();
-      const { makePreview } = await import("@/lib/artPrep");
-      const png = await makePreview(new File([blob], name, { type: blob.type || "application/pdf" }), 360);
-      return png ? URL.createObjectURL(png) : "";
+      const buf = await (await fetch(url)).arrayBuffer();
+      try {
+        const { openPdf } = await import("@/lib/printavoArt");
+        type Doc = { getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> };
+        const doc = await openPdf(buf.slice(0)) as unknown as Doc;
+        const pg = await doc.getPage(1), v1 = pg.getViewport({ scale: 1 });
+        const vp = pg.getViewport({ scale: 420 / Math.max(v1.width, v1.height) });
+        const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        await pg.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+        return c.toDataURL("image/jpeg", 0.85);
+      } catch {
+        const { makePreview } = await import("@/lib/artPrep");
+        const png = await makePreview(new File([buf], name, { type: "application/pdf" }), 360);
+        return png ? URL.createObjectURL(png) : "";
+      }
     } catch { return ""; }
   })());
   return thumbCache.get(url)!;

@@ -461,6 +461,26 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // across it (we remake the mockup ourselves for the separations). Made once per file: the stamped file is named
   // after the original's path.
   const [filesBump, setFilesBump] = useState(0);
+  // the job's photos in Production files too (Oct 23, Nick: "I added some pictures to the production details. Those should
+  // be on the production files now"): this run's, and last time's (the production view files photos of the old job on
+  // that job, so the next reorder has them)
+  const [jobPics, setJobPics] = useState<{ id: string; name: string; url: string; mime: string; note: string }[]>([]);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      type JF = { id: string; kind: string; url: string; file_name: string; file_type: string; body: string };
+      const get = (k: "o" | "a", jid: string) => fetch(`/api/jobs/files?kind=${k}&id=${jid}`).then((x) => x.json()).then((j) => ((j.items || []) as JF[]).filter((x) => x.kind === "photo" && x.url)).catch(() => [] as JF[]);
+      const mine = await get("o", id);
+      const { data: ev } = await sb.from("order_events").select("detail").eq("order_id", id).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
+      const num = String(ev?.detail || "").match(/Printavo #(\d{3,7})/)?.[1];
+      let prev: JF[] = [];
+      if (num) { const { data: ao } = await sb.from("archived_orders").select("id").eq("visual_id", num).limit(1).maybeSingle(); if (ao?.id) prev = await get("a", ao.id as string); }
+      if (!live) return;
+      setJobPics([...mine.map((x) => ({ id: "jf-" + x.id, name: x.body || x.file_name || "Photo", url: x.url, mime: x.file_type || "image/jpeg", note: "Photo of this run" })),
+        ...prev.map((x) => ({ id: "jf-" + x.id, name: x.body || x.file_name || "Photo", url: x.url, mime: x.file_type || "image/jpeg", note: `Photo from last time (#${num})` }))]);
+    })();
+    return () => { live = false; };
+  }, [id, filesBump, sb]);
   // opened from an email (Inbox → Edit details): a way back to it once the order is checked
   const [fromEmail, setFromEmail] = useState("");
   useEffect(() => { setFromEmail(new URLSearchParams(window.location.search).get("email") || ""); }, []);
@@ -1397,9 +1417,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) }))}
-            onFileNote={(f, t) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
-            onCategory={(f, c) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
+            files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true }))]}
+            onFileNote={(f, t) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
+            onCategory={(f, c) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
             {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}
             <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside />
