@@ -209,7 +209,9 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
           </div>
         );
       })}
-      {stale && !working && <p className="faint">The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</p>}
+      {stale && !working && (onMockupPage
+        ? <p className="faint">The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too.</p>
+        : <p className="faint">The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</p>)}
       {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
       {lastRule && <p className="faint orv-rule">For tonight&apos;s review: {lastRule}</p>}
 

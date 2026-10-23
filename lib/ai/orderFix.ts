@@ -25,6 +25,22 @@ export type FixResult = { reply: string; changes: OrderChange[]; applied: string
 
 const PRINT_FIELDS = ["size", "location", "inks", "colors", "drop", "underbase"];
 const ART_ACTIONS = ["one_black", "flatten", "remove_hairline"];
+/** the order's own fields (the order page's Job details and Totals, Oct 23, Nick: "change it to pickup"), each checked here */
+const yes = (v: string) => /^(y|true|on|1)/i.test(v);
+const ORDER_FIELDS: Record<string, { say: string; set: (v: string) => unknown | undefined }> = {
+  due_date: { say: "YYYY-MM-DD", set: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined) },
+  firm: { say: "yes/no", set: (v) => yes(v) },
+  delivery_method: { say: "pickup, deliver or ship", set: (v) => { const k = v.toLowerCase(); return /pick/.test(k) ? "pickup" : /deliver/.test(k) ? "deliver" : /ship/.test(k) ? "ship" : undefined; } },
+  ship_to: { say: "the address", set: (v) => v.slice(0, 500) },
+  nickname: { say: "the job name", set: (v) => (v ? v.slice(0, 120) : undefined) },
+  po_number: { say: "the customer's PO number", set: (v) => v.slice(0, 80) },
+  production_date: { say: "YYYY-MM-DD or \"\"", set: (v) => (!v ? null : /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined) },
+  rush: { say: "yes/no", set: (v) => yes(v) },
+  tax_exempt: { say: "yes/no", set: (v) => yes(v) },
+  price_type: { say: "retail or wholesale", set: (v) => (/whole/i.test(v) ? "wholesale" : /retail/i.test(v) ? "retail" : undefined) },
+  discount_pct: { say: "percent off, a number", set: (v) => { const n = parseFloat(v); return n >= 0 && n <= 100 ? n : undefined; } },
+  waive_setup: { say: "yes/no (no screen and setup charges)", set: (v) => yes(v) },
+};
 const EXTRAS = ["printed_free", "not_printed_free", "printed_charged", "not_printed_charged", "not_extras"];
 
 /** the order's garment lines with their ids, so a change can point at one */
@@ -62,8 +78,8 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
       changes: { type: "array", description: "Each change, one field each.", items: { type: "object", properties: {
         what: { type: "string", enum: ["print", "line", "art", "order"] },
         id: { type: "string", description: "The print id (print and art), the line id (line), or \"order\"" },
-        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price. order: due_date, firm` },
-        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); due_date YYYY-MM-DD; firm yes/no` },
+        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price. order: ${Object.keys(ORDER_FIELDS).join(", ")}` },
+        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
         say: { type: "string", description: "One plain sentence saying the change, past tense, for staff and (art) the customer: \"Made the two blacks in the art one solid black\"" },
       }, required: ["what", "id", "field", "value", "say"] } },
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
@@ -73,7 +89,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
 
 You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
 
-Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; extras; the due date and firm date. When staff ask for one of these, make it; don't say you can't.
+Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -89,7 +105,7 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     (c.what === "print" && printIds.has(c.id) && PRINT_FIELDS.includes(c.field)) ||
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
     (c.what === "line" && lineIds.has(c.id) && ((c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
-    (c.what === "order" && ["due_date", "firm"].includes(c.field))).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 12);
+    (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 12);
   const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
@@ -174,9 +190,10 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
       else if (v === "not_extras") { delete l.extras; delete l.extrasPrint; delete l.extrasFree; if (l.priceOverride === 0) l.priceOverride = null; }
       else { const free = /_free$/.test(v); l.extras = true; l.extrasPrint = !/^not_printed/.test(v); l.extrasFree = free; l.priceOverride = free ? 0 : l.priceOverride === 0 ? null : l.priceOverride; }
     } else if (c.what === "order") {
-      if (c.field === "due_date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) patch.due_date = v;
-      else if (c.field === "firm") patch.firm = /^y|true|on/i.test(v);
-      else continue;
+      const f = ORDER_FIELDS[c.field];
+      const x = f ? f.set(v) : undefined;
+      if (x === undefined) continue;
+      patch[c.field] = x;
     }
     applied.push(c.say);
   }
@@ -185,7 +202,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
   const { data: full } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   let money: Record<string, number> = {};
-  try { if (full) { const c = calcOrder({ ...(full as Order), groups }, mergeSettings(st?.data)); money = { total: c.total, qty: c.qty }; } } catch { /* the page's next save fixes it */ }
+  try { if (full) { const c = calcOrder({ ...(full as Order), groups, ...patch } as Order, mergeSettings(st?.data)); money = { total: c.total, qty: c.qty }; } } catch { /* the page's next save fixes it */ }
   const { error } = await admin.from("orders").update({ groups, ...patch, ...money }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
   await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Changed when it was checked: ${applied.join("; ")}`.slice(0, 2000), actor: by });

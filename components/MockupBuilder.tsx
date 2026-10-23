@@ -504,7 +504,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
   }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the customer's designs
+  // the customer's designs; again when the order check (on the right) changes a logo's art, so the shirt shows it
+  // (Oct 23, Nick: "I asked it to remove the white outline and… it didn't update the mock-up on the left")
+  const [artTick, setArtTick] = useState(0);
+  useEffect(() => {
+    const on = () => setArtTick((t) => t + 1);
+    window.addEventListener("fbs:order-changed", on);
+    return () => window.removeEventListener("fbs:order-changed", on);
+  }, []);
   useEffect(() => {
     (async () => {
       if (!customerId) { setDesigns([]); setUrls({}); return; }
@@ -518,7 +525,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setDesigns(list);
       setUrls(await previewUrls(sb, list));
     })();
-  }, [sb, customerId, portal]);
+  }, [sb, customerId, portal, artTick]);
 
   // ?design=<id>: start with that logo on the shirt (e.g. right after making it in the shirt designer)
   const designParam = useRef(sp.get("design") || "");
