@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   const [{ data: sg }, past, st, { data: cust }, cv] = await Promise.all([
     admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", part ? `email:${part.anchor || id}:order:${part.key}` : `email:${id}:order`).maybeSingle(),
     // the jobs it names first (their PO "86798" → Printavo #32997), then the recent ones
-    pastJobs(admin, a.customer_id as string | null).then(async (recent) => [...await jobsNamed(admin, `${a.subject || ""} ${String(a.body || "").slice(0, 3000)}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent]),
+    pastJobs(admin, a.customer_id as string | null).then(async (recent) => [...await jobsNamed(admin, `${a.subject || ""} ${String(a.body || "").slice(0, 3000)} ${(((a.meta as { attachments?: { name: string }[] } | null)?.attachments) || []).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent]),
     aiState(admin),
     a.customer_id ? admin.from("customers").select("*").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     emailConversation(admin, id).catch(() => null),

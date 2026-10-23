@@ -225,6 +225,24 @@ export async function signaturePaths(admin: SupabaseClient, a: { id: string; fro
   return out;
 }
 
+/**
+ * What a file is, by its name (Oct 22, Nick: "the file names are how I figure everything out… you can see Work Order
+ * 91537, you know that's a work order"). The paperwork (a purchase order, work order, invoice, quote, packing slip) is
+ * read for the order, never used as the print art; a name like a logo or art is the art. null: the name doesn't say.
+ */
+export function kindByName(name: string): { kind: "po" | "wo" | "invoice" | "quote" | "packing" | "art"; say: string } | null {
+  const n = name.replace(/\.[a-z0-9]+$/i, "").replace(/[_\-.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  if (/\bpurchase\s*order\b|^\s*p\.?o\.?\s*#?\s*\d|\bp\.?o\.?\s*#?\s*\d{3,}/i.test(n)) return { kind: "po", say: "the customer's purchase order (paperwork: read it for the garments, sizes, prints and notes; never the print art)" };
+  if (/\bwork\s*order\b|\bw\.?o\.?\s*#?\s*\d{3,}|\bjob\s*(ticket|sheet)\b/i.test(n)) return { kind: "wo", say: "the customer's work order (paperwork: read it for the locations, sizes, inks and instructions; any mockup on it is only a picture of the job, never the print art)" };
+  if (/\binvoice\b|\binv\s*#?\s*\d/i.test(n)) return { kind: "invoice", say: "an invoice (paperwork, never the print art)" };
+  if (/\b(quote|estimate|quotation)\b/i.test(n)) return { kind: "quote", say: "a quote (paperwork, never the print art)" };
+  if (/\bpacking\s*(slip|list)\b|\bbill\s*of\s*lading\b/i.test(n)) return { kind: "packing", say: "a packing slip (paperwork, never the print art)" };
+  if (/\b(logo|logos|art|artwork|vector|print\s*file|design|front|back|sleeve|chest)\b/i.test(n) || /\.(ai|eps|svg)$/i.test(name)) return { kind: "art", say: "art, by its name" };
+  return null;
+}
+const PAPERWORK = new Set(["po", "wo", "invoice", "quote", "packing"]);
+export const isPaperwork = (name: string) => PAPERWORK.has(kindByName(name)?.kind || "");
+
 export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
@@ -232,7 +250,8 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
   let budget = 18 * 1024 * 1024;
   for (const [i, a] of atts.slice(0, 12).entries()) {
     const fromLink = (a as { from_link?: string; source?: string }).from_link, prev = (a as { source?: string }).source === "canva-preview";
-    const n = i + 1, tag = `File ${n}: "${a.name}"${fromLink ? ` (from a link the customer sent${prev ? ": a preview picture of their Canva design, not a print file" : ""})` : ""}`;
+    const byName = kindByName(a.name);
+    const n = i + 1, tag = `File ${n}: "${a.name}"${fromLink ? ` (from a link the customer sent${prev ? ": a preview picture of their Canva design, not a print file" : ""})` : ""}${byName ? ` [its name says: ${byName.say}]` : ""}`;
     if (sigs.has(a.path)) { listing.push(`${tag} (the sender's email signature picture: role signature, ignore it)`); continue; }
     const pic = isPicture(a), pdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
     const text = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(a.name) || /spreadsheetml|wordprocessingml|^text\//i.test(a.type);
@@ -395,7 +414,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
   const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
-  const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)}`;
+  const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
   // several jobs picked together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676: "create an order out of a
@@ -423,7 +442,7 @@ More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like
 Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
 0. Before taking any numbers, read the email like a person: how is it laid out, and why? Look at the headings and at what repeats. When the same designs come again under headings such as store or location names (e.g. ****Frisco**** then ****McKinney****, "see break out by location"), departments, people or ship-to places, that's ONE order broken out by those headings, not separate garments and never to be added together: make ONE group per design (name the group with the design, e.g. "T10A Autumn Tee"), and in it one garment line per heading, with the heading as that line's description (e.g. "Frisco"). The same style and color under two headings is two lines. When you can't tell what a heading or split means, keep the parts apart anyway and ask in questions what it is. Check your totals against any the customer gives ("T10A total tees 348").
 1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's.
-2. Say what every attached file is: art (the print file: just the design, nothing else on the page), mockup (the design shown on a garment), setup_sheet (the customer's own mockup sheet: the art shown big, usually on a flat background panel with a note like "BACKGROUND DOES NOT PRINT", a spec box with the location, the size and the inks (Pantone / PMS), and the design on the garment, often on a second page; give art_page and mockup_page), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
+2. Say what every attached file is: art (the print file: just the design, nothing else on the page), mockup (the design shown on a garment), setup_sheet (the customer's own mockup sheet: the art shown big, usually on a flat background panel with a note like "BACKGROUND DOES NOT PRINT", a spec box with the location, the size and the inks (Pantone / PMS), and the design on the garment, often on a second page; give art_page and mockup_page), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files). A file's NAME says what it is, the way staff read it: "Purchase_Order_91537" is their purchase order, "Work_Order_91537" their work order, "SS-logo" the logo. The paperwork (purchase order, work order, invoice, quote, packing slip) is read for the garments, sizes, locations, inks and notes, and is never the art: a purchase order is size_breakdown, a work order other (even when it shows the design on a shirt); set art_file to the art files, and take a number in a paperwork name (91537) as their PO number.
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
 4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front, or Center Chest only for a small logo (under about 5" wide on an adult, about a quarter of the chest width or less). On toddler, infant and youth garments judge by the share of the chest, not inches: a print across half or more of a toddler's chest is Full Front. Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
@@ -488,12 +507,22 @@ ${staffSays}` : ""}`;
   }
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
     const t = (p.files || []).find((x) => x.file === i + 1);
-    const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : t?.role === "setup_sheet" ? "art" : "other";
+    const paper = kindByName(f.name);
+    let role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : t?.role === "setup_sheet" ? "art" : "other";
+    // the file's name wins: a purchase order or work order is paperwork, never the art (Work_Order_91537 was read as art)
+    if (paper && PAPERWORK.has(paper.kind) && role !== "signature") role = paper.kind === "po" ? "sheet" : "other";
     // a customer's mockup sheet (art page + garment page): staff confirm, and the art is cut off its art page
-    const sheet = t?.role === "setup_sheet" ? { artPage: Math.max(1, Math.round(+(t.art_page || 1))), mockupPage: Math.max(1, Math.round(+(t.mockup_page || (t.art_page === 2 ? 1 : 2)))) } : undefined;
+    const sheet = t?.role === "setup_sheet" && !(paper && PAPERWORK.has(paper.kind)) ? { artPage: Math.max(1, Math.round(+(t.art_page || 1))), mockupPage: Math.max(1, Math.round(+(t.mockup_page || (t.art_page === 2 ? 1 : 2)))) } : undefined;
     return { path: f.path, name: f.name, type: f.type, size: f.size, role, what: t?.what || "", ...(sheet ? { sheet } : {}) };
   });
-  const fileAt = (n?: number | null) => (n && files[n - 1] && files[n - 1].role !== "signature" ? files[n - 1].path : "");
+  // a print's art: never the signature, and never the paperwork when there's an art file to use instead
+  const artFiles = files.filter((f) => f.role === "art");
+  const fileAt = (n?: number | null) => {
+    const f = n ? files[n - 1] : undefined;
+    if (!f || f.role === "signature") return "";
+    if (isPaperwork(f.name)) return artFiles.length === 1 ? artFiles[0].path : "";
+    return f.path;
+  };
 
   const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
   const finIds = new Set((settings.finishing || []).map((f) => f.id));
