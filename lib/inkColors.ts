@@ -127,8 +127,8 @@ export function recolor(img: HTMLImageElement, sources: string[], targets: Recor
  * removed"): a logo on a black box with the black removed is sized by the art that prints, not the box.
  * `box` = the part kept, as fractions of the full picture (null when nothing was cut).
  */
-export function recolorTrim(img: HTMLImageElement, sources: string[], targets: Record<string, string>): { url: string; w: number; h: number; box: { x: number; y: number; w: number; h: number } | null } {
-  const c = recolorCanvas(img, sources, targets);
+export function recolorTrim(img: HTMLImageElement, sources: string[], targets: Record<string, string>, solid?: { shirt?: string }): { url: string; w: number; h: number; box: { x: number; y: number; w: number; h: number } | null } {
+  const c = solid ? solidCanvas(img, sources, targets, solid.shirt) : recolorCanvas(img, sources, targets);
   const W = c.width, H = c.height;
   if (!Object.values(targets).includes("none") || !W || !H) return { url: c.toDataURL("image/png"), w: W, h: H, box: null };
   const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
@@ -140,6 +140,36 @@ export function recolorTrim(img: HTMLImageElement, sources: string[], targets: R
   const o = document.createElement("canvas"); o.width = w; o.height = h;
   o.getContext("2d")!.drawImage(c, x0, y0, w, h, 0, 0, w, h);
   return { url: o.toDataURL("image/png"), w, h, box: { x: x0 / W, y: y0 / H, w: w / W, h: h / H } };
+}
+
+/**
+ * Solid colors only (Oct 23, Nick on HUD 102026: "this shouldn't print with any shading… it's just all solid colors"): art
+ * pulled off a photo carries the photo's light and shadow (a black ring gone gray, the shirt's red half showing through
+ * at the edges). Every pixel becomes exactly one of its inks, or the shirt (left out); no in-between colors, no see-through.
+ */
+function solidCanvas(img: HTMLImageElement, sources: string[], targets: Record<string, string>, shirt?: string): HTMLCanvasElement {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
+  x.drawImage(img, 0, 0);
+  const data = x.getImageData(0, 0, w, h), d = data.data;
+  const cand = sources.map((s0) => ({ src: rgb(s0), out: targets[s0] === "none" ? null : rgb(targets[s0] || s0) }));
+  if (shirt && /^#[0-9a-f]{6}$/i.test(shirt)) cand.push({ src: rgb(shirt), out: null });
+  const cache = new Map<number, number[] | null>();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) { d[i + 3] = 0; continue; }
+    const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    let out = cache.get(key);
+    if (out === undefined && !cache.has(key)) {
+      let best = 0, bd = Infinity;
+      for (let k = 0; k < cand.length; k++) { const q = cand[k].src, dd = (d[i] - q[0]) ** 2 + (d[i + 1] - q[1]) ** 2 + (d[i + 2] - q[2]) ** 2; if (dd < bd) { bd = dd; best = k; } }
+      out = cand[best].out; cache.set(key, out);
+    }
+    if (!out) { d[i + 3] = 0; continue; }
+    d[i] = out[0]; d[i + 1] = out[1]; d[i + 2] = out[2]; d[i + 3] = 255;
+  }
+  x.putImageData(data, 0, 0);
+  return c;
 }
 
 function recolorCanvas(img: HTMLImageElement, sources: string[], targets: Record<string, string>): HTMLCanvasElement {
