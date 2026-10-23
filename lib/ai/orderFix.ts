@@ -56,7 +56,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     task: "order_fix", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 60_000, admin, images, documents,
     ctx: { order_id: orderId, customer_id: o.customer_id, by },
     tool: { name: "order_fix", description: "What you'll change on the order and its art.", input_schema: { type: "object", properties: {
-      reply: { type: "string", description: "Plain words, short: what you found or what you changed. No headings." },
+      reply: { type: "string", description: "Plain words, short: what you found or what you changed. No headings. Name prints by their spot (the Full Front print), never by an id." },
       changes: { type: "array", description: "Each change, one field each.", items: { type: "object", properties: {
         what: { type: "string", enum: ["print", "line", "art", "order"] },
         id: { type: "string", description: "The print id (print and art), the line id (line), or \"order\"" },

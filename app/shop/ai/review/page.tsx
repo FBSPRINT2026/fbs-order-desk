@@ -57,7 +57,7 @@ export default function CorrectionsReview() {
                       {it.state ? <span className="faint">{it.state === "approved" ? "Added to the shop's rules" : it.state === "noted" ? "Noted for Claude to fix" : "Not added"}</span>
                         : it.kind === "rule" ? <><button type="button" className="btn sm" onClick={() => void decide(rv.id, i, "no")} disabled={!!busy}>Not this</button><button type="button" className="btn sm primary" onClick={() => void decide(rv.id, i, "approved")} disabled={!!busy}>Add the rule</button></>
                         : it.kind === "bug" ? <button type="button" className="btn sm" onClick={() => void decide(rv.id, i, "noted")} disabled={!!busy}>Noted</button>
-                        : <span className="faint">Remembered for them</span>}
+                        : <span className="faint">Only this customer</span>}
                     </span>
                   </li>
                 ))}

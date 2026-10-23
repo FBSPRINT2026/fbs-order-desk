@@ -52,6 +52,8 @@ You look over the corrections the shop's staff made to orders after the order wa
   await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString() }).in("id", rows.map((x) => x.id));
   // on the owner's My Day
   const { data: own } = await admin.from("staff").select("email").eq("role", "owner").limit(1).maybeSingle();
-  if (own?.email && items.length) await admin.from("tasks").insert({ owner: String(own.email).toLowerCase(), title: `Yesterday's corrections: ${items.length} thing${items.length === 1 ? "" : "s"} to look at`.slice(0, 200), notes: String(r.data.summary || "").slice(0, 1000), area: "shop", status: "open", source: "ai", url: `/shop/ai/review?id=${rv.id}`, created_by: "assistant" });
+  // only when there's something to decide (a rule to approve or a bug); one customer's own fixes don't need the owner
+  const todo = items.filter((x) => x.kind !== "customer").length;
+  if (own?.email && todo) await admin.from("tasks").insert({ owner: String(own.email).toLowerCase(), title: `Order corrections: ${todo} thing${todo === 1 ? "" : "s"} to look at`.slice(0, 200), notes: String(r.data.summary || "").slice(0, 1000), area: "shop", status: "open", source: "ai", url: `/shop/ai/review?id=${rv.id}`, created_by: "assistant" });
   return { ok: true, n: rows.length, reviewId: rv.id as string };
 }
