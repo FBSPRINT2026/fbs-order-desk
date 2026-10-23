@@ -534,6 +534,17 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null, page
     let bl = -1, br = -1;
     for (let x = sh.x0; x <= sh.x1; x++) if (lab[by * W + x] === sh.id) { if (bl < 0) bl = x; br = x; }
     if (bl < 0 || br - bl < 20) continue;
+    // a shirt has sleeves: wider across the shoulders than at the body (Oct 23, McKenna's HUD 102026.ai: the round logo
+    // on its own artboard was read as a shirt and its middle as a 12" print 9.25" down). Our template's shirt is a shirt.
+    if (!viaTpl) {
+      let topW = 0;
+      for (let y = Math.round(sh.y0 + (sh.y1 - sh.y0) * 0.12); y <= Math.round(sh.y0 + (sh.y1 - sh.y0) * 0.35); y += 2) {
+        let a = -1, b = -1;
+        for (let x = sh.x0; x <= sh.x1; x++) if (lab[y * W + x] === sh.id) { if (a < 0) a = x; b = x; }
+        if (a >= 0) topW = Math.max(topW, b - a);
+      }
+      if (topW < 1.15 * (br - bl)) continue;
+    }
     const ppi = sized ? s * 72 : (br - bl) / REF_BODY.widthIn, mid = (bl + br) / 2;
     let neck = sh.y0;
     for (let y = sh.y0; y <= sh.y1; y++) if (lab[y * W + Math.round(mid)] === sh.id) { neck = y; break; }
