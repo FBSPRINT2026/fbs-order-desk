@@ -22,6 +22,7 @@ import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
+import { guessHex, isHeather, teeSvg } from "@/lib/mockup";
 
 /**
  * Create order, start to finish, in one window (Oct 20, Nick: "once I click create order or create reorder… just
@@ -52,7 +53,8 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  confirm it: hey, this is a customer mockup with sizing and information") */
 /** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
  *  and whether to remember it for this customer */
-type CheckAsk = { items: { q: string; guess: string }[]; customer: string; resolve: (a: { q: string; answer: string; remember: boolean }[]) => void };
+type ReviewAns = { q: string; answer: string; remember: boolean }[];
+type ReviewAsk = { d: EODraft; customer: string; again: boolean; resolve: (a: ReviewAns) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
 type ArtAsk = { job: string; /** the old job's files */ old?: { name: string; url: string; type: string }[]; /** the email's files they sent */ from?: string[]; items: { key: string; label: string; file: { name: string; url: string; type: string; path?: string } }[]; resolve: (a: "theirs" | "old") => void };
@@ -75,7 +77,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [artAsk, setArtAsk] = useState<ArtAsk | null>(null);
   const [sheetAsk, setSheetAsk] = useState<SheetAsk | null>(null);
-  const [checkAsk, setCheckAsk] = useState<CheckAsk | null>(null);
+  const [review, setReview] = useState<ReviewAsk | null>(null);
+  // answers already given on this order (a color, whose art, their sheet): not asked again when it's made again with
+  // your answers at the check
+  const memo = useRef(new Map<string, unknown>());
+  async function askOnce<T>(key: string, open: (resolve: (v: T) => void) => void): Promise<T> {
+    if (memo.current.has(key)) return memo.current.get(key) as T;
+    const v = await waitFor<T>(open);
+    memo.current.set(key, v);
+    return v;
+  }
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
@@ -106,13 +117,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const ticker = (lines: string[], ms = 3500) => { let i = 0; note(lines[0]); const t = setInterval(() => { i = Math.min(i + 1, lines.length - 1); note(lines[i]); }, ms); return () => clearInterval(t); };
   const finishSteps = (state: "done" | "error" = "done") => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state } : x)));
 
-  async function one(part: EOPart | null, of: string): Promise<Made | null> {
+  async function one(part: EOPart | null, of: string, again: string[] = []): Promise<Made | null> {
     const qs = `activity=${encodeURIComponent(activityId)}${part ? `&part=${encodeURIComponent(part.key)}` : ""}`;
     step(`${of}Reading the email${part ? ` for ${part.label}` : ""}…`);
     const g = await fetch(`/api/inbox/order?${qs}`).then((r) => r.json()).catch(() => null) as Loaded & { error?: string } | null;
     guard();
     if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
-    let d = !start.told && !start.job ? g.draft : null;
+    let d = !start.told && !start.job && !again.length ? g.draft : null;
     if (d) note("Already read in the background: using that");
     if (!d) {
       const files = (g.files || []).filter((f) => f.role !== "signature");
@@ -129,7 +140,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: part ? "" : start.told || "", job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? "" : start.told || "", ...again].filter(Boolean).join("\n"), job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
@@ -137,32 +148,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     }
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     const did: string[] = [];
-    // what doesn't add up is asked first, not guessed through (Oct 22, Nick: "when there's a clear contradiction, or I
-    // can't find this product… you need to just ask… then remember it moving forward"; 40105's "best fit for onesie" with
-    // no onesies). Typed answers: it reads the email again with them; ticked: remembered for this customer's next orders
-    if (d.check?.length) {
-      step(`${of}Checking a few things with you…`);
-      note(`${d.check.length} thing${d.check.length === 1 ? "" : "s"} didn't add up: asking you before I make it`);
-      const ans = await waitFor<{ q: string; answer: string; remember: boolean }[]>((resolve) => setCheckAsk({ items: d!.check!, customer: g.customer?.company || g.customer?.name || "this customer", resolve }));
-      setCheckAsk(null);
-      const said = ans.filter((a) => a.answer.trim()).map((a) => `${a.q} → ${a.answer.trim()}`);
-      let kept = 0;
-      for (const a of ans.filter((x) => x.remember && x.answer.trim())) { const r = await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null); if (r?.ok) kept++; }
-      if (said.length) {
-        step(`${of}Reading it again with your answers…`);
-        const told = [part ? "" : start.told || "", ...said].filter(Boolean).join("\n");
-        const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
-        const j = r ? await r.json().catch(() => ({})) : {};
-        guard();
-        if (r?.ok && j.draft) { d = j.draft as EODraft; g.past = j.past || g.past; did.push(...said.map((x) => `You said: ${x}`)); }
-        else {
-          // couldn't read it again: your answers go in the order's notes for whoever checks it, said plainly
-          d = { ...d, notes: [d.notes, `Answers given when it was made (not applied, the email couldn't be read again): ${said.join("; ")}`].filter(Boolean).join("\n").slice(0, 2000) };
-          did.push("Couldn't read the email again with your answers: they're in the order's notes, check them on the order");
-        }
-      } else did.push(`Went with my guesses on: ${ans.map((a) => a.q).join(" · ")}`.slice(0, 400));
-      if (kept) did.push(`Remembered ${kept === 1 ? "that" : `those ${kept}`} for ${g.customer?.company || g.customer?.name || "this customer"}'s next orders`);
-    }
+    if (again.length) did.push(...again.map((x) => `You said: ${x}`));
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
     // several past jobs in one order (Hutchins T10A + T11A): all of them
     const jobs = (d.reorderJobs || []).map((ref) => (g.past || []).find((p) => p.ref === ref)).filter(Boolean) as PastJob[];
@@ -174,7 +160,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // a color that isn't one of the style's: asked, not guessed (Oct 22, Nick: "it says 64400 NeonBlue… did you mean Neon Blue?")
     if (cc.ask.length) {
       note("A shirt color isn't one of the style's colors: asking you");
-      const picked = await waitFor<ColorRow[] | null>((resolve) => setColorAsk({ rows: cc.rows, done: resolve }));
+      const picked = await askOnce<ColorRow[] | null>(`color:${cc.ask.map((x) => JSON.stringify(x)).join("|")}`, (resolve) => setColorAsk({ rows: cc.rows, done: resolve }));
       setColorAsk(null);
       if (picked) cc.rows = picked;
     }
@@ -204,7 +190,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       // or from here. You got to ask me first what to do with all of the art")
       const oldFiles = [...new Map(d.groups.flatMap((x) => [...(x.pvArt || []), ...(x.pvRef || [])]).map((f) => [f.path, f])).values()].slice(0, 8);
       const { data: oldUrls } = oldFiles.length ? await createClient().storage.from("proofs").createSignedUrls(oldFiles.map((f) => f.path), 3600) : { data: [] };
-      const ans = await waitFor<"theirs" | "old">((resolve) => setArtAsk({ job: jobLabel || "the old job", resolve, old: oldFiles.map((f, i) => ({ name: f.name, url: oldUrls?.[i]?.signedUrl || "", type: /\.pdf$/i.test(f.path) ? "application/pdf" : "image/png" })), from: d!.files.filter((f) => sentArt.some((z) => z.path === f.path)).map((f) => f.name), items: sentArt.map(({ x, im, path }) => {
+      const ans = await askOnce<"theirs" | "old">(`art:${sentArt.map((z) => z.path).join("|")}`, (resolve) => setArtAsk({ job: jobLabel || "the old job", resolve, old: oldFiles.map((f, i) => ({ name: f.name, url: oldUrls?.[i]?.signedUrl || "", type: /\.pdf$/i.test(f.path) ? "application/pdf" : "image/png" })), from: d!.files.filter((f) => sentArt.some((z) => z.path === f.path)).map((f) => f.name), items: sentArt.map(({ x, im, path }) => {
         const f = d!.files.find((y) => y.path === path);
         return { key: im.id, label: `${x.name ? `${x.name} · ` : ""}${im.location}`, file: { name: f?.name || path.split("/").pop() || "art", url: f?.url || "", type: f?.type || "", path } };
       }) }));
@@ -416,7 +402,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         ];
         const artUrl = URL.createObjectURL(parts.art), mockUrl = parts.mockup ? URL.createObjectURL(parts.mockup) : "";
         note("Found their mockup sheet: checking with you");
-        const ans = await waitFor<"sheet" | "art">((resolve) => setSheetAsk({ name: f.name, art: artUrl, mockup: mockUrl, background: parts.background, specs, resolve }));
+        const ans = await askOnce<"sheet" | "art">(`sheet:${f.path}`, (resolve) => setSheetAsk({ name: f.name, art: artUrl, mockup: mockUrl, background: parts.background, specs, resolve }));
         setSheetAsk(null);
         if (ans === "art") { did.push(`${f.name}: used as the art, as sent (you said it's not a mockup sheet)`); continue; }
         const key = `designs/sheet-${crypto.randomUUID().slice(0, 8)}`, base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "-").slice(0, 60);
@@ -469,7 +455,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const urls = shown.map((pc) => URL.createObjectURL(pc.file)), mockUrl = page ? URL.createObjectURL(page) : "";
         const specs = plan.map(({ im, pc }) => `${im.location}: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar${pc.ink ? ` · looks like ${pc.ink}` : ""}`);
         note(`${f.name} has the art on a shirt: pulled it off with the Helper, checking with you`);
-        const ans = await waitFor<"sheet" | "art">((resolve) => setSheetAsk({ name: f.name, art: urls[0], more: urls.slice(1), mockup: mockUrl, background: null, specs, resolve, onShirt: got.kind }));
+        const ans = await askOnce<"sheet" | "art">(`shirt:${f.path}`, (resolve) => setSheetAsk({ name: f.name, art: urls[0], more: urls.slice(1), mockup: mockUrl, background: null, specs, resolve, onShirt: got.kind }));
         setSheetAsk(null);
         if (ans === "art") { did.push(`${f.name}: used as the art, as sent (you said the art isn't on a shirt)`); continue; }
         const key = `designs/pulled-${crypto.randomUUID().slice(0, 8)}`, base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "-").slice(0, 60);
@@ -508,6 +494,34 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
     }
     guard();
+    // the check, at the end, with pictures (Oct 23, Nick: "you don't ask until you get to the end and you've read all the
+    // data and we've identified all the mockups and work orders… maybe it would be more visual"): each group as a card,
+    // their picture of it beside the art picked and the shirts, and what doesn't add up asked on its card, by picture.
+    // An answer that changes something: it's read again with your answers and made again (the answers you already gave
+    // along the way aren't asked twice); ticked: remembered for this customer's next orders
+    {
+      const cust = g.customer?.company || g.customer?.name || "this customer";
+      step(`${of}${d.check?.length ? `Checking ${d.check.length === 1 ? "one thing" : `${d.check.length} things`} with you…` : "Here's the order: look it over…"}`);
+      if (d.check?.length) note(`${d.check.length} thing${d.check.length === 1 ? "" : "s"} to check, on the order's cards`);
+      const ans = await waitFor<ReviewAns>((resolve) => setReview({ d: d!, customer: cust, again: again.length > 0, resolve }));
+      setReview(null);
+      guard();
+      const said = ans.filter((a) => a.answer.trim()).map((a) => `${a.q} → ${a.answer.trim()}`);
+      let kept = 0;
+      for (const a of ans.filter((x) => x.remember && x.answer.trim())) { const r = await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null); if (r?.ok) kept++; }
+      if (kept) did.push(`Remembered ${kept === 1 ? "that" : `those ${kept}`} for ${cust}'s next orders`);
+      if (said.length && !again.length) {
+        // made again with your answers: the logos this pass made are taken back first
+        const ids = [...made0.current]; made0.current = new Set();
+        if (ids.length) await discardDraftArt(ids).catch(() => null);
+        step(`${of}Reading it again with your answers…`);
+        return one(part, of, said);
+      }
+      if (said.length) {
+        d = { ...d, notes: [d.notes, `Answers given when it was made: ${said.join("; ")}`].filter(Boolean).join("\n").slice(0, 2000) };
+        did.push(...said.map((x) => `You said: ${x} (in the order's notes)`));
+      } else if (d.check?.length) did.push(`Went with my guesses on: ${d.check.map((c) => c.q).join(" · ")}`.slice(0, 400));
+    }
     setCommitting(true);
     step(`${of}Creating the order…`);
     note(d.kind === "reorder" ? "Copying the job with the new sizes as a quote…" : "Saving it as a quote…");
@@ -574,8 +588,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const parts = start.parts?.length ? start.parts : [null];
   const many = parts.length > 1;
   return (
-    <div className={"dla-bg" + (dock ? " dock" + (help || confirm ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
-      <div className={"dla qo" + (help || confirm ? " wide" : "")}>
+    <div className={"dla-bg" + (dock ? " dock" + (help || confirm || review ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
+      <div className={"dla qo" + (help || confirm || review ? " wide" : "")}>
         {!done && !committing && <button type="button" className="qo-x" onClick={cancel} aria-label={made.length ? "Stop here: the orders already made stay" : "Cancel: nothing is saved"} title={made.length ? "Stop here: the orders already made stay; the one in progress isn't saved" : "Cancel: stop here, nothing is saved"}>×</button>}
         {many && !done && (() => {
           const p = parts[cur]!;
@@ -617,7 +631,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
-        {checkAsk && <CheckConfirm a={checkAsk} onCancel={cancel} />}
+        {review && <ReviewConfirm a={review} onCancel={cancel} />}
         {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
@@ -1082,27 +1096,88 @@ function trimToArt(c: HTMLCanvasElement) {
  * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
  * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
  */
-/** what doesn't add up, before the order is made: answer (or leave it to the guess), and remember it for the customer */
-function CheckConfirm({ a, onCancel }: { a: CheckAsk; onCancel: () => void }) {
-  const [rows, setRows] = useState(a.items.map((x) => ({ q: x.q, answer: "", remember: false })));
+/** a picture of a file (a page of a PDF or AI file, or a picture) or of a logo on file, for the check */
+const picCache = new Map<string, Promise<string>>();
+function picOf(o: { path?: string; design?: string; page?: number }): Promise<string> {
+  const key = `${o.design || ""}|${o.path || ""}|${o.page || 1}`;
+  if (!picCache.has(key)) picCache.set(key, (async () => {
+    const sb = createClient();
+    let path = o.path || "";
+    if (o.design) { const { data } = await sb.from("designs").select("preview_path, file_path").eq("id", o.design).maybeSingle(); path = (data?.preview_path || data?.file_path || "") as string; }
+    if (!path) return "";
+    const { data: su } = await sb.storage.from("proofs").createSignedUrl(path, 3600);
+    const url = su?.signedUrl || "";
+    if (!url || !/\.(pdf|ai)$/i.test(path)) return url;
+    const buf = await (await fetch(url)).arrayBuffer();
+    const c = await pdfPicture(buf, 700, o.page || 1);
+    const b = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+    return b ? URL.createObjectURL(b) : "";
+  })().catch(() => ""));
+  return picCache.get(key)!;
+}
+function Pic({ path, design, page, big }: { path?: string; design?: string; page?: number; big?: boolean }) {
+  const [u, setU] = useState<string | null>(null);
+  useEffect(() => { let live = true; setU(null); void picOf({ path, design, page }).then((x) => { if (live) setU(x); }); return () => { live = false; }; }, [path, design, page]);
+  return <span className={"rv-pic" + (big ? " big" : "")}>{u ? <img src={u} alt="" /> : <span className="faint">{u === null ? "…" : "No picture"}</span>}</span>;
+}
+const sameName = (a?: string, b?: string) => { const n = (x?: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return !!n(a) && !!n(b) && (n(a) === n(b) || n(a).startsWith(n(b)) || n(b).startsWith(n(a))); };
+
+/**
+ * The check before it's made (Oct 23, Nick: "you don't ask until you get to the end and you've read all the data…
+ * maybe it would be more visual… think of a better way to do it than ask like that"). One card per group: their own
+ * picture of it (a work order page, their mockup) beside the art picked and the shirts; what doesn't add up is asked on
+ * the card it's about, picked by picture when the answer is a file. Nothing to ask: look it over and make it.
+ */
+function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) {
+  const d = a.d, checks = d.check || [];
+  const [rows, setRows] = useState(checks.map(() => ({ pick: 0, text: "", remember: false })));
   const set = (i: number, ch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...ch } : x)));
-  const typed = rows.some((r) => r.answer.trim());
+  const groupOf = (about?: string) => (about ? d.groups.findIndex((g) => sameName(g.name, about)) : -1);
+  const answerOf = (i: number) => { const r = rows[i], c = checks[i]; if (r.text.trim()) return r.text.trim(); if (r.pick > 0 && c.choices?.[r.pick]) { const ch = c.choices[r.pick]; return `${ch.label}${ch.name ? ` (${ch.name})` : ""}`; } return ""; };
+  const changed = checks.some((_, i) => !!answerOf(i));
+  // a plain function, not a component: typing in its box keeps the focus
+  const Q = (i: number) => {
+    const c = checks[i], r = rows[i], mine = !!answerOf(i);
+    return (
+      <div key={i} className="rv-q">
+        <p className="rv-qq">{c.q}</p>
+        <div className="rv-ch" role="radiogroup" aria-label={c.q}>
+          {(c.choices?.length ? c.choices : [{ label: c.guess || "My guess" }]).map((ch, k) => (
+            <button key={k} type="button" role="radio" aria-checked={r.pick === k && !r.text.trim()} className={"rv-c" + (r.pick === k && !r.text.trim() ? " on" : "") + ("path" in ch && ch.path ? " pic" : "")} onClick={() => set(i, { pick: k, text: "" })}>
+              {"path" in ch && ch.path ? <Pic path={ch.path} /> : null}
+              <span>{ch.label}{k === 0 ? <i className="faint"> (my guess)</i> : null}</span>
+            </button>
+          ))}
+        </div>
+        <input type="text" className="rv-txt" aria-label={`Something else: ${c.q}`} placeholder="Something else…" value={r.text} onChange={(e) => set(i, { text: e.target.value })} />
+        {mine && <label className="qc-rem"><input type="checkbox" checked={r.remember} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>}
+      </div>
+    );
+  };
+  const loose = checks.map((c, i) => ({ c, i })).filter(({ c }) => groupOf(c.about) < 0);
+  const pcs = (g: Group) => g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((m, v) => m + (+v || 0), 0), 0);
   return (
-    <div className="ap" role="group" aria-label="Before I make it">
-      <p className="ap-q">Before I make it: {a.items.length === 1 ? "this doesn't" : "these don't"} add up.</p>
-      <p className="ap-why">Tell me what to do, or leave a box empty and I&apos;ll go with my guess. Tick Remember and I&apos;ll know it for {a.customer}&apos;s next orders.</p>
-      <ol className="qc-list">
-        {a.items.map((x, i) => (
-          <li key={i} className="qc-it">
-            <p className="qc-q">{x.q}</p>
-            {x.guess && <p className="qc-g faint">My guess: {x.guess}</p>}
-            <input type="text" className="qc-a" aria-label={`Your answer to: ${x.q}`} placeholder="Your answer (empty = my guess)" value={rows[i].answer} onChange={(e) => set(i, { answer: e.target.value })} />
-            <label className="qc-rem"><input type="checkbox" checked={rows[i].remember} disabled={!rows[i].answer.trim()} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>
-          </li>
-        ))}
-      </ol>
+    <div className="ap rv" role="group" aria-label="Check the order before it's made">
+      <p className="ap-q">{checks.length ? `Here's the order. ${checks.length === 1 ? "One thing" : `${checks.length} things`} to check.` : "Here's the order. Look right?"}</p>
+      <p className="ap-why">{checks.length ? "Pick an answer on the card, or leave my guess." : "Their picture, the art I picked and the shirts, for each group."}{a.again ? " Your earlier answers are in." : ""}</p>
+      {loose.length > 0 && <section className="rv-g ask"><div className="rv-h"><b>The whole order</b></div>{loose.map(({ i }) => Q(i))}</section>}
+      {d.groups.map((g, gi) => {
+        const qs = checks.map((c, i) => ({ c, i })).filter(({ c }) => groupOf(c.about) === gi);
+        const shown = (d.shown || []).find((x) => sameName(x.about, g.name)) || (d.groups.length === 1 ? (d.shown || [])[0] : undefined);
+        return (
+          <section key={g.id} className={"rv-g" + (qs.length ? " ask" : "")}>
+            <div className="rv-h"><b data-notranslate>{g.name || g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ") || `Group ${gi + 1}`}</b><span className="faint">{pcs(g).toLocaleString("en-US")} pcs{g.imprints.length ? ` · ${g.imprints.map((im) => `${im.location}${parseFloat(String(im.size || "")) > 0 ? ` ${parseFloat(String(im.size))}"` : ""}`).join(", ")}` : ""}</span></div>
+            <div className="rv-pics">
+              {shown && <figure><Pic path={shown.path} page={shown.page} big /><figcaption data-notranslate>Their {shown.name.replace(/\.[a-z0-9]+$/i, "")}{shown.page > 1 ? `, page ${shown.page}` : ""}</figcaption></figure>}
+              {g.imprints.map((im) => { const path = d.art?.[im.id]; return <figure key={im.id}><Pic path={im.design_id ? undefined : path} design={im.design_id || undefined} big /><figcaption>{im.location}{im.inks ? ` · ${im.inks}` : ""}</figcaption></figure>; })}
+              {g.lines.map((l) => <figure key={l.id}><span className="rv-pic big rv-tee"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(teeSvg(guessHex(l.color || "White"), "front", isHeather(l.color || "")))}`} alt="" /></span><figcaption data-notranslate>{[l.style, l.color].filter(Boolean).join(" ") || "Garment"}<br /><span className="faint">{Object.entries(l.sizes || {}).filter(([, q]) => +q).map(([z, q]) => `${z} ${q}`).join(" · ")}</span></figcaption></figure>)}
+            </div>
+            {qs.length ? qs.map(({ i }) => Q(i)) : <p className="rv-ok">✓ Nothing to ask{shown ? ": the art is the one in their picture" : ""}</p>}
+          </section>
+        );
+      })}
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
-        <button type="button" className="btn primary" onClick={() => a.resolve(rows)}>{typed ? "Use my answers" : "Go with your guesses"}</button></div>
+        <button type="button" className="btn primary" onClick={() => a.resolve(checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })))}>{changed ? (a.again ? "Make the order" : "Use my answers") : "Make the order"}</button></div>
     </div>
   );
 }

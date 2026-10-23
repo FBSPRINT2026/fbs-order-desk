@@ -12419,3 +12419,28 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .mf-look-b{flex:1;min-height:0;background:var(--surface-2,#f3f4f6);overflow:auto;display:flex;align-items:flex-start;justify-content:center}
 .mf-look-b iframe{width:100%;height:100%;border:0;background:#fff}
 .mf-look-b img{max-width:100%;height:auto;margin:16px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+
+/* Create order: the check at the end, with pictures (Oct 23, Nick: "maybe it would be more visual"). One card per group:
+   their picture, the art picked, the shirts; a question on the card it's about, picked by picture */
+.rv .rv-g{border:1px solid var(--line);border-radius:var(--r,6px);padding:10px 12px;margin:10px 0;background:var(--surface)}
+.rv .rv-g.ask{border-color:var(--warn);box-shadow:inset 3px 0 0 var(--warn)}
+.rv .rv-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:14px;color:var(--ink);min-width:0}
+.rv .rv-h b{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv .rv-h .faint{font-size:12px;white-space:nowrap}
+.rv .rv-pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.rv .rv-pics figure{margin:0;min-width:0}
+.rv .rv-pics figcaption{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.35;overflow-wrap:anywhere}
+.rv .rv-pic{display:flex;align-items:center;justify-content:center;height:56px;border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface-2,#f3f4f6);overflow:hidden}
+.rv .rv-pic.big{height:110px}
+.rv .rv-pic img{max-width:100%;max-height:100%;object-fit:contain}
+.rv .rv-tee{background:var(--surface)}
+.rv .rv-ok{margin:8px 0 0;font-size:12.5px;color:var(--ok)}
+.rv .rv-q{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.rv .rv-qq{margin:0 0 6px;font-size:14px;font-weight:700;color:var(--ink)}
+.rv .rv-ch{display:flex;flex-wrap:wrap;gap:6px}
+.rv .rv-c{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface);font:inherit;font-size:13px;color:var(--ink);cursor:pointer;text-align:left}
+.rv .rv-c.pic{flex-direction:column;align-items:stretch;width:150px;padding:6px}
+.rv .rv-c.pic .rv-pic{height:70px}
+.rv .rv-c.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:var(--accent-soft,var(--surface))}
+.rv .rv-c i{font-style:normal;font-size:12px}
+.rv .rv-txt{display:block;width:100%;height:36px;margin-top:6px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r,6px);font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}

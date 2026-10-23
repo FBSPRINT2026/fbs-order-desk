@@ -27,8 +27,9 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
 
 /** a PDF's first page as a picture, about `width` px wide on white (the designs catalog's covers, Oct 20) */
-export async function pdfPicture(buf: ArrayBuffer, width = 900): Promise<HTMLCanvasElement> {
-  const page = await openPage(buf);
+export async function pdfPicture(buf: ArrayBuffer, width = 900, pageNo = 1): Promise<HTMLCanvasElement> {
+  const doc = await openDoc(buf);
+  const page = await doc.getPage(Math.max(1, Math.min(doc.numPages, pageNo)));
   const v1 = page.getViewport({ scale: 1 });
   const vp = page.getViewport({ scale: Math.min(4, width / Math.max(1, v1.width)) });
   const c = document.createElement("canvas");
