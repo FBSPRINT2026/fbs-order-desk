@@ -22,7 +22,9 @@ import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
-import { shirtBg } from "@/lib/mockup";
+import { guessHex, shirtBg } from "@/lib/mockup";
+import { knockOut } from "@/lib/artPrep";
+import { inkName, planPrint, pxOfImage } from "@/lib/printPlan";
 
 /**
  * Create order, start to finish, in one window (Oct 20, Nick: "once I click create order or create reorder… just
@@ -519,6 +521,24 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         d = { ...d, check: [...(d.check || []), { q: `${im.location}: what size? ${im.sameAs.label} didn't keep one`, guess: "Standard size", about: x.name, choices: [{ label: "Standard size" }, { label: "Production measures it" }] }] };
       }
     }
+    // art on a solid box (Oct 23, Nick on Tongue in Cheek: "do I remove the background and make it a two-color print?
+    // Because it's on a black shirt"): the box found on the art's picture, its other colors counted without the shirt's,
+    // and asked at the check, with taking it out as the guess
+    for (const x of d.groups) {
+      const shirt = guessHex(x.lines.find((l) => l.color)?.color || "White"), shirtName = x.lines.find((l) => l.color)?.color || "white";
+      for (const im of x.imprints) {
+        const path = d.art?.[im.id];
+        if (!path || im.method === "dtf" || (d.check || []).some((c) => c.local === `bg:${im.id}`)) continue;
+        const b = await boxOf(path, shirt).catch(() => null);
+        guard();
+        if (!b) continue;
+        const n = b.inks.length, list = b.inks.join(", ");
+        const q = b.sameAsShirt
+          ? `${im.location}: the art is on a ${b.bgName.toLowerCase()} box, the ${shirtName} shirt's color. Take it out and print ${n} color${n === 1 ? "" : "s"}?`
+          : `${im.location}: the art is on a ${b.bgName.toLowerCase()} box. Take it out (${n} color${n === 1 ? "" : "s"}) or print the box?`;
+        d = { ...d, check: [...(d.check || []), { q, guess: "Take it out", about: x.name, local: `bg:${im.id}|${n}|${list}|${b.bgName}`, choices: [{ label: `Take it out: ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}` }, { label: `Print the box: ${n + 1} colors` }] }] };
+      }
+    }
     // the check, at the end, with pictures (Oct 23, Nick: "you don't ask until you get to the end and you've read all the
     // data and we've identified all the mockups and work orders… maybe it would be more visual"): each group as a card,
     // their picture of it beside the art picked and the shirts, and what doesn't add up asked on its card, by picture.
@@ -531,7 +551,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const rv = await waitFor<ReviewAns>((resolve) => setReview({ d: d!, customer: cust, again: again.length > 0, resolve }));
       setReview(null);
       guard();
-      const ans = rv.answers;
+      // the background boxes: answered here, never sent back to the reader
+      const localOf = new Map((d.check || []).filter((c) => c.local).map((c) => [c.q, c.local!]));
+      for (const a of rv.answers.filter((x) => localOf.has(x.q))) {
+        const [key, n0, list, bgName] = localOf.get(a.q)!.split("|"), id = key.slice(3), n = +n0 || 1;
+        const keep = /print the box/i.test(a.answer);
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, colors: keep ? n + 1 : n, ...(keep ? {} : { inks: list }), notes: [z.notes, keep ? `Their ${bgName.toLowerCase()} box prints too` : `The ${bgName.toLowerCase()} box behind the art is taken out: the shirt shows through, ${n} color${n === 1 ? "" : "s"}`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+        did.push(`${y0(d, id)}: ${keep ? `the ${bgName.toLowerCase()} box prints too (${n + 1} colors)` : `${bgName.toLowerCase()} box taken out, ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`}`);
+      }
+      const ans = rv.answers.filter((x) => !localOf.has(x.q));
       // a different logo picked for a print: it goes on, with its own colors (no ink names carried over from the other one)
       for (const x of d.groups) for (const im of x.imprints) {
         const v = rv.art[im.id] || "", was = d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "");
@@ -1131,6 +1159,36 @@ function trimToArt(c: HTMLCanvasElement) {
  * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
  * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
  */
+/** the location of a print, by its id */
+const y0 = (d: EODraft, id: string) => d.groups.flatMap((g) => g.imprints).find((im) => im.id === id)?.location || "A print";
+/** art on a solid box: the box's color, whether it's the shirt's, and the colors left once it's out (the shirt's own color in
+ *  the art doesn't print either). Null when the art isn't on a box. */
+async function boxOf(path: string, shirt: string): Promise<{ bg: string; bgName: string; sameAsShirt: boolean; inks: string[] } | null> {
+  const url = await picOf({ path });
+  if (!url) return null;
+  const load = (u: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = rej; i.src = u; });
+  const img = await load(url);
+  // cropped to what's on the page first (a PDF is drawn on white paper): the box, if there is one, is then the edge
+  const W = img.naturalWidth, H = img.naturalHeight;
+  if (!W || !H) return null;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(img, 0, 0);
+  const px = x.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < H; yy += 2) for (let xx = 0; xx < W; xx += 2) { const i = (yy * W + xx) * 4; if (px[i + 3] > 200 && !(px[i] > 235 && px[i + 1] > 235 && px[i + 2] > 235)) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; } }
+  if (x1 <= x0 || y1 <= y0) return null;
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1, c2 = document.createElement("canvas"); c2.width = cw; c2.height = ch;
+  c2.getContext("2d")!.drawImage(c, x0, y0, cw, ch, 0, 0, cw, ch);
+  const k = knockOut(await load(c2.toDataURL("image/png")), { keepInside: true });
+  if (!k || !k.bg) return null;
+  { const v = parseInt(k.bg.replace("#", ""), 16); if (((v >> 16) & 255) > 235 && ((v >> 8) & 255) > 235 && (v & 255) > 235) return null; } // white is the paper, not a box
+  const clean = await load(k.url);
+  const plan = planPrint(pxOfImage(clean, 800), { garment: shirt });
+  const rgb = (h: string) => { const v = parseInt(h.replace("#", ""), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+  const near = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 70; };
+  const bg = k.bg.startsWith("#") ? k.bg : `#${k.bg}`;
+  return { bg, bgName: inkName(bg), sameAsShirt: near(bg, shirt), inks: [...new Set(plan.inks.filter((x) => !near(x.hex, shirt)).map((x) => x.name))] };
+}
 /** a picture of a file (a page of a PDF or AI file, or a picture) or of a logo on file, for the check */
 const picCache = new Map<string, Promise<string>>();
 function picOf(o: { path?: string; design?: string; page?: number }): Promise<string> {
