@@ -7,7 +7,7 @@ import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import { rememberOrderNote } from "@/app/shop/ai-actions";
-import { LOCATIONS } from "@/lib/pricing";
+import { LOCATIONS, inkNames } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
@@ -60,7 +60,7 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 type SheetSpec = { w: number; h?: number; inks?: string[] };
 type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string>; /** each print's size and inks as the check left them */ specs?: Record<string, Spec> };
 /** a print's size and inks at the check, and how they were arrived at */
-type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
+type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; /** a white underbase under the inks, and why */ ub?: boolean; ubWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
 type ReviewAsk = { d: EODraft; customer: string; again: boolean; resolve: (a: ReviewAns) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
@@ -627,6 +627,35 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         whyOf(id).inksWhy = `Same as the ${ref.location}: nothing named for this print`;
       }
     }
+    // one more color on the paperwork than the inks it names, on a shirt that isn't white: the extra one is the white
+    // underbase (Oct 23, Nick on HALFF: "anytime somebody says three colors and they only give you two and it's on a darker
+    // or a different color garment than the white, you got to know that's just underbase"). Not asked: said on the print
+    const ubOf = new Map<string, string>();
+    {
+      const notWhite = (c?: string) => !!c && !/\b(white|natural|cream|ivory|pfd)\b/i.test(c);
+      const ubQ = (t: string) => /underbase|\b(2nd|3rd|4th|5th|second|third|fourth|fifth|extra|another|missing)\s+(ink\s+)?colou?r|colou?rs?\b[^.?]*\bonly\b|\bonly\b[^.?]*\bnamed\b/i.test(t);
+      const nums = (t: string) => (t.replace(/\([^)]*\)/g, " ").replace(/\b(pms|pantone)\s*\d+\s*[a-z]?\b/gi, " ").replace(/\b\d{3,4}\s?[cu]\b/gi, " ").match(/\b(1[0-2]|[1-9])\b/g) || []).map(Number);
+      const drop = new Set<number>();
+      for (const x of d.groups) {
+        if (!x.lines.length || !x.lines.every((l) => notWhite(l.color))) continue;
+        const shirt = x.lines[0].color;
+        const qs = (d.check || []).map((c, i) => ({ c, i })).filter(({ c }) => !c.local && ubQ(c.q) && (!c.about || sameName(c.about, x.name || "") || /whole|order|all/i.test(c.about)));
+        for (const im of x.imprints) {
+          if (im.method && im.method !== "screen") continue;
+          const n = inkNames(im.inks || "").filter((t) => !/underbase/i.test(t)).length;
+          if (!n || im.underbase === false) continue;
+          const asked = qs.filter(({ c }) => nums(c.q).includes(n + 1) && (!c.about || !/(front|back|sleeve|chest)/i.test(c.q) || new RegExp(im.location.split(/\s+/)[0], "i").test(c.q) || /whole|order|all/i.test(c.about)));
+          if (!asked.length && +im.colors !== n + 1) continue;
+          asked.forEach(({ i }) => drop.add(i));
+          const why = `${n + 1} colors on their paperwork = these ${n} + a white underbase (${String(shirt).toLowerCase().replace(/\b\w/g, (k) => k.toUpperCase())} shirt)`;
+          ubOf.set(im.id, why);
+          const id = im.id;
+          d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, underbase: true, colors: n, inks: inkNames(z.inks || "").filter((t) => !/underbase/i.test(t)).join(", "), notes: [z.notes, `${why}`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+          did.push(`${im.location}: ${why}`);
+        }
+      }
+      if (drop.size) d = { ...d, check: (d.check || []).filter((_, i) => !drop.has(i)) };
+    }
     // every print's size and inks, with how they were arrived at, for the check (whatever it says there is what's made)
     {
       const specs: Record<string, Spec> = {};
@@ -638,6 +667,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         if (w > 0) { sp.size = w; sp.sizeWhy ||= im.sizeFrom === "customer" ? "Their PO or email gives this size" : im.aiPlace ? "Read off their mockup" : "From the order"; }
         else { const rule = sizeRule(im.location, r); sp.size = rule.w; sp.sizeWhy = `${/best fit/i.test(im.notes || "") ? `"Best fit" on their paperwork: ` : ""}${rule.why}`; }
         if (im.inks && !/simulated/i.test(im.inks)) { sp.inks = im.inks; sp.inksWhy ||= "Named on their paperwork"; }
+        if (ubOf.has(im.id)) { sp.ub = true; sp.ubWhy = ubOf.get(im.id); }
         else { const a = artInks.get(im.id); if (a?.length) { sp.inks = a.map((k) => k.name).join(", "); sp.inksWhy = "Read off the art (the shirt's own color left out)"; } }
         // the new art shaped differently from last time's (an extra circle on the right): a bigger size suggested
         if (sp.lastW && sp.lastH && r) {
@@ -676,6 +706,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const changed = !!was && (was.size !== sp.size || (was.inks || "") !== (sp.inks || ""));
         d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, ...(sp.size && sp.size > 0 ? { size: `${sp.size}" wide`, ...(changed ? { sizeFrom: "staff" as const } : {}) } : {}), ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}), ...(changed ? { notes: [z.notes, `Set at the check: ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`].filter(Boolean).join(". ").slice(0, 300) } : {}) })) })) };
         if (changed) did.push(`${y0(d, id)}: you set ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
+        if (was?.ubWhy && !sp.ub) {
+          d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, underbase: false, notes: [z.notes, "No underbase (set at the check)"].filter(Boolean).join(". ").slice(0, 300) })) })) };
+          did.push(`${y0(d, id)}: no underbase (you said)`);
+        }
       }
       // a different logo picked for a print: it goes on, with its own colors (no ink names carried over from the other one)
       for (const x of d.groups) for (const im of x.imprints) {
@@ -1554,6 +1588,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                           <label className="rv-f rv-f-inks"><span>Inks</span>{sws.length > 0 && <span className="rv-sws" aria-hidden>{sws.map((n) => <i key={n} style={{ background: colorHex(stockName(n)) || "transparent" }} />)}</span>}<input value={s0.inks || ""} onChange={(e) => setInks(g, im.id, e.target.value)} placeholder="White, Scarlet" aria-label={`${im.location} inks`} /></label>
                         </div>
                         <p className="rv-why">{s0.sizeWhy ? <>Size: {s0.sizeWhy}</> : null}{s0.sizeWhy && s0.inksWhy ? " · " : ""}{s0.inksWhy ? <>Inks: {s0.inksWhy}</> : null}</p>
+                        {s0.ubWhy && <p className="rv-why" data-notranslate>{s0.ub ? <>{s0.ubWhy}. </> : <>No underbase. </>}<button type="button" className="ap-link" onClick={() => setSp((x) => ({ ...x, [im.id]: { ...x[im.id], ub: !x[im.id]?.ub } }))}>{s0.ub ? "No underbase" : "Put the underbase back"}</button></p>}
                         {s0.flag && s0.size !== s0.flag.size && <p className="rv-flag">{s0.flag.text} <button type="button" className="ap-link" onClick={() => setSize(im.id, s0.flag!.size)}>Make it {s0.flag.size}&quot;</button></p>}
                       </div>
                     );
@@ -1566,7 +1601,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
           </section>
         );
       })}
-      <div className="rv-sum"><span className="faint">I&apos;ll make</span>{d.groups.map((g) => <div key={g.id} data-notranslate>{[...g.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => `${im.location} ${sp[im.id]?.size ? `${sp[im.id]!.size}"` : ""}${sp[im.id]?.inks ? ` · ${sp[im.id]!.inks}` : ""}`).join("  ·  ")}{d.groups.length > 1 ? ` (${g.name || g.lines.map((l) => l.color).join(", ")})` : ""}</div>)}</div>
+      <div className="rv-sum"><span className="faint">I&apos;ll make</span>{d.groups.map((g) => <div key={g.id} data-notranslate>{[...g.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => `${im.location} ${sp[im.id]?.size ? `${sp[im.id]!.size}"` : ""}${sp[im.id]?.inks ? ` · ${sp[im.id]!.inks}` : ""}${sp[im.id]?.ub ? " + white underbase" : ""}`).join("  ·  ")}{d.groups.length > 1 ? ` (${g.name || g.lines.map((l) => l.color).join(", ")})` : ""}</div>)}</div>
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
         <button type="button" className="btn primary" onClick={() => a.resolve({ answers: checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })), art, specs: sp })}>{answered && !a.again ? "Use my answers" : "Make the order"}</button></div>
     </div>
