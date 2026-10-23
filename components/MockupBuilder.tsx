@@ -354,6 +354,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string };
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
   const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
+  const [bsOpen, setBsOpen] = useSticky("mockup.brandStd", false);
+  const [distressing, setDistressing] = useState<string | null>(null);
   useEffect(() => {
     setBrandMask(null);
     if (portal || !customerId) return;
@@ -3126,19 +3128,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
                     {p.d && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
-                    {p.d && im.method === "screen" && !portal && (
-                      <div className="mk-hit">
-                        <span className="mk-hit-seg" role="radiogroup" aria-label="Underbase or fashion hit">
-                          <button type="button" role="radio" aria-checked={im.printStyle !== "fashion"} className={im.printStyle !== "fashion" ? "on" : ""} onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, printStyle: undefined } : x)))}>Standard</button>
-                          <button type="button" role="radio" aria-checked={im.printStyle === "fashion"} className={im.printStyle === "fashion" ? "on" : ""} title="No underbase: each color printed, flashed and printed again through the same screen" onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, printStyle: "fashion", underbase: undefined } : x)))}>Fashion hit</button>
-                        </span>
-                        <label className="check"><input type="checkbox" checked={!!im.softHand} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, softHand: e.target.checked || undefined } : x)))} /> Soft hand</label>
-                        {brandPrint?.hit && brandPrint.hit !== "standard" && <span className="faint">{brandPrint.hit === "ask" ? "Ask: this customer's prints vary" : "From their brand standards"}</span>}
-                      </div>
-                    )}
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
-                        distress={p.d && (p.d.specs as { distressLayer?: boolean } | null)?.distressLayer ? { on: im.distress !== "off", canOff: !!urls[p.d.id + ":clean"], set: (on: boolean) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, distress: on ? undefined : "off" } : x))) } : undefined}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
@@ -3184,6 +3175,44 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <div className="mk-imp-acts">
                         <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                       </div>
+                      {p.d && im.method === "screen" && !portal && (() => {
+                        // Brand standards (Oct 23, Nick: "a little pop-up at the bottom of the imprints… brand standards… soft
+                        // print… apply the distress effect… keep that upper section the same… on all prints"; "fashion hit
+                        // and soft hand are really the same thing"): how this customer's prints are made, for this print
+                        const soft = im.printStyle === "fashion" || !!im.softHand;
+                        const ds = (p.d.specs || {}) as { distressLayer?: boolean; distressed?: boolean };
+                        const hasDis = !!ds.distressLayer || !!ds.distressed;
+                        const disOn = hasDis && im.distress !== "off";
+                        const who = custLabel(customers.find((c) => c.id === customerId)) || "this customer";
+                        const set = (ch: Partial<Imprint>) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, ...ch } : x)));
+                        return (
+                          <div className={"mk-bs" + (bsOpen ? " on" : "")}>
+                            <button type="button" className="mk-bs-h" onClick={() => setBsOpen(!bsOpen)} aria-expanded={bsOpen}>
+                              <b>Brand standards</b><span className="mk-bs-who">{brandPrint || brandMask ? who : "none set"}</span>
+                              {!bsOpen && (soft || disOn) && <span className="faint">{[soft && "Soft Hand (Fashion)", disOn && "Distress"].filter(Boolean).join(" · ")}</span>}
+                              <span className="mk-bs-a" aria-hidden>{bsOpen ? "▾" : "▸"}</span>
+                            </button>
+                            {bsOpen && <div className="mk-bs-b">
+                              <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen, so it feels soft"><input type="checkbox" checked={soft} onChange={(e) => set(e.target.checked ? { printStyle: "fashion", softHand: true, underbase: undefined } : { printStyle: undefined, softHand: undefined })} /> Soft Hand (Fashion)</label>
+                              {(hasDis || brandMask) && <>
+                                <label className="check"><input type="checkbox" checked={disOn} disabled={distressing === im.id || (hasDis && !urls[p.d.id + ":clean"] && disOn)}
+                                  onChange={async (e) => {
+                                    if (hasDis) { set({ distress: e.target.checked ? undefined : "off" }); return; }
+                                    // not distressed yet: their mask laid over this logo (kept clean underneath, so it can be turned off)
+                                    setDistressing(im.id); setMsg("Putting their distress on the logo…");
+                                    const { fixDesignArt } = await import("@/lib/artFix");
+                                    const r = await fixDesignArt(sb, p.d!.id, ["distress"], { say: ["Added the customer's distressed texture"] });
+                                    setDistressing(null);
+                                    if (!r.ok) { setMsg(r.error); return; }
+                                    set({ distress: undefined }); setMsg("Distress on. Save to keep it on the order."); setArtTick((t) => t + 1);
+                                  }} /> {distressing === im.id ? "Putting the distress on…" : "Distress (their mask)"}</label>
+                                {brandMask && <div className="mk-bs-mask"><img src={brandMask.url} alt="" /><span className="faint">{brandMask.name} · the shirt shows through · films get {brandMask.layers || 3} layers</span></div>}
+                              </>}
+                              <p className="faint mk-bs-n">{brandPrint || brandMask ? `Set from ${who}'s brand standards. Change it here for just this print.` : "No brand standards saved for this customer."}</p>
+                            </div>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );

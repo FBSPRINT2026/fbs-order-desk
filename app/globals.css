@@ -12669,3 +12669,15 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 body:has(.dla-bg.dock) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,.sd-modal-back,.pv-zoom,.pp-modal,.sup-back,.cc-back,.md-modal,.wb-big,.ctx-big,.bs-overlay,.le-overlay,.cmp-bg,.ss-back){right:min(520px,100vw)}
 body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,.sd-modal-back,.pv-zoom,.pp-modal,.sup-back,.cc-back,.md-modal,.wb-big,.ctx-big,.bs-overlay,.le-overlay,.cmp-bg,.ss-back){right:min(760px,100vw)}
 @media (max-width:760px){body:has(.dla-bg.dock) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,.sd-modal-back,.pv-zoom,.pp-modal,.sup-back,.cc-back,.md-modal,.wb-big,.ctx-big,.bs-overlay,.le-overlay,.cmp-bg,.ss-back){right:0}}
+
+/* Mockup Creator: Brand standards, at the bottom of each print (Oct 23) */
+.mk-bs{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;flex-basis:100%}
+.mk-bs-h{width:100%;display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:0;background:var(--surface-2);font:13px var(--body);color:var(--ink);cursor:pointer;text-align:left}
+.mk-bs-who{font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.mk-bs-h .faint{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-bs-a{margin-left:auto;color:var(--ink-3)}
+.mk-bs-b{display:flex;flex-direction:column;gap:6px;padding:8px 10px 10px}
+.mk-bs-mask{display:flex;align-items:center;gap:8px;margin-left:22px}
+.mk-bs-mask img{width:40px;height:40px;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:var(--surface-3)}
+.mk-bs-mask .faint{font-size:11.5px}
+.mk-bs-n{margin:2px 0 0;font-size:11.5px}
