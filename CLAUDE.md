@@ -36,6 +36,12 @@
     14px `--ink`; sub text (second lines, notes, labels, `.sub` / `.faint` / `small`) 12–12.5px `--ink-3`; bold is
     `--ink` at weight 700; links, the picked tab and counts on it `--accent` / `--fbs-blue`. Money, numbers, dates and
     statuses never wrap onto a second line (`white-space:nowrap`).
+  - **Fields (Nick, Oct 22: "lock in the style guidelines")**: every input, picker and dropdown in a form row is the
+    kit's field: 36px tall, 6px corners, 1px `--line` border, 14px body font in `--ink`, label above in the small gray
+    uppercase label style (only the label, never the value). A picked value (a customer, a style) stays inside the box as
+    plain text; never swap the box for a chip, a badge or a different font. Chips that sit in a field row (a garment's
+    colors) match the fields: 36px tall, 6px corners. Fields in one row line up at the top and share the same height.
+    Pick a customer with `components/CustomerPick.tsx` (type to find), never a `<select>` of customers.
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.

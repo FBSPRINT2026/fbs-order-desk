@@ -52,22 +52,19 @@ export default function CustomerPick({ value, label, onPick, placeholder = "Type
   }, []);
   const pick = (h: PickOption) => { onPick(h.id, h.label); setName(h.label); setOpen(false); setQ(""); setEditing(false); };
 
-  if (value && !editing) return (
-    <span className={"cpk-chip" + (compact ? " sm" : "") + (field ? " field" : "")}>
-      <button type="button" className="cpk-n" data-notranslate disabled={disabled} title={disabled ? undefined : "Change customer"} onClick={() => { setEditing(true); setTimeout(() => inp.current?.focus(), 0); }}>{name || "Customer"}</button>
-      {!disabled && clearable && <button type="button" className="cpk-x" aria-label="Clear the customer" title="Clear" onClick={() => { onPick(null, ""); setQ(""); }}>×</button>}
-    </span>
-  );
   return (
     <div className={"cpk" + (compact ? " sm" : "") + (field ? " field" : "")} ref={box}>
-      <input ref={inp} type="search" value={q} disabled={disabled} placeholder={editing && name ? name : placeholder} autoComplete="off" aria-label={ariaLabel} aria-expanded={open} aria-autocomplete="list"
-        onChange={(e) => setQ(e.target.value)} onFocus={() => hits.length && setOpen(true)}
+      {/* the picked customer stays in the box as plain text, like any field (Oct 22, Nick: "just have it fill in the way you
+          see it in there and keep that"); click in to type another, × clears */}
+      <input ref={inp} type="text" value={editing || !value ? q : name} disabled={disabled} placeholder={value && name ? name : placeholder} autoComplete="off" aria-label={ariaLabel} aria-expanded={open} aria-autocomplete="list" data-notranslate
+        onChange={(e) => { setQ(e.target.value); setEditing(true); }} onFocus={(e) => { if (value) { setEditing(true); setQ(""); } else if (hits.length) setOpen(true); e.currentTarget.select(); }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setAt((a) => Math.min(hits.length - 1, a + 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setAt((a) => Math.max(0, a - 1)); }
           else if (e.key === "Enter") { if (open && hits[at]) { e.preventDefault(); pick(hits[at]); } }
           else if (e.key === "Escape") { setOpen(false); if (editing) { setEditing(false); setQ(""); } }
         }} />
+      {value && !editing && !disabled && clearable && <button type="button" className="cpk-x" aria-label="Clear the customer" title="Clear" onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick(null, ""); setQ(""); }}>×</button>}
       {open && q.trim().length >= 1 && (
         <div className="cpk-list" role="listbox">
           {hits.length ? hits.map((h, i) => (

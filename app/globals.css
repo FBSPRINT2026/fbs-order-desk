@@ -12284,3 +12284,20 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-match.compact .mk-near .k{font-size:10.5px}
 .mk-match.compact .mk-rec{display:none}
 .mk-match.compact .mk-near.rec{border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+
+/* ONE FIELD LOOK (Oct 22, Nick: "you have to lock in the style guidelines"): every typed field, picker and dropdown in a
+   form row is the kit's field: 36px tall, 6px corners, 1px --line border, 14px body font in --ink. A picked value stays
+   in the box as plain text. Chips sitting beside fields (a garment's colors) are the same height and corners. */
+.cpk{position:relative}
+.cpk input{padding-right:28px}
+.cpk .cpk-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);all:unset;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--ink-3);font-size:16px;line-height:1;cursor:pointer}
+.cpk .cpk-x:hover{background:var(--surface-2);color:var(--ink)}
+.cpk.field input,.mk-setup input[type=text],.mk-setup input[type=search],.mk-setup select{height:36px;border-radius:6px;font-size:14px;color:var(--ink);font-weight:400;text-transform:none;letter-spacing:0}
+.mk-setup .mk-f > span{min-height:14px}
+.mk-gc{height:36px;border-radius:6px;border-color:var(--line);font-size:14px}
+.mk-gc-pick{padding:0 6px 0 10px;height:100%}
+.mk-gc-dot{border-radius:3px}
+.mk-gc-x{padding:0 10px 0 4px;height:100%;font-size:12px}
+.mk-gar-colors{gap:6px}
+.mk-gc-add{width:160px}
+.mk-gc-add .style-pick input{height:36px !important;border-radius:6px;border-style:solid;font-size:14px}
