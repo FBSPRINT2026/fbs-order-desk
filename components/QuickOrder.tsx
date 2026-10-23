@@ -329,6 +329,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             // "this is going to be our most common mockup… this actually has everything you need")
             const inks = [...new Set((pu.sheet.inks || []).map(stockName))];
             if (+im.colors > 0) saidColors.set(im.id, +im.colors);
+            // no size written on the sheet: the art pulled off our sized proof is at its real size
+            if (!pu.sheet.w) pu.sheet = { ...pu.sheet, w: pu.pc.widthIn, h: pu.pc.heightIn };
             // the sheet has the size and inks: nothing for production to confirm ("Reorder details needed" was on #40119)
             // its halftones are a screen of their own (counted as a color), its underbase is the white underbase (Oct 23,
             // All Star #34528: "1. NAVY (MATCH TRIM) 2. GOLD 3. HALFTONES 4. UNDERBASE")
@@ -543,8 +545,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             if (!b) continue;
             if (!blob) blob = b;
             said = (await sizesOnSheet(await b.arrayBuffer()).catch(() => ({} as Awaited<ReturnType<typeof sizesOnSheet>>)))[side];
-            if (said) break;
+            if (said?.w) break; // a sheet with no size written: measured off it instead (below)
           }
+          if (said && !said.w) said = undefined;
           if (said) {
             w = said.w;
             Object.assign(whyOf(im.id), { sizeWhy: `${im.sameAs.label}'s mockup sheet: ${side[0].toUpperCase() + side.slice(1)} Imprint W ${said.w}"${said.h ? ` × H ${said.h}"` : ""}`, last: `Last time (${im.sameAs.label.replace(/^(#\d+).*/, "$1")}): ${said.w}" wide${said.inks?.length ? ` · ${said.inks.map(stockName).join(", ")}` : ""}`, lastW: said.w, ...(said.h ? { lastH: said.h } : {}) });
@@ -1269,7 +1272,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       <div className="ap arc" role="group" aria-label="Our mockup sheet">
         <p className="ap-q">{job} has our FBS mockup sheet. Here&apos;s what I&apos;ll do:</p>
         <ul className="arc-sheet-l">
-          {specs.map((x, i) => <li key={i} data-notranslate>Use its <b>{x.side}</b> art at <b>{x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}</b>{x.v.inks?.length ? <> in <b>{x.v.inks.map(stockName).join(" and ")}</b></> : null}{x.v.halftones || x.v.ub ? <>, with {[x.v.halftones ? "halftones" : "", x.v.ub ? "a white underbase" : ""].filter(Boolean).join(" and ")}</> : null}{x.v.notes?.length ? <span className="faint"> ({x.v.notes.join("; ")})</span> : null}</li>)}
+          {specs.map((x, i) => { const pc = arts.find((a) => a.pc.side === (x.side === "back" ? "back" : "front"))?.pc, w = x.v.w || pc?.widthIn || 0, h = x.v.w ? x.v.h : pc?.heightIn; return <li key={i} data-notranslate>Use its <b>{x.side}</b> art at <b>{w}&quot;{h ? ` × ${h}"` : ""}</b>{!x.v.w && pc ? <span className="faint"> (measured off the sheet)</span> : null}{x.v.inks?.length ? <> in <b>{x.v.inks.map(stockName).join(" and ")}</b></> : null}{x.v.halftones || x.v.ub ? <>, with {[x.v.halftones ? "halftones" : "", x.v.ub ? "a white underbase" : ""].filter(Boolean).join(" and ")}</> : null}{x.v.notes?.length ? <span className="faint"> ({x.v.notes.join("; ")})</span> : null}</li>; })}
           {skipped.length > 0 && <li data-notranslate>Ignore the old {skipped.length === 1 ? "paperwork" : "work order and purchase order"} ({skipped.join(", ")}): the new ones on this job replace {skipped.length === 1 ? "it" : "them"}</li>}
         </ul>
         <div className="arc-sheet">

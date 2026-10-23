@@ -31,13 +31,16 @@ const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
  * says W 10"). By side: front, back, left/right sleeve.
  */
 /** one side of our mockup sheet: its size, its inks, and the screens that aren't inks (a white underbase, halftones) */
-export type SheetSide = { w: number; h?: number; inks?: string[]; ub?: boolean; halftones?: boolean; /** an ink's own note ("Navy: match trim") */ notes?: string[] };
+export type SheetSide = { /** inches wide; 0 = not written (the art pulled off the sized proof gives it) */ w: number; h?: number; inks?: string[]; ub?: boolean; halftones?: boolean; /** an ink's own note ("Navy: match trim") */ notes?: string[] };
 export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", SheetSide>>> {
   const doc = await openDoc(buf);
   const out: Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", SheetSide>> = {};
   for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
     const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
     const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
+    // our sized proof, known by what's printed on every one (Oct 23, Nick: yes, recognize it by that, not only by how its
+    // size is written): a side with its inks but no size it can read is still ours (w 0: the art pulled off it gives it)
+    const ours = /the above sized proof|standard imprint colou?rs/i.test(t);
     for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(?=(.{0,160}))/gi)) { // each side found, even one inside the side before's 160 letters
       const side = m[1].toLowerCase() as keyof typeof out;
       // this side's part only: up to the next "… Imprint" or the sheet's own text
@@ -62,6 +65,7 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
         inks.push(nm);
         if (br) notes.push(`${nm}: ${br.toLowerCase()}`);
       }
+      if (!out[side] && ours && !(sz && +sz[1] > 0) && inks.length && !inks.every((x) => /^black$/i.test(x))) out[side] = { w: 0, ...(inks.length ? { inks: inks.slice(0, 8) } : {}), ...(ub ? { ub } : {}), ...(halftones ? { halftones } : {}), ...(notes.length ? { notes } : {}) };
       if (sz && !out[side] && +sz[1] > 0 && +sz[1] < 20) out[side] = { w: +sz[1], ...(sz[2] && +sz[2] > 0 ? { h: +sz[2] } : {}), ...(inks.length ? { inks: inks.slice(0, 8) } : {}), ...(ub ? { ub } : {}), ...(halftones ? { halftones } : {}), ...(notes.length ? { notes } : {}) };
     }
   }
