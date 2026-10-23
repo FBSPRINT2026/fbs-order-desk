@@ -137,8 +137,8 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
                   ))}
                 </ol>
                 {nx && <div className="osp-plan-acts">
-                  <button type="button" className="btn primary" onClick={() => onPick({ parts: [nx] })}>{done.length ? `Yes, make the next one: ${nx.label} (${at} of ${all.length})` : `One at a time: start with ${nx.label}`}</button>
-                  {left.length > 1 && <button type="button" className="btn" onClick={() => onPick({ parts: left })} title="Each one stops when it's made; you open it and go on to the next">{done.length ? `All ${left.length} left now` : `All ${all.length} now`}</button>}
+                  <button type="button" className="btn primary" onClick={() => onPick({ parts: [nx] })} title={`Makes ${nx.label} now; you check it in the Order chat, then it asks about the next one`}>{done.length ? `Make the next one (${at} of ${all.length})` : "One at a time"}</button>
+                  {left.length > 1 && <button type="button" className="btn" onClick={() => onPick({ parts: left })} title="Each one stops when it's made; you open it and go on to the next">{done.length ? `All ${left.length} left at once` : `All ${all.length} at once`}</button>}
                 </div>}
               </>;
             })()}
