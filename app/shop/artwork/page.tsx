@@ -7,6 +7,7 @@ import { designLabel, type Customer, type Design } from "@/lib/pricing";
 import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
+import CustomerPick from "@/components/CustomerPick";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
 import { logoShirtsFrom } from "@/lib/logoShirts";
@@ -24,6 +25,7 @@ export default function ArtworkPage() {
   const [mUrls, setMUrls] = useState<Record<string, { full: string; thumb: string }>>({});
   const [orderNo, setOrderNo] = useState<Record<string, number>>({});
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [cust, setCust] = useState("");
@@ -129,7 +131,7 @@ export default function ArtworkPage() {
         <section className="panel" style={{ marginBottom: 14 }}>
           <div className="panel-h"><h2>Upload a logo</h2></div>
           <div className="panel-b grid g3">
-            <div className="field"><label htmlFor="dz-c">Customer</label><select id="dz-c" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}><option value="">Choose…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></div>
+            <div className="field"><label>Customer</label><CustomerPick field value={form.customer_id || null} options={custOpts} onPick={(v) => setForm({ ...form, customer_id: v || "" })} /></div>
             <div className="field"><label htmlFor="dz-n">Logo name</label><input id="dz-n" type="text" placeholder="Main logo, Back print 2026…" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="field"><label htmlFor="dz-k">Ink colors</label><input id="dz-k" type="number" min="1" max="15" value={form.colors} onChange={(e) => setForm({ ...form, colors: Math.max(1, +e.target.value || 1) })} /></div>
             <div className="field"><label htmlFor="dz-f">Art file (PNG, JPG, SVG, PDF, AI, EPS…)</label><input id="dz-f" type="file" accept={DESIGN_ACCEPT} onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })} /></div>
@@ -143,7 +145,7 @@ export default function ArtworkPage() {
 
       <div className="toolbar art-tools">
         <label className="aa-search"><SearchInput placeholder="Search logos and mockups" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-        <select aria-label="Filter by customer" value={cust} onChange={(e) => setCust(e.target.value)} style={{ maxWidth: 240 }}><option value="">All customers</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
+        <CustomerPick compact value={cust || null} options={custOpts} placeholder="All customers: type one" ariaLabel="Filter by customer" onPick={(v) => setCust(v || "")} />
         <div className="chips">
           {(["all", "logos", "mockups"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "logos" ? `Logos (${logos.length})` : `Mockups (${mockSets.length})`}</button>)}
         </div>

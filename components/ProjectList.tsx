@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PROJECT_STATUS, countdown, daysTo, type ProjectSummary } from "@/lib/projects";
 import { fmtDateLong, money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
+import CustomerPick from "@/components/CustomerPick";
 
 type NewProject = { name: string; event_date: string | null; in_hands_date: string | null; requests: string; customer_id?: string };
 
@@ -39,7 +40,7 @@ export default function ProjectList({ mode, projects, hrefOf, onCreate, customer
         <div className="pj-new">
           <b>{mode === "portal" ? "Tell us about your project" : "New project"}</b>
           <div className="pj-grid">
-            {customers && <label className="wide">Customer<select value={f.customer_id} onChange={(e) => setF({ ...f, customer_id: e.target.value })}><option value="">Choose…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>}
+            {customers && <div className="wide">Customer<CustomerPick field value={f.customer_id || null} options={customers.map((c) => ({ id: c.id, label: c.label }))} onPick={(v) => setF({ ...f, customer_id: v || "" })} /></div>}
             <label className="wide">Project name<input type="text" autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Fall Sales Conference 2026" /></label>
             <label>Event date<input type="date" value={f.event_date || ""} onChange={(e) => setF({ ...f, event_date: e.target.value || null })} /></label>
             <label>Need everything by<input type="date" value={f.in_hands_date || ""} onChange={(e) => setF({ ...f, in_hands_date: e.target.value || null })} /></label>

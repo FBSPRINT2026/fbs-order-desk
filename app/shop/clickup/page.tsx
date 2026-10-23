@@ -10,6 +10,7 @@ import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
 import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
+import CustomerPick from "@/components/CustomerPick";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -333,8 +334,7 @@ export default function ClickUpJobs() {
             <ul className="cu-comments">{job.comments.map((c, i) => <li key={i}><b>{c.who}</b> <span className="faint">{when(c.at)}</span><div>{c.text}</div></li>)}</ul></div>}
 
           {jobTeam && !jobTeam.customer_id && <div className="cu-sec cu-cust">
-            <label>Which customer is the &ldquo;{jobTeam.name}&rdquo; workspace? <select value="" onChange={(e) => void pickCustomer(jobTeam.id, e.target.value)}>
-              <option value="">Pick the customer…</option>{data?.customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+            <label>Which customer is the &ldquo;{jobTeam.name}&rdquo; workspace? <CustomerPick compact value={null} options={data?.customers.map((c) => ({ id: c.id, label: c.label }))} onPick={(v) => { if (v) void pickCustomer(jobTeam.id, v); }} /></label>
             <span className="faint">Its jobs become this customer&apos;s orders. You only pick it once.</span>
           </div>}
           {jobTeam?.customer_id && jobTeam.guessed && <div className="cu-sec faint">We matched the &ldquo;{jobTeam.name}&rdquo; workspace to {custName.get(jobTeam.customer_id)}. <button type="button" className="linkbtn" onClick={() => void pickCustomer(jobTeam.id, jobTeam.customer_id!)}>That&apos;s right</button> · <button type="button" className="linkbtn" onClick={() => setTab("boards")}>Change it</button></div>}
@@ -422,10 +422,8 @@ export default function ClickUpJobs() {
           {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
             .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
         </div>
-        {tab !== "boards" && <select aria-label="Customer" value={team} onChange={(e) => setTeam(e.target.value)}>
-          <option value="">Every customer</option>
-          {(data?.teams || []).filter((t) => !t.hidden).map((t) => <option key={t.id} value={t.id}>{custName.get(t.customer_id || "") || t.name}</option>)}
-        </select>}
+        {tab !== "boards" && <CustomerPick compact value={team || null} label={team ? (() => { const t = (data?.teams || []).find((x) => x.id === team); return t ? custName.get(t.customer_id || "") || t.name : ""; })() : undefined} placeholder="Every customer: type one" ariaLabel="Customer"
+          options={(data?.teams || []).filter((t) => !t.hidden).map((t) => ({ id: t.id, label: custName.get(t.customer_id || "") || t.name, sub: custName.get(t.customer_id || "") ? t.name : "" }))} onPick={(v) => setTeam(v || "")} />}
         {tab !== "boards" && <SearchInput placeholder="Search jobs" value={q} onChange={(e) => setQ(e.target.value)} />}
       </div>
 
@@ -438,9 +436,7 @@ export default function ClickUpJobs() {
               return <tr key={t.id} tabIndex={0} className={t.hidden ? "cu-off" : undefined} title="Open this workspace" onClick={() => { setWs(t.id); setOpenId(null); }} onKeyDown={(e) => e.key === "Enter" && setWs(t.id)}>
                 <td><div>{t.name}</div><div className="sub">{t.members.slice(0, 3).join(", ")}{t.members.length > 3 ? ` +${t.members.length - 3}` : ""}</div></td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  <select aria-label={`Customer for ${t.name}`} value={t.customer_id || ""} onChange={(e) => void pickCustomer(t.id, e.target.value)}>
-                    <option value="">Pick the customer…</option>{data?.customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
+                  <CustomerPick compact value={t.customer_id || null} ariaLabel={`Customer for ${t.name}`} clearable={false} options={data?.customers.map((c) => ({ id: c.id, label: c.label }))} onPick={(v) => { if (v) void pickCustomer(t.id, v); }} />
                   {t.guessed && t.customer_id && <div className="sub">Matched by the portal. <button type="button" className="linkbtn" onClick={() => void pickCustomer(t.id, t.customer_id!)}>That&apos;s right</button></div>}
                 </td>
                 <td className="r">{t.hidden ? <span className="faint">—</span> : n}</td>

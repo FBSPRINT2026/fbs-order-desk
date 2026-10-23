@@ -1,6 +1,7 @@
 "use client";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
+import CustomerPick from "@/components/CustomerPick";
 import ProofSide from "@/components/ProofSide";
 import OrderStages from "@/components/OrderStages";
 import JobLabor from "@/components/team/JobLabor";
@@ -90,6 +91,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [reprintAsk, setReprintAsk] = useState(false);
   useEffect(() => { try { const u = new URL(window.location.href); if (u.searchParams.get("reprint") === "1") { setReprintAsk(true); u.searchParams.delete("reprint"); window.history.replaceState(window.history.state, "", u.toString()); } } catch { /* */ } }, []);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [proofs, setProofs] = useState<(Proof & { url?: string })[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1072,14 +1074,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ) : (
                   <>
-                    <select aria-label="Customer" value={o.customer_id || ""} onChange={(e) => {
-                      const v = e.target.value;
+                    {/* type to find (Oct 22, Nick: "type PET and then select Peticolas") */}
+                    <CustomerPick field value={o.customer_id || null} options={custOpts} placeholder="Type a customer: company, name or email" onPick={(v) => {
                       const c = customers.find((x) => x.id === v);
                       patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; if (c) d.price_type = c.price_type || "retail"; });
-                    }}>
-                      <option value="">Choose a customer…</option>
-                      {customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}{c.company && c.name ? " · " + c.name : ""}</option>)}
-                    </select>
+                    }} />
                     <div className="cust-row">
                       {cust ? (
                         <div className="cust-card">

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import BackLink from "@/components/BackLink";
+import CustomerPick from "@/components/CustomerPick";
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -80,7 +81,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
             <div className="panel-h"><h2>Details</h2></div>
             <div className="panel-b grid g2">
               <div className="field"><label htmlFor="d-n">Name</label><input id="d-n" type="text" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} onBlur={(e) => patch({ name: e.target.value })} /></div>
-              <div className="field"><label htmlFor="d-c">Customer</label><select id="d-c" value={d.customer_id || ""} onChange={(e) => patch({ customer_id: e.target.value || null })}><option value="">No customer</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></div>
+              <div className="field"><label>Customer</label><CustomerPick field value={d.customer_id || null} options={customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" }))} placeholder="No customer: type to pick one" onPick={(v) => patch({ customer_id: v || null })} /></div>
               <div className="field"><label htmlFor="d-k">Ink colors</label><input id="d-k" type="number" min="1" max="15" value={d.colors} onChange={(e) => patch({ colors: Math.max(1, +e.target.value || 1) })} /></div>
               <div className="field"><label htmlFor="d-i">Inks / PMS</label><input id="d-i" type="text" value={d.inks} onChange={(e) => setD({ ...d, inks: e.target.value })} onBlur={(e) => patch({ inks: e.target.value })} /></div>
               {/* a distressed logo: customers whose brand standards say "fashion hit for distressed logos" print it without an underbase (Oct 16) */}

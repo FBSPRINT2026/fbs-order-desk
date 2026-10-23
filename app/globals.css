@@ -12247,3 +12247,10 @@ body.cu-resizing{cursor:col-resize;user-select:none}
   .vd{align-items:center;justify-content:flex-end;padding-bottom:32px}
   .vd-card{width:min(620px,100%)}
 }
+/* customer picker (type to search, Oct 22): the picked one's name is a button to change it; ↑ ↓ highlight */
+.cpk-chip .cpk-n{all:unset;cursor:pointer;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpk-chip .cpk-n:disabled{cursor:default}
+.cpk-chip.field{display:flex;width:100%;min-height:36px;border-radius:var(--r);padding:4px 6px 4px 12px;background:var(--surface);border-color:var(--line);font-size:14px}
+.cpk-chip.field .cpk-n{flex:1;max-width:none}
+.cpk.field{width:100%;min-width:0}
+.cpk-list button.on{background:var(--surface-2)}

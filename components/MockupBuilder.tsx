@@ -17,6 +17,7 @@ import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
+import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage } from "@/lib/printavoArt";
 import { applyDistress } from "@/lib/distress";
@@ -2483,7 +2484,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         )}
         {!orderId && (
           <section className="panel mk-setup">
-            {!portal && <label className="mk-f"><span>Customer</span><select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></label>}
+            {!portal && <div className="mk-f"><span>Customer</span><CustomerPick field value={customerId || null} options={customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" }))} onPick={(v) => setCustomerId(v || "")} /></div>}
             <label className="mk-f"><span>Mockup name</span><input type="text" aria-label="Mockup name" placeholder="e.g. Spring promo tee" value={groupName} onChange={(e) => setGroupName(e.target.value)} /></label>
             {/* the garments grouped by style, each style's colors as chips under it (Oct 22, Nick: "this top part… is
                 jumbled… maybe grouping like styles and just listing colors under"); a color chip shows that shirt */}
