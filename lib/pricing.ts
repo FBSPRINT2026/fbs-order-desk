@@ -167,6 +167,9 @@ export type Group = { id: string; name?: string;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
   /** the size the mockup is shown on (2T, 3T…), picked in the Mockup Creator; else the middle size of the run */ mockupSize?: string;
+  /** where each print was dragged to on the shirt pictures in the Mockup Creator (reference-photo pixels, by imprint id or
+   *  "<line id>:<imprint id>"), so a reopened mockup shows it where it was put (Oct 22, Nick: "it returns back to the
+   *  original placement") */ mockupOffsets?: Record<string, { dx: number; dy: number }>;
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
   /** a reorder of an old Printavo job: its mockup PDF(s), where the art is pulled from when the order is made */

@@ -441,6 +441,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
           setOrderedBy(Object.fromEntries(g.lines.map((l) => [l.id, Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)])));
           if (g.mockupSize) setShownSize(g.mockupSize);
+          if (g.mockupOffsets) setOffsets(g.mockupOffsets);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
             const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
@@ -2020,6 +2021,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     if (mockupSaved) g.mockupAt = new Date().toISOString();
     g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
+    // the hand moves on the shirt pictures, kept for the next time it's opened (only this group's prints)
+    const ids = new Set(g.imprints.map((x) => x.id));
+    const offs = Object.fromEntries(Object.entries(offsets).filter(([k, v]) => ids.has(k.split(":").pop() || "") && (Math.abs(v.dx) > 0.5 || Math.abs(v.dy) > 0.5)).map(([k, v]) => [k, { dx: Math.round(v.dx * 10) / 10, dy: Math.round(v.dy * 10) / 10 }]));
+    g.mockupOffsets = Object.keys(offs).length ? offs : undefined;
     if (thumbs.length) g.mockupThumbs = thumbs;
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
