@@ -708,7 +708,9 @@ ${staffSays}` : ""}`;
             if (o2.method) im.method = o2.method;
             // its mockup: our picture of it, else its mockup PDF (Printavo #32303 had only the PDF)
             const pic = ((hit.x.pvRef || [])[0]?.path) || ((hit.x.pvArt || [])[0]?.path) || (sj.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])])[0]?.path) || "";
-            im.sameAs = { ref: sj.ref, label: lab, ...(pic ? { pic } : {}) };
+            // its mockup PDF (ours, art over the shirt photos): the print's size is measured off it when the job didn't keep one
+            const pdf = ((hit.x.pvArt || [])[0]?.path) || (sj.groups.flatMap((x) => x.pvArt || [])[0]?.path) || "";
+            im.sameAs = { ref: sj.ref, label: lab, ...(pic ? { pic } : {}), ...(pdf ? { pdf } : {}) };
             im.notes = [im.notes, `Same process as ${lab}: ${o2.colors} color${o2.colors === 1 ? "" : "s"}${o2.inks ? ` (${o2.inks})` : ""}${o2.size ? `, ${o2.size}` : ""}`].filter(Boolean).join(". ").slice(0, 300);
             if (!refUsed.has(sj)) refUsed.set(sj, g);
           }

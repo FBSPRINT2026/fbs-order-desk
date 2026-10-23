@@ -494,6 +494,31 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
     }
     guard();
+    // a print done like a past job that didn't keep its size (Printavo never did): measured off that job's mockup with the
+    // Helper, else asked at the check (Oct 23, Nick on #40113: "you should have used the previous order to size the back
+    // art or ask that question")
+    for (const x of d.groups) for (const im of x.imprints) {
+      if (!im.sameAs || parseFloat(String(im.size || "")) > 0) continue;
+      let w = 0, dropIn = -1;
+      if (im.sameAs.pdf) {
+        note(`Measuring the ${im.location} on ${im.sameAs.label}'s mockup…`);
+        try {
+          const { data: su } = await createClient().storage.from("proofs").createSignedUrl(im.sameAs.pdf, 600);
+          const blob = su?.signedUrl ? await (await fetch(su.signedUrl)).blob() : null;
+          const got = blob ? await pullOffMockup(new File([blob], "old mockup.pdf", { type: "application/pdf" }), "old mockup.pdf", { drawn: true }) : null;
+          const pc = got ? pieceFor(got, im.location) : undefined;
+          if (pc) { w = pc.widthIn; dropIn = pc.dropIn; }
+        } catch { /* asked below */ }
+        guard();
+      }
+      const id = im.id;
+      if (w > 0) {
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, size: `${w}" wide`, ...(dropIn >= 0 ? { drop: String(dropIn) } : {}), notes: [z.notes, `Size from ${im.sameAs!.label}'s mockup: ${w}" wide${dropIn >= 0 ? `, ${dropIn}" below the collar` : ""} (measured)`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+        did.push(`${im.location}: ${w}" wide, measured on ${im.sameAs.label}'s mockup`);
+      } else {
+        d = { ...d, check: [...(d.check || []), { q: `${im.location}: what size? ${im.sameAs.label} didn't keep one`, guess: "Standard size", about: x.name, choices: [{ label: "Standard size" }, { label: "Production measures it" }] }] };
+      }
+    }
     // the check, at the end, with pictures (Oct 23, Nick: "you don't ask until you get to the end and you've read all the
     // data and we've identified all the mockups and work orders… maybe it would be more visual"): each group as a card,
     // their picture of it beside the art picked and the shirts, and what doesn't add up asked on its card, by picture.

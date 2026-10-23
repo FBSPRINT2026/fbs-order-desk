@@ -249,6 +249,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // logo is sized on the shirt by that, not by the old box around it
   const [trims, setTrims] = useState<Record<string, { w: number; h: number }>>({});
   /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
+  const replan = useRef(new Set<string>());
   async function logoImg(d: Design, clean0 = false): Promise<HTMLImageElement> {
     // a distressed logo printed without its distress: its clean picture (cached apart)
     if (clean0 && urls[d.id + ":clean"]) {
@@ -261,11 +262,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const hit = imgCache.current.get(d.id);
     if (hit) return hit;
     let img = await loadImg(urls[d.id]);
-    if (!isVector(d.file_type, d.file_name)) {
+    const vec = isVector(d.file_type, d.file_name);
+    {
       // a logo on a solid background: background out, then cropped to the art. Already see-through (or the background
-      // kept on purpose): just the empty margins cut off, so the art itself is what's sized on the shirt
-      const k: CleanArt | null = (keepBg[d.id] ? null : knockOut(img, { keepInside: !!keepInside[d.id] })) || trimClear(img);
+      // kept on purpose): just the empty margins cut off, so the art itself is what's sized on the shirt. A vector file
+      // too, when its art sits on a solid box (Oct 23, Nick on #40113: Tongue in Cheek came on a black background, "you've
+      // got to know to remove the background so that you can have that be the shirt color and then size it"): only the
+      // box around the art comes out, the same color inside the art stays
+      const k: CleanArt | null = (keepBg[d.id] ? null : knockOut(img, { keepInside: vec || !!keepInside[d.id] })) || (vec ? null : trimClear(img));
       if (k) {
+        // a vector's box taken out for the first time: its print plan was worked out with the box's color as an ink
+        if (vec && !d.art_box) replan.current.add(d.id);
         img = await loadImg(k.url);
         setClean((c) => ({ ...c, [d.id]: k.url }));
         setTrims((t) => ({ ...t, [d.id]: { w: k.box.w, h: k.box.h } }));
@@ -570,7 +577,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       try {
         const img = await logoImg(d, off);
         // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved
-        let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 ? d.print_plan as PrintPlan : null;
+        let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 && !replan.current.has(d.id) ? d.print_plan as PrintPlan : null;
+        replan.current.delete(d.id);
         if (!plan) {
           plan = planPrint(pxOfImage(img, 1600), { garment: line ? shirtHex(line) : undefined });
           const names = [...new Set(plan.inks.map((k) => k.name))];
