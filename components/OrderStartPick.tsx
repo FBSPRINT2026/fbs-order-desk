@@ -16,7 +16,9 @@ const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", 
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
-export default function OrderStartPick({ activityId, text, guess, onPick, onClose, suggested }: { activityId: string; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
+export default function OrderStartPick({ activityId, text, guess, onPick, onClose, suggested, dock }: { activityId: string;
+  /** a panel on the right, the page still usable beside it (Oct 23, Nick: "I can't see anything once we create an order… a
+   *  pop-up on the right, like Claude in Chrome… so I can still click the attachments") */ dock?: boolean; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string } }) {
   const [past, setPast] = useState<PastJob[] | null>(null);
   // the order already read in the background (lib/ai/prepareOrders.ts): one click to open it ready to approve
@@ -65,8 +67,38 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
       .sort((a, b) => b.hit - a.hit || b.p.date.localeCompare(a.p.date));
   }, [past, found, text, q]);
 
+  // each past job's mockup, to see which one it is (Oct 23, Nick: "they're all named very similar… I should be able to
+  // click… the picture attached… and say yep, this is the reorder")
+  const [pics, setPics] = useState<Record<string, { thumb: string; full: string; pdf: boolean }>>({});
+  const [big, setBig] = useState<{ ref: string; url: string } | null>(null);
+  const picRefs = list.slice(0, 40).map(({ p }) => p.ref).filter((r) => !(r in pics)).join(",");
+  useEffect(() => {
+    if (!picRefs) return;
+    let live = true;
+    const refs = picRefs.split(",");
+    fetch("/api/jobs/pics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refs }) }).then((r) => r.json())
+      .then((j: { pics?: Record<string, { thumb: string; full: string; pdf: boolean }> }) => { if (live) setPics((x) => ({ ...x, ...Object.fromEntries(refs.map((r) => [r, j.pics?.[r] || { thumb: "", full: "", pdf: false }])) })); }).catch(() => null);
+    return () => { live = false; };
+  }, [picRefs]);
+  async function showBig(ref: string) {
+    const pc = pics[ref]; if (!pc?.full) return;
+    if (big?.ref === ref) return setBig(null);
+    if (!pc.pdf) return setBig({ ref, url: pc.full });
+    setBig({ ref, url: pc.thumb });
+    try {
+      const { pdfPicture } = await import("@/lib/printavoArt");
+      const c = await pdfPicture(await (await fetch(pc.full)).arrayBuffer(), 900);
+      setBig((b) => (b?.ref === ref ? { ref, url: c.toDataURL("image/jpeg", 0.85) } : b));
+    } catch { /* the small picture stays */ }
+  }
+  const what = (p: PastJob) => {
+    const shirts = [...new Set(p.groups.flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))).filter(Boolean))];
+    const prints = [...new Set(p.groups.flatMap((g) => g.imprints.map((im) => `${im.location}${im.colors ? ` ${im.colors}c` : ""}`)))];
+    return [shirts.slice(0, 2).join(", ") + (shirts.length > 2 ? ` +${shirts.length - 2}` : ""), prints.slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+  };
+
   return (
-    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Create order" onClick={onClose}>
+    <div className={"dla-bg" + (dock ? " dock" : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Create order" onClick={dock ? undefined : onClose}>
       <div className="dla osp" onClick={(e) => e.stopPropagation()}>
         <h3>Create order</h3>
         <p className="dla-sub">Is this a new order, or a reorder of something we&apos;ve printed for them before? A reorder brings in the old job&apos;s art, film and garments.</p>
@@ -111,11 +143,16 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
               return (
                 <div key={p.ref} className={"osp-jobrow" + (on ? " on" : "")}>
                   <label className="osp-tick" title="Tick several jobs to reorder them together in one order"><input type="checkbox" checked={on} onChange={() => tick(p)} aria-label={`Add ${name(p)} to one reorder`} /></label>
+                  <button type="button" className={"osp-pic" + (big?.ref === p.ref ? " on" : "")} disabled={!pics[p.ref]?.full} title={pics[p.ref]?.full ? "See this job's mockup" : p.ref in pics ? "No mockup on this job" : "Loading its mockup…"} aria-label={`See the mockup of ${name(p)}`} onClick={() => void showBig(p.ref)}>
+                    {pics[p.ref]?.thumb ? <img src={pics[p.ref].thumb} alt="" /> : <span aria-hidden>{p.ref in pics ? "–" : ""}</span>}
+                  </button>
                   <button type="button" className={"osp-job" + (hit ? " hit" : "")} onClick={() => (sel.length ? tick(p) : onPick({ job: p.ref, told: `This is a reorder of ${name(p)}.` }))}>
                     <b>{name(p)}</b>
                     <span className="faint">{fmt(p.date)} · {p.qty.toLocaleString("en-US")} pcs{p.ref.startsWith("a:") ? " · Printavo" : ""}</span>
+                    {what(p) && <span className="osp-what" data-notranslate>{what(p)}</span>}
                     {hit > 0 && <em>Named in the email</em>}
                   </button>
+                  {big?.ref === p.ref && <div className="osp-big-pic"><img src={big.url} alt={`The mockup of ${name(p)}`} /><button type="button" className="btn sm primary" onClick={() => onPick({ job: p.ref, told: `This is a reorder of ${name(p)}.` })}>Reorder this one</button></div>}
                 </div>
               );
             })}

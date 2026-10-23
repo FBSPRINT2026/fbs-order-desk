@@ -63,7 +63,8 @@ class Cancelled extends Error {}
 const LIGHTISH = /white|natural|cream|ivory|ash\b|light|pink|mauve|stone|sand|silver|yellow|bone|oatmeal|heather gr[ae]y|athletic heather|sport gr[ae]y|columbia blue|baby|pastel|mint|lavender|peach/i;
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
 
-export default function QuickOrder({ activityId, start, onClose, onCreated, onReview }: { activityId: string; start: OrderStart; onClose: () => void;
+export default function QuickOrder({ activityId, start, onClose, onCreated, onReview, dock }: { activityId: string; start: OrderStart; onClose: () => void;
+  /** a panel on the right, the email and its attachments still there to look at (Oct 23, Nick) */ dock?: boolean;
   /** each order made (for the email's notes) */ onCreated: (id: string, number: number, label: string) => void;
   /** open the full form instead (check every detail before it's made) */ onReview: () => void }) {
   const [steps, setSteps] = useState<Step[]>([]);
@@ -572,7 +573,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const parts = start.parts?.length ? start.parts : [null];
   const many = parts.length > 1;
   return (
-    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Creating the order">
+    <div className={"dla-bg" + (dock ? " dock" + (help || confirm ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
       <div className={"dla qo" + (help || confirm ? " wide" : "")}>
         {!done && !committing && <button type="button" className="qo-x" onClick={cancel} aria-label={made.length ? "Stop here: the orders already made stay" : "Cancel: nothing is saved"} title={made.length ? "Stop here: the orders already made stay; the one in progress isn't saved" : "Cancel: stop here, nothing is saved"}>×</button>}
         {many && !done && (() => {

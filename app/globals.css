@@ -12362,3 +12362,21 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .ait-src .tbl td:first-child{overflow:hidden}
 .ait-src .tbl td:first-child > div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ait-src .tbl td.r{width:64px}
+/* Create order as a panel on the right (Oct 23, Nick: "a pop-up on the right, like Claude in Chrome… so I can still go
+   back and click attachments"): the page stays usable beside it and makes room for it */
+.dla-bg.dock{left:auto;right:0;top:0;bottom:0;width:min(480px,100vw);padding:0;background:none;display:block;pointer-events:none}
+.dla-bg.dock.wide{width:min(760px,100vw)}
+.dla-bg.dock > .dla{pointer-events:auto;width:100%;height:100%;max-height:none;border-radius:0;box-shadow:-8px 0 30px rgba(15,23,42,.18);border-left:1px solid var(--line);padding:18px 18px 16px}
+.dla-bg.dock .cc-back{position:absolute}
+body:has(.dla-bg.dock){padding-right:min(480px,100vw)}
+body:has(.dla-bg.dock.wide){padding-right:min(760px,100vw)}
+@media (max-width:760px){body:has(.dla-bg.dock){padding-right:0}}
+/* past jobs in Create order: their mockup, to tell look-alike names apart */
+.osp-jobrow{flex-wrap:wrap}
+.osp-pic{flex:none;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);overflow:hidden;cursor:pointer;display:grid;place-items:center;color:var(--ink-3)}
+.osp-pic:disabled{cursor:default;opacity:.6}
+.osp-pic.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.osp-pic img{width:100%;height:100%;object-fit:contain}
+.osp-what{display:block;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.osp-big-pic{flex-basis:100%;display:grid;gap:8px;justify-items:start;margin:6px 0 4px 30px}
+.osp-big-pic img{max-width:100%;max-height:360px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
