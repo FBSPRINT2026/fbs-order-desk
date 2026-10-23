@@ -126,6 +126,10 @@ export type GLine = {
   /** a note for this line only (Oct 22, Nick: "add line item description… for each specific line"): under the line
    *  on the order, the invoice and the work order */
   note?: string;
+  /** the customer's extras (Oct 22, Nick: McKenna sends one extra of each size under the line; "we don't charge for
+   *  extra printing… we'll just go ahead and print them"): its own line under the real one, marked "Extras" on the
+   *  order, invoice and work order, and printed free (price each 0) */
+  extras?: boolean;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */

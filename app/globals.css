@@ -10342,7 +10342,7 @@ div.prod-kind{border:0;padding:0}
 .prod-fnote.ro{padding:0}
 .arc-note{font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;min-width:0}
 /* several orders from one email, one at a time (Oct 20) */
-.qo-part{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:-4px 34px 12px 0;padding:8px 12px;border-radius:10px;background:var(--accent-soft,#e8f1fb)}
+.qo-part{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:-4px 34px 12px 0;padding:8px 12px;border-radius:10px;background:var(--accent-soft)}
 .qo-part-n{font-size:12px;font-weight:700;color:var(--accent);text-transform:none}
 .qo-part b{font-size:14px}
 .qo-part-dots{display:flex;gap:5px;margin-left:auto}
@@ -11836,6 +11836,14 @@ html body .ord .line-b .gl .a-x{gap:2px}
 @media (hover:hover){html body .ord .line-b .gl:not(:hover):not(:focus-within) .ln-add{visibility:hidden}}
 html body .ord .line-b .gl .ln-add{color:var(--ink-3);font-size:13px}
 html body .ord .line-b .gl > .gl-note{grid-column:1/-1;margin:4px 0 0}
+/* the customer's extras on their own line (Oct 22): where the brand sits on a line under the same style; "+ Extras" on
+   hover, a pill when on (printed free) */
+html body .ord .line-b .gl > .gl-xtra{grid-area:br;justify-self:start;align-self:center;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px dashed var(--line);border-radius:999px;background:transparent;color:var(--ink-3);font:600 12px/1 var(--body);white-space:nowrap;cursor:pointer}
+html body .ord .line-b .gl > .gl-xtra.on{border:0;background:var(--accent-soft);color:var(--accent);font-weight:700}
+html body .ord .line-b .gl > .gl-xtra.solo{grid-area:auto;grid-column:1/-1;margin:4px 0 0}
+@media (hover:hover){html body .ord .line-b .gl:not(:hover):not(:focus-within) > .gl-xtra:not(.on){visibility:hidden}}
+@media (hover:none){html body .ord .line-b .gl > .gl-xtra:not(.on){display:none}}
+@media (max-width:760px){html body .ord .line-b .gl > .gl-xtra{margin:0 0 4px}}
 /* the line description: plain text under the line, from the style column; a box only while typing (Oct 22, Nick: "it
    looks bad") */
 html body .ord .line-b .gl > .gl-note textarea{box-sizing:border-box;width:calc(100% + 8px);margin-left:-8px;field-sizing:content;min-height:0;resize:none;font:13px/1.4 var(--body);color:var(--ink-2);padding:3px 7px;border:1px solid transparent;border-radius:var(--r);background:transparent;box-shadow:none;outline:0;overflow:hidden}

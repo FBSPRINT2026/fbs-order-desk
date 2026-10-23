@@ -13,7 +13,7 @@ Ship-to and dates
 - No street on the ship-to (Nine18 "MIKE TO P/U & DELIVER", Tigerblue "LA - Louisiana") or PO notes that say "customer pickup" while the PO says delivery: ask which in questions.
 - due_date = the date we must finish by: In-hands, then Due, then Production due, then Ship date. Other dates (PO date, cancel, X-factory, "Firm") go in notes.
 Garments
-- One garment entry per style + color: a style in several colors is several entries. An "Extras" / overage line is its own entry right after its main one, with note "Extras".
+- One garment entry per style + color: a style in several colors is several entries. An "Extras" / overage / spares line (McKenna sends one extra of each size under each style) is its own entry right after its main one, never added into it, with note "Extras": we print the customer's extras free.
 - A product or design name listed apart from the style (Cowboy Cool "PRODUCT": "Cut'em Hoodie") goes in that garment's note; the style number in style.
 - A style number ending in B or Y is youth (5000B, 18500B, G640B, PC43Y, PC54Y): its S/M/L/XL are YS/YM/YL/YXL. XXL = 2XL, XXXL = 3XL. One size → OS. Waist sizes (32" waist) and anything else that isn't one of our sizes: total under OS and the breakdown in the garment's note.
 - Read the size grid from the page as you see it and check every row against its total and the PO's line quantity: text pulled out of a PDF drops empty cells and slides numbers into the wrong sizes. If the sizes don't add up, say so in questions. "PPK" / prepack: ask how many pieces are in a pack.

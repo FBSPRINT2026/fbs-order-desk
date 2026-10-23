@@ -488,6 +488,11 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                 </div>}
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
                 {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}
+                {/* the customer's extras: said on the line, printed free (Oct 22, Nick) */}
+                {/* a line under another of the same style: "+ Extras" where the brand would be (shows on hover), Extras when on */}
+                {(l.extras || same) && <button type="button" tabIndex={-1} className={"gl-xtra" + (l.extras ? " on" : "") + (same ? "" : " solo")} aria-pressed={!!l.extras}
+                  title={l.extras ? "Their extras: printed free, not charged. Click to charge for this line again." : "Mark this line as their extras: printed free, says Extras on the order, invoice and work order"}
+                  onClick={() => update((x) => { const ln = x.lines[li]; if (ln.extras) { delete ln.extras; if (ln.priceOverride === 0) ln.priceOverride = null; } else { ln.extras = true; ln.priceOverride = 0; } })}>{l.extras ? <>Extras <span aria-hidden>×</span></> : "+ Extras"}</button>}
                 <div className="gl-row gl-r2">
                   <div className="a-co">
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {

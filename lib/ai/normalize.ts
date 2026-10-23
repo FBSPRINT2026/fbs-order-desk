@@ -75,7 +75,9 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       }
       if (Object.keys(l.sizes).length === 1 && l.sizes.OS) l.oneSize = true;
       // a note for this line from a PO: "Extras", the product name, a waist-size breakdown
-      const note = String(g.note || "").trim().slice(0, 200);
+      let note = String(g.note || "").trim().slice(0, 200);
+      // their extras / overage: an extras line, printed free (Oct 22, McKenna #40104)
+      if (/^\s*(extras?|overage|overs|spares?)\b/i.test(note)) { l.extras = true; l.priceOverride = 0; note = note.replace(/^\s*(extras?|overage|overs|spares?)\b[\s:·,.-]*/i, "").trim(); }
       if (note) l.note = note;
       return l;
     }).filter((l) => l.style || l.garment || l.color || Object.keys(l.sizes).length);
