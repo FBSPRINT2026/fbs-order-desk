@@ -511,6 +511,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // the customer's designs; again when the order check (on the right) changes a logo's art, so the shirt shows it
   // (Oct 23, Nick: "I asked it to remove the white outline and… it didn't update the mock-up on the left")
   const [artTick, setArtTick] = useState(0);
+  const fileOf = useRef<Record<string, string>>({});
   useEffect(() => {
     const on = async () => {
       setArtTick((t) => t + 1);
@@ -538,6 +539,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
       const { data } = await sb.from("designs").select("*").eq("customer_id", customerId).order("number", { ascending: false });
       const list = (data || []) as Design[];
+      // a logo whose picture changed (the Order chat's or Brand standards' art changes: distress, one black…): its cached
+      // picture and its painted colors are dropped, so the shirt is drawn from the new file (Oct 23, Nick on #40133: the
+      // distress was on the logo, the shirt didn't show it)
+      const changed = list.filter((d) => fileOf.current[d.id] && fileOf.current[d.id] !== (d.preview_path || d.file_path)).map((d) => d.id);
+      for (const d of list) fileOf.current[d.id] = d.preview_path || d.file_path;
+      if (changed.length) {
+        for (const id of changed) { imgCache.current.delete(id); imgCache.current.delete(id + ":clean"); }
+        setClean((c) => { const n = { ...c }; for (const id of changed) delete n[id]; return n; });
+        setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => !changed.includes(v.design))));
+      }
       setDesigns(list);
       setUrls(await previewUrls(sb, list));
     })();
