@@ -676,6 +676,20 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
       if (drop.size) d = { ...d, check: (d.check || []).filter((_, i) => !drop.has(i)) };
     }
+    // their extras (Oct 23, Nick on McKenna's HUD 102026: "when you're reading it, you say, hey, I've got one extra of
+    // each size. Are these extras? …to be printed or not to be printed"): a line the reader called extras, or a small
+    // line (1 or 2 a size) under a bigger one of the same style, is asked at the check, answered here
+    {
+      const qty = (l: { sizes?: Record<string, number | undefined> }) => Object.values(l.sizes || {}).reduce<number>((a, v) => a + (+(v || 0)), 0);
+      for (const x of d.groups) for (const [li, l] of x.lines.entries()) {
+        if (l.extrasPrint != null || (d.check || []).some((c) => c.local === `xt:${l.id}`)) continue;
+        const prev = li > 0 ? x.lines[li - 1] : null, qs = Object.values(l.sizes || {}).map((v) => +(v || 0)).filter((v) => v > 0);
+        const small = qs.length >= 3 && qs.every((v) => v <= 2) && !!prev && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && qty(prev) >= 5 * qty(l);
+        if (!l.extras && !small) continue;
+        const n = qty(l), what = [l.style, l.color].filter(Boolean).join(" ") || "this garment";
+        d = { ...d, check: [...(d.check || []), { q: `${n} more ${what}${qs.every((v) => v === 1) ? ", one of each size" : ""}. Are these extras?`, guess: "Yes, printed extras", about: x.name, local: `xt:${l.id}`, choices: [{ label: "Yes, printed extras" }, { label: "Yes, not printed" }, { label: "No, charge for them" }] }] };
+      }
+    }
     // every print's size and inks, with how they were arrived at, for the check (whatever it says there is what's made)
     {
       const specs: Record<string, Spec> = {};
@@ -717,7 +731,14 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       guard();
       // the background boxes: answered here, never sent back to the reader
       const localOf = new Map((d.check || []).filter((c) => c.local).map((c) => [c.q, c.local!]));
-      for (const a of rv.answers.filter((x) => localOf.has(x.q))) {
+      // their extras: printed, not printed (counted, sent back blank), or not extras (charged)
+      for (const a of rv.answers.filter((x) => localOf.get(x.q)?.startsWith("xt:"))) {
+        const lid = localOf.get(a.q)!.slice(3), no = /\bno\b.*charge/i.test(a.answer), blank = /not printed/i.test(a.answer);
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, lines: y.lines.map((l) => (l.id !== lid ? l : no ? { ...l, extras: undefined, extrasPrint: undefined, priceOverride: l.priceOverride === 0 ? null : l.priceOverride } : { ...l, extras: true, extrasPrint: !blank, priceOverride: 0 })) })) };
+        const l0 = d.groups.flatMap((y) => y.lines).find((l) => l.id === lid);
+        did.push(`${[l0?.style, l0?.color].filter(Boolean).join(" ")}: ${no ? "not extras, charged" : blank ? "their extras, not printed (no charge)" : "their extras, printed (no charge)"}`);
+      }
+      for (const a of rv.answers.filter((x) => localOf.get(x.q)?.startsWith("bg:"))) {
         const [key, n0, list, bgName] = localOf.get(a.q)!.split("|"), id = key.slice(3), n = +n0 || 1;
         const keep = /print the box/i.test(a.answer);
         d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, colors: keep ? n + 1 : n, notes: [z.notes, keep ? `Their ${bgName.toLowerCase()} box prints too` : `The ${bgName.toLowerCase()} box behind the art is taken out: the shirt shows through, ${n} color${n === 1 ? "" : "s"}`].filter(Boolean).join(". ").slice(0, 300) })) })) };

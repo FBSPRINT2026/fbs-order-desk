@@ -493,11 +493,6 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                 </div>}
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
                 {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}
-                {/* the customer's extras: said on the line, printed free (Oct 22, Nick) */}
-                {/* a line under another of the same style: "+ Extras" where the brand would be (shows on hover), Extras when on */}
-                {(l.extras || same) && <button type="button" tabIndex={-1} className={"gl-xtra" + (l.extras ? " on" : "") + (same ? "" : " solo")} aria-pressed={!!l.extras}
-                  title={l.extras ? "Their extras: printed free, not charged. Click to charge for this line again." : "Mark this line as their extras: printed free, says Extras on the order, invoice and work order"}
-                  onClick={() => update((x) => { const ln = x.lines[li]; if (ln.extras) { delete ln.extras; if (ln.priceOverride === 0) ln.priceOverride = null; } else { ln.extras = true; ln.priceOverride = 0; } })}>{l.extras ? <>Extras <span aria-hidden>×</span></> : "+ Extras"}</button>}
                 <div className="gl-row gl-r2">
                   <div className="a-co">
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
@@ -533,6 +528,12 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">
+                    {/* their extras: a stamp at the end of the row, printed or not (Oct 23, Nick: asked when the order is made,
+                        "a little stamp next to that row at the end… printed extras or not printed extras"); click to switch */}
+                    {l.extras && <span className="gl-stamp" data-notranslate>
+                      <button type="button" tabIndex={-1} title={l.extrasPrint === false ? "Their extras, sent back blank. Click: print them" : "Their extras, printed free. Click: don't print them"} onClick={() => update((x) => { const ln = x.lines[li]; ln.extrasPrint = ln.extrasPrint === false ? true : false; })}>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</button>
+                      <button type="button" tabIndex={-1} className="x" aria-label="Not extras: charge for this line" title="Not extras: charge for this line" onClick={() => update((x) => { const ln = x.lines[li]; delete ln.extras; delete ln.extrasPrint; if (ln.priceOverride === 0) ln.priceOverride = null; })}>×</button>
+                    </span>}
                     {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 6h14M5 11h14M5 16h8" /></svg></button>}
                     {g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
                   </div>
