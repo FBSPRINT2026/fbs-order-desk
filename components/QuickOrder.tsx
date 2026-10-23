@@ -22,7 +22,7 @@ import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
-import { guessHex, isHeather, teeSvg } from "@/lib/mockup";
+import { shirtBg } from "@/lib/mockup";
 
 /**
  * Create order, start to finish, in one window (Oct 20, Nick: "once I click create order or create reorder… just
@@ -53,7 +53,7 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  confirm it: hey, this is a customer mockup with sizing and information") */
 /** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
  *  and whether to remember it for this customer */
-type ReviewAns = { q: string; answer: string; remember: boolean }[];
+type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string> };
 type ReviewAsk = { d: EODraft; customer: string; again: boolean; resolve: (a: ReviewAns) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
@@ -503,9 +503,19 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const cust = g.customer?.company || g.customer?.name || "this customer";
       step(`${of}${d.check?.length ? `Checking ${d.check.length === 1 ? "one thing" : `${d.check.length} things`} with you…` : "Here's the order: look it over…"}`);
       if (d.check?.length) note(`${d.check.length} thing${d.check.length === 1 ? "" : "s"} to check, on the order's cards`);
-      const ans = await waitFor<ReviewAns>((resolve) => setReview({ d: d!, customer: cust, again: again.length > 0, resolve }));
+      const rv = await waitFor<ReviewAns>((resolve) => setReview({ d: d!, customer: cust, again: again.length > 0, resolve }));
       setReview(null);
       guard();
+      const ans = rv.answers;
+      // a different logo picked for a print: it goes on, with its own colors (no ink names carried over from the other one)
+      for (const x of d.groups) for (const im of x.imprints) {
+        const v = rv.art[im.id] || "", was = d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "");
+        if (!v || v === was) continue;
+        const art2 = { ...(d.art || {}) };
+        if (v.startsWith("design:")) delete art2[im.id]; else art2[im.id] = v;
+        d = { ...d, art: art2, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== im.id ? z : { ...z, design_id: v.startsWith("design:") ? v.slice(7) : (undefined as unknown as string), inks: "" })) })) };
+        did.push(`${x.name || "The order"} · ${im.location}: you picked ${v.startsWith("design:") ? "their logo on file" : d.files.find((f) => f.path === v)?.name || "another logo"}`);
+      }
       const said = ans.filter((a) => a.answer.trim()).map((a) => `${a.q} → ${a.answer.trim()}`);
       let kept = 0;
       for (const a of ans.filter((x) => x.remember && x.answer.trim())) { const r = await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null); if (r?.ok) kept++; }
@@ -1122,19 +1132,29 @@ function Pic({ path, design, page, big }: { path?: string; design?: string; page
 }
 const sameName = (a?: string, b?: string) => { const n = (x?: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return !!n(a) && !!n(b) && (n(a) === n(b) || n(a).startsWith(n(b)) || n(b).startsWith(n(a))); };
 
+/** what a file is, the way staff say it */
+const fileLabel = (f: { name: string; role: string }) => (/purchase[\s_-]*order|(^|[^a-z])p\.?o\.?[\s_#-]*\d/i.test(f.name) ? "Purchase order" : /work[\s_-]*order/i.test(f.name) ? "Work order" : /invoice/i.test(f.name) ? "Invoice" : f.role === "art" ? "Art" : f.role === "mockup" ? "Mockup" : f.role === "sheet" ? "Size sheet" : "Other");
+
 /**
  * The check before it's made (Oct 23, Nick: "you don't ask until you get to the end and you've read all the data…
- * maybe it would be more visual… think of a better way to do it than ask like that"). One card per group: their own
- * picture of it (a work order page, their mockup) beside the art picked and the shirts; what doesn't add up is asked on
- * the card it's about, picked by picture when the answer is a file. Nothing to ask: look it over and make it.
+ * maybe it would be more visual"; then: "it should say something like, here's the files identified. For variation one,
+ * do I use this logo or that logo? For variation two, this logo or that logo?"). The files and what each one is; then
+ * each group: its shirts, and for each print the logo it gets, picked from the art files by picture (the one I picked
+ * already on). Anything else that doesn't add up is asked on the card it's about.
  */
 function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) {
-  const d = a.d, checks = d.check || [];
+  const d = a.d;
+  const files = d.files.filter((f) => f.role !== "signature");
+  const arts = files.filter((f) => f.role === "art");
+  // the logo per print: the art file picked for it (or the logo already on it)
+  const [art, setArt] = useState<Record<string, string>>(() => Object.fromEntries(d.groups.flatMap((g) => g.imprints.map((im) => [im.id, d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")]))));
+  // a question whose answer is one of the files is the logo picker's job when there's a picker
+  const checks = (d.check || []).filter((c) => !(arts.length > 1 && c.choices?.some((x) => x.path)));
   const [rows, setRows] = useState(checks.map(() => ({ pick: 0, text: "", remember: false })));
   const set = (i: number, ch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...ch } : x)));
   const groupOf = (about?: string) => (about ? d.groups.findIndex((g) => sameName(g.name, about)) : -1);
   const answerOf = (i: number) => { const r = rows[i], c = checks[i]; if (r.text.trim()) return r.text.trim(); if (r.pick > 0 && c.choices?.[r.pick]) { const ch = c.choices[r.pick]; return `${ch.label}${ch.name ? ` (${ch.name})` : ""}`; } return ""; };
-  const changed = checks.some((_, i) => !!answerOf(i));
+  const answered = checks.some((_, i) => !!answerOf(i));
   // a plain function, not a component: typing in its box keeps the focus
   const Q = (i: number) => {
     const c = checks[i], r = rows[i], mine = !!answerOf(i);
@@ -1143,41 +1163,63 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
         <p className="rv-qq">{c.q}</p>
         <div className="rv-ch" role="radiogroup" aria-label={c.q}>
           {(c.choices?.length ? c.choices : [{ label: c.guess || "My guess" }]).map((ch, k) => (
-            <button key={k} type="button" role="radio" aria-checked={r.pick === k && !r.text.trim()} className={"rv-c" + (r.pick === k && !r.text.trim() ? " on" : "") + ("path" in ch && ch.path ? " pic" : "")} onClick={() => set(i, { pick: k, text: "" })}>
-              {"path" in ch && ch.path ? <Pic path={ch.path} /> : null}
+            <button key={k} type="button" role="radio" aria-checked={r.pick === k && !r.text.trim()} className={"rv-c" + (r.pick === k && !r.text.trim() ? " on" : "")} onClick={() => set(i, { pick: k, text: "" })}>
               <span>{ch.label}{k === 0 ? <i className="faint"> (my guess)</i> : null}</span>
             </button>
           ))}
+          <input type="text" className="rv-txt" aria-label={`Something else: ${c.q}`} placeholder="Or say what to do…" value={r.text} onChange={(e) => set(i, { text: e.target.value })} />
         </div>
-        <input type="text" className="rv-txt" aria-label={`Something else: ${c.q}`} placeholder="Something else…" value={r.text} onChange={(e) => set(i, { text: e.target.value })} />
         {mine && <label className="qc-rem"><input type="checkbox" checked={r.remember} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>}
       </div>
     );
   };
   const loose = checks.map((c, i) => ({ c, i })).filter(({ c }) => groupOf(c.about) < 0);
   const pcs = (g: Group) => g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((m, v) => m + (+v || 0), 0), 0);
+  const nameOf = (v: string) => (v.startsWith("design:") ? "Their logo on file" : files.find((f) => f.path === v)?.name || "Art");
   return (
     <div className="ap rv" role="group" aria-label="Check the order before it's made">
-      <p className="ap-q">{checks.length ? `Here's the order. ${checks.length === 1 ? "One thing" : `${checks.length} things`} to check.` : "Here's the order. Look right?"}</p>
-      <p className="ap-why">{checks.length ? "Pick an answer on the card, or leave my guess." : "Their picture, the art I picked and the shirts, for each group."}{a.again ? " Your earlier answers are in." : ""}</p>
+      <p className="ap-q">Here&apos;s what I found. Check it, then make it.</p>
+      {files.length > 0 && <section className="rv-files" aria-label="The files">
+        <div className="rv-k">The files</div>
+        <div className="rv-fl">{files.map((f) => <figure key={f.path}><Pic path={f.path} /><figcaption><b>{fileLabel(f)}</b><span data-notranslate>{f.name}</span></figcaption></figure>)}</div>
+      </section>}
       {loose.length > 0 && <section className="rv-g ask"><div className="rv-h"><b>The whole order</b></div>{loose.map(({ i }) => Q(i))}</section>}
       {d.groups.map((g, gi) => {
         const qs = checks.map((c, i) => ({ c, i })).filter(({ c }) => groupOf(c.about) === gi);
-        const shown = (d.shown || []).find((x) => sameName(x.about, g.name)) || (d.groups.length === 1 ? (d.shown || [])[0] : undefined);
+        const gname = g.name || g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ") || `Group ${gi + 1}`;
         return (
           <section key={g.id} className={"rv-g" + (qs.length ? " ask" : "")}>
-            <div className="rv-h"><b data-notranslate>{g.name || g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ") || `Group ${gi + 1}`}</b><span className="faint">{pcs(g).toLocaleString("en-US")} pcs{g.imprints.length ? ` · ${g.imprints.map((im) => `${im.location}${parseFloat(String(im.size || "")) > 0 ? ` ${parseFloat(String(im.size))}"` : ""}`).join(", ")}` : ""}</span></div>
-            <div className="rv-pics">
-              {shown && <figure><Pic path={shown.path} page={shown.page} big /><figcaption data-notranslate>Their {shown.name.replace(/\.[a-z0-9]+$/i, "")}{shown.page > 1 ? `, page ${shown.page}` : ""}</figcaption></figure>}
-              {g.imprints.map((im) => { const path = d.art?.[im.id]; return <figure key={im.id}><Pic path={im.design_id ? undefined : path} design={im.design_id || undefined} big /><figcaption>{im.location}{im.inks ? ` · ${im.inks}` : ""}</figcaption></figure>; })}
-              {g.lines.map((l) => <figure key={l.id}><span className="rv-pic big rv-tee"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(teeSvg(guessHex(l.color || "White"), "front", isHeather(l.color || "")))}`} alt="" /></span><figcaption data-notranslate>{[l.style, l.color].filter(Boolean).join(" ") || "Garment"}<br /><span className="faint">{Object.entries(l.sizes || {}).filter(([, q]) => +q).map(([z, q]) => `${z} ${q}`).join(" · ")}</span></figcaption></figure>)}
-            </div>
-            {qs.length ? qs.map(({ i }) => Q(i)) : <p className="rv-ok">✓ Nothing to ask{shown ? ": the art is the one in their picture" : ""}</p>}
+            <div className="rv-h"><b data-notranslate>{gname}</b><span className="faint">{pcs(g).toLocaleString("en-US")} pcs</span></div>
+            {g.lines.map((l) => (
+              <div key={l.id} className="rv-shirt">
+                <span className="rv-sw" style={{ background: shirtBg(l.color || "White") }} aria-hidden />
+                <span data-notranslate><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b> · {l.color || "no color"}</span>
+                <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
+              </div>
+            ))}
+            {g.imprints.map((im) => {
+              const cur = art[im.id] || "";
+              const opts = [...new Set([...(cur && !arts.some((f) => f.path === cur) ? [cur] : []), ...arts.map((f) => f.path)])];
+              return (
+                <div key={im.id} className="rv-print">
+                  <p className="rv-qq">{opts.length > 1 ? `${gname} · ${im.location}: which logo?` : `${im.location}${parseFloat(String(im.size || "")) > 0 ? `, ${parseFloat(String(im.size))}" wide` : ""}`}</p>
+                  <div className="rv-ch" role="radiogroup" aria-label={`The logo for ${gname}, ${im.location}`}>
+                    {(opts.length ? opts : [""]).map((v) => (
+                      <button key={v || "none"} type="button" role="radio" aria-checked={cur === v} className={"rv-c pic" + (cur === v ? " on" : "")} disabled={!v || opts.length < 2} onClick={() => setArt((x) => ({ ...x, [im.id]: v }))}>
+                        {v ? <Pic path={v.startsWith("design:") ? undefined : v} design={v.startsWith("design:") ? v.slice(7) : undefined} /> : <span className="rv-pic"><span className="faint">No logo yet</span></span>}
+                        <span data-notranslate>{v ? nameOf(v) : "Add it on the order"}{v && v === (d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")) && opts.length > 1 ? <i className="faint"> (my pick)</i> : null}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {qs.map(({ i }) => Q(i))}
           </section>
         );
       })}
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
-        <button type="button" className="btn primary" onClick={() => a.resolve(checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })))}>{changed ? (a.again ? "Make the order" : "Use my answers") : "Make the order"}</button></div>
+        <button type="button" className="btn primary" onClick={() => a.resolve({ answers: checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })), art })}>{answered && !a.again ? "Use my answers" : "Make the order"}</button></div>
     </div>
   );
 }

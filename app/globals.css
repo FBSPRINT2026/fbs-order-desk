@@ -12458,3 +12458,18 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .mf-pdf-th.on canvas{outline:2px solid var(--accent);outline-offset:1px}
 .mf-pdf-th.on{color:var(--accent)}
 .mf-pdf-err{padding:24px;text-align:center}
+.rv .rv-k{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px}
+.rv .rv-files{margin:8px 0 4px}
+.rv .rv-fl{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.rv .rv-fl figure{margin:0;min-width:0}
+.rv .rv-fl figcaption{display:flex;flex-direction:column;font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.3}
+.rv .rv-fl figcaption b{color:var(--ink);font-size:12.5px}
+.rv .rv-fl figcaption span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv .rv-fl .rv-pic{height:64px}
+.rv .rv-shirt{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;font-size:13.5px;color:var(--ink);margin:2px 0 8px}
+.rv .rv-shirt b{font-weight:700}
+.rv .rv-shirt .faint{font-size:12px;white-space:nowrap}
+.rv .rv-sw{flex:none;width:22px;height:22px;border-radius:var(--r,6px);border:1px solid var(--line)}
+.rv .rv-print{margin-top:8px}
+.rv .rv-c:disabled{cursor:default;opacity:1}
+.rv .rv-ch .rv-txt{flex:1 1 180px;width:auto;margin-top:0}
