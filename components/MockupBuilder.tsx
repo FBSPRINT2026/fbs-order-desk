@@ -18,7 +18,7 @@ import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/acti
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
-import { artFromArtPdf, artFromMockupPdf } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage } from "@/lib/printavoArt";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -27,7 +27,7 @@ import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
-import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolorTrim } from "@/lib/inkColors";
+import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
@@ -320,7 +320,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
    *  a proof page per color, or a sales sheet with every color on one page */
   const [salesOpen, setSalesOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
-  const [converting, setConverting] = useState(false), convertIn = useRef<HTMLInputElement>(null);
+  // the Helper (shop): art that came built onto a mockup, pulled off and walked through before it goes on (Oct 22)
+  type HelpRow = { key: string; file: File; url: string; side: "front" | "back"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean };
+  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string }>(null);
+  const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
+  const helpIn = useRef<HTMLInputElement>(null);
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
@@ -1223,58 +1227,94 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setTab(side);
   }
 
+  /** where a print pulled off a mockup goes: by its side, size and how far off center it sat */
+  const locOfPulled = (side: "front" | "back", widthIn: number, dropIn: number, offIn: number) => side === "back"
+    ? (widthIn <= 4.5 && dropIn < 3.5 ? "Upper Back (Yoke)" : widthIn <= 8 ? "Medium Back" : "Full Back")
+    : widthIn > 8 ? "Full Front" : widthIn > 5 ? "Medium Front" : Math.abs(offIn) >= 1.75 ? (offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
+
   /**
-   * Convert a previous mockup (shop only, Oct 22, Nick: "take a full mock-up like this that has vector art on it, pull
-   * off the image on the front and the back, put it on the new mock-up and go"): our old Illustrator mockup sheet (PDF or
-   * PDF-compatible AI) with the shirt photos left out, each piece of art on a shirt becomes a logo on the customer's
-   * account and goes on this mockup at its measured size; the location comes from its side and size. Placement is the
-   * standard one (centered in the print area), the old drop is noted on the print. A PDF that's just the art (no shirt
-   * photos) goes on the full front.
+   * Helper → read a mockup (Oct 22, Nick: "we're going to get a lot of art that's pre-built and that's not separated out…
+   * take the vector art right off the top… process the art, kind of like we do reorders: what do I got here? a front art
+   * and a back art, these colors, I place this on"). Three kinds: our old mockup or a customer's on shirt photos (the
+   * photos are left out, the art kept), a customer's mockup with the shirts drawn flat (the shirt's color taken out), or a
+   * PDF that's just the art. PMS swatches written on the page are read as the inks. Nothing is saved until "Put on".
    */
-  async function convertMockup(f: File) {
-    if (!customerId) return setMsg("Pick the customer first. The art is saved to their account.");
-    setConverting(true); setMsg(`Pulling the art off ${f.name}…`);
+  async function helperRead(f: File) {
+    if (!/\.(pdf|ai)$/i.test(f.name) && !/pdf|postscript|illustrator/i.test(f.type)) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Use the PDF or Illustrator file (saved PDF-compatible). A picture (JPG, PNG) has the art flattened into the shirt." }); return; }
+    setHelpOpen(true);
+    setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [] });
     try {
       const buf = await f.arrayBuffer();
-      const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/ mockup$/i, "");
-      const pieces = await artFromMockupPdf(buf.slice(0), base).catch(() => []);
-      const { data: u } = await sb.auth.getUser();
-      const made: { im: Imprint; d: Design }[] = [];
-      if (pieces.length) {
-        // the biggest piece on each side first (a stray small mark never takes the main spot)
-        const order = [...pieces].sort((a, b) => Number(a.side === "back") - Number(b.side === "back") || b.widthIn * b.heightIn - a.widthIn * a.heightIn);
-        const taken = new Set<string>();
-        for (const pc of order) {
-          const loc = pc.side === "back"
-            ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
-            : pc.widthIn > 8 ? "Full Front" : pc.widthIn > 5 ? "Medium Front" : Math.abs(pc.offIn) >= 1.75 ? (pc.offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
-          if (taken.has(loc)) continue;
-          taken.add(loc);
-          const d = await uploadDesign(sb, { file: pc.file, customer_id: customerId, name: `${base} ${pc.side}`, colors: 1, notes: `Pulled from the mockup ${f.name}`, by: u.user?.email || "" });
-          made.push({ d, im: { ...newImprint(loc), design_id: d.id, size: `${pc.widthIn}" wide`, notes: `From ${f.name}: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar there; ink looks like ${pc.ink}` } });
+      const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
+      const pms = await pmsOnPage(buf.slice(0));
+      setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
+      type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number };
+      let kind: "photos" | "drawn" | "art" = "photos";
+      let got: P[] = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => []);
+      if (!got.length) { kind = "drawn"; got = await artFromDrawnMockup(buf.slice(0), base).catch(() => []); }
+      if (!got.length) {
+        kind = "art";
+        const a = await artFromArtPdf(buf.slice(0), base).catch(() => null);
+        if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0 }];
+      }
+      if (!got.length) { setHelper({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on." }); return; }
+      setHelper((h) => h && { ...h, busy: "Reading the colors…" });
+      // the biggest print on each side first; a second one at a spot that's taken waits unchecked
+      got.sort((x, y) => Number(x.side === "back") - Number(y.side === "back") || y.widthIn * y.heightIn - x.widthIn * x.heightIn);
+      const taken = new Set<string>(), rows: HelpRow[] = [];
+      for (const [i, pc] of got.entries()) {
+        const url = URL.createObjectURL(pc.file);
+        const img = await loadImg(url).catch(() => null);
+        const cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02) : [];
+        // each color: the nearest PMS written on the page (when it's close), else our closest ink
+        const inks: string[] = [];
+        for (const c of cols) {
+          const near = pms.map((n) => ({ n, e: deltaE(c.hex, colorHex(n) || "#000000") })).sort((a, b) => a.e - b.e)[0];
+          const name = near && near.e < 30 ? near.n : (() => { const s0 = suggestInk(c.hex); return s0.rec === "pms" ? s0.pms.name : s0.standard.name; })();
+          if (name && !inks.includes(name)) inks.push(name);
         }
-      } else {
-        const art = await artFromArtPdf(buf.slice(0), base).catch(() => null);
-        if (!art) { setMsg(`No art could be pulled off ${f.name}. Save it from Illustrator as a PDF (or PDF-compatible AI) and try again.`); setConverting(false); return; }
-        const d = await uploadDesign(sb, { file: art.file, customer_id: customerId, name: base, colors: 1, notes: `From ${f.name}`, by: u.user?.email || "" });
-        made.push({ d, im: { ...newImprint("Full Front"), design_id: d.id, size: '10" wide', notes: `From ${f.name}` } });
+        const location = locOfPulled(pc.side, pc.widthIn, pc.dropIn, pc.offIn);
+        const hx = (cols[0]?.hex || "#000000").replace("#", "");
+        const lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
+        rows.push({ key: `r${i}`, file: pc.file, url, side: pc.side, location, widthIn: pc.widthIn, heightIn: pc.heightIn, dropIn: pc.dropIn, inks, use: !taken.has(location) && (pc.widthIn >= 1 || pc.heightIn >= 1), light: lum > 0.7 });
+        taken.add(location);
+      }
+      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])] });
+    } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
+  }
+  const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
+  /** Helper → Put on the mockup: each checked print saved to the customer's logos and put at its location */
+  async function helperApply() {
+    if (!helper) return;
+    if (!customerId) return setMsg("Pick the customer first. The art is saved to their account.");
+    const rows = helper.rows.filter((r) => r.use);
+    if (!rows.length) return setMsg("Check at least one print.");
+    setHelper((h) => h && { ...h, busy: "Saving the art…" });
+    try {
+      const { data: u } = await sb.auth.getUser();
+      const base = helper.name.replace(/\.(pdf|ai)$/i, "").replace(/_/g, " ");
+      const made: { im: Imprint; d: Design }[] = [];
+      for (const r of rows) {
+        const d = await uploadDesign(sb, { file: r.file, customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}`, by: u.user?.email || "" });
+        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
-      // each print takes the same location's spot if it's there (its art replaced), else an empty spot on that side, else a new one
+      // each print takes its location's spot when it's there (the art replaced), else an empty spot on that side, else a new one
       setImprints((xs) => {
         let out = [...xs];
         for (const { im } of made) {
           const same = out.find((x) => x.location === im.location) || out.find((x) => !x.design_id && !qt[x.id] && sideOf(x.location) === sideOf(im.location));
-          out = same ? out.map((x) => (x.id === same.id ? { ...x, design_id: im.design_id, location: im.location, size: im.size, drop: "", notes: [x.notes, im.notes].filter(Boolean).join(". ").slice(0, 300) } : x)) : [...out, im];
+          out = same ? out.map((x) => (x.id === same.id ? { ...x, design_id: im.design_id, location: im.location, size: im.size, inks: im.inks, colors: im.colors, drop: "", notes: [x.notes, im.notes].filter(Boolean).join(". ").slice(0, 300) } : x)) : [...out, im];
         }
         return out;
       });
       setRasterOk((r) => ({ ...r, ...Object.fromEntries(made.map((m) => [m.d.id, true])) })); // drawn at 300 dpi off the vector art: no "picture file" warning
-      setTab(sideOf(made[0].im.location) as typeof curTab);
-      setMsg(`Pulled ${made.length === 1 ? "1 print" : `${made.length} prints`} off ${f.name}: ${made.map((m) => `${m.im.location} ${m.im.size}`).join(", ")}. Check the inks and sizes.`);
-    } catch (e) { setMsg("Couldn't convert that mockup: " + (e instanceof Error ? e.message : String(e))); }
-    setConverting(false);
+      setTab(sideOf(made[0].im.location));
+      helper.rows.forEach((r) => URL.revokeObjectURL(r.url));
+      setHelper(null);
+      setMsg(`Put ${made.map((m) => `${m.im.location} (${m.im.size})`).join(" and ")} on the mockup from ${helper.name}. Check the sizes against the art.`);
+    } catch (e) { setHelper((h) => h && { ...h, busy: "", err: "Couldn't save the art: " + (e instanceof Error ? e.message : String(e)) }); }
   }
 
   async function uploadNew(im: Imprint, f: File) {
@@ -2687,6 +2727,51 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
         </div>}
         <div className="mk-side stack">
+          {!portal && (
+            <section className={"panel mk-help" + (helpOpen ? "" : " closed")}
+              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+              onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); void helperRead(f); } }}>
+              <div className="panel-h"><h2>Helper</h2><button type="button" className="lc-link" onClick={() => setHelpOpen(!helpOpen)}>{helpOpen ? "Hide" : "Show"}</button></div>
+              {helpOpen && <div className="panel-b">
+                {!helper && <>
+                  <p className="faint mk-help-t">Art that came already on a mockup (ours, the customer&apos;s, or a design sheet)? I&apos;ll take the art off the shirts, show you what I found, and put it on this mockup.</p>
+                  <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
+                  <span className="faint mk-help-d">or drop the PDF / AI file here</span>
+                </>}
+                <input ref={helpIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
+                {helper && <>
+                  <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>
+                  {helper.busy && <p className="faint mk-help-t">{helper.busy}</p>}
+                  {helper.err && <p className="err mk-help-t">{helper.err}</p>}
+                  {!helper.busy && helper.rows.length > 0 && <>
+                    <p className="mk-help-q">
+                      {(() => { const f = helper.rows.filter((r) => r.side === "front").length, b = helper.rows.filter((r) => r.side === "back").length; const say = (n: number, w: string) => (n ? `${n === 1 ? "a" : n} ${w} print${n === 1 ? "" : "s"}` : ""); return `I found ${[say(f, "front"), say(b, "back")].filter(Boolean).join(" and ")}${helper.kind === "drawn" ? " on drawn shirts" : helper.kind === "art" ? " (just the art, no shirt)" : ""}.`; })()}
+                      {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
+                      {" "}Check where each goes, its size and inks.
+                    </p>
+                    {helper.rows.map((r) => (
+                      <div key={r.key} className={"mk-help-r" + (r.use ? "" : " off")}>
+                        <label className="mk-help-use"><input type="checkbox" checked={r.use} onChange={(e) => helpSet(r.key, { use: e.target.checked })} /></label>
+                        <div className={"mk-help-pic" + (r.light ? " dark" : "")}><img src={r.url} alt={`${r.side} art`} /></div>
+                        <div className="mk-help-b">
+                          <div className="row" style={{ gap: 6 }}>
+                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>
+                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
+                          </div>
+                          <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
+                          <div className="mk-help-inks">{helper.inkOpts.map((n) => { const on = r.inks.includes(n); return <button key={n} type="button" className={"chip" + (on ? " on" : "")} onClick={() => helpSet(r.key, { inks: on ? r.inks.filter((x) => x !== n) : [...r.inks, n] })}><i style={{ background: colorHex(n) || "#ccc" }} />{n}</button>; })}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="row" style={{ gap: 8 }}>
+                      <button type="button" className="btn primary sm" disabled={!customerId || !helper.rows.some((r) => r.use)} title={customerId ? undefined : "Pick the customer first"} onClick={() => void helperApply()}>Put on the mockup</button>
+                      <span className="faint mk-help-d">{helper.kind === "drawn" ? "Sizes are read off a drawn shirt: close, not exact." : "Placed centered in each print area, like every print."}</span>
+                    </div>
+                  </>}
+                </>}
+              </div>}
+            </section>
+          )}
           {custMocks.length > 0 && (
             <section className="panel mk-cust">
               <div className="panel-h"><h2>Customer&apos;s mockup</h2><span className="faint" style={{ fontSize: 12 }}>Match this</span></div>
@@ -2708,7 +2793,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </div>
           ) : null; })()}
           <section className={"panel" + (ready ? "" : " mk-off") + (imprints.some((im) => im.visualOnly && !im.confirmed) ? " mk-vis-lock" : "")} inert={!ready || imprints.some((im) => im.visualOnly && !im.confirmed) || undefined}>
-            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button>{!portal && <><button className="btn sm" type="button" disabled={converting} title="Our old mockup (PDF or AI) with the art on the shirt photos: the front and back art comes off it and goes on this mockup" onClick={() => convertIn.current?.click()}>{converting ? "Converting…" : "Convert previous mockup"}</button><input ref={convertIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void convertMockup(f); }} /></>}</div></div>
+            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button></div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>

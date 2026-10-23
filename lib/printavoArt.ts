@@ -132,14 +132,38 @@ function mainHex(c: HTMLCanvasElement) {
   return `#${ch(top >> 10)}${ch(top >> 5)}${ch(top)}`;
 }
 
-export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<ArtPiece[]> {
+/** boxes this close (canvas px) become one: a design built from separate bits (Rahr's "VOLUNBIER" over "I ♥ BEIR") is one print */
+function mergeRects(rs: Rect[], gap: number): Rect[] {
+  const out = rs.map((r) => ({ ...r }));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < out.length && !changed; i++) for (let j = i + 1; j < out.length; j++) {
+      const a = out[i], b = out[j];
+      const dx = Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1)), dy = Math.max(0, Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
+      if (dx <= gap && dy <= gap) { out[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) }; out.splice(j, 1); changed = true; break; }
+    }
+  }
+  return out;
+}
+
+export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /** join bits closer than this many inches into one print */ mergeIn?: number } = {}): Promise<ArtPiece[]> {
   const page = await openPage(buf);
   // 1. a quick look: where the photos and the art are
   const s1 = 3;
   const look = await drawWithoutPhotos(page, s1);
   const photos = look.photos.sort((a, b) => a.x0 - b.x0);
   if (!photos.length) return [];
-  const found = pieces(look.canvas, 0.12 * 72 * s1).filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 64);
+  let found = pieces(look.canvas, 0.12 * 72 * s1).filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 64);
+  if (opt.mergeIn) {
+    // per shirt photo: its bits within mergeIn inches of each other are one print (an inch on that photo, in page px)
+    const byPhoto = new Map<number, Rect[]>(), off: Rect[] = [];
+    for (const r of found) {
+      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+      const pi = photos.findIndex((p) => cx > p.x0 && cx < p.x1 && cy > p.y0 && cy < p.y1);
+      if (pi < 0) off.push(r); else byPhoto.set(pi, [...(byPhoto.get(pi) || []), r]);
+    }
+    found = [...off, ...[...byPhoto.entries()].flatMap(([pi, rs]) => { const p = photos[pi]; return mergeRects(rs, opt.mergeIn! * PX_PER_IN * ((p.x1 - p.x0) / PHOTO_W)); })];
+  }
   // the page as it looks (photos in), to read the shirt's color around each print
   const vpF = page.getViewport({ scale: s1 }), full = document.createElement("canvas");
   full.width = Math.round(vpF.width); full.height = Math.round(vpF.height);
@@ -200,6 +224,129 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
     out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name });
   }
   return out;
+}
+
+/**
+ * A customer's mockup with the shirts drawn (flat color shapes with outlines, not photos: Mambo Miles' race shirt, Oct 22).
+ * Each big shape on the page is a shirt (left = front, right = back when there are two); inside it, what isn't the shirt's
+ * color and isn't its outline (the lines that touch the page around it) is art. Bits within an inch of each other are one
+ * print. Sizes come from the shirt's body width taken as an adult large (22"), so they're close, not exact. The art is
+ * drawn again sharp with the shirt's color taken out (see-through, so knockouts stay holes).
+ */
+export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promise<(ArtPiece & { shirtHex: string })[]> {
+  const page = await openPage(buf);
+  const v1 = page.getViewport({ scale: 1 });
+  const s = Math.min(6, 1600 / Math.max(v1.width, v1.height));
+  const vp = page.getViewport({ scale: s });
+  const W = Math.round(vp.width), H = Math.round(vp.height);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+  const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  // the page around the shirts: light pixels reached from the edges
+  const outside = new Uint8Array(W * H), st: number[] = [];
+  const light = (i: number) => d[i * 4] > 232 && d[i * 4 + 1] > 232 && d[i * 4 + 2] > 232;
+  for (let x = 0; x < W; x++) for (const y of [0, H - 1]) { const i = y * W + x; if (light(i) && !outside[i]) { outside[i] = 1; st.push(i); } }
+  for (let y = 0; y < H; y++) for (const x of [0, W - 1]) { const i = y * W + x; if (light(i) && !outside[i]) { outside[i] = 1; st.push(i); } }
+  while (st.length) {
+    const i = st.pop()!, x = i % W, y = (i / W) | 0;
+    for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) if (j >= 0 && !outside[j] && light(j)) { outside[j] = 1; st.push(j); }
+  }
+  // the shapes on it; the big ones are shirts
+  const lab = new Int32Array(W * H);
+  const comps: { id: number; n: number; x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (let i0 = 0; i0 < W * H; i0++) {
+    if (outside[i0] || lab[i0]) continue;
+    const id = comps.length + 1, q = [i0]; lab[i0] = id;
+    const cp = { id, n: 0, x0: W, y0: H, x1: 0, y1: 0 };
+    while (q.length) {
+      const i = q.pop()!, x = i % W, y = (i / W) | 0; cp.n++;
+      if (x < cp.x0) cp.x0 = x; if (x > cp.x1) cp.x1 = x; if (y < cp.y0) cp.y0 = y; if (y > cp.y1) cp.y1 = y;
+      for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) if (j >= 0 && !outside[j] && !lab[j]) { lab[j] = id; q.push(j); }
+    }
+    comps.push(cp);
+  }
+  const shirts = comps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => a.x0 - b.x0);
+  const out: (ArtPiece & { shirtHex: string })[] = [];
+  const { REF_BODY } = await import("@/lib/garmentBody");
+  for (const [si, sh] of shirts.entries()) {
+    // its color: the most common one inside it
+    const n = new Map<number, number>();
+    for (let y = sh.y0; y <= sh.y1; y += 2) for (let x = sh.x0; x <= sh.x1; x += 2) { const i = y * W + x; if (lab[i] !== sh.id) continue; const k = ((d[i * 4] >> 3) << 10) | ((d[i * 4 + 1] >> 3) << 5) | (d[i * 4 + 2] >> 3); n.set(k, (n.get(k) || 0) + 1); }
+    const top = [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+    const fill = [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+    const far = (i: number, lim: number) => Math.hypot(d[i * 4] - fill[0], d[i * 4 + 1] - fill[1], d[i * 4 + 2] - fill[2]) > lim;
+    // the body's width a bit over halfway down (under the sleeves): an adult large's 22"
+    const by = Math.round(sh.y0 + (sh.y1 - sh.y0) * 0.62);
+    let bl = -1, br = -1;
+    for (let x = sh.x0; x <= sh.x1; x++) if (lab[by * W + x] === sh.id) { if (bl < 0) bl = x; br = x; }
+    if (bl < 0 || br - bl < 20) continue;
+    const ppi = (br - bl) / REF_BODY.widthIn, mid = (bl + br) / 2;
+    let neck = sh.y0;
+    for (let y = sh.y0; y <= sh.y1; y++) if (lab[y * W + Math.round(mid)] === sh.id) { neck = y; break; }
+    // art = not the shirt's color; its outline = those bits that touch the page around it (spread through each other)
+    const art = new Uint8Array(W * H), line = new Uint8Array(W * H), q: number[] = [];
+    for (let y = sh.y0; y <= sh.y1; y++) for (let x = sh.x0; x <= sh.x1; x++) {
+      const i = y * W + x; if (lab[i] !== sh.id || !far(i, 60)) continue;
+      art[i] = 1;
+      if ((x > 0 && outside[i - 1]) || (x < W - 1 && outside[i + 1]) || (y > 0 && outside[i - W]) || (y < H - 1 && outside[i + W])) { line[i] = 1; q.push(i); }
+    }
+    while (q.length) {
+      const i = q.pop()!, x = i % W, y = (i / W) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = yy * W + xx; if (art[j] && !line[j]) { line[j] = 1; q.push(j); }
+      }
+    }
+    const m = document.createElement("canvas"); m.width = W; m.height = H;
+    const mx = m.getContext("2d")!, md = mx.createImageData(W, H);
+    let cnt = 0;
+    for (let i = 0; i < W * H; i++) if (art[i] && !line[i]) { md.data[i * 4 + 3] = 255; cnt++; }
+    if (!cnt) continue;
+    mx.putImageData(md, 0, 0);
+    // bits, less stray lines (a seam drawn inside the shirt: long, thin, mostly empty box) and specks
+    const count = (r: Rect) => { let k = 0; for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) if (md.data[(y * W + x) * 4 + 3]) k++; return k; };
+    const bits = pieces(m, 0.12 * ppi).filter((r) => {
+      const w = r.x1 - r.x0, h = r.y1 - r.y0;
+      if (w < 0.15 * ppi && h < 0.15 * ppi) return false;
+      return !(Math.max(w, h) > 1.5 * ppi && count(r) / (w * h) < 0.035);
+    });
+    for (const r of mergeRects(bits, 1 * ppi)) {
+      const w = r.x1 - r.x0, h = r.y1 - r.y0;
+      if (w < 0.5 * ppi && h < 0.5 * ppi) continue;
+      const widthIn = w / ppi, heightIn = h / ppi;
+      // drawn again sharp (about 300 dpi at its size, at most 5000 px), the shirt's color made see-through
+      const want = Math.min(5000, Math.max(800, widthIn * 300)), k = want / w, s2 = s * k, pad = 6;
+      const vp2 = page.getViewport({ scale: s2 });
+      const cc = document.createElement("canvas");
+      cc.width = Math.round(w * k + pad * 2); cc.height = Math.round(h * k + pad * 2);
+      await page.render({ canvasContext: cc.getContext("2d")!, viewport: vp2, background: "rgba(0,0,0,0)", transform: [1, 0, 0, 1, -(r.x0 * k - pad), -(r.y0 * k - pad)] }).promise;
+      const cx2 = cc.getContext("2d", { willReadFrequently: true })!, img = cx2.getImageData(0, 0, cc.width, cc.height), px = img.data, lim = 40;
+      for (let i = 0; i < px.length; i += 4) {
+        if (!px[i + 3]) continue;
+        const dist = Math.hypot(px[i] - fill[0], px[i + 1] - fill[1], px[i + 2] - fill[2]);
+        if (dist < 2 * lim) px[i + 3] = Math.round(px[i + 3] * Math.max(0, (dist - lim) / lim));
+      }
+      cx2.putImageData(img, 0, 0);
+      const blob = await new Promise<Blob | null>((res) => cc.toBlob(res, "image/png"));
+      if (!blob) continue;
+      const side: "front" | "back" = shirts.length > 1 && si === shirts.length - 1 ? "back" : "front";
+      const hex = mainHex(cc), sug = suggestInk(hex), q4 = (v: number) => Math.round(v * 4) / 4;
+      const shirtHex = "#" + fill.map((v) => Math.min(255, v).toString(16).padStart(2, "0")).join("");
+      out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex });
+    }
+  }
+  return out;
+}
+
+/** PMS colors written on the page (a mockup's swatches: "PMS 283C", "PMS 1625 C (30%)"), as "PMS 283 C" */
+export async function pmsOnPage(buf: ArrayBuffer): Promise<string[]> {
+  try {
+    const page = await openPage(buf) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
+    const t = (await page.getTextContent()).items.map((x) => x.str || "").join(" ");
+    const out: string[] = [];
+    for (const m of t.matchAll(/(?:PMS|Pantone)\s*#?\s*(\d{3,4})\s*-?\s*([CU])?\b/gi)) { const n = `PMS ${m[1]} ${(m[2] || "C").toUpperCase()}`; if (!out.includes(n)) out.push(n); }
+    return out;
+  } catch { return []; }
 }
 
 /**
