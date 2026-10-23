@@ -669,6 +669,62 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
   </>);
 }
 
+/**
+ * A PDF's pages, drawn here (Oct 23, Nick on the quick look: "make the pages view not so wide… typically that goes on the
+ * right side"): the pages down the middle, a narrow strip of page pictures on the right to jump to one, zoom in and out.
+ */
+function PdfPages({ url }: { url: string }) {
+  type Doc = { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> };
+  const [doc, setDoc] = useState<Doc | null>(null), [err, setErr] = useState(""), [zoom, setZoom] = useState(1), [at, setAt] = useState(1);
+  const main = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const buf = await (await fetch(url)).arrayBuffer();
+        const { openPdf } = await import("@/lib/printavoArt");
+        const d = await openPdf(buf) as unknown as Doc;
+        if (live) setDoc(d);
+      } catch { if (live) setErr("This file couldn't be shown here. Open it in a tab."); }
+    })();
+    return () => { live = false; };
+  }, [url]);
+  const draw = async (c: HTMLCanvasElement | null, n: number, w: number) => {
+    if (!c || !doc || c.dataset.w === String(w)) return;
+    c.dataset.w = String(w);
+    const pg = await doc.getPage(n), v1 = pg.getViewport({ scale: 1 }), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const vp = pg.getViewport({ scale: (w / v1.width) * dpr });
+    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    c.style.width = `${w}px`; c.style.height = `${Math.round(vp.height / dpr)}px`;
+    await pg.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+  };
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = main.current; if (!el) return;
+    const ro = new ResizeObserver(() => setW(Math.max(200, el.clientWidth - 32)));
+    ro.observe(el); return () => ro.disconnect();
+  }, [doc]);
+  if (err) return <p className="mf-pdf-err">{err}</p>;
+  if (!doc) return <p className="mf-pdf-err faint">Opening…</p>;
+  const pw = Math.round(w * zoom), pages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+  const go = (n: number) => { setAt(n); main.current?.querySelector(`[data-pg="${n}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }); };
+  return (
+    <div className="mf-pdf">
+      <div className="mf-pdf-main" ref={main} onScroll={(e) => { const el = e.currentTarget as HTMLDivElement, top = el.scrollTop + 40; let n = 1; (Array.from(el.querySelectorAll("[data-pg]")) as HTMLElement[]).forEach((x) => { if (x.offsetTop <= top) n = +(x.dataset.pg || 1); }); setAt(n); }}>
+        {w > 0 && pages.map((n) => <canvas key={n} data-pg={n} ref={(c) => { void draw(c, n, pw).catch(() => { if (c) delete c.dataset.w; }); }} />)}
+      </div>
+      <div className="mf-pdf-side">
+        <div className="mf-pdf-zoom">
+          <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out">−</button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button type="button" onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} aria-label="Zoom in">+</button>
+        </div>
+        {pages.map((n) => <button key={n} type="button" className={"mf-pdf-th" + (n === at ? " on" : "")} onClick={() => go(n)} aria-label={`Page ${n}`}><canvas ref={(c) => { void draw(c, n, 64).catch(() => { if (c) delete c.dataset.w; }); }} /><span>{n}</span></button>)}
+      </div>
+    </div>
+  );
+}
+
 /** an attachment shown in the page, over the email or job (not over the Create order panel on the right) */
 function QuickLook({ files, at, onClose }: { files: MailFile[]; at: number; onClose: () => void }) {
   const [i, setI] = useState(Math.max(0, at));
@@ -692,7 +748,7 @@ function QuickLook({ files, at, onClose }: { files: MailFile[]; at: number; onCl
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="mf-look-b">
-          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : <iframe key={f.key} src={f.href} title={f.name} />}
+          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : <PdfPages key={f.key} url={f.href!} />}
         </div>
       </div>
     </div>

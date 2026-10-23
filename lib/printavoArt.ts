@@ -25,6 +25,8 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
   return pdfjs.getDocument({ data: buf }).promise;
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
+/** a PDF (or a PDF-compatible AI file) opened to draw its pages (the quick look's own viewer) */
+export const openPdf = openDoc;
 
 /** a PDF's first page as a picture, about `width` px wide on white (the designs catalog's covers, Oct 20) */
 export async function pdfPicture(buf: ArrayBuffer, width = 900, pageNo = 1): Promise<HTMLCanvasElement> {
