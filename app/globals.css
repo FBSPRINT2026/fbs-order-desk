@@ -10154,6 +10154,13 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .osp-plan-h .faint{font-size:12.5px}
 .osp-plan ol{margin:0 0 10px;padding-left:20px;font-size:13px;display:flex;flex-direction:column;gap:4px}
 .osp-plan-wait{font-size:12.5px;color:var(--ink-3);margin:0 0 10px}
+/* one at a time (Oct 23): the made ones ticked with their number, the next one picked out */
+.osp-plan li.made b{color:var(--ink-3);font-weight:600}
+.osp-plan li.next b{color:var(--accent)}
+.osp-made{color:var(--ok);font-weight:700;white-space:nowrap;text-decoration:none}
+.osp-made:hover{text-decoration:underline}
+.osp-plan-acts{display:flex;flex-wrap:wrap;gap:8px}
+.orv-nextq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .osp-sugg{width:100%;margin-bottom:12px}
 .eo-parts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .eo-parts .chip.done{border-color:var(--ok);color:var(--ok)}

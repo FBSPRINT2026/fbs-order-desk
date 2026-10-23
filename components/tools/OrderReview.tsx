@@ -9,6 +9,7 @@ import { MicButton } from "@/components/SearchInput";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 import { aiOrderFix, applyOrderFixChanges, loadOrderThread, markOrderChecked, noteArtChange, saveOrderLesson, saveOrderThread } from "@/app/shop/ai-actions";
 import type { OrderChange } from "@/lib/ai/orderFix";
+import type { EOPart } from "@/lib/emailOrderShared";
 
 /**
  * THE order check after it's made (Oct 23, Nick: "the right panel opens. That never closes until I say, yes, we've got
@@ -52,7 +53,7 @@ async function pageSaves(orderId: string) {
 }
 const pageReloads = (orderId: string) => window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId } }));
 
-export default function OrderReview({ orderId, onClose, did, next }: { orderId: string; onClose: () => void; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string }) {
+export default function OrderReview({ orderId, onClose, did, next, from }: { orderId: string; onClose: () => void; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string; /** made from one of several orders in an email: the next one is offered when this one's right */ from?: { activity: string } }) {
   const sb = useRef(createClient()).current;
   const saved0 = useRef(typeof window !== "undefined" ? readSaved(orderId) : null).current;
   const [o, setO] = useState<O | null>(null);
@@ -80,6 +81,25 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   }, [sb, orderId]);
   const endRef = useRef<HTMLDivElement>(null);
 
+  // one of several orders in the email (Oct 23, Nick: "when you're done, you'll say, do you want to go ahead and make the
+  // second order? And then I'd say yes or no. And then I can come back to it later"): the next one not made yet
+  const [nextUp, setNextUp] = useState<null | { label: string; at: number; of: number; part: EOPart }>(null);
+  const [askNext, setAskNext] = useState(false);
+  useEffect(() => {
+    if (!from?.activity) return;
+    let live = true;
+    fetch(`/api/inbox/order/plan?activity=${encodeURIComponent(from.activity)}`).then((r) => r.json()).then((j: { parts?: EOPart[] }) => {
+      const all = j.parts || [], nx = all.find((p) => !p.made);
+      if (live && nx && all.length > 1) setNextUp({ label: nx.label, at: all.indexOf(nx) + 1, of: all.length, part: nx });
+    }).catch(() => null);
+    return () => { live = false; };
+  }, [from?.activity]);
+  const makeNext = () => {
+    const a = nextUp, act = from?.activity; if (!a || !act) return;
+    onClose();
+    setTimeout(() => window.dispatchEvent(new CustomEvent("fbs:create-order", { detail: { activity: act, start: { parts: [a.part] } } })), 0);
+  };
+
   // kept with the order (not just this tab): opened again later, everything said and done is still there
   const [didKept, setDidKept] = useState<string[] | undefined>(saved0?.did || did);
   const loaded = useRef(false);
@@ -98,7 +118,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     const t = setTimeout(() => { void saveOrderThread(orderId, v); }, 600);
     return () => clearTimeout(t);
   }, [rounds, lesson, didKept, orderId]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length, busy]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length, busy, askNext]);
 
   const load = useCallback(async () => {
     const { data } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, customers(name, company)").eq("id", orderId).maybeSingle();
@@ -233,6 +253,8 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     await saveOrderThread(orderId, { rounds: after, lesson: { ...lesson, on: false }, did: didKept }).catch(() => null);
     try { sessionStorage.removeItem(keyOf(orderId)); } catch { /* */ }
     setBusy("");
+    // the next order from the same email: asked here, in the thread
+    if (nextUp) { setRounds(after); setAskNext(true); return; }
     onClose();
   }
 
@@ -305,6 +327,16 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
         {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
         {lastRule && <p className="bub-note">For tonight&apos;s review: {lastRule}</p>}
         {err && <div className="err">{err}</div>}
+        {askNext && nextUp && (
+          <div className="bub them">
+            <p>#{o.number} is done. Do you want to go ahead and make the next order from this email? <b>{nextUp.at} of {nextUp.of}: {nextUp.label}</b></p>
+            <div className="orv-nextq">
+              <button type="button" className="btn primary sm" onClick={makeNext}>Yes, make it</button>
+              <button type="button" className="btn sm" onClick={onClose}>Not now</button>
+            </div>
+            <p className="bub-sub">Not now: it waits on the email. Create order there picks up with this one.</p>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -320,7 +352,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
           {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Order resources <span className="orv-rsc-n">{res.length}</span></button>}
           <span className="spacer" />
           <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
-          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
+          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working || askNext} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
         </div>
       </div>
       {resOpen && res.length > 0 && typeof document !== "undefined" && createPortal(<QuickLook files={res} at={0} strip title="Order resources" onClose={() => setResOpen(false)} />, document.body)}
@@ -331,9 +363,9 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
 /** the order check, open on the right of every shop page until it's closed (the end of Create order, an order's
  *  Ask AI → "Order chat"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
 const DOCK_KEY = "fbs:orderCheck";
-type DockState = { orderId: string; did?: string[] };
-export function openOrderCheck(orderId: string, did?: string[]) {
-  const st: DockState = { orderId, did };
+type DockState = { orderId: string; did?: string[]; /** made from one of several orders in this email */ from?: { activity: string } };
+export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }) {
+  const st: DockState = { orderId, did, ...(from ? { from } : {}) };
   try { sessionStorage.setItem(DOCK_KEY, JSON.stringify(st)); } catch { /* */ }
   window.dispatchEvent(new CustomEvent("fbs:order-check", { detail: st }));
 }
@@ -356,7 +388,8 @@ export function OrderCheckDock() {
   const close = () => { try { sessionStorage.removeItem(DOCK_KEY); } catch { /* */ } setSt(null); };
   return (
     <div className="dla-bg dock wide" role="dialog" aria-label="Check the order">
-      <div className="dla qo wide"><OrderReview key={st.orderId} orderId={st.orderId} did={st.did} onClose={close} /></div>
+      <div className="dla qo wide"><OrderReview key={st.orderId} orderId={st.orderId} did={st.did} from={st.from} onClose={close} /></div>
     </div>
   );
 }
+

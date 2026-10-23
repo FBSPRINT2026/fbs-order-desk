@@ -91,6 +91,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fMore, setFMore] = useState<{ k: "seq"; n: number } | { k: "cache" | "live"; before: string } | null>(null), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
   const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
+  // opened on an email that's no longer in the Inbox: its conversation is searched and the first one opened
+  const pickFirst = useRef(false);
+  useEffect(() => { if (pickFirst.current && convos?.length) { pickFirst.current = false; setCSel(convos[0]); setPicked(true); } }, [convos]); // eslint-disable-line react-hooks/exhaustive-deps
   // the folder list shows at once from last time (kept on this computer: folders hardly ever change), then refreshes
   // quietly: first the list, then the unread counts
   const loadFolders = useCallback(async () => {
@@ -323,7 +326,17 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (mode === "mail") {
       if (ol === null) return;
       urlDone.current = true;
-      if (!ol.some((i) => i.activity_id === id)) { window.location.replace(`/shop/conversations?open=${id}`); return; }
+      // a customer email that isn't in the Inbox any more (moved to a folder): its conversation, searched in Email
+      // (Oct 23, Nick: "it actually takes me back to conversations… we moved that away, so it needs to go to actual email")
+      if (!ol.some((i) => i.activity_id === id)) {
+        void createClient().from("activities").select("subject, from_email").eq("id", id).maybeSingle().then(({ data }) => {
+          const subj = String(data?.subject || "").replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "").trim(), from = String(data?.from_email || "").toLowerCase();
+          if (subj.length < 2) return;
+          pickFirst.current = true; setQ(subj);
+          void runSearch(subj, from ? [from] : undefined, from ? { words: subj } : undefined, subj);
+        });
+        return;
+      }
       setBk("all"); setOpen(id); if (!shown) setFocus(id); setPicked(true);
       return;
     }

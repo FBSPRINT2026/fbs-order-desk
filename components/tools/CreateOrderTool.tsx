@@ -13,7 +13,7 @@ import QuickOrder from "@/components/QuickOrder";
  * works (Oct 23, Nick: "a pop-up on the right, like Claude in Chrome… so I can still go back and click attachments"). Every Create order
  * button opens this; change it here and it changes everywhere. Listed in the AI Workbench's Tools (lib/aiTools.ts).
  */
-export default function CreateOrderTool({ activityId, text, guess = "", suggested, onClose, onCreated, onReview }: {
+export default function CreateOrderTool({ activityId, text, guess = "", suggested, onClose, onCreated, onReview, begin }: {
   activityId: string;
   /** what it's about (the email's subject and summary, the job's name): past jobs named in it come first */ text: string;
   guess?: "new" | "reorder" | "";
@@ -21,8 +21,9 @@ export default function CreateOrderTool({ activityId, text, guess = "", suggeste
   onClose: () => void;
   /** each order made */ onCreated?: (id: string, number: number, label: string) => void;
   /** "check every detail first": the page's full form, when it has one */ onReview?: (start: OrderStart) => void;
+  /** already decided (the next order from an email, asked in the Order chat): straight to making it */ begin?: OrderStart;
 }) {
-  const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
+  const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(() => (begin ? { ...begin, n: Date.now() } : null));
   // open on the right: the left menu folds to icons while it's open (ShopNav listens), then comes back
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));

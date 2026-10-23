@@ -50,9 +50,12 @@ export function touchCurrent() {
   last.label = labelFor(last.path);
   write(t);
 }
-/** where "back" should go from this page: the step before it, if there is one */
-export function previousStep(): TrailStep | null {
+/** where "back" should go from this page: the step before it, if there is one. `skip`: pages passed through on the way
+ *  (the Mockup Creator after Create order) that "back" goes past. This page not in the trail yet (its visit is
+ *  recorded a moment later): the last step is where you came from. */
+export function previousStep(skip?: RegExp): TrailStep | null {
   const t = readTrail(), here = window.location.pathname;
-  for (let i = t.length - 1; i >= 0; i--) if (t[i].path !== here) return i === t.length - 1 ? null : t[i];
+  const hereAt = t.length && t[t.length - 1].path === here ? t.length - 1 : t.length;
+  for (let i = hereAt - 1; i >= 0; i--) if (t[i].path !== here && !(skip && skip.test(t[i].path))) return t[i];
   return null;
 }

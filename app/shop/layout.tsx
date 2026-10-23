@@ -11,6 +11,7 @@ import Translate from "@/components/Translate";
 import { RoleProvider } from "@/components/RoleContext";
 import CrewGuard from "@/components/CrewGuard";
 import { OrderCheckDock } from "@/components/tools/OrderReview";
+import { CreateOrderDock } from "@/components/tools/CreateOrderDock";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
         <OrderCheckDock />
+        <CreateOrderDock />
       </div>
     </RoleProvider>
   );

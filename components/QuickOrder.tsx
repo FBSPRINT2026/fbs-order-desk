@@ -868,10 +868,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (!done || many || made.length !== 1 || handed.current) return;
     handed.current = true;
     const m = made[0];
-    openOrderCheck(m.id, [...m.did, ...m.ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]);
+    // one of several orders in the email: the check offers the next one when this one's right
+    openOrderCheck(m.id, [...m.did, ...m.ask.map((q) => `Question for the customer (in the order's notes): ${q}`)], start.parts?.length ? { activity: activityId } : undefined);
     onClose();
     window.location.assign(m.url);
-  }, [done, many, made, onClose]);
+  }, [done, many, made, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={"dla-bg" + (dock ? " dock" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
       <div className={"dla qo" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "")}>

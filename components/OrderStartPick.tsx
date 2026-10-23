@@ -118,13 +118,30 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
         <p className="dla-sub">Is this a new order, or a reorder of something we&apos;ve printed for them before? A reorder brings in the old job&apos;s art, film and garments.</p>
         {plan === null ? <p className="osp-plan-wait">Reading the emails for how many orders are in them…</p> : plan.parts.length > 1 && (
           <div className="osp-plan">
-            <div className="osp-plan-h"><b>{plan.parts.length} orders in this email</b><span className="faint">{plan.note || "One per design, each from its own files"}</span></div>
-            <ol>
-              {plan.parts.map((p) => (
-                <li key={p.key}><b>{p.label}</b> <span className="faint">{p.kind === "reorder" ? (p.jobLabel ? `reorder of ${p.jobLabel}` : "reorder") : "new"}{" · "}{p.changes ? `new: ${p.changes}` : "exact reprint"}{p.pieces ? ` · ${p.pieces.toLocaleString("en-US")} pcs` : ""}{p.names?.length ? ` · ${p.names.length} file${p.names.length === 1 ? "" : "s"}` : ""}</span></li>
-              ))}
-            </ol>
-            <button type="button" className="btn primary" onClick={() => onPick({ parts: plan.parts })}>Make these {plan.parts.length} orders</button>
+            {(() => {
+              // one at a time or all at once (Oct 23, Nick, Kassidy's four Buc-ee's orders: "do you want me to make all the
+              // orders at one time or one at a time?… do the first one and finish… then you'll say, do you want to go ahead
+              // and make the second order?"), and which are already made when Create order is opened on it again
+              const all = plan.parts, done = all.filter((p) => p.made), left = all.filter((p) => !p.made), nx = left[0];
+              const at = nx ? all.indexOf(nx) + 1 : 0;
+              return <>
+                <div className="osp-plan-h">
+                  <b>{done.length === 0 ? `${all.length} orders in this email` : left.length === 0 ? `All ${all.length} orders in this email are made` : `${done.length} of ${all.length} orders made from this email`}</b>
+                  <span className="faint">{done.length === 0 ? "Make them one at a time (each checked in the Order chat, then the next), or all at once?" : nx ? `You already made ${done.map((p) => `${p.label} (#${p.made!.number})`).join(", ")}. Make the next one?` : plan.note || "One per design, each from its own files"}</span>
+                </div>
+                <ol>
+                  {all.map((p) => (
+                    <li key={p.key} className={p.made ? "made" : p === nx ? "next" : ""}><b>{p.label}</b> {p.made
+                      ? <a className="osp-made" href={`/shop/orders/${p.made.id}`} target="_blank" rel="noreferrer" title="Open it in a new tab">✓ #{p.made.number}</a>
+                      : <span className="faint">{p.kind === "reorder" ? (p.jobLabel ? `reorder of ${p.jobLabel}` : "reorder") : "new"}{" · "}{p.changes ? `new: ${p.changes}` : "exact reprint"}{p.pieces ? ` · ${p.pieces.toLocaleString("en-US")} pcs` : ""}{p.names?.length ? ` · ${p.names.length} file${p.names.length === 1 ? "" : "s"}` : ""}</span>}</li>
+                  ))}
+                </ol>
+                {nx && <div className="osp-plan-acts">
+                  <button type="button" className="btn primary" onClick={() => onPick({ parts: [nx] })}>{done.length ? `Yes, make the next one: ${nx.label} (${at} of ${all.length})` : `One at a time: start with ${nx.label}`}</button>
+                  {left.length > 1 && <button type="button" className="btn" onClick={() => onPick({ parts: left })} title="Each one stops when it's made; you open it and go on to the next">{done.length ? `All ${left.length} left now` : `All ${all.length} now`}</button>}
+                </div>}
+              </>;
+            })()}
           </div>
         )}
         {ready && !(plan && plan.parts.length > 1) && (() => {

@@ -6,6 +6,7 @@ import ProofSide from "@/components/ProofSide";
 import OrderStages from "@/components/OrderStages";
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
+import { previousStep, type TrailStep } from "@/lib/navTrail";
 import JobFiles from "@/components/job/JobFiles";
 import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
@@ -488,6 +489,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [id, filesBump, sb]);
   // opened from an email (Inbox → Edit details): a way back to it once the order is checked
   const [fromEmail, setFromEmail] = useState("");
+  const [backTo, setBackTo] = useState<TrailStep | null>(null);
+  useEffect(() => { setBackTo(previousStep(/^\/shop\/artwork\/mockup/)); }, [id]);
   useEffect(() => { setFromEmail(new URLSearchParams(window.location.search).get("email") || ""); }, []);
   // an order made from an email (Create order / Edit details) keeps its way back to that email however it's opened
   const orderSource = o?.source || "", orderIdNow = o?.id || "";
@@ -1004,8 +1007,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="ord">
-      {fromEmail
-        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/conversations?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
+      {/* back to where you came from (Oct 23, Nick: "it's just supposed to go from wherever you were last… I was in the
+          order screen, so it should go back to the order screen"): the page before this one in the tab's trail, the email
+          (in Email, not Conversations) only when that's where you were or the order was opened on its own */}
+      {backTo
+        ? <button type="button" className="back back-btn" title={`Saves this order, then goes back to ${backTo.label}`} onClick={async () => { if (timer.current) await save(); router.push(backTo.url); }}>← Save &amp; return to {/^\/shop\/(inbox|conversations)/.test(backTo.path) ? "the email" : backTo.label}</button>
+        : fromEmail
+        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { if (timer.current) await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
         : <BackLink href="/shop/orders" label="Orders" />}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">

@@ -89,6 +89,7 @@ export type EOPart = {
   /** what's different from the past job ("" = an exact reprint) */ changes: string;
   /** its files (storage paths) and their names (the same file sent again in a reply) */ files: string[]; names?: string[];
   /** the pieces the sheets' names add up to ("…-400PCS.pdf"), to check the order against */ pieces?: number;
+  /** already made from this email (added by /api/inbox/order/plan, never saved in the plan) */ made?: { id: string; number: number };
 };
 export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };
 /**
