@@ -381,7 +381,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } finally { setLookingUp(""); }
   }
 
-  // load the order group (or start blank), catalog and customers
+  // load the order group (or start blank), catalog and customers. Opened from an order and the order still isn't here
+  // after 8 seconds (a read that never came back: Oct 23, Nick on #40112 from Create order, "it just got stuck…
+  // it says pick a customer"): it's loaded again, twice at most
+  const [loadTry, setLoadTry] = useState(0);
+  useEffect(() => {
+    if (!orderId || portal || order || loadTry >= 2) return;
+    const t = setTimeout(() => { setMsg("Loading the order again…"); setLoadTry((n) => n + 1); }, 8000);
+    return () => clearTimeout(t);
+  }, [orderId, portal, order, loadTry]);
   useEffect(() => {
     (async () => {
       if (portal) {
@@ -438,6 +446,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (!data) return setMsg("Order not found.");
         const o = data as Order;
         setOrder(o);
+        if (loadTry) setMsg("");
         setCustomerId(o.customer_id || "");
         const groups = orderGroups(o);
         const g = groups.find((x) => x.id === groupId) || groups[0];
@@ -460,8 +469,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           }
         }
       }
-    })();
-  }, [sb, orderId, groupId, portal, changeId, viewId, wbChat, wbCard, reopenId]);
+    })().catch((e) => setMsg(`Couldn't load it: ${e instanceof Error ? e.message : String(e)}. Refresh the page.`));
+  }, [sb, orderId, groupId, portal, changeId, viewId, wbChat, wbCard, reopenId, loadTry]);
 
   // art saved without a picture to draw (a PDF / AI from an email made into a design on the server): the preview is
   // made here, once, and kept on the design, so the logo shows on the mockup instead of "No logo yet"
