@@ -636,7 +636,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
           // a reorder awaiting production keeps the color count the old job printed (Printavo's 7/0 is a fact; the inks
           // painted here are our guess, and production confirms both: Oct 20, Nick)
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : saved || useAsked ? Math.max(1, names.length) : plan!.colors } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : Math.max(1, names.length) } : x)));
           return;
         }
         const sources = detectColors(img);
