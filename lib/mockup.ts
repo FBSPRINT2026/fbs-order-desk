@@ -214,6 +214,7 @@ export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: 
  * its photo is shown by its height; its prints are still sized by its width (Oct 21, Nick: a 6.5" print on the Bella
  * 100B came out about half again too big: 97% of the chest instead of ~70%).
  */
+const HOOD_FROM_SHADOW = false;
 export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean } = {}): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas");
@@ -285,7 +286,9 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   // dropping the print way down lower below the hood… clip the art only in the mockup so that it appears to go behind
   // the hood"). The hood's bottom edge is the dark shadow line it casts across the back; everything above it, across the
   // hood, is taken out of the shirt's outline, which is what every print is cut to.
-  if (hoodTo > 0 && view === "back") {
+  // (off for now, Oct 23: the shadow line isn't found on heathers or black, and the hood's center seam was read as its
+  // edge; a hoodie's back is read by looking at it instead, below)
+  if (HOOD_FROM_SHADOW && hoodTo > 0 && view === "back") {
     const cxh = (L[hoodTo] + R[hoodTo]) / 2, yA = Math.round(T + 0.08 * (B - T)), yB = Math.round(T + 0.36 * (B - T));
     const lum = (X: number, y: number) => { let v = 0; for (let k = -1; k <= 1; k++) { const p = ((y + k) * W + X) * 4; v += d[p] + d[p + 1] + d[p + 2]; } return v / 3; };
     const pts = new Map<number, number>();
@@ -296,19 +299,35 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
       const med = vals.slice().sort((a, b) => a - b)[vals.length >> 1];
       if (bv < med * 0.62 && med - bv > 20) pts.set(X, best);
     }
-    // the edge across the middle, kept where it's continuous (a fold or a drawstring isn't the hood)
-    const xs = [...pts.keys()].sort((a, b) => a - b);
-    if (xs.length >= 12) {
-      const ys = xs.map((X) => pts.get(X)!), sm = ys.map((_, i) => { const w = ys.slice(Math.max(0, i - 3), i + 4).sort((a, b) => a - b); return w[w.length >> 1]; });
-      const mid = xs.findIndex((X) => X >= cxh);
-      let a = Math.max(0, mid), b = a;
-      while (a > 0 && Math.abs(sm[a - 1] - sm[a]) < 14 && xs[a] - xs[a - 1] <= 12) a--;
-      while (b < xs.length - 1 && Math.abs(sm[b + 1] - sm[b]) < 14 && xs[b + 1] - xs[b] <= 12) b++;
-      if (xs[b] - xs[a] > 0.25 * (R[hoodTo] - L[hoodTo])) {
-        for (let i = a; i < b; i++) for (let X = xs[i]; X < xs[i + 1]; X++) {
-          const yE = Math.round(sm[i] + ((sm[i + 1] - sm[i]) * (X - xs[i])) / (xs[i + 1] - xs[i]));
-          for (let y = 0; y <= yE; y++) maskData.data[(y * W + X) * 4 + 3] = 0;
-        }
+    // the edge is a smooth arch across the back: a curve fitted to the points, the ones off it dropped (the hood's own
+    // center seam is a dark vertical line and cut a notch down into the art, Oct 23 Peticolas black 3739)
+    let P = [...pts.entries()].map(([X, y]) => ({ X, y }));
+    let fit: [number, number, number] | null = null;
+    const solve = (ps: { X: number; y: number }[]): [number, number, number] | null => {
+      // least squares y = a·u² + b·u + c, u = X - cxh
+      let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, t0 = 0, t1 = 0, t2 = 0;
+      for (const { X, y } of ps) { const u = X - cxh, u2 = u * u; s0++; s1 += u; s2 += u2; s3 += u2 * u; s4 += u2 * u2; t0 += y; t1 += u * y; t2 += u2 * y; }
+      const M = [[s4, s3, s2], [s3, s2, s1], [s2, s1, s0]], v = [t2, t1, t0];
+      const det = (m: number[][]) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+      const D = det(M); if (!Math.abs(D)) return null;
+      const col = (k: number) => M.map((r, ri) => r.map((x0, ci) => (ci === k ? v[ri] : x0)));
+      return [det(col(0)) / D, det(col(1)) / D, det(col(2)) / D];
+    };
+    for (let it = 0; it < 4 && P.length >= 10; it++) {
+      fit = solve(P); if (!fit) break;
+      const f = fit, res = P.map(({ X, y }) => Math.abs(y - (f[0] * (X - cxh) ** 2 + f[1] * (X - cxh) + f[2])));
+      const mr = res.slice().sort((a, b) => a - b)[res.length >> 1], lim = Math.max(8, 2.5 * mr);
+      const keep = P.filter((_, k) => res[k] <= lim);
+      if (keep.length === P.length) break;
+      P = keep;
+    }
+    const span = P.length ? Math.max(...P.map((q) => q.X)) - Math.min(...P.map((q) => q.X)) : 0;
+    // an arch (lowest in the middle, or about flat), across a good part of the hood
+    if (fit && P.length >= 10 && span > 0.25 * (R[hoodTo] - L[hoodTo]) && fit[0] <= 0.0008) {
+      const x0 = Math.min(...P.map((q) => q.X)), x1 = Math.max(...P.map((q) => q.X));
+      for (let X = x0; X <= x1; X++) {
+        const yE = Math.round(fit[0] * (X - cxh) ** 2 + fit[1] * (X - cxh) + fit[2]);
+        for (let y = 0; y <= Math.min(H - 1, yE); y++) maskData.data[(y * W + X) * 4 + 3] = 0;
       }
     }
   }
