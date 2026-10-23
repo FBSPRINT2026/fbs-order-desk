@@ -740,7 +740,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   useEffect(() => {
     if (!order || !row) { setMocks([]); return; }
     const gs = orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)));
-    const want = gs.flatMap((g) => (g.mockupThumbs || []).map((p, i) => ({ p, cap: [g.name, g.lines[i] ? [g.lines[i].style, g.lines[i].color].filter(Boolean).join(" ") : ""].filter(Boolean).join(" · ") }))).filter((x) => x.p).slice(0, 8);
+    // one mockup per style and color (a line repeated for extras has none of its own)
+    const uniq = (g: (typeof gs)[number]) => g.lines.filter((l, i, a) => a.findIndex((y) => `${y.style}|${y.color}`.toLowerCase() === `${l.style}|${l.color}`.toLowerCase()) === i);
+    const want = gs.flatMap((g) => { const ls = uniq(g); return (g.mockupThumbs || []).map((p, i) => ({ p, cap: [g.name, ls[i] ? [ls[i].style, ls[i].color].filter(Boolean).join(" ") : ""].filter(Boolean).join(" · ") })); }).filter((x) => x.p).slice(0, 8);
     if (!want.length) { setMocks([]); return; }
     let live = true;
     sb.storage.from("proofs").createSignedUrls(want.map((x) => x.p), 3600).then(({ data }) => { if (live) setMocks(want.map((x, i) => ({ url: data?.[i]?.signedUrl || "", cap: x.cap })).filter((x) => x.url)); });

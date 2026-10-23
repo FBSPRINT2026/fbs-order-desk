@@ -435,7 +435,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const g = groups.find((x) => x.id === groupId) || groups[0];
         if (g) {
           setGroupName(g.name || `Group ${groups.indexOf(g) + 1}`);
-          setLines(g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
+          // one mockup per garment: the same style and color twice (their extras line under it) is one shirt, not two
+          // identical mockups (Oct 22: #40104 and #40106 each got the same Red / Charcoal mockup twice)
+          const seenSC = new Set<string>();
+          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
