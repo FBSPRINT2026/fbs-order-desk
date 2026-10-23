@@ -409,7 +409,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
         </div>
       )}
       {shopNotes(d.notes) && <div className="n2"><b>Notes:</b> {shopNotes(d.notes)}</div>}
-      {(d.artChanges || []).length > 0 && <div className="n2"><b>Art changed for this print:</b> {d.artChanges!.join("; ")}</div>}
+      {(d.artChanges || []).length > 0 && <div className="n2"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : `Changes we made to your art`}:</b> {d.artChanges!.join("; ")}. Approve it, or tell us if it should stay as you sent it.</div>}
       {foot}
     </section>
   );
