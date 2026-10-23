@@ -865,7 +865,7 @@ export function payDueDate(o: { approved_at?: string | null; sent_at?: string | 
  * fields hold the size, drop and inks, and those lines only confused the press (Oct 23, Nick: "we don't even need that…
  * that's going to hurt us more than help us"). What a person wrote (a press note, the customer's words) stays.
  */
-const MACHINE_NOTE = /^(From Printavo #|Art (pulled off|from|uploaded)|Pulled off |You said:|Set at the check|Placement from their mockup|Size from |No underbase \(set at the check\)|The [a-z ]+ box behind the art|Their [a-z ]+ box prints|Same inks as the |Inks? (and size )?from Printavo|Inks from |\*\*\*\s*REORDER|Confirm in the portal|Changed after it was made)/i;
+const MACHINE_NOTE = /^(From Printavo #|Art (pulled off|from|uploaded)|Pulled off |You said:|Set at the check|Placement from their mockup|Size from |No underbase \(set at the check\)|The [a-z ]+ box behind the art|Their [a-z ]+ box prints|Same inks as the |Inks? (and size )?from Printavo|Inks from |\*\*\*\s*REORDER|Confirm in the portal|Changed after it was made|Press: )/i;
 export const cleanPrintNotes = (s: string | null | undefined) => String(s || "").split(/\n|(?<=\.)\s+(?=[A-Z*"])/)
   .map((x) => x.trim()).filter((x) => x && !MACHINE_NOTE.test(x)).join(" ").trim();
 

@@ -471,6 +471,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const seenSC = new Set<string>();
           setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
           setImprints(g.imprints.map((d) => ({ ...d })));
+          loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
           setOrderedBy(Object.fromEntries(g.lines.map((l) => [l.id, Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)])));
@@ -512,6 +513,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // (Oct 23, Nick: "I asked it to remove the white outline and… it didn't update the mock-up on the left")
   const [artTick, setArtTick] = useState(0);
   const fileOf = useRef<Record<string, string>>({});
+  /** each print as it was when the order was opened here: only what's changed here goes back to the order */
+  const loadedIms = useRef<Record<string, Imprint>>({});
   useEffect(() => {
     const on = async () => {
       setArtTick((t) => t + 1);
@@ -2170,7 +2173,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const saved = g.imprints.find((x) => x.id === im.id);
       // production confirmed this print while the builder was open: its confirmed specs win (lib/designSpecs.ts)
       if (saved?.confirmed && !saved.confirm && im.confirm) return { ...saved, ...im, size: saved.size, inks: saved.inks, colors: saved.colors, underbase: saved.underbase, drop: saved.drop, sizeFrom: saved.sizeFrom, remake: saved.remake, notes: saved.notes, confirm: undefined, confirmed: saved.confirmed };
-      return { ...(saved || {}), ...im };
+      // only what was changed here goes back: anything else changed on the order meanwhile (production's drop, the
+      // notes, the Order chat) is kept (Oct 23: #40133's cleaned notes and confirmed drops came back from an open
+      // Mockup Creator)
+      const was = loadedIms.current[im.id];
+      if (!saved || !was) return { ...(saved || {}), ...im };
+      const out: Record<string, unknown> = { ...saved };
+      const keys = new Set([...Object.keys(im), ...Object.keys(was)]);
+      for (const k of keys) {
+        const a = (im as unknown as Record<string, unknown>)[k], b = (was as unknown as Record<string, unknown>)[k];
+        if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) { if (a === undefined) delete out[k]; else out[k] = a; }
+      }
+      return out as unknown as Imprint;
     });
     // the AI read this print's size / drop off the customer's mockup: what staff saved teaches it (not in auto mode,
     // where nobody has looked yet)
@@ -2191,6 +2205,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (thumbs.length) g.mockupThumbs = thumbs;
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
+    loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
     return true;
   }
 
