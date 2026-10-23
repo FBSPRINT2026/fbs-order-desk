@@ -22,7 +22,7 @@ import type { OrderChange } from "@/lib/ai/orderFix";
 type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; customers?: { name?: string; company?: string } | null };
 type Result = { reply: string; applied: string[]; art: (OrderChange & { state: "doing" | "done" | "error"; err?: string })[]; suggest: OrderChange[]; lesson?: string; rule?: string };
 
-export default function OrderReview({ orderId, onClose, did }: { orderId: string; onClose: () => void; /** what Create order did, folded */ did?: string[] }) {
+export default function OrderReview({ orderId, onClose, did, next }: { orderId: string; onClose: () => void; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string }) {
   const sb = useRef(createClient()).current;
   const [o, setO] = useState<O | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -102,7 +102,12 @@ export default function OrderReview({ orderId, onClose, did }: { orderId: string
     void load();
   }
 
+  /** Oct 23 (#40127, Nick: "it made the order, but didn't even make the mock-up"): before the check, the end of Create
+   *  order was "Make the mockup & view order". Yes still goes on to it: a print with art and no mockup yet opens the
+   *  Mockup Creator (it makes it) in a new tab, opened first so the browser doesn't block it. */
+  const needMock = o?.groups.find((g) => g.imprints.some((im) => im.design_id) && !(g.mockupThumbs || []).length) || null;
   async function done() {
+    if (needMock) window.open(next && next.includes("/mockup?") ? next : mockHref(needMock), "_blank", "noopener");
     setBusy("Saving…");
     if (lesson.on && lesson.text.trim()) await saveOrderLesson(orderId, lesson.text).catch(() => null);
     await markOrderChecked(orderId).catch(() => null);
@@ -170,7 +175,7 @@ export default function OrderReview({ orderId, onClose, did }: { orderId: string
       <div className="ap-foot">
         <span className="ap-more"><button type="button" className="ap-link" onClick={onClose}>Close for now</button>{!res && <button type="button" className="ap-link" onClick={() => void ask("review")} disabled={!!busy}>Check it for me</button>}</span>
         {mode === "look" && <button type="button" className="btn" onClick={() => { setMode("talk"); setTimeout(() => box.current?.focus(), 50); }}>No, change something</button>}
-        <button type="button" className="btn primary" onClick={() => void done()} disabled={!!busy || working}>Yes, it&apos;s right</button>
+        <button type="button" className="btn primary" onClick={() => void done()} disabled={!!busy || working} title={needMock ? "Saves it and makes the mockup in a new tab" : undefined}>{needMock ? "Yes, make the mockup" : "Yes, it\u2019s right"}</button>
       </div>
     </div>
   );

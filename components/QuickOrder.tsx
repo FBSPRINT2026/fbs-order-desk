@@ -910,7 +910,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {help && <ArtHelp help={help} onCancel={cancel} />}
         {/* one order made: the panel stays open to check it (Oct 23, Nick: "that never closes until I say, yes, we've
             got everything right") */}
-        {done && !many && made.length === 1 && <OrderReview orderId={made[0].id} did={[...made[0].did, ...made[0].ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]} onClose={onClose} />}
+        {done && !many && made.length === 1 && <OrderReview orderId={made[0].id} next={made[0].url} did={[...made[0].did, ...made[0].ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]} onClose={onClose} />}
         {!many && !(done && made.length === 1) && made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
