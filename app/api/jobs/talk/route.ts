@@ -133,6 +133,35 @@ export async function GET(req: Request) {
   const mine = (e: string) => (((staff || []) as { email: string; name: string | null }[]).find((x) => x.email.toLowerCase() === e.toLowerCase())?.name || e.split("@")[0]).split(/\s+/)[0].replace(/^./, (x) => x.toUpperCase());
   const items: Item[] = texts.map((t) => ({ kind: "text", id: t.id, date: t.sent_at, from_me: t.from_me, who: t.from_me ? mine(t.owner) : nameOf(t.handle), body: t.body, files: (t.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })), how: t.job_how || "" }));
 
+  // 2b. texts about this job filed with another one (Oct 23, Nick: "I texted Kayla Peticolas images of this for approval
+  // last time… nothing is showing up"): two jobs made the same week share one conversation, and it was filed with the
+  // Sit Down shirts. Any of the customer's texts while this job was open that name it (its words, or its initials: "VH"
+  // for Velvet Hammer) show here too, with the rest of that conversation (6 hours either side)
+  {
+    const jobs0 = await customerJobs(admin, job.customer);
+    const me0 = jobs0.find((j) => j.ref === ref);
+    if (me0) {
+      // the customer's own name isn't the job ("Peticolas Velvet Hammer Shirts": Velvet Hammer, VH)
+      const own = squash(`${c?.company || ""} ${c?.name || ""}`);
+      const keys0 = jobKeys(job.name).filter((k) => !own.includes(k) && k !== squash(job.name));
+      const words0 = job.name.replace(/\(.*?\)/g, " ").split(/[^A-Za-z0-9]+/).filter((w) => w.length >= 3 && !/^(shirts?|tees?|hoodies?|totes?|reorder|reprints?|new|the|and)$/i.test(w) && !own.includes(squash(w)));
+      const inits = new Set<string>();
+      for (let i = 0; i < words0.length; i++) for (let n = 2; n <= 3 && i + n <= words0.length; n++) inits.add(words0.slice(i, i + n).map((w) => w[0].toUpperCase()).join(""));
+      const initRe = inits.size ? new RegExp(`\\b(${[...inits].join("|")})\\b`) : null;
+      const { data: near } = await admin.from("text_messages").select("id, from_me, body, sent_at, handle, owner, files, job_how, job_ref").eq("customer_id", job.customer)
+        .gte("sent_at", new Date(me0.start).toISOString()).lte("sent_at", new Date(me0.end).toISOString()).or(`job_ref.is.null,job_ref.neq.${ref}`).order("sent_at").limit(500);
+      const pool = (near || []) as (typeof texts[number] & { job_ref: string | null })[];
+      const hits = pool.filter((t) => { const b = t.body || ""; return keys0.some((k) => squash(b).includes(k)) || (initRe ? initRe.test(b) : false); });
+      const pick = new Map<string, (typeof pool)[number]>();
+      for (const h of hits) for (const t of pool) if (Math.abs(Date.parse(t.sent_at) - Date.parse(h.sent_at)) <= 6 * 3600e3 && t.job_ref === h.job_ref) pick.set(t.id, t);
+      const extra = [...pick.values()].filter((t) => !items.some((i) => i.id === t.id));
+      const p2 = extra.flatMap((t) => (t.files || []).map((f) => f.path)).filter((x) => !signed.has(x));
+      if (p2.length) { const { data: s2 } = await admin.storage.from("proofs").createSignedUrls(p2, 3600); for (const x of s2 || []) if (x.path && x.signedUrl) signed.set(x.path, x.signedUrl); }
+      const other = (r: string | null) => jobs0.find((j) => j.ref === r);
+      for (const t of extra) items.push({ kind: "text", id: t.id, date: t.sent_at, from_me: t.from_me, who: t.from_me ? mine(t.owner) : nameOf(t.handle), body: t.body, files: (t.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })), how: `mentions this job${other(t.job_ref) ? ` (filed with #${other(t.job_ref)!.number} ${other(t.job_ref)!.name})` : ""}` });
+    }
+  }
+
   // 3. its emails: Printavo's, then the mailbox and the portal's (naming the job number, or its name while it was open)
   const jobs = await customerJobs(admin, job.customer);
   const me = jobs.find((j) => j.ref === ref);
@@ -159,6 +188,14 @@ export async function GET(req: Request) {
     const k = `${e.subject}|${e.date.slice(0, 10)}`; if (seen.has(k)) return; seen.add(k);
     items.push({ kind: "email", id: `m${i}`, date: e.date, incoming: e.incoming, from: e.from, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}), ...(e.folder && e.uid && e.acct ? { folder: e.folder, uid: e.uid, acct: e.acct, t: sign(`${e.acct}|${e.folder}|${e.uid}|${ref}`) } : {}), ...(e.act ? { act: e.act, ...(e.folder && e.uid && e.acct ? {} : { t: sign(`act|${e.act}|${ref}`) }) } : {}), src: byNumber ? `names #${job.number}` : "names the job, while it was open" });
   });
+  // 3b. emails on this order itself (the one it was made from, replies kept with it): Oct 23, #40133's "VH shirt reorder"
+  if (ref.startsWith("o:")) {
+    const { data: acts } = await admin.from("activities").select("id, subject, body, from_email, occurred_at, direction").eq("order_id", ref.slice(2)).eq("kind", "email").order("occurred_at").limit(100);
+    for (const a of (acts || []) as { id: string; subject: string | null; body: string | null; from_email: string | null; occurred_at: string; direction: string }[]) {
+      const k = `${a.subject || ""}|${a.occurred_at.slice(0, 10)}`; if (seen.has(k)) continue; seen.add(k);
+      items.push({ kind: "email", id: `a${a.id}`, date: a.occurred_at, incoming: a.direction === "in", from: a.from_email || "", subject: a.subject || "", text: String(a.body || "").slice(0, 3000), act: a.id, t: sign(`act|${a.id}|${ref}`), src: "on this order" });
+    }
+  }
   items.sort((a, b) => a.date.localeCompare(b.date));
 
   // 4. what happened, and the approvals (kept until the items change)

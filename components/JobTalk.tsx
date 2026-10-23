@@ -113,8 +113,10 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0, title, on
  * they have the emails with the original files, the texts where I sent an image for approval… that's the whole
  * point"). The original is read from the order's "Reorder of (Printavo) #27166" note.
  */
-export function OriginalJobTalk({ notes }: { notes: string | null | undefined }) {
-  const m = String(notes || "").match(/Reorder of (Printavo )?#(\d+)/);
+export function OriginalJobTalk({ notes, orderId }: { notes: string | null | undefined; /** the order's own "Reorder of Printavo #…" history line, when the notes don't say it (Oct 23: #40133) */ orderId?: string }) {
+  const [ev, setEv] = useState("");
+  useEffect(() => { if (!orderId || /Reorder of (Printavo )?#\d+/.test(String(notes || ""))) return; void createClient().from("order_events").select("detail").eq("order_id", orderId).eq("kind", "reorder").order("created_at").limit(1).maybeSingle().then(({ data }) => setEv(String(data?.detail || ""))); }, [orderId, notes]);
+  const m = (String(notes || "").match(/Reorder of (Printavo )?#(\d+)/) || ev.match(/Reorder of (Printavo )?#(\d+)/));
   const [ref, setRef] = useState<{ ref: string; pv?: PvOrder; files?: Record<string, string> } | null>(null);
   const [signed, setSigned] = useState<Record<string, string>>({});
   useEffect(() => {

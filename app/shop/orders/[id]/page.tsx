@@ -1445,7 +1445,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="ed-grid" hidden={tab !== "msg"}>
           <div className="stack">
             <JobTalk jobRef={`o:${o.id}`} onCount={setTalkN} />
-            <OriginalJobTalk notes={o.notes} />
+            <OriginalJobTalk notes={o.notes} orderId={o.id} />
           </div>
           <aside className="ed-aside">
           <section className="panel" id="messages">
