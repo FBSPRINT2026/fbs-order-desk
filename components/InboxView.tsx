@@ -264,6 +264,32 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setOrders((os || []) as Ord[]);
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+  // the Outlook Inbox close to live (Oct 23, Nick: "if I archive an email in my Outlook, it takes a really long time to
+  // update… 3 or 4 minutes"): while this page is on screen, what's in the Inbox is read straight from Exchange every
+  // 10 seconds (and the moment you come back to the tab); archived or moved mail drops off, new mail comes in. A new
+  // customer email also brings in the rest of the page (its AI tags, suggestions).
+  const olRef = useRef(ol); olRef.current = ol;
+  useEffect(() => {
+    if (mode !== "mail") return;
+    let going = false;
+    const tick = async () => {
+      if (going || document.visibilityState !== "visible") return;
+      going = true;
+      try {
+        const r = await getOutlookInbox(true).catch(() => null);
+        if (!r?.ok) return;
+        const next = r.connected ? r.items : [];
+        const had = new Set((olRef.current || []).map((x) => x.id));
+        const newCustomer = next.some((x) => !had.has(x.id) && x.activity_id);
+        setOl(next);
+        if (newCustomer) void load();
+      } finally { going = false; }
+    };
+    const t = setInterval(tick, 10000);
+    const on = () => { if (document.visibilityState === "visible") void tick(); };
+    window.addEventListener("focus", on); document.addEventListener("visibilitychange", on);
+    return () => { clearInterval(t); window.removeEventListener("focus", on); document.removeEventListener("visibilitychange", on); };
+  }, [mode, load]);
   // phones: pull down to refresh, like the Mail app: just the list showing, quickly. (No mailbox check here: the
   // portal checks the mailbox by itself every couple of minutes, and a check holds up everything else for up to 35 s.)
   const viewRef = useRef(view); viewRef.current = view;

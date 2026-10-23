@@ -387,7 +387,7 @@ export type InboxItem = { id: string; uid: number; from_email: string; from_name
   /** who else it went to (To and Cc, names and addresses), for the list's search (Oct 21, Nick: "when I search Alvin, this email doesn't come up") */ people?: string };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
-export async function getOutlookInbox() {
+export async function getOutlookInbox(quick = false) {
   try {
     const v = await staff(), { admin } = v;
     const { acct: a } = await mailboxToRead(admin, v);
@@ -399,7 +399,7 @@ export async function getOutlookInbox() {
         // new Inbox email straight from Exchange, in case the regular check can't read the Inbox (Oct 20)
         addInboxEws(admin, a).catch((e) => console.warn("addInboxEws", e instanceof Error ? e.message : e)),
         // someone who wasn't a customer when they wrote, and is now: their emails are linked (no "New sender")
-        relinkInboxLeads(admin, a).catch((e) => console.warn("relinkInboxLeads", e instanceof Error ? e.message : e)),
+        quick ? Promise.resolve() : relinkInboxLeads(admin, a).catch((e) => console.warn("relinkInboxLeads", e instanceof Error ? e.message : e)),
       ]), new Promise((r) => setTimeout(r, 4000))]); }
     const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary, has_attachments, message_id")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);

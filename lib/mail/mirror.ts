@@ -156,7 +156,7 @@ const ewsAdded = new Map<string, number>();
  */
 export async function addInboxEws(admin: SupabaseClient, acct: MailAccount) {
   const k = acct.id;
-  if (Date.now() - (ewsAdded.get(k) || 0) < 30000) return 0;
+  if (Date.now() - (ewsAdded.get(k) || 0) < 8000) return 0;
   ewsAdded.set(k, Date.now());
   const { ewsReady, ewsList } = await import("./ewsBox");
   if (!(await ewsReady(admin, acct))) return 0;
@@ -186,7 +186,7 @@ export async function addInboxEws(admin: SupabaseClient, acct: MailAccount) {
 const pruned = new Map<string, number>();
 export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, force = false) {
   const k = acct.id;
-  if (!force && Date.now() - (pruned.get(k) || 0) < 15000) return 0;
+  if (!force && Date.now() - (pruned.get(k) || 0) < 6000) return 0;
   pruned.set(k, Date.now());
   const { ewsReady, ewsInboxMessageIds } = await import("./ewsBox");
   if (!(await ewsReady(admin, acct))) return 0;
