@@ -99,7 +99,7 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** it prints differently by shirt color (production mockup step 3): shirt color → the screens (by ink name) left off */
   byColor?: { skip: Record<string, string[]>; by?: string; at?: string };
   film?: { state: "asPrinted" | "physical" | "new"; files?: { path: string; name: string }[]; note?: string; by?: string; at?: string; checked?: { by: string; at: string } };
-  /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
+  /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand" | "staff";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through
    *  the same screen. Priced the same as with the underbase (two rounds on press) */ printStyle?: "fashion";
   /** a logo with a distress layer printed clean, without it (Oct 16: the distress is a layer, on unless turned off) */ distress?: "off";

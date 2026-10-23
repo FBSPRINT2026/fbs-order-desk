@@ -1287,7 +1287,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (const im of imprints) {
       const d = designOf(im); if (!d) continue;
       const rule = brandRule(im), k = `${d.id}|${im.location}`;
-      if (rule && brandSized.current[im.id] !== k && im.sizeFrom !== "customer" && im.sizeFrom !== "film") { brandSized.current[im.id] = k; if (!(im.size || "").startsWith(`${rule.width}"`)) sizes[im.id] = `${rule.width}" wide`; }
+      // a size that's already set is never changed by opening the page (Oct 23, Nick on #40133: the back set to 3.5" four
+      // times came back as their standard 3" each time the mockup was opened: "those sizes have to be set in stone"). The
+      // standard size goes on a print that has none yet, or whose logo or spot is changed here.
+      const was = brandSized.current[im.id];
+      if (was === undefined && (im.size || "").trim()) { brandSized.current[im.id] = k; }
+      else if (rule && was !== k && im.sizeFrom !== "customer" && im.sizeFrom !== "film") { brandSized.current[im.id] = k; if (!(im.size || "").startsWith(`${rule.width}"`)) sizes[im.id] = `${rule.width}" wide`; }
       if (im.method === "screen" && brandHit.current[im.id] !== d.id) {
         brandHit.current[im.id] = d.id;
         const h = brandHitFor(brandPrint, !!(d.specs as { distressed?: boolean } | null)?.distressed);
@@ -3160,7 +3165,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             const r = ratioIm(im) || 0;
                             const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
                             if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
-                            guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x))));
+                            guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "", sizeFrom: "staff" as const } : x))));
                           };
                           return (
                             <>
