@@ -354,6 +354,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
+  // opened as the Mockup Helper tool (AI Workbench → Tools, lib/aiTools.ts): the Helper open and in view
+  useEffect(() => {
+    if (sp.get("helper") !== "1") return;
+    setHelpOpen(true);
+    const t = setTimeout(() => document.querySelector(".mk-help")?.scrollIntoView({ block: "start", behavior: "smooth" }), 600);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const helpIn = useRef<HTMLInputElement>(null);
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)

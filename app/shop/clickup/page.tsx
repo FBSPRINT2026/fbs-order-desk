@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
 import { Due } from "@/components/bits";
-import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
-import QuickOrder from "@/components/QuickOrder";
+import { type OrderStart } from "@/components/OrderStartPick";
+import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
@@ -92,7 +92,6 @@ export default function ClickUpJobs() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [act, setAct] = useState<string | null>(null); // the job brought in (activity), for the order maker
   const [pick, setPick] = useState(false);
-  const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
   const [review, setReview] = useState<OrderStart | null>(null);
   const [made, setMade] = useState<{ id: string; number: number } | null>(null);
   const [files, setFiles] = useState<{ id: string; list: CuFile[]; busy: boolean; err?: string } | null>(null);
@@ -249,7 +248,7 @@ export default function ClickUpJobs() {
     await load();
   };
   const openJob = (id: string) => {
-    setOpenId(id); setMade(null); setAct(null); setPick(false); setQuick(null); setReview(null);
+    setOpenId(id); setMade(null); setAct(null); setPick(false); setReview(null);
     // the files, like an email's attachments: copied into the portal if the reader hasn't yet
     const t = data?.tasks.find((x) => x.id === id) || wsData?.tasks.find((x) => x.id === id);
     setFiles({ id, list: t?.attachments || [], busy: !!t?.attachments.some((f) => !f.path) });
@@ -357,10 +356,9 @@ export default function ClickUpJobs() {
           {review && act && <div className="cu-sec"><EmailOrderPanel key={act + (review.job || "")} activityId={act} start={{ told: review.told, job: review.job }} onClose={() => setReview(null)} onCreated={(id, n) => { setReview(null); madeIt(id, n); }} /></div>}
         </div>
       </div>}
-      {pick && act && job && <OrderStartPick activityId={act} text={`${job.name} ${job.description || ""}`.slice(0, 600)} guess="" onClose={() => setPick(false)}
-        onPick={(s) => { setPick(false); if (s.review) setReview(s); else setQuick({ ...s, n: Date.now() }); }} />}
-      {quick && act && <QuickOrder key={quick.n} activityId={act} start={quick} onClose={() => setQuick(null)}
-        onReview={() => { const s = quick; setQuick(null); setReview(s); }}
+      {/* Create order: the one tool (components/tools/CreateOrderTool.tsx), the same as on emails and in the AI Workbench */}
+      {pick && act && job && <CreateOrderTool activityId={act} text={`${job.name} ${job.description || ""}`.slice(0, 600)} onClose={() => setPick(false)}
+        onReview={(s) => { setPick(false); setReview(s); }}
         onCreated={(id, n) => madeIt(id, n)} />}
 
       {ws ? (() => {

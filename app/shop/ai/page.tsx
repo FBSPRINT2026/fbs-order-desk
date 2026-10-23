@@ -1,6 +1,6 @@
 import { getViewer } from "@/lib/supabase/server";
 import { viewerPerms } from "@/lib/access";
-import AiWorkbench from "@/components/AiWorkbench";
+import WorkbenchTabs from "@/components/WorkbenchTabs";
 
 export const metadata = { title: "AI Workbench · FBS" };
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function AiPage() {
   return (
     <>
       <div className="page-head wb-head"><div><h1>AI Workbench</h1></div></div>
-      <AiWorkbench name={first} />
+      <WorkbenchTabs name={first} />
     </>
   );
 }

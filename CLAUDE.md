@@ -13,6 +13,12 @@
   buttons show icons only, then the row wraps. `components/ToolbarFit.tsx` does this for `.aa-nav`, `.ot-nav`,
   `.ibx2-tabs`, `.mf-bar` and anything with `data-toolbar`; give new toolbars icons and one of those hooks. Tables and
   calendars may still scroll.
+- **Each AI tool is ONE tool, used in many places** (Nicholas, Oct 23 2026: "think of each of these as an individual
+  tool that just gets applied multiple places in the site… the create order is in email, it's in the ClickUp thing, it's
+  in the projects area… one uniform tool that works throughout the site"). Every AI tool is listed in `lib/aiTools.ts`
+  (shown in AI Workbench → Tools) with the component that IS the tool and the places it opens from. A button for a tool
+  anywhere opens that component (Create order = `components/tools/CreateOrderTool.tsx`); never copy or fork a tool's flow
+  into a page. Fix or change it in the tool, and add a new place to its `places` list.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

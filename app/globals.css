@@ -12339,3 +12339,22 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .qc-g{font-size:12.5px;margin-top:2px!important}
 .qc-a{box-sizing:border-box;width:100%;height:36px;margin-top:6px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);background:var(--surface)}
 .qc-rem{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;color:var(--ink-3)}
+
+/* AI Workbench → Tools (Oct 23): every AI tool, one each, with where it shows up */
+.wb-tabs{margin:0 0 12px}
+.wb-tabs + .wb{height:calc(100dvh - 205px)}
+.ait{display:grid;gap:14px}
+.ait-intro{margin:0;font-size:12.5px}
+.ait-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.ait-card{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.ait-card .btn{align-self:flex-start;margin-top:auto}
+.ait-n{font-size:14px;color:var(--ink)}
+.ait-w{margin:0;font-size:13px;color:var(--ink-2);line-height:1.4}
+.ait-p{font-size:12px;color:var(--ink-3);line-height:1.4}
+.ait-l{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)}
+.ait-launch{max-width:640px;width:calc(100vw - 32px)}
+.ait-launch .toolbar{margin:10px 0}
+.ait-src{max-height:360px;overflow:auto;margin-top:8px}
+.ait-files{display:grid;gap:10px;padding:4px 0}
+.ait-fl{margin:0;padding:0 0 0 18px;font-size:13px}
+.ait-made{margin:6px 0;font-size:14px}

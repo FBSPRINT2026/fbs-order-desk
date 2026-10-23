@@ -88,7 +88,10 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       const full = d.colors === "full" || (typeof d.colors === "number" && d.colors >= FULL_COLOR);
       im.colors = im.method === "dtf" ? 1 : full && im.method === "screen" ? FULL_COLOR : Math.max(1, Math.min(im.method === "embroidery" ? 15 : 10, Math.round(+(d.colors || 1)) || 1));
       im.inks = (d.inks || "").slice(0, 200);
-      im.size = (d.size || "").slice(0, 40);
+      // the shop's way of writing it: "11 inches wide" / "11in" / "11 in. W" → 11" wide (a height stays a height)
+      const sz = String(d.size || "").trim();
+      const m = sz.match(/^(\d+(?:\.\d+)?)\s*(?:"|”|''|in\.?|inch(?:es)?)?\s*(w|wide|width|t|tall|h|high|height)?\.?$/i);
+      im.size = (m ? `${m[1]}" ${/^(t|tall|h|high|height)$/i.test(m[2] || "") ? "tall" : "wide"}` : sz).slice(0, 40);
       im.notes = (d.notes || "").slice(0, 300);
       return im;
     });

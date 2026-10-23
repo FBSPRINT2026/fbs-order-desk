@@ -26,8 +26,8 @@ import { FileTray, FrameZoom, msgFiles, type MailFile, OpeningNote, box as mailB
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
-import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
-import QuickOrder from "@/components/QuickOrder";
+import { type OrderStart } from "@/components/OrderStartPick";
+import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import NewEmail from "@/components/NewEmail";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
@@ -1160,7 +1160,6 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   // Create order asks first: new order, or a reorder of which job (Oct 20, Nick)
   // Create order in one go: reading, deciding and making it in a window, then "here's what I did" (Oct 20, Nick)
-  const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
   const [pickOpen, setPickOpen] = useState(false), [suggest, setSuggest] = useState<{ label: string; told?: string; job?: string } | undefined>(undefined);
   // several orders from one email (one per design): which one is open, and the ones made
   const [partAt, setPartAt] = useState(0), [partMade, setPartMade] = useState<Record<string, { id: string; number: number }>>({});
@@ -1373,9 +1372,10 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {made && <div className="ibx2-made eh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
         {err && <div className="pv-err eh-err">{err}</div>}
 
-        {pickOpen && <OrderStartPick activityId={orderFrom?.id || x.id} text={`${x.subject || ""} ${x.meta?.triage?.summary || ""}`} guess={reorder ? "reorder" : intents.includes("new_order") ? "new" : ""} suggested={suggest} onClose={() => { setPickOpen(false); setSuggest(undefined); }} onPick={(st) => { setPickOpen(false); setSuggest(undefined); if (st.review) startOrder({}); else setQuick({ ...st, n: Date.now() }); }} />}
-        {quick && <QuickOrder key={quick.n} activityId={orderFrom?.id || x.id} start={quick} onClose={() => setQuick(null)}
-          onReview={() => { const st = quick; setQuick(null); startOrder({ told: st.told, job: st.job, parts: st.parts }); }}
+        {/* Create order: the one tool (components/tools/CreateOrderTool.tsx), the same as on ClickUp jobs and in the AI Workbench */}
+        {pickOpen && <CreateOrderTool activityId={orderFrom?.id || x.id} text={`${x.subject || ""} ${x.meta?.triage?.summary || ""}`} guess={reorder ? "reorder" : intents.includes("new_order") ? "new" : ""} suggested={suggest}
+          onClose={() => { setPickOpen(false); setSuggest(undefined); }}
+          onReview={(st) => { setPickOpen(false); setSuggest(undefined); startOrder(st.review ? {} : { told: st.told, job: st.job, parts: st.parts }); }}
           onCreated={(id, n, label) => { setMade({ id, number: n }); void noteEmailChat(x.id, `Order #${n} (${label}) created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); }} />}
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
           {orderStart?.parts?.length ? (() => {
