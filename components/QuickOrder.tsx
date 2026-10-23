@@ -1387,6 +1387,9 @@ function sizeRule(location: string, ratio?: number): { w: number; why: string } 
 }
 /** our stock ink for a name written on a sheet ("Scarlet Red" → Scarlet), else the name as written */
 const stockName = (n: string) => {
+  // a PMS written any way ("Pms 534c", "PMS534 C", "Pantone 2178"): "PMS 534 C"
+  const pms = n.trim().match(/^(?:pms|pantone)\s*#?\s*(\d{3,4})\s*([cu])?$/i);
+  if (pms) return `PMS ${pms[1]} ${(pms[2] || "C").toUpperCase()}`;
   if (colorHex(n)) return n;
   const w = n.split(/\s+/);
   for (let i = w.length - 1; i >= 1; i--) { const a = w.slice(0, i).join(" "); if (colorHex(a)) return a; }
