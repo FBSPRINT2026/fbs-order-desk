@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
-import { loadMemories } from "@/lib/ai/orderMemory";
+import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { LOCATIONS, orderGroups, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
@@ -49,6 +49,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     b.text,
     "Garment lines:", linesText(groups),
     mem.length ? `\nWhat the shop has taught you about this customer:\n${mem.slice(0, 15).map((m) => `- ${m.text}`).join("\n")}` : "",
+    shopRulesText(await loadShopRules(admin).catch(() => [])),
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
   const r = await askClaude<{ reply: string; changes?: OrderChange[]; lesson?: string; rule?: string }>({

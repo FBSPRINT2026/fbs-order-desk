@@ -14,7 +14,7 @@ import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, t
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
-import { loadMemories, memoryText } from "@/lib/ai/orderMemory";
+import { loadMemories, memoryText, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import { isPicture, looksLikeSignature, oldNoteText, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
@@ -427,7 +427,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     loadMemories(admin, (a.customer_id as string) || null).catch(() => []),
   ]);
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
-  const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
+  const memText = [memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];

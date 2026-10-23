@@ -12577,3 +12577,16 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 .orv-talk textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:14px/1.4 var(--body);color:var(--ink);resize:vertical}
 .orv-talk-b{display:flex;justify-content:flex-end;gap:8px;align-items:center}
 .err-t{color:var(--danger);font-size:12.5px}
+/* the corrections review (Oct 23) */
+.crv.on{outline:2px solid var(--accent);outline-offset:2px}
+.crv-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.crv-it{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;color:var(--ink)}
+.crv-it:first-child{border-top:0}
+.crv-k{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);width:96px;flex:none}
+.crv-it.bug .crv-k{color:var(--danger)}
+.crv-it.rule .crv-k{color:var(--accent)}
+.crv-t{flex:1 1 260px;min-width:0}
+.crv-it input[type=text]{flex:1 1 260px;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink)}
+.crv-n{font-size:12px;white-space:nowrap}
+.crv-a{display:flex;gap:6px;margin-left:auto}
+.crv-it.no .crv-t{color:var(--ink-3);text-decoration:line-through}

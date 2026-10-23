@@ -44,3 +44,15 @@ export async function forgetMemory(admin: SupabaseClient, id: string) {
   const { error } = await admin.from("ai_suggestions").update({ status: "dismissed", decided_at: new Date().toISOString() }).eq("id", id).eq("kind", MEMORY_KIND);
   return error ? { ok: false as const, error: error.message } : { ok: true as const };
 }
+
+/**
+ * The shop's own rules, approved by the owner from the overnight review of corrections (Oct 23, Nick: "you would then
+ * store… you should learn from it… then we go on from there"): ai_suggestions rows (kind shop_rule). Every order
+ * reading and the order check read them, for every customer.
+ */
+export const RULE_KIND = "shop_rule";
+export async function loadShopRules(admin: SupabaseClient): Promise<{ id: string; text: string }[]> {
+  const { data } = await admin.from("ai_suggestions").select("id, payload").eq("kind", RULE_KIND).neq("status", "dismissed").order("created_at", { ascending: false }).limit(40);
+  return (data || []).map((r) => ({ id: r.id as string, text: String(((r.payload || {}) as { text?: string }).text || "") })).filter((r) => r.text);
+}
+export const shopRulesText = (rs: { text: string }[]) => (rs.length ? `THE SHOP'S RULES (approved by the owner from past corrections; follow them on every order):\n${rs.map((r) => `- ${r.text}`).join("\n")}` : "");
