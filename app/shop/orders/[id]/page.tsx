@@ -779,8 +779,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const leave = () => {
     if (!o) return;
-    // back to wherever it was opened from (the customer's page, the orders list…); opened on its own: the customer
-    if (window.history.length > 1) router.back();
+    // made from a ClickUp job: back to ClickUp Jobs (Oct 23, Nick: deleting an order to remake it "goes back to a blank
+    // mock-up screen. Should either go home or back to the ClickUp screen it was on before it started the order creator")
+    if (delAsk?.cu) { location.assign("/shop/clickup"); return; }
+    // back to wherever it was opened from (the customer's page, the orders list…), but never to the Mockup Creator or
+    // this order's own pages; else the email it was made from, else the customer
+    let ref: URL | null = null;
+    try { ref = document.referrer ? new URL(document.referrer) : null; } catch { ref = null; }
+    const okBack = !!ref && ref.origin === location.origin && !ref.pathname.startsWith("/shop/artwork/mockup") && !ref.pathname.startsWith(`/shop/orders/${o.id}`);
+    if (okBack && window.history.length > 1) router.back();
+    else if (new URLSearchParams(location.search).get("email") || o.source === "email") router.replace("/shop/inbox");
     else router.replace(o.customer_id ? `/shop/customers/${o.customer_id}` : "/shop/orders");
   };
   // this order's art that's still a draft (not in the customer's library until the order goes out)
