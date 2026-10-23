@@ -25,7 +25,7 @@ export type OrderChange = {
 export type FixResult = { reply: string; changes: OrderChange[]; applied: string[]; art: OrderChange[]; lesson?: string; rule?: string };
 
 const PRINT_FIELDS = ["size", "location", "inks", "colors", "drop", "underbase", "confirm"];
-const ART_ACTIONS = ["one_black", "flatten", "remove_hairline"];
+const ART_ACTIONS = ["one_black", "flatten", "remove_hairline", "distress"];
 /** the order's own fields (the order page's Job details and Totals, Oct 23, Nick: "change it to pickup"), each checked here */
 const yes = (v: string) => /^(y|true|on|1)/i.test(v);
 const ORDER_FIELDS: Record<string, { say: string; set: (v: string) => unknown | undefined }> = {
@@ -62,6 +62,8 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     if (t && images.length < 10) { const x = await fileB64(admin, f.file_path); if (x) images.push({ media_type: t, data: x, label: `What the customer sent: ${f.name}` }); }
     else if (/\.(pdf|ai)$/i.test(f.file_path) && documents.length < 4) { const x = await fileB64(admin, f.file_path); if (x && Buffer.from(x.slice(0, 12), "base64").toString().startsWith("%PDF")) documents.push({ data: x, label: `What the customer sent: ${f.name}` }); }
   }
+  const { data: cuBp } = o.customer_id ? await admin.from("customers").select("brand_print").eq("id", o.customer_id as string).maybeSingle() : { data: null };
+  const hasMask = !!((cuBp?.brand_print || {}) as { distress?: { path?: string } }).distress?.path;
   const mem = await loadMemories(admin, (o.customer_id as string) || null).catch(() => []);
   const prompt = [
     b.text,
@@ -96,6 +98,7 @@ Art fixes you can make (what "art", the print id, value "yes"), drawn on the art
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
 - flatten: shading, soft edges and in-between colors become the print's solid inks; no gradients (when the print is solid colors).
 - remove_hairline: a very thin line that can't print (a hairline stroke or gap between shapes) is taken out.
+- distress: the customer's own saved distress texture (their "distress mask") is laid over the art, the shirt showing through. ${hasMask ? "This customer HAS a saved mask." : "This customer has NO saved mask: say so, and that one can be saved from a distressed logo in the Mockup Creator."}
 Anything bigger (redrawing art, a new logo, vectorizing a picture) goes to the art department: say so in the reply.
 Print drop: "" puts it at our standard spot for the location (a full front sits about 3" below the collar). Keep each "say" short and plain.`,
     prompt,

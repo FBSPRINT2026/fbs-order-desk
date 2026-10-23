@@ -13,7 +13,7 @@ import { detectColors } from "@/lib/inkColors";
  *   - remove_hairline: a line or gap too thin to print (under about 0.025" at the print's size) is filled in with what's
  *     around it
  */
-export type ArtAction = "one_black" | "flatten" | "remove_hairline";
+export type ArtAction = "one_black" | "flatten" | "remove_hairline" | "distress";
 
 const hexRgb = (h: string) => { const v = h.replace("#", ""); return [parseInt(v.slice(0, 2), 16) || 0, parseInt(v.slice(2, 4), 16) || 0, parseInt(v.slice(4, 6), 16) || 0]; };
 
@@ -103,7 +103,7 @@ export function fixPixels(img: ImageData, actions: ArtAction[], o: { palette: st
 
 /** the fixes on a logo (a design), saved as its file; the file before is kept */
 export async function fixDesignArt(sb: SupabaseClient, designId: string, actions: ArtAction[], o: { shirt?: string; widthIn?: number; say?: string[] }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: d, error } = await sb.from("designs").select("id, name, file_path, file_name, file_type, preview_path, width_px, height_px, print_plan, specs").eq("id", designId).maybeSingle();
+  const { data: d, error } = await sb.from("designs").select("id, customer_id, name, file_path, file_name, file_type, preview_path, width_px, height_px, print_plan, specs").eq("id", designId).maybeSingle();
   if (error || !d) return { ok: false, error: "The logo wasn't found." };
   const path = (d.preview_path as string) || (d.file_path as string);
   if (!/\.(png|jpe?g|webp)$/i.test(path)) return { ok: false, error: "This logo has no picture to change here; the art department can do it." };
@@ -122,8 +122,21 @@ export async function fixDesignArt(sb: SupabaseClient, designId: string, actions
   if (!palette.length) return { ok: false, error: "Couldn't tell the logo's colors." };
   fixPixels(img, actions, { palette, shirt: o.shirt, ppi: W / Math.max(1, o.widthIn || 11) });
   x.putImageData(img, 0, 0);
-  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+  let blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
   if (!blob) return { ok: false, error: "Couldn't save the changed logo." };
+  // the customer's own distress texture laid over it, the shirt showing through (Oct 23, Nick on Peticolas: "apply the
+  // Peticolas Distressed mask to this mockup"); their mask is in their brand standards (Mockup Creator → save it)
+  let clean: string | null = null;
+  if (actions.includes("distress")) {
+    const { data: cu } = await sb.from("customers").select("brand_print").eq("id", d.customer_id as string).maybeSingle();
+    const dm = ((cu?.brand_print || {}) as { distress?: { path?: string } }).distress;
+    if (!dm?.path) return { ok: false, error: "This customer has no distress mask saved yet. Save one from a distressed logo in the Mockup Creator (Helper → save as their mask)." };
+    const { data: ms } = await sb.storage.from("proofs").createSignedUrl(dm.path, 600);
+    if (!ms?.signedUrl) return { ok: false, error: "Couldn't open their distress mask." };
+    const { applyDistress } = await import("@/lib/distress");
+    clean = path;
+    blob = await applyDistress(blob, ms.signedUrl, { layers: 1, fit: "cover", name: "distressed.png" });
+  }
   const base = String(d.file_name || d.name || "art").replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9_-]+/gi, "-").slice(0, 60) || "art";
   const fp = `designs/${crypto.randomUUID()}/${base}-fixed.png`;
   const up = await sb.storage.from("proofs").upload(fp, blob, { contentType: "image/png" });
@@ -132,7 +145,8 @@ export async function fixDesignArt(sb: SupabaseClient, designId: string, actions
   const now = new Date().toISOString();
   const next = { ...specs,
     original: specs.original || { path: d.file_path, name: d.file_name, type: d.file_type, preview: d.preview_path },
-    artFixes: [...((specs.artFixes as unknown[]) || []), { at: now, actions, say: o.say || [] }].slice(-10) };
+    artFixes: [...((specs.artFixes as unknown[]) || []), { at: now, actions, say: o.say || [] }].slice(-10),
+    ...(clean ? { distressed: true, cleanPreview: (specs.cleanPreview as string) || clean } : {}) };
   const { error: e2 } = await sb.from("designs").update({ file_path: fp, file_name: `${base}-fixed.png`, file_type: "image/png", preview_path: fp, width_px: W, height_px: H, art_box: null, print_plan: null, specs: next }).eq("id", designId);
   if (e2) return { ok: false, error: e2.message };
   return { ok: true };
