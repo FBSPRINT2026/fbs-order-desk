@@ -187,7 +187,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
       else if (c.field === "drop") { const n = parseFloat(v); im.drop = n > 0 && n < 20 ? String(n) : ""; }
       else if (c.field === "underbase") { im.underbase = /^y|true|on/i.test(v); }
       else continue;
-      im.notes = [im.notes, `Changed after it was made: ${c.say}`].filter(Boolean).join(". ").slice(0, 300);
+      // not added to the print's notes (Oct 23: they showed on the customer's proof); the order's history keeps it
     } else if (c.what === "line") {
       const l = groups.flatMap((g) => g.lines).find((x) => x.id === c.id);
       if (!l) continue;

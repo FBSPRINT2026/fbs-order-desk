@@ -982,7 +982,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
           <span className="ed-br" aria-hidden />
-          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} />
+          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }} />
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">Documents ▾</summary>
             <div className="ot-menu">
@@ -991,7 +991,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
             </div>
           </details>
-          <button type="button" className="btn" onClick={async () => { await save(); openOrderCheck(o.id); }} title="Did I get everything right? Say what to change (the order or the art) and it's changed, without Illustrator">Check or change it</button>
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">

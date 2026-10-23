@@ -382,8 +382,9 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
   const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
   const hex = p.hexes[gi] || "#9aa1ab";
-  // the art as big as the panel takes (7.6" × 5.9"), its real measurements drawn on
-  const PW = 6.6, PH = 5.7;
+  // the art as big as the panel takes, with room left for its measurements drawn beside and under it (Oct 23, Nick: "the
+  // measurements are spilling out over the red box")
+  const PW = 5.9, PH = 5.4;
   const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = d.visualOnly ? [] : inkNames(d.inks);
@@ -408,8 +409,11 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
           <div className="pf-inklist">{inks.map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b></span>)}</div>
         </div>
       )}
-      {shopNotes(d.notes) && <div className="n2"><b>Notes:</b> {shopNotes(d.notes)}</div>}
-      {(d.artChanges || []).length > 0 && <div className="n2"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : `Changes we made to your art`}:</b> {d.artChanges!.join("; ")}. Approve it, or tell us if it should stay as you sent it.</div>}
+      {/* our own notes aren't the customer's (Oct 23, Nick: "on the PDF proof, we don't need… the notes"); what we changed
+          in their art is, as a list */}
+      {(d.artChanges || []).length > 0 && <div className="n2 pf-chg"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : "Changes we made to your art"}:</b>
+        <ul>{[...new Set(d.artChanges!.map((t) => t.trim().replace(/[.;\s]+$/, "")))].map((t, i) => <li key={i}>{t}</li>)}</ul>
+        <span>Approve it, or tell us if it should stay as you sent it.</span></div>}
       {foot}
     </section>
   );

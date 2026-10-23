@@ -228,6 +228,8 @@ export const DOC_CSS = `
 .pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;position:relative;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
 .pdoc .pf-art{height:7in;margin-top:12px}
+.pdoc .pf-chg ul{margin:3px 0 4px;padding-left:18px}
+.pdoc .pf-chg li{margin:1px 0}
 .pdoc .pf-specs{grid-template-columns:repeat(4,1fr)}
 .pdoc .pf-specs .sp .v{font-size:13pt}
 .pdoc .pf-inkrow{margin-top:12px}

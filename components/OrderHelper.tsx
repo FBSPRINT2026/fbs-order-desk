@@ -26,8 +26,9 @@ async function shrink(f: Blob): Promise<Pic | null> {
   } catch { return null; } finally { URL.revokeObjectURL(url); }
 }
 
-export default function OrderHelper({ orderId, snapshot, apply, undo }: {
+export default function OrderHelper({ orderId, snapshot, apply, undo, onChat }: {
   orderId: string;
+  /** the Order chat on the right (components/tools/OrderReview.tsx), in this menu (Oct 23, Nick picked "Order chat inside Ask AI") */ onChat?: () => void;
   /** the order as it is on screen */ snapshot: () => HelperOrder | null;
   /** make the changes; returns what was done, line by line */ apply: (a: HelperAction[]) => Promise<string[]>;
   /** put the order back the way it was before the last changes */ undo: () => boolean;
@@ -95,7 +96,15 @@ export default function OrderHelper({ orderId, snapshot, apply, undo }: {
 
   return (
     <>
-      <button type="button" className="btn oh-btn" onClick={() => setOpen(true)} title="Tell the AI what to do with this order, or paste a snip of the customer's email">✦ Ask AI</button>
+      {onChat ? (
+        <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+          <summary className="btn oh-btn">✦ Ask AI ▾</summary>
+          <div className="ot-menu">
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onChat(); }} title="The chat on the right: did I get everything right? Say what to change (the order or the art); it stays open while you look around, and it's kept with the order">Order chat</button>
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setOpen(true); }} title="Tell the AI what to do with this order, or paste a snip of the customer's email">Quick ask (or paste an email)</button>
+          </div>
+        </details>
+      ) : <button type="button" className="btn oh-btn" onClick={() => setOpen(true)} title="Tell the AI what to do with this order, or paste a snip of the customer's email">✦ Ask AI</button>}
       {open && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Order helper" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setOpen(false); }}>
           <div className="dla oh" onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addFiles(fs); } }}

@@ -922,7 +922,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {help && <ArtHelp help={help} onCancel={cancel} />}
         {/* one order made: the panel stays open to check it (Oct 23, Nick: "that never closes until I say, yes, we've
             got everything right") */}
-        {done && !many && made.length === 1 && <p className="dla-sub">Opening #{made[0].number}{made[0].mockup ? " and making its mockup" : ""}… the check stays open on the right.</p>}
+        {done && !many && made.length === 1 && <p className="dla-sub">Opening #{made[0].number}{made[0].mockup ? " and making its mockup" : ""}… the Order chat stays open on the right.</p>}
         {!many && !(done && made.length === 1) && made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>

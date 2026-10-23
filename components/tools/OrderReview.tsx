@@ -7,7 +7,7 @@ import { guessHex } from "@/lib/mockup";
 import { fixDesignArt, type ArtAction } from "@/lib/artFix";
 import { MicButton } from "@/components/SearchInput";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
-import { aiOrderFix, applyOrderFixChanges, markOrderChecked, noteArtChange, saveOrderLesson } from "@/app/shop/ai-actions";
+import { aiOrderFix, applyOrderFixChanges, loadOrderThread, markOrderChecked, noteArtChange, saveOrderLesson, saveOrderThread } from "@/app/shop/ai-actions";
 import type { OrderChange } from "@/lib/ai/orderFix";
 
 /**
@@ -34,7 +34,7 @@ type Round = { you: string; reply: string; applied: string[]; art: Art[]; sugges
 /** their PO first, then their mockup and art, then the last job's */
 const RES_RANK = ["order_sheet", "customer_mockup", "print_art", "old_mockup", "barcodes"];
 const RES_LABEL: Record<string, string> = { order_sheet: "Order sheet / PO", customer_mockup: "Their mockup", old_mockup: "Last job's mockup", print_art: "Their art", barcodes: "Barcodes" };
-type Saved = { rounds: Round[]; lesson: { on: boolean; text: string } };
+type Saved = { rounds: Round[]; lesson: { on: boolean; text: string }; did?: string[] };
 
 const SIZE_ORDER = ["0-3M", "3-6M", "6-12M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 const sizeRun = (sz: Record<string, unknown> | undefined) => Object.entries(sz || {}).filter(([, v]) => +(v || 0) > 0)
@@ -80,7 +80,24 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   }, [sb, orderId]);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { try { sessionStorage.setItem(keyOf(orderId), JSON.stringify({ rounds, lesson })); } catch { /* */ } }, [rounds, lesson, orderId]);
+  // kept with the order (not just this tab): opened again later, everything said and done is still there
+  const [didKept, setDidKept] = useState<string[] | undefined>(saved0?.did || did);
+  const loaded = useRef(false);
+  useEffect(() => {
+    void loadOrderThread(orderId).then((r) => {
+      const t = r.ok ? (r.thread as Saved | null) : null;
+      if (t?.rounds?.length && t.rounds.length >= rounds.length) { setRounds(t.rounds.map((x) => ({ ...x, art: (x.art || []).map((a) => (a.state === "doing" ? { ...a, state: "done" as const } : a)) }))); if (t.lesson) setLesson(t.lesson); }
+      if (!did?.length && t?.did?.length) setDidKept(t.did);
+      loaded.current = true;
+    });
+  }, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const v: Saved = { rounds, lesson, did: didKept };
+    try { sessionStorage.setItem(keyOf(orderId), JSON.stringify(v)); } catch { /* */ }
+    if (!loaded.current) return;
+    const t = setTimeout(() => { void saveOrderThread(orderId, v); }, 600);
+    return () => clearTimeout(t);
+  }, [rounds, lesson, didKept, orderId]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length, busy]);
 
   const load = useCallback(async () => {
@@ -210,8 +227,12 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     setBusy("Saving…");
     if (lesson.on && lesson.text.trim()) await saveOrderLesson(orderId, lesson.text).catch(() => null);
     await markOrderChecked(orderId).catch(() => null);
-    setBusy("");
+    // the OK stays in the conversation, which is kept with the order
+    const when = new Date().toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const after: Round[] = [...rounds, { you: changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right", reply: `Marked right · ${when}${lesson.on && lesson.text.trim() ? ` · remembered for ${who}: ${lesson.text.trim()}` : ""}`, applied: [], art: [], suggest: [] }];
+    await saveOrderThread(orderId, { rounds: after, lesson: { ...lesson, on: false }, did: didKept }).catch(() => null);
     try { sessionStorage.removeItem(keyOf(orderId)); } catch { /* */ }
+    setBusy("");
     onClose();
   }
 
@@ -224,7 +245,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   return (
     <div className="ap orv chat" role="group" aria-label="Check the order">
       <div className="orv-top">
-        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back with Check or change it on the order">Close for now</button></div>
+        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from Ask AI → Order chat on the order, with everything said">Close for now</button></div>
         {o.groups.map((g) => (
           <section key={g.id} className="orv-g">
             <div className="orv-pics">
@@ -257,7 +278,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
         <div className="bub them">
           <p>#{o.number} is made. Did I get everything right?</p>
           <p className="bub-sub">Click around the order and the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. Nothing goes to the customer.</p>
-          {did && did.length > 0 && <details className="orv-did"><summary>What I did ({did.length})</summary><ul>{did.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
+          {didKept && didKept.length > 0 && <details className="orv-did"><summary>What I did ({didKept.length})</summary><ul>{didKept.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
         </div>
         {rounds.map((r, ri) => {
           const isLast = ri === rounds.length - 1;
@@ -308,7 +329,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
 }
 
 /** the order check, open on the right of every shop page until it's closed (the end of Create order, an order's
- *  "Check or change it"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
+ *  Ask AI → "Order chat"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
 const DOCK_KEY = "fbs:orderCheck";
 type DockState = { orderId: string; did?: string[] };
 export function openOrderCheck(orderId: string, did?: string[]) {

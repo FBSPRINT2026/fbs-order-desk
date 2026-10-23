@@ -495,6 +495,25 @@ export async function saveOrderLesson(orderId: string, text: string) {
 }
 
 /** "Yes, it's right": said on the order's history */
+/** the order chat's conversation, kept with the order (staff only) so it's all there when it's opened again (Oct 23,
+ *  Nick: "when I click back in it, it deletes the history. I'd like to see everything that we did in there") */
+export async function loadOrderThread(orderId: string) {
+  try {
+    const { admin } = await staff();
+    const { data } = await admin.from("order_internal").select("check_thread").eq("order_id", orderId).maybeSingle();
+    return { ok: true as const, thread: (data?.check_thread || null) as unknown };
+  } catch (e) { return fail(e); }
+}
+export async function saveOrderThread(orderId: string, thread: unknown) {
+  try {
+    const { admin } = await staff();
+    const s = JSON.stringify(thread ?? null);
+    if (s.length > 400_000) return { ok: false as const, error: "The conversation is too long to keep." };
+    const { error } = await admin.from("order_internal").upsert({ order_id: orderId, check_thread: thread ?? null });
+    return error ? { ok: false as const, error: error.message } : { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 export async function markOrderChecked(orderId: string) {
   try {
     const { admin, email } = await staff();
