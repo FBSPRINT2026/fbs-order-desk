@@ -19,6 +19,7 @@ import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage } from "@/lib/printavoArt";
+import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
@@ -330,7 +331,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [portal]); // eslint-disable-line react-hooks/exhaustive-deps
   // the Helper (shop): art that came built onto a mockup, pulled off and walked through before it goes on (Oct 22)
-  type HelpRow = { key: string; file: File; url: string; side: "front" | "back"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean };
+  type HelpRow = { key: string; file: File; url: string; side: "front" | "back"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean;
+    /** the texture laid over it in the file, and how it's distressed here: none, the file's, or the customer's saved mask */
+    mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string };
+  // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
+  const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
+  useEffect(() => {
+    setBrandMask(null);
+    if (portal || !customerId) return;
+    sb.from("customers").select("brand_print").eq("id", customerId).maybeSingle().then(async ({ data }) => {
+      const d = (data?.brand_print as { distress?: { path: string; name?: string; layers?: number } } | null)?.distress;
+      if (!d?.path) return;
+      const { data: su } = await sb.storage.from("proofs").createSignedUrl(d.path, 3600);
+      if (su?.signedUrl) setBrandMask({ path: d.path, url: su.signedUrl, name: d.name || "their mask", layers: d.layers || 3 });
+    });
+  }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
   const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const helpIn = useRef<HTMLInputElement>(null);
@@ -1257,14 +1272,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
       const pms = await pmsOnPage(buf.slice(0));
       setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
-      type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number };
+      type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number };
       let kind: "photos" | "drawn" | "art" = "photos";
       let got: P[] = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => []);
       if (!got.length) { kind = "drawn"; got = await artFromDrawnMockup(buf.slice(0), base).catch(() => []); }
       if (!got.length) {
         kind = "art";
         const a = await artFromArtPdf(buf.slice(0), base).catch(() => null);
-        if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0 }];
+        if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0, ...(a.mask ? { mask: a.mask } : {}) }];
       }
       if (!got.length) { setHelper({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on." }); return; }
       setHelper((h) => h && { ...h, busy: "Reading the colors…" });
@@ -1285,13 +1300,41 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const location = locOfPulled(pc.side, pc.widthIn, pc.dropIn, pc.offIn);
         const hx = (cols[0]?.hex || "#000000").replace("#", "");
         const lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
-        rows.push({ key: `r${i}`, file: pc.file, url, side: pc.side, location, widthIn: pc.widthIn, heightIn: pc.heightIn, dropIn: pc.dropIn, inks, use: !taken.has(location) && (pc.widthIn >= 1 || pc.heightIn >= 1), light: lum > 0.7 });
+        // a texture over it in the file: the customer's own saved mask goes back on instead (sharp, the same on every logo
+        // of theirs), else the file's; none in the file, none here
+        const distress: HelpRow["distress"] = pc.mask ? (brandMask ? "brand" : "file") : "none";
+        const row: HelpRow = { key: `r${i}`, file: pc.file, url, side: pc.side, location, widthIn: pc.widthIn, heightIn: pc.heightIn, dropIn: pc.dropIn, inks, use: !taken.has(location) && (pc.widthIn >= 1 || pc.heightIn >= 1), light: lum > 0.7, mask: pc.mask, maskPpi: pc.maskPpi, distress };
+        if (distress !== "none") { const dd = await distressRow(row, distress).catch(() => null); if (dd) Object.assign(row, dd); else row.distress = "none"; }
+        rows.push(row);
         taken.add(location);
       }
       setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])] });
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
+  /** the art with its distress, as the mockup shows it: one layer of the mask, the shirt showing through */
+  async function distressRow(r: HelpRow, how: HelpRow["distress"]): Promise<Partial<HelpRow> | null> {
+    if (how === "none") return { distress: "none", dfile: undefined, durl: undefined };
+    const mask = how === "brand" ? brandMask?.url : r.mask;
+    if (!mask) return null;
+    const dfile = await applyDistress(r.file, mask, { layers: 1, fit: how === "brand" ? "cover" : "stretch", name: r.file.name.replace(/\.png$/i, "") + " distressed.png" });
+    return { distress: how, dfile, durl: URL.createObjectURL(dfile) };
+  }
+  const helpDistress = async (r: HelpRow, how: HelpRow["distress"]) => { const ch = await distressRow(r, how).catch(() => null); if (ch) helpSet(r.key, ch); };
+  /** the texture in this file saved as the customer's distress mask (brand standards), for every logo of theirs after */
+  async function saveBrandMask(r: HelpRow) {
+    if (!customerId || !r.mask) return;
+    const path = `brand/${customerId}/distress-${Date.now().toString(36)}.png`;
+    const up = await sb.storage.from("proofs").upload(path, r.mask, { contentType: "image/png" });
+    if (up.error) return setMsg("Couldn't save the mask: " + up.error.message);
+    const { data } = await sb.from("customers").select("brand_print").eq("id", customerId).maybeSingle();
+    const bp = (data?.brand_print || {}) as Record<string, unknown>;
+    const { error } = await sb.from("customers").update({ brand_print: { ...bp, distress: { path, name: `From ${helper?.name || "a mockup"}`, layers: 3 } } }).eq("id", customerId);
+    if (error) return setMsg("Couldn't save the mask: " + error.message);
+    const { data: su } = await sb.storage.from("proofs").createSignedUrl(path, 3600);
+    if (su?.signedUrl) setBrandMask({ path, url: su.signedUrl, name: `From ${helper?.name || "a mockup"}`, layers: 3 });
+    setMsg("Saved as the customer's distress mask (Brand standards). Every logo of theirs can use it now.");
+  }
   /** Helper → Put on the mockup: each checked print saved to the customer's logos and put at its location */
   async function helperApply() {
     if (!helper) return;
@@ -1304,8 +1347,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const base = helper.name.replace(/\.(pdf|ai)$/i, "").replace(/_/g, " ");
       const made: { im: Imprint; d: Design }[] = [];
       for (const r of rows) {
-        const d = await uploadDesign(sb, { file: r.file, customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}`, by: u.user?.email || "" });
-        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}` } });
+        // distressed: the distressed picture is the logo, the clean one its "Distress: off"; the film stacks the mask (3 layers)
+        const dz = r.distress !== "none" && r.dfile;
+        const how = r.distress === "brand" ? `${brandMask?.name || "their mask"}, ${brandMask?.layers || 3} layers on the film (black composite film)` : r.distress === "file" ? "the texture in the file, 3 layers on the film (black composite film)" : "";
+        const d = await uploadDesign(sb, { file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: r.distress === "brand" ? brandMask?.path : "file", layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
+        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
@@ -1320,7 +1366,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       });
       setRasterOk((r) => ({ ...r, ...Object.fromEntries(made.map((m) => [m.d.id, true])) })); // drawn at 300 dpi off the vector art: no "picture file" warning
       setTab(sideOf(made[0].im.location));
-      helper.rows.forEach((r) => URL.revokeObjectURL(r.url));
+      helper.rows.forEach((r) => { URL.revokeObjectURL(r.url); if (r.durl) URL.revokeObjectURL(r.durl); });
       setHelper(null);
       setMsg(`Put ${made.map((m) => `${m.im.location} (${m.im.size})`).join(" and ")} on the mockup from ${helper.name}. Check the sizes against the art.`);
     } catch (e) { setHelper((h) => h && { ...h, busy: "", err: "Couldn't save the art: " + (e instanceof Error ? e.message : String(e)) }); }
@@ -2758,16 +2804,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
                       {" "}Check where each goes, its size and inks.
                     </p>
+                    {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
+                        want me to apply the mask to this mockup?") */}
+                    {brandMask && helper.rows.some((r) => r.mask) && (
+                      <div className="mk-help-know">
+                        <p>I know {custLabel(customers.find((c) => c.id === customerId)) || "this customer"}: their distress mask was on this art. I took it off and kept the art underneath. Put their mask back on this mockup?</p>
+                        <div className="row" style={{ gap: 6 }}>
+                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "brand") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "brand"))}>Yes, their mask</button>
+                          <button type="button" className={"btn sm" + (helper.rows.filter((r) => r.mask).every((r) => r.distress === "none") ? " primary" : "")} onClick={() => helper.rows.filter((r) => r.mask).forEach((r) => void helpDistress(r, "none"))}>No, keep it clean</button>
+                        </div>
+                      </div>
+                    )}
+                    {!brandMask && helper.rows.some((r) => r.mask) && <p className="faint mk-help-t">There&apos;s a distress texture over this art. I took it off; it&apos;s on each print below (Distress). Save it as their mask and it goes on every logo of theirs.</p>}
                     {helper.rows.map((r) => (
                       <div key={r.key} className={"mk-help-r" + (r.use ? "" : " off")}>
                         <label className="mk-help-use"><input type="checkbox" checked={r.use} onChange={(e) => helpSet(r.key, { use: e.target.checked })} /></label>
-                        <div className={"mk-help-pic" + (r.light ? " dark" : "")}><img src={r.url} alt={`${r.side} art`} /></div>
+                        <div className={"mk-help-pic" + (r.light ? " dark" : "")}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
                         <div className="mk-help-b">
                           <div className="row" style={{ gap: 6 }}>
                             <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>
                             <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
                           </div>
                           <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
+                          {(r.mask || brandMask) && <div className="mk-help-ds">
+                            <span className="faint">Distress</span>
+                            <select aria-label="Distress" value={r.distress} onChange={(e) => void helpDistress(r, e.target.value as HelpRow["distress"])}>
+                              <option value="none">None (clean)</option>
+                              {brandMask && <option value="brand">Their mask (brand standards)</option>}
+                              {r.mask && <option value="file">The texture in this file{r.maskPpi && r.maskPpi < 100 ? ` (low-res, ${r.maskPpi} ppi)` : ""}</option>}
+                            </select>
+                            {r.mask && !brandMask && customerId && <button type="button" className="lc-link" title="Saved in their brand standards: laid over every logo of theirs from now on" onClick={() => void saveBrandMask(r)}>Save as their mask</button>}
+                          </div>}
                           <div className="mk-help-inks">{helper.inkOpts.map((n) => { const on = r.inks.includes(n); return <button key={n} type="button" className={"chip" + (on ? " on" : "")} onClick={() => helpSet(r.key, { inks: on ? r.inks.filter((x) => x !== n) : [...r.inks, n] })}><i style={{ background: colorHex(n) || "#ccc" }} />{n}</button>; })}</div>
                         </div>
                       </div>

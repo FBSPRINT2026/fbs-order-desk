@@ -20,7 +20,8 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
-export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean }): Promise<Design> {
+export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
+  /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; note?: string } }): Promise<Design> {
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
   if (!opts.preview) { const cropped = await cropFileToArt(opts.file); if (cropped) opts = { ...opts, file: cropped }; }
   const key = crypto.randomUUID();
@@ -56,12 +57,18 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
       }
     } catch { /* not readable as shapes */ }
   }
+  // handed a clean picture (the Helper's distressed art): the distress is a layer, on or off
+  if (opts.clean) {
+    const path = `designs/${key}/clean-${safe(opts.clean.name.replace(/\.[^.]+$/, ""))}.png`;
+    const u = await sb.storage.from("proofs").upload(path, opts.clean, { contentType: opts.clean.type || "image/png" });
+    if (!u.error) { distressed = true; cleanPreview = path; }
+  }
   const { data, error } = await sb.from("designs").insert({
     customer_id: opts.customer_id, name: (opts.name || opts.file.name.replace(/\.[^.]+$/, "")).trim(),
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
     colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "", draft: !!opts.draft,
-    ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}) } } : {}),
+    ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}), ...(opts.distress ? { distress: opts.distress } : {}) } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);
   return data as Design;

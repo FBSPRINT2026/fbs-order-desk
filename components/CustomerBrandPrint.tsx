@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { BrandEdit } from "@/components/BrandAssistant";
 import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, uid, type BrandPrint, type BrandSize } from "@/lib/pricing";
+import { maskFromFile } from "@/lib/printavoArt";
 
 /**
  * Brand standards beyond colors (Oct 16, Nick): the customer's standard print sizes ("Peticolas' circle logo: 10.5" on
@@ -26,7 +27,24 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
     sb.from("designs").select("id, name, number").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("number", { ascending: false }).limit(200)
       .then(({ data }) => setLogos((data || []) as { id: string; name: string; number: number }[]));
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // their distress mask (Oct 22): shown small, uploaded as a PDF/AI of the texture alone or a picture of it
+  const [maskUrl, setMaskUrl] = useState("");
+  useEffect(() => {
+    const p = bp?.distress?.path; if (!p) { setMaskUrl(""); return; }
+    sb.storage.from("proofs").createSignedUrl(p, 3600).then(({ data }) => setMaskUrl(data?.signedUrl || ""));
+  }, [bp?.distress?.path]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!bp) return null;
+  const upMask = async (f: File) => {
+    setState("Reading the texture…");
+    try {
+      const m = await maskFromFile(f);
+      if (!m) { setState("No texture found in that file. Use the file with just the mask on it."); return; }
+      const path = `brand/${customerId}/distress-${Date.now().toString(36)}.png`;
+      const up = await sb.storage.from("proofs").upload(path, m, { contentType: "image/png" });
+      if (up.error) { setState("Couldn't save it: " + up.error.message); return; }
+      await save({ ...bp, distress: { path, name: f.name, layers: 3 } });
+    } catch (e) { setState("Couldn't read it: " + (e instanceof Error ? e.message : String(e))); }
+  };
 
   const save = async (next: BrandPrint) => {
     setBp(next);
@@ -47,6 +65,7 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
         {sizes.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">Print sizes</span><span>{sizes.map((r) => `${nameOf(r)}: ${r.width}" on the ${locLabel(r.location)}${r.note ? ` (${r.note})` : ""}`).join(" · ")}</span></div>}
         {how.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">On dark shirts</span><span>{how.join(", ")}</span></div>}
         {rules.length > 0 && <div className="bp-ro-r"><span className="bp-ro-l">Rules</span><span>{rules.join(" · ")}</span></div>}
+        {bp.distress?.path && <div className="bp-ro-r"><span className="bp-ro-l">Distress mask</span><span className="bp-mask">{maskUrl && <img src={maskUrl} alt="Distress mask" />}{bp.distress.name || "Their texture"} · {bp.distress.layers || 3} layers on the film</span></div>}
       </div>
     );
   }
@@ -84,6 +103,15 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
         <label className="check"><input type="checkbox" checked={!!bp.soft} onChange={(e) => save({ ...bp, soft: e.target.checked })} /> Soft hand additive</label>
         {hit === "fashion" && <label className="check"><input type="checkbox" checked={!!bp.distressedOnly} onChange={(e) => save({ ...bp, distressedOnly: e.target.checked })} /> Only for distressed logos <span className="faint">(marked on each logo)</span></label>}
       </div>
+      <div className="bp-sec">Distress mask</div>
+      <div className="bp-mask">
+        {bp.distress?.path ? <>{maskUrl && <img src={maskUrl} alt="Distress mask" />}<span>{bp.distress.name || "Their texture"}</span>
+          <label className="bp-w">Layers on the film <input type="number" min="1" max="6" step="1" aria-label="Layers on the film" defaultValue={bp.distress.layers || 3} onBlur={(e) => save({ ...bp, distress: { ...bp.distress!, layers: Math.min(6, Math.max(1, Math.round(+e.target.value || 3))) } })} /></label>
+          <button type="button" className="btn icon ghost sm" aria-label="Remove the distress mask" title="Remove (the file stays saved)" onClick={() => save({ ...bp, distress: undefined })}>✕</button></>
+          : <span className="faint">None</span>}
+        <label className="btn sm ghost">{bp.distress?.path ? "Replace…" : "Upload the mask…"}<input type="file" hidden accept=".pdf,.ai,image/*,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upMask(f); }} /></label>
+      </div>
+      <p className="faint bp-hint">Their scratched texture on its own (a PDF or AI with just the mask, or a picture of it). Laid over their art it becomes the distress: the shirt shows through. The mockup shows one layer; the film stacks it this many times.</p>
       <div className="bp-sec">Other rules</div>
       {(bp.rules || []).map((r, i) => (
         <div className="bp-rule" key={i + ":" + r}>

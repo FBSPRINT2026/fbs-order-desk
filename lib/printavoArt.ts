@@ -8,7 +8,8 @@ import { suggestInk } from "@/lib/inkColors";
  * is the art itself, on a clear background; each piece sitting on a shirt photo is one print. Its size and drop come
  * from where it sits on the photo (the same supplier photos the Mockup Creator uses: 1000 px wide, 34 px per inch).
  */
-export type ArtPiece = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; hex: string; ink: string };
+export type ArtPiece = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; hex: string; ink: string;
+  /** a texture laid over the art in the file (its distress), white = texture, the same size as `file`; and how sharp it is at print size */ mask?: File; maskPpi?: number };
 
 const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
@@ -39,17 +40,28 @@ export async function pdfPicture(buf: ArrayBuffer, width = 900): Promise<HTMLCan
  * Draws the page with the big photos skipped: a picture drawn wider than 30% of the page (the shirt photos) is left
  * out and its place on the page recorded. pdf.js's own scratch canvases (page sized) still go through.
  */
-async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?: { photos: Rect[]; scale: number }) {
+/**
+ * mode "art" (default): everything but the shirt photos. "vector": no pictures at all (the art's own shapes: a distress
+ * texture laid over it is left off, so the art comes out clean). "textures": only the pictures that aren't shirt photos
+ * (a distress texture: Peticolas' scratched mask), no shapes. `texPx`: the sharpest texture's own pixels per canvas pixel.
+ */
+async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?: { photos: Rect[]; scale: number }, mode: "art" | "vector" | "textures" = "art") {
   const vp = page.getViewport({ scale });
   const c = document.createElement("canvas");
   const W = crop ? Math.round(crop.x1 - crop.x0) : Math.round(vp.width), H = crop ? Math.round(crop.y1 - crop.y0) : Math.round(vp.height);
   c.width = W; c.height = H;
   const ctx = c.getContext("2d")!;
   const photos: Rect[] = [];
+  let texPx = 0;
+  const noop = () => {};
   const proxy = new Proxy(ctx, {
     get(t, p) {
+      // textures only: the shapes aren't painted (pictures, and pdf.js's own layer copies, still are)
+      if (mode === "textures" && (p === "fill" || p === "stroke" || p === "fillRect" || p === "strokeRect" || p === "fillText" || p === "strokeText")) return noop;
       if (p === "drawImage") return (...a: unknown[]) => {
         const src = a[0] as { width: number; height: number };
+        // a picture in the file is painted with 9 arguments; pdf.js's own layer copies (groups, masks) with 3
+        if (mode === "vector" && a.length >= 5) return;
         const [dx, dy, dw, dh] = a.length >= 9 ? (a.slice(5, 9) as number[]) : a.length >= 5 ? (a.slice(1, 5) as number[]) : [a[1] as number, a[2] as number, src.width, src.height];
         const m = t.getTransform();
         const xs = [dx, dx + dw].flatMap((x) => [dy, dy + dh].map((y) => m.a * x + m.c * y + m.e));
@@ -70,9 +82,11 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
             return Math.abs(q.x0 - r.x0) < tol && Math.abs(q.x1 - r.x1) < tol && Math.abs(q.y0 - r.y0) < tol && Math.abs(q.y1 - r.y1) < tol;
           });
           if (same) return;
+          if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
           return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
         }
         if (r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000) { photos.push(r); return; }
+        if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
         return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
       };
       const v = Reflect.get(t, p);
@@ -81,7 +95,50 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
     set(t, p, v) { return Reflect.set(t, p, v); },
   });
   await page.render({ canvasContext: proxy, viewport: vp, background: "rgba(0,0,0,0)", ...(crop ? { transform: [1, 0, 0, 1, -crop.x0, -crop.y0] } : {}) }).promise;
-  return { canvas: c, photos };
+  return { canvas: c, photos, texPx };
+}
+
+/** a texture layer (drawn alone) as a mask picture: white where the texture is, black where it isn't (opaque, gray =
+ *  how strong). Null when there's no texture there. */
+async function maskFile(c: HTMLCanvasElement, name: string): Promise<File | null> {
+  const x = c.getContext("2d", { willReadFrequently: true })!, img = x.getImageData(0, 0, c.width, c.height), px = img.data;
+  let on = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const v = Math.round((px[i + 3] / 255) * Math.max(px[i], px[i + 1], px[i + 2]));
+    if (v > 12) on++;
+    px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255;
+  }
+  if (on < (c.width * c.height) / 100) return null;
+  x.putImageData(img, 0, 0);
+  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+  return blob ? new File([blob], name, { type: "image/png" }) : null;
+}
+
+/**
+ * A distress mask file (a customer's: Peticolas_Film_Mask.pdf, the scratched texture alone): the texture as a mask
+ * picture (white = texture), cropped to it. PDF/AI (the texture pictures in it, at their own resolution) or a picture
+ * (white or see-through texture).
+ */
+export async function maskFromFile(f: File): Promise<File | null> {
+  if (/pdf|postscript|illustrator/i.test(f.type) || /\.(pdf|ai)$/i.test(f.name)) {
+    const page = await openPage(await f.arrayBuffer());
+    const v1 = page.getViewport({ scale: 1 });
+    // first at a small size to find how sharp the texture is, then at about its own resolution (at most 4000 px)
+    const look = await drawWithoutPhotos(page, 1, undefined, undefined, "textures");
+    const sc = Math.min(4000 / Math.max(v1.width, v1.height), Math.max(1, look.texPx || 2));
+    const t = await drawWithoutPhotos(page, sc, undefined, undefined, "textures");
+    const c = t.canvas, d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) if (d[(y * c.width + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < x0) return null;
+    const cc = document.createElement("canvas"); cc.width = x1 - x0 + 1; cc.height = y1 - y0 + 1;
+    cc.getContext("2d")!.drawImage(c, x0, y0, cc.width, cc.height, 0, 0, cc.width, cc.height);
+    return maskFile(cc, f.name.replace(/\.[^.]+$/, "") + " mask.png");
+  }
+  const bm = await createImageBitmap(f);
+  const c = document.createElement("canvas"); c.width = bm.width; c.height = bm.height;
+  c.getContext("2d")!.drawImage(bm, 0, 0);
+  return maskFile(c, f.name.replace(/\.[^.]+$/, "") + " mask.png");
 }
 
 /** a picture that's one flat color (sampled small): an artboard background, not art or a photo */
@@ -188,7 +245,11 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     const s2 = s1 * (want / (r.x1 - r.x0));
     const pad = 4 * (s2 / s1);
     const crop = { x0: (r.x0 * s2) / s1 - pad, y0: (r.y0 * s2) / s1 - pad, x1: (r.x1 * s2) / s1 + pad, y1: (r.y1 * s2) / s1 + pad };
-    const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 });
+    // the art's own shapes (clean), and any texture laid over it apart (the distress: Peticolas' scratched mask)
+    const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "vector");
+    const tex = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "textures");
+    const mask = await maskFile(tex.canvas, `${name} ${side} mask.png`).catch(() => null);
+    const maskPpi = mask && tex.texPx ? Math.round(tex.texPx * (hi.canvas.width / Math.max(0.1, widthIn))) : 0;
     // the shirt's color right around the print (a ring just outside it on the full page)
     const ring: number[][] = [];
     for (let d = 3; d <= 9; d += 3) for (let t = 0; t < 1; t += 0.02) {
@@ -221,7 +282,7 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     const blob = await new Promise<Blob | null>((res) => hi.canvas.toBlob(res, "image/png"));
     if (!blob) continue;
     const hex = mainHex(hi.canvas), sug = suggestInk(hex);
-    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name });
+    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, ...(mask ? { mask, maskPpi } : {}) });
   }
   return out;
 }
@@ -316,10 +377,10 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
       const widthIn = w / ppi, heightIn = h / ppi;
       // drawn again sharp (about 300 dpi at its size, at most 5000 px), the shirt's color made see-through
       const want = Math.min(5000, Math.max(800, widthIn * 300)), k = want / w, s2 = s * k, pad = 6;
-      const vp2 = page.getViewport({ scale: s2 });
-      const cc = document.createElement("canvas");
-      cc.width = Math.round(w * k + pad * 2); cc.height = Math.round(h * k + pad * 2);
-      await page.render({ canvasContext: cc.getContext("2d")!, viewport: vp2, background: "rgba(0,0,0,0)", transform: [1, 0, 0, 1, -(r.x0 * k - pad), -(r.y0 * k - pad)] }).promise;
+      const box = { x0: r.x0 * k - pad, y0: r.y0 * k - pad, x1: r.x1 * k + pad, y1: r.y1 * k + pad };
+      const cc = (await drawWithoutPhotos(page, s2, box, undefined, "vector")).canvas;
+      const tex = await drawWithoutPhotos(page, s2, box, undefined, "textures");
+      const mask = await maskFile(tex.canvas, `${name} mask.png`).catch(() => null);
       const cx2 = cc.getContext("2d", { willReadFrequently: true })!, img = cx2.getImageData(0, 0, cc.width, cc.height), px = img.data, lim = 40;
       for (let i = 0; i < px.length; i += 4) {
         if (!px[i + 3]) continue;
@@ -332,7 +393,7 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
       const side: "front" | "back" = shirts.length > 1 && si === shirts.length - 1 ? "back" : "front";
       const hex = mainHex(cc), sug = suggestInk(hex), q4 = (v: number) => Math.round(v * 4) / 4;
       const shirtHex = "#" + fill.map((v) => Math.min(255, v).toString(16).padStart(2, "0")).join("");
-      out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex });
+      out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex, ...(mask ? { mask, maskPpi: tex.texPx ? Math.round(tex.texPx * (cc.width / Math.max(0.1, widthIn))) : 0 } : {}) });
     }
   }
   return out;
@@ -426,7 +487,7 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
  * the logo on an empty page, no shirt photos). The first page, drawn on a clear background at about 3000 px and cropped
  * to the art. Null when the PDF has shirt photos (a mockup) or nothing on a clear background.
  */
-export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ file: File; ratio: number } | null> {
+export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ file: File; ratio: number; mask?: File } | null> {
   const doc = await openDoc(buf);
   // a sheet of labels (Little Groupies' "onesies_labels.pdf": 300 small pages of barcodes) is never the print art
   if (doc.numPages > 20) return null;
@@ -434,6 +495,25 @@ export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ f
   const vp1 = page.getViewport({ scale: 1 });
   if (Math.max(vp1.width, vp1.height) < 300 && doc.numPages > 2) return null;
   const scale = Math.min(3000 / Math.max(vp1.width, vp1.height), 8);
+  // vector art with a texture laid over it (Peticolas' logos with their scratched mask, Oct 22): the art clean, and the
+  // texture apart as its distress
+  {
+    const tex = await drawWithoutPhotos(page, scale, undefined, undefined, "textures");
+    const tm = await maskFile(tex.canvas, `${name} mask.png`).catch(() => null);
+    if (tm) {
+      const vec = (await drawWithoutPhotos(page, scale, undefined, undefined, "vector")).canvas;
+      const w = vec.width, h = vec.height, d = vec.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+      let n = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (d[(y * w + x) * 4 + 3] > 20) { n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (n > (w * h) / 4 * 0.02) {
+        x0 = Math.max(0, x0 - 4); y0 = Math.max(0, y0 - 4); x1 = Math.min(w - 1, x1 + 4); y1 = Math.min(h - 1, y1 + 4);
+        const crop = (src: CanvasImageSource) => { const cc = document.createElement("canvas"); cc.width = x1 - x0 + 1; cc.height = y1 - y0 + 1; cc.getContext("2d")!.drawImage(src, x0, y0, cc.width, cc.height, 0, 0, cc.width, cc.height); return cc; };
+        const art = crop(vec), mbm = await createImageBitmap(tm), mk = crop(mbm);
+        const [ab, mb] = await Promise.all([new Promise<Blob | null>((res) => art.toBlob(res, "image/png")), new Promise<Blob | null>((res) => mk.toBlob(res, "image/png"))]);
+        if (ab) return { file: new File([ab], `${name}.png`, { type: "image/png" }), ratio: art.height / art.width, ...(mb ? { mask: new File([mb], `${name} mask.png`, { type: "image/png" }) } : {}) };
+      }
+    }
+  }
   const { canvas: c0, photos } = await drawWithoutPhotos(page, scale);
   let c = c0;
   if (photos.length) {
