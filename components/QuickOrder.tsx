@@ -155,6 +155,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     }
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     const did: string[] = [];
+    /** each print's color count before our sheet's inks replaced it (the old job's or the paperwork's: "3 colors") */
+    const saidColors = new Map<string, number>();
     if (again.length) did.push(...again.map((x) => `You said: ${x}`));
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
     // several past jobs in one order (Hutchins T10A + T11A): all of them
@@ -323,6 +325,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             // our own mockup sheet: the size and inks as written on it, the art pulled off it (Oct 23, Nick on HALFF #32997:
             // "this is going to be our most common mockup… this actually has everything you need")
             const inks = [...new Set((pu.sheet.inks || []).map(stockName))];
+            if (+im.colors > 0) saidColors.set(im.id, +im.colors);
             setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}`);
             did.push(`${im.location}: from our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
             continue;
@@ -637,18 +640,22 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       // underbase?", "J1 had 2 colors; this work order says 3. Confirm 3rd ink"), so it's matched by what it's about and
       // the count it gives (one more than the inks named), never by its wording
       const ubQ = (t: string) => /colou?rs?\b|\binks?\b|underbase|screens?\b|\bpms\b/i.test(t);
+      // the counts a question gives: numbers, ordinals ("3rd screen color", "a third ink") and "one more / another / extra
+      // / missing" color (= one more than named)
+      const ORD: Record<string, number> = { second: 2, "2nd": 2, third: 3, "3rd": 3, fourth: 4, "4th": 4, fifth: 5, "5th": 5, sixth: 6, "6th": 6 };
+      const counts = (t: string, n: number) => [...nums(t), ...(t.match(/\b(second|2nd|third|3rd|fourth|4th|fifth|5th|sixth|6th)\b/gi) || []).map((w) => ORD[w.toLowerCase()]), ...(/\b(one more|another|extra|additional|missing|unnamed|not named)\b/i.test(t) ? [n + 1] : [])];
       const nums = (t: string) => (t.replace(/\([^)]*\)/g, " ").replace(/\b(pms|pantone)\s*\d+\s*[a-z]?\b/gi, " ").replace(/\b\d{3,4}\s?[cu]\b/gi, " ").match(/\b(1[0-2]|[1-9])\b/g) || []).map(Number);
       const drop = new Set<number>();
       for (const x of d.groups) {
         if (!x.lines.length || !x.lines.every((l) => notWhite(l.color))) continue;
         const shirt = x.lines[0].color;
-        const qs = (d.check || []).map((c, i) => ({ c, i })).filter(({ c }) => !c.local && ubQ(c.q) && (!c.about || sameName(c.about, x.name || "") || /whole|order|all/i.test(c.about)));
+        const qs = (d.check || []).map((c, i) => ({ c, i })).filter(({ c }) => !c.local && ubQ(c.q) && (!c.about || sameName(c.about, x.name || "") || !d!.groups.some((g2) => sameName(c.about, g2.name || ""))));
         for (const im of x.imprints) {
           if (im.method && im.method !== "screen") continue;
           const n = inkNames(im.inks || "").filter((t) => !/underbase/i.test(t)).length;
           if (!n || im.underbase === false) continue;
-          const asked = qs.filter(({ c }) => nums(c.q).includes(n + 1) && (!c.about || !/(front|back|sleeve|chest)/i.test(c.q) || new RegExp(im.location.split(/\s+/)[0], "i").test(c.q) || /whole|order|all/i.test(c.about)));
-          if (!asked.length && +im.colors !== n + 1) continue;
+          const asked = qs.filter(({ c }) => counts(c.q, n).includes(n + 1) && (!c.about || !/(front|back|sleeve|chest)/i.test(c.q) || new RegExp(im.location.split(/\s+/)[0], "i").test(c.q) || !d!.groups.some((g2) => sameName(c.about, g2.name || ""))));
+          if (!asked.length && +im.colors !== n + 1 && saidColors.get(im.id) !== n + 1) continue;
           asked.forEach(({ i }) => drop.add(i));
           const why = `${n + 1} colors on their paperwork = these ${n} + a white underbase (${String(shirt).toLowerCase().replace(/\b\w/g, (k) => k.toUpperCase())} shirt)`;
           ubOf.set(im.id, why);

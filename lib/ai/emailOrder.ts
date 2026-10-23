@@ -339,7 +339,7 @@ function tool(finishingIds: string[]) {
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
         } } },
         questions: { type: "array", items: { type: "string" }, description: "What we still need to ask the customer, in plain words" },
-        check_with_staff: { type: "array", description: "What staff must answer BEFORE the order is made (rule 11): contradictions, things you couldn't find or place. Empty when it all adds up.", items: { type: "object", properties: {
+        check_with_staff: { type: "array", description: "What staff must answer BEFORE the order is made (rule 11): contradictions, things you couldn't find or place. Empty when it all adds up. Never ask about a color count one more than the inks named on a shirt that isn't white: that extra color is the white underbase.", items: { type: "object", properties: {
           question: { type: "string", description: "ONE short question, 15 words at most, no explaining or background (Oct 23, Nick: the questions are \"very long-winded… it's not succinct\"). e.g. '\"Best fit for onesie\" on the work order: no onesies here. Ignore it?' or 'Neon Blue for \"NeonBlue\"?'" },
           guess: { type: "string", description: "What you'll do if they don't say otherwise: 8 words at most (e.g. 'Ignore the note', 'Gildan 64400 Neon Blue')" },
           about: { type: "string", description: "The name of the group it's about, exactly as you named it in groups (e.g. 'Variation 2'); empty when it's about the whole order" },
