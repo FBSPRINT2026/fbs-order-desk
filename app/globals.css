@@ -12264,3 +12264,13 @@ body.cu-resizing{cursor:col-resize;user-select:none}
   .mk-setup .mk-gar{flex:1 1 auto;min-width:0}
   .mk-setup .mk-gar-row:first-of-type{padding-top:0}
 }
+
+/* Helper rows fit the right panel (Oct 22, Nick: "these are overflowing") */
+.mk-help .panel-b{min-width:0;overflow:hidden}
+.mk-help-r{grid-template-columns:auto 64px minmax(0,1fr);gap:8px;overflow:hidden}
+.mk-help-pic{width:64px;height:64px;overflow:hidden}
+.mk-help-pic img{width:100%;height:100%;object-fit:contain;display:block}
+.mk-help-b select,.mk-help-b .row>select{width:100%;min-width:0}
+.mk-help-b>.row{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.mk-help-inks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-help-use{padding-top:22px}

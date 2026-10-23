@@ -62,6 +62,8 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
         const src = a[0] as { width: number; height: number };
         // a picture in the file is painted with 9 arguments; pdf.js's own layer copies (groups, masks) with 3
         if (mode === "vector" && a.length >= 5) return;
+        // textures only: a layer copy holds shapes drawn elsewhere (Mambo's grouped art), not a texture
+        if (mode === "textures" && a.length < 5) return;
         const [dx, dy, dw, dh] = a.length >= 9 ? (a.slice(5, 9) as number[]) : a.length >= 5 ? (a.slice(1, 5) as number[]) : [a[1] as number, a[2] as number, src.width, src.height];
         const m = t.getTransform();
         const xs = [dx, dx + dw].flatMap((x) => [dy, dy + dh].map((y) => m.a * x + m.c * y + m.e));
@@ -103,13 +105,15 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
  *  how strong). Null when there's no texture there. */
 async function maskFile(c: HTMLCanvasElement, name: string): Promise<File | null> {
   const x = c.getContext("2d", { willReadFrequently: true })!, img = x.getImageData(0, 0, c.width, c.height), px = img.data;
-  let on = 0;
+  let on = 0, seen = 0, mid = 0;
   for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] > 8) { seen++; if (px[i + 3] > 20 && px[i + 3] < 235) mid++; }
     const v = Math.round((px[i + 3] / 255) * Math.max(px[i], px[i + 1], px[i + 2]));
     if (v > 12) on++;
     px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255;
   }
-  if (on < (c.width * c.height) / 100) return null;
+  // a texture is see-through in between (a scratched mask), not a solid picture (a placed logo)
+  if (on < (c.width * c.height) / 100 || mid < seen * 0.25) return null;
   x.putImageData(img, 0, 0);
   const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
   return blob ? new File([blob], name, { type: "image/png" }) : null;
@@ -217,6 +221,8 @@ function mergeRects(rs: Rect[], gap: number): Rect[] {
 
 export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /** join bits closer than this many inches into one print */ mergeIn?: number } = {}): Promise<ArtPiece[]> {
   const page = await openPage(buf);
+  // one of our blank templates filled in (the sized proof, the race sheet): read as drawn shirts, not photos
+  if (await templateFor(page, 1).catch(() => null)) return [];
   // 1. a quick look: where the photos and the art are
   const s1 = 3;
   const look = await drawWithoutPhotos(page, s1);
@@ -316,7 +322,11 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
   // every page (our sized proof: the front on page 1, the back and sleeves on page 2); one shirt a page = front, then back
   const doc = await openDoc(buf);
   const per: { n: number; got: (ArtPiece & { shirtHex: string; shirts: number })[] }[] = [];
-  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) per.push({ n, got: await drawnPage(await doc.getPage(n), name).catch(() => []) });
+  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
+    const page = await doc.getPage(n);
+    const tpl = await templateFor(page, n).catch(() => null);
+    per.push({ n, got: await drawnPage(page, name, tpl).catch((e) => { console.warn("drawnPage", n, e); return []; }) });
+  }
   const withShirt = per.filter((p) => p.got.length);
   const onePerPage = withShirt.length > 1 && withShirt.every((p) => p.got.every((g) => g.shirts === 1));
   return withShirt.flatMap((p, pi) => p.got.map(({ shirts: _s, ...g }) => (onePerPage ? { ...g, side: (pi === 0 ? "front" : "back") as "front" | "back" } : g)));
@@ -329,15 +339,78 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
  * art is left: the shirt and its collar, seam and hem lines, and whatever sits off the shirts (the neck tag box, the
  * scale ruler, the labels, the standard imprint colors chart, the sleeve shapes).
  */
-async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
+/**
+ * Our blank mockup templates (Oct 22, Nick: "here are our blank templates that we used over the years… you can lock
+ * anything on these when you're importing from these files, and the stuff sitting on top you pull"): a file the same
+ * page size as one (the FBS sized proof, adult and youth medium; the race shirt sheet) has that template's own drawing
+ * (shirt lines, collar, seams, hem, sleeves, ruler, labels, colors chart) taken away, so only what was put on top is art.
+ * Same-size templates: the one whose drawing shows in the file the most.
+ */
+const TEMPLATES = ["/mockup-templates/fbs-adult.pdf", "/mockup-templates/fbs-youth-medium.pdf", "/mockup-templates/race-shirt-blank.pdf"];
+let tplDocs: Promise<Doc[]> | null = null;
+const loadTemplates = () => (tplDocs ||= Promise.all(TEMPLATES.map(async (u) => { try { const r = await fetch(u); return r.ok ? await openDoc(await r.arrayBuffer()) : null; } catch { return null; } })).then((ds) => ds.filter(Boolean) as Doc[]));
+/** the template's drawing on a page, as a mask: not the paper, not its shirt's color */
+async function tplInk(page: Page, scale: number, crop?: Rect) {
+  const vp = page.getViewport({ scale });
+  const W = crop ? Math.round(crop.x1 - crop.x0) : Math.round(vp.width), H = crop ? Math.round(crop.y1 - crop.y0) : Math.round(vp.height);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)", ...(crop ? { transform: [1, 0, 0, 1, -crop.x0, -crop.y0] } : {}) }).promise;
+  const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  const n = new Map<number, number>();
+  for (let i = 0; i < d.length; i += 4 * 7) { if (d[i] > 232 && d[i + 1] > 232 && d[i + 2] > 232) continue; const k = ((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3); n.set(k, (n.get(k) || 0) + 1); }
+  const top = [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? -1;
+  const fill = top < 0 ? [255, 255, 255] : [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+  const m = new Uint8Array(W * H);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    if (d[i] > 232 && d[i + 1] > 232 && d[i + 2] > 232) continue;
+    if (Math.hypot(d[i] - fill[0], d[i + 1] - fill[1], d[i + 2] - fill[2]) < 30) continue;
+    m[j] = 1;
+  }
+  return { m, W, H, d };
+}
+/** grow a mask by r pixels (square) */
+function grow(m: Uint8Array, W: number, H: number, r: number) {
+  const a = new Uint8Array(W * H), b = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) { let last = -1e9; for (let x = 0; x < W; x++) { if (m[y * W + x]) last = x; if (x - last <= r) a[y * W + x] = 1; } last = 1e9; for (let x = W - 1; x >= 0; x--) { if (m[y * W + x]) last = x; if (last - x <= r) a[y * W + x] = 1; } }
+  for (let x = 0; x < W; x++) { let last = -1e9; for (let y = 0; y < H; y++) { if (a[y * W + x]) last = y; if (y - last <= r) b[y * W + x] = 1; } last = 1e9; for (let y = H - 1; y >= 0; y--) { if (a[y * W + x]) last = y; if (last - y <= r) b[y * W + x] = 1; } }
+  return b;
+}
+async function templateFor(page: Page, n: number): Promise<Page | null> {
+  const v = page.getViewport({ scale: 1 });
+  const docs = await loadTemplates();
+  const same: Page[] = [];
+  for (const d of docs) {
+    if (d.numPages < n) continue;
+    const tp = await d.getPage(n), tv = tp.getViewport({ scale: 1 });
+    if (Math.abs(tv.width - v.width) < 2 && Math.abs(tv.height - v.height) < 2) same.push(tp);
+  }
+  if (same.length < 2) return same[0] || null;
+  // the template whose drawing is in the file: at a small size, how much of its drawing the file has too
+  const sc = 600 / Math.max(v.width, v.height);
+  const f = await tplInk(page, sc);
+  let best: Page | null = null, bs = -1;
+  for (const tp of same) {
+    const t = await tplInk(tp, sc);
+    let hit = 0, all = 0;
+    for (let i = 0; i < t.m.length; i++) if (t.m[i]) { all++; if (f.m[i]) hit++; }
+    const sc2 = all ? hit / all : 0;
+    if (sc2 > bs) { bs = sc2; best = tp; }
+  }
+  return bs > 0.4 ? best : null;
+}
+
+async function drawnPage(page: Page, name: string, tpl: Page | null = null): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
   const v1 = page.getViewport({ scale: 1 });
   const sized = Math.max(v1.width, v1.height) / 72 >= 20;
-  const s = Math.min(6, 1600 / Math.max(v1.width, v1.height));
+  // sharp enough to tell a seam line from art (about 50 px an inch on a real-size page, at most ~5 million pixels)
+  const s = Math.min(6, Math.sqrt(5e6 / (v1.width * v1.height)));
   const vp = page.getViewport({ scale: s });
   const W = Math.round(vp.width), H = Math.round(vp.height);
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
   const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  // the template's own drawing, grown a little (its lines' soft edges): never art
+  const tm = tpl ? await tplInk(tpl, s).then((t) => (t.W === W && t.H === H ? grow(t.m, W, H, 2) : null)).catch(() => null) : null;
   // the page around the shirts: light pixels reached from the edges
   const outside = new Uint8Array(W * H), st: number[] = [];
   const light = (i: number) => d[i * 4] > 232 && d[i * 4 + 1] > 232 && d[i * 4 + 2] > 232;
@@ -382,7 +455,7 @@ async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtH
     // art = not the shirt's color; its outline = those bits that touch the page around it (spread through each other)
     const art = new Uint8Array(W * H), line = new Uint8Array(W * H), q: number[] = [];
     for (let y = sh.y0; y <= sh.y1; y++) for (let x = sh.x0; x <= sh.x1; x++) {
-      const i = y * W + x; if (lab[i] !== sh.id || !far(i, 60)) continue;
+      const i = y * W + x; if (lab[i] !== sh.id || !far(i, 60) || (tm && tm[i])) continue;
       art[i] = 1;
       if ((x > 0 && outside[i - 1]) || (x < W - 1 && outside[i + 1]) || (y > 0 && outside[i - W]) || (y < H - 1 && outside[i + W])) { line[i] = 1; q.push(i); }
     }
@@ -391,6 +464,25 @@ async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtH
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
         const j = yy * W + xx; if (art[j] && !line[j]) { line[j] = 1; q.push(j); }
+      }
+    }
+    // lines drawn on the shirt (a collar, a sleeve seam, a hem; no template to take them off): bits so thin nothing of
+    // them is left when shrunk by about 0.03" are lines, not art (letters and logos are thicker)
+    {
+      const keepA = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) if (art[i] && !line[i]) keepA[i] = 1;
+      const r = Math.max(1, Math.round(0.03 * ppi));
+      // shrink = not grown from the outside
+      const inv = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) inv[i] = keepA[i] ? 0 : 1;
+      const core = grow(inv, W, H, r);
+      const seen = new Uint8Array(W * H);
+      for (let i0 = 0; i0 < W * H; i0++) {
+        if (!keepA[i0] || seen[i0]) continue;
+        const q = [i0], comp: number[] = []; seen[i0] = 1; let thick = false;
+        while (q.length) {
+          const i = q.pop()!, x = i % W, y = (i / W) | 0; comp.push(i); if (!core[i]) thick = true;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const j = yy * W + xx; if (keepA[j] && !seen[j]) { seen[j] = 1; q.push(j); } }
+        }
+        if (!thick) for (const i of comp) line[i] = 1;
       }
     }
     const m = document.createElement("canvas"); m.width = W; m.height = H;
@@ -423,8 +515,12 @@ async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtH
         if (inkPx(cc) < 0.5 * inkPx(all)) { cc = all; mask = null; }
       }
       const cx2 = cc.getContext("2d", { willReadFrequently: true })!, img = cx2.getImageData(0, 0, cc.width, cc.height), px = img.data, lim = 40;
+      // the template's lines inside this box, where nothing covers them (the same color there as the template's)
+      const tc = tpl ? await tplInk(tpl, s2, box).catch(() => null) : null;
+      const tg = tc && tc.W === cc.width && tc.H === cc.height ? grow(tc.m, tc.W, tc.H, 2) : null;
       for (let i = 0; i < px.length; i += 4) {
         if (!px[i + 3]) continue;
+        if (tg && tc && tg[i / 4] && Math.hypot(px[i] - tc.d[i], px[i + 1] - tc.d[i + 1], px[i + 2] - tc.d[i + 2]) < 70) { px[i + 3] = 0; continue; }
         const dist = Math.hypot(px[i] - fill[0], px[i + 1] - fill[1], px[i + 2] - fill[2]);
         if (dist < 2 * lim) px[i + 3] = Math.round(px[i + 3] * Math.max(0, (dist - lim) / lim));
       }
@@ -438,6 +534,30 @@ async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtH
     }
   }
   return out;
+}
+
+/**
+ * What our sized proof says in its own words, per print (Oct 22, Nick: "you still have to read the mockups… for colors
+ * and size and imprints"): "Front Imprint · SIZE: W 11" H 11" · COLORS 1. BLACK…". The blank template's untouched
+ * defaults (all BLACK, NA, a 0" size) are left out.
+ */
+export async function proofNotes(buf: ArrayBuffer): Promise<{ where: string; w?: number; h?: number; colors: string[] }[]> {
+  try {
+    const doc = await openDoc(buf), out: { where: string; w?: number; h?: number; colors: string[] }[] = [];
+    for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
+      const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
+      const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
+      const re = /(Front|Back|Left Sleeve|Right Sleeve|Sleeve)\s*Imprint\s*SIZE:?\s*W\s*([\d.]+)\D{0,4}H\s*([\d.]+)\D{0,3}\s*COLORS?:?\s*((?:\d+\.\s*[A-Za-z0-9#&/ -]+?\s*)+?)(?=(?:Front|Back|Left|Right|Sleeve|STANDARD|The above|$))/gi;
+      for (const m of t.matchAll(re)) {
+        const colors = [...m[4].matchAll(/\d+\.\s*([A-Za-z0-9#&/ -]+?)(?=\s*\d+\.|$)/g)].map((x) => x[1].trim()).filter((c) => c && !/^NA$/i.test(c));
+        const allBlack = colors.length >= 5 && colors.every((c) => /^black$/i.test(c));
+        const w = +m[2], h = +m[3];
+        const e = { where: m[1].replace(/\b\w/g, (c) => c.toUpperCase()), ...(w > 0 ? { w, h } : {}), colors: allBlack ? [] : [...new Set(colors)] };
+        if (e.w || e.colors.length) out.push(e);
+      }
+    }
+    return out;
+  } catch { return []; }
 }
 
 /** PMS colors written on the page (a mockup's swatches: "PMS 283C", "PMS 1625 C (30%)"), as "PMS 283 C" */

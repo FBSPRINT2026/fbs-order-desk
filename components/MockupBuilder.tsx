@@ -19,7 +19,7 @@ import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
-import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage, proofNotes } from "@/lib/printavoArt";
 import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -347,7 +347,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (su?.signedUrl) setBrandMask({ path: d.path, url: su.signedUrl, name: d.name || "their mask", layers: d.layers || 3 });
     });
   }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string }>(null);
+  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[] }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const helpIn = useRef<HTMLInputElement>(null);
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
@@ -1309,7 +1309,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         rows.push(row);
         taken.add(location);
       }
-      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])] });
+      const notes = await proofNotes(buf.slice(0)).catch(() => []);
+      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes });
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
@@ -2966,6 +2967,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
                       {" "}Check where each goes, its size and inks.
                     </p>
+                    {(helper.notes || []).length > 0 && <p className="faint mk-help-t">The proof says: {helper.notes!.map((n) => `${n.where}${n.w ? ` ${n.w}" × ${n.h}"` : ""}${n.colors.length ? ` (${n.colors.join(", ")})` : ""}`).join("; ")}.</p>}
                     {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
                         want me to apply the mask to this mockup?") */}
                     {brandMask && helper.rows.some((r) => r.mask) && (
