@@ -669,7 +669,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setTimeout(() => {
       const el = document.querySelector(`[data-imp="${CSS.escape(id)}"]`) as HTMLElement | null;
       if (!el) return;
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      // never the page itself: the logo is being clicked or dragged on the shirt, so the window stays put (Oct 22, Nick:
+      // "you click it, it moves the whole browser down to that art"); only a panel that scrolls on its own brings it in
+      let box = el.parentElement;
+      while (box && box !== document.body) {
+        const o = getComputedStyle(box).overflowY;
+        if ((o === "auto" || o === "scroll") && box.scrollHeight > box.clientHeight) break;
+        box = box.parentElement;
+      }
+      if (box && box !== document.body) {
+        const b = box.getBoundingClientRect(), r = el.getBoundingClientRect();
+        if (r.top < b.top) box.scrollBy({ top: r.top - b.top - 8, behavior: "smooth" });
+        else if (r.bottom > b.bottom) box.scrollBy({ top: r.bottom - b.bottom + 8, behavior: "smooth" });
+      }
       el.classList.remove("mk-imp-flash"); void el.offsetWidth; el.classList.add("mk-imp-flash");
     }, 60);
   }
