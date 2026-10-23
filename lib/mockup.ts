@@ -240,10 +240,10 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   }
   const md = x.createImageData(W, H);
   for (let p = 0; p < W * H; p++) { md.data[p * 4 + 3] = bg[p] ? 0 : 255; }
+  const maskData = md;
   const mc = document.createElement("canvas");
   mc.width = W; mc.height = H;
-  mc.getContext("2d")!.putImageData(md, 0, 0);
-  const mask = mc.toDataURL("image/png");
+  let mask = "";
 
   const L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
   let T = -1, B = -1;
@@ -269,7 +269,51 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   // a short-sleeve tee that reads wider than its height: the photo is still shown at its height (Oct 21, Nick: the
   // adult A4 came out "really small" when the whole photo was shrunk to its chest), and prints are sized by the chest
   // (only a little wider: much wider is sleeves hanging beside the body, not a boxy chest)
-  const ps = Math.abs(sw - sh) > 0.1 && !cut && ((opts.tee && sw > sh && sw < sh * 1.3) || (opts.kid && sw < sh)) ? sw : s;
+  let ps = Math.abs(sw - sh) > 0.1 && !cut && ((opts.tee && sw > sh && sw < sh * 1.3) || (opts.kid && sw < sh)) ? sw : s;
+  // a hood: the photo's height runs from the top of the hood, so a hoodie read as a taller (bigger) garment and its
+  // prints came out too big (Oct 23, Nick on Bella 3719/3739 next to the 3945 crew: "it shouldn't be that big on the
+  // hoodies"). Where the shoulders reach most of the width is found; a crew gets there about 8.5% of the way down, a hood
+  // pushes it to 15–18%. The garment is measured from where its shoulders would start without the hood.
+  let hoodTo = -1;
+  if (!cut && !opts.tee && !opts.kid) {
+    let mx = 0; for (let y = T; y <= B; y++) if (L[y] >= 0) mx = Math.max(mx, R[y] - L[y]);
+    let yS = -1; for (let y = T; y <= B; y++) if (L[y] >= 0 && R[y] - L[y] >= 0.7 * mx) { yS = y; break; }
+    const off = yS > 0 ? (yS - T) / (B - T) : 0;
+    if (off > 0.13 && off < 0.3) { const hEff = (B - yS) / (1 - 0.085); ps = Math.min(ps, hEff / ref.h); hoodTo = yS; }
+  }
+  // a hoodie's back: the hood lies over the top of the back, so a print there goes behind it (Oct 23, Nick: "instead of
+  // dropping the print way down lower below the hood… clip the art only in the mockup so that it appears to go behind
+  // the hood"). The hood's bottom edge is the dark shadow line it casts across the back; everything above it, across the
+  // hood, is taken out of the shirt's outline, which is what every print is cut to.
+  if (hoodTo > 0 && view === "back") {
+    const cxh = (L[hoodTo] + R[hoodTo]) / 2, yA = Math.round(T + 0.08 * (B - T)), yB = Math.round(T + 0.36 * (B - T));
+    const lum = (X: number, y: number) => { let v = 0; for (let k = -1; k <= 1; k++) { const p = ((y + k) * W + X) * 4; v += d[p] + d[p + 1] + d[p + 2]; } return v / 3; };
+    const pts = new Map<number, number>();
+    for (let X = Math.round(cxh - 0.3 * (R[hoodTo] - L[hoodTo])); X <= Math.round(cxh + 0.3 * (R[hoodTo] - L[hoodTo])); X += 4) {
+      const vals: number[] = []; let best = -1, bv = Infinity;
+      for (let y = yA; y <= yB; y++) { if (bg[y * W + X]) continue; const v = lum(X, y); vals.push(v); if (v < bv) { bv = v; best = y; } }
+      if (vals.length < 20) continue;
+      const med = vals.slice().sort((a, b) => a - b)[vals.length >> 1];
+      if (bv < med * 0.62 && med - bv > 20) pts.set(X, best);
+    }
+    // the edge across the middle, kept where it's continuous (a fold or a drawstring isn't the hood)
+    const xs = [...pts.keys()].sort((a, b) => a - b);
+    if (xs.length >= 12) {
+      const ys = xs.map((X) => pts.get(X)!), sm = ys.map((_, i) => { const w = ys.slice(Math.max(0, i - 3), i + 4).sort((a, b) => a - b); return w[w.length >> 1]; });
+      const mid = xs.findIndex((X) => X >= cxh);
+      let a = Math.max(0, mid), b = a;
+      while (a > 0 && Math.abs(sm[a - 1] - sm[a]) < 14 && xs[a] - xs[a - 1] <= 12) a--;
+      while (b < xs.length - 1 && Math.abs(sm[b + 1] - sm[b]) < 14 && xs[b + 1] - xs[b] <= 12) b++;
+      if (xs[b] - xs[a] > 0.25 * (R[hoodTo] - L[hoodTo])) {
+        for (let i = a; i < b; i++) for (let X = xs[i]; X < xs[i + 1]; X++) {
+          const yE = Math.round(sm[i] + ((sm[i + 1] - sm[i]) * (X - xs[i])) / (xs[i + 1] - xs[i]));
+          for (let y = 0; y <= yE; y++) maskData.data[(y * W + X) * 4 + 3] = 0;
+        }
+      }
+    }
+  }
+  mc.getContext("2d")!.putImageData(maskData, 0, 0);
+  mask = mc.toDataURL("image/png");
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;
