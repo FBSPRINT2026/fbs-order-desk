@@ -12479,3 +12479,21 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .rv .rv-same .rv-pic{height:70px}
 .rv .rv-same figcaption{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.35}
 .rv .rv-same figcaption b{color:var(--ink)}
+/* the check: each print's size and inks, and how they were arrived at */
+.rv .rv-spec{margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface-2,#f7f8fa)}
+.rv .rv-last{margin:0 0 6px;font-size:12px;color:var(--ink-3)}
+.rv .rv-fields{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.rv .rv-f{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}
+.rv .rv-f > span:first-child{font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
+.rv .rv-f input{height:36px;border:1px solid var(--line);border-radius:var(--r,6px);padding:0 8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.rv .rv-f input[type=number]{width:72px}
+.rv .rv-f em{font-style:normal}
+.rv .rv-f-inks{flex:1 1 220px}
+.rv .rv-f-inks input{flex:1;min-width:120px}
+.rv .rv-sws{display:inline-flex;gap:3px}
+.rv .rv-sws i{width:14px;height:14px;border-radius:50%;border:1px solid var(--line)}
+.rv .rv-why{margin:6px 0 0;font-size:12px;color:var(--ink-3)}
+.rv .rv-flag{margin:6px 0 0;font-size:12.5px;color:var(--warn)}
+.rv .rv-same-inks{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;color:var(--ink-3)}
+.rv .rv-sum{margin:10px 0 0;padding:8px 10px;border-radius:var(--r,6px);background:var(--surface-2,#f3f4f6);font-size:13.5px;color:var(--ink);display:flex;flex-direction:column;gap:2px}
+.rv .rv-sum .faint{font-size:12px}

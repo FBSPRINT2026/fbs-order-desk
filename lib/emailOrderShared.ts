@@ -55,6 +55,8 @@ export type EODraft = {
   /** what doesn't add up, asked of staff BEFORE the order is made (Oct 22, Nick: "when there's a clear contradiction, or I
    *  can't find this product… you need to just ask… then remember it moving forward"): the question and the AI's guess */
   check?: { q: string; guess: string; /** the group it's about (its name) */ about?: string; /** answers to click, the first the guess; a file's are picked by its picture */ choices?: { label: string; path?: string; name?: string }[]; /** asked by Create order itself (not the reader), answered without reading it again */ local?: string }[];
+  /** each print's size and inks at the check (by print id), with how they were arrived at (Create order fills it) */
+  specs?: Record<string, { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } }>;
   /** the file and page that pictures each group's print (by group name), shown beside the art at the check */
   shown?: { about: string; path: string; name: string; page: number }[];
   /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */

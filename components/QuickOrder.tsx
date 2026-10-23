@@ -56,7 +56,9 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  confirm it: hey, this is a customer mockup with sizing and information") */
 /** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
  *  and whether to remember it for this customer */
-type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string> };
+type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string>; /** each print's size and inks as the check left them */ specs?: Record<string, Spec> };
+/** a print's size and inks at the check, and how they were arrived at */
+type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
 type ReviewAsk = { d: EODraft; customer: string; again: boolean; resolve: (a: ReviewAns) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
@@ -497,6 +499,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
     }
     guard();
+    // how each print's size and inks were arrived at, shown beside them at the check (Oct 23, Nick: "you have to say
+    // something about how you got there… last time on the mock-up we used these dimensions, or the PO says this… it says
+    // best fit, I'm thinking 10 inches")
+    const howGot = new Map<string, Spec>();
+    const whyOf = (id: string) => { if (!howGot.has(id)) howGot.set(id, {}); return howGot.get(id)!; };
     // a print done like a past job that didn't keep its size (Printavo never did): measured off that job's mockup with the
     // Helper, else asked at the check (Oct 23, Nick on #40113: "you should have used the previous order to size the back
     // art or ask that question")
@@ -520,6 +527,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           }
           if (said) {
             w = said.w;
+            Object.assign(whyOf(im.id), { sizeWhy: `${im.sameAs.label}'s mockup sheet: ${side[0].toUpperCase() + side.slice(1)} Imprint W ${said.w}"${said.h ? ` × H ${said.h}"` : ""}`, last: `Last time (${im.sameAs.label.replace(/^(#\d+).*/, "$1")}): ${said.w}" wide${said.inks?.length ? ` · ${said.inks.map(stockName).join(", ")}` : ""}`, lastW: said.w, ...(said.h ? { lastH: said.h } : {}) });
+            if (said.inks?.length) whyOf(im.id).inksWhy = `${im.sameAs.label.replace(/^(#\d+).*/, "$1")}'s sheet: ${said.inks.join(", ")}`;
             // the inks it printed in, as the sheet lists them ("1. WHITE 2. SCARLET RED"): ours by name
             if (said.inks?.length) {
               const names = [...new Set(said.inks.map(stockName))], id0 = im.id;
@@ -539,6 +548,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const id = im.id;
       if (w > 0) {
         const how = dropIn >= 0 ? "measured" : "written on it";
+        if (dropIn >= 0) whyOf(id).sizeWhy = `Measured on ${im.sameAs.label.replace(/^(#\d+).*/, "$1")}'s mockup`;
         d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, size: `${w}" wide`, ...(dropIn >= 0 ? { drop: String(dropIn) } : {}), notes: [z.notes, `Size from ${im.sameAs!.label}'s mockup: ${w}" wide${dropIn >= 0 ? `, ${dropIn}" below the collar` : ""} (${how})`].filter(Boolean).join(". ").slice(0, 300) })) })) };
         did.push(`${im.location}: ${w}" wide, ${how} on ${im.sameAs.label}'s mockup`);
       } else {
@@ -548,7 +558,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // art on a solid box (Oct 23, Nick on Tongue in Cheek: "do I remove the background and make it a two-color print?
     // Because it's on a black shirt"): the box found on the art's picture, its other colors counted without the shirt's,
     // and asked at the check, with taking it out as the guess
-    const boxedOut: { group: string; location: string }[] = [], artInks = new Map<string, { name: string; hex: string }[]>();
+    const boxedOut: { group: string; location: string }[] = [], artInks = new Map<string, { name: string; hex: string }[]>(), ratioOf = new Map<string, number>();
     for (const x of d.groups) {
       const shirt = guessHex(x.lines.find((l) => l.color)?.color || "White"), shirtName = x.lines.find((l) => l.color)?.color || "white";
       for (const im of x.imprints) {
@@ -558,6 +568,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         guard();
         if (!b0) continue;
         artInks.set(im.id, b0.inks);
+        if (b0.ratio) ratioOf.set(im.id, b0.ratio);
         if (!b0.box) continue;
         const b = { ...b0.box, inks: b0.inks.map((k) => k.name) };
         const n = b.inks.length, list = b.inks.join(", ");
@@ -603,7 +614,26 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const names = [...new Set(picks)], id = im.id;
         d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, inks: names.join(", "), colors: names.length, notes: [z.notes, `Same inks as the ${ref.location} (${names.join(", ")}): none were named for this print`].filter(Boolean).join(". ").slice(0, 300) })) })) };
         did.push(`${im.location}: the same inks as the ${ref.location} (${names.join(", ")})`);
+        whyOf(id).inksWhy = `Same as the ${ref.location}: nothing named for this print`;
       }
+    }
+    // every print's size and inks, with how they were arrived at, for the check (whatever it says there is what's made)
+    {
+      const specs: Record<string, Spec> = {};
+      for (const x of d.groups) for (const im of x.imprints) {
+        const sp: Spec = { ...(howGot.get(im.id) || {}) }, w = parseFloat(String(im.size || "")), r = ratioOf.get(im.id);
+        if (w > 0) { sp.size = w; sp.sizeWhy ||= im.sizeFrom === "customer" ? "Their PO or email gives this size" : im.aiPlace ? "Read off their mockup" : "From the order"; }
+        else { const rule = sizeRule(im.location, r); sp.size = rule.w; sp.sizeWhy = `${/best fit/i.test(im.notes || "") ? `"Best fit" on their paperwork: ` : ""}${rule.why}`; }
+        if (im.inks && !/simulated/i.test(im.inks)) { sp.inks = im.inks; sp.inksWhy ||= "Named on their paperwork"; }
+        else { const a = artInks.get(im.id); if (a?.length) { sp.inks = a.map((k) => k.name).join(", "); sp.inksWhy = "Read off the art (the shirt's own color left out)"; } }
+        // the new art shaped differently from last time's (an extra circle on the right): a bigger size suggested
+        if (sp.lastW && sp.lastH && r) {
+          const was = sp.lastW / sp.lastH, now = 1 / r;
+          if (now > was * 1.12) { const sug = Math.round(sp.lastW * (now / was) * 4) / 4; if (sug <= spotFor(im.location).maxW) sp.flag = { text: `This art is wider than ${im.sameAs?.label.replace(/^(#\d+).*/, "$1") || "last time"}'s (${sp.lastW}" × ${sp.lastH}"). Same ${sp.lastW}", or ${sug}"?`, size: sug }; }
+        }
+        specs[im.id] = sp;
+      }
+      d = { ...d, specs };
     }
     // the check, at the end, with pictures (Oct 23, Nick: "you don't ask until you get to the end and you've read all the
     // data and we've identified all the mockups and work orders… maybe it would be more visual"): each group as a card,
@@ -626,6 +656,14 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`${y0(d, id)}: ${keep ? `the ${bgName.toLowerCase()} box prints too (${n + 1} colors)` : `${bgName.toLowerCase()} box taken out, ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`}`);
       }
       const ans = rv.answers.filter((x) => !localOf.has(x.q));
+      // the size and inks as the check shows them: that's what's made
+      for (const [id, sp] of Object.entries(rv.specs || {})) {
+        const was = d.specs?.[id];
+        const inks = (sp.inks || "").split(/\s*,\s*/).map((t) => t.trim()).filter(Boolean).map(stockName);
+        const changed = !!was && (was.size !== sp.size || (was.inks || "") !== (sp.inks || ""));
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, ...(sp.size && sp.size > 0 ? { size: `${sp.size}" wide`, ...(changed ? { sizeFrom: "staff" as const } : {}) } : {}), ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}), ...(changed ? { notes: [z.notes, `Set at the check: ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`].filter(Boolean).join(". ").slice(0, 300) } : {}) })) })) };
+        if (changed) did.push(`${y0(d, id)}: you set ${sp.size}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
+      }
       // a different logo picked for a print: it goes on, with its own colors (no ink names carried over from the other one)
       for (const x of d.groups) for (const im of x.imprints) {
         const v = rv.art[im.id] || "", was = d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "");
@@ -1231,7 +1269,7 @@ function trimToArt(c: HTMLCanvasElement) {
 const y0 = (d: EODraft, id: string) => d.groups.flatMap((g) => g.imprints).find((im) => im.id === id)?.location || "A print";
 /** art on a solid box: the box's color, whether it's the shirt's, and the colors left once it's out (the shirt's own color in
  *  the art doesn't print either). Null when the art isn't on a box. */
-async function boxOf(path: string, shirt: string): Promise<{ box: { bg: string; bgName: string; sameAsShirt: boolean } | null; inks: { name: string; hex: string }[] } | null> {
+async function boxOf(path: string, shirt: string): Promise<{ box: { bg: string; bgName: string; sameAsShirt: boolean } | null; inks: { name: string; hex: string }[]; /** the art's height ÷ width */ ratio: number } | null> {
   const url = await picOf({ path });
   if (!url) return null;
   const load = (u: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = rej; i.src = u; });
@@ -1256,9 +1294,19 @@ async function boxOf(path: string, shirt: string): Promise<{ box: { bg: string; 
   const near = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 70; };
   // the art's colors that print: not the shirt's own, not the paper (white paper on a white-shirt PDF is left to the Mockup Creator)
   const inks = [...new Map(plan.inks.filter((x) => !near(x.hex, shirt)).map((x) => [x.name, { name: x.name, hex: x.hex }])).values()];
-  if (!k?.bg) return { box: null, inks };
+  const ratio = k?.bg && k.w ? k.h / k.w : ch / cw;
+  if (!k?.bg) return { box: null, inks, ratio };
   const bg = k.bg.startsWith("#") ? k.bg : `#${k.bg}`;
-  return { box: { bg, bgName: inkName(bg), sameAsShirt: near(bg, shirt) }, inks };
+  return { box: { bg, bgName: inkName(bg), sameAsShirt: near(bg, shirt) }, inks, ratio };
+}
+/** the shop's usual size for a print with nothing to go on (Oct 23, Nick: "we know a circle is going to be 10. I know a
+ *  fullback's probably going to be 11 and a half or 12"); ratio = the art's height ÷ width */
+function sizeRule(location: string, ratio?: number): { w: number; why: string } {
+  const round = !!ratio && ratio > 0.85 && ratio < 1.18, loc = location.toLowerCase();
+  if (/full back/.test(loc)) return round ? { w: 10, why: `A round logo on a full back: usually 10"` } : { w: 12, why: `A full back: usually 11.5–12"` };
+  if (/full front/.test(loc)) return round ? { w: 10, why: `A round logo on a full front: usually 10"` } : { w: 11, why: `A full front: usually 11"` };
+  if (/left chest|right chest/.test(loc)) return { w: 3.5, why: `A left chest: usually 3.5"` };
+  return { w: spotFor(location).defW, why: `Our standard ${location}: ${spotFor(location).defW}"` };
 }
 /** our stock ink for a name written on a sheet ("Scarlet Red" → Scarlet), else the name as written */
 const stockName = (n: string) => {
@@ -1312,6 +1360,15 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
   const arts = files.filter((f) => f.role === "art");
   // the logo per print: the art file picked for it (or the logo already on it)
   const [art, setArt] = useState<Record<string, string>>(() => Object.fromEntries(d.groups.flatMap((g) => g.imprints.map((im) => [im.id, d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")]))));
+  // each print's size and inks (filled with how they were arrived at), and one set of inks per garment group by default
+  const [sp, setSp] = useState<Record<string, Spec>>(() => JSON.parse(JSON.stringify(d.specs || {})));
+  const [sameInks, setSameInks] = useState<Record<string, boolean>>(() => Object.fromEntries(d.groups.filter((g) => g.imprints.length > 1).map((g) => [g.id, true])));
+  const setSize = (id: string, v: number) => setSp((x) => ({ ...x, [id]: { ...x[id], size: v, sizeWhy: "You set it" } }));
+  const setInks = (g: Group, id: string, v: string) => setSp((x) => {
+    const y = { ...x };
+    for (const im of sameInks[g.id] ? g.imprints : g.imprints.filter((q) => q.id === id)) y[im.id] = { ...y[im.id], inks: v, inksWhy: im.id === id ? "You set it" : `Same as the ${g.imprints.find((q) => q.id === id)?.location || "other print"}` };
+    return y;
+  });
   // a question whose answer is one of the files is the logo picker's job when there's a picker
   const checks = (d.check || []).filter((c) => !(arts.length > 1 && c.choices?.some((x) => x.path)));
   const [rows, setRows] = useState(checks.map(() => ({ pick: 0, text: "", remember: false })));
@@ -1375,17 +1432,35 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                         <span data-notranslate>{v ? nameOf(v) : "Add it on the order"}{v && v === (d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")) && opts.length > 1 ? <i className="faint"> (my pick)</i> : null}</span>
                       </button>
                     ))}
-                    {im.sameAs && <figure className="rv-same"><Pic path={im.sameAs.pic} /><figcaption>Printed like <b data-notranslate>{im.sameAs.label}</b>{im.colors ? ` · ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}</figcaption></figure>}
+                    {im.sameAs && <figure className="rv-same"><Pic path={im.sameAs.pic} /><figcaption>Printed like <b data-notranslate>{im.sameAs.label}</b></figcaption></figure>}
                   </div>
+                  {/* how it prints, and how I got there (Oct 23, Nick: "say something about how you got there… last time on the
+                      mockup we used these dimensions, or the PO says this… it says best fit, I'm thinking 10 inches") */}
+                  {(() => {
+                    const s0 = sp[im.id] || {}, sws = (s0.inks || "").split(/\s*,\s*/).filter(Boolean);
+                    return (
+                      <div className="rv-spec">
+                        {s0.last && <p className="rv-last" data-notranslate>{s0.last}</p>}
+                        <div className="rv-fields">
+                          <label className="rv-f"><span>Size</span><input type="number" step={0.25} min={1} max={spotFor(im.location).maxW} value={s0.size ?? ""} onChange={(e) => setSize(im.id, +e.target.value)} aria-label={`${im.location} width in inches`} /><em>in wide</em></label>
+                          <label className="rv-f rv-f-inks"><span>Inks</span>{sws.length > 0 && <span className="rv-sws" aria-hidden>{sws.map((n) => <i key={n} style={{ background: colorHex(stockName(n)) || "transparent" }} />)}</span>}<input value={s0.inks || ""} onChange={(e) => setInks(g, im.id, e.target.value)} placeholder="White, Scarlet" aria-label={`${im.location} inks`} /></label>
+                        </div>
+                        <p className="rv-why">{s0.sizeWhy ? <>Size: {s0.sizeWhy}</> : null}{s0.sizeWhy && s0.inksWhy ? " · " : ""}{s0.inksWhy ? <>Inks: {s0.inksWhy}</> : null}</p>
+                        {s0.flag && s0.size !== s0.flag.size && <p className="rv-flag">{s0.flag.text} <button type="button" className="ap-link" onClick={() => setSize(im.id, s0.flag!.size)}>Make it {s0.flag.size}&quot;</button></p>}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
+            {g.imprints.length > 1 && <label className="rv-same-inks"><input type="checkbox" checked={!!sameInks[g.id]} onChange={(e) => setSameInks((x) => ({ ...x, [g.id]: e.target.checked }))} /> Same inks on all its prints</label>}
             {qs.map(({ i }) => Q(i))}
           </section>
         );
       })}
+      <div className="rv-sum"><span className="faint">I&apos;ll make</span>{d.groups.map((g) => <div key={g.id} data-notranslate>{[...g.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => `${im.location} ${sp[im.id]?.size ? `${sp[im.id]!.size}"` : ""}${sp[im.id]?.inks ? ` · ${sp[im.id]!.inks}` : ""}`).join("  ·  ")}{d.groups.length > 1 ? ` (${g.name || g.lines.map((l) => l.color).join(", ")})` : ""}</div>)}</div>
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
-        <button type="button" className="btn primary" onClick={() => a.resolve({ answers: checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })), art })}>{answered && !a.again ? "Use my answers" : "Make the order"}</button></div>
+        <button type="button" className="btn primary" onClick={() => a.resolve({ answers: checks.map((c, i) => ({ q: c.q, answer: answerOf(i), remember: rows[i].remember && !!answerOf(i) })), art, specs: sp })}>{answered && !a.again ? "Use my answers" : "Make the order"}</button></div>
     </div>
   );
 }
