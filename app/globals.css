@@ -12447,9 +12447,9 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 /* the quick look's own PDF pages: the pages in the middle, a narrow strip of page pictures on the right (Oct 23, Nick) */
 .mf-look-b:has(.mf-pdf){display:block;overflow:hidden}
 .mf-pdf{display:flex;height:100%;min-height:0}
-.mf-pdf-main{position:relative;flex:1;min-width:0;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;background:var(--surface-2,#f3f4f6)}
+.mf-pdf-main{position:relative;flex:1;min-width:0;overflow-y:scroll;overflow-x:auto;scrollbar-gutter:stable;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;background:var(--surface-2,#f3f4f6)}
 .mf-pdf-main canvas{display:block;flex:none;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.14)}
-.mf-pdf-side{flex:none;width:92px;overflow:auto;border-left:1px solid var(--line);background:var(--surface);padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.mf-pdf-side{flex:none;width:92px;overflow-y:auto;overflow-x:hidden;border-left:1px solid var(--line);background:var(--surface);padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:8px}
 .mf-pdf-zoom{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--ink-3)}
 .mf-pdf-zoom button{width:24px;height:24px;border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface);color:var(--ink);cursor:pointer;padding:0;line-height:1}
 .mf-pdf-zoom span{min-width:32px;text-align:center}

@@ -701,7 +701,10 @@ function PdfPages({ url }: { url: string }) {
   const [w, setW] = useState(0);
   useEffect(() => {
     const el = main.current; if (!el) return;
-    const ro = new ResizeObserver(() => setW(Math.max(200, el.clientWidth - 32)));
+    // the room for a page, steadied: a page that brings in the scroll bar narrows the box, which redrew the pages smaller,
+    // which took the bar away again, over and over (Oct 23, Nick: "it's vibrating back and forth real chaotically").
+    // The bar's space is always kept (scrollbar-gutter), and a few pixels' change is ignored
+    const ro = new ResizeObserver(() => setW((x) => { const n = Math.max(200, Math.floor(el.clientWidth - 34)); return Math.abs(n - x) > 6 ? n : x; }));
     ro.observe(el); return () => ro.disconnect();
   }, [doc]);
   if (err) return <p className="mf-pdf-err">{err}</p>;
