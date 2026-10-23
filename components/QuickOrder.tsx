@@ -42,7 +42,7 @@ import { colorHex } from "@/lib/inkColors";
  */
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string; company?: string | null; name?: string | null } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
-type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string; /** art the Helper pulled off a mockup: its size and drop */ pc?: ArtPiece; from?: string; how?: Pulled["kind"] } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
+type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string; /** art the Helper pulled off a mockup: its size and drop */ pc?: ArtPiece; from?: string; how?: Pulled["kind"]; /** what our mockup sheet says about this print (size, inks) */ sheet?: SheetSpec } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
 type HelpAns = { picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
@@ -56,6 +56,8 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  confirm it: hey, this is a customer mockup with sizing and information") */
 /** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
  *  and whether to remember it for this customer */
+/** one print as our FBS mockup sheet writes it: "Front Imprint · SIZE: W 3" H 0.7" · COLORS 1. PMS 534C 2. PMS 2178C" */
+type SheetSpec = { w: number; h?: number; inks?: string[] };
 type ReviewAns = { answers: { q: string; answer: string; remember: boolean }[]; /** the logo per print: an art file path, or "design:<id>" */ art: Record<string, string>; /** each print's size and inks as the check left them */ specs?: Record<string, Spec> };
 /** a print's size and inks at the check, and how they were arrived at */
 type Spec = { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } };
@@ -270,7 +272,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       // the art for that print's side becomes the logo, with the size and drop measured off the shirt (Oct 22, Nick: "if
       // you see it in Printavo, any way, shape, and form… you've got to go in and use the helper and pull it out")
       const pulledOf = new Map<File, Pulled | null>(), usedOf = new Map<File, Set<ArtPiece>>();
-      const pulledFor = new Map<string, { pc: ArtPiece; from: string; kind: Pulled["kind"] }>();
+      const pulledFor = new Map<string, { pc: ArtPiece; from: string; kind: Pulled["kind"]; sheet?: SheetSpec }>();
       // a picked file or upload saved as their logo (once per file, or per print pulled off it)
       const designFor = async (picked: HelpPick, im: (typeof targets)[number]["im"]): Promise<string | null> => {
         if (picked.kind === "design") return picked.id;
@@ -296,7 +298,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           guard();
         }
         if (pc && pl) pulledFor.set(id, { pc, from: file.name, kind: pl.kind });
-        else if (picked.kind === "file" && picked.pc) pulledFor.set(id, { pc: picked.pc, from: picked.from || file.name, kind: picked.how || "photos" });
+        else if (picked.kind === "file" && picked.pc) pulledFor.set(id, { pc: picked.pc, from: picked.from || file.name, kind: picked.how || "photos", ...(picked.sheet ? { sheet: picked.sheet } : {}) });
         return id;
       };
       for (const { gi, ii, im } of targets) {
@@ -317,6 +319,14 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           const id = await designFor(picked, im);
           if (!id) continue;
           const pu = pulledFor.get(id);
+          if (pu?.sheet) {
+            // our own mockup sheet: the size and inks as written on it, the art pulled off it (Oct 23, Nick on HALFF #32997:
+            // "this is going to be our most common mockup… this actually has everything you need")
+            const inks = [...new Set((pu.sheet.inks || []).map(stockName))];
+            setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}`);
+            did.push(`${im.location}: from our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
+            continue;
+          }
           if (pu) {
             setIm({ design_id: id, ...(parseFloat(String(im.size || "")) > 0 ? {} : { size: `${pu.pc.widthIn}" wide` }), ...(im.drop ? {} : { drop: String(pu.pc.dropIn) }) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
             did.push(`${im.location}: the art in ${pu.from} was on a shirt, so the Helper pulled it off (${pu.pc.widthIn}" wide, ${pu.pc.dropIn}" down)`);
@@ -622,6 +632,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const specs: Record<string, Spec> = {};
       for (const x of d.groups) for (const im of x.imprints) {
         const sp: Spec = { ...(howGot.get(im.id) || {}) }, w = parseFloat(String(im.size || "")), r = ratioOf.get(im.id);
+        // set from our own mockup sheet in the Resolution Center
+        const fromSheet = (im.notes || "").match(/From our mockup sheet ([^:]+): ([\d.]+)" wide/);
+        if (fromSheet) { sp.sizeWhy ||= `Our mockup sheet ${fromSheet[1]}: W ${fromSheet[2]}"`; if (im.inks) sp.inksWhy ||= `Our mockup sheet ${fromSheet[1]}`; }
         if (w > 0) { sp.size = w; sp.sizeWhy ||= im.sizeFrom === "customer" ? "Their PO or email gives this size" : im.aiPlace ? "Read off their mockup" : "From the order"; }
         else { const rule = sizeRule(im.location, r); sp.size = rule.w; sp.sizeWhy = `${/best fit/i.test(im.notes || "") ? `"Best fit" on their paperwork: ` : ""}${rule.why}`; }
         if (im.inks && !/simulated/i.test(im.inks)) { sp.inks = im.inks; sp.inksWhy ||= "Named on their paperwork"; }
@@ -864,7 +877,10 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // the print it's for (Oct 23, Nick, reordering #33728 from Printavo with only Peticolas_Velvet_Hammer_Mockup_Red.pdf:
   // "it asks me what this file is and I say mockup. And then it goes, well, I don't have the art then. A lot of times
   // this is all you're going to have. And you can easily use the mockup helper to pull the art")
-  const [pulls, setPulls] = useState<Record<string, { busy: boolean; from: string; how?: Pulled["kind"]; pieces: { pc: ArtPiece; url: string }[] }>>({});
+  const [pulls, setPulls] = useState<Record<string, { busy: boolean; from: string; how?: Pulled["kind"]; pieces: { pc: ArtPiece; url: string }[]; sheet?: Partial<Record<string, SheetSpec>> }>>({});
+  // our own FBS mockup sheet among the old job's files (the blank template, filled in: "Front Imprint · SIZE: W 3" ·
+  // COLORS 1. PMS 534C…"): read for its writing as soon as it's open; null = not one of ours
+  const [sheets, setSheets] = useState<Record<string, Partial<Record<string, SheetSpec>> | null | "reading">>({});
   const [films, setFilms] = useState<null | { busy?: boolean; note?: string; list: { id: string; name: string }[] }>(null);
   // what each file is: a print's key, "mockup" or "none"; and whether its background comes off
   const [as, setAs] = useState<Record<string, string>>({});
@@ -932,7 +948,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     ...help.prints.filter((p) => p.design).map((p) => ({ key: `K${p.key}`, where: "kept" as const, only: p.key, tag: `Pulled for the ${p.label}`, name: "Art pulled from the old job", cutUrl: kept[p.design!] || "", asIsUrl: kept[p.design!] || "", canCut: false, ready: true, pick: () => ({ kind: "keep" as const }) })),
     ...(old || []).map((f, i) => ({ key: `O${i}`, open: f.url, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
     ...Object.entries(pulls).filter(([k]) => as[k] === "mockup").flatMap(([k, pu]) => pu.pieces.map((x, n) => ({ key: `P${k}:${n}`, where: "pulled" as const, tag: `Pulled off ${pu.from} · ${x.pc.side === "back" ? "Back" : "Front"}, ${x.pc.widthIn}" × ${x.pc.heightIn}"`, name: `${pu.from} ${x.pc.side} art`, cutUrl: x.url, asIsUrl: x.url, canCut: false, ready: true,
-      pick: () => ({ kind: "file" as const, file: x.pc.file, name: `the art pulled off ${pu.from}`, pc: x.pc, from: pu.from, how: pu.how }) }))),
+      pick: () => ({ kind: "file" as const, file: x.pc.file, name: `the art pulled off ${pu.from}`, pc: x.pc, from: pu.from, how: pu.how, ...(pu.sheet?.[x.pc.side] ? { sheet: pu.sheet[x.pc.side] } : {}) }) }))),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
     ...pieces.map((p, i) => ({ key: `M${i}`, where: "else" as const, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => ({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
     ...(found || []).map((f, i) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
@@ -1010,13 +1026,17 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const k = `O${i}`;
       // marked Mockup, or not answered yet and it looks like one (by its name, or what the AI sees in it): a PDF with
       // the art still in it (vector, ready to go) is found here and marked Mockup for you; a flat one gets nothing off it
-      const looks = !as[k] && (mockupNamed(f.name) || /mock/i.test(aiG[f.path]?.kind || ""));
+      // wait until the file has been read for our sheet's writing
+      if (sheets[k] === undefined || sheets[k] === "reading") continue;
+      const sh = sheets[k] as Partial<Record<string, SheetSpec>> | null;
+      const looks = (!as[k] || as[k] === "mockup") && (!!sh || (!as[k] && (mockupNamed(f.name) || /mock/i.test(aiG[f.path]?.kind || ""))));
       if ((as[k] !== "mockup" && !looks) || pulls[k] || !f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) continue;
       const raw = f.d.raw instanceof File ? f.d.raw : new File([f.d.raw], f.name, { type: f.d.raw.type || "application/pdf" });
       setPulls((x) => ({ ...x, [k]: { busy: true, from: f.name, pieces: [] } }));
       void pullOffMockup(raw, f.name, { drawn: true }).catch(() => null).then((got) => {
-        const pieces = (got?.pieces || []).filter((pc) => pc.widthIn * pc.heightIn >= 1).map((pc) => ({ pc, url: URL.createObjectURL(pc.file) }));
-        setPulls((x) => ({ ...x, [k]: { busy: false, from: f.name, how: got?.kind, pieces } }));
+        // on our sheet, small bits count too (a 3" × 0.7" left chest): the sheet says where its prints are
+        const pieces = (got?.pieces || []).filter((pc) => (sh ? !!sh[pc.side] : pc.widthIn * pc.heightIn >= 1)).map((pc) => ({ pc, url: URL.createObjectURL(pc.file) }));
+        setPulls((x) => ({ ...x, [k]: { busy: false, from: f.name, how: got?.kind, pieces, ...(sh ? { sheet: sh } : {}) } }));
         // each piece to the print on its side that has no art yet (the biggest piece first)
         if (!pieces.length) return;
         setAs((a) => {
@@ -1035,12 +1055,52 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [as, old, aiG]);
+  }, [as, old, aiG, sheets]);
+  useEffect(() => {
+    for (const [i, f] of (old || []).entries()) {
+      const k = `O${i}`;
+      if (k in sheets || f.d === undefined) continue;
+      // the old job's purchase order and work order: the customer's new ones replace them (Oct 23, Nick: "you've got to
+      // ignore that old purchase order by default. The new one overrides it")
+      // "Same thing with the work order too": both are replaced by the new ones on this email or job
+      if (/purchase[\s_-]*order|work[\s_-]*order|(^|[^a-z])[pw]\.?o\.?[\s_#-]*\d/i.test(f.name)) setAs((a) => (a[k] ? a : { ...a, [k]: "none" }));
+      if (!f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) { setSheets((x) => ({ ...x, [k]: null })); continue; }
+      setSheets((x) => ({ ...x, [k]: "reading" }));
+      void f.d.raw.arrayBuffer().then((b) => sizesOnSheet(b)).then((r) => { const has = Object.keys(r).length > 0; setSheets((x) => ({ ...x, [k]: has ? r : null })); if (has) setAs((a) => (a[k] ? a : { ...a, [k]: "mockup" })); }).catch(() => setSheets((x) => ({ ...x, [k]: null })));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [old]);
   const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
   const filesLeft = olds0.filter((x) => !as[x.key]).length, knowLeft = knowLocs.filter((p) => !(p.location in know)).length;
   const unanswered = filesLeft + knowLeft;
+  // our sheet covers every print: nothing to ask, it's done here (Oct 23, Nick on HALFF #32997: "once you see this file,
+  // you're good… I've got all the color information, all that stuff"): the other files are kept as production files,
+  // how it printed comes off the sheet, and the check at the end shows it all
+  const autoGo = useRef(false);
+  const [autoFinish, setAutoFinish] = useState(false);
+  useEffect(() => {
+    if (autoGo.current || !old || !help.prints.length || old.some((f) => f.d === undefined)) return;
+    const keys = Object.entries(sheets).filter(([, v]) => v && v !== "reading").map(([k]) => k);
+    if (!keys.length || (old || []).some((_, i) => sheets[`O${i}`] === undefined || sheets[`O${i}`] === "reading")) return;
+    if (keys.some((k) => !pulls[k] || pulls[k].busy) || given.length !== help.prints.length) return;
+    autoGo.current = true;
+    setAs((a) => { const n = { ...a }; for (const it of items.filter((x) => x.where === "old")) if (!n[it.key]) n[it.key] = "production"; return n; });
+    setKnow((k0) => {
+      const n = { ...k0 };
+      for (const p of knowLocs) {
+        const sd = /sleeve/i.test(p.location) ? (/left/i.test(p.location) ? "left sleeve" : "right sleeve") : /back|yoke|shoulder|nape/i.test(p.location) ? "back" : "front";
+        const spec = keys.map((k) => (sheets[k] as Partial<Record<string, SheetSpec>>)[sd]).find(Boolean);
+        n[p.location] = spec?.inks?.length ? { colors: spec.inks.length, ub: !!p.dark } : null;
+      }
+      return n;
+    });
+    setMode("details");
+    setAutoFinish(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [old, sheets, pulls, given.length]);
+  useEffect(() => { if (autoFinish) finish("skip"); }, [autoFinish]); // eslint-disable-line react-hooks/exhaustive-deps
   const finish = (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>(), splits: NonNullable<HelpAns["splits"]> = [];
     const pickOf = (it: Item) => { if (!once.has(it.key)) once.set(it.key, it.pick(!!bgOff[it.key])); return once.get(it.key) || null; };
