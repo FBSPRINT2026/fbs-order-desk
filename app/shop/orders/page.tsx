@@ -47,7 +47,7 @@ export default function OrdersPage() {
     const r = await bulkDeleteOrders([...picked]);
     setBulkBusy(false); setBulkArm(false);
     if (!r.ok) { setBulkMsg(r.error); return; }
-    setBulkMsg(`${r.deleted.length ? `Deleted ${r.deleted.length} order${r.deleted.length === 1 ? "" : "s"} (#${r.deleted.join(", #")}).` : "Nothing deleted."}${r.skipped.length ? ` Kept: ${r.skipped.join(", ")}.` : ""}`);
+    setBulkMsg(`${r.deleted.length ? `Deleted ${r.deleted.length} order${r.deleted.length === 1 ? "" : "s"} (#${r.deleted.join(", #")}).` : "Nothing deleted."}${r.skipped.length ? ` Kept: ${r.skipped.join(", ")}.` : ""}${r.notes?.length ? ` ${r.notes.join(" ")}` : ""}`);
     setPicked(new Set()); setPicking(false);
     reload();
   }

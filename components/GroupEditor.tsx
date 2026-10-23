@@ -551,7 +551,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             <summary className="btn sm">+ Add garment ▾</summary>
             <div className="ot-menu">
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push(newGLine()); }); }}>New garment</button>
-              <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); }); }}>Same style, new color</button>
+              <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, extras: undefined, id: uid(), color: "", sizes: {}, priceOverride: null }); }); }}>Same style, new color</button>
               <button type="button" disabled={!!yth?.busy || !!cmp?.busy} title="The youth, women's, long sleeve… styles that go with this garment, in the same color" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void openCompanions(); }}>{cmp?.busy ? "Finding companion styles…" : "Companion style (youth, women's…)"}</button>
             </div>
           </details>
@@ -645,7 +645,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
                 <h3>Change every item in this group to ${askAll.v.toFixed(2)}?</h3>
                 <p className="dla-sub">{g.lines.length} items in this group. Just this one keeps the others as they are.</p>
-                <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setAskAll(null)}>Just this one</button><button type="button" className="btn primary" autoFocus onClick={() => { const v = askAll.v; setAskAll(null); update((x) => { x.lines.forEach((y) => { y.priceOverride = v; }); }); }}>Yes, all {g.lines.length}</button></div>
+                <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setAskAll(null)}>Just this one</button><button type="button" className="btn primary" autoFocus onClick={() => { const v = askAll.v; setAskAll(null); update((x) => { x.lines.forEach((y) => { if (!y.extras) y.priceOverride = v; }); }); }}>Yes, all {g.lines.filter((y) => !y.extras).length}</button></div>
               </div>
             </div>
           )}

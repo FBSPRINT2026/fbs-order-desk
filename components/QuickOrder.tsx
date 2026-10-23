@@ -145,17 +145,21 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const ans = await waitFor<{ q: string; answer: string; remember: boolean }[]>((resolve) => setCheckAsk({ items: d!.check!, customer: g.customer?.company || g.customer?.name || "this customer", resolve }));
       setCheckAsk(null);
       const said = ans.filter((a) => a.answer.trim()).map((a) => `${a.q} → ${a.answer.trim()}`);
-      for (const a of ans.filter((x) => x.remember && x.answer.trim())) await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null);
+      let kept = 0;
+      for (const a of ans.filter((x) => x.remember && x.answer.trim())) { const r = await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null); if (r?.ok) kept++; }
       if (said.length) {
         step(`${of}Reading it again with your answers…`);
         const told = [part ? "" : start.told || "", ...said].filter(Boolean).join("\n");
         const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
         const j = r ? await r.json().catch(() => ({})) : {};
         guard();
-        if (r?.ok && j.draft) { d = j.draft as EODraft; g.past = j.past || g.past; }
-        did.push(...said.map((x) => `You said: ${x}`));
+        if (r?.ok && j.draft) { d = j.draft as EODraft; g.past = j.past || g.past; did.push(...said.map((x) => `You said: ${x}`)); }
+        else {
+          // couldn't read it again: your answers go in the order's notes for whoever checks it, said plainly
+          d = { ...d, notes: [d.notes, `Answers given when it was made (not applied, the email couldn't be read again): ${said.join("; ")}`].filter(Boolean).join("\n").slice(0, 2000) };
+          did.push("Couldn't read the email again with your answers: they're in the order's notes, check them on the order");
+        }
       } else did.push(`Went with my guesses on: ${ans.map((a) => a.q).join(" · ")}`.slice(0, 400));
-      const kept = ans.filter((x) => x.remember && x.answer.trim()).length;
       if (kept) did.push(`Remembered ${kept === 1 ? "that" : `those ${kept}`} for ${g.customer?.company || g.customer?.name || "this customer"}'s next orders`);
     }
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
@@ -273,7 +277,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       // a file that's a mockup (the art on a shirt, a person, our old mockup or theirs): the Helper pulls the art off it,
       // the art for that print's side becomes the logo, with the size and drop measured off the shirt (Oct 22, Nick: "if
       // you see it in Printavo, any way, shape, and form… you've got to go in and use the helper and pull it out")
-      const pulledOf = new Map<File, Pulled | null>();
+      const pulledOf = new Map<File, Pulled | null>(), usedOf = new Map<File, Set<ArtPiece>>();
       const pulledFor = new Map<string, { pc: ArtPiece; from: string; kind: Pulled["kind"] }>();
       // a picked file or upload saved as their logo (once per file, or per print pulled off it)
       const designFor = async (picked: HelpPick, im: (typeof targets)[number]["im"]): Promise<string | null> => {
@@ -286,7 +290,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           guard();
         }
         const pl = pulledOf.get(file) || null;
-        const pc = pl ? pieceFor(pl, im.location) || pieceFor(pl, "front") || pieceFor(pl, "back") : undefined;
+        const used = usedOf.get(file) || new Set<ArtPiece>(); usedOf.set(file, used);
+        const pc = pl ? pieceFor(pl, im.location, used) || pieceFor(pl, "front", used) || pieceFor(pl, "back", used) : undefined;
+        if (pc) used.add(pc);
         const src = pc ? pc.file : file;
         let id = made.get(src);
         if (!id) {
@@ -319,7 +325,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           if (!id) continue;
           const pu = pulledFor.get(id);
           if (pu) {
-            setIm({ design_id: id, size: `${pu.pc.widthIn}" wide`, drop: String(pu.pc.dropIn) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
+            setIm({ design_id: id, ...(parseFloat(String(im.size || "")) > 0 ? {} : { size: `${pu.pc.widthIn}" wide` }), ...(im.drop ? {} : { drop: String(pu.pc.dropIn) }) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
             did.push(`${im.location}: the art in ${pu.from} was on a shirt, so the Helper pulled it off (${pu.pc.widthIn}" wide, ${pu.pc.dropIn}" down)`);
             continue;
           }
@@ -610,7 +616,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {checkAsk && <CheckConfirm a={checkAsk} onCancel={cancel} />}
-        {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={() => colorAsk.done(null)} />}
+        {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}

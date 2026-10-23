@@ -810,7 +810,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   // colors the supplier has no photo of (Oct 22, Nick: 64400 Neon Blue showed a gray drawn tee): dye the style's photo
   const [tinted, setTinted] = useState<Record<string, string>>({});
-  const tinting = useRef(new Set<string>());
+  const tinting = useRef(new Set<string>()), photoQ = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
     for (const l of lines) {
       const g = garmentFor(l); if (!g || !l.color.trim()) continue;
@@ -822,7 +822,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const color = l.color;
       // the other supplier's photo first (Oct 22, Nick: "if S&S doesn't have it, I know SanMar does"), saved on the garment;
       // else the style's own photo dyed to the color
-      void (async () => {
+      // one at a time: each request saves the garment's whole photo list, so two at once could drop one's photo
+      photoQ.current = photoQ.current.then(async () => {
         const r = await fetch("/api/garments/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId: g.id, color }) }).then((x) => x.json()).catch(() => null) as { name?: string; front?: string; back?: string; side?: string; hex?: string; none?: boolean } | null;
         if (r?.front && r.name) {
           const entry = { front: r.front, back: r.back || "", side: r.side || "", hex: r.hex || "" };
@@ -837,7 +838,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const u = await tintPhoto(ssImg(src), hex.startsWith("#") ? hex : `#${hex}`).catch(() => "");
           if (u) setTinted((t) => ({ ...t, [`${k0}|${v}`]: u }));
         }
-      })();
+      }).catch(() => null);
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
 

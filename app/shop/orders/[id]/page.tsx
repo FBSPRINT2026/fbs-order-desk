@@ -386,6 +386,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const apply = (d: Order) => {
       const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
       d.groups.forEach((g, gi) => g.lines.forEach((l) => {
+        // their extras print free: never priced by the program
+        if (l.extras) return;
         if (l.progOff) { if (l.priceOverride == null) delete l.progOff; else return; }
         if (l.prog && l.priceOverride !== l.prog.each) { l.progOff = true; delete l.prog; return; }
         const want0 = on ? plans[gi]?.lines[l.id] || null : null;
@@ -751,7 +753,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // and a logo another order uses is never taken. Taken off = archived (kept, can be put back).
   // the ClickUp job it was made from: put back on the New list (ticked), so deleting the order doesn't lose the job
   // (Oct 22, Nick: Hudson Band was made into an order, deleted, and gone from New)
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean }>(null);
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean }>(null);
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
@@ -765,12 +767,22 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDelAsk({ ...delAsk, busy: true });
     const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
+    // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)
+    const gone = await reallyDel(false);
+    if (!gone) { setDelAsk({ ...delAsk, busy: false, error: "Couldn't delete the order. Nothing else was changed in ClickUp." }); return; }
     if (delAsk.cu && delAsk.cuBack) {
       const r = await reopenClickUpJob(delAsk.cu.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
-      if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: `The ClickUp job couldn't be put back on New: ${r.error}. Nothing was deleted.` }); return; }
+      const say2 = !r.ok ? `Order deleted, but the ClickUp job couldn't be put back on New: ${r.error}` : "note" in r && r.note ? `Order deleted and the job is back on New. ${r.note}` : "";
+      if (say2) { setDelAsk({ ...delAsk, busy: false, gone: true, error: say2 }); return; }
     }
-    await reallyDel();
+    leave();
   }
+  const leave = () => {
+    if (!o) return;
+    // back to wherever it was opened from (the customer's page, the orders list…); opened on its own: the customer
+    if (window.history.length > 1) router.back();
+    else router.replace(o.customer_id ? `/shop/customers/${o.customer_id}` : "/shop/orders");
+  };
   // this order's art that's still a draft (not in the customer's library until the order goes out)
   const [drafts, setDrafts] = useState({ logos: 0, mockups: 0 });
   useEffect(() => { if (o?.id) draftArtCount(o.id).then((r) => setDrafts({ logos: r.logos, mockups: r.mockups })); }, [o?.id, o?.status]);
@@ -781,17 +793,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDrafts({ logos: 0, mockups: 0 });
     say("The art is in the customer's library now.");
   }
-  async function reallyDel() {
-    if (!o) return;
+  async function reallyDel(go = true): Promise<boolean> {
+    if (!o) return false;
     if (timer.current) clearTimeout(timer.current);
     latest.current = null;
     const paths = ownedFiles(o.id, [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)]);
     if (paths.length) await sb.storage.from("proofs").remove(paths);
     const { error } = await sb.from("orders").delete().eq("id", o.id);
-    if (error) return say("Couldn't delete: " + error.message);
-    // back to wherever it was opened from (the customer's page, the orders list…); opened on its own: the customer
-    if (window.history.length > 1) router.back();
-    else router.replace(o.customer_id ? `/shop/customers/${o.customer_id}` : "/shop/orders");
+    if (error) { say("Couldn't delete: " + error.message); return false; }
+    if (go) leave();
+    return true;
   }
 
   // payments
@@ -1007,8 +1018,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </>
             )}
             <div className="dla-acts">
+              {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button>
+              <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button></>}
             </div>
           </div>
         </div>
@@ -1137,7 +1149,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     )}
                     {o.use_program && prog && progOpen && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
                     {o.use_program && prog && progOpen && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
-                      onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
+                      onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (!l.extras && Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
                       onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.cards.length || r.items.length)) setProgAll({ cards: r.cards, items: r.items, applyMode: r.applyMode }); }); }} />}
                     {/* the "Last time…" past-price line is gone (Oct 15, Nick: it matched a job they had never printed) */}
                     {confirmRetail && cust && (

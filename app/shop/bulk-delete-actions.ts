@@ -11,7 +11,7 @@ import { reopenClickUpTask } from "@/lib/clickup";
  */
 const BULK_DELETERS = ["nicholas@fbsprint.com"];
 
-export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; deleted: number[]; skipped: string[] } | { ok: false; error: string }> {
+export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; deleted: number[]; skipped: string[]; notes?: string[] } | { ok: false; error: string }> {
   try {
     const v = await getViewer();
     if (!v.user || !v.isStaff || !BULK_DELETERS.includes(String(v.email || "").toLowerCase())) return { ok: false, error: "Only Nick can delete orders in bulk." };
@@ -40,10 +40,16 @@ export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; delet
     const paths = gids.flatMap((id) => ownedFiles(id, [...((pr || []) as { file_path: string; order_id?: string }[]), ...((af || []) as { file_path: string; order_id?: string }[])].filter((x) => x.order_id === id).map((x) => x.file_path)));
     for (let i = 0; i < paths.length; i += 100) await admin.storage.from("proofs").remove(paths.slice(i, i + 100));
     // an order made from a ClickUp job: the job goes back on the New list (Oct 22, Nick: Hudson Band was lost that way)
+    // (found first, put back only once the orders are really gone)
+    const notes: string[] = [];
     const { data: cus } = await admin.from("clickup_tasks").select("id").or(`order_id.in.(${gids.join(",")}),order_number.in.(${go.map((o) => o.number).join(",")})`);
-    for (const t of (cus || []) as { id: string }[]) await reopenClickUpTask(admin, t.id).catch(() => null);
     const { error } = await admin.from("orders").delete().in("id", gids);
     if (error) return { ok: false, error: error.message };
-    return { ok: true, deleted: go.map((o) => o.number).sort((a, b) => a - b), skipped };
+    for (const t of (cus || []) as { id: string }[]) {
+      const r = await reopenClickUpTask(admin, t.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+      if (!r.ok) notes.push(`A ClickUp job (${t.id}) couldn't be put back on New: ${r.error}`);
+      else if ("note" in r && r.note) notes.push(r.note);
+    }
+    return { ok: true, deleted: go.map((o) => o.number).sort((a, b) => a - b), skipped, ...(cus?.length ? { notes: [`${cus.length} ClickUp job${cus.length === 1 ? " is" : "s are"} back on the New list.`, ...notes] } : {}) };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }

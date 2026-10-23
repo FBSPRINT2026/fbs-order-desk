@@ -474,19 +474,23 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
       const keepA = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) if (art[i] && !line[i]) keepA[i] = 1;
       // thin by the shirt's measure or by the page's: a stroke under ~2pt on the page is a drawn line (on a small mockup
       // the collar is drawn thicker than 0.03" of shirt: Art Car's neck came off as a 6.75" print, Oct 22)
-      const r = Math.max(1, Math.round(0.03 * ppi), Math.round(1.1 * s));
+      // the page's measure only for long pieces (a collar or seam runs inches): small lettering drawn thin stays art
+      const rS = Math.max(1, Math.round(0.03 * ppi)), rP = Math.max(rS, Math.round(1.1 * s));
       // shrink = not grown from the outside
       const inv = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) inv[i] = keepA[i] ? 0 : 1;
-      const core = grow(inv, W, H, r);
+      const coreS = grow(inv, W, H, rS), coreP = rP > rS ? grow(inv, W, H, rP) : coreS;
       const seen = new Uint8Array(W * H);
       for (let i0 = 0; i0 < W * H; i0++) {
         if (!keepA[i0] || seen[i0]) continue;
-        const q = [i0], comp: number[] = []; seen[i0] = 1; let thick = false;
+        const q = [i0], comp: number[] = []; seen[i0] = 1; let thickS = false, thickP = false;
+        let x0 = W, x1 = 0, y0 = H, y1 = 0;
         while (q.length) {
-          const i = q.pop()!, x = i % W, y = (i / W) | 0; comp.push(i); if (!core[i]) thick = true;
+          const i = q.pop()!, x = i % W, y = (i / W) | 0; comp.push(i); if (!coreS[i]) thickS = true; if (!coreP[i]) thickP = true;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
           for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const j = yy * W + xx; if (keepA[j] && !seen[j]) { seen[j] = 1; q.push(j); } }
         }
-        if (!thick) for (const i of comp) line[i] = 1;
+        const long = Math.max(x1 - x0, y1 - y0) >= 1.5 * ppi;
+        if (!thickS || (long && !thickP)) for (const i of comp) line[i] = 1;
       }
     }
     const m = document.createElement("canvas"); m.width = W; m.height = H;

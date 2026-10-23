@@ -43,7 +43,8 @@ function matchOne(asked: string, options: string[]): { color: string; sure: bool
   const run = options.filter((o) => squash(o) === squash(asked));
   if (run.length === 1) return { color: run[0], sure: true };
   const letters = asked.replace(/[^a-z]/gi, "").toLowerCase();
-  if (letters.length >= 2 && letters.length <= 4 && /^([a-z]\.?\s*){2,4}$/i.test(asked.trim())) {
+  // initials are written with dots or spaces ("B.C.", "B C") or as capitals ("BC"), never a short word ("Red", "Navy")
+  if (letters.length >= 2 && letters.length <= 4 && (/^([a-z]\.\s*|[a-z]\s+){1,3}[a-z]\.?$/i.test(asked.trim()) || /^[A-Z]{2,4}$/.test(asked.trim()))) {
     const ini = options.filter((o) => words(o).map((w) => w[0]).join("") === letters);
     if (ini.length === 1) return { color: ini[0], sure: false };
   }

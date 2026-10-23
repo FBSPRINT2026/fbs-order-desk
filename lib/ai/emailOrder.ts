@@ -234,12 +234,16 @@ export function kindByName(name: string): { kind: "po" | "wo" | "invoice" | "quo
   const n = name.replace(/\.[a-z0-9]+$/i, "").replace(/[_\-.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
   if (/\bpurchase\s*order\b|^\s*p\.?o\.?\s*#?\s*\d|\bp\.?o\.?\s*#?\s*\d{3,}/i.test(n)) return { kind: "po", say: "the customer's purchase order (paperwork: read it for the garments, sizes, prints and notes; never the print art)" };
   if (/\bwork\s*order\b|\bw\.?o\.?\s*#?\s*\d{3,}|\bjob\s*(ticket|sheet)\b/i.test(n)) return { kind: "wo", say: "the customer's work order (paperwork: read it for the locations, sizes, inks and instructions; any mockup on it is only a picture of the job, never the print art)" };
-  if (/\binvoice\b|\binv\s*#?\s*\d/i.test(n)) return { kind: "invoice", say: "an invoice (paperwork, never the print art)" };
-  if (/\b(quote|estimate|quotation)\b/i.test(n)) return { kind: "quote", say: "a quote (paperwork, never the print art)" };
-  if (/\bpacking\s*(slip|list)\b|\bbill\s*of\s*lading\b/i.test(n)) return { kind: "packing", say: "a packing slip (paperwork, never the print art)" };
+  // a picture named "Bible quote tee.png" is art, not a quote: these words count only on documents
+  const doc = !/\.(png|jpe?g|gif|webp|svg|ai|eps|psd|tiff?|heic)$/i.test(name);
+  if (doc && /\binvoice\b|\binv\s*#?\s*\d/i.test(n)) return { kind: "invoice", say: "an invoice (paperwork, never the print art)" };
+  if (doc && /\b(quote|estimate|quotation)\b/i.test(n)) return { kind: "quote", say: "a quote (paperwork, never the print art)" };
+  if (doc && /\bpacking\s*(slip|list)\b|\bbill\s*of\s*lading\b/i.test(n)) return { kind: "packing", say: "a packing slip (paperwork, never the print art)" };
   if (/\b(logo|logos|art|artwork|vector|print\s*file|design|front|back|sleeve|chest)\b/i.test(n) || /\.(ai|eps|svg)$/i.test(name)) return { kind: "art", say: "art, by its name" };
   return null;
 }
+/** a phone's or scanner's own file name ("IMG_4521.jpg", "Screenshot 2026-10-22"): its numbers aren't a PO or job */
+export const CAMERA_NAME = /^(img|dsc|dscn|pxl|photo|image|screenshot|screen shot|scan|mvimg|whatsapp)[\s_-]*\d/i;
 const PAPERWORK = new Set(["po", "wo", "invoice", "quote", "packing"]);
 export const isPaperwork = (name: string) => PAPERWORK.has(kindByName(name)?.kind || "");
 
@@ -418,7 +422,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
   const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
-  const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
+  const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
   // several jobs picked together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676: "create an order out of a
@@ -525,8 +529,9 @@ ${staffSays}` : ""}`;
   for (const pg of p.groups || []) for (const pr of pg.prints || []) {
     const nm = String(pr.art_file_name || "").trim().toLowerCase();
     if (!nm) continue;
-    const at = files.findIndex((f) => f.name.toLowerCase() === nm);
-    if (at >= 0 && pr.art_file !== at + 1) pr.art_file = at + 1;
+    if (files[(pr.art_file || 0) - 1]?.name.toLowerCase() === nm) continue;
+    const hits = files.map((f, i) => (f.name.toLowerCase() === nm ? i : -1)).filter((i) => i >= 0);
+    if (hits.length === 1 && files[hits[0]].role !== "signature") pr.art_file = hits[0] + 1;
   }
   // a print's art: never the signature, and never the paperwork when there's an art file to use instead
   const artFiles = files.filter((f) => f.role === "art");

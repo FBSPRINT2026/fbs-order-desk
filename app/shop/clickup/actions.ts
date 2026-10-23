@@ -194,6 +194,7 @@ export async function tickClickUpBox(id: string, name: string, on: boolean) {
 /** the ClickUp job an order was made from (asked when the order is deleted) */
 export async function clickUpJobOfOrder(orderId: string, number: number): Promise<{ id: string; name: string; team: string } | null> {
   const v = await who(); if (!v) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(String(orderId))) return null;
   const admin = createAdminClient();
   const { data } = await admin.from("clickup_tasks").select("id, name, team_id").or(`order_id.eq.${orderId},order_number.eq.${Math.floor(+number || 0)}`).limit(1);
   const t = data?.[0] as { id: string; name: string; team_id: string } | undefined;
