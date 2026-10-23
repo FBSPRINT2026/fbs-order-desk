@@ -481,7 +481,37 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
     }
     comps.push(cp);
   }
-  const shirts = comps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => a.x0 - b.x0);
+  let shirts = comps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => a.x0 - b.x0);
+  // a white shirt drawn in lines too light to stop the page around it (Oct 23, All Star #34528: our sized proof with its
+  // shirt left white): no shirt is found in the file, so our template's shirt is where it is (the page around it and
+  // the shirt itself taken from the template's drawing, its body only: not the sleeve boxes)
+  if (!shirts.length && tpl) {
+    const tc = document.createElement("canvas"); tc.width = W; tc.height = H;
+    await tpl.render({ canvasContext: tc.getContext("2d")!, viewport: tpl.getViewport({ scale: s }), background: "rgba(255,255,255,1)" }).promise;
+    const td = tc.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+    const tLight = (i: number) => td[i * 4] > 232 && td[i * 4 + 1] > 232 && td[i * 4 + 2] > 232;
+    const tOut = new Uint8Array(W * H), ts: number[] = [];
+    for (let x = 0; x < W; x++) for (const y of [0, H - 1]) { const i = y * W + x; if (tLight(i) && !tOut[i]) { tOut[i] = 1; ts.push(i); } }
+    for (let y = 0; y < H; y++) for (const x of [0, W - 1]) { const i = y * W + x; if (tLight(i) && !tOut[i]) { tOut[i] = 1; ts.push(i); } }
+    while (ts.length) {
+      const i = ts.pop()!, x = i % W, y = (i / W) | 0;
+      for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) if (j >= 0 && !tOut[j] && tLight(j)) { tOut[j] = 1; ts.push(j); }
+    }
+    const tLab = new Int32Array(W * H), tComps: typeof comps = [];
+    for (let i0 = 0; i0 < W * H; i0++) {
+      if (tOut[i0] || tLab[i0]) continue;
+      const id = tComps.length + 1, q = [i0]; tLab[i0] = id;
+      const cp = { id, n: 0, x0: W, y0: H, x1: 0, y1: 0 };
+      while (q.length) {
+        const i = q.pop()!, x = i % W, y = (i / W) | 0; cp.n++;
+        if (x < cp.x0) cp.x0 = x; if (x > cp.x1) cp.x1 = x; if (y < cp.y0) cp.y0 = y; if (y > cp.y1) cp.y1 = y;
+        for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) if (j >= 0 && !tOut[j] && !tLab[j]) { tLab[j] = id; q.push(j); }
+      }
+      tComps.push(cp);
+    }
+    const body = tComps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => b.n - a.n)[0];
+    if (body) { outside.set(tOut); lab.set(tLab); shirts = [body]; }
+  }
   const out: (ArtPiece & { shirtHex: string; shirts: number })[] = [];
   const { REF_BODY } = await import("@/lib/garmentBody");
   for (const [si, sh] of shirts.entries()) {
