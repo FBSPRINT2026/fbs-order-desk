@@ -1078,14 +1078,15 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // our sheet covers every print: nothing to ask, it's done here (Oct 23, Nick on HALFF #32997: "once you see this file,
   // you're good… I've got all the color information, all that stuff"): the other files are kept as production files,
   // how it printed comes off the sheet, and the check at the end shows it all
-  const autoGo = useRef(false);
-  const [autoFinish, setAutoFinish] = useState(false);
-  useEffect(() => {
-    if (autoGo.current || !old || !help.prints.length || old.some((f) => f.d === undefined)) return;
-    const keys = Object.entries(sheets).filter(([, v]) => v && v !== "reading").map(([k]) => k);
-    if (!keys.length || (old || []).some((_, i) => sheets[`O${i}`] === undefined || sheets[`O${i}`] === "reading")) return;
-    if (keys.some((k) => !pulls[k] || pulls[k].busy) || given.length !== help.prints.length) return;
-    autoGo.current = true;
+  // (Oct 23, Nick: "I think it's still okay to ask me… say, hey, I'm good to go. I've got all this stuff… 3x0.7 using
+  // these PMSs. Good to go"): said in one short card, one click
+  const [autoFinish, setAutoFinish] = useState(false), [sheetOff, setSheetOff] = useState(false);
+  const sheetKeys = Object.entries(sheets).filter(([, v]) => v && v !== "reading").map(([k]) => k);
+  const sheetReady = !sheetOff && !!old && help.prints.length > 0 && !old.some((f) => f.d === undefined) && sheetKeys.length > 0
+    && !(old || []).some((_, i) => sheets[`O${i}`] === undefined || sheets[`O${i}`] === "reading")
+    && sheetKeys.every((k) => pulls[k] && !pulls[k].busy) && given.length === help.prints.length;
+  const goodToGo = () => {
+    const keys = sheetKeys;
     setAs((a) => { const n = { ...a }; for (const it of items.filter((x) => x.where === "old")) if (!n[it.key]) n[it.key] = "production"; return n; });
     setKnow((k0) => {
       const n = { ...k0 };
@@ -1098,8 +1099,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     });
     setMode("details");
     setAutoFinish(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [old, sheets, pulls, given.length]);
+  };
   useEffect(() => { if (autoFinish) finish("skip"); }, [autoFinish]); // eslint-disable-line react-hooks/exhaustive-deps
   const finish = (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>(), splits: NonNullable<HelpAns["splits"]> = [];
@@ -1191,6 +1191,23 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
+      {sheetReady && (() => {
+        const specs = sheetKeys.flatMap((k) => Object.entries(sheets[k] as Partial<Record<string, SheetSpec>>).map(([side, v]) => ({ side, v: v!, from: (old || [])[+k.slice(1)]?.name || "" })));
+        const skipped = olds0.filter((x) => as[x.key] === "none").map((x) => x.name);
+        return (
+          <div className="arc-ready">
+            <p className="ap-q">Our FBS mockup sheet is on {help.job.replace(/^(#\d+).*/, "$1")}: I&apos;ve got what I need.</p>
+            <ul>
+              {specs.map((x, i) => <li key={i} data-notranslate><b>{x.side[0].toUpperCase() + x.side.slice(1)}</b>: {x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""} wide{x.v.inks?.length ? `, ${x.v.inks.map(stockName).join(", ")}` : ""} <span className="faint">· art pulled off {x.from}</span></li>)}
+              {skipped.length > 0 && <li className="faint" data-notranslate>Not needed: {skipped.join(", ")} (the new ones here replace them)</li>}
+            </ul>
+            <div className="arc-ready-b">
+              <button type="button" className="btn primary" onClick={goodToGo}>Good to go</button>
+              <button type="button" className="ap-link" onClick={() => setSheetOff(true)}>Let me look through the files</button>
+            </div>
+          </div>
+        );
+      })()}
       {help.settled?.length ? <p className="ap-q">You&apos;re using the email&apos;s art for {help.settled.join(", ")}. {olds0.length === 1 ? "This file is" : `These ${olds0.length} files are`} on {help.job} too: keep any you still need?</p> : null}
       {!help.settled?.length && <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>}
       <p className="ap-why">{help.settled?.length ? "Barcodes, labels, packing sheets…: mark them Production file and they go with this order. The old art they replaced: Not needed (or Production file to keep it for reference)." : stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
