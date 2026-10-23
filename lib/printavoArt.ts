@@ -85,7 +85,7 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
           if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
           return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
         }
-        if (r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000) { photos.push(r); return; }
+        if (mode !== "textures" && r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000) { photos.push(r); return; }
         if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
         return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
       };
@@ -246,9 +246,15 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     const pad = 4 * (s2 / s1);
     const crop = { x0: (r.x0 * s2) / s1 - pad, y0: (r.y0 * s2) / s1 - pad, x1: (r.x1 * s2) / s1 + pad, y1: (r.y1 * s2) / s1 + pad };
     // the art's own shapes (clean), and any texture laid over it apart (the distress: Peticolas' scratched mask)
-    const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "vector");
+    let hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "vector");
     const tex = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "textures");
-    const mask = await maskFile(tex.canvas, `${name} ${side} mask.png`).catch(() => null);
+    let mask = await maskFile(tex.canvas, `${name} ${side} mask.png`).catch(() => null);
+    {
+      // a logo placed as a picture (a customer's JPG on the shirt photo): the shapes alone miss it, so it keeps its pictures
+      const opaque = (cv: HTMLCanvasElement) => { const dd = cv.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, cv.width, cv.height).data; let k = 0; for (let i = 3; i < dd.length; i += 16) if (dd[i] > 128) k++; return k; };
+      const all = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 }, "art");
+      if (opaque(hi.canvas) < 0.5 * opaque(all.canvas)) { hi = all; mask = null; }
+    }
     const maskPpi = mask && tex.texPx ? Math.round(tex.texPx * (hi.canvas.width / Math.max(0.1, widthIn))) : 0;
     // the shirt's color right around the print (a ring just outside it on the full page)
     const ring: number[][] = [];
@@ -295,8 +301,25 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
  * drawn again sharp with the shirt's color taken out (see-through, so knockouts stay holes).
  */
 export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promise<(ArtPiece & { shirtHex: string })[]> {
-  const page = await openPage(buf);
+  // every page (our sized proof: the front on page 1, the back and sleeves on page 2); one shirt a page = front, then back
+  const doc = await openDoc(buf);
+  const per: { n: number; got: (ArtPiece & { shirtHex: string; shirts: number })[] }[] = [];
+  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) per.push({ n, got: await drawnPage(await doc.getPage(n), name).catch(() => []) });
+  const withShirt = per.filter((p) => p.got.length);
+  const onePerPage = withShirt.length > 1 && withShirt.every((p) => p.got.every((g) => g.shirts === 1));
+  return withShirt.flatMap((p, pi) => p.got.map(({ shirts: _s, ...g }) => (onePerPage ? { ...g, side: (pi === 0 ? "front" : "back") as "front" | "back" } : g)));
+}
+
+/**
+ * One page of drawn shirts. A page laid out at real size (our sized proof, 35" × 42"; Mambo's 68" × 32": Oct 22, Nick:
+ * "these are sized, meaning when you pull the logos from the front, they're the size they should be") is measured by the
+ * page itself; a small page (a letter-size mockup) by the shirt, taken as an adult large. Everything that isn't the
+ * art is left: the shirt and its collar, seam and hem lines, and whatever sits off the shirts (the neck tag box, the
+ * scale ruler, the labels, the standard imprint colors chart, the sleeve shapes).
+ */
+async function drawnPage(page: Page, name: string): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
   const v1 = page.getViewport({ scale: 1 });
+  const sized = Math.max(v1.width, v1.height) / 72 >= 20;
   const s = Math.min(6, 1600 / Math.max(v1.width, v1.height));
   const vp = page.getViewport({ scale: s });
   const W = Math.round(vp.width), H = Math.round(vp.height);
@@ -327,7 +350,7 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
     comps.push(cp);
   }
   const shirts = comps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => a.x0 - b.x0);
-  const out: (ArtPiece & { shirtHex: string })[] = [];
+  const out: (ArtPiece & { shirtHex: string; shirts: number })[] = [];
   const { REF_BODY } = await import("@/lib/garmentBody");
   for (const [si, sh] of shirts.entries()) {
     // its color: the most common one inside it
@@ -341,7 +364,7 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
     let bl = -1, br = -1;
     for (let x = sh.x0; x <= sh.x1; x++) if (lab[by * W + x] === sh.id) { if (bl < 0) bl = x; br = x; }
     if (bl < 0 || br - bl < 20) continue;
-    const ppi = (br - bl) / REF_BODY.widthIn, mid = (bl + br) / 2;
+    const ppi = sized ? s * 72 : (br - bl) / REF_BODY.widthIn, mid = (bl + br) / 2;
     let neck = sh.y0;
     for (let y = sh.y0; y <= sh.y1; y++) if (lab[y * W + Math.round(mid)] === sh.id) { neck = y; break; }
     // art = not the shirt's color; its outline = those bits that touch the page around it (spread through each other)
@@ -378,9 +401,15 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
       // drawn again sharp (about 300 dpi at its size, at most 5000 px), the shirt's color made see-through
       const want = Math.min(5000, Math.max(800, widthIn * 300)), k = want / w, s2 = s * k, pad = 6;
       const box = { x0: r.x0 * k - pad, y0: r.y0 * k - pad, x1: r.x1 * k + pad, y1: r.y1 * k + pad };
-      const cc = (await drawWithoutPhotos(page, s2, box, undefined, "vector")).canvas;
+      let cc = (await drawWithoutPhotos(page, s2, box, undefined, "vector")).canvas;
       const tex = await drawWithoutPhotos(page, s2, box, undefined, "textures");
-      const mask = await maskFile(tex.canvas, `${name} mask.png`).catch(() => null);
+      let mask = await maskFile(tex.canvas, `${name} mask.png`).catch(() => null);
+      // art that's a picture (a placed logo, not shapes): the shapes alone miss it, so it's drawn with its pictures
+      {
+        const inkPx = (cv: HTMLCanvasElement) => { const dd = cv.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, cv.width, cv.height).data; let k = 0; for (let i = 0; i < dd.length; i += 16) if (dd[i + 3] > 128 && Math.hypot(dd[i] - fill[0], dd[i + 1] - fill[1], dd[i + 2] - fill[2]) > 60) k++; return k; };
+        const all = (await drawWithoutPhotos(page, s2, box, undefined, "art")).canvas;
+        if (inkPx(cc) < 0.5 * inkPx(all)) { cc = all; mask = null; }
+      }
       const cx2 = cc.getContext("2d", { willReadFrequently: true })!, img = cx2.getImageData(0, 0, cc.width, cc.height), px = img.data, lim = 40;
       for (let i = 0; i < px.length; i += 4) {
         if (!px[i + 3]) continue;
@@ -393,7 +422,7 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
       const side: "front" | "back" = shirts.length > 1 && si === shirts.length - 1 ? "back" : "front";
       const hex = mainHex(cc), sug = suggestInk(hex), q4 = (v: number) => Math.round(v * 4) / 4;
       const shirtHex = "#" + fill.map((v) => Math.min(255, v).toString(16).padStart(2, "0")).join("");
-      out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex, ...(mask ? { mask, maskPpi: tex.texPx ? Math.round(tex.texPx * (cc.width / Math.max(0.1, widthIn))) : 0 } : {}) });
+      out.push({ shirts: shirts.length, side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex, ...(mask ? { mask, maskPpi: tex.texPx ? Math.round(tex.texPx * (cc.width / Math.max(0.1, widthIn))) : 0 } : {}) });
     }
   }
   return out;
