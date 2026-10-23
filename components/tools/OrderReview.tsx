@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import type { Group } from "@/lib/pricing";
 import { guessHex } from "@/lib/mockup";
 import { fixDesignArt, type ArtAction } from "@/lib/artFix";
 import { MicButton } from "@/components/SearchInput";
-import { useSticky } from "@/lib/useSticky";
+import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 import { aiOrderFix, applyOrderFixChanges, markOrderChecked, noteArtChange, saveOrderLesson } from "@/app/shop/ai-actions";
 import type { OrderChange } from "@/lib/ai/orderFix";
 
@@ -30,7 +31,6 @@ import type { OrderChange } from "@/lib/ai/orderFix";
 type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; customers?: { name?: string; company?: string } | null };
 type Art = OrderChange & { state: "doing" | "done" | "error"; err?: string };
 type Round = { you: string; reply: string; applied: string[]; art: Art[]; suggest: OrderChange[]; rule?: string };
-type Res = { key: string; label: string; url: string; img: boolean };
 const RES_LABEL: Record<string, string> = { order_sheet: "Order sheet / PO", customer_mockup: "Their mockup", old_mockup: "Last job's mockup", print_art: "Their art", barcodes: "Barcodes" };
 type Saved = { rounds: Round[]; lesson: { on: boolean; text: string } };
 
@@ -67,13 +67,12 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   // Order resources (Oct 23, Nick: "keep the production documents… at the bottom… pops up and pops down… looking back at
   // the original documents at the same time… call that order resources, like the purchase order, the work order"):
   // what the customer sent (their PO, mockup, art), then our work order, quote and proof, opened right here
-  const [resOpen, setResOpen] = useSticky("orderCheck.resources", false);
-  const [resView, setResView] = useState("");
-  const [res, setRes] = useState<Res[]>([]);
+  const [resOpen, setResOpen] = useState(false);
+  const [res, setRes] = useState<MailFile[]>([]);
   useEffect(() => {
     void sb.from("art_files").select("id, name, category, file_path").eq("order_id", orderId).order("created_at").then(({ data }) => {
-      const files: Res[] = (data || []).map((f) => ({ key: f.id as string, label: `${RES_LABEL[(f.category as string) || ""] || "File"}: ${f.name}`, url: `/api/files/open?p=${encodeURIComponent(f.file_path as string)}&n=${encodeURIComponent(f.name as string)}`, img: /\.(jpe?g|png|gif|webp)$/i.test(f.file_path as string) }));
-      setRes([...files, { key: "work", label: "Work order", url: `/print/${orderId}?work=1`, img: false }, { key: "quote", label: "Quote", url: `/print/${orderId}`, img: false }, { key: "proof", label: "Proof", url: `/print/${orderId}?proof=1`, img: false }]);
+      setRes((data || []).map((f) => ({ key: f.id as string, name: f.name as string, label: `${RES_LABEL[(f.category as string) || ""] || "File"}: ${f.name}`,
+        href: `/api/files/open?${new URLSearchParams({ p: f.file_path as string, n: f.name as string })}` })).filter(canQuickLook));
     });
   }, [sb, orderId]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -245,29 +244,10 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
         <div ref={endRef} />
       </div>
 
-      <div className={"orv-rsc" + (resOpen ? " on" : "")}>
-        <button type="button" className="orv-rsc-h" onClick={() => setResOpen(!resOpen)} aria-expanded={resOpen}>
-          <span>Order resources</span><span className="orv-rsc-n">{res.length}</span><span className="orv-rsc-a" aria-hidden>{resOpen ? "▾" : "▴"}</span>
-        </button>
-        {resOpen && (() => {
-          const cur = res.find((x) => x.key === resView) || res[0];
-          return (
-            <div className="orv-rsc-b">
-              <div className="orv-rsc-list">{res.map((x) => <button key={x.key} type="button" className={"chip" + (cur?.key === x.key ? " on" : "")} onClick={() => setResView(x.key)} title={x.label}>{x.label}</button>)}</div>
-              {cur && <div className="orv-rsc-v">
-                {cur.img ? <img src={cur.url} alt={cur.label} /> : <iframe key={cur.key} src={cur.url} title={cur.label} />}
-                <a className="ap-link" href={cur.url} target="_blank" rel="noreferrer">Open it in a new tab ›</a>
-              </div>}
-            </div>
-          );
-        })()}
-      </div>
-
       <div className="orv-compose">
-        <div className="orv-quick">
-          <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
-          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
-        </div>
+        {res.length > 0 && <button type="button" className="orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">
+          <span>Order resources</span><span className="orv-rsc-n">{res.length}</span><span className="orv-rsc-a" aria-hidden>Open ›</span>
+        </button>}
         <div className="orv-box">
           <MicButton target={() => box.current} append label="Say what to change" />
           <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
@@ -275,7 +255,12 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
             placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
           <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>
+        <div className="orv-quick">
+          <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
+          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
+        </div>
       </div>
+      {resOpen && res.length > 0 && typeof document !== "undefined" && createPortal(<QuickLook files={res} at={0} strip title="Order resources" onClose={() => setResOpen(false)} />, document.body)}
     </div>
   );
 }

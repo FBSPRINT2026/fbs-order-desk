@@ -12643,10 +12643,15 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 .orv-send{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--fbs-blue);color:#fff;font:700 16px var(--body);cursor:pointer;display:grid;place-items:center}
 .orv-send:disabled{background:var(--surface-3);color:var(--ink-3);cursor:default}
 /* Order resources: the customer's PO, mockup and art, and our work order, quote and proof, up from the bottom of the check */
-.orv-rsc{flex:none;border-top:1px solid var(--line);background:var(--surface)}
-.orv-rsc-h{width:100%;display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;border:0;background:var(--surface-2);font:700 13px var(--body);color:var(--ink);cursor:pointer}
+.orv-rsc-h{width:100%;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font:700 13px var(--body);color:var(--ink);cursor:pointer}
+.orv-rsc-h:hover{border-color:var(--accent)}
 .orv-rsc-n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;display:inline-grid;place-items:center}
-.orv-rsc-a{margin-left:auto;color:var(--ink-3)}
+.orv-rsc-a{margin-left:auto;color:var(--accent);font-weight:600}
+/* the chat's bubbles sit at the bottom, newest last, like a phone's messages */
+.orv-thread > :first-child{margin-top:auto}
+.mf-look-strip{display:flex;align-items:center;gap:6px;padding:10px 14px 0;overflow-x:auto;flex:none}
+.mf-look-strip > b{font:700 13px var(--body);margin-right:6px;white-space:nowrap}
+.mf-look-strip .chip{flex:none;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .orv-rsc-b{display:flex;flex-direction:column;gap:8px;padding:8px 12px 10px}
 .orv-rsc-list{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .orv-rsc-list .chip{flex:none;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

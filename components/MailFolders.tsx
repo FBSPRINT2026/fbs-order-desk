@@ -625,7 +625,9 @@ export const attUrl = (path: string, uid: number, i: number) => `/api/mail/box?$
 const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** one attachment, wherever an email shows it (an email box, the Inbox, a customer's email) */
-export type MailFile = { key: string; name: string; size?: number; type?: string; href?: string; onOpen?: () => void };
+export type MailFile = { key: string; name: string; size?: number; type?: string; href?: string; onOpen?: () => void; /** a short name for a tab (Order resources) */ label?: string };
+/** can it be shown in the quick look (a PDF, an Illustrator file, a picture) */
+export const canQuickLook = (f: MailFile) => !!f.href && (kindOf(f) === "pdf" || kindOf(f) === "img" || /^AI$/.test(ext(f)));
 export const msgFiles = (m: FullMsg): MailFile[] => m.attachments.map((a) => ({ key: String(a.i), name: a.name, size: a.size, type: a.type,
   href: a.ews ? `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id: a.ews })}` : attUrl(m.folder, m.uid, a.i) }));
 const ext = (f: MailFile) => (/\.([a-z0-9]{1,5})$/i.exec(f.name)?.[1] || (f.type || "").split("/")[1] || "file").toUpperCase().slice(0, 4);
@@ -649,7 +651,7 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
   // the PO and read what you're saying at the same time"). Ctrl/⌘-click still opens a tab.
   const [look, setLook] = useState<number | null>(null);
   if (!files.length) return null;
-  const canLook = (f: MailFile) => !!f.href && (kindOf(f) === "pdf" || kindOf(f) === "img" || /^AI$/.test(ext(f)));
+  const canLook = canQuickLook;
   return (<>
     <section className={"mf-tray" + (inBar ? " in-bar" : "")} aria-label="Attachments">
       <div className="mf-tray-h"><span className="mf-tray-t">{TbIcon.clip}Attachments <b className="chip-n">{files.length}</b></span>
@@ -735,7 +737,7 @@ function PdfPages({ url }: { url: string }) {
 }
 
 /** an attachment shown in the page, over the email or job (not over the Create order panel on the right) */
-function QuickLook({ files, at, onClose }: { files: MailFile[]; at: number; onClose: () => void }) {
+export function QuickLook({ files, at, onClose, title, strip }: { files: MailFile[]; at: number; onClose: () => void; /** a heading before the file's name (Order resources) */ title?: string; /** every file as a tab across the top (Order resources, Oct 23: "you should have the files listed across the top") */ strip?: boolean }) {
   const [i, setI] = useState(Math.max(0, at));
   const f = files[i];
   useEffect(() => {
@@ -747,6 +749,7 @@ function QuickLook({ files, at, onClose }: { files: MailFile[]; at: number; onCl
   return (
     <div className="mf-look-bg" onClick={onClose}>
       <div className="mf-look" role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>
+        {strip && files.length > 0 && <div className="mf-look-strip">{title && <b>{title}</b>}{files.map((x, k) => <button key={x.key} type="button" className={"chip" + (k === i ? " on" : "")} onClick={() => setI(k)} title={x.name}>{x.label || x.name}</button>)}</div>}
         <div className="mf-look-h">
           {files.length > 1 && <button type="button" className="mf-look-nav" disabled={i === 0} onClick={() => setI(i - 1)} aria-label="Previous file">‹</button>}
           <b title={f.name} data-notranslate>{f.name}</b>
