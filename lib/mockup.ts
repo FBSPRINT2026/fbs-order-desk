@@ -25,7 +25,9 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   "Full Front": { view: "front", dx: 0, drop: 3, top: true, defW: 11, maxW: 13, maxH: 18 },
   "Medium Front": { view: "front", dx: 0, drop: 1.5, defW: 8, maxW: 8, maxH: 8 },
   "Center Chest": { view: "front", dx: 0, drop: 1.5, defW: 4.5, maxW: 5, maxH: 5 },
-  "Across Chest": { view: "front", dx: 0, drop: 1.5, defW: 11, maxW: 12, maxH: 4 },
+  // a narrow print across the chest sits lower: nothing under it to balance it (Oct 23, Nick on Logotology #40110:
+  // "across the chest is gonna be a smaller, narrower print, and it should start lower")
+  "Across Chest": { view: "front", dx: 0, drop: 2.75, defW: 11, maxW: 12, maxH: 4 },
   "Left Chest": { view: "front", dx: 3.5, drop: 1.5, defW: 3.5, maxW: 5, maxH: 5 },
   "Right Chest": { view: "front", dx: -3.5, drop: 1.5, defW: 3.5, maxW: 5, maxH: 5 },
   Pocket: { view: "front", dx: 4.5, drop: 3.5, defW: 3, maxW: 4, maxH: 4 },

@@ -322,7 +322,7 @@ function tool(finishingIds: string[]) {
           prints: { type: "array", items: { type: "object", properties: {
             method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, location: { type: "string" },
             colors: { description: "Ink colors in the art (not the shirt color, not the underbase), or 'full'", anyOf: [{ type: "integer" }, { type: "string", enum: ["full"] }] },
-            inks: { type: "string", description: "The ink colors by name, e.g. 'Gold, Black'" },
+            inks: { type: "string", description: "The ink colors by name ONLY when an email, a spec box or the paperwork names them (e.g. 'Gold, Black', 'PMS 286'). Never a guessed ink name: when nothing names the inks, leave this empty and the colors come from the art itself (Oct 23, Logotology #40110: 'Reflex Blue' was guessed for art that's Electric Blue and the mockup came out the wrong blue)" },
             size: { type: "string", description: "Print size only if the customer states it, e.g. '10\" wide' (it's then kept as theirs)" },
             notes: { type: "string" },
             art_file: { type: ["integer", "null"], description: "The File number of the art printed here" },
