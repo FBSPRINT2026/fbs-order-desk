@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { reorderProducts, saveProduct, setProductActive, storeDesigns, suggestPrice, uploadStoreImage, type StoreBundle } from "@/app/merch-actions";
 import { bySize, isYouthSize, r2, storeImg, unitPrice, type Product, type ProductColor, type YouthBlank } from "@/lib/merch";
-import { guessHex, ssImg } from "@/lib/mockup";
+import { guessHex, garmentHex, ssImg } from "@/lib/mockup";
 import { renderMockup } from "@/lib/mockupRender";
 import type { Garment } from "@/lib/pricing";
 
@@ -117,7 +117,7 @@ function Builder({ b, product, onClose, onSaved }: { b: StoreBundle; product: Pr
   }, [product]);
   const design = designs?.find((d) => d.id === designId) || null;
   useEffect(() => { if (design && !product) setInks(design.colors || 1); }, [design, product]);
-  const hexOf = (gg: Garment | null, c: string) => gg?.color_images?.[c]?.hex || guessHex(c);
+  const hexOf = (gg: Garment | null, c: string) => garmentHex(gg?.color_images?.[c]?.hex, c);
   const photoOf = (gg: Garment | null, c: string) => { const ci = gg?.color_images?.[c] || Object.entries(gg?.color_images || {}).find(([k]) => k.toLowerCase() === c.toLowerCase())?.[1]; return ci?.front ? ssImg(ci.front) : ""; };
   const allSizes = useMemo(() => [...new Set([...(yg?.sizes || []).filter(isYouthSize), ...(g?.sizes || [])])].sort(bySize), [g, yg]);
   // a new blank: every color off, the usual sizes on, and FBS's price suggested

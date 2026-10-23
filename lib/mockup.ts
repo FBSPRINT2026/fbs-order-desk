@@ -622,6 +622,20 @@ export const guessHex = (color: string): string => {
   return NAMED[c] || NAMED[spaced] || NAMED[spaced.replace(/\s*\(.*\)|heather\s*/g, "").trim()]
     || NAMED[NAMED_LONGEST().find((k) => new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`).test(spaced)) || ""] || "#9aa1ab";
 };
+/**
+ * A garment color's color: the supplier's code, unless it plainly isn't the color its name says (Oct 23, Peticolas: S&S
+ * gives Bella+Canvas 3719/3739 "Heather Navy" as #E2B484, a tan; the photos are navy but the chips and close-ups were
+ * tan). A name we know whose color is far from the supplier's wins.
+ */
+export const garmentHex = (supplierHex: string | null | undefined, name: string): string => {
+  const sh = supplierHex && /^#?[0-9a-f]{6}$/i.test(supplierHex) ? (supplierHex.startsWith("#") ? supplierHex : "#" + supplierHex) : "";
+  const g = guessHex(name);
+  if (!sh) return g;
+  if (g === "#9aa1ab") return sh; // a name we don't know: the supplier's
+  const rgb = (h: string) => { const v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+  const a = rgb(sh), b = rgb(g);
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 150 ? g : sh;
+};
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 

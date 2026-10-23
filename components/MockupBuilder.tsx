@@ -37,7 +37,7 @@ import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { garmentHex, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
@@ -915,6 +915,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const isKidGarment = (l: Line) => { const b = bodyFor(l); return b.kind === "infant" || b.kind === "toddler" || /one ?piece|onesie|bodysuit|creeper|romper/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`); };
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
+  // a color chip being dragged (its line's index), and a line moved to another's place (the color shown stays shown)
+  const [dragC, setDragC] = useState<number | null>(null);
+  const moveLine = (from: number, to: number) => {
+    const curId = lines[active]?.id;
+    setLines((ls) => { const n = [...ls]; const [x] = n.splice(from, 1); n.splice(to, 0, x); const k = n.findIndex((y) => y.id === curId); if (k >= 0) setTimeout(() => setActive(k), 0); return n; });
+  };
   // a color the supplier gave no color code for (SanMar's Scarlet): the color read off its photo is saved on the
   // garment, so the order page's logo tiles and close-ups show the shirt's real color too (Oct 21, Nick: #40092's
   // logo box was grey)
@@ -1264,7 +1270,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
@@ -2699,9 +2705,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                         <div className="mk-gar-colors">
                           {gr.idx.filter((i) => lines[i].color).map((i) => {
-                            const l = lines[i], hex = g?.color_images?.[l.color]?.hex || guessHex(l.color);
+                            const l = lines[i], hex = garmentHex(g?.color_images?.[l.color]?.hex, l.color);
                             return (
-                              <span key={l.id} className={"mk-gc" + (i === active ? " on" : "")}>
+                              // drag a color to put it in order (Oct 23, Nick: "I should be able to drag that chip over so it shows in
+                              // that order… when I make the sales tools"): the colors' order is the order everywhere after
+                              <span key={l.id} className={"mk-gc" + (i === active ? " on" : "") + (dragC === i ? " drag" : "")} draggable
+                                onDragStart={(e) => { setDragC(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
+                                onDragEnd={() => setDragC(null)}
+                                onDragOver={(e) => { if (dragC != null && dragC !== i && gr.idx.includes(dragC)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
+                                onDrop={(e) => { e.preventDefault(); const from = dragC; setDragC(null); if (from == null || from === i || !gr.idx.includes(from)) return; moveLine(from, i); }}>
                                 <button type="button" className="mk-gc-pick" onClick={() => setActive(i)} title={`Show ${l.color}`}><span className="mk-gc-dot" style={{ background: hex }} />{l.color}</button>
                                 <button type="button" className="mk-gc-x" aria-label={`Remove ${l.color}`} onClick={() => removeLine(i)}>✕</button>
                               </span>

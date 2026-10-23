@@ -1,7 +1,7 @@
 "use client";
 import { inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { guessHex, smallerSpot } from "@/lib/mockup";
+import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
 import { colorHex, repaintLogo } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
@@ -150,7 +150,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const gar = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase());
     const ci = gar?.color_images?.[l.color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
-    return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color) || "#9aa1ab";
+    return garmentHex(ci?.hex, l.color) || "#9aa1ab";
   })();
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts

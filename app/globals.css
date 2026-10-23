@@ -12590,3 +12590,6 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 .crv-n{font-size:12px;white-space:nowrap}
 .crv-a{display:flex;gap:6px;margin-left:auto}
 .crv-it.no .crv-t{color:var(--ink-3);text-decoration:line-through}
+/* a color chip being dragged into order (Oct 23) */
+.mk-gc[draggable]{cursor:grab}
+.mk-gc.drag{opacity:.45}

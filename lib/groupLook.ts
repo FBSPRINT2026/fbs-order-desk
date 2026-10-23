@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { designOther, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
-import { guessHex, spotFor } from "@/lib/mockup";
+import { guessHex, garmentHex, spotFor } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
 
 /**
@@ -26,7 +26,7 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
     if (!l) return "#9aa1ab";
     const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
-    return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color) || "#9aa1ab";
+    return garmentHex(ci?.hex, l.color) || "#9aa1ab";
   });
   const maxes: MaxArea[][] = groups.map((g) => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
