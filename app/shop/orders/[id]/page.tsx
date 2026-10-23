@@ -14,7 +14,7 @@ import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/Send
 import { SITE_URL } from "@/lib/config";
 import { type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
-import { OrderReviewPanel } from "@/components/tools/OrderReview";
+import { openOrderCheck } from "@/components/tools/OrderReview";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -142,8 +142,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [confirmRetail, setConfirmRetail] = useState(false);
   // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
   const [progOpen, setProgOpen] = useSticky("order.programOpen", false);
-  // the order check (Oct 23): "did I get everything right?" and changes by talking, the same panel as after Create order
-  const [checkOpen, setCheckOpen] = useState(false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
   // the customer's program: every rate card (Nine18 has one per location or brand), the design prices and whether new
   // orders take it by themselves; prog = the card this order uses (picked on the order, else guessed from its name)
@@ -307,6 +305,36 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [sb, settings]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
+  // the order check on the right (components/tools/OrderReview.tsx, Oct 23): what's typed here is saved before it changes
+  // the order, and the order shows its changes as soon as they're made (no reload, no lost typing)
+  useEffect(() => {
+    const onSave = (e: Event) => {
+      const d = (e as CustomEvent<{ orderId: string; handled: boolean; done: () => void }>).detail;
+      if (d?.orderId !== id) return;
+      d.handled = true;
+      void (async () => { if (timer.current) await save(); d.done(); })();
+    };
+    const onChanged = async (e: Event) => {
+      if ((e as CustomEvent<{ orderId: string }>).detail?.orderId !== id) return;
+      if (timer.current) return; // typing here right now: their next save keeps both
+      const { data } = await sb.from("orders").select("*").eq("id", id).maybeSingle();
+      if (!data) return;
+      const d = data as Order;
+      d.groups = orderGroups(d);
+      d.fees = d.fees || [];
+      d.discount_pct = +d.discount_pct || 0;
+      d.discount_amt = +(d.discount_amt || 0);
+      d.discount_type = d.discount_type === "amt" ? "amt" : "pct";
+      d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
+      d.delivery_method = d.delivery_method || "pickup";
+      d.price_type = d.price_type || "retail";
+      setO(d); latest.current = d;
+      void loadDesigns(); void loadSide();
+    };
+    window.addEventListener("fbs:order-save", onSave);
+    window.addEventListener("fbs:order-changed", onChanged);
+    return () => { window.removeEventListener("fbs:order-save", onSave); window.removeEventListener("fbs:order-changed", onChanged); };
+  }, [id, save, sb, loadDesigns, loadSide]);
   // closing the tab mid-edit: save now and ask the browser to wait
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => { if (timer.current) { save(); e.preventDefault(); e.returnValue = ""; } };
@@ -963,8 +991,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
             </div>
           </details>
-          <button type="button" className="btn" onClick={async () => { await save(); setCheckOpen(true); }} title="Did I get everything right? Say what to change (the order or the art) and it's changed, without Illustrator">Check or change it</button>
-          {checkOpen && <OrderReviewPanel orderId={o.id} onClose={() => { setCheckOpen(false); window.location.reload(); }} />}
+          <button type="button" className="btn" onClick={async () => { await save(); openOrderCheck(o.id); }} title="Did I get everything right? Say what to change (the order or the art) and it's changed, without Illustrator">Check or change it</button>
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">

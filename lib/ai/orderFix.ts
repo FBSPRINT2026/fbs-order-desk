@@ -4,7 +4,7 @@ import { askClaude } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
-import { LOCATIONS, orderGroups, type Group, type Order, type Settings } from "@/lib/pricing";
+import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
  * "Did I get everything right?" (Oct 23, Nick: "the right panel… never closes until I say, yes, we've got everything
@@ -28,9 +28,10 @@ const ART_ACTIONS = ["one_black", "flatten", "remove_hairline"];
 const EXTRAS = ["printed_free", "not_printed_free", "printed_charged", "not_printed_charged", "not_extras"];
 
 /** the order's garment lines with their ids, so a change can point at one */
-const linesText = (groups: Group[]) => groups.map((g, gi) => g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
+const sizeRun = (l: Group["lines"][number]) => SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${z} ${l.sizes?.[z]}`).join(", ");
+const linesText = (groups: Group[]) => groups.map((g, gi) => g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs (${sizeRun(l) || "no sizes"})${l.priceOverride != null && (l.priceOverride as unknown) !== "" ? `, priced $${l.priceOverride} each` : ""}${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
 
-export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, mode: "review" | "change"): Promise<{ ok: true; r: FixResult } | { ok: false; error: string }> {
+export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, mode: "review" | "change", earlier = ""): Promise<{ ok: true; r: FixResult } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, 2000);
   if (mode === "change" && !msg) return { ok: false, error: "Say what to change first." };
   const b = await orderBrief(admin, orderId, false);
@@ -50,6 +51,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     "Garment lines:", linesText(groups),
     mem.length ? `\nWhat the shop has taught you about this customer:\n${mem.slice(0, 15).map((m) => `- ${m.text}`).join("\n")}` : "",
     shopRulesText(await loadShopRules(admin).catch(() => [])),
+    earlier.trim() ? `\nEarlier in this check (already done; the order above already has these changes):\n${earlier.trim().slice(0, 3000)}` : "",
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
   const r = await askClaude<{ reply: string; changes?: OrderChange[]; lesson?: string; rule?: string }>({
@@ -60,8 +62,8 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
       changes: { type: "array", description: "Each change, one field each.", items: { type: "object", properties: {
         what: { type: "string", enum: ["print", "line", "art", "order"] },
         id: { type: "string", description: "The print id (print and art), the line id (line), or \"order\"" },
-        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras. order: due_date, firm` },
-        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; art: "yes"; line extras: ${EXTRAS.join(", ")}; due_date YYYY-MM-DD; firm yes/no` },
+        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price. order: due_date, firm` },
+        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); due_date YYYY-MM-DD; firm yes/no` },
         say: { type: "string", description: "One plain sentence saying the change, past tense, for staff and (art) the customer: \"Made the two blacks in the art one solid black\"" },
       }, required: ["what", "id", "field", "value", "say"] } },
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
@@ -70,6 +72,8 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     system: `${SHOP_CONTEXT(s)}
 
 You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
+
+Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; extras; the due date and firm date. When staff ask for one of these, make it; don't say you can't.
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -84,9 +88,9 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
   const changes = (Array.isArray(r.data.changes) ? r.data.changes : []).filter((c) =>
     (c.what === "print" && printIds.has(c.id) && PRINT_FIELDS.includes(c.field)) ||
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
-    (c.what === "line" && lineIds.has(c.id) && c.field === "extras" && EXTRAS.includes(c.value)) ||
+    (c.what === "line" && lineIds.has(c.id) && ((c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
     (c.what === "order" && ["due_date", "firm"].includes(c.field))).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 12);
-  const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: String(r.data.lesson || "").trim().slice(0, 300) || undefined, rule: String(r.data.rule || "").trim().slice(0, 300) || undefined };
+  const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
     if (!a.ok) return a;
@@ -94,6 +98,23 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     await keepCorrection(admin, o as Order, by, msg, changes, res);
   }
   return { ok: true, r: res };
+}
+
+/** the AI's "nothing" ('""', "none", "N/A") is nothing (Oct 23: Remember for theMcKennagroup: "") */
+const clean = (x: unknown) => { const t = String(x ?? "").trim().replace(/^["'“”\s]+|["'“”\s]+$/g, "").slice(0, 300); return t && !/^(none|n\/a|null|nothing|empty)\.?$/i.test(t) ? t : undefined; };
+
+/** "S:10, M:12, L:8" → the size run (null when it isn't one) */
+function parseRun(v: string): Partial<Record<(typeof SIZES)[number], number>> | null {
+  const out: Partial<Record<(typeof SIZES)[number], number>> = {};
+  let n = 0;
+  for (const part of String(v || "").split(/[,;]/)) {
+    const m = part.trim().match(/^([A-Za-z0-9-]+)\s*[:=x ]\s*(\d+)$/);
+    if (!m) { if (part.trim()) return null; continue; }
+    const z = SIZES.find((k) => k.toLowerCase() === m[1].toLowerCase());
+    if (!z) return null;
+    out[z] = +m[2]; n++;
+  }
+  return n ? out : null;
 }
 
 /** a "change" that leaves the order as it is (Oct 23: the check offered "print stays at 3 x 0.7" with a Make this change
@@ -111,6 +132,13 @@ function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "
     if (c.field === "drop") return (num(v) || 0) === (num(im.drop) || 0);
     if (c.field === "inks") { const k = (x: string) => x.toUpperCase().replace(/PANTONE|PMS|\s+/g, "").split(",").filter(Boolean).sort().join(","); return k(v) === k(String(im.inks || "")); }
     if (c.field === "underbase") { const on = /^y|true|on/i.test(v); return on === !!im.underbase || (mode === "review" && !on); }
+  }
+  if (c.what === "line") {
+    const l = groups.flatMap((g) => g.lines).find((x) => x.id === c.id);
+    if (!l) return true;
+    if (c.field === "sizes") { const run = parseRun(v); return !!run && SIZES.every((z) => +(run[z] || 0) === +(l.sizes?.[z] || 0)); }
+    if (c.field === "color") return v.toLowerCase() === String(l.color || "").toLowerCase();
+    if (c.field === "price") { const n = parseFloat(v.replace(/[$,]/g, "")); return l.priceOverride != null && (l.priceOverride as unknown) !== "" && Math.abs(+l.priceOverride - n) < 0.005; }
   }
   if (c.what === "order" && c.field === "firm") return /^y|true|on/i.test(v) === !!(o as { firm?: boolean }).firm;
   if (c.what === "order" && c.field === "due_date") return v === String((o as { due_date?: string }).due_date || "").slice(0, 10);
@@ -140,7 +168,10 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
     } else if (c.what === "line") {
       const l = groups.flatMap((g) => g.lines).find((x) => x.id === c.id);
       if (!l) continue;
-      if (v === "not_extras") { delete l.extras; delete l.extrasPrint; delete l.extrasFree; if (l.priceOverride === 0) l.priceOverride = null; }
+      if (c.field === "sizes") { const run = parseRun(v); if (!run) continue; l.sizes = run; }
+      else if (c.field === "color") { if (!v) continue; l.color = v; }
+      else if (c.field === "price") { const n = parseFloat(v.replace(/[$,]/g, "")); if (v && !(n >= 0 && n < 10000)) continue; l.priceOverride = v ? Math.round(n * 100) / 100 : null; }
+      else if (v === "not_extras") { delete l.extras; delete l.extrasPrint; delete l.extrasFree; if (l.priceOverride === 0) l.priceOverride = null; }
       else { const free = /_free$/.test(v); l.extras = true; l.extrasPrint = !/^not_printed/.test(v); l.extrasFree = free; l.priceOverride = free ? 0 : l.priceOverride === 0 ? null : l.priceOverride; }
     } else if (c.what === "order") {
       if (c.field === "due_date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) patch.due_date = v;
@@ -150,7 +181,12 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
     applied.push(c.say);
   }
   if (!applied.length) return { ok: true, applied };
-  const { error } = await admin.from("orders").update({ groups, ...patch }).eq("id", orderId);
+  // the totals follow (sizes or extras change the price), like the order page's save
+  const { data: full } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  let money: Record<string, number> = {};
+  try { if (full) { const c = calcOrder({ ...(full as Order), groups }, mergeSettings(st?.data)); money = { total: c.total, qty: c.qty }; } } catch { /* the page's next save fixes it */ }
+  const { error } = await admin.from("orders").update({ groups, ...patch, ...money }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
   await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Changed when it was checked: ${applied.join("; ")}`.slice(0, 2000), actor: by });
   return { ok: true, applied };

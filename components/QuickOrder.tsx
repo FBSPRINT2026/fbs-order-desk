@@ -4,7 +4,7 @@ import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { loadInkFormulas } from "@/lib/inkFormulas";
-import OrderReview from "@/components/tools/OrderReview";
+import { openOrderCheck } from "@/components/tools/OrderReview";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
@@ -859,6 +859,18 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
 
   const parts = start.parts?.length ? start.parts : [null];
   const many = parts.length > 1;
+  // one order made (Oct 23, Nick: "keep the order panel open the entire time… you make the mock-up and you stay open…
+  // click around the order, look at the mock-up"): the check opens on the right (it stays on every page until it's
+  // closed) and this tab goes on to the Mockup Creator, which makes the mockup and then shows the order
+  const handed = useRef(false);
+  useEffect(() => {
+    if (!done || many || made.length !== 1 || handed.current) return;
+    handed.current = true;
+    const m = made[0];
+    openOrderCheck(m.id, [...m.did, ...m.ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]);
+    onClose();
+    window.location.assign(m.url);
+  }, [done, many, made, onClose]);
   return (
     <div className={"dla-bg" + (dock ? " dock" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
       <div className={"dla qo" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "")}>
@@ -910,7 +922,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {help && <ArtHelp help={help} onCancel={cancel} />}
         {/* one order made: the panel stays open to check it (Oct 23, Nick: "that never closes until I say, yes, we've
             got everything right") */}
-        {done && !many && made.length === 1 && <OrderReview orderId={made[0].id} next={made[0].url} did={[...made[0].did, ...made[0].ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]} onClose={onClose} />}
+        {done && !many && made.length === 1 && <p className="dla-sub">Opening #{made[0].number}{made[0].mockup ? " and making its mockup" : ""}… the check stays open on the right.</p>}
         {!many && !(done && made.length === 1) && made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>

@@ -10,6 +10,7 @@ import MobileTables from "@/components/MobileTables";
 import Translate from "@/components/Translate";
 import { RoleProvider } from "@/components/RoleContext";
 import CrewGuard from "@/components/CrewGuard";
+import { OrderCheckDock } from "@/components/tools/OrderReview";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
+        <OrderCheckDock />
       </div>
     </RoleProvider>
   );

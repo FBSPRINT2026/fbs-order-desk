@@ -442,12 +442,12 @@ export async function handOffArt(orderId: string, title: string, notes: string) 
  * "Did I get everything right?" after an order is made (lib/ai/orderFix.ts): review = what doesn't match what the
  * customer sent (suggestions); change = staff say what's wrong and it's changed. Art fixes come back for the browser.
  */
-export async function aiOrderFix(orderId: string, message: string, mode: "review" | "change") {
+export async function aiOrderFix(orderId: string, message: string, mode: "review" | "change", earlier = "") {
   try {
     const { admin, email } = await staff();
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, error: st.reason };
-    const r = await orderFix(admin, st.settings, orderId, email || "staff", message, mode);
+    const r = await orderFix(admin, st.settings, orderId, email || "staff", message, mode, earlier);
     if (r.ok) revalidatePath(`/shop/orders/${orderId}`);
     return r.ok ? { ok: true as const, r: r.r } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
