@@ -995,6 +995,10 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
     setBusy("");
   };
   const when = i.received_at ? new Date(i.received_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  // the AI's to-dos for this email, small (Oct 23, Nick: "it's okay to give me a recommendation or two, but it doesn't
+  // need to take up half the screen"): one line each, the first two, the rest behind "more"
+  const [allTodos, setAllTodos] = useState(false);
+  useEffect(() => setAllTodos(false), [i.id]);
   const openTasks = (ex?.tasks || []).filter((t) => t.status === "open"), sugg = (ex?.events || []).filter((e) => e.status === "suggested"), added = (ex?.events || []).filter((e) => e.status === "added");
   return (
     <div className="ibx2-work ibx2-solo">
@@ -1037,12 +1041,13 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
           {convo}
           {(openTasks.length > 0 || sugg.length > 0 || added.length > 0) && <div className="lm-ai">
             <div className="lm-ai-h">✦ From this email</div>
-            {openTasks.map((t) => (
-              <div key={t.id} className="lm-row" style={{ ["--ac" as string]: AREAS[t.area]?.c }}>
+            {(allTodos ? openTasks : openTasks.slice(0, 2)).map((t) => (
+              <div key={t.id} className="lm-row lm-todo" title={t.notes || undefined} style={{ ["--ac" as string]: AREAS[t.area]?.c }}>
                 <button type="button" className="md-check" aria-label={`Done: ${t.title}`} onClick={async () => { setEx((x) => (x ? { ...x, tasks: x.tasks.map((y) => (y.id === t.id ? { ...y, status: "done" } : y)) } : x)); const r = await setTaskDone(t.id, true); if (r.ok && r.archived) done("Done. The email is archived."); }}><svg viewBox="0 0 16 16" aria-hidden><path d="M3.5 8.5l3 3 6-7" /></svg></button>
-                <div><b>{t.title}</b><span className="faint">{AREAS[t.area]?.label}{t.due ? ` · due ${new Date(t.due + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}</span>{t.notes && <div className="faint">{t.notes}</div>}</div>
+                <div><b>{t.title}</b>{t.due ? <span className="faint"> · due {new Date(t.due + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span> : null}</div>
               </div>
             ))}
+            {openTasks.length > 2 && <button type="button" className="lm-more" onClick={() => setAllTodos((x) => !x)}>{allTodos ? "Fewer" : `${openTasks.length - 2} more`}</button>}
             {sugg.map((e) => (
               <div key={e.id} className="lm-row ev">
                 <span className="lm-cal" aria-hidden>📅</span>

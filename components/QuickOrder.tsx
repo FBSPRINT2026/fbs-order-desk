@@ -38,7 +38,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
  */
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string; company?: string | null; name?: string | null } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
-type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
+type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string; /** art the Helper pulled off a mockup: its size and drop */ pc?: ArtPiece; from?: string; how?: Pulled["kind"] } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
 type HelpAns = { picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
@@ -305,6 +305,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           guard();
         }
         if (pc && pl) pulledFor.set(id, { pc, from: file.name, kind: pl.kind });
+        else if (picked.kind === "file" && picked.pc) pulledFor.set(id, { pc: picked.pc, from: picked.from || file.name, kind: picked.how || "photos" });
         return id;
       };
       for (const { gi, ii, im } of targets) {
@@ -651,7 +652,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
  * off (a checkbox per file), then the mockup is made. Not there? Their emails and logos, the film folder, an upload,
  * production, or without art for now; or Cancel reorder (nothing saved).
  */
-type Item = { key: string; /** the file as it is, to open full size */ open?: string; where: "old" | "kept" | "else"; /** the print it can only be (art already pulled) */ only?: string; path?: string; hint?: string; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
+type Item = { key: string; /** the file as it is, to open full size */ open?: string; where: "old" | "kept" | "pulled" | "else"; /** the print it can only be (art already pulled) */ only?: string; path?: string; hint?: string; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
 type Drawn = { cut: Blob | null; cutUrl: string; asIs: Blob | null; asIsUrl: string; raw: Blob | null };
 async function drawFile(url: string, name: string, type: string): Promise<Drawn | null> {
   const r = await fetch(url); if (!r.ok) return null;
@@ -676,6 +677,11 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const [found, setFound] = useState<null | (Found & { d?: Drawn | null })[]>(null);
   const [pieces, setPieces] = useState<{ name: string; file: File; url: string; size: string }[]>([]);
   const [ups, setUps] = useState<{ file: File; url: string }[]>([]);
+  // a file marked Mockup: the Helper pulls the art off it right away, each piece shown as a file of its own and given to
+  // the print it's for (Oct 23, Nick, reordering #33728 from Printavo with only Peticolas_Velvet_Hammer_Mockup_Red.pdf:
+  // "it asks me what this file is and I say mockup. And then it goes, well, I don't have the art then. A lot of times
+  // this is all you're going to have. And you can easily use the mockup helper to pull the art")
+  const [pulls, setPulls] = useState<Record<string, { busy: boolean; from: string; how?: Pulled["kind"]; pieces: { pc: ArtPiece; url: string }[] }>>({});
   const [films, setFilms] = useState<null | { busy?: boolean; note?: string; list: { id: string; name: string }[] }>(null);
   // what each file is: a print's key, "mockup" or "none"; and whether its background comes off
   const [as, setAs] = useState<Record<string, string>>({});
@@ -742,6 +748,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const items: Item[] = [
     ...help.prints.filter((p) => p.design).map((p) => ({ key: `K${p.key}`, where: "kept" as const, only: p.key, tag: `Pulled for the ${p.label}`, name: "Art pulled from the old job", cutUrl: kept[p.design!] || "", asIsUrl: kept[p.design!] || "", canCut: false, ready: true, pick: () => ({ kind: "keep" as const }) })),
     ...(old || []).map((f, i) => ({ key: `O${i}`, open: f.url, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
+    ...Object.entries(pulls).filter(([k]) => as[k] === "mockup").flatMap(([k, pu]) => pu.pieces.map((x, n) => ({ key: `P${k}:${n}`, where: "pulled" as const, tag: `Pulled off ${pu.from} · ${x.pc.side === "back" ? "Back" : "Front"}, ${x.pc.widthIn}" × ${x.pc.heightIn}"`, name: `${pu.from} ${x.pc.side} art`, cutUrl: x.url, asIsUrl: x.url, canCut: false, ready: true,
+      pick: () => ({ kind: "file" as const, file: x.pc.file, name: `the art pulled off ${pu.from}`, pc: x.pc, from: pu.from, how: pu.how }) }))),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
     ...pieces.map((p, i) => ({ key: `M${i}`, where: "else" as const, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => ({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
     ...(found || []).map((f, i) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
@@ -814,6 +822,37 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     y[key] = on ? mine.filter((x) => x !== id) : [...mine, id];
     return y;
   });
+  useEffect(() => {
+    for (const [i, f] of (old || []).entries()) {
+      const k = `O${i}`;
+      // marked Mockup, or not answered yet and it looks like one (by its name, or what the AI sees in it): a PDF with
+      // the art still in it (vector, ready to go) is found here and marked Mockup for you; a flat one gets nothing off it
+      const looks = !as[k] && (mockupNamed(f.name) || /mock/i.test(aiG[f.path]?.kind || ""));
+      if ((as[k] !== "mockup" && !looks) || pulls[k] || !f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) continue;
+      const raw = f.d.raw instanceof File ? f.d.raw : new File([f.d.raw], f.name, { type: f.d.raw.type || "application/pdf" });
+      setPulls((x) => ({ ...x, [k]: { busy: true, from: f.name, pieces: [] } }));
+      void pullOffMockup(raw, f.name, { drawn: true }).catch(() => null).then((got) => {
+        const pieces = (got?.pieces || []).filter((pc) => pc.widthIn * pc.heightIn >= 1).map((pc) => ({ pc, url: URL.createObjectURL(pc.file) }));
+        setPulls((x) => ({ ...x, [k]: { busy: false, from: f.name, how: got?.kind, pieces } }));
+        // each piece to the print on its side that has no art yet (the biggest piece first)
+        if (!pieces.length) return;
+        setAs((a) => {
+          if (a[k] && a[k] !== "mockup") return a;
+          const n: Record<string, string> = { ...a, [k]: "mockup" }, covered = new Set(Object.values(a).filter((v) => v.startsWith("loc:")).map((v) => v.slice(4)));
+          for (const pk of Object.values(a)) { const pr = help.prints.find((q) => q.key === pk); if (pr) covered.add(pr.location); }
+          const order = pieces.map((x, m) => ({ x, m })).sort((p1, p2) => p2.x.pc.widthIn * p2.x.pc.heightIn - p1.x.pc.widthIn * p1.x.pc.heightIn);
+          for (const { x, m } of order) {
+            const back = x.pc.side === "back", open = locs.filter((l) => !covered.has(l));
+            const loc = open.find((l) => /back|yoke|shoulder|nape/i.test(l) === back);
+            if (!loc) continue;
+            n[`P${k}:${m}`] = `loc:${loc}`; covered.add(loc);
+          }
+          return n;
+        });
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [as, old, aiG]);
   const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
@@ -888,7 +927,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
             </div>
           );
         })()}
-        {!v && (it.path && aiG[it.path]?.kind && aiG[it.path].kind !== "?" ? <span className="arc-hint">I think: <b>{prodKindLabel(aiG[it.path].kind)}</b>{aiG[it.path].why ? ` (${aiG[it.path].why})` : ""}. Right?</span> : it.hint ? <span className="arc-hint">{it.hint}?</span> : it.where === "old" && it.path && !aiG[it.path] ? <span className="arc-hint">Looking at it…</span> : null)}
+        {!v && pulls[it.key]?.busy ? <span className="arc-hint">Looks like a mockup: checking it with the Mockup Helper…</span> : !v && (it.path && aiG[it.path]?.kind && aiG[it.path].kind !== "?" ? <span className="arc-hint">I think: <b>{prodKindLabel(aiG[it.path].kind)}</b>{aiG[it.path].why ? ` (${aiG[it.path].why})` : ""}. Right?</span> : it.hint ? <span className="arc-hint">{it.hint}?</span> : it.where === "old" && it.path && !aiG[it.path] ? <span className="arc-hint">Looking at it…</span> : null)}
         {it.where === "old" && v === "production" && (
           <label className="arc-kind">What it is
             <select value={kindOf[it.key] ?? (aiKind(it.path) || guessProdKind(it.name))} onChange={(e) => setKindOf((x) => ({ ...x, [it.key]: e.target.value }))}>
@@ -898,13 +937,13 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           </label>
         )}
         {it.where === "old" && v && v !== "none" && <input className="arc-note" value={noteOf[it.key] || ""} onChange={(e) => setNoteOf((x) => ({ ...x, [it.key]: e.target.value }))} placeholder={v === "production" ? 'A note, e.g. "Amazon barcodes for The Bottles"' : "A note for production (optional)"} aria-label="Note on this file" />}
-        {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
+        {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? (() => { const pu = pulls[it.key]; return pu?.busy ? "Kept as the old mockup. Pulling the art off it with the Mockup Helper…" : pu && pu.pieces.length ? `The art is still in this mockup, so the order is made from it: the Mockup Helper pulled ${pu.pieces.map((x) => `the ${x.pc.side} (${x.pc.widthIn}" wide)`).join(" and ")}. Next ›` : pu ? "Kept as the old mockup. The Mockup Helper couldn't find art on a shirt in it: upload the art below, or skip for now" : "Kept in Production files as the old mockup"; })() : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
 
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
       </div>
     );
   };
-  const olds = items.filter((x) => x.where === "old" || x.where === "kept"), elses = items.filter((x) => x.where === "else");
+  const olds = items.filter((x) => x.where === "old" || x.where === "kept" || x.where === "pulled"), elses = items.filter((x) => x.where === "else");
   const opening = old === null || (old || []).some((f) => f.d === undefined);
   const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
@@ -1018,7 +1057,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         {stage === "details" && <button type="button" className="btn ghost" onClick={() => setStage("files")}>‹ Back to the files</button>}
         {stage === "files"
           ? (() => {
-            const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1));
+            const n = items.filter((x) => x.where === "old" || x.where === "kept" || x.where === "pulled").length, i = Math.min(at, Math.max(0, n - 1));
             if (n > 1 && i < n - 1) return <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button>;
             if (!help.prints.length) return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => finish("skip")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Done ›"}</button>;
             return <button type="button" className="btn primary" disabled={filesLeft > 0} onClick={() => setStage("details")}>{filesLeft > 0 ? `Say what each file is (${filesLeft} left)` : "Next: how it printed ›"}</button>;
