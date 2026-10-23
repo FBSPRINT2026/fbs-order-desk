@@ -15,14 +15,17 @@ import { artFromDrawnMockup, artFromMockupPdf, pdfPicture, type ArtPiece } from 
  */
 export type Pulled = { kind: "photos" | "drawn"; pieces: ArtPiece[] };
 
+/** a file named or read as a mockup / proof / layout (the drawn-shirt reader is only tried on these) */
+export const mockupNamed = (name: string) => /mock|proof|layout|sheet|template|visual|draft/i.test(name);
 export const pdfLike = (f: { name: string; type?: string }) => /\.(pdf|ai)$/i.test(f.name) || /pdf|postscript|illustrator/i.test(f.type || "");
 
-export async function pullOffMockup(file: Blob, name: string): Promise<Pulled | null> {
+export async function pullOffMockup(file: Blob, name: string, opt: { /** read shirts drawn flat too: only for a file known to be a mockup (a plain logo's big shapes could pass for shirts) */ drawn?: boolean } = { drawn: true }): Promise<Pulled | null> {
   if (!pdfLike({ name, type: file.type })) return null;
   const buf = await file.arrayBuffer();
   const base = name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ").trim() || "Art";
   const photos = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => [] as ArtPiece[]);
   if (photos.length) return { kind: "photos", pieces: photos };
+  if (opt.drawn === false) return null;
   const drawn = await artFromDrawnMockup(buf.slice(0), base).catch(() => [] as ArtPiece[]);
   if (drawn.length) return { kind: "drawn", pieces: drawn };
   return null;

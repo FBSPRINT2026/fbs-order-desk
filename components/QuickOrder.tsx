@@ -12,7 +12,7 @@ import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
 import { looksLikeSheet, measureDrop, splitSheet } from "@/lib/setupSheet";
-import { pagePicture, pdfLike, pieceFor, pullOffMockup, type Pulled } from "@/lib/mockupPull";
+import { mockupNamed, pagePicture, pdfLike, pieceFor, pullOffMockup, type Pulled } from "@/lib/mockupPull";
 import type { ArtPiece } from "@/lib/printavoArt";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
@@ -286,7 +286,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const file = picked.file;
         if (pdfLike(file) && !pulledOf.has(file)) {
           note(`Is the art in ${file.name} on a shirt? Checking with the Helper…`);
-          pulledOf.set(file, await pullOffMockup(file, file.name).catch(() => null));
+          pulledOf.set(file, await pullOffMockup(file, file.name, { drawn: mockupNamed(file.name) }).catch(() => null));
           guard();
         }
         const pl = pulledOf.get(file) || null;
@@ -451,7 +451,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const { data: blob } = await sb0.storage.from("proofs").download(f.path);
         if (!blob) continue;
         step(`${of}Is the art in ${f.name} on a shirt? Checking with the Helper…`);
-        const got: Pulled | null = await pullOffMockup(blob, f.name).catch(() => null);
+        const got: Pulled | null = await pullOffMockup(blob, f.name, { drawn: f.role === "mockup" || mockupNamed(f.name) || Object.values(d.mockups || {}).flat().includes(f.path) }).catch(() => null);
         guard();
         if (!got) continue;
         const used = new Set<ArtPiece>();
