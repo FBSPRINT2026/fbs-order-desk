@@ -1538,7 +1538,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
   };
   const loose = checks.map((c, i) => ({ c, i })).filter(({ c }) => groupOf(c.about) < 0);
   const pcs = (g: Group) => g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((m, v) => m + (+v || 0), 0), 0);
-  const nameOf = (v: string) => (v.startsWith("design:") ? "Their logo on file" : files.find((f) => f.path === v)?.name || "Art");
+  const nameOf = (v: string) => (v.startsWith("design:") ? "Logo from a past order" : files.find((f) => f.path === v)?.name || "Art");
   return (
     <div className="ap rv" role="group" aria-label="Check the order before it's made">
       <p className="ap-q">Here&apos;s what I found. Check it, then make it.</p>
@@ -1563,7 +1563,11 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
             {/* front first, then the back, then sleeves (Oct 23, Nick: "can you do the front first and the back second?") */}
             {[...g.imprints].sort((x, y) => spotRank(x.location) - spotRank(y.location)).map((im) => {
               const cur = art[im.id] || "";
-              const opts = [...new Set([...(cur && !arts.some((f) => f.path === cur) ? [cur] : []), ...arts.map((f) => f.path)])];
+              // art pulled off our own mockup sheet (the files step already said "I'll use its art"): that's the logo, not
+              // asked again (Oct 23, Nick: "you already have the mockup. You said, I'm good to go. And then you ask their
+              // logo on file, or use the file in the email. It's ambiguous")
+              const ourSheet = cur.startsWith("design:") && /From our mockup sheet /.test(im.notes || "") ? (im.notes || "").match(/From our mockup sheet ([^:]+):/)?.[1] || "" : null;
+              const opts = ourSheet != null ? [cur] : [...new Set([...(cur && !arts.some((f) => f.path === cur) ? [cur] : []), ...arts.map((f) => f.path)])];
               return (
                 <div key={im.id} className="rv-print">
                   <p className="rv-qq">{opts.length > 1 ? `${gname} · ${im.location}: which logo?` : `${im.location}${parseFloat(String(im.size || "")) > 0 ? `, ${parseFloat(String(im.size))}" wide` : ""}`}</p>
@@ -1571,7 +1575,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                     {(opts.length ? opts : [""]).map((v) => (
                       <button key={v || "none"} type="button" role="radio" aria-checked={cur === v} className={"rv-c pic" + (cur === v ? " on" : "")} disabled={!v || opts.length < 2} onClick={() => setArt((x) => ({ ...x, [im.id]: v }))}>
                         {v ? <Pic path={v.startsWith("design:") ? undefined : v} design={v.startsWith("design:") ? v.slice(7) : undefined} /> : <span className="rv-pic"><span className="faint">No logo yet</span></span>}
-                        <span data-notranslate>{v ? nameOf(v) : "Add it on the order"}{v && v === (d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")) && opts.length > 1 ? <i className="faint"> (my pick)</i> : null}</span>
+                        <span data-notranslate>{v ? (ourSheet != null ? "Pulled from our mockup sheet" : nameOf(v)) : "Add it on the order"}{v && v === (d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")) && opts.length > 1 ? <i className="faint"> (my pick)</i> : null}</span>
                       </button>
                     ))}
                     {im.sameAs && <figure className="rv-same"><Pic path={im.sameAs.pic} /><figcaption>Printed like <b data-notranslate>{im.sameAs.label}</b></figcaption></figure>}
