@@ -25,6 +25,25 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
   return pdfjs.getDocument({ data: buf }).promise;
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
+/**
+ * The print sizes written on one of our mockup sheets ("Back Imprint · SIZE: W 10"", "Front Imprint · SIZE: W 3" H 3.21"")
+ * (Oct 23, Nick on PO 92785: the back was measured off #32303's sheet at 14" wide, which we can't even print; the sheet
+ * says W 10"). By side: front, back, left/right sleeve.
+ */
+export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", { w: number; h?: number }>>> {
+  const doc = await openDoc(buf);
+  const out: Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", { w: number; h?: number }>> = {};
+  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
+    const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
+    const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
+    for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(.{0,80})/gi)) {
+      const side = m[1].toLowerCase() as keyof typeof out;
+      const sz = m[2].match(/\bW\s*:?\s*(\d+(?:\.\d+)?)\s*["”″]?(?:\s*(?:x|×)?\s*H\s*:?\s*(\d+(?:\.\d+)?))?/i);
+      if (sz && !out[side] && +sz[1] > 0 && +sz[1] < 20) out[side] = { w: +sz[1], ...(sz[2] ? { h: +sz[2] } : {}) };
+    }
+  }
+  return out;
+}
 /** a PDF (or a PDF-compatible AI file) opened to draw its pages (the quick look's own viewer) */
 export const openPdf = openDoc;
 

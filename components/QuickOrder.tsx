@@ -17,12 +17,12 @@ import type { ArtPiece } from "@/lib/printavoArt";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
-import { pdfPicture } from "@/lib/printavoArt";
+import { pdfPicture, sizesOnSheet } from "@/lib/printavoArt";
 import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
-import { guessHex, isHeather, shirtBg } from "@/lib/mockup";
+import { guessHex, isHeather, shirtBg, spotFor } from "@/lib/mockup";
 import { knockOut } from "@/lib/artPrep";
 import { inkName, planPrint, pxOfImage } from "@/lib/printPlan";
 
@@ -505,18 +505,33 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (im.sameAs.pdf) {
         note(`Measuring the ${im.location} on ${im.sameAs.label}'s mockup…`);
         try {
-          const { data: su } = await createClient().storage.from("proofs").createSignedUrl(im.sameAs.pdf, 600);
-          const blob = su?.signedUrl ? await (await fetch(su.signedUrl)).blob() : null;
-          const got = blob ? await pullOffMockup(new File([blob], "old mockup.pdf", { type: "application/pdf" }), "old mockup.pdf", { drawn: true }) : null;
-          const pc = got ? pieceFor(got, im.location) : undefined;
-          if (pc) { w = pc.widthIn; dropIn = pc.dropIn; }
+          const side = /sleeve/i.test(im.location) ? (/left/i.test(im.location) ? "left sleeve" : "right sleeve") : /back|yoke|shoulder|nape/i.test(im.location) ? "back" : "front";
+          // the size written on our mockup sheet ("Back Imprint · SIZE: W 10"") wins over measuring the drawing: every PDF
+          // on the old job is looked at (the sheet may not be the first)
+          let blob: Blob | null = null, said: { w: number; h?: number } | undefined;
+          for (const pth of im.sameAs.pdfs?.length ? im.sameAs.pdfs : [im.sameAs.pdf]) {
+            const { data: su } = await createClient().storage.from("proofs").createSignedUrl(pth, 600);
+            const b = su?.signedUrl ? await (await fetch(su.signedUrl)).blob().catch(() => null) : null;
+            if (!b) continue;
+            if (!blob) blob = b;
+            said = (await sizesOnSheet(await b.arrayBuffer()).catch(() => ({} as Awaited<ReturnType<typeof sizesOnSheet>>)))[side];
+            if (said) break;
+          }
+          if (said) w = said.w;
+          else {
+            const got = blob ? await pullOffMockup(new File([blob], "old mockup.pdf", { type: "application/pdf" }), "old mockup.pdf", { drawn: true }) : null;
+            const pc = got ? pieceFor(got, im.location) : undefined;
+            // never bigger than the spot can print (a 14" back: "we can't even print 14 wide")
+            if (pc && pc.widthIn <= spotFor(im.location).maxW) { w = pc.widthIn; dropIn = pc.dropIn; }
+          }
         } catch { /* asked below */ }
         guard();
       }
       const id = im.id;
       if (w > 0) {
-        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, size: `${w}" wide`, ...(dropIn >= 0 ? { drop: String(dropIn) } : {}), notes: [z.notes, `Size from ${im.sameAs!.label}'s mockup: ${w}" wide${dropIn >= 0 ? `, ${dropIn}" below the collar` : ""} (measured)`].filter(Boolean).join(". ").slice(0, 300) })) })) };
-        did.push(`${im.location}: ${w}" wide, measured on ${im.sameAs.label}'s mockup`);
+        const how = dropIn >= 0 ? "measured" : "written on it";
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, size: `${w}" wide`, ...(dropIn >= 0 ? { drop: String(dropIn) } : {}), notes: [z.notes, `Size from ${im.sameAs!.label}'s mockup: ${w}" wide${dropIn >= 0 ? `, ${dropIn}" below the collar` : ""} (${how})`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+        did.push(`${im.location}: ${w}" wide, ${how} on ${im.sameAs.label}'s mockup`);
       } else {
         d = { ...d, check: [...(d.check || []), { q: `${im.location}: what size? ${im.sameAs.label} didn't keep one`, guess: "Standard size", about: x.name, choices: [{ label: "Standard size" }, { label: "Production measures it" }] }] };
       }
