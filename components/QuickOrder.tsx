@@ -326,7 +326,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             // "this is going to be our most common mockup… this actually has everything you need")
             const inks = [...new Set((pu.sheet.inks || []).map(stockName))];
             if (+im.colors > 0) saidColors.set(im.id, +im.colors);
-            setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}`);
+            // the sheet has the size and inks: nothing for production to confirm ("Reorder details needed" was on #40119)
+            setIm({ design_id: id, size: `${pu.sheet.w}" wide`, ...(inks.length ? { inks: inks.join(", "), colors: inks.length, confirm: undefined } : {}) }, `From our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${pu.sheet.h ? ` × ${pu.sheet.h}"` : ""}${inks.length ? `, ${inks.join(", ")}` : ""}`);
             did.push(`${im.location}: from our mockup sheet ${pu.from}: ${pu.sheet.w}" wide${inks.length ? `, ${inks.join(", ")}` : ""}`);
             continue;
           }
@@ -709,6 +710,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`${y0(d, id)}: ${keep ? `the ${bgName.toLowerCase()} box prints too (${n + 1} colors)` : `${bgName.toLowerCase()} box taken out, ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`}`);
       }
       const ans = rv.answers.filter((x) => !localOf.has(x.q));
+      // a date question settled on a firm date ("Firm 11/2 (notes)"): the order's Firm box is ticked
+      for (const c of (d.check || []).filter((c0) => /\b(due|dates?|in-?hands|deadline|needed by)\b/i.test(c0.q))) {
+        const a1 = ans.find((x) => x.q === c.q)?.answer.trim() || c.guess || "";
+        if (/\bfirm\b/i.test(a1)) d = { ...d, firm: true };
+      }
       // the size and inks as the check shows them: that's what's made
       for (const [id, sp] of Object.entries(rv.specs || {})) {
         const was = d.specs?.[id];
@@ -1139,7 +1145,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       for (const p of knowLocs) {
         const sd = /sleeve/i.test(p.location) ? (/left/i.test(p.location) ? "left sleeve" : "right sleeve") : /back|yoke|shoulder|nape/i.test(p.location) ? "back" : "front";
         const spec = keys.map((k) => (sheets[k] as Partial<Record<string, SheetSpec>>)[sd]).find(Boolean);
-        n[p.location] = spec?.inks?.length ? { colors: spec.inks.length, ub: !!p.dark } : null;
+        // the sheet's inks go on the print with its art (not as "you said": #40119 read "You said: printed 2 colors, no
+        // underbase" when nobody said it); the underbase is decided later from the paperwork's color count
+        n[p.location] = spec?.inks?.length ? null : n[p.location] ?? null;
       }
       return n;
     });

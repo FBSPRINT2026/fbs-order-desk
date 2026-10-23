@@ -176,6 +176,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const { data: o, error } = await admin.from("orders").insert({
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
+    ...(d.firm && d.due_date ? { firm: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),

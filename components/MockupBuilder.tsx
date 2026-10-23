@@ -591,7 +591,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const map: Paint["map"] = {};
           // inks already named on the order (the customer's proof: "White, PMS 368 C") win over our closest guess:
           // each logo color gets the nearest of those (Oct 9: a guessed PMS 360 C replaced her PMS 368 C)
-          const asked = (im.inks || "").split(/\s*[,;+]\s*|\s+\/\s+|\s+and\s+/i).map((z) => z.trim()).filter((z) => z && colorHex(z));
+          const named = (im.inks || "").split(/\s*[,;+]\s*|\s+\/\s+|\s+and\s+/i).map((z) => z.trim()).filter((z) => z && !/^(none|removed)$/i.test(z));
+          const asked = named.filter((z) => colorHex(z));
+          // a PMS named on the order that isn't in our color list (Oct 23, HALFF #40119: "PMS 2178 C" from our own mockup
+          // sheet was dropped, the order looked one ink short and both were swapped for guesses, PMS 648 C and 7696 C): still
+          // an ink they asked for. It goes on the logo color no named ink is near, drawn in the logo's own color
+          const unknown = named.filter((z) => !colorHex(z) && /\b(pms|pantone)\b|^\d{3,4}\s*-?\s*[cu]?$/i.test(z));
           const rgb = (h: string) => { const v = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
           const dist = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2; };
           const nearestAsked = (hex: string) => asked.slice().sort((a, b) => dist(hex, colorHex(a)!) - dist(hex, colorHex(b)!))[0];
@@ -600,7 +605,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // the logo's colors that print: the shirt's own color doesn't (Oct 23, #40116: Black counted made White + Scarlet
           // look like too few inks, so they were thrown out for National Red and PMS Bright Red C)
           const ownOf = (hex: string) => plan!.inks.length > 1 && !!line?.color && !isHeather(line.color) && dist(hex, shirtHex(line)) < 45 ** 2;
-          const useAsked = asked.length > 0 && asked.length >= plan.inks.filter((k) => !ownOf(k.hex)).length;
+          const useAsked = asked.length + unknown.length > 0 && asked.length + unknown.length >= plan.inks.filter((k) => !ownOf(k.hex)).length;
+          const spare = [...unknown];
           // otherwise the customer's brand colors: a red in their logo becomes their PMS red (when it's close)
           const b = brandRef.current;
           // brand standards aren't applied on their own (Oct 16, Nick: a customer can have several sets): the "Apply brand
@@ -621,7 +627,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             // a logo color that's the shirt's own color doesn't print: the shirt shows through (Oct 23, Nick: "black on a
             // black shirt, you should always think I'm removing it… yellow on a yellow shirt"; not on a heathered shirt)
             const shirtOwn = ownOf(k.hex);
-            const name = was ? was.name : shirtOwn ? "none" : near && dist(k.hex, colorHex(near)!) < 90 ** 2 ? near : onShirt || snap(k.hex, k.name);
+            const close = !!near && dist(k.hex, colorHex(near)!) < 90 ** 2;
+            const name = was ? was.name : shirtOwn ? "none" : close ? near : useAsked && spare.length ? spare.shift()! : onShirt || snap(k.hex, k.name);
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
           }

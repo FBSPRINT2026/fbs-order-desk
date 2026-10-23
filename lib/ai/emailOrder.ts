@@ -296,6 +296,7 @@ function tool(finishingIds: string[]) {
         summary: { type: "string", description: "One sentence for staff: what they want" },
         nickname: { type: "string", description: "Short job name, e.g. 'Terrible Toddler'" },
         due_date: { type: ["string", "null"], description: "In-hands date YYYY-MM-DD only if the customer gave one" },
+        due_firm: { type: "boolean", description: "True when the paperwork or email says the in-hands date is firm (FIRM, hard date, must have by, event date, no later than)" },
         po_number: { type: "string" },
         delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
         ship_to: { type: "string" },
@@ -786,6 +787,8 @@ ${staffSays}` : ""}`;
     v: 2, kind: job ? "reorder" : "new", summary: (p.summary || "").slice(0, 400), confidence: p.confidence || "medium",
     nickname: (p.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "").slice(0, 120),
     due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date! : null,
+    // a firm in-hands date (Oct 23, Nick on HALFF: "you should have checked firm date"): the order's Firm box
+    firm: !!(p as { due_firm?: boolean }).due_firm || /\bfirm\b/i.test(`${(p as { customer_notes?: string }).customer_notes || ""} ${p.notes || ""}`),
     delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
     ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60),
     customerNotes: String((p as { customer_notes?: string }).customer_notes || "").trim().slice(0, 2000),
