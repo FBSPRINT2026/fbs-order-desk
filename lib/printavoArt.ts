@@ -45,7 +45,8 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
     // or by the page itself (Oct 23, Nick: "visually… the whole bottom third of the sheet is the same on every one"): the
     // same page as our blank sized proof (35" × 42", the shirt and the standard imprint colors chart)
     const v = (pg as unknown as { getViewport: (o: { scale: number }) => { width: number; height: number } }).getViewport({ scale: 1 });
-    const ours = /the above sized proof|standard imprint colou?rs/i.test(t) || (Math.abs(v.width - 2528) < 3 && Math.abs(v.height - 3005.3) < 3);
+    void v;
+    const ours = n === 1 ? (await looksLikeOurSheet(pg as unknown as Page).catch(() => 0)) >= 0.6 || /the above sized proof|standard imprint colou?rs/i.test(t) : /the above sized proof|standard imprint colou?rs/i.test(t);
     for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(?=(.{0,160}))/gi)) { // each side found, even one inside the side before's 160 letters
       const side = m[1].toLowerCase() as keyof typeof out;
       // this side's part only: up to the next "… Imprint" or the sheet's own text
@@ -76,6 +77,34 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
   }
   return out;
 }
+/**
+ * Our mockup sheet, by looking at it (Oct 23, Nick: "look at a image of our mock-up and go, oh, this matches 95% of our
+ * mock-up… the whole bottom third of the sheet is the same on every one"): the page drawn small next to our blank
+ * sheets, and the bottom third compared (ours: 86–100% the same; a work order or PO: 3%). 60% = ours.
+ */
+const smallGray = async (page: Page, W = 200, H = 240) => {
+  const v = page.getViewport({ scale: 1 }), sc = Math.min(W / v.width, H / v.height);
+  const vp = page.getViewport({ scale: sc }), c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true })!; x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+  await page.render({ canvasContext: x, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+  const d = x.getImageData(0, 0, W, H).data, g = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) g[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  return g;
+};
+let blankLooks: Promise<Uint8Array[]> | null = null;
+export async function looksLikeOurSheet(page: Page): Promise<number> {
+  blankLooks ||= loadTemplates().then((ds) => Promise.all(ds.map(async (d) => smallGray(await d.getPage(1)))));
+  const blanks = await blankLooks, f = await smallGray(page), W = 200, H = 240, y0 = Math.round(H * 0.67);
+  let best = 0;
+  for (const b of blanks) {
+    let same = 0, n = 0;
+    // where our blank sheet has something drawn (the color chart, the notes), does this page have it too
+    for (let i = y0 * W; i < W * H; i++) { if (b[i] > 215) continue; n++; if (Math.abs(f[i] - b[i]) < 45) same++; }
+    if (n) best = Math.max(best, same / n);
+  }
+  return best;
+}
+
 /** the first page's size in inches (a logo's own artboard is a few inches; a mockup page is letter size or more) */
 export async function firstPageIn(buf: ArrayBuffer): Promise<{ w: number; h: number }> {
   const doc = await openDoc(buf);
