@@ -16,10 +16,15 @@ const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", 
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
-export default function OrderStartPick({ activityId, text, guess, onPick, onClose, suggested, dock }: { activityId: string;
+export default function OrderStartPick({ activityId, text, guess, onPick: onPick0, onClose, suggested, dock }: { activityId: string;
   /** a panel on the right, the page still usable beside it (Oct 23, Nick: "I can't see anything once we create an order… a
    *  pop-up on the right, like Claude in Chrome… so I can still click the attachments") */ dock?: boolean; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string } }) {
+  // screen printing or embroidery, first (Oct 23, Nick: "when you create a reorder, you have to now go, okay, is this
+  // screen printing or embroidery first to start… some orders are both"): told to the AI with whatever's picked below
+  const [how, setHow] = useState<"" | "screen" | "embroidery" | "both">("");
+  const HOW_TOLD = { screen: "Every print on this order is SCREEN PRINTED.", embroidery: "Every print on this order is EMBROIDERED (method embroidery): threads, not inks; give each print's finished size.", both: "This order has BOTH embroidery and screen printing: say which method each print is (e.g. embroidered left chest, screen printed back)." } as const;
+  const onPick = (st: OrderStart) => onPick0(how ? { ...st, told: [st.told, HOW_TOLD[how]].filter(Boolean).join(" ") } : st);
   const [past, setPast] = useState<PastJob[] | null>(null);
   // "same as order 85254", "screen print process same as PO 85254", "like job #31174": the past job a new order points at
   const like = (() => {
@@ -116,6 +121,13 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
       <div className="dla osp" onClick={(e) => e.stopPropagation()}>
         <h3>Create order</h3>
         <p className="dla-sub">Is this a new order, or a reorder of something we&apos;ve printed for them before? A reorder brings in the old job&apos;s art, film and garments.</p>
+        <div className="osp-how" role="group" aria-label="How it's decorated">
+          <span className="faint">How is it decorated?</span>
+          <div className="chips">
+            {([["screen", "Screen print"], ["embroidery", "Embroidery"], ["both", "Both"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (how === k ? " on" : "")} aria-pressed={how === k} onClick={() => setHow(how === k ? "" : k)}>{l}</button>)}
+          </div>
+          {!how && <span className="faint osp-how-n">Not picked: the AI reads it from the email</span>}
+        </div>
         {plan === null ? <p className="osp-plan-wait">Reading the emails for how many orders are in them…</p> : plan.parts.length > 1 && (
           <div className="osp-plan">
             {(() => {

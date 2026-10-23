@@ -36,6 +36,11 @@ import { levelBack } from "@/lib/levelBack";
 import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
+import { closestThread, isThreadName, threadLabel } from "@/lib/embroidery";
+import { loadThreadStock } from "@/lib/threadStock";
+import { stitchLook } from "@/lib/stitchLook";
+import EmbroideryPanel from "@/components/EmbroideryPanel";
+import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
@@ -57,7 +62,8 @@ type Ink = { name: string; hex: string; /** printed as a halftone of this ink (%
 type Paint = { /** the shirt color it was set up for, when the logo has its own ink per shirt color */ shirt?: string; design: string; sources: { hex: string; share: number }[]; map: Record<string, Ink>;
   /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
   /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean;
-  /** drawn from the clean picture: the logo's distress layer turned off */ off?: boolean };
+  /** drawn from the clean picture: the logo's distress layer turned off */ off?: boolean;
+  /** set up for embroidery: each color is a Madeira thread, not an ink (screen prints leave it out) */ method?: "embroidery" };
 /** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
 const inkNames = (pt: Paint, map = pt.map) => {
   const names = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
@@ -243,6 +249,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [askUploaded, setAskUploaded] = useState(false);
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
+  // embroidered prints drawn stitched on the mockup (off shows the flat logo)
+  const [stitchOn, setStitchOn] = useSticky<boolean>("mockup.stitchLook", true);
+  const stitchRun = useRef(0);
+  const stitchCache = useRef(new Map<string, string>());
   /** a print's art cut down to what prints when a color was removed (its proportions; the print size is this art's) */
   const [paintBox, setPaintBox] = useState<Record<string, { w: number; h: number }>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
@@ -613,7 +623,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // a logo with its own ink per shirt color is set up again when the shirt color changes
       const sh = onShirtsOf(d).length ? (line?.color || "") : "";
       const off = im.distress === "off" && !!urls[d.id + ":clean"];
-      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off) return;
+      const emb = im.method === "embroidery";
+      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off && (paints[im.id]?.method === "embroidery") === emb) return;
       // every PMS the Ink Room has, before the order's inks are matched to the logo's colors (PMS 2178 C, HALFF #40119)
       if (!portal) await loadInkFormulas(sb).catch(() => 0);
       try {
@@ -626,6 +637,30 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const names = [...new Set(plan.inks.map((k) => k.name))];
           if (!portal) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
           const pl = plan; setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
+        }
+        // embroidery (Oct 23, Nick: "we're no longer picking colors or PMS colors, we're picking threads… Madeira"): each
+        // color of the logo is the closest Madeira thread (or the thread saved on the print), its own path apart from
+        // the inks below
+        if (emb) {
+          const rgbE = (h: string) => { const v = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
+          const far = (a: string, b: string) => { const x = rgbE(a), y = rgbE(b); return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2; };
+          const groups: { hex: string; also: string[] }[] = plan.method === "spot" ? plan.inks.map((k) => ({ hex: k.hex, also: k.also || [] })) : detectColors(img, 12).map((x) => ({ hex: x.hex, also: [] }));
+          const sources = groups.flatMap((k) => [k.hex, ...k.also].map((hex) => ({ hex, share: 0 })));
+          const saved = im.inkMap?.design === d.id ? im.inkMap.map : null;
+          const stock = portal ? new Set<string>() : await loadThreadStock(sb).catch(() => new Set<string>());
+          const map: Paint["map"] = {};
+          for (const k of groups) {
+            const was = saved?.[k.hex] && (isThreadName(saved[k.hex].name) || saved[k.hex].name === "none") ? saved[k.hex] : null;
+            // the shirt's own color isn't sewn (not on a heather)
+            const own = groups.length > 1 && !!line?.color && !isHeather(line.color) && far(k.hex, shirtHex(line)) < 45 ** 2;
+            const t = was ? null : closestThread(k.hex, { line: im.emb?.line, stock });
+            const pick = was || (own ? { name: "none", hex: k.hex } : t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: k.hex });
+            for (const hex of [k.hex, ...k.also]) map[hex] = saved?.[hex] && isThreadName(saved[hex].name) ? saved[hex] : pick;
+          }
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, method: "embroidery" } }));
+          const names = [...new Set(Object.values(map).map((v) => v.name).filter((n) => n && n !== "none"))];
+          setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: names.join(", "), colors: Math.max(1, names.length) } : x)));
+          return;
         }
         if (plan.method === "spot") {
           // each color of the logo (fade steps and combined colors too) already set to the ink it prints as
@@ -659,7 +694,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // the logo's own ink for this shirt color (its "On shirts": white on navy, navy on white), for a one-color logo
           const onShirt = plan.inks.length === 1 && line?.color ? inkOnShirt(d, line.color) : null;
           // the inks picked for this logo before (saved on the imprint) come back as they were
-          const saved = im.inkMap?.design === d.id ? im.inkMap.map : null;
+          // threads picked while it was embroidery don't come back as inks
+          const saved0 = im.inkMap?.design === d.id ? im.inkMap.map : null;
+          const saved = saved0 && Object.values(saved0).some((v) => isThreadName(v.name)) ? null : saved0;
           for (const k of plan.inks) {
             const was = saved?.[k.hex];
             // an ink named on the order only when it's near the logo's own color: a named ink far off it is a guess
@@ -721,9 +758,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       next[im.id] = t.url;
       if (t.box) boxes[im.id] = { w: t.w, h: t.h };
     }
+    // stitched pictures already drawn come straight back (a drag or a save doesn't draw them again)
+    const todo: { id: string; flat: string; key: string; pxPerIn?: number }[] = [];
+    if (stitchOn) for (const im of imprints) {
+      if (im.method !== "embroidery" || !next[im.id]) continue;
+      const wIn = parseFloat(im.size || "") || 0, box = boxes[im.id], tall = /tall/i.test(im.size || "");
+      const pxPerIn = box && wIn ? Math.round(((tall ? box.h : box.w) / wIn) * 10) / 10 : undefined;
+      const key = `${next[im.id].length}:${next[im.id].slice(-64)}:${pxPerIn || 0}`;
+      const hit = stitchCache.current.get(key);
+      if (hit) next[im.id] = hit; else todo.push({ id: im.id, flat: next[im.id], key, pxPerIn });
+    }
     setPainted(next);
     setPaintBox(boxes);
-  }, [paints, imprints, hover]);
+    // embroidery looks stitched (Oct 23, Nick: "make our mock-ups look like they're embroidered… this FedEx logo… it
+    // should look like it's stitched"): thread rows, raised edges, a shadow on the fabric. Drawn after the flat one shows
+    const run = ++stitchRun.current;
+    for (const t of todo) {
+      void stitchLook(t.flat, { pxPerIn: t.pxPerIn }).then((u) => {
+        stitchCache.current.set(t.key, u);
+        if (stitchCache.current.size > 40) stitchCache.current.delete(stitchCache.current.keys().next().value as string);
+        if (run === stitchRun.current) setPainted((p) => (p[t.id] === t.flat ? { ...p, [t.id]: u } : p));
+      }).catch(() => null);
+    }
+  }, [paints, imprints, hover, stitchOn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // picture files (JPG, PNG…): warn once per logo that they don't print as crisp as vector art
   const [rasterOk, setRasterOk] = useState<Record<string, boolean>>({});
@@ -904,6 +961,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const t = g && l.color ? tinted[`${g.style}|${colorKey(l.color)}|${view}`] : "";
     return t || teeSvg(guessHex(l.color), view, isHeather(l.color));
   };
+  // SanMar's tall photos (2:3, the shirt in the top two thirds: a K500 polo showed small and high next to S&S shirts;
+  // Oct 23, Nick: "those K500 images are extremely small… they need to be much bigger"): the whole picture, photo and
+  // prints together, zoomed so the shirt fills the frame like the others. One zoom per line from its front photo, used
+  // for the back too, so front and back stay the same size (Oct 22: each photo zoomed on its own made backs bigger)
+  const [frames, setFrames] = useState<Record<string, { z: number; tx: number; ty: number }>>({});
+  const framing = useRef(new Set<string>());
+  useEffect(() => {
+    for (const l of lines) {
+      const u = photo(l, "front");
+      if (!u || !/[?&]u=https?%3A%2F%2F[^&]*sanmar/i.test(u) || framing.current.has(u)) continue;
+      framing.current.add(u);
+      void loadImg(u).then((img) => {
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!iw || ih / iw < 1.4) return;
+        const k0 = Math.min(1, 600 / ih), w = Math.round(iw * k0), h = Math.round(ih * k0);
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return;
+        g.drawImage(img, 0, 0, w, h);
+        const d = g.getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = 0, y1 = 0;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const p = (y * w + x) * 4; if (d[p] < 235 || d[p + 1] < 235 || d[p + 2] < 235) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+        if (x1 <= x0 || y1 <= y0) return;
+        const cr = containRect(img), s0 = cr.w / w;
+        const bx = cr.x + x0 * s0, by = cr.y + y0 * s0, bw = (x1 - x0) * s0, bh = (y1 - y0) * s0;
+        const z = Math.max(1, Math.min(1.35, (PHOTO_W * 0.9) / bw, (PHOTO_H * 0.92) / bh));
+        if (z < 1.05) return;
+        setFrames((f) => ({ ...f, [u]: { z, tx: PHOTO_W / 2 - z * (bx + bw / 2), ty: PHOTO_H / 2 - z * (by + bh / 2) } }));
+      }).catch(() => null);
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const frameOf = (l?: Line) => (l ? frames[photo(l, "front")] : undefined) || RAW;
   // a sweatshirt's or hoodie's back photo drawn at the size of its front (lib/levelBack.ts, Oct 23 Bella 3945)
   const [leveled, setLeveled] = useState<Record<string, string>>({});
   const leveling = useRef(new Set<string>());
@@ -1691,7 +1779,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
-      const nm = RAW;
+      const nm = frameOf(l);
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
       // fitted inside the frame the way it was measured and is shown on screen (object-fit: contain), not stretched: a SanMar
       // photo (2:3) stretched to the 4:5 frame came out 20% wider than the S&S shirts next to it (Oct 20, PC55RS)
@@ -1774,7 +1862,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
-    const nm = RAW;
+    const nm = frameOf(l);
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * nm.z * (p.rot ? 1.35 : 1.12)));
     const cx = nm.tx + nm.z * (p.x + p.w / 2), cy = nm.ty + nm.z * (p.y + p.h / 2);
     const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
@@ -2206,6 +2294,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
     loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
+    // embroidery: the threads, backing and stitches it was set up with, kept on the logo for its next reorder
+    if (!portal) {
+      const l0 = lines[active] || lines[0], gm = l0 ? garmentFor(l0) : undefined;
+      for (const im of g.imprints) if (im.method === "embroidery" && im.design_id && !isQuick(im.design_id)) void rememberEmbroidery(sb, im, order.number, [l0?.brand, l0?.style, gm?.description, l0?.color].filter(Boolean).join(" ")).catch(() => null);
+    }
     return true;
   }
 
@@ -2565,7 +2658,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
-      const nm = RAW;
+      const nm = frameOf(l);
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
@@ -2916,7 +3009,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={RAW}
+              <Stage key={v} grid={grid} norm={frameOf(line)}
                 neckLine={USE_HAND_AREAS && v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={fitFor(line, v)?.cx}
                 areaEdit={false}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
@@ -3187,8 +3280,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
-                    {p.d && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
-                    {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
+                    {/* embroidery: threads and stitches, its own panel (Oct 23, Nick: "keep this completely separate") */}
+                    {p.d && im.method === "embroidery" && paints[im.id]?.method === "embroidery" && (
+                      <>
+                        <EmbroideryPanel im={im} rows={colorRows(paints[im.id])} artUrl={artUrl(im)} wIn={p.wIn} hIn={p.hIn || 0} portal={portal} designId={p.d.id}
+                          garment={(() => { const l = lines[active] || lines[0]; const g = l ? garmentFor(l) : undefined; return [l?.brand, l?.style, g?.description, l?.garment].filter(Boolean).join(" "); })()}
+                          shirtLight={(() => { const l = lines[active] || lines[0]; return !!l && deltaE(shirtHex(l), "#ffffff") < 20; })()}
+                          onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
+                          onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
+                          setIm={(patch) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, ...patch, ...(patch.emb ? { emb: { ...(x.emb || {}), ...patch.emb } } : {}) } : x)))} />
+                        <label className="check emb-look"><input type="checkbox" checked={stitchOn} onChange={(e) => setStitchOn(e.target.checked)} /> Show it stitched on the mockup</label>
+                      </>
+                    )}
+                    {p.d && im.method !== "embroidery" && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
+                    {p.d && im.method !== "embroidery" && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}

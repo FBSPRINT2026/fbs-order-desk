@@ -1,3 +1,4 @@
+import { threadByName } from "@/lib/embroidery";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
@@ -219,9 +220,14 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
   const inks = d.visualOnly ? [] : inkNames(d.inks);
-  const fills = d.method === "embroidery" ? ["Machine", "Hoop", "Backing", "Trims"] : d.method === "dtf" ? ["Press temp", "Time", "Pressure", "Peel"] : ["Press", "Platen", "Flash / cure", "Off-contact"];
+  // embroidery's own facts from the Mockup Creator (Oct 23): backing, topping, the digitized file
+  const emb = d.method === "embroidery" ? d.emb || {} : null;
+  const fills = d.method === "embroidery" ? ["Machine", "Hoop", ...(emb?.backing ? [] : ["Backing"]), "Trims"] : d.method === "dtf" ? ["Press temp", "Time", "Pressure", "Peel"] : ["Press", "Platen", "Flash / cure", "Off-contact"];
   const specs: [string, string][] = d.method === "embroidery"
-    ? [["Size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Stitches", d.stitches ? d.stitches.toLocaleString() : "—"], ["Threads", String(d.colors || inks.length || "—")]]
+    ? [["Size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Stitches", d.stitches ? `${d.stitches.toLocaleString()}${emb?.stitchesFrom === "file" ? "" : emb?.stitchesFrom === "estimate" ? " (est.)" : ""}` : "—"], ["Threads", String(d.colors || inks.length || "—")],
+      ...(emb?.backing ? [["Backing", `${emb.backing}${emb.topping && emb.topping !== "None" ? ` + ${emb.topping.replace(/ \(.*\)$/, "")}` : ""}`] as [string, string]] : []),
+      ...(emb?.file ? [["File", emb.file.name] as [string, string]] : []),
+      ...(emb?.puff || emb?.metallic ? [["Effects", [emb.puff && "3D puff", emb.metallic && "Metallic"].filter(Boolean).join(", ")] as [string, string]] : [])]
     : d.method === "dtf"
       ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
@@ -243,7 +249,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       {d.method === "embroidery" ? (
         <table className="ink">
           <thead><tr><th style={{ width: ".4in" }}>#</th><th>Thread</th><th className="w">Needle</th><th style={{ width: ".7in" }}>Done</th></tr></thead>
-          <tbody>{inkRows.map((k, i) => <tr key={i}><td><b>{i + 1}</b></td><td>{k ? <><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></> : null}</td><td /><td><span className="cb" /></td></tr>)}</tbody>
+          <tbody>{inkRows.map((k, i) => <tr key={i}><td><b>{i + 1}</b></td><td>{k ? <><Swatch c={threadByName(k)?.hex || colorHex(k) || "#ccc"} /><b>{k}</b>{threadByName(k)?.pms.length ? <small>PMS {threadByName(k)!.pms[0].replace(/^PMS\s*/i, "")}</small> : null}</> : null}</td><td /><td><span className="cb" /></td></tr>)}</tbody>
         </table>
       ) : inkRows.length > 0 || sc?.under ? (
         <table className="ink">

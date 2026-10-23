@@ -5,11 +5,14 @@
  * Crew (no "money" permission) see the work (orders, quantities, what's ordered, art, separations, the schedule) but
  * no prices, totals, payments, balances or sales — like Printavo's employee view of an invoice.
  */
-export type Role = "owner" | "admin" | "production" | "receiving" | "shipping";
+export type Role = "owner" | "admin" | "production" | "embroidery" | "receiving" | "shipping";
 export const ROLES: { v: Role; label: string; note: string }[] = [
   { v: "owner", label: "Owner", note: "everything" },
   { v: "admin", label: "Admin", note: "everything" },
   { v: "production", label: "Production", note: "production, separations, shop tools; no money" },
+  // embroidery's own manager (Oct 23, Nick: Maria Guzman, embroidery@fbsprint.com: "she won't see inks, she'll see the
+  // thread room… her own team… her schedule, not the screen printing schedule… her machines")
+  { v: "embroidery", label: "Embroidery", note: "the Thread Room, digitizing, the embroidery schedule and team; no inks, separations or money" },
   { v: "receiving", label: "Receiving", note: "goods, receiving, shop tools; no money" },
   { v: "shipping", label: "Shipping", note: "shipping, shop tools; no money" },
 ];
@@ -30,6 +33,9 @@ export const PERMS = [
   { k: "schedule", group: "Production", label: "Can open the Production calendar" },
   { k: "pressDefaults", group: "Production", label: "Can change press defaults and equipment status" },
   { k: "inkStock", group: "Production", label: "Can choose which stock inks we carry, and add or edit them (Ink Room)" },
+  { k: "inkRoom", group: "Production", label: "Can open the Ink Room (screen printing inks and mixing)" },
+  { k: "threadRoom", group: "Embroidery", label: "Can open the Thread Room (embroidery threads)" },
+  { k: "digitizing", group: "Embroidery", label: "Can open Digitizing (embroidery files: requests, DST files, stitch counts)" },
   { k: "employees", group: "Production", label: "Can open Employees" },
   { k: "pay", group: "Production", label: "Runs the time clock: sees and changes employee pay, fixes timecards, adds employees, payroll report (Oct 20, Nick)" },
   { k: "shipping", group: "Shop tools", label: "Can open the Shipping Center" },
@@ -49,6 +55,8 @@ const CREW: Perms = { ...ALL, money: false, payments: false, quotes: false, cust
 export const roleDefaults = (role?: string | null): Perms => {
   if (!role || role === "owner" || role === "admin") return { ...ALL };
   if (role === "production") return { ...CREW };
+  // embroidery: her side of the shop only (screen printing's inks, separations and presses aren't hers)
+  if (role === "embroidery") return { ...CREW, inkRoom: false, inkStock: false, separations: false, coach: false };
   // receiving / shipping: the shop tools, no separation coach or press changes
   return { ...CREW, coach: false, pressDefaults: false };
 };
@@ -64,7 +72,7 @@ export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => 
 /** pages and the permission that opens them (anything else, like Orders and the dashboard, everyone opens) */
 export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/conversations", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
-  ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"],
+  ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"], ["/shop/inks", "inkRoom"], ["/shop/threads", "threadRoom"], ["/shop/digitizing", "digitizing"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
   ["/shop/receiving", "receiving"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/ai", "workbench"],
 ];

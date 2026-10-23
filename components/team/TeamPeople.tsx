@@ -5,6 +5,7 @@ import { fullName, type Employee } from "@/lib/timeclock";
 import { mergeProduction, estimate, CREW_ROLES, SKILLS, DEFAULT_SKILL, fmtMin, type Crew, type CrewMembers, type CrewSkill, type Need, type ProductionSettings } from "@/lib/production";
 import { EmployeeEditor } from "@/components/time/TimeEmployees";
 import { useSticky } from "@/lib/useSticky";
+import { useRole } from "@/components/RoleContext";
 import type { TeamData } from "./types";
 
 /**
@@ -39,7 +40,10 @@ export default function TeamPeople({ d }: { d: TeamData }) {
 
   const active = d.employees.filter((e) => e.active);
   const list = d.employees.filter((e) => showOld || e.active);
-  const depts = d.settings.departments;
+  // embroidery's manager sees her own team (Oct 23, Nick: Maria "will have her own team… instead of having screen
+  // printing teams and employees there, she'll have her staff")
+  const embOnly = useRole().role === "embroidery";
+  const depts = embOnly ? d.settings.departments.filter((x) => /embroider/i.test(x)) : d.settings.departments;
   const byId = useMemo(() => new Map(d.employees.map((e) => [e.id, e])), [d.employees]);
   const timeData = { me: d.me, role: d.boss ? "owner" : "staff", seesPay: canPay, employees: d.employees, settings: d.settings, reload: d.reload };
 
@@ -115,7 +119,7 @@ export default function TeamPeople({ d }: { d: TeamData }) {
       </div>
       {msg && <div className="pv-err">{msg}</div>}
 
-      <section className="db-card db-blue">
+      {!embOnly && <section className="db-card db-blue">
         <div className="db-card-h"><h2>Press Crews</h2><a className="linkbtn" href="/shop/settings/production">Crew hours &amp; presses</a></div>
         <p className="faint" style={{ fontSize: 12.5, margin: "0 0 10px" }}>Who runs each press. The press operator&apos;s name shows on the production calendar{canPay ? ", and the crew's rates add up to the labor cost of every job on that press" : ""}.</p>
         {!prod ? <div className="db-empty">Loading…</div> : (
@@ -137,12 +141,12 @@ export default function TeamPeople({ d }: { d: TeamData }) {
             </div>
           ); })}</div>
         )}
-      </section>
+      </section>}
 
       <section className="db-card db-teal">
         <div className="db-card-h"><h2>Teams</h2><span className="faint" style={{ fontSize: 12.5 }}>Change the team list on <a href="/shop/time?tab=settings">Time Clock → Settings</a></span></div>
         <div className="tp-depts">
-          {[...depts, ""].map((dep) => { const ppl = list.filter((e) => (dep ? e.department === dep : !depts.includes(e.department))); if (!dep && !ppl.length) return null; return (
+          {[...depts, ...(embOnly ? [] : [""])].map((dep) => { const ppl = list.filter((e) => (dep ? e.department === dep : !depts.includes(e.department))); if (!dep && !ppl.length) return null; return (
             <div key={dep || "none"} className="tp-dept">
               <div className="tp-dept-h"><b>{dep || "No team yet"}</b><span className="aa-n">{ppl.length}</span></div>
               {!ppl.length ? <div className="faint" style={{ fontSize: 12.5 }}>Nobody yet.</div> : (

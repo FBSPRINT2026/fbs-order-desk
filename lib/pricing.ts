@@ -40,7 +40,7 @@ export const INK_COLORS = ["White", "Lemon Yellow", "Yellow", "Light Gold", "Gol
 /** Embroidery thread colors (standard list for now). */
 export const THREAD_COLORS = ["White", "Black", "Navy", "Royal", "Light Blue", "Carolina Blue", "Red", "Maroon", "Kelly Green", "Forest Green", "Lime Green", "Gold", "Athletic Gold", "Yellow", "Orange", "Purple", "Pink", "Hot Pink", "Silver", "Gray", "Charcoal", "Brown", "Tan", "Cream"];
 /** Staff roles. Owner sees everything; the others get their own views as those screens are built. */
-export const ROLES = { owner: "Owner", admin: "Admin (orders, customers, payments)", production: "Production manager", receiving: "Receiving", shipping: "Shipping" } as const;
+export const ROLES = { owner: "Owner", admin: "Admin (orders, customers, payments)", production: "Production manager", embroidery: "Embroidery manager", receiving: "Receiving", shipping: "Shipping" } as const;
 export type Role = keyof typeof ROLES;
 /** Print locations (match the fbsprint.com order form). */
 export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Medium Front", "Center Chest", "Across Chest", "Full Back", "Medium Back", "Upper Back (Yoke)", "Across Shoulders", "Left Sleeve", "Right Sleeve", "Left Vertical", "Right Vertical", "Front Bottom Left", "Front Bottom Right", "Pocket"];
@@ -75,6 +75,9 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   inkMap?: { design: string; map: Record<string, { name: string; hex: string; /** printed as a halftone of that ink, % (Mockup Creator: Combine colors) */ tone?: number;
     /** a custom ink mixed for this job ("half PMS 475 C, half PMS 7506 C"), set in the production view */ mix?: string }> };
   /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;
+  /** embroidery only (Oct 23, Nick: "a whole different process"): where the stitch count came from, backing, topping,
+   *  3D puff / metallic, the thread line and the digitized file (lib/embroidery.ts). Screen prints never have it */
+  emb?: import("@/lib/embroidery").EmbSpec;
   /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
    *  are charged by pmsInks() */ pms?: number;
   /** PMS charge per ink set by hand (lowercase ink name → charge or not): "standard, no charge" for a customer's
