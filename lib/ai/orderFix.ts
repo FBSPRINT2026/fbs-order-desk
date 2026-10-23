@@ -69,7 +69,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     }, required: ["reply", "changes"] } },
     system: `${SHOP_CONTEXT(s)}
 
-You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
+You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -85,7 +85,7 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     (c.what === "print" && printIds.has(c.id) && PRINT_FIELDS.includes(c.field)) ||
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
     (c.what === "line" && lineIds.has(c.id) && c.field === "extras" && EXTRAS.includes(c.value)) ||
-    (c.what === "order" && ["due_date", "firm"].includes(c.field))).slice(0, 12);
+    (c.what === "order" && ["due_date", "firm"].includes(c.field))).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 12);
   const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: String(r.data.lesson || "").trim().slice(0, 300) || undefined, rule: String(r.data.rule || "").trim().slice(0, 300) || undefined };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
@@ -94,6 +94,27 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     await keepCorrection(admin, o as Order, by, msg, changes, res);
   }
   return { ok: true, r: res };
+}
+
+/** a "change" that leaves the order as it is (Oct 23: the check offered "print stays at 3 x 0.7" with a Make this change
+ *  button) is dropped, matched on the numbers, not the wording. A check never takes the white underbase off a colored
+ *  shirt on its own; only staff saying so does. */
+function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "change"): boolean {
+  const v = String(c.value || "").trim();
+  const num = (x: unknown) => { const n = parseFloat(String(x ?? "")); return Number.isFinite(n) ? n : null; };
+  if (c.what === "print") {
+    const im = groups.flatMap((g) => g.imprints).find((x) => x.id === c.id);
+    if (!im) return true;
+    if (c.field === "size") return num(v) !== null && num(v) === num(im.size);
+    if (c.field === "location") return v.toLowerCase() === String(im.location || "").toLowerCase();
+    if (c.field === "colors") return num(v) === num(im.colors);
+    if (c.field === "drop") return (num(v) || 0) === (num(im.drop) || 0);
+    if (c.field === "inks") { const k = (x: string) => x.toUpperCase().replace(/PANTONE|PMS|\s+/g, "").split(",").filter(Boolean).sort().join(","); return k(v) === k(String(im.inks || "")); }
+    if (c.field === "underbase") { const on = /^y|true|on/i.test(v); return on === !!im.underbase || (mode === "review" && !on); }
+  }
+  if (c.what === "order" && c.field === "firm") return /^y|true|on/i.test(v) === !!(o as { firm?: boolean }).firm;
+  if (c.what === "order" && c.field === "due_date") return v === String((o as { due_date?: string }).due_date || "").slice(0, 10);
+  return false;
 }
 
 /** the order changes (not art): print fields, their extras, the date */
