@@ -58,6 +58,20 @@ function normLocation(l?: string) {
   return (l || "").trim().slice(0, 60);
 }
 
+const BRANDS = ["Gildan", "Next Level", "Bella+Canvas", "Bella + Canvas", "Bella Canvas", "Comfort Colors", "Hanes", "Port & Company", "Port and Company", "Port Authority", "District", "Sport-Tek", "Independent Trading Co.", "Independent", "Champion", "American Apparel", "Jerzees", "Fruit of the Loom", "Augusta", "Badger", "Richardson", "Rabbit Skins", "Alternative", "LAT", "Allmade", "Tultex", "BELLA+CANVAS"];
+/** "Gildan 64000" → style "64000", brand "Gildan" (the brand at the front of the style, or one we know) */
+export function bareStyle(style: string, brand = ""): { style: string; brand: string } {
+  const st = style.trim(), low = st.toLowerCase();
+  for (const b of [brand, ...BRANDS].filter(Boolean)) {
+    const bl = b.toLowerCase().trim();
+    if (low.startsWith(bl + " ") || low.startsWith(bl + "-")) {
+      const rest = st.slice(bl.length).replace(/^[\s-]+/, "").trim();
+      if (/\d/.test(rest)) return { style: rest, brand: brand || b };
+    }
+  }
+  return { style: st, brand };
+}
+
 /** Proposed groups → real order groups (no costs, no price overrides). */
 export function proposalToGroups(p: ProposedOrder): Group[] {
   const groups: Group[] = [];
@@ -66,6 +80,9 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       const l = newGLine();
       l.style = (g.style || "").trim().slice(0, 40);
       l.brand = (g.brand || "").trim().slice(0, 40);
+      // the brand written into the style ("Gildan 64000"): the style is the number, so the garment and its photos are
+      // found (Oct 23, Logotology #40109: "Gildan 64000" found no garment and the mockup never got made)
+      { const b = bareStyle(l.style, l.brand); l.style = b.style; if (!l.brand && b.brand) l.brand = b.brand; }
       l.garment = (g.description || "").trim().slice(0, 120);
       l.color = (g.color || "").trim().slice(0, 60);
       for (const [raw, q] of Object.entries(g.sizes || {})) {

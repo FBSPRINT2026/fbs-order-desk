@@ -29,6 +29,9 @@ export async function aiState(admin: SupabaseClient = createAdminClient()): Prom
   return { settings, ready: true, reason: "" };
 }
 
+/** tasks that write words for people (drafts): a little variety; everything else reads and decides the same way each time */
+const WRITING = new Set(["reply_options", "draft_message", "reply_followups", "text_job"]);
+
 /**
  * Ask Claude for one structured answer.
  * `prompt` is the user turn (the email, the order summary…); `system` sets the job and the shop's voice.
@@ -41,6 +44,8 @@ export async function askClaude<T>(opts: {
   documents?: { data: string; label?: string }[];
   /** how long to wait for the answer (ms, default 50 s) */
   timeoutMs?: number;
+  /** 0 (the default) = the same answer every time; writing tasks get 0.7 */
+  temperature?: number;
 }): Promise<AiResult<T>> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "AI isn't set up yet.", off: true };
@@ -57,13 +62,17 @@ export async function askClaude<T>(opts: {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs || 50_000);
   try {
-    const res = await fetch(API, {
+    const send = (temp: boolean) => fetch(API, {
       method: "POST",
       signal: ctrl.signal,
       headers: { "x-api-key": key, "anthropic-version": VERSION, "content-type": "application/json" },
       body: JSON.stringify({
         model: opts.model,
         max_tokens: opts.maxTokens || 2000,
+        // the same answer for the same input (Oct 23, Nick: "I've tried to create this Logotology order 3 times, and each
+        // time it gives me a different result… it's hard to get you to problem solve"): readers and checkers run at 0;
+        // only the writing tasks (reply and message drafts) keep some variety
+        ...(temp ? { temperature: opts.temperature ?? (WRITING.has(opts.task) ? 0.7 : 0) } : {}),
         system: opts.system,
         messages: [{ role: "user", content: opts.images?.length || opts.documents?.length
           ? [
@@ -76,7 +85,10 @@ export async function askClaude<T>(opts: {
         tool_choice: { type: "tool", name: opts.tool.name },
       }),
     });
-    const j = await res.json().catch(() => ({}));
+    let res = await send(true);
+    let j = await res.json().catch(() => ({}));
+    // a model that doesn't take a temperature: asked again without one
+    if (res.status === 400 && /temperature/i.test(String(j?.error?.message || ""))) { res = await send(false); j = await res.json().catch(() => ({})); }
     if (!res.ok) {
       const error = j?.error?.message || `Claude API error ${res.status}`;
       await log({ status: "error", error });

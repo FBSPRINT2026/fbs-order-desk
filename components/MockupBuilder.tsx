@@ -43,6 +43,7 @@ import { canvasPage } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
 import { ColorPicker, StylePicker } from "@/components/GroupEditor";
 import { fmtPhone } from "@/lib/phone";
+import { bareStyle } from "@/lib/ai/normalize";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -778,14 +779,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
-  const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
-    || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
+  const garmentFor = (l: Line) => {
+    // "Gildan 64000" on an order: the style is the number (lib/ai/normalize.ts bareStyle)
+    const st = bareStyle(l.style, l.brand).style.toLowerCase();
+    return catalog.find((g) => g.style.toLowerCase() === st && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
+      || catalog.find((g) => g.style.toLowerCase() === st);
+  };
 
   // a style on the order that isn't in the catalog yet (so no photos): pull it from S&S / SanMar once
   useEffect(() => {
     if (!catalog.length && !orderId) return;
     lines.forEach((l) => {
-      const st = l.style.trim();
+      const st = bareStyle(l.style, l.brand).style;
       if (!st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
       tried.current.add(st.toUpperCase());
       // SanMar's brands (Port Authority, Sport-Tek, District…) go straight to SanMar
