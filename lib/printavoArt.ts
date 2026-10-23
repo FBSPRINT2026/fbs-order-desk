@@ -74,6 +74,12 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
   }
   return out;
 }
+/** the first page's size in inches (a logo's own artboard is a few inches; a mockup page is letter size or more) */
+export async function firstPageIn(buf: ArrayBuffer): Promise<{ w: number; h: number }> {
+  const doc = await openDoc(buf);
+  const v = (await doc.getPage(1)).getViewport({ scale: 1 });
+  return { w: v.width / 72, h: v.height / 72 };
+}
 /** a PDF (or a PDF-compatible AI file) opened to draw its pages (the quick look's own viewer) */
 export const openPdf = openDoc;
 

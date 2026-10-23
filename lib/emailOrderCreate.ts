@@ -59,7 +59,14 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const clean = proposalToGroups({ groups: [{ name: g.name, garments: g.lines.map((l) => ({ style: l.style, brand: l.brand, description: l.garment, color: l.color, sizes: l.sizes as Record<string, number> })), prints: [] }] })[0];
     return {
       ...g,
-      lines: clean ? clean.lines.map((l, i) => ({ ...l, id: g.lines[i]?.id || l.id, sizeRun: g.lines[i]?.sizeRun, sizeUp: g.lines[i]?.sizeUp })) : g.lines,
+      // what was settled on the line stays: their extras (printed or not, charged or not), its note, a price set on it
+      // (Oct 23, #40122: the extras answer was dropped here and the line came out a plain one)
+      lines: clean ? clean.lines.map((l, i) => {
+        const o = g.lines[i];
+        return { ...l, id: o?.id || l.id, sizeRun: o?.sizeRun, sizeUp: o?.sizeUp,
+          ...(o?.extras ? { extras: true, ...(o.extrasPrint != null ? { extrasPrint: o.extrasPrint } : {}), ...(o.extrasFree != null ? { extrasFree: o.extrasFree } : {}) } : {}),
+          ...(o?.note ? { note: o.note } : {}), ...(o?.priceOverride != null ? { priceOverride: o.priceOverride } : {}) };
+      }) : g.lines,
       imprints: (g.imprints || []).slice(0, 10).map((im) => ({ ...im, colors: Math.max(1, Math.min(15, Math.round(+im.colors || 1))) })),
     };
   }).filter((g) => g.lines.some((l) => Object.keys(l.sizes || {}).length) || g.imprints.length);
