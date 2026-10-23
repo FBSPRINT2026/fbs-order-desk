@@ -1,5 +1,5 @@
 "use client";
-import { artFromDrawnMockup, artFromMockupPdf, firstPageIn, pdfPicture, type ArtPiece } from "@/lib/printavoArt";
+import { artFromDrawnMockup, artFromMockupPdf, pdfPicture, type ArtPiece } from "@/lib/printavoArt";
 
 /**
  * Art that came already on a garment: the Mockup Creator's Helper, for every place an order is made (Oct 22, Nick:
@@ -22,10 +22,6 @@ export const pdfLike = (f: { name: string; type?: string }) => /\.(pdf|ai)$/i.te
 export async function pullOffMockup(file: Blob, name: string, opt: { /** read shirts drawn flat too: only for a file known to be a mockup (a plain logo's big shapes could pass for shirts) */ drawn?: boolean } = { drawn: true }): Promise<Pulled | null> {
   if (!pdfLike({ name, type: file.type })) return null;
   const buf = await file.arrayBuffer();
-  // a logo on its own artboard (Oct 23, McKenna's HUD 102026.ai: 2.2" × 3.2", the logo as one picture) isn't a mockup:
-  // no shirt to pull it off, it's the art as is
-  const pg = await firstPageIn(buf.slice(0)).catch(() => null);
-  if (pg && Math.max(pg.w, pg.h) < 5) return null;
   const base = name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ").trim() || "Art";
   const photos = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => [] as ArtPiece[]);
   if (photos.length && opt.drawn === false) return { kind: "photos", pieces: photos };

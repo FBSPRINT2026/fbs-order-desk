@@ -9,6 +9,8 @@ import { suggestInk } from "@/lib/inkColors";
  * from where it sits on the photo (the same supplier photos the Mockup Creator uses: 1000 px wide, 34 px per inch).
  */
 export type ArtPiece = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; hex: string; ink: string;
+  /** measured off a photo that isn't our flat shirt photo (a person wearing it, their own photo): the art is right, its size
+   *  and drop aren't to be trusted (Oct 23, McKenna's HUD 102026: a man in the red tee read as 12" wide, 9.25" down) */ approx?: boolean;
   /** a texture laid over the art in the file (its distress), white = texture, the same size as `file`; and how sharp it is at print size */ mask?: File; maskPpi?: number;
   /** the shirt's color around it on the mockup */ shirtHex?: string };
 
@@ -316,6 +318,8 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     const widthIn = ((r.x1 - r.x0) * k) / PX_PER_IN, heightIn = ((r.y1 - r.y0) * k) / PX_PER_IN;
     const topPx = (r.y0 - p.y0) * (PHOTO_H / (p.y1 - p.y0));
     const dropIn = Math.max(0, (topPx - COLLAR_Y[side]) / PX_PER_IN);
+    // our flat shirt photos are 4:5; any other photo (a person, their own shot) isn't measured by it
+    const approx = Math.abs((p.x1 - p.x0) / Math.max(1, p.y1 - p.y0) - PHOTO_W / PHOTO_H) > 0.05;
     const offIn = ((cx - (p.x0 + p.x1) / 2) * k) / PX_PER_IN;
     // 2. the piece drawn again at print resolution (about 300 dpi at its real size, at most 5000 px)
     const want = Math.min(5000, Math.max(800, widthIn * 300));
@@ -366,7 +370,7 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     if (!blob) continue;
     const hex = mainHex(hi.canvas), sug = suggestInk(hex);
     const shirtHex = isShirt ? "#" + shirt.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") : undefined;
-    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, ...(mask ? { mask, maskPpi } : {}), ...(shirtHex ? { shirtHex } : {}) });
+    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, ...(approx ? { approx } : {}), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, ...(mask ? { mask, maskPpi } : {}), ...(shirtHex ? { shirtHex } : {}) });
   }
   return out;
 }

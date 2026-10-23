@@ -340,7 +340,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             continue;
           }
           if (pu) {
-            setIm({ design_id: id, ...(parseFloat(String(im.size || "")) > 0 ? {} : { size: `${pu.pc.widthIn}" wide` }), ...(im.drop ? {} : { drop: String(pu.pc.dropIn) }) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
+            const trust = !pu.pc.approx && !(pu.pc.dropIn > 5 && /front|chest/i.test(im.location));
+            setIm({ design_id: id, ...(parseFloat(String(im.size || "")) > 0 || !trust ? {} : { size: `${pu.pc.widthIn}" wide` }), ...(im.drop || !trust ? {} : { drop: String(pu.pc.dropIn) }) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
             did.push(`${im.location}: the art in ${pu.from} was on a shirt, so the Helper pulled it off (${pu.pc.widthIn}" wide, ${pu.pc.dropIn}" down)`);
             continue;
           }
@@ -510,8 +511,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           const pc = ok.has(im.id) ? by.get(im.id) : undefined;
           if (!pc) return im;
           const sized = parseFloat(String(im.size || "")) > 0;
-          return { ...im, ...(sized ? {} : { size: `${pc.widthIn}" wide` }), drop: im.drop || String(pc.dropIn), ...(!im.inks && pc.ink ? { inks: pc.ink } : {}),
-            notes: [im.notes, `Art pulled off ${f.name} with the Helper: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar${got.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`].filter(Boolean).join(". ").slice(0, 300) };
+          // off a photo of a person (or any photo that isn't our flat shirt): the art only; the size and drop are the shop's
+          // usual for the spot (HUD 102026 came out 9.25" down, in the belly); a drop deeper than a chest print sits isn't used
+          const trust = !pc.approx && !(pc.dropIn > 5 && /front|chest/i.test(im.location));
+          return { ...im, ...(sized || !trust ? {} : { size: `${pc.widthIn}" wide` }), ...(trust ? { drop: im.drop || String(pc.dropIn) } : {}), ...(!im.inks && pc.ink ? { inks: pc.ink } : {}),
+            notes: [im.notes, trust ? `Art pulled off ${f.name} with the Helper: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar${got.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}` : `Art pulled off ${f.name} with the Helper (a photo of it worn: the usual size and drop for the ${im.location})`].filter(Boolean).join(". ").slice(0, 300) };
         }) })), files: [
           ...d.files.map((x) => (x.path === f.path ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)),
           ...added,
@@ -563,7 +567,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             const got = blob ? await pullOffMockup(new File([blob], "old mockup.pdf", { type: "application/pdf" }), "old mockup.pdf", { drawn: true }) : null;
             const pc = got ? pieceFor(got, im.location) : undefined;
             // never bigger than the spot can print (a 14" back: "we can't even print 14 wide")
-            if (pc && pc.widthIn <= spotFor(im.location).maxW) { w = pc.widthIn; dropIn = pc.dropIn; }
+            if (pc && !pc.approx && pc.widthIn <= spotFor(im.location).maxW) { w = pc.widthIn; dropIn = pc.dropIn; }
           }
         } catch { /* asked below */ }
         guard();
