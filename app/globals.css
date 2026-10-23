@@ -12276,3 +12276,11 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-help-use{padding-top:22px}
 .mk-help-shirt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px;font-size:12.5px;color:var(--ink-2)}
 .mk-help-shirt .mk-gc-dot{width:16px;height:16px;border-radius:50%;border:1px solid var(--line);flex:none}
+
+/* logo colors: every color open again (Oct 22); many colors = one compact line of suggestions each */
+.mk-color-wrap{margin-bottom:6px}
+.mk-match.compact{flex-direction:row;flex-wrap:wrap;gap:4px;padding:3px 4px;margin:3px 0 6px}
+.mk-match.compact .mk-near{width:auto;flex:1 1 0;min-width:0;grid-template-columns:auto 12px minmax(0,1fr) auto;gap:4px;padding:2px 5px;font-size:11.5px}
+.mk-match.compact .mk-near .k{font-size:10.5px}
+.mk-match.compact .mk-rec{display:none}
+.mk-match.compact .mk-near.rec{border-color:color-mix(in srgb,var(--accent) 45%,transparent)}

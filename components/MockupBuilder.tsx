@@ -3399,10 +3399,11 @@ function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, bra
   onMatchAll?: () => void;
   brandGroups?: { label: string; colors: BrandInk[]; go: () => void }[];
 }) {
-  const [open, setOpen] = useState(""); // a picked color reopened to change it
+  const [open] = useState(""); // (colors don't fold any more)
   const [bsOpen, setBsOpen] = useState(false);
   const key = (r: { hexes: string[] }) => r.hexes.join();
-  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); };
+  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); };
+  const compactRows = rows.filter((r) => r.cur?.name !== "none").length > 4;
   // Combine colors: pick the colors, then how they print from one screen
   const [comb, setComb] = useState<null | { sel: string[]; how: "solid" | "tone"; ink: string; tone: number }>(null);
   const live = rows.filter((r) => r.cur?.name !== "none");
@@ -3467,29 +3468,23 @@ function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, bra
           </select>
         </div>
       )}
-      {rows.filter((r) => !(r.cur?.name === "none" && open !== key(r))).map((r) => {
-        const cur = r.cur, k = key(r), folded = !!cur && open !== k;
+      {/* every color open, like the first Mockup Creator (Oct 22, Nick: "I like what you originally had… drop-down, use a
+          standard color or a PMS, how close, and you could easily select from the top"): its ink, and the closest
+          standard ink and PMS to pick with one click. A logo with many colors: one compact line each. */}
+      {rows.filter((r) => r.cur?.name !== "none").map((r) => {
+        const cur = r.cur, k = key(r);
         const swatches = <span className="mk-srcs">{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>;
-        if (folded) return (
-          <div key={k} className="mk-color tight">
-            {swatches}<span className="arrow">→</span>
-            <span className="sw" style={{ background: cur!.name === "none" ? "transparent" : cur!.hex }} />
-            <span className="mk-cname" title={cur!.name}>{cur!.name === "none" ? "Removed" : cur!.name}{r.hexes.length > 1 ? <span className="faint"> · {r.hexes.length} united{r.tones?.length ? `, ${r.tones.length > 1 ? "halftones" : `one as a ${r.tones[0]}% halftone`}` : ""}</span> : null}</span>
-            <button type="button" className="lc-link" onClick={() => setOpen(k)}>Change</button>
-            <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>
-          </div>
-        );
         return (
-          <div key={k} className="mk-color-wrap">
+          <div key={k} className={"mk-color-wrap" + (compactRows ? " compact" : "")}>
             <div className="mk-color">
               {swatches}<span className="arrow">→</span>
-              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : r.hexes[0] }} />
+              <span className="sw" style={{ background: cur ? cur.hex : r.hexes[0] }} />
               <InkSelect value={cur} onChange={(v) => pick(r, v)} />
-              {open === k && <button type="button" className="lc-link" onClick={() => setOpen("")}>Done</button>}
+              {cur && <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>}
             </div>
             {r.hexes.length > 1
               ? <div className="mk-united"><span>{r.hexes.length} colors united · prints as one color{r.tones?.length ? ` (${r.tones.map((t) => `${t}% halftone`).join(", ")})` : ""}</span><button type="button" className="btn sm ghost" onClick={onSplit}>Split</button></div>
-              : <Match hex={r.hexes[0]} cur={cur} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
+              : <Match hex={r.hexes[0]} cur={cur} compact={compactRows} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
           </div>
         );
       })}

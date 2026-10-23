@@ -6,8 +6,9 @@ import { matchWord, suggestInk } from "@/lib/inkColors";
  * each is, and which one we'd use (a stock ink when it's very close, a PMS when only the PMS is). Pick either.
  * Used by the mockup builder and the Separation Studio.
  */
-export default function InkMatch({ hex, cur, onPick, onHover, title = "SUGGESTED COLORS" }: {
+export default function InkMatch({ hex, cur, onPick, onHover, title = "SUGGESTED COLORS", compact }: {
   hex: string; cur?: { name: string; hex: string };
+  /** a logo with many colors: the two suggestions side by side on one line, no heading or why line */ compact?: boolean;
   onPick: (v: { name: string; hex: string }) => void;
   onHover?: (v: { name: string; hex: string } | null) => void;
   title?: string;
@@ -20,6 +21,12 @@ export default function InkMatch({ hex, cur, onPick, onHover, title = "SUGGESTED
       <span className={"q q-" + matchWord(c.dE).replace(/ /g, "-")}>{matchWord(c.dE)}</span>
       {rec && <span className="mk-rec">Suggested</span>}
     </button>
+  );
+  if (compact) return (
+    <div className="mk-match compact" title={s.why}>
+      {opt("Std", s.standard, s.rec === "standard")}
+      {opt("PMS", s.pms, s.rec === "pms")}
+    </div>
   );
   return (
     <div className="mk-match">
