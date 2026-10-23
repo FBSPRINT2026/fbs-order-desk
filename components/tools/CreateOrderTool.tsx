@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
 
@@ -23,6 +23,11 @@ export default function CreateOrderTool({ activityId, text, guess = "", suggeste
   /** "check every detail first": the page's full form, when it has one */ onReview?: (start: OrderStart) => void;
 }) {
   const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(null);
+  // open on the right: the left menu folds to icons while it's open (ShopNav listens), then comes back
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));
+    return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); };
+  }, []);
   if (quick) return (
     <QuickOrder key={quick.n} dock activityId={activityId} start={quick} onClose={() => { setQuick(null); onClose(); }}
       onReview={() => { const st = quick; setQuick(null); if (onReview) onReview(st); else onClose(); }}

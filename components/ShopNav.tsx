@@ -99,7 +99,16 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const slowAt = useRef(0); // when the slower badges (email, Printavo) were last counted
   // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
   // back up to the full menu and folds it again
-  const [mini, setMini] = useSticky<boolean>("nav.mini", true);
+  const [miniSet, setMini] = useSticky<boolean>("nav.mini", true);
+  // a tool panel open on the right (Create order): the menu folds to icons for the room, and comes back as it was when
+  // the panel closes (Oct 23, Nick: "automatically minimize the toolbar on the left until we close the reorder")
+  const [docked, setDocked] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => setDocked(!!(e as CustomEvent<{ open: boolean }>).detail?.open);
+    window.addEventListener("fbs:dock", on);
+    return () => window.removeEventListener("fbs:dock", on);
+  }, []);
+  const mini = miniSet || docked;
   const [tip, setTip] = useState<{ text: string; top: number; left: number } | null>(null);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
@@ -272,7 +281,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       }}
       onMouseLeave={() => setTip(null)}>
       {/* the menu's right edge is the switch: click it to open the full menu or fold it to icons */}
-      <button type="button" className="side-edge" onClick={() => { setMini(!mini); setTip(null); }}
+      <button type="button" className="side-edge" onClick={() => { if (docked) setDocked(false); else setMini(!miniSet); setTip(null); }}
         title={mini ? "Show the full menu" : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
         <span className="side-edge-k" aria-hidden><svg viewBox="0 0 24 24">{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg></span>
       </button>
