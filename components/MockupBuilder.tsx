@@ -594,7 +594,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const saved = im.inkMap?.design === d.id ? im.inkMap.map : null;
           for (const k of plan.inks) {
             const was = saved?.[k.hex];
-            const name = was ? was.name : useAsked ? nearestAsked(k.hex) : onShirt || snap(k.hex, k.name);
+            // an ink named on the order only when it's near the logo's own color: a named ink far off it is a guess
+            // (Oct 23, Logotology #40110: the order said "Reflex Blue" for an Electric Blue logo and the mockup went dark
+            // blue: "if I uploaded that logo just naturally, it never suggests Reflex Blue")
+            const near = useAsked ? nearestAsked(k.hex) : "";
+            const name = was ? was.name : near && dist(k.hex, colorHex(near)!) < 90 ** 2 ? near : onShirt || snap(k.hex, k.name);
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
           }
@@ -608,11 +612,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             return;
           }
           const kept = [...new Set(chosen)].filter((n) => n && n !== "none");
-          const names = saved ? kept : useAsked ? asked : kept;
+          const names = kept;
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
           // a reorder awaiting production keeps the color count the old job printed (Printavo's 7/0 is a fact; the inks
           // painted here are our guess, and production confirms both: Oct 20, Nick)
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : saved ? Math.max(1, names.length) : useAsked ? asked.length : plan!.colors } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : saved || useAsked ? Math.max(1, names.length) : plan!.colors } : x)));
           return;
         }
         const sources = detectColors(img);
