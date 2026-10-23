@@ -1188,26 +1188,37 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   };
   const olds = items.filter((x) => x.where === "old" || x.where === "kept" || x.where === "pulled"), elses = items.filter((x) => x.where === "else");
   const opening = old === null || (old || []).some((f) => f.d === undefined);
+  // our sheet has it all: this screen is only that, one button to go on (Oct 23, Nick: "an account manager is not going to
+  // know what to do… do I click good to go or do I click next?"); the file-by-file screen only when they ask for it
+  if (sheetReady) {
+    const k0 = sheetKeys[0], f0 = (old || [])[+k0.slice(1)];
+    const specs = sheetKeys.flatMap((k) => Object.entries(sheets[k] as Partial<Record<string, SheetSpec>>).map(([side, v]) => ({ side, v: v! })));
+    const arts = sheetKeys.flatMap((k) => pulls[k]?.pieces || []);
+    const skipped = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => as[k] === "none").map(({ f }) => f.name);
+    const others = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => !sheetKeys.includes(k) && as[k] !== "none").map(({ f }) => f.name);
+    return (
+      <div className="ap arc" role="group" aria-label="Our mockup sheet">
+        <p className="ap-q">{help.job.replace(/^(#\d+).*/, "$1")} has our FBS mockup sheet, so I have everything for this reorder.</p>
+        <p className="ap-why">Check what I took from it, then continue. Nothing to sort out file by file.</p>
+        <div className="arc-sheet">
+          <figure><span className="ap-pic big">{f0?.d?.asIsUrl ? <img src={f0.d.asIsUrl} alt="" /> : null}</span><figcaption data-notranslate>Our mockup sheet<br />{f0?.name}</figcaption></figure>
+          {arts.map((x, i) => <figure key={i}><span className="ap-pic big ap-check"><img src={x.url} alt="" /></span><figcaption>The art, pulled off it</figcaption></figure>)}
+        </div>
+        <ul className="arc-sheet-l">
+          {specs.map((x, i) => <li key={i} data-notranslate><b>{x.side[0].toUpperCase() + x.side.slice(1)}</b>: {x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""}{x.v.inks?.length ? `, ${x.v.inks.map(stockName).join(", ")}` : ""}</li>)}
+          {skipped.length > 0 && <li data-notranslate><b>Left out:</b> {skipped.join(", ")} <span className="faint">(the old paperwork: the new PO and work order replace it)</span></li>}
+          {others.length > 0 && <li data-notranslate><b>Kept in Production files:</b> {others.join(", ")}</li>}
+        </ul>
+        <div className="ap-foot">
+          <span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel reorder</button><button type="button" className="ap-link" onClick={() => setSheetOff(true)}>Something&apos;s wrong: go through the files myself</button></span>
+          <button type="button" className="btn primary" onClick={goodToGo}>Use it and continue ›</button>
+        </div>
+      </div>
+    );
+  }
   const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
-      {sheetReady && (() => {
-        const specs = sheetKeys.flatMap((k) => Object.entries(sheets[k] as Partial<Record<string, SheetSpec>>).map(([side, v]) => ({ side, v: v!, from: (old || [])[+k.slice(1)]?.name || "" })));
-        const skipped = olds0.filter((x) => as[x.key] === "none").map((x) => x.name);
-        return (
-          <div className="arc-ready">
-            <p className="ap-q">Our FBS mockup sheet is on {help.job.replace(/^(#\d+).*/, "$1")}: I&apos;ve got what I need.</p>
-            <ul>
-              {specs.map((x, i) => <li key={i} data-notranslate><b>{x.side[0].toUpperCase() + x.side.slice(1)}</b>: {x.v.w}&quot;{x.v.h ? ` × ${x.v.h}"` : ""} wide{x.v.inks?.length ? `, ${x.v.inks.map(stockName).join(", ")}` : ""} <span className="faint">· art pulled off {x.from}</span></li>)}
-              {skipped.length > 0 && <li className="faint" data-notranslate>Not needed: {skipped.join(", ")} (the new ones here replace them)</li>}
-            </ul>
-            <div className="arc-ready-b">
-              <button type="button" className="btn primary" onClick={goodToGo}>Good to go</button>
-              <button type="button" className="ap-link" onClick={() => setSheetOff(true)}>Let me look through the files</button>
-            </div>
-          </div>
-        );
-      })()}
       {help.settled?.length ? <p className="ap-q">You&apos;re using the email&apos;s art for {help.settled.join(", ")}. {olds0.length === 1 ? "This file is" : `These ${olds0.length} files are`} on {help.job} too: keep any you still need?</p> : null}
       {!help.settled?.length && <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>}
       <p className="ap-why">{help.settled?.length ? "Barcodes, labels, packing sheets…: mark them Production file and they go with this order. The old art they replaced: Not needed (or Production file to keep it for reference)." : stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>

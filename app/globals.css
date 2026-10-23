@@ -12529,3 +12529,7 @@ html body .qo .ap-foot .btn.primary,html body .qo .qo-foot .btn.primary{margin-l
 /* small labels inside cards: the kit's small gray text */
 html body .qo :is(.faint, figcaption, .arc-hint, .rv-why){font-size:12px;color:var(--ink-3)}
 html body .qo .arc-hint.ok,html body .qo .rv-ok{color:var(--ok)}
+.arc-sheet{display:flex;flex-wrap:wrap;gap:10px}
+.arc-sheet figure{margin:0;width:170px;display:flex;flex-direction:column;gap:4px}
+.arc-sheet figcaption{font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
+.arc-sheet-l{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink);display:flex;flex-direction:column;gap:3px}
