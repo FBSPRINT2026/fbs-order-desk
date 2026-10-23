@@ -37,11 +37,12 @@ export default function PullRefresh({ children }: { children?: React.ReactNode }
     } catch { return false; }
   });
   useEffect(() => {
+    // never reloads by itself (Oct 22, Nick: "halfway through emails… and all of a sudden the site just refreshes
+    // randomly… I keep losing my spot"): coming back to the tab after an update went out used to reload the page, and only
+    // a typed text box held it off. Now the new version waits: "vX ready · Refresh" under the logo, or a pull to refresh.
     void checkVersion.current();
-    const back = () => { if (document.visibilityState === "visible") void checkVersion.current().then((n) => { if (n && ![...document.querySelectorAll("textarea, input[type=text]")].some((t) => (t as HTMLInputElement).value.trim())) window.location.reload(); }); /* not while something's being written */ };
-    document.addEventListener("visibilitychange", back);
     const t = setInterval(() => void checkVersion.current(), 10 * 60000);
-    return () => { document.removeEventListener("visibilitychange", back); clearInterval(t); };
+    return () => clearInterval(t);
   }, []);
   // this page only: the server part asked for again, then the page drawn fresh (its own lists load again)
   const refreshPage = useRef<() => Promise<void>>(async () => {});
