@@ -601,6 +601,7 @@ export const SHIRT_COLORS: { group: string; colors: [string, string][] }[] = [
 ];
 /** supplier color names not in the picker list (SanMar sends no color codes; Oct 21: A4's Scarlet showed grey) */
 const SUPPLIER_NAMED: Record<string, string> = {
+  "neon blue": "#1f8fd8", "neon green": "#7ed957", "neon pink": "#ff5fa2", "neon orange": "#ff7a2f", "neon yellow": "#eaf04a",
   scarlet: "#ba0c2f", cardinal: "#8c1d40", crimson: "#a6192e", "vegas gold": "#c5b358", "athletic gold": "#ffb81c", "electric blue": "#0084d4",
   "safety yellow": "#e7ef3c", "athletic orange": "#f47321", "pastel mint": "#a8dcc4", "pastel blue": "#a7c6ed", "light yellow": "#f6eb9a",
   graphite: "#53565a", silver: "#b1b3b3", "military green": "#5e6145", olive: "#5f6131", coral: "#f2786a", fuchsia: "#c6007e", teal: "#00808a",

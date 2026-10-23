@@ -21,6 +21,7 @@ import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
 import { detectCenter } from "@/lib/visualCenter";
+import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -801,8 +802,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
     // a bag with no back photo: its back looks like its front (same bag, other side), never a drawn tee
     const p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
-    return p ? ssImg(p) : teeSvg(guessHex(l.color), view, isHeather(l.color));
+    if (p) return ssImg(p);
+    // no photo of this color: the style's own photo dyed to it, once it's made (below), not a drawn tee
+    const t = g && l.color ? tinted[`${g.style}|${colorKey(l.color)}|${view}`] : "";
+    return t || teeSvg(guessHex(l.color), view, isHeather(l.color));
   };
+  // colors the supplier has no photo of (Oct 22, Nick: 64400 Neon Blue showed a gray drawn tee): dye the style's photo
+  const [tinted, setTinted] = useState<Record<string, string>>({});
+  const tinting = useRef(new Set<string>());
+  useEffect(() => {
+    for (const l of lines) {
+      const g = garmentFor(l); if (!g || !l.color.trim()) continue;
+      const imgs = g.color_images || {};
+      if (Object.entries(imgs).some(([k, v]) => colorKey(k) === colorKey(l.color) && v?.front)) continue;
+      const base = tintBase(imgs); if (!base) continue;
+      const hex = Object.entries(imgs).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]?.hex || guessHex(l.color);
+      for (const v of ["front", "back"] as View[]) {
+        const k = `${g.style}|${colorKey(l.color)}|${v}`, src = v === "front" ? imgs[base].front : imgs[base].back;
+        if (!src || tinting.current.has(k)) continue;
+        tinting.current.add(k);
+        void tintPhoto(ssImg(src), hex.startsWith("#") ? hex : `#${hex}`).then((u) => setTinted((t) => ({ ...t, [k]: u }))).catch(() => null);
+      }
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // bags and totes: flat, no collar; measured as a bag and printed centered on the body at real size (Oct 9: totes)
   const isBag = (l?: Line) => { if (!l) return false; const g = garmentFor(l); return /\b(tote|bag|backpack|duffel|cinch|sack|pouch)\b/i.test(`${g?.description || ""} ${l.garment || ""} ${g?.style || ""}`); };

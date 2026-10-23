@@ -330,6 +330,9 @@ function tool(finishingIds: string[]) {
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
         } } },
         questions: { type: "array", items: { type: "string" }, description: "What we still need to ask the customer, in plain words" },
+        check_with_staff: { type: "array", description: "What staff must answer BEFORE the order is made (rule 11): contradictions, things you couldn't find or place. Empty when it all adds up.", items: { type: "object", properties: {
+          question: { type: "string", description: "Short, plain, to the shop's staff, quoting what you saw (e.g. 'The work order says \"best fit for onesie\" but there are no onesies on it. Ignore that note?')" },
+          guess: { type: "string", description: "What you'll do if they don't say otherwise" } }, required: ["question", "guess"] } },
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
       required: ["kind", "summary", "files", "groups", "questions", "confidence"],
@@ -454,6 +457,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 ${PO_RULES}
 9. Art sent as a link (a file marked "from a link", e.g. a Canva design preview): use it as the art for the mockup. A Canva preview is a picture, not a print file: say in questions that we'll need the print file (PDF or SVG) unless a real file came with it.
 Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.
+11. CHECK WITH STAFF FIRST (Oct 22, Nick: "take steps to get things right, but when there's a clear contradiction, or I can't find this product, or there's a clear anything, you need to just ask… I'm processing this for the first time, and then remember it moving forward"). Before the order is made, ask the shop in check_with_staff about anything that doesn't add up, with your best guess: a note or spec that contradicts the order ("best fit for onesie" with no onesies in it), two files that disagree (PO vs work order sizes, quantities, colors), a style or color written oddly or not one you know ("NeonBlue": Neon Blue?), a garment you can't identify, a file you can't place, a size grid that doesn't add up, a print with no location or art. Don't ask what the files settle, and don't ask what staff already told you or taught you about this customer. Never copy a contradicting note into the order as if it applied: ask instead.
 When staff tell you something about this email (which past job it is, that it's a reorder, what the customer wants changed, colors used before), it's fact: follow it over your own reading.`;
   const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
   const prompt = `${custText}
@@ -704,6 +708,7 @@ ${staffSays}` : ""}`;
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null, ...(reorderJobs.length > 1 ? { reorderJobs } : {}), ...(readingLeads && emailArt ? { emailArt: true } : {}),
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
+    check: ((p as { check_with_staff?: { question?: string; guess?: string }[] }).check_with_staff || []).map((c) => ({ q: String(c.question || "").slice(0, 300), guess: String(c.guess || "").slice(0, 200) })).filter((c) => c.q).slice(0, 8),
     ...(told ? { told } : {}), ...(p.kind === "reorder" || picked ? { looksReorder: true } : {}),
     ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}), ...(o.part ? { part: o.part } : {}),
   };

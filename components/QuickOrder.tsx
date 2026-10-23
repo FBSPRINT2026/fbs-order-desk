@@ -5,7 +5,8 @@ import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
-import { applyColors, checkColors } from "@/components/ColorCheck";
+import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
+import { rememberOrderNote } from "@/app/shop/ai-actions";
 import { LOCATIONS } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
@@ -35,7 +36,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
  *   - the order made as a quote, the customer's mockup stamped into Production files.
  * Then "View order" (our mockup is made first when the order needs one). Nothing is sent to the customer.
  */
-type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
+type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string; company?: string | null; name?: string | null } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
@@ -49,6 +50,9 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  could have just used it, but you ignored it because you treated it as a reorder") */
 /** a customer's mockup sheet: what was read off it, to confirm (Oct 22, Nick: "you just ask me, what is this?… or you
  *  confirm it: hey, this is a customer mockup with sizing and information") */
+/** what doesn't add up, asked before the order is made (Oct 22, Nick): each question with the AI's guess, your answer,
+ *  and whether to remember it for this customer */
+type CheckAsk = { items: { q: string; guess: string }[]; customer: string; resolve: (a: { q: string; answer: string; remember: boolean }[]) => void };
 type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
   /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
 type ArtAsk = { job: string; /** the old job's files */ old?: { name: string; url: string; type: string }[]; /** the email's files they sent */ from?: string[]; items: { key: string; label: string; file: { name: string; url: string; type: string; path?: string } }[]; resolve: (a: "theirs" | "old") => void };
@@ -70,6 +74,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [artAsk, setArtAsk] = useState<ArtAsk | null>(null);
   const [sheetAsk, setSheetAsk] = useState<SheetAsk | null>(null);
+  const [checkAsk, setCheckAsk] = useState<CheckAsk | null>(null);
+  const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
   const [pause, setPause] = useState<null | { made: Made | null; i: number; resolve: (v: void) => void }>(null);
@@ -130,14 +136,43 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     }
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     const did: string[] = [];
+    // what doesn't add up is asked first, not guessed through (Oct 22, Nick: "when there's a clear contradiction, or I
+    // can't find this product… you need to just ask… then remember it moving forward"; 40105's "best fit for onesie" with
+    // no onesies). Typed answers: it reads the email again with them; ticked: remembered for this customer's next orders
+    if (d.check?.length) {
+      step(`${of}Checking a few things with you…`);
+      note(`${d.check.length} thing${d.check.length === 1 ? "" : "s"} didn't add up: asking you before I make it`);
+      const ans = await waitFor<{ q: string; answer: string; remember: boolean }[]>((resolve) => setCheckAsk({ items: d!.check!, customer: g.customer?.company || g.customer?.name || "this customer", resolve }));
+      setCheckAsk(null);
+      const said = ans.filter((a) => a.answer.trim()).map((a) => `${a.q} → ${a.answer.trim()}`);
+      for (const a of ans.filter((x) => x.remember && x.answer.trim())) await rememberOrderNote(activityId, `${a.q} Answer: ${a.answer.trim()}`).catch(() => null);
+      if (said.length) {
+        step(`${of}Reading it again with your answers…`);
+        const told = [part ? "" : start.told || "", ...said].filter(Boolean).join("\n");
+        const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
+        const j = r ? await r.json().catch(() => ({})) : {};
+        guard();
+        if (r?.ok && j.draft) { d = j.draft as EODraft; g.past = j.past || g.past; }
+        did.push(...said.map((x) => `You said: ${x}`));
+      } else did.push(`Went with my guesses on: ${ans.map((a) => a.q).join(" · ")}`.slice(0, 400));
+      const kept = ans.filter((x) => x.remember && x.answer.trim()).length;
+      if (kept) did.push(`Remembered ${kept === 1 ? "that" : `those ${kept}`} for ${g.customer?.company || g.customer?.name || "this customer"}'s next orders`);
+    }
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
     // several past jobs in one order (Hutchins T10A + T11A): all of them
     const jobs = (d.reorderJobs || []).map((ref) => (g.past || []).find((p) => p.ref === ref)).filter(Boolean) as PastJob[];
     const jobLabel = (jobs.length > 1 ? jobs.map((j) => j.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")).join(" and ") : (job?.label || part?.jobLabel || "")).replace(/\s*\(Printavo\)$/, "");
     // the shirt colors: the style's real color names (the closest one when not an exact match)
     step(`${of}Checking the shirt colors…`);
-    const cc = await checkColors(d.groups).catch(() => ({ rows: [], ask: [] }));
+    const cc = await checkColors(d.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
     guard();
+    // a color that isn't one of the style's: asked, not guessed (Oct 22, Nick: "it says 64400 NeonBlue… did you mean Neon Blue?")
+    if (cc.ask.length) {
+      note("A shirt color isn't one of the style's colors: asking you");
+      const picked = await waitFor<ColorRow[] | null>((resolve) => setColorAsk({ rows: cc.rows, done: resolve }));
+      setColorAsk(null);
+      if (picked) cc.rows = picked;
+    }
     if (cc.rows.length) {
       const before = d.groups.flatMap((x) => x.lines.map((l) => l.color));
       d = { ...d, groups: applyColors(d.groups, cc.rows) };
@@ -574,6 +609,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
+        {checkAsk && <CheckConfirm a={checkAsk} onCancel={cancel} />}
+        {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={() => colorAsk.done(null)} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}
@@ -999,6 +1036,30 @@ function trimToArt(c: HTMLCanvasElement) {
  * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
  * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
  */
+/** what doesn't add up, before the order is made: answer (or leave it to the guess), and remember it for the customer */
+function CheckConfirm({ a, onCancel }: { a: CheckAsk; onCancel: () => void }) {
+  const [rows, setRows] = useState(a.items.map((x) => ({ q: x.q, answer: "", remember: false })));
+  const set = (i: number, ch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...ch } : x)));
+  const typed = rows.some((r) => r.answer.trim());
+  return (
+    <div className="ap" role="group" aria-label="Before I make it">
+      <p className="ap-q">Before I make it: {a.items.length === 1 ? "this doesn't" : "these don't"} add up.</p>
+      <p className="ap-why">Tell me what to do, or leave a box empty and I&apos;ll go with my guess. Tick Remember and I&apos;ll know it for {a.customer}&apos;s next orders.</p>
+      <ol className="qc-list">
+        {a.items.map((x, i) => (
+          <li key={i} className="qc-it">
+            <p className="qc-q">{x.q}</p>
+            {x.guess && <p className="qc-g faint">My guess: {x.guess}</p>}
+            <input type="text" className="qc-a" aria-label={`Your answer to: ${x.q}`} placeholder="Your answer (empty = my guess)" value={rows[i].answer} onChange={(e) => set(i, { answer: e.target.value })} />
+            <label className="qc-rem"><input type="checkbox" checked={rows[i].remember} disabled={!rows[i].answer.trim()} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>
+          </li>
+        ))}
+      </ol>
+      <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
+        <button type="button" className="btn primary" onClick={() => a.resolve(rows)}>{typed ? "Use my answers" : "Go with your guesses"}</button></div>
+    </div>
+  );
+}
 /** a customer's mockup sheet: the art cut off it, their shirt page and the specs read off it, to confirm */
 function SheetConfirm({ a, onCancel }: { a: SheetAsk; onCancel: () => void }) {
   return (

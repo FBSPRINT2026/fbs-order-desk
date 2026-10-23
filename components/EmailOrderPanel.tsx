@@ -252,6 +252,14 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
           {d.lookedUp.sources.length > 0 && <span className="faint"> ({d.lookedUp.sources.map((x, i) => <a key={i} href={x.url} target="_blank" rel="noreferrer">{i ? ", " : ""}{x.title || "source"}</a>)})</span>}
         </div>
       )}
+      {/* what doesn't add up, asked before the order is made (Oct 22, Nick): the same questions Create order stops on */}
+      {d?.check && d.check.length > 0 && (
+        <div className="eo-q eo-check">
+          <div className="eo-sub">Check with you first</div>
+          <ul>{d.check.map((c, i) => <li key={i}>{c.q}{c.guess && <span className="faint"> My guess: {c.guess}</span>} <button type="button" className="eo-link" onClick={() => { setTold((t) => `${t.trim() ? `${t.trim()}\n` : ""}${c.q} → `); setTellOpen(true); }}>Answer</button></li>)}</ul>
+          <small className="faint">Answer in the box below and read it again, or leave them and it goes with its guesses.</small>
+        </div>
+      )}
       {data.ai && busy !== "read" && !(d && (d.kind === "reorder" || d.looksReorder) && !d.reorderOk) && (() => {
         // any other email: tell the AI something before it reads it (again)
         if (!tellOpen && !d?.told) return <button type="button" className="eo-link eo-tell-link" onClick={() => setTellOpen(true)}>✦ Tell the AI something about this email</button>;

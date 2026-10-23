@@ -50,6 +50,9 @@ export type EODraft = {
   /** a reorder where the customer attached the art: staff choose their files or the old jobs' (QuickOrder asks) */
   emailArt?: boolean;
   questions: string[];
+  /** what doesn't add up, asked of staff BEFORE the order is made (Oct 22, Nick: "when there's a clear contradiction, or I
+   *  can't find this product… you need to just ask… then remember it moving forward"): the question and the AI's guess */
+  check?: { q: string; guess: string }[];
   /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */
   artNotes?: string[];
   /** a reorder of a Printavo job: what its notes say about the prints, for production to confirm (lib/ai/oldJobNotes.ts) */

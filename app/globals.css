@@ -12331,3 +12331,11 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 /* Mockup Creator: center a badge on its circle (Oct 22) */
 .mk-ctr{display:flex;align-items:center;gap:6px;margin:6px 0 0;font-size:12.5px;color:var(--ink-2);cursor:pointer}
 .mk-ctr input{margin:0}
+
+/* Create order: what doesn't add up, asked before it's made (Oct 22) */
+.qc-list{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:12px}
+.qc-it p{margin:0}
+.qc-q{font-size:14px;color:var(--ink);font-weight:600;line-height:1.4}
+.qc-g{font-size:12.5px;margin-top:2px!important}
+.qc-a{box-sizing:border-box;width:100%;height:36px;margin-top:6px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);background:var(--surface)}
+.qc-rem{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;color:var(--ink-3)}
