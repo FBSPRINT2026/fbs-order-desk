@@ -14,8 +14,8 @@ const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0,
  * the notes on top, then the files as a grid of thumbnails you can drop more files onto.
  * Without the edit handlers it's read-only (archived orders).
  */
-export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, onCategory, onFileNote, uploading = false, compact = false, children }: {
-  note: string; files: ProdFile[]; /** more below the files: the job's notes & photos added in the portal (Oct 15: was a second "Production files & notes") */ children?: ReactNode;
+export default function ProductionPanel({ note, noteState, files, onNote, onUpload, onRemove, onCategory, onFileNote, uploading = false, compact = false, children }: {
+  note: string; /** "Saving…" / "Saved": the notes save as you type */ noteState?: string; files: ProdFile[]; /** more below the files: the job's notes & photos added in the portal (Oct 15: was a second "Production files & notes") */ children?: ReactNode;
   onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; /** label a file: barcodes, film, mailing list… (Oct 20) */ onCategory?: (f: ProdFile, category: string | null) => void; /** a note on one file */ onFileNote?: (f: ProdFile, note: string) => void; uploading?: boolean; /** narrow side column */ compact?: boolean;
 }) {
   const [over, setOver] = useState(false);
@@ -29,7 +29,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
       <div className="panel-h"><h2>Production notes &amp; files</h2><span className="prod-lock" title="Only your team sees these. They never show on the customer's quote, invoice or portal.">Shop only</span></div>
       <div className="panel-b stack" style={{ gap: 14 }}>
         <div className="field">
-          <label htmlFor="prod-note">Production notes</label>
+          <label htmlFor="prod-note">Production notes{noteState ? <span className={"prod-nstate" + (/Couldn/.test(noteState) ? " bad" : "")}>{noteState}</span> : null}</label>
           {edit
             ? <textarea id="prod-note" rows={4} placeholder="Ink colors, PMS matches, mesh counts, placement, who's shipping the garments…" value={note} onChange={(e) => onNote!(e.target.value)} />
             : <div className="prod-note">{note || <span className="faint">No production notes.</span>}</div>}

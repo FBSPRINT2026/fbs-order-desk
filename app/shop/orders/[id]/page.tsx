@@ -926,11 +926,24 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
+  // saved as you type (Oct 23, Nick: "the production notes aren't saving… I've tried to delete this like 3 times"): the
+  // save was built but never sent (a Supabase query only runs once it's awaited), so nothing typed here was kept
+  const [noteState, setNoteState] = useState("");
+  const notesPending = useRef<string | null>(null);
+  const flushNotes = useCallback(async () => {
+    const v = notesPending.current; if (v === null) return;
+    notesPending.current = null;
+    if (notesTimer.current) { clearTimeout(notesTimer.current); notesTimer.current = null; }
+    setNoteState("Saving…");
+    const { error } = await sb.from("order_internal").upsert({ order_id: id, production_notes: v });
+    setNoteState(error ? "Couldn't save: " + error.message : "Saved");
+  }, [sb, id]);
   function onProdNotes(v: string) {
-    setProdNotes(v);
+    setProdNotes(v); notesPending.current = v; setNoteState("Not saved yet…");
     if (notesTimer.current) clearTimeout(notesTimer.current);
-    notesTimer.current = setTimeout(() => { sb.from("order_internal").upsert({ order_id: id, production_notes: v }); }, 700);
+    notesTimer.current = setTimeout(() => { void flushNotes(); }, 700);
   }
+  useEffect(() => () => { void flushNotes(); }, [flushNotes]);
 
   useEffect(() => {
     if (!o?.id || o.price_type !== "wholesale") { setGoodsSt(null); return; }
@@ -1421,7 +1434,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="stack">
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
-          <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
+          <ProductionPanel note={prodNotes} onNote={onProdNotes} noteState={noteState} uploading={artUploading}
             files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true }))]}
             onFileNote={(f, t) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
             onCategory={(f, c) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
