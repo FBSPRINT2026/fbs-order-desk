@@ -31,6 +31,8 @@ import type { OrderChange } from "@/lib/ai/orderFix";
 type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; customers?: { name?: string; company?: string } | null };
 type Art = OrderChange & { state: "doing" | "done" | "error"; err?: string };
 type Round = { you: string; reply: string; applied: string[]; art: Art[]; suggest: OrderChange[]; rule?: string };
+/** their PO first, then their mockup and art, then the last job's */
+const RES_RANK = ["order_sheet", "customer_mockup", "print_art", "old_mockup", "barcodes"];
 const RES_LABEL: Record<string, string> = { order_sheet: "Order sheet / PO", customer_mockup: "Their mockup", old_mockup: "Last job's mockup", print_art: "Their art", barcodes: "Barcodes" };
 type Saved = { rounds: Round[]; lesson: { on: boolean; text: string } };
 
@@ -72,7 +74,8 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   useEffect(() => {
     void sb.from("art_files").select("id, name, category, file_path").eq("order_id", orderId).order("created_at").then(({ data }) => {
       setRes((data || []).map((f) => ({ key: f.id as string, name: f.name as string, label: `${RES_LABEL[(f.category as string) || ""] || "File"}: ${f.name}`,
-        href: `/api/files/open?${new URLSearchParams({ p: f.file_path as string, n: f.name as string })}` })).filter(canQuickLook));
+        href: `/api/files/open?${new URLSearchParams({ p: f.file_path as string, n: f.name as string })}`, rank: RES_RANK.indexOf((f.category as string) || "") + 1 || 9 }))
+        .filter(canQuickLook).sort((a, b) => a.rank - b.rank).map(({ rank: _r, ...x }) => x)); // eslint-disable-line @typescript-eslint/no-unused-vars
     });
   }, [sb, orderId]);
   const endRef = useRef<HTMLDivElement>(null);
