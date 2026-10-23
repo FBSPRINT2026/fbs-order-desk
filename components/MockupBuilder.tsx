@@ -2720,7 +2720,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // clicked again (Oct 23, Nick: "a 3-second countdown to return to the order, unless you click it again… just
           // like the archive email button")
           if (saveOk.current && orderId && !portal) setBackIn(3);
-        }}>{backIn != null ? `Back to the order in ${backIn}… (click to stay)` : saving ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
+        }}>{backIn != null && <span className="mk-cd-tip" aria-live="polite">Back to the order in {backIn}… click to stay</span>}{saving && backIn == null ? "Saving…" : imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed) ? "Save visual mockup" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
       </div>
 
         {sheetOpen && (

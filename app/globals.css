@@ -12475,6 +12475,11 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .rv .rv-ch .rv-txt{flex:1 1 180px;width:auto;margin-top:0}
 /* Save mockups to order: counting down back to the order (a click stays); the bar empties as it counts */
 .btn.primary.mk-back-cd{background:linear-gradient(90deg,var(--accent-hover) calc(var(--cd,1) * 100%),var(--accent) 0);transition:background .9s linear}
+/* the button keeps its size while it counts down; a small note pops up above it (Oct 23, Nick: "it's getting really
+   large, and so it moves everything out of the place… a little text above it… click to stay") */
+.mk-back-cd{position:relative;overflow:visible}
+.mk-cd-tip{position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;padding:3px 9px;border-radius:6px;background:var(--ink);color:var(--surface);font:600 12px var(--body);pointer-events:none;box-shadow:0 2px 8px rgba(15,23,42,.18)}
+.mk-cd-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink)}
 .rv .rv-same{margin:0;width:170px;padding:6px;border:1px dashed var(--line);border-radius:var(--r,6px)}
 .rv .rv-same .rv-pic{height:70px}
 .rv .rv-same figcaption{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.35}
