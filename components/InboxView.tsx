@@ -1165,7 +1165,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // several orders from one email (one per design): which one is open, and the ones made
   const [partAt, setPartAt] = useState(0), [partMade, setPartMade] = useState<Record<string, { id: string; number: number }>>({});
   const startOrder = (s?: OrderStart) => { if (s) { setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setPartAt(0); setPartMade({}); } setOrdering(true); setView("order"); setSide("mail"); };
-  useEffect(() => { if (autoOrder) { startOrder(); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  // opened to make the order (an archived or older email, one just kept from the Inbox): the same Create order as the
+  // toolbar button: new or reorder, then the AI reads it and makes it (Oct 22, Nick: "it went through the old process")
+  useEffect(() => { if (autoOrder) { setPickOpen(true); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!autoGo) return;
     if (autoGo === "reorder") startOrder({ told: "This is a reorder of a past job: find the job it repeats." });

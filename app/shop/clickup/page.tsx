@@ -256,15 +256,15 @@ export default function ClickUpJobs() {
     if (t?.attachments.some((f) => !f.path)) void clickUpFiles(id).then((r) => setFiles((cur) => (cur?.id !== id ? cur : r.ok ? { id, list: r.files, busy: false } : { ...cur, busy: false, err: r.error })));
     setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
-  const start = async (kind: "new" | "reorder") => {
+  /** one Create order, the same as an email's (Oct 22, Nick: "it should do the exact same thing… the ClickUp notes are
+   *  like the body of an email; read the purchase order, the art, find whether it's a new order or a reorder") */
+  const createOrder = async () => {
     if (!job) return;
     setBusy("Bringing in the job and its files from ClickUp…"); setErr("");
     const r = await processClickUpTask(job.id);
     setBusy("");
     if (!r.ok) { setErr(r.error); return; }
-    setAct(r.activityId);
-    if (kind === "new") setQuick({ told: "This is a new order, not a reorder of a past job.", n: Date.now() });
-    else setPick(true);
+    setAct(r.activityId); setPick(true);
   };
   const madeIt = (id: string, number: number) => { setMade({ id, number }); void load(); setTimeout(() => void load(), 4000); };
   const pickCustomer = async (teamId: string, customerId: string) => {
@@ -346,8 +346,7 @@ export default function ClickUpJobs() {
           </div> : <div className="cu-ask">
             <b>Would you like to process this job?</b>
             <div className="cu-acts">
-              <button type="button" className="btn primary" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} onClick={() => void start("new")}>Create a new order</button>
-              <button type="button" className="btn" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} onClick={() => void start("reorder")}>Create a reorder</button>
+              <button type="button" className="btn primary" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} title="New order or reorder: the AI reads the job's notes, its purchase order and art, then makes the order (the same as from an email)" onClick={() => void createOrder()}>Create order</button>
               {job.dismissed_at
                 ? <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
                 : <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }}>Not an order</button>}
@@ -358,7 +357,7 @@ export default function ClickUpJobs() {
           {review && act && <div className="cu-sec"><EmailOrderPanel key={act + (review.job || "")} activityId={act} start={{ told: review.told, job: review.job }} onClose={() => setReview(null)} onCreated={(id, n) => { setReview(null); madeIt(id, n); }} /></div>}
         </div>
       </div>}
-      {pick && act && job && <OrderStartPick activityId={act} text={job.name} guess="reorder" onClose={() => setPick(false)}
+      {pick && act && job && <OrderStartPick activityId={act} text={`${job.name} ${job.description || ""}`.slice(0, 600)} guess="" onClose={() => setPick(false)}
         onPick={(s) => { setPick(false); if (s.review) setReview(s); else setQuick({ ...s, n: Date.now() }); }} />}
       {quick && act && <QuickOrder key={quick.n} activityId={act} start={quick} onClose={() => setQuick(null)}
         onReview={() => { const s = quick; setQuick(null); setReview(s); }}
