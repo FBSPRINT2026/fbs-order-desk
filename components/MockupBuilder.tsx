@@ -1151,6 +1151,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setImprints((xs) => xs.map((x) => (sizes[x.id] || hits[x.id] ? { ...x, ...(sizes[x.id] ? { size: sizes[x.id], sizeFrom: "brand" as const } : {}), ...(hits[x.id] || {}) } : x)));
   }, [imprints, designs, brandPrint, trims]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** another logo on a print: the old logo's inks and color count go with it (Oct 22, Nick, #40106: swapped to the
+   *  1-color black logo, the print kept "2 colors · Electric Blue, Black, 3 screens"); the new one's are read fresh */
+  const swapLogo = (x: Imprint, d: Design): Imprint => (x.design_id === d.id ? x : { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined });
   /** how far off its box's middle a print is centered (shares of its width / height): a round badge with a tail is
    *  centered on the circle (Oct 22, Nick: "the circle's in the center, the tail is off to the right") */
   const centerShift = (im: Imprint) => (im.center?.on && im.center.d === im.design_id ? { x: 0.5 - im.center.x, y: 0.5 - im.center.y } : { x: 0, y: 0 });
@@ -1492,7 +1495,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         d = r.design;
         setDesigns((x) => [d, ...x]);
         if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
-        setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
+        setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
         askRaster(im.id, d);
         setMsg(`Saved ${designLabel(d)} to your logos.`);
         return;
@@ -1501,7 +1504,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       d = await uploadDesign(sb, { file: f, customer_id: customerId, by: u.user?.email || "" });
       setDesigns((x) => [d, ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
-      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
       askRaster(im.id, d);
       setMsg(`Saved ${designLabel(d)} to the customer's account.`);
     } catch (e) { setMsg("Upload failed: " + (e instanceof Error ? e.message : String(e))); }
@@ -2957,7 +2960,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       );
                     })() : (<>
                     <DesignSearch designs={designs.filter((d) => !isQuick(d.id))} urls={urls} value={im.design_id} placeholder="Pick a logo…"
-                      onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x))); if (d) askRaster(im.id, d); }}
+                      onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? (d ? swapLogo(x, d) : { ...x, design_id: undefined }) : x))); if (d) askRaster(im.id, d); }}
                       onStar={async (d, starred) => {
                         setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
                         const { error } = portal ? await starMyDesign(d.id, starred).then((r) => ({ error: r.ok ? null : r.error })) : await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
