@@ -706,7 +706,8 @@ ${staffSays}` : ""}`;
             if (!im.inks && o2.inks) im.inks = o2.inks;
             if (!String(pr.size || "").trim() && o2.size) im.size = o2.size;
             if (o2.method) im.method = o2.method;
-            const pic = ((hit.x.pvRef || [])[0]?.path) || "";
+            // its mockup: our picture of it, else its mockup PDF (Printavo #32303 had only the PDF)
+            const pic = ((hit.x.pvRef || [])[0]?.path) || ((hit.x.pvArt || [])[0]?.path) || (sj.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])])[0]?.path) || "";
             im.sameAs = { ref: sj.ref, label: lab, ...(pic ? { pic } : {}) };
             im.notes = [im.notes, `Same process as ${lab}: ${o2.colors} color${o2.colors === 1 ? "" : "s"}${o2.inks ? ` (${o2.inks})` : ""}${o2.size ? `, ${o2.size}` : ""}`].filter(Boolean).join(". ").slice(0, 300);
             if (!refUsed.has(sj)) refUsed.set(sj, g);

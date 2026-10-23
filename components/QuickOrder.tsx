@@ -1132,6 +1132,8 @@ function Pic({ path, design, page, big }: { path?: string; design?: string; page
 }
 const sameName = (a?: string, b?: string) => { const n = (x?: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return !!n(a) && !!n(b) && (n(a) === n(b) || n(a).startsWith(n(b)) || n(b).startsWith(n(a))); };
 
+/** where a print sits, for showing them in order: the front, then the back, then sleeves, then anything else */
+const spotRank = (loc: string) => { const i = LOCATIONS.indexOf(loc); return (/sleeve/i.test(loc) ? 2000 : /back|yoke|shoulder|nape/i.test(loc) ? 1000 : 0) + (i < 0 ? 99 : i); };
 /** what a file is, the way staff say it */
 const fileLabel = (f: { name: string; role: string }) => (/purchase[\s_-]*order|(^|[^a-z])p\.?o\.?[\s_#-]*\d/i.test(f.name) ? "Purchase order" : /work[\s_-]*order/i.test(f.name) ? "Work order" : /invoice/i.test(f.name) ? "Invoice" : f.role === "art" ? "Art" : f.role === "mockup" ? "Mockup" : f.role === "sheet" ? "Size sheet" : "Other");
 
@@ -1197,7 +1199,8 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                 <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
               </div>
             ))}
-            {g.imprints.map((im) => {
+            {/* front first, then the back, then sleeves (Oct 23, Nick: "can you do the front first and the back second?") */}
+            {[...g.imprints].sort((x, y) => spotRank(x.location) - spotRank(y.location)).map((im) => {
               const cur = art[im.id] || "";
               const opts = [...new Set([...(cur && !arts.some((f) => f.path === cur) ? [cur] : []), ...arts.map((f) => f.path)])];
               return (
