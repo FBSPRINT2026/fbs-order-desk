@@ -33,6 +33,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { levelBack } from "@/lib/levelBack";
+import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -983,7 +984,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
     }
   }, [fits, lines, anchorLine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a hoodie's back: the hood's edge traced (and snapped) by hand, prints go behind the hood (lib/hoodSnap.ts, Oct 23)
+  const hoodKey = (l: Line) => { const g = garmentFor(l); return g ? Object.keys(g.color_images || {}).find((c) => colorKey(c) === colorKey(l.color)) || "" : ""; };
+  const hoodOf = (l?: Line) => { if (!l) return null; const g = garmentFor(l), k0 = hoodKey(l); return (k0 && g?.color_images?.[k0]?.hoodBack) || null; };
+  const isHoodie = (l?: Line) => !!l && /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`);
+  const [hoodDraw, setHoodDraw] = useState(false);
+  const [hoodMasks, setHoodMasks] = useState<Record<string, string>>({});
+  const saveHood = async (l: Line, raw: [number, number][] | null) => {
+    const g = garmentFor(l), k0 = hoodKey(l); if (!g || !k0) return;
+    const edge = raw && raw.length > 1 ? await snapToEdge(photo(l, "back"), raw).catch(() => raw) : null;
+    const ci = { ...(g.color_images || {}) }; const cur = { ...ci[k0] };
+    if (edge) cur.hoodBack = edge; else delete cur.hoodBack;
+    ci[k0] = cur;
+    setCatalog((c) => c.map((x) => (x.id === g.id ? { ...x, color_images: ci } : x)));
+    await sb.from("garments").update({ color_images: ci }).eq("id", g.id);
+  };
+  useEffect(() => {
+    for (const l of lines) {
+      const e = hoodOf(l); if (!e?.length) continue;
+      const u = photo(l, "back"), base = fits[u]?.mask, key = `${u}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`;
+      if (!base || hoodMasks[key]) continue;
+      void maskBehindHood(base, e).then((m) => setHoodMasks((x) => ({ ...x, [key]: m }))).catch(() => null);
+    }
+  }, [lines, fits, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
   const fitFor = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
+    const f = fitFor0(l, v, measured);
+    if (!f || !l || v !== "back") return f;
+    const e = hoodOf(l); if (!e?.length) return f;
+    const m = hoodMasks[`${photo(l, "back")}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`];
+    return m ? { ...f, mask: m } : f;
+  };
+  const fitFor0 = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     if (!l) return null;
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
@@ -2812,7 +2843,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     </div>
                   )}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
-                </>} overlay={measure ? measured(v) : undefined} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                  {v === "back" && isHoodie(line) && <div className="mk-corner l mk-hood-b"><button type="button" className={"mk-pill" + (hoodDraw ? " on" : "")} onClick={() => setHoodDraw((x) => !x)} title="Trace the bottom edge of the hood: prints go behind it">{hoodDraw ? "Done with the hood" : hoodOf(line) ? "Hood seam ✓" : "Help me find the hood seam"}</button></div>}
+                </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -3728,5 +3760,28 @@ function AddColor({ colors, onAdd }: { colors: string[]; onAdd: (c: string) => v
     <span className="mk-gc-add" title="Add a color of this style">
       <ColorPicker value={v} colors={colors} onChange={(c) => { if (colors.includes(c)) { onAdd(c); setV(""); } else setV(c); }} />
     </span>
+  );
+}
+
+/**
+ * Trace the hood's edge on a hoodie's back photo (Oct 23, Nick): drag roughly along the bottom edge of the hood; it snaps
+ * to the color change there (lib/hoodSnap.ts) and every print on this color's back goes behind it.
+ */
+function HoodTrace({ edge, onDone, onClear }: { edge: [number, number][] | null; onDone: (pts: [number, number][]) => void; onClear: () => void }) {
+  const svg = useRef<SVGSVGElement>(null);
+  const [cur, setCur] = useState<[number, number][] | null>(null);
+  const at = (e: { clientX: number; clientY: number }): [number, number] => { const r = svg.current!.getBoundingClientRect(); return [Math.round(((e.clientX - r.left) / r.width) * PHOTO_W), Math.round(((e.clientY - r.top) / r.height) * PHOTO_H)]; };
+  const line = (pts: [number, number][]) => pts.map((p) => p.join(",")).join(" ");
+  return (
+    <div className="mk-trace" onPointerDown={(e) => e.stopPropagation()}>
+      <svg ref={svg} viewBox={`0 0 ${PHOTO_W} ${PHOTO_H}`} preserveAspectRatio="none"
+        onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as Element).setPointerCapture(e.pointerId); setCur([at(e)]); }}
+        onPointerMove={(e) => { if (!cur) return; e.stopPropagation(); const p = at(e), l = cur[cur.length - 1]; if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 6) setCur([...cur, p]); }}
+        onPointerUp={(e) => { e.stopPropagation(); const pts = cur; setCur(null); if (pts && pts.length > 2) onDone(pts); }}>
+        {edge && !cur && <polyline points={line(edge)} fill="none" stroke="#e8336b" strokeWidth={5} />}
+        {cur && <polyline points={line(cur)} fill="none" stroke="#1ba0e2" strokeWidth={5} strokeDasharray="10 6" />}
+      </svg>
+      <div className="mk-trace-bar">{edge ? "The hood's edge is set: prints on this color's back go behind it. Draw again to redo it." : "Drag along the bottom edge of the hood, left to right. It snaps to the edge."}{edge && <button type="button" className="ap-link" onClick={onClear}>Clear it</button>}</div>
+    </div>
   );
 }
