@@ -633,7 +633,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const ubOf = new Map<string, string>();
     {
       const notWhite = (c?: string) => !!c && !/\b(white|natural|cream|ivory|pfd)\b/i.test(c);
-      const ubQ = (t: string) => /underbase|\b(2nd|3rd|4th|5th|second|third|fourth|fifth|extra|another|missing)\s+(ink\s+)?colou?r|colou?rs?\b[^.?]*\bonly\b|\bonly\b[^.?]*\bnamed\b/i.test(t);
+      // any question about a print's colors or inks: the reader words it differently every time ("add a 3rd color or White
+      // underbase?", "J1 had 2 colors; this work order says 3. Confirm 3rd ink"), so it's matched by what it's about and
+      // the count it gives (one more than the inks named), never by its wording
+      const ubQ = (t: string) => /colou?rs?\b|\binks?\b|underbase|screens?\b|\bpms\b/i.test(t);
       const nums = (t: string) => (t.replace(/\([^)]*\)/g, " ").replace(/\b(pms|pantone)\s*\d+\s*[a-z]?\b/gi, " ").replace(/\b\d{3,4}\s?[cu]\b/gi, " ").match(/\b(1[0-2]|[1-9])\b/g) || []).map(Number);
       const drop = new Set<number>();
       for (const x of d.groups) {
