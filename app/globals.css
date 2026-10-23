@@ -12475,3 +12475,7 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .rv .rv-ch .rv-txt{flex:1 1 180px;width:auto;margin-top:0}
 /* Save mockups to order: counting down back to the order (a click stays); the bar empties as it counts */
 .btn.primary.mk-back-cd{background:linear-gradient(90deg,var(--accent-hover) calc(var(--cd,1) * 100%),var(--accent) 0);transition:background .9s linear}
+.rv .rv-same{margin:0;width:170px;padding:6px;border:1px dashed var(--line);border-radius:var(--r,6px)}
+.rv .rv-same .rv-pic{height:70px}
+.rv .rv-same figcaption{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.35}
+.rv .rv-same figcaption b{color:var(--ink)}

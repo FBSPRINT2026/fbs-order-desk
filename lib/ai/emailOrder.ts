@@ -292,6 +292,7 @@ function tool(finishingIds: string[]) {
       properties: {
         kind: { type: "string", enum: ["new", "reorder"], description: "new = something we build from scratch (a new design or new garments); reorder = the same job as one we printed before, again" },
         reorder_of: { type: ["integer", "null"], description: "For a reorder: the J number of the past job it repeats" },
+        reference_job: { type: ["integer", "null"], description: "A NEW order that points to a past job for how to print it ('not a repeat… same process as order 85254'): that job's J number. Null otherwise." },
         summary: { type: "string", description: "One sentence for staff: what they want" },
         nickname: { type: "string", description: "Short job name, e.g. 'Terrible Toddler'" },
         due_date: { type: ["string", "null"], description: "In-hands date YYYY-MM-DD only if the customer gave one" },
@@ -329,6 +330,7 @@ function tool(finishingIds: string[]) {
             art_file_name: { type: ["string", "null"], description: "That file's exact name, written out (e.g. \"SS-logo--1-.png\"): the check that art_file points at the right file" },
             width_in: { type: ["number", "null"], description: "Width of the print in inches, judged from the customer's mockup against the garment (see the sizing note). Null when there is no mockup showing it." },
             drop_in: { type: ["number", "null"], description: "Only when the customer states how far below the collar the print goes; otherwise null (we use our standard placement)." },
+            same_as_job: { type: ["integer", "null"], description: "A NEW order that says this print is done like a past job ('same process as order 85254', 'back same as last time'): the J number of that past job. Its print at the same location gives the colors, inks and size; the art still comes from art_file. Null otherwise." },
           } } },
           mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
           shown_in: { type: ["object", "null"], description: "The file and page that pictures THIS group's print the way it should look (a work order page showing this variation's logo, their mockup of these garments): shown to staff beside the art you picked. Null when nothing pictures it.", properties: { file: { type: "integer" }, page: { type: "integer", description: "1 = first page" } } },
@@ -458,7 +460,7 @@ More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like
 
 Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
 0. Before taking any numbers, read the email like a person: how is it laid out, and why? Look at the headings and at what repeats. When the same designs come again under headings such as store or location names (e.g. ****Frisco**** then ****McKinney****, "see break out by location"), departments, people or ship-to places, that's ONE order broken out by those headings, not separate garments and never to be added together: make ONE group per design (name the group with the design, e.g. "T10A Autumn Tee"), and in it one garment line per heading, with the heading as that line's description (e.g. "Frisco"). The same style and color under two headings is two lines. When you can't tell what a heading or split means, keep the parts apart anyway and ask in questions what it is. Check your totals against any the customer gives ("T10A total tees 348").
-1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's.
+1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's. NEW WITH A REFERENCE (Oct 23, Logotology PO 92785: "NOT A REPEAT ORDER - NEW LEFT CHEST LOGO. Screen print process same as order 85254"): it's NEW (kind new), set reference_job to that past job's J number (a number they give can be their PO on it: "PO 85254" is Printavo #32303), and on every print that matches one of that job's prints (same location, or the same side), set same_as_job to it: those prints print the same way (colors, inks, size); the art still comes from the files they attached. A new print (the new left chest) is set up as usual.
 2. Say what every attached file is: art (the print file: just the design, nothing else on the page), mockup (the design shown on a garment), setup_sheet (the customer's own mockup sheet: the art shown big, usually on a flat background panel with a note like "BACKGROUND DOES NOT PRINT", a spec box with the location, the size and the inks (Pantone / PMS), and the design on the garment, often on a second page; give art_page and mockup_page), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files). A file's NAME says what it is, the way staff read it: "Purchase_Order_91537" is their purchase order, "Work_Order_91537" their work order, "SS-logo" the logo. The paperwork (purchase order, work order, invoice, quote, packing slip) is read for the garments, sizes, locations, inks and notes, and is never the art: a purchase order is size_breakdown, a work order other (even when it shows the design on a shirt); set art_file to the art files, and take a number in a paperwork name (91537) as their PO number.
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Set art_file to the file whose art prints there and write its name in art_file_name; when several art files are close (two colorways of one logo), match each to its print by what the files show (the work order's or mockup's picture of each variation: blue art on Variation 1, black on Variation 2), not by the order the files came in.  Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
@@ -553,6 +555,7 @@ ${staffSays}` : ""}`;
   };
 
   const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
+  const refNotes: string[] = [];
   const finIds = new Set((settings.finishing || []).map((f) => f.id));
   let groups: Group[] = [];
   // the J number of the past job; the model sometimes gives the job's own number instead (#33729), so that's matched too
@@ -679,6 +682,8 @@ ${staffSays}` : ""}`;
       groups.push(ng);
     }
   } else {
+    // the past jobs prints copy their process from: their mockups go in this order's Production files to look at
+    const refUsed = new Map<PastJob, Group>();
     // what staff changed on earlier mockups the AI measured: scale this reading the same way
     const { data: ls } = await admin.from("ai_suggestions").select("payload").eq("kind", LESSON_KIND).order("updated_at", { ascending: false }).limit(80);
     const lessons = (ls || []).map((x) => x.payload as MockupLesson).filter(Boolean);
@@ -689,6 +694,24 @@ ${staffSays}` : ""}`;
       (pg.prints || []).slice(0, 10).forEach((pr, k) => {
         const im = g.imprints[k]; if (!im) return;
         const f = fileAt(pr.art_file); if (f) art[im.id] = f;
+        // done like a past job's print ("same process as order 85254"): its colors, inks and size, and its mockup to look at
+        const sj = jobAt((pr as { same_as_job?: number | null }).same_as_job);
+        if (sj) {
+          const side = (l: string) => (/back|yoke|shoulder|nape/i.test(l) ? "b" : "f");
+          const olds = sj.groups.flatMap((x) => x.imprints.map((o2) => ({ o2, x })));
+          const hit = olds.find((z) => z.o2.location === im.location) || olds.find((z) => side(z.o2.location) === side(im.location));
+          if (hit) {
+            const o2 = hit.o2, lab = sj.label.replace(/\s*\(Printavo\)$/, "");
+            if (o2.colors) im.colors = o2.colors;
+            if (!im.inks && o2.inks) im.inks = o2.inks;
+            if (!String(pr.size || "").trim() && o2.size) im.size = o2.size;
+            if (o2.method) im.method = o2.method;
+            const pic = ((hit.x.pvRef || [])[0]?.path) || "";
+            im.sameAs = { ref: sj.ref, label: lab, ...(pic ? { pic } : {}) };
+            im.notes = [im.notes, `Same process as ${lab}: ${o2.colors} color${o2.colors === 1 ? "" : "s"}${o2.inks ? ` (${o2.inks})` : ""}${o2.size ? `, ${o2.size}` : ""}`].filter(Boolean).join(". ").slice(0, 300);
+            if (!refUsed.has(sj)) refUsed.set(sj, g);
+          }
+        }
         // a size the customer stated in words is theirs: the Mockup Creator asks before anyone changes it
         if (im.size && String(pr.size || "").trim()) im.sizeFrom = "customer";
         // where and how big the customer's mockup shows it, so our Mockup Creator rebuilds the same picture
@@ -719,6 +742,15 @@ ${staffSays}` : ""}`;
     // a mockup the AI didn't tie to a group goes with the first one
     const loose = files.filter((f) => f.role === "mockup" && !Object.values(mockups).flat().includes(f.path)).map((f) => f.path);
     if (loose.length && groups[0]) mockups[groups[0].id] = [...(mockups[groups[0].id] || []), ...loose];
+    // the reference job (named, even with no print tied to it): its mockups in Production files, and said in the notes
+    const rj = jobAt((p as { reference_job?: number | null }).reference_job);
+    if (rj && !refUsed.has(rj) && groups[0]) refUsed.set(rj, groups[0]);
+    for (const [j, g] of refUsed) {
+      const lab = j.label.replace(/\s*\(Printavo\)$/, "");
+      const add = j.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).slice(0, 4).map((f) => ({ ...f, kind: "old_mockup", note: `The job this order is printed like: ${lab}` }));
+      if (add.length) g.pvRef = [...(g.pvRef || []), ...add];
+      refNotes.push(`Printed the same way as ${lab}${j.date ? ` (${j.date})` : ""}: its mockup is in Production files`);
+    }
   }
 
   const wholesale = cust?.price_type === "wholesale";
@@ -728,7 +760,7 @@ ${staffSays}` : ""}`;
     nickname: (p.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "").slice(0, 120),
     due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date! : null,
     delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
-    ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60), notes: (p.notes || "").slice(0, 2000),
+    ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60), notes: [...refNotes, p.notes || ""].filter(Boolean).join("\n").slice(0, 2000),
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null, ...(reorderJobs.length > 1 ? { reorderJobs } : {}), ...(readingLeads && emailArt ? { emailArt: true } : {}),
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,

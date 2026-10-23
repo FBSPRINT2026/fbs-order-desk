@@ -1210,6 +1210,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                         <span data-notranslate>{v ? nameOf(v) : "Add it on the order"}{v && v === (d.art?.[im.id] || (im.design_id ? `design:${im.design_id}` : "")) && opts.length > 1 ? <i className="faint"> (my pick)</i> : null}</span>
                       </button>
                     ))}
+                    {im.sameAs && <figure className="rv-same"><Pic path={im.sameAs.pic} /><figcaption>Printed like <b data-notranslate>{im.sameAs.label}</b>{im.colors ? ` · ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}</figcaption></figure>}
                   </div>
                 </div>
               );
