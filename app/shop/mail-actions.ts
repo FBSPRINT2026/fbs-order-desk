@@ -485,6 +485,38 @@ export async function keepInboxEmail(inboxId: string) {
   } catch (e) { return fail(e); }
 }
 
+/**
+ * An email from any folder (Archive, a customer folder, a search result) kept in the portal, so Create order works on
+ * it exactly as from the Inbox (Oct 22, Nick: "if the email is not in the inbox and I go to create an order from it, it
+ * does a whole separate task… I had to do it by hand"). Already kept (same message id): that one.
+ */
+export async function keepFolderEmail(input: { folder: string; uid: number; messageId?: string }) {
+  try {
+    const v = await staff(), { admin } = v;
+    const { acct: a } = await mailboxToRead(admin, v);
+    if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
+    const mid = (input.messageId || "").trim();
+    if (mid) {
+      const b = mid.replace(/^<|>$/g, "");
+      const { data: hit } = await admin.from("activities").select("id").eq("kind", "email").in("external_id", [b, `<${b}>`]).limit(1).maybeSingle();
+      if (hit) return { ok: true as const, activityId: hit.id as string };
+    }
+    const { simpleParser } = await import("mailparser");
+    const { toMsg } = await import("@/lib/mail/imap");
+    const { keepIncoming } = await import("@/lib/mail/process");
+    let raw: Buffer | null = null;
+    const { ewsReady, ewsMimeByMessageId } = await import("@/lib/mail/ewsBox");
+    if (mid && (await ewsReady(admin, a))) raw = await ewsMimeByMessageId(a, mid).catch(() => null);
+    if (!raw) {
+      const { withBox } = await import("@/lib/mail/folders");
+      raw = await withBox(a, async (c) => { const lock = await c.getMailboxLock(input.folder); try { const m = await c.fetchOne(String(input.uid), { source: true }, { uid: true }); return m && m.source ? Buffer.from(m.source) : null; } finally { lock.release(); } }, Date.now() + 40000).catch(() => null);
+    }
+    if (!raw) return { ok: false as const, error: "Couldn't read that email from your mailbox. Try again in a minute." };
+    const id = await keepIncoming(admin, toMsg(await simpleParser(raw)), { id: a.id, email: a.email });
+    return { ok: true as const, activityId: id };
+  } catch (e) { return fail(e); }
+}
+
 /** read any email in your Inbox, live from the mailbox (the portal doesn't keep non-customer mail) */
 export async function readInboxEmail(id: string) {
   try {

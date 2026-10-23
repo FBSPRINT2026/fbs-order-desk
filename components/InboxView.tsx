@@ -245,6 +245,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
     // theirs); one that came in another way (no mailbox) shows to everyone
     const myAcct = s.ok ? s.mine?.id || null : null, myAddr = s.ok ? s.mine?.email || null : null;
     const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored && emailIsMine(x, myAcct, myAddr));
+    // opened by a link (?open=, Create order from another folder or an older email): that email too, however old
+    const want = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("open") : null;
+    if (want && !list.some((x) => x.id === want)) {
+      const { data: one } = await sb.from("activities").select("id, customer_id, order_id, project_id, direction, subject, body, from_email, to_email, external_id, thread_id, occurred_at, meta").eq("id", want).maybeSingle();
+      if (one) list.unshift(one as Act);
+    }
     setActs(list);
     const ids = list.filter((x) => x.direction === "in").map((x) => x.id);
     const cIds = [...new Set(list.map((x) => x.customer_id).filter(Boolean))] as string[];

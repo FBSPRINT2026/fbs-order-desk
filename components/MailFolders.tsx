@@ -9,6 +9,7 @@ import VoiceDraft, { SayButton, startListening, type Draft } from "@/components/
 import { cheerWin } from "@/components/Cheer";
 import { createClient } from "@/lib/supabase/client";
 import { useSaneBox } from "@/components/RoleContext";
+import { keepFolderEmail } from "@/app/shop/mail-actions";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -734,6 +735,8 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
   }, [row.folder, row.uid, n, full]);
   useEffect(() => { setFull(false); }, [row.folder, row.uid]);
   const move = async (to: string, label: string) => { setBusy(true); try { await boxPost({ do: "move", path: row.folder, uid: row.uid, to }); flash(label); onGone(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); };
+  const [ordering, setOrdering] = useState(false);
+  const orderFrom = async (r: MsgRow) => { setOrdering(true); const k = await keepFolderEmail({ folder: r.folder, uid: r.uid, messageId: r.messageId }); if (!k.ok) { setOrdering(false); setErr(k.error); return; } window.location.href = `/shop/conversations?open=${k.activityId}&order=1`; };
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
@@ -747,6 +750,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
               <TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setRep("one")} />
               <TbBtn icon={TbIcon.replyAll} label="Reply all" disabled={!m} onClick={() => setRep("all")} />
             </TbGroup>
+            {!row.sent && <TbGroup label="Actions"><TbBtn icon={TbIcon.order} label={ordering ? "Opening…" : "Create order"} disabled={ordering} title="Make an order from this email, the same way as from the Inbox" onClick={() => void orderFrom(row)} /></TbGroup>}
             <MoveBar folders={folders} busy={busy} onMove={move} here={row.folder} />
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
@@ -894,8 +898,11 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     });
     return () => { live = false; };
   }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const orderHref = orderAct ? `/shop/email-order/${orderAct.id}` : "";
+  // the same Create order as the Inbox (Oct 22): the email opens in Conversations with the order started
+  const orderHref = orderAct ? `/shop/conversations?open=${orderAct.id}&order=1` : "";
   const orderLabel = orderAct?.reorder ? "Create reorder" : "Create order";
+  const [cOrdering, setCOrdering] = useState(false), [cErr, setCErr] = useState("");
+  const alertErr = (t: string) => setCErr(t);
   const replyLast = () => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
   return (
     <div className="ibx2-work ibx2-solo">
@@ -907,8 +914,10 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
+            {!lastIn.sent && <TbGroup label="Actions"><TbBtn icon={TbIcon.order} label={cOrdering ? "Opening…" : orderLabel} disabled={cOrdering} title="Make an order from their latest email here, the same way as from the Inbox" onClick={async () => { if (orderHref) { window.location.href = orderHref; return; } setCOrdering(true); const k = await keepFolderEmail({ folder: lastIn.folder, uid: lastIn.uid, messageId: lastIn.messageId }); if (!k.ok) { setCOrdering(false); alertErr(k.error); return; } window.location.href = `/shop/conversations?open=${k.activityId}&order=1`; }} /></TbGroup>}
             <span className="faint mf-hint">Oldest at the top, newest at the bottom. Click an email to open or fold it.</span>
           </Toolbar>} />
+        {cErr && <div className="pv-err eh-err">{cErr}</div>}
         <div className="ibx2-read mf-thread">
           {shown.map((m) => {
             if (m === "more") return <button key="more" type="button" className="mf-more" onClick={() => setShowAll(true)}>▾ {c.msgs.length - 2} more email{c.msgs.length - 2 === 1 ? "" : "s"} in between</button>;
