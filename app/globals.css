@@ -12632,19 +12632,20 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 @keyframes bubdot{0%,60%,100%{opacity:.25;transform:none}30%{opacity:.9;transform:translateY(-3px)}}
 @media (prefers-reduced-motion:reduce){.bub.typing i{animation:none}}
 .orv-compose{flex:none;border-top:1px solid var(--line);padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
-.orv-quick{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.orv-quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.orv-quick .spacer{flex:1}
+.orv-quick .orv-rsc-h{display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
 .orv-quick .chip{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--accent);font:600 13px var(--body);cursor:pointer}
 .orv-quick .chip.ok{background:var(--fbs-blue);border-color:var(--fbs-blue);color:#fff}
 .orv-quick .chip:disabled{opacity:.5;cursor:default}
-.orv-box{display:flex;align-items:flex-end;gap:6px;border:1px solid var(--line);border-radius:20px;padding:4px 4px 4px 6px;background:var(--surface)}
+.orv-box{display:flex;align-items:flex-end;gap:6px;border:1px solid var(--line);border-radius:20px;padding:4px 4px 4px 10px;background:var(--surface)}
 .orv-box:focus-within{border-color:var(--accent)}
 .orv-box textarea{flex:1;border:0;outline:0;resize:none;padding:7px 4px;font:14px/1.4 var(--body);color:var(--ink);background:transparent;max-height:140px}
-.orv-box .mic{position:static;transform:none;flex:none;width:32px;height:32px}
+.orv-box .mic{position:static;transform:none;flex:none;width:32px;height:32px;border-radius:50%;background:var(--surface-2);color:var(--accent)}
+.orv-box .mic svg{width:16px;height:16px}
 .orv-send{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--fbs-blue);color:#fff;font:700 16px var(--body);cursor:pointer;display:grid;place-items:center}
 .orv-send:disabled{background:var(--surface-3);color:var(--ink-3);cursor:default}
 /* Order resources: the customer's PO, mockup and art, and our work order, quote and proof, up from the bottom of the check */
-.orv-rsc-h{width:100%;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font:700 13px var(--body);color:var(--ink);cursor:pointer}
-.orv-rsc-h:hover{border-color:var(--accent)}
 .orv-rsc-n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;display:inline-grid;place-items:center}
 .orv-rsc-a{margin-left:auto;color:var(--accent);font-weight:600}
 /* the chat's bubbles sit at the bottom, newest last, like a phone's messages */

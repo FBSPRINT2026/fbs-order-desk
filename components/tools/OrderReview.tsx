@@ -248,17 +248,16 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
       </div>
 
       <div className="orv-compose">
-        {res.length > 0 && <button type="button" className="orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">
-          <span>Order resources</span><span className="orv-rsc-n">{res.length}</span><span className="orv-rsc-a" aria-hidden>Open ›</span>
-        </button>}
         <div className="orv-box">
-          <MicButton target={() => box.current} append label="Say what to change" />
           <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
+          <MicButton target={() => box.current} append label="Say what to change" />
           <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>
         <div className="orv-quick">
+          {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Order resources <span className="orv-rsc-n">{res.length}</span></button>}
+          <span className="spacer" />
           <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
           <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
         </div>
