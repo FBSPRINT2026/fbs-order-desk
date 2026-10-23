@@ -39,7 +39,9 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const [gi, setGi] = useState(0);
-  const [pi, setPi] = useState(0);
+  // the print shown, by its id (not its place in the list): a save that reloads the job can't swap which print's form is
+  // on screen (Oct 23, Nick on #40133: the front's drop ended up on the back)
+  const [pid, setPid] = useState("");
   const [photos, setPhotos] = useState<JobFile[]>([]);
 
   const load = useCallback(async () => {
@@ -69,7 +71,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
 
   const group = v.groups[Math.min(gi, v.groups.length - 1)];
   const gPrints = v.prints.filter((p) => p.groupId === group?.id);
-  const print = gPrints[Math.min(pi, Math.max(0, gPrints.length - 1))];
+  const print = gPrints.find((p) => p.id === pid) || gPrints[0];
   // a reorder is logged in one sitting (Oct 21, Nick: "the production man is gonna sit down with the press operator and log
   // it all in, one step… a one page here's what we did"): nothing waits on a step, one Save everything
   const oneSitting = !!v.order.reorderOf || v.prints.some((p) => !!p.confirm && !p.confirmed);
@@ -107,14 +109,14 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
 
       {v.groups.length > 1 && (
         <div className="chips" role="tablist" aria-label="Group" data-toolbar>
-          {v.groups.map((g, i) => <button key={g.id} type="button" role="tab" aria-selected={i === gi} className={"chip" + (i === gi ? " on" : "")} onClick={() => { setGi(i); setPi(0); }}>{g.name || `Group ${i + 1}`}</button>)}
+          {v.groups.map((g, i) => <button key={g.id} type="button" role="tab" aria-selected={i === gi} className={"chip" + (i === gi ? " on" : "")} onClick={() => { setGi(i); setPid(""); }}>{g.name || `Group ${i + 1}`}</button>)}
         </div>
       )}
 
       <section className="jv-card jv-confirm" aria-label="Confirm the print">
         {gPrints.length > 1 && (
           <div className="chips" role="tablist" aria-label="Print" data-toolbar>
-            {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPi(i)}>{p.location}</button>)}
+            {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPid(p.id)}>{p.location}{p.confirmed ? " ✓" : ""}</button>)}
           </div>
         )}
         {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} photos={photos} reloadPhotos={loadPhotos} /> : <div className="faint">No prints on this group.</div>}
@@ -330,7 +332,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     }
     if (ok) {
       setSaving("Confirming…");
-      const r = await confirmDetails(orderId, [{ id: p.id, size, inks: screens.map((x) => x.name).filter(Boolean).join(", ") || p.inks, colors: screens.filter((x) => x.name).length || p.colors, underbase: ub, drop, screensOnFile: film === "asPrinted", notes: pnotes }]);
+      const r = await confirmDetails(orderId, [{ id: p.id, size, inks: screens.map((x) => x.name).filter(Boolean).join(", ") || p.inks, colors: screens.filter((x) => x.name).length || p.colors, underbase: ub, drop, screensOnFile: film === "asPrinted", notes: pnotes }], !!p.confirmed);
       if (!r.ok) { setErr(r.error); ok = false; }
     }
     setSaving("");

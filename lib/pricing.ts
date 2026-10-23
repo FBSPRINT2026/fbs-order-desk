@@ -859,4 +859,14 @@ export function payDueDate(o: { approved_at?: string | null; sent_at?: string | 
  * once production has already confirmed the details?"): "*** REORDER DETAILS NEEDED … ***" and "Specs confirmed by
  * production …" are made from the print's state each time; read back from Printavo they ended up in the notes.
  */
+/**
+ * A print's notes without what Create order wrote about how it got there ("Art pulled off … with the Helper: 10.25" ×
+ * 10.25"…", "Set at the check: 10.5" wide, Black", "You said: printed 1 color", "From Printavo #33728"…): the print's own
+ * fields hold the size, drop and inks, and those lines only confused the press (Oct 23, Nick: "we don't even need that…
+ * that's going to hurt us more than help us"). What a person wrote (a press note, the customer's words) stays.
+ */
+const MACHINE_NOTE = /^(From Printavo #|Art (pulled off|from|uploaded)|Pulled off |You said:|Set at the check|Placement from their mockup|Size from |No underbase \(set at the check\)|The [a-z ]+ box behind the art|Their [a-z ]+ box prints|Same inks as the |Inks? (and size )?from Printavo|Inks from |\*\*\*\s*REORDER|Confirm in the portal|Changed after it was made)/i;
+export const cleanPrintNotes = (s: string | null | undefined) => String(s || "").split(/\n|(?<=\.)\s+(?=[A-Z*"])/)
+  .map((x) => x.trim()).filter((x) => x && !MACHINE_NOTE.test(x)).join(" ").trim();
+
 export const shopNotes = (s: string | null | undefined) => String(s || "").replace(/\*\*\*\s*REORDER[^*]*\*\*\*[^\n]*\n?/gi, "").replace(/^\s*Specs confirmed by production[^\n]*\n?/gim, "").trim();

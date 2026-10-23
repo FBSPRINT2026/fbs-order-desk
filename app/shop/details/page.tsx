@@ -23,9 +23,9 @@ type ArtRef = { id: string; order_id: string; name: string; file_path: string };
  * first print of each set carries the form; confirming applies it to all of them.
  */
 type Set1 = { lead: Imprint; ims: Imprint[]; gs: Group[] };
-const printSets = (r: Row): Set1[] => {
+const printSets = (r: Row, which: (im: Imprint) => boolean = needsDetails): Set1[] => {
   const out: Set1[] = [], by = new Map<string, Set1>();
-  for (const g of r.groups) for (const im of g.imprints.filter(needsDetails)) {
+  for (const g of r.groups) for (const im of g.imprints.filter(which)) {
     const k = im.design_id ? `${im.design_id}|${(im.location || "").toLowerCase()}|${im.method}` : im.id;
     const s0 = by.get(k);
     if (s0) { s0.ims.push(im); if (!s0.gs.includes(g)) s0.gs.push(g); continue; }
@@ -37,6 +37,7 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
 // blank, with our guesses shown greyed in each box (Oct 14, Nick: a guess must never become a fact by clicking through);
 // "Copy in our guesses" fills them in on purpose
 const formOf = (im: Imprint): DetailsInput => ({ id: im.id, size: "", inks: "", colors: im.colors || 1, underbase: "", drop: "", screensOnFile: !!im.remake, notes: "" });
+const isDone = (im: Imprint) => !!im.confirmed && !needsDetails(im);
 const guessOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || "", inks: im.inks || "", colors: im.colors || 1, underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "", drop: im.drop || "", screensOnFile: !!im.remake, notes: "" });
 
 export default function ProductionDetailsPage() {
@@ -55,6 +56,26 @@ export default function ProductionDetailsPage() {
   const [open, setOpen] = useState<string | null>(open0);
   const [form, setForm] = useState<Record<string, DetailsInput>>({});
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState<{ id: string; text: string; bad?: boolean } | null>(null);
+  // a confirmed order opened again to correct it (Recently confirmed → Edit)
+  const [editing, setEditing] = useState<Row | null>(null);
+  async function openEdit(orderId: string) {
+    if (editing?.id === orderId) { setEditing(null); return; }
+    const { data } = await sb.from("orders").select("id, number, nickname, customer_id, due_date, status, groups").eq("id", orderId).maybeSingle();
+    if (!data) return;
+    const r = data as Row;
+    const f: Record<string, DetailsInput> = { ...form };
+    for (const g of r.groups) for (const im of g.imprints) if (isDone(im)) f[im.id] = { ...guessOf(im), notes: "" };
+    setForm(f); setEditing(r); setMsg(null);
+    const ds = [...new Set(r.groups.flatMap((g) => g.imprints.map((im) => im.design_id)).filter(Boolean))] as string[];
+    if (ds.length) {
+      const { data: dd } = await sb.from("designs").select("id, preview_path").in("id", ds);
+      const withPv = ((dd || []) as { id: string; preview_path: string }[]).filter((d) => d.preview_path);
+      const { data: su } = withPv.length ? await sb.storage.from("proofs").createSignedUrls(withPv.map((d) => d.preview_path), 3600) : { data: [] };
+      const m: Record<string, string> = {};
+      withPv.forEach((d, i) => { if (su?.[i]?.signedUrl) m[d.id] = su[i].signedUrl; });
+      setDUrl((x) => ({ ...x, ...m }));
+    }
+  }
 
   async function load() {
     const list = (await ordersNeedingDetails<Row>(sb, "id, number, nickname, customer_id, due_date, status, groups"))
@@ -117,11 +138,50 @@ export default function ProductionDetailsPage() {
     const res = await confirmDetails(r.id, prints);
     setBusy("");
     if (!res.ok) { setMsg({ id: r.id, text: res.error, bad: true }); return; }
-    setMsg({ id: r.id, text: `#${r.number} confirmed. It's on the order and the customer's design for next time.` });
+    setMsg({ id: r.id, text: `#${r.number} confirmed. It's on the order and the customer's design for next time. To fix a typo, open it here and click Edit.` });
     setOpen(null);
+    await load();
+    // it moves to Recently confirmed, where it can be opened again to correct (Oct 23, Nick)
+    if (res.left === 0) setTab("done");
+  }
+  async function saveEdit(r: Row) {
+    const prints = printSets(r, isDone).flatMap((x) => { const f = form[x.lead.id] || guessOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
+    setBusy(r.id); setMsg(null);
+    const res = await confirmDetails(r.id, prints, true);
+    setBusy("");
+    if (!res.ok) { setMsg({ id: r.id, text: res.error, bad: true }); return; }
+    setMsg({ id: r.id, text: `#${r.number} corrected. The order and the customer's design have the new details.` });
+    setEditing(null);
     await load();
   }
 
+  /** each print's fields: our guess greyed (waiting), or what's confirmed filled in (editing) */
+  const formFor = (prints: Set1[]) => prints.map(({ lead: im, gs, ims }) => {
+      const f = form[im.id] || formOf(im);
+      // a visual-only print: nothing guessed is shown (only what the old job says: its color count), so the
+      // press sets what really ran (Oct 20, Nick)
+      const vis = !!im.visualOnly, gs0 = vis ? { size: "", inks: "", drop: "" } : { size: im.size, inks: im.inks, drop: im.drop };
+      const garment = [...new Set(gs.flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
+      return (
+        <div key={im.id} className="pdd-print">
+          <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
+          <div className="pdd-fields">
+            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups, one set of screens` : ""}</span></div>
+            {vis && <div className="pdd-why faint">Visual mockup only: set what ran on press. The old job says {im.colors} color{im.colors === 1 ? "" : "s"}.</div>}
+            {!vis && im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
+            <div className="pdd-grid">
+              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={gs0.size ? `Guess: ${gs0.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
+              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={gs0.inks ? `Guess: ${gs0.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
+              <label className="field"><span>Colors</span><input type="number" min={1} max={20} value={f.colors} onChange={(e) => set(im.id, { colors: +e.target.value || 1 })} /></label>
+              <label className="field"><span>Underbase</span><select value={f.underbase} onChange={(e) => set(im.id, { underbase: e.target.value as DetailsInput["underbase"] })}><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={gs0.drop ? `Guess: ${gs0.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
+              <label className="check pdd-chk"><input type="checkbox" checked={f.screensOnFile} onChange={(e) => set(im.id, { screensOnFile: e.target.checked })} />Screens on file</label>
+              <label className="field pdd-full"><span>Press notes (optional)</span><input type="text" value={f.notes} placeholder="Mesh, flash, ink order, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
+            </div>
+          </div>
+        </div>
+      );
+    });
   const waiting = rows || [];
   return (
     <>
@@ -153,32 +213,7 @@ export default function ProductionDetailsPage() {
                 {isOpen && (
                   <div className="pdd-body">
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
-                    {prints.map(({ lead: im, gs, ims }) => {
-                      const f = form[im.id] || formOf(im);
-                      // a visual-only print: nothing guessed is shown (only what the old job says: its color count), so the
-                      // press sets what really ran (Oct 20, Nick)
-                      const vis = !!im.visualOnly, gs0 = vis ? { size: "", inks: "", drop: "" } : { size: im.size, inks: im.inks, drop: im.drop };
-                      const garment = [...new Set(gs.flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
-                      return (
-                        <div key={im.id} className="pdd-print">
-                          <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
-                          <div className="pdd-fields">
-                            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups, one set of screens` : ""}</span></div>
-                            {vis && <div className="pdd-why faint">Visual mockup only: set what ran on press. The old job says {im.colors} color{im.colors === 1 ? "" : "s"}.</div>}
-                            {!vis && im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
-                            <div className="pdd-grid">
-                              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={gs0.size ? `Guess: ${gs0.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
-                              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={gs0.inks ? `Guess: ${gs0.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
-                              <label className="field"><span>Colors</span><input type="number" min={1} max={20} value={f.colors} onChange={(e) => set(im.id, { colors: +e.target.value || 1 })} /></label>
-                              <label className="field"><span>Underbase</span><select value={f.underbase} onChange={(e) => set(im.id, { underbase: e.target.value as DetailsInput["underbase"] })}><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select></label>
-                              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={gs0.drop ? `Guess: ${gs0.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
-                              <label className="check pdd-chk"><input type="checkbox" checked={f.screensOnFile} onChange={(e) => set(im.id, { screensOnFile: e.target.checked })} />Screens on file</label>
-                              <label className="field pdd-full"><span>Press notes (optional)</span><input type="text" value={f.notes} placeholder="Mesh, flash, ink order, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {formFor(prints)}
                     {msg?.bad && msg.id === r.id && <div className="err">{msg.text}</div>}
                     <div className="pdd-foot">
                       <Link href={`/shop/orders/${r.id}?view=admin`} className="linkbtn">Open the order</Link>
@@ -196,11 +231,30 @@ export default function ProductionDetailsPage() {
         </div>
       ))}
 
+      {tab === "done" && msg && msg.bad && <div className="err">{msg.text}</div>}
+      {tab === "done" && editing && (() => {
+        const r = editing, sets = printSets(r, isDone);
+        return (
+          <section className="panel pdd-card open">
+            <div className="pdd-head"><span className="pdd-num">#{r.number}</span><span className="pdd-main"><b>{custs[r.customer_id || ""] || "Correct the confirmed details"}</b><span className="faint">{r.nickname || "Untitled Job"}</span></span><span className="pdd-tag">Editing</span></div>
+            <div className="pdd-body">
+              {sets.length ? formFor(sets) : <p className="faint">Nothing confirmed on this order yet.</p>}
+              <div className="pdd-foot">
+                <Link href={`/shop/orders/${r.id}?view=admin`} className="linkbtn">Open the order</Link>
+                <span className="spacer" />
+                <button type="button" className="btn" onClick={() => setEditing(null)}>Cancel</button>
+                {sets.length > 0 && <button type="button" className="btn primary" disabled={busy === r.id} onClick={() => void saveEdit(r)}>{busy === r.id ? "Saving…" : `Save the corrections to #${r.number}`}</button>}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
       {tab === "done" && (!done.length ? <div className="empty">Nothing confirmed yet.</div> : (
         <section className="panel"><table className="rv-tbl pdd-done">
-          <thead><tr><th>Order</th><th>What was confirmed</th><th>By</th><th className="r">When</th></tr></thead>
+          <thead><tr><th>Order</th><th>What was confirmed</th><th>By</th><th className="r">When</th><th /></tr></thead>
           <tbody>{done.map((e) => (
-            <tr key={e.id}><td><Link href={`/shop/orders/${e.order_id}`} className="db-num">#{e.number || "—"}</Link><div className="faint">{e.nickname}</div></td><td className="pdd-d">{e.detail.replace(/^Production details confirmed: /, "")}</td><td>{e.actor}</td><td className="r faint">{new Date(e.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}</td></tr>
+            <tr key={e.id}><td><Link href={`/shop/orders/${e.order_id}`} className="db-num">#{e.number || "—"}</Link><div className="faint">{e.nickname}</div></td><td className="pdd-d">{e.detail.replace(/^Production details (confirmed|corrected): /, (m0, w) => (w === "corrected" ? "Corrected: " : ""))}</td><td>{e.actor}</td><td className="r faint">{new Date(e.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}</td>
+              <td className="r">{canConfirm && <button type="button" className="btn sm" onClick={() => void openEdit(e.order_id)}>{editing?.id === e.order_id ? "Close" : "Edit"}</button>}</td></tr>
           ))}</tbody>
         </table></section>
       ))}

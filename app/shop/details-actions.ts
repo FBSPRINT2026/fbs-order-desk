@@ -14,7 +14,7 @@ const CAN = ["owner", "admin", "production"];
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) });
 const clip = (s: unknown, n: number) => String(s ?? "").trim().slice(0, n);
 
-export async function confirmDetails(orderId: string, prints: DetailsInput[]): Promise<{ ok: true; left: number } | { ok: false; error: string }> {
+export async function confirmDetails(orderId: string, prints: DetailsInput[], edit = false): Promise<{ ok: true; left: number } | { ok: false; error: string }> {
   try {
     const v = await getViewer(", name");
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
@@ -31,7 +31,9 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
     for (const p of prints) {
       let im: Imprint | undefined;
       for (const g of groups) { im = g.imprints.find((x) => x.id === p.id); if (im) break; }
-      if (!im || !needsDetails(im)) continue;
+      // edit: a print already confirmed, corrected (Oct 23, Nick: "you should be able to go back in and edit it… I made a
+      // typo there. It should have been 2 inches")
+      if (!im || !(needsDetails(im) || (edit && im.confirmed))) continue;
       const before = { size: im.size, inks: im.inks, colors: im.colors };
       im.size = clip(p.size, 80);
       im.inks = clip(p.inks, 200);
@@ -43,13 +45,13 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
       // the size is now what production says we printed (the Mockup Creator asks before changing it)
       if (im.size) im.sizeFrom = "film";
       const note = clip(p.notes, 240);
-      if (note) im.notes = [im.notes, `Press: ${note}`].filter(Boolean).join(". ").slice(0, 300);
+      if (note && !String(im.notes || "").includes(note)) im.notes = [im.notes, `Press: ${note}`].filter(Boolean).join(". ").slice(0, 300);
       im.notes = shopNotes(im.notes);
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || "inks left blank", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
       const changed = [before.size !== im.size && "size", before.inks !== im.inks && "inks", before.colors !== im.colors && "colors"].filter(Boolean);
-      lines.push(`${spec}${changed.length ? ` (changed: ${changed.join(", ")})` : " (as guessed)"}`);
+      lines.push(`${spec}${edit ? " (corrected)" : changed.length ? ` (changed: ${changed.join(", ")})` : " (as guessed)"}`);
       if (im.design_id) {
         designs.set(im.design_id, [...(designs.get(im.design_id) || []), [im.location, im.size, im.inks, im.underbase === true ? "underbase" : ""].filter(Boolean).join(", ")]);
         const garment = [...new Set(groups.filter((g) => g.imprints.includes(im!)).flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
@@ -75,7 +77,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[]): P
       await admin.from("designs").update({ specs: r.specs }).eq("id", design);
       if (r.differs) differs.push(`${e.location} ${r.differs}`);
     }
-    await admin.from("order_events").insert({ order_id: o.id, kind: "details", detail: `Production details confirmed: ${lines.join("; ")}${differs.length ? `. Note: ${differs.join("; ")}` : ""}`.slice(0, 2000), actor: by });
+    await admin.from("order_events").insert({ order_id: o.id, kind: "details", detail: `Production details ${edit ? "corrected" : "confirmed"}: ${lines.join("; ")}${differs.length ? `. Note: ${differs.join("; ")}` : ""}`.slice(0, 2000), actor: by });
     // the customer's design remembers how it printed, for the next reorder
     const day = at.slice(0, 10);
     for (const [id, specs] of designs) {

@@ -9,7 +9,7 @@ import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import { rememberOrderNote } from "@/app/shop/ai-actions";
-import { LOCATIONS, inkNames } from "@/lib/pricing";
+import { cleanPrintNotes, LOCATIONS, inkNames } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
@@ -792,8 +792,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(...said.map((x) => `You said: ${x} (in the order's notes)`));
       } else if (d.check?.length) did.push(`Went with my guesses on: ${d.check.map((c) => c.q).join(" · ")}`.slice(0, 400));
     }
-    // the prints in order on the order: the front, then the back, then sleeves (Oct 23, #40116 had the Full Back first)
-    d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: [...y.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)) })) };
+    // the prints in order on the order: the front, then the back, then sleeves (Oct 23, #40116 had the Full Back first);
+    // their notes keep only what a person said, not how Create order got there (that's in "What I did", Oct 23)
+    d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: [...y.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)).map((im) => ({ ...im, notes: cleanPrintNotes(im.notes) })) })) };
     setCommitting(true);
     step(`${of}Creating the order…`);
     note(d.kind === "reorder" ? "Copying the job with the new sizes as a quote…" : "Saving it as a quote…");

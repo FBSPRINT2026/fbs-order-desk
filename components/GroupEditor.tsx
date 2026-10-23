@@ -1,5 +1,5 @@
 "use client";
-import { inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { cleanPrintNotes, inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
 import { colorHex, repaintLogo } from "@/lib/inkColors";
@@ -1037,8 +1037,7 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
  * A print's notes to read: the shop's own words, without where things came from ("From Printavo #32668. Art from …
  * You said: printed 6 colors…": Oct 21, Nick: "that doesn't need to be there").
  */
-const printNotes = (s: string | null | undefined) => shopNotes(s).split(/\n|(?<=\.)\s+(?=[A-Z*])/)
-  .map((x) => x.trim()).filter((x) => x && !/^(From Printavo #|Art from |Art uploaded when|Inks? (and size )?from Printavo|You said:|\*\*\*\s*REORDER|Confirm in the portal)/i.test(x)).join(" ");
+const printNotes = (s: string | null | undefined) => cleanPrintNotes(shopNotes(s));
 
 /** A print's inks: a swatch chip each (PMS matches marked), then the PMS charge; the pencil opens "standard, no charge". */
 function InkLine({ inks, charged, summary, editable, children }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode }) {
