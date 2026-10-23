@@ -68,6 +68,10 @@ export type Method = "screen" | "embroidery" | "dtf";
 export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
+  /** where the logo is centered, as a share of its picture, when its box's middle isn't its middle (a round badge with a
+   *  tail sticking out: the circle goes in the center, the tail hangs off to the side; Oct 22, Nick, Hudson Band). d = the
+   *  logo it was read for; on = use it; by = found on its own or ticked by a person */
+  center?: { d: string; x: number; y: number; on: boolean; by?: "auto" | "you" };
   inkMap?: { design: string; map: Record<string, { name: string; hex: string; /** printed as a halftone of that ink, % (Mockup Creator: Combine colors) */ tone?: number;
     /** a custom ink mixed for this job ("half PMS 475 C, half PMS 7506 C"), set in the production view */ mix?: string }> };
   /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;

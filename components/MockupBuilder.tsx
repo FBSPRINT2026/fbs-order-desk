@@ -20,6 +20,7 @@ import SalesSheet from "@/components/SalesSheet";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
+import { detectCenter } from "@/lib/visualCenter";
 import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -1114,6 +1115,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setImprints((xs) => xs.map((x) => (sizes[x.id] || hits[x.id] ? { ...x, ...(sizes[x.id] ? { size: sizes[x.id], sizeFrom: "brand" as const } : {}), ...(hits[x.id] || {}) } : x)));
   }, [imprints, designs, brandPrint, trims]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** how far off its box's middle a print is centered (shares of its width / height): a round badge with a tail is
+   *  centered on the circle (Oct 22, Nick: "the circle's in the center, the tail is off to the right") */
+  const centerShift = (im: Imprint) => (im.center?.on && im.center.d === im.design_id ? { x: 0.5 - im.center.x, y: 0.5 - im.center.y } : { x: 0, y: 0 });
+  const vCentered = (im: Imprint) => !spotFor(im.location).top && !(im.drop && !isNaN(+im.drop));
+  // each logo read once for a circle that should be the center (found ones are ticked; "Center on the circle" changes it)
+  const centerAsked = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const im of imprints) {
+      const d = designOf(im), u = d ? artUrl(im) : "";
+      if (!d || !u || isQuick(d.id) || im.center?.d === d.id || centerAsked.current[im.id] === d.id) continue;
+      centerAsked.current[im.id] = d.id;
+      void detectCenter(u).then((c) => setImprints((xs) => xs.map((x) => (x.id === im.id && x.design_id === d.id && x.center?.d !== d.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on: !!c, by: "auto" } } : x)))).catch(() => null);
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  async function toggleCenter(im: Imprint, on: boolean) {
+    const d = designOf(im); if (!d) return;
+    let c = im.center?.d === d.id && (im.center.x !== 0.5 || im.center.y !== 0.5) ? { x: im.center.x, y: im.center.y } : null;
+    if (on && !c) c = await detectCenter(artUrl(im), true).catch(() => null);
+    if (on && !c) return setMsg("I couldn't find a circle or badge to center on in this logo. Drag it into place on the close-up instead.");
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on, by: "you" } } : x)));
+  }
   /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
   const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
@@ -1127,7 +1149,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // a hand drag lines the logo up on the shirt picture only (Oct 22, Nick: "locks in the close-up… then we just drag
     // to visually align it on the mockup… that shouldn't matter for our proofing"): close-ups and the print spec stay put
     const og = offsets[im.id] || NO_OFF, ol = offsets[`${(on || line)?.id}:${im.id}`] || NO_OFF;
-    const o0 = { dx: og.dx + ol.dx, dy: og.dy + ol.dy }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
+    const cs = b.clip ? { x: 0, y: 0 } : centerShift(im);
+    const o0 = { dx: og.dx + ol.dx, dy: og.dy + ol.dy }, o = { dx: o0.dx * b.k + cs.x * b.w, dy: o0.dy * b.k + (vCentered(im) ? cs.y * b.h : 0) };
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -1208,8 +1231,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const closeUp = (im: Imprint, size: number) => {
                 const d = designOf(im); const r = ratioIm(im) || 0.6;
                 const wIn = printWidth(im, im.location, ratioIm(im));
-                const o = NO_OFF;
                 const sp = spotFor(im.location);
+                // a badge with a tail: the circle in the middle of the close-up
+                const cs = sp.wrap ? { x: 0, y: 0 } : centerShift(im), ppi0 = PX_PER_IN * scale;
+                const o = { dx: cs.x * wIn * ppi0, dy: vCentered(im) ? cs.y * wIn * r * ppi0 : 0 };
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
@@ -1821,16 +1846,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           x.fillText(`largest print area ${max.maxW}" × ${max.maxH}"`, cxm - mw / 2, y + top - 19 * PX + 9 * PT);
         }
         const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
-        if (art && s > 0) x.drawImage(art, cxm - aw / 2, y + top, aw, ah);
+        // a badge with a tail: the circle in the middle of the panel, the tail off to its side
+        const al = cxm - aw / 2 + centerShift(im).x * aw;
+        if (art && s > 0) x.drawImage(art, al, y + top, aw, ah);
         else { x.fillStyle = dk ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.5)"; x.font = body(400, 14); x.textAlign = "center"; x.fillText("Art coming", cxm, y + panelH / 2); x.textAlign = "left"; }
         if (art && s > 0) {
           const col = dk ? "#ffffff" : "#000000"; x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 2 * PX;
           // width under the art: a line with end ticks, the inches under it
-          const wy = y + top + ah + 0.06 * IN, wl = cxm - aw / 2;
+          const wy = y + top + ah + 0.06 * IN, wl = al;
           x.fillRect(wl, wy + 6 * PX, aw, 2 * PX); x.fillRect(wl, wy, 2 * PX, 12 * PX); x.fillRect(wl + aw - 2 * PX, wy, 2 * PX, 12 * PX);
-          x.font = body(800, 14); x.textAlign = "center"; x.fillText(`${sz.w.toFixed(2)}"`, cxm, wy + 12 * PX + 14 * PT); x.textAlign = "left";
+          x.font = body(800, 14); x.textAlign = "center"; x.fillText(`${sz.w.toFixed(2)}"`, al + aw / 2, wy + 12 * PX + 14 * PT); x.textAlign = "left";
           // height to the right: a line, the inches beside it
-          const hx = cxm + aw / 2 + 0.14 * IN;
+          const hx = al + aw + 0.14 * IN;
           x.fillRect(hx, y + top, 2 * PX, ah);
           x.textBaseline = "middle"; x.fillText(`${sz.h.toFixed(2)}"`, hx + 10 * PX, y + top + ah / 2); x.textBaseline = "alphabetic";
         }
@@ -2945,6 +2972,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           );
                         })()}
                       </div>
+                      {designOf(im) && !spotFor(im.location).wrap && (() => {
+                        const c = im.center?.d === im.design_id ? im.center : undefined;
+                        return (
+                          <label className="mk-ctr" title="A round badge with something sticking out (a tail, a wing): the circle is centered on the shirt and the film, the rest hangs off to the side">
+                            <input type="checkbox" checked={!!c?.on} onChange={(e) => void toggleCenter(im, e.target.checked)} />
+                            Center on the circle{c?.on && c.by === "auto" ? <span className="faint"> · found it</span> : null}
+                          </label>
+                        );
+                      })()}
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
