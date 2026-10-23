@@ -472,7 +472,9 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
     // them is left when shrunk by about 0.03" are lines, not art (letters and logos are thicker)
     {
       const keepA = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) if (art[i] && !line[i]) keepA[i] = 1;
-      const r = Math.max(1, Math.round(0.03 * ppi));
+      // thin by the shirt's measure or by the page's: a stroke under ~2pt on the page is a drawn line (on a small mockup
+      // the collar is drawn thicker than 0.03" of shirt: Art Car's neck came off as a 6.75" print, Oct 22)
+      const r = Math.max(1, Math.round(0.03 * ppi), Math.round(1.1 * s));
       // shrink = not grown from the outside
       const inv = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) inv[i] = keepA[i] ? 0 : 1;
       const core = grow(inv, W, H, r);
