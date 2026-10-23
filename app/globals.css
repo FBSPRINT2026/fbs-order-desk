@@ -12358,3 +12358,7 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .ait-files{display:grid;gap:10px;padding:4px 0}
 .ait-fl{margin:0;padding:0 0 0 18px;font-size:13px}
 .ait-made{margin:6px 0;font-size:14px}
+.ait-src .tbl{width:100%;table-layout:fixed}
+.ait-src .tbl td:first-child{overflow:hidden}
+.ait-src .tbl td:first-child > div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ait-src .tbl td.r{width:64px}
