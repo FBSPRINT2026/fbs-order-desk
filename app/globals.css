@@ -12306,3 +12306,12 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-setup .mk-gar > .mk-gar-row:first-of-type{padding-top:0;margin-top:0}
 .mk-setup .mk-gar-row{align-items:start}
 .mk-setup .mk-gar-colors{align-self:start}
+/* logo colors: a typed PMS row looks like the others (Oct 22, Nick: "three boxes on the same line… it should just be
+   black to black"): no extra swatch in the field (the row already shows from → to), and the field is a box like the
+   dropdowns with its ▾ inside */
+.mk-color .ink-type>.sw{display:none}
+.mk-color .ink-type{position:relative;flex-wrap:nowrap}
+.mk-color .ink-type>input[type=text]{min-width:0;width:100%;padding-right:28px}
+.mk-color .ink-type>.btn.icon{position:absolute;right:2px;top:50%;transform:translateY(-50%);height:26px;width:24px;min-width:0;padding:0;border:0;background:none}
+.mk-color .ink-type>input[type=color]{flex:none;width:26px;height:26px;padding:0;border:1px solid var(--line);border-radius:4px}
+.mk-color .ink-type-note{display:none}
