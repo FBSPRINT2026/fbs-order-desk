@@ -1350,7 +1350,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // distressed: the distressed picture is the logo, the clean one its "Distress: off"; the film stacks the mask (3 layers)
         const dz = r.distress !== "none" && r.dfile;
         const how = r.distress === "brand" ? `${brandMask?.name || "their mask"}, ${brandMask?.layers || 3} layers on the film (black composite film)` : r.distress === "file" ? "the texture in the file, 3 layers on the film (black composite film)" : "";
-        const d = await uploadDesign(sb, { file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: r.distress === "brand" ? brandMask?.path : "file", layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
+        // the mask itself is kept with the logo, so the separation can stack it for the film (the customer's, or this file's)
+        let maskPath = r.distress === "brand" ? brandMask?.path : "";
+        if (dz && r.distress === "file" && r.mask) { const mp = `masks/${customerId}/${Date.now().toString(36)}-${r.key}.png`; const up = await sb.storage.from("proofs").upload(mp, r.mask, { contentType: "image/png" }); if (!up.error) maskPath = mp; }
+        const d = await uploadDesign(sb, { file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
         made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
@@ -2819,7 +2822,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     {helper.rows.map((r) => (
                       <div key={r.key} className={"mk-help-r" + (r.use ? "" : " off")}>
                         <label className="mk-help-use"><input type="checkbox" checked={r.use} onChange={(e) => helpSet(r.key, { use: e.target.checked })} /></label>
-                        <div className={"mk-help-pic" + (r.light ? " dark" : "")}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
+                        {/* on the mockup's shirt color when there is one: the distress shows as that color through the ink */}
+                        <div className={"mk-help-pic" + (r.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
                         <div className="mk-help-b">
                           <div className="row" style={{ gap: 6 }}>
                             <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>

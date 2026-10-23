@@ -21,7 +21,7 @@ const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
 export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
-  /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; note?: string } }): Promise<Design> {
+  /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
   if (!opts.preview) { const cropped = await cropFileToArt(opts.file); if (cropped) opts = { ...opts, file: cropped }; }
   const key = crypto.randomUUID();

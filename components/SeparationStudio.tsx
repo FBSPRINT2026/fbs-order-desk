@@ -510,6 +510,18 @@ export default function SeparationStudio({ id }: { id: string }) {
     designRef.current = (d0 as (Design & { print_plan?: PrintPlan | null }) | null) || null;
     const des = d0?.file_path ? { file_path: d0.file_path, file_type: d0.file_type, file_name: d0.file_name, preview_path: d0.preview_path } : up?.path ? { file_path: up.path, file_type: up.type, file_name: up.name, preview_path: null as string | null } : null;
     setHasArt(!!des);
+    // a logo distressed with a mask (Oct 22, Nick on Peticolas: "take that mask and duplicate it 3 times… and that creates
+    // enough distress to output the screens… a black film, composite film"): the film is drawn from the clean art with
+    // the mask stacked that many times (the mockup shows one)
+    const dsp = (d0?.specs || null) as { cleanPreview?: string; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch" } } | null;
+    if (dsp?.cleanPreview && dsp.distress?.mask) {
+      const [{ data: cb }, { data: mb }, { data: su }] = await Promise.all([sb.storage.from("proofs").download(dsp.cleanPreview), sb.storage.from("proofs").download(dsp.distress.mask), sb.storage.from("proofs").createSignedUrl(des?.file_path || dsp.cleanPreview, 3600)]);
+      if (cb && mb) {
+        const { applyDistress } = await import("@/lib/distress");
+        const f = await applyDistress(cb, mb, { layers: dsp.distress.layers || 3, fit: dsp.distress.fit || "cover", name: "film.png" }).catch(() => null);
+        if (f) { setOrigUrl(su?.signedUrl || ""); setArtUrl(URL.createObjectURL(f)); return; }
+      }
+    }
     // Illustrator EPS: read its shapes (vector all the way to the Illustrator file)
     if (des && (isEps(des.file_name || des.file_path, des.file_type || "") || isPdf(des.file_name || des.file_path, des.file_type || ""))) {
       const [{ data: ev }, { data: su }] = await Promise.all([sb.storage.from("proofs").download(des.file_path), sb.storage.from("proofs").createSignedUrl(des.file_path, 3600)]);
