@@ -5,6 +5,7 @@ import type { Group } from "@/lib/pricing";
 import { guessHex } from "@/lib/mockup";
 import { fixDesignArt, type ArtAction } from "@/lib/artFix";
 import { MicButton } from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 import { aiOrderFix, applyOrderFixChanges, markOrderChecked, noteArtChange, saveOrderLesson } from "@/app/shop/ai-actions";
 import type { OrderChange } from "@/lib/ai/orderFix";
 
@@ -29,6 +30,8 @@ import type { OrderChange } from "@/lib/ai/orderFix";
 type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; customers?: { name?: string; company?: string } | null };
 type Art = OrderChange & { state: "doing" | "done" | "error"; err?: string };
 type Round = { you: string; reply: string; applied: string[]; art: Art[]; suggest: OrderChange[]; rule?: string };
+type Res = { key: string; label: string; url: string; img: boolean };
+const RES_LABEL: Record<string, string> = { order_sheet: "Order sheet / PO", customer_mockup: "Their mockup", old_mockup: "Last job's mockup", print_art: "Their art", barcodes: "Barcodes" };
 type Saved = { rounds: Round[]; lesson: { on: boolean; text: string } };
 
 const SIZE_ORDER = ["0-3M", "3-6M", "6-12M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
@@ -52,7 +55,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   const saved0 = useRef(typeof window !== "undefined" ? readSaved(orderId) : null).current;
   const [o, setO] = useState<O | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [mode, setMode] = useState<"look" | "talk">(saved0?.rounds.length ? "talk" : "look");
+  const [pending, setPending] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -61,10 +64,22 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   const [lesson, setLesson] = useState(saved0?.lesson || { on: true, text: "" });
   const [stale, setStale] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  // Order resources (Oct 23, Nick: "keep the production documents… at the bottom… pops up and pops down… looking back at
+  // the original documents at the same time… call that order resources, like the purchase order, the work order"):
+  // what the customer sent (their PO, mockup, art), then our work order, quote and proof, opened right here
+  const [resOpen, setResOpen] = useSticky("orderCheck.resources", false);
+  const [resView, setResView] = useState("");
+  const [res, setRes] = useState<Res[]>([]);
+  useEffect(() => {
+    void sb.from("art_files").select("id, name, category, file_path").eq("order_id", orderId).order("created_at").then(({ data }) => {
+      const files: Res[] = (data || []).map((f) => ({ key: f.id as string, label: `${RES_LABEL[(f.category as string) || ""] || "File"}: ${f.name}`, url: `/api/files/open?p=${encodeURIComponent(f.file_path as string)}&n=${encodeURIComponent(f.name as string)}`, img: /\.(jpe?g|png|gif|webp)$/i.test(f.file_path as string) }));
+      setRes([...files, { key: "work", label: "Work order", url: `/print/${orderId}?work=1`, img: false }, { key: "quote", label: "Quote", url: `/print/${orderId}`, img: false }, { key: "proof", label: "Proof", url: `/print/${orderId}?proof=1`, img: false }]);
+    });
+  }, [sb, orderId]);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { try { sessionStorage.setItem(keyOf(orderId), JSON.stringify({ rounds, lesson })); } catch { /* */ } }, [rounds, lesson, orderId]);
-  useEffect(() => { if (rounds.length) endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length, busy]);
 
   const load = useCallback(async () => {
     const { data } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, customers(name, company)").eq("id", orderId).maybeSingle();
@@ -108,10 +123,11 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
     const said = text.trim();
     if (m === "change" && !said) { setErr("Say what to change first."); return; }
     setBusy(m === "review" ? "Comparing it with what the customer sent…" : "Making the changes…"); setErr("");
+    setPending(m === "review" ? "Check it for me" : said); if (m === "change") setText("");
     if (m === "change") await pageSaves(orderId);
     const r = await aiOrderFix(orderId, m === "change" ? said : "", m, earlier);
-    setBusy("");
-    if (!r.ok) { setErr(r.error); return; }
+    setBusy(""); setPending(null);
+    if (!r.ok) { setErr(r.error); if (m === "change") setText(said); return; }
     const x = r.r;
     const ri = rounds.length;
     if (m === "review") {
@@ -125,7 +141,6 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
       void load();
     }
     if (x.lesson) setLesson({ on: true, text: x.lesson });
-    setMode("talk");
   }
 
   async function makeSuggested() {
@@ -162,76 +177,104 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
   if (!o) return <div className="ap orv"><p className="faint">Opening the order…</p></div>;
   const working = rounds.some((r) => r.art.some((a) => a.state === "doing"));
   const lastRule = [...rounds].reverse().find((r) => r.rule)?.rule;
+  const send = () => { if (text.trim() && !busy) void ask("change"); };
+  const yesLabel = needMock && !onMockupPage ? "Yes, make the mockup" : changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right";
+  // like a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread, and the box at the bottom
   return (
-    <div className="ap orv" role="group" aria-label="Check the order">
-      <p className="ap-q">{changed ? `#${o.number}: does everything look right now?` : `#${o.number} is made. Did I get everything right?`}</p>
-      <p className="ap-why">Look it over: click around the order and open the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. This stays open until you say it&apos;s right. Nothing goes to the customer.</p>
-      {o.groups.map((g) => (
-        <section key={g.id} className="orv-g">
-          <div className="orv-pics">
-            {(g.mockupThumbs || []).filter((p) => urls[p]).slice(0, 2).map((p) => <a key={p} href={mockHref(g)} target="_blank" rel="noreferrer" className="ap-pic big"><img src={urls[p]} alt="The mockup" /></a>)}
-            {!(g.mockupThumbs || []).length && (onMockupPage
-              ? <span className="ap-pic big orv-none"><span>Making the mockup…</span></span>
-              : <a className="ap-pic big orv-none" href={mockHref(g)} target="_blank" rel="noreferrer"><span>No mockup yet</span></a>)}
-          </div>
-          <div className="orv-d">
-            {g.lines.map((l) => (
-              <div key={l.id} className="orv-l" data-notranslate>
-                <b>{[l.brand, l.style].filter(Boolean).join(" ")}</b> · {l.color || "no color"} · {Object.values(l.sizes || {}).reduce<number>((a, v) => a + (+(v || 0)), 0)} pcs
-                {sizeRun(l.sizes as Record<string, unknown>) && <span className="faint"> ({sizeRun(l.sizes as Record<string, unknown>)})</span>}
-                {l.extras && <span className="gl-stamp orv-stamp"><span>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</span><span>· {l.extrasFree === false ? "charged" : "no charge"}</span></span>}
-              </div>
-            ))}
-            {g.imprints.map((im) => (
-              <div key={im.id} className="orv-p" data-notranslate>
-                <b>{im.location}</b> · {parseFloat(String(im.size || "")) > 0 ? `${parseFloat(String(im.size))}" wide` : "standard size"} · {im.drop ? `${im.drop}" below the collar` : "normal height"}{im.inks ? ` · ${im.inks}` : ""}{im.underbase ? " + white underbase" : ""}
-                {(im.artChanges || []).length > 0 && <ul className="orv-art">{im.artChanges!.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-              </div>
-            ))}
-            {!onMockupPage && <a className="ap-link" href={mockHref(g)} target="_blank" rel="noreferrer">{(g.mockupThumbs || []).length ? "Open the mockup ›" : "Make the mockup ›"}</a>}
-          </div>
-        </section>
-      ))}
-      {did && did.length > 0 && <details className="orv-did"><summary>What I did ({did.length})</summary><ul>{did.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
+    <div className="ap orv chat" role="group" aria-label="Check the order">
+      <div className="orv-top">
+        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back with Check or change it on the order">Close for now</button></div>
+        {o.groups.map((g) => (
+          <section key={g.id} className="orv-g">
+            <div className="orv-pics">
+              {(g.mockupThumbs || []).filter((p) => urls[p]).slice(0, 1).map((p) => <a key={p} href={mockHref(g)} target="_blank" rel="noreferrer" className="ap-pic"><img src={urls[p]} alt="The mockup" /></a>)}
+              {!(g.mockupThumbs || []).length && (onMockupPage
+                ? <span className="ap-pic orv-none"><span>Making the mockup…</span></span>
+                : <a className="ap-pic orv-none" href={mockHref(g)} target="_blank" rel="noreferrer"><span>No mockup yet</span></a>)}
+            </div>
+            <div className="orv-d">
+              {g.lines.map((l) => (
+                <div key={l.id} className="orv-l" data-notranslate>
+                  <b>{[l.brand, l.style].filter(Boolean).join(" ")}</b> · {l.color || "no color"} · {Object.values(l.sizes || {}).reduce<number>((a, v) => a + (+(v || 0)), 0)} pcs
+                  {sizeRun(l.sizes as Record<string, unknown>) && <span className="faint"> ({sizeRun(l.sizes as Record<string, unknown>)})</span>}
+                  {l.extras && <span className="gl-stamp orv-stamp"><span>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</span><span>· {l.extrasFree === false ? "charged" : "no charge"}</span></span>}
+                </div>
+              ))}
+              {g.imprints.map((im) => (
+                <div key={im.id} className="orv-p" data-notranslate>
+                  <b>{im.location}</b> · {parseFloat(String(im.size || "")) > 0 ? `${parseFloat(String(im.size))}" wide` : "standard size"} · {im.drop ? `${im.drop}" below the collar` : "normal height"}{im.inks ? ` · ${im.inks}` : ""}{im.underbase ? " + white underbase" : ""}
+                  {(im.artChanges || []).length > 0 && <ul className="orv-art">{im.artChanges!.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                </div>
+              ))}
+              {!onMockupPage && <a className="ap-link" href={mockHref(g)} target="_blank" rel="noreferrer">{(g.mockupThumbs || []).length ? "Open the mockup ›" : "Make the mockup ›"}</a>}
+            </div>
+          </section>
+        ))}
+      </div>
 
-      {rounds.map((r, ri) => {
-        const isLast = ri === rounds.length - 1;
-        return (
-          <div key={ri} className="orv-res" aria-live={isLast ? "polite" : undefined}>
-            <p className="orv-you"><b>You:</b> {r.you}</p>
-            {r.reply && <p>{r.reply}</p>}
-            {r.applied.length > 0 && <ul className="orv-done">{r.applied.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-            {r.art.length > 0 && <ul className="orv-done">{r.art.map((a, i) => <li key={i} className={a.state}>{a.say}{a.state === "doing" ? <span className="faint"> · changing the logo…</span> : a.state === "error" ? <span className="err-t"> · {a.err}</span> : <span className="orv-tag">On the proof</span>}</li>)}</ul>}
-            {isLast && r.suggest.length > 0 && <>
-              <ul className="orv-sug">{r.suggest.map((c, i) => <li key={i}><label><input type="checkbox" checked={!!pick[i]} onChange={(e) => setPick((p) => ({ ...p, [i]: e.target.checked }))} /> {c.say}{c.what === "art" && <span className="orv-tag">On the proof</span>}</label></li>)}</ul>
-              <button type="button" className="btn primary" onClick={() => void makeSuggested()} disabled={!!busy}>Make {Object.values(pick).filter(Boolean).length === 1 ? "this change" : "these changes"}</button>
-            </>}
-          </div>
-        );
-      })}
-      {stale && !working && (onMockupPage
-        ? <p className="faint">The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too.</p>
-        : <p className="faint">The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</p>)}
-      {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
-      {lastRule && <p className="faint orv-rule">For tonight&apos;s review: {lastRule}</p>}
-
-      {mode === "talk" && (
-        <div className="orv-talk">
-          <textarea ref={box} rows={3} value={text} onChange={(e) => { setText(e.target.value); setErr(""); }}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void ask("change"); } }}
-            placeholder={rounds.length ? "Anything else? Like: the smalls and extra smalls are in the wrong columns." : "Like: the smalls and extra smalls are in the wrong columns, and the black should be one solid black."} aria-label="What to change" />
-          <div className="orv-talk-b">
-            <MicButton target={() => box.current} append label="Say what to change" />
-            <button type="button" className="btn primary" onClick={() => void ask("change")} disabled={!!busy || !text.trim()}>Make the changes</button>
-          </div>
+      <div className="orv-thread" aria-live="polite">
+        <div className="bub them">
+          <p>#{o.number} is made. Did I get everything right?</p>
+          <p className="bub-sub">Click around the order and the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. Nothing goes to the customer.</p>
+          {did && did.length > 0 && <details className="orv-did"><summary>What I did ({did.length})</summary><ul>{did.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
         </div>
-      )}
-      {busy && <p className="faint" aria-live="polite">{busy}</p>}
-      {err && <div className="err">{err}</div>}
-      <div ref={endRef} className="ap-foot">
-        <span className="ap-more"><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back with Check or change it on the order">Close for now</button><button type="button" className="ap-link" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button></span>
-        {mode === "look" && <button type="button" className="btn" onClick={() => { setMode("talk"); setTimeout(() => box.current?.focus(), 50); }}>No, change something</button>}
-        <button type="button" className="btn primary" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{needMock && !onMockupPage ? "Yes, make the mockup" : changed ? "Yes, it’s right now" : "Yes, it’s right"}</button>
+        {rounds.map((r, ri) => {
+          const isLast = ri === rounds.length - 1;
+          const didSome = r.applied.length > 0 || r.art.length > 0;
+          return (
+            <div key={ri} className="bub-pair">
+              <div className="bub me"><p>{r.you}</p></div>
+              <div className="bub them">
+                {r.reply && <p>{r.reply}</p>}
+                {r.applied.length > 0 && <ul className="orv-done">{r.applied.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                {r.art.length > 0 && <ul className="orv-done">{r.art.map((a, i) => <li key={i} className={a.state}>{a.say}{a.state === "doing" ? <span className="faint"> · changing the logo…</span> : a.state === "error" ? <span className="err-t"> · {a.err}</span> : <span className="orv-tag">On the proof</span>}</li>)}</ul>}
+                {isLast && r.suggest.length > 0 && <>
+                  <ul className="orv-sug">{r.suggest.map((c, i) => <li key={i}><label><input type="checkbox" checked={!!pick[i]} onChange={(e) => setPick((p) => ({ ...p, [i]: e.target.checked }))} /> {c.say}{c.what === "art" && <span className="orv-tag">On the proof</span>}</label></li>)}</ul>
+                  <button type="button" className="btn primary sm" onClick={() => void makeSuggested()} disabled={!!busy}>Make {Object.values(pick).filter(Boolean).length === 1 ? "this change" : "these changes"}</button>
+                </>}
+                {isLast && didSome && !working && <p className="bub-q">Does everything look right now?</p>}
+              </div>
+            </div>
+          );
+        })}
+        {busy && <>{pending && <div className="bub me"><p>{pending}</p></div>}<div className="bub them typing" aria-label={busy}><i /><i /><i /></div></>}
+        {stale && !working && <p className="bub-note">{onMockupPage ? "The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too." : <>The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</>}</p>}
+        {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
+        {lastRule && <p className="bub-note">For tonight&apos;s review: {lastRule}</p>}
+        {err && <div className="err">{err}</div>}
+        <div ref={endRef} />
+      </div>
+
+      <div className={"orv-rsc" + (resOpen ? " on" : "")}>
+        <button type="button" className="orv-rsc-h" onClick={() => setResOpen(!resOpen)} aria-expanded={resOpen}>
+          <span>Order resources</span><span className="orv-rsc-n">{res.length}</span><span className="orv-rsc-a" aria-hidden>{resOpen ? "▾" : "▴"}</span>
+        </button>
+        {resOpen && (() => {
+          const cur = res.find((x) => x.key === resView) || res[0];
+          return (
+            <div className="orv-rsc-b">
+              <div className="orv-rsc-list">{res.map((x) => <button key={x.key} type="button" className={"chip" + (cur?.key === x.key ? " on" : "")} onClick={() => setResView(x.key)} title={x.label}>{x.label}</button>)}</div>
+              {cur && <div className="orv-rsc-v">
+                {cur.img ? <img src={cur.url} alt={cur.label} /> : <iframe key={cur.key} src={cur.url} title={cur.label} />}
+                <a className="ap-link" href={cur.url} target="_blank" rel="noreferrer">Open it in a new tab ›</a>
+              </div>}
+            </div>
+          );
+        })()}
+      </div>
+
+      <div className="orv-compose">
+        <div className="orv-quick">
+          <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
+          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
+        </div>
+        <div className="orv-box">
+          <MicButton target={() => box.current} append label="Say what to change" />
+          <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
+          <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
+        </div>
       </div>
     </div>
   );

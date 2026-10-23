@@ -508,7 +508,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // (Oct 23, Nick: "I asked it to remove the white outline and… it didn't update the mock-up on the left")
   const [artTick, setArtTick] = useState(0);
   useEffect(() => {
-    const on = () => setArtTick((t) => t + 1);
+    const on = async () => {
+      setArtTick((t) => t + 1);
+      // and the order's prints and garments as changed there (inks, colors, size, drop), into what's on the screen
+      if (!orderId) return;
+      const { data } = await sb.from("orders").select("groups, lines").eq("id", orderId).maybeSingle();
+      const g = data ? orderGroups(data as Order).find((x) => x.id === groupId) || orderGroups(data as Order)[0] : null;
+      if (!g) return;
+      setImprints((xs) => xs.map((x) => { const n = g.imprints.find((y) => y.id === x.id); return n ? { ...x, inks: n.inks, colors: n.colors, size: n.size, drop: n.drop, location: n.location, underbase: n.underbase, inkMap: n.inkMap, design_id: n.design_id } : x; }));
+      setLines((ls) => ls.map((l) => { const n = g.lines.find((y) => y.id === l.id); return n ? { ...l, color: n.color, style: n.style, brand: n.brand } : l; }));
+    };
     window.addEventListener("fbs:order-changed", on);
     return () => window.removeEventListener("fbs:order-changed", on);
   }, []);

@@ -4,6 +4,7 @@ import { askClaude } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
+import { colorHex } from "@/lib/inkColors";
 import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
@@ -175,7 +176,13 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
       if (!im) continue;
       if (c.field === "size") { const n = parseFloat(v); if (!(n > 0 && n < 30)) continue; im.size = `${n}" wide`; }
       else if (c.field === "location") { if (!(LOCATIONS as readonly string[]).includes(v)) continue; im.location = v; }
-      else if (c.field === "inks") { im.inks = v; }
+      else if (c.field === "inks") {
+        im.inks = v;
+        // the logo is painted in its picked inks (inkMap, from the Mockup Creator): the new inks, in the same order, so
+        // the order page and the mockup show them (Oct 23, Nick: "it did it, but it doesn't update… on the left")
+        const names = v.split(",").map((t) => t.trim()).filter(Boolean);
+        if (im.inkMap?.map) { const keys = Object.keys(im.inkMap.map); keys.forEach((k, i) => { const n = names[i]; if (!n) return; const hx = colorHex(n); im.inkMap!.map[k] = { ...im.inkMap!.map[k], name: n, ...(hx ? { hex: hx } : {}) }; }); }
+      }
       else if (c.field === "colors") { const n = parseInt(v, 10); if (!(n > 0 && n < 13)) continue; im.colors = n; }
       else if (c.field === "drop") { const n = parseFloat(v); im.drop = n > 0 && n < 20 ? String(n) : ""; }
       else if (c.field === "underbase") { im.underbase = /^y|true|on/i.test(v); }

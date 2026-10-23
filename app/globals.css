@@ -12604,3 +12604,51 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 .mk-trace-bar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.94);border:1px solid var(--line);font-size:12.5px;color:var(--ink)}
 .mk-hood-b{top:auto;bottom:8px}
 .mk-pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* The order check as a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread scrolls,
+   the box sits at the bottom. My messages blue on the right, the assistant's gray on the left. */
+.dla:has(> .orv.chat){display:flex;flex-direction:column;overflow:hidden;padding:0}
+.orv.chat{flex:1;min-height:0;margin:0;gap:0}
+.orv.chat .orv-top{flex:none;max-height:38%;overflow:auto;padding:14px 16px 8px;border-bottom:1px solid var(--line)}
+.orv-top-h{display:flex;align-items:baseline;gap:8px;font-size:14px}
+.orv-top-h .ap-link{margin-left:auto}
+.orv.chat .orv-g{border-top:0;padding:8px 0 4px;flex-wrap:nowrap}
+.orv.chat .orv-pics .ap-pic{width:96px;flex:none}
+.orv.chat .orv-d{font-size:13px}
+.orv-thread{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:14px 16px;background:var(--surface)}
+.bub-pair{display:flex;flex-direction:column;gap:8px}
+.bub{max-width:82%;padding:9px 13px;border-radius:18px;font-size:14px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
+.bub p{margin:0}
+.bub.them{align-self:flex-start;background:var(--surface-2);color:var(--ink);border-bottom-left-radius:5px}
+.bub.me{align-self:flex-end;background:var(--fbs-blue);color:#fff;border-bottom-right-radius:5px;white-space:pre-wrap}
+.bub-sub{font-size:12.5px;color:var(--ink-3)}
+.bub-q{font-weight:700}
+.bub .orv-done{gap:4px;font-size:13px}
+.bub .orv-did summary{font-size:12px}
+.bub-note{margin:0;font-size:12px;color:var(--ink-3);text-align:center;padding:0 8px}
+.bub.typing{flex-direction:row;gap:4px;padding:12px 14px}
+.bub.typing i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);opacity:.4;animation:bubdot 1.2s infinite}
+.bub.typing i:nth-child(2){animation-delay:.2s}.bub.typing i:nth-child(3){animation-delay:.4s}
+@keyframes bubdot{0%,60%,100%{opacity:.25;transform:none}30%{opacity:.9;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.bub.typing i{animation:none}}
+.orv-compose{flex:none;border-top:1px solid var(--line);padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.orv-quick{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.orv-quick .chip{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--accent);font:600 13px var(--body);cursor:pointer}
+.orv-quick .chip.ok{background:var(--fbs-blue);border-color:var(--fbs-blue);color:#fff}
+.orv-quick .chip:disabled{opacity:.5;cursor:default}
+.orv-box{display:flex;align-items:flex-end;gap:6px;border:1px solid var(--line);border-radius:20px;padding:4px 4px 4px 6px;background:var(--surface)}
+.orv-box:focus-within{border-color:var(--accent)}
+.orv-box textarea{flex:1;border:0;outline:0;resize:none;padding:7px 4px;font:14px/1.4 var(--body);color:var(--ink);background:transparent;max-height:140px}
+.orv-box .mic{position:static;transform:none;flex:none;width:32px;height:32px}
+.orv-send{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--fbs-blue);color:#fff;font:700 16px var(--body);cursor:pointer;display:grid;place-items:center}
+.orv-send:disabled{background:var(--surface-3);color:var(--ink-3);cursor:default}
+/* Order resources: the customer's PO, mockup and art, and our work order, quote and proof, up from the bottom of the check */
+.orv-rsc{flex:none;border-top:1px solid var(--line);background:var(--surface)}
+.orv-rsc-h{width:100%;display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;border:0;background:var(--surface-2);font:700 13px var(--body);color:var(--ink);cursor:pointer}
+.orv-rsc-n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;display:inline-grid;place-items:center}
+.orv-rsc-a{margin-left:auto;color:var(--ink-3)}
+.orv-rsc-b{display:flex;flex-direction:column;gap:8px;padding:8px 12px 10px}
+.orv-rsc-list{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.orv-rsc-list .chip{flex:none;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orv-rsc-v{display:flex;flex-direction:column;gap:6px}
+.orv-rsc-v iframe,.orv-rsc-v img{width:100%;height:42vh;border:1px solid var(--line);border-radius:6px;background:#fff;object-fit:contain}
