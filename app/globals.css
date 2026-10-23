@@ -12233,3 +12233,17 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-help-w input{width:72px}
 .mk-help-know{margin:0 0 8px;padding:8px 10px;border-radius:var(--r);background:var(--accent-soft, var(--surface-2));font-size:13px}
 .mk-help-know p{margin:0 0 6px;line-height:1.45}
+
+/* computers too (Oct 22, Nick: "we used to have a button at the bottom… an AI tool that you spoke into and it reworded
+   what you said. I'm not seeing that on all emails"): "Tell the AI what to say" in every reply box, smaller than on a
+   phone; it replaces the typed tell-line where both were (one way in, the same everywhere). The talk card sits centered. */
+@media (min-width:761px), (pointer:fine){
+  .ibx2-compose .ibx2-tell{display:none}
+  .ibx2-compose .vd-say{display:flex;align-items:center;gap:8px;align-self:flex-start;height:36px;padding:0 14px 0 4px;margin:6px 0 2px;border-radius:999px;font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;background:linear-gradient(var(--surface),var(--surface)) padding-box,conic-gradient(from 200deg,#0E9BD8,#7C5CE0,#F26660,#FCB122,#0E9BD8) border-box;border:2px solid transparent}
+  .ibx2-compose .vd-say-mic{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#0E9BD8,#7C5CE0)}
+  .ibx2-compose .vd-say-mic svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ibx2-compose .vd-say-ai{color:#7C5CE0}
+  .ibx2-compose .vd-say:hover{filter:brightness(.98)}
+  .vd{align-items:center;justify-content:flex-end;padding-bottom:32px}
+  .vd-card{width:min(620px,100%)}
+}
