@@ -299,6 +299,7 @@ function tool(finishingIds: string[]) {
         po_number: { type: "string" },
         delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
         ship_to: { type: "string" },
+        customer_notes: { type: "string", description: "The customer's own notes and instructions for this job, word for word: the ClickUp job's notes (e.g. \"NOT A REPEAT ORDER - NEW LEFT CHEST LOGO. Screen print process same as order 85254 from 4/2026\"), the PO's special instructions, what their email says about how to do the job. Never your own words, guesses or questions. Empty if they wrote none. These go on the order's Customer notes." },
         notes: { type: "string", description: "Anything else the shop should know (one or two sentences). For a purchase order: the PO's own notes word for word, then its other useful facts (see rule 10)" },
         garments_supplied_by: { type: "string", enum: ["customer", "shop", "unknown"], description: "customer = they buy the blanks and send them to us" },
         goods: { type: "object", properties: {
@@ -313,7 +314,7 @@ function tool(finishingIds: string[]) {
         }, required: ["file", "role"] } },
         groups: { type: "array", items: { type: "object", properties: {
           name: { type: "string" },
-          description: { type: "string", description: "What the customer says about everything in this group that the garments and prints don't hold: how it's packed, bagged, labeled or tagged, what it's for. Plain words, one or two sentences; empty if nothing" },
+          description: { type: "string", description: "What the customer says about everything in this group that the garments and prints don't hold: how it's packed, bagged, labeled or tagged, what it's for. Plain words, one or two sentences; empty if nothing. Not who supplies the garments or their tracking (that's goods)" },
           garments: { type: "array", items: { type: "object", properties: {
             style: { type: "string" }, brand: { type: "string" }, description: { type: "string" }, color: { type: "string" },
             sizes: { type: "object", description: "Size code to quantity, e.g. {\"6M\":5,\"12M\":5,\"2T\":4}", additionalProperties: { type: "integer" } },
@@ -763,7 +764,9 @@ ${staffSays}` : ""}`;
     nickname: (p.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "").slice(0, 120),
     due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date! : null,
     delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
-    ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60), notes: [...refNotes, p.notes || ""].filter(Boolean).join("\n").slice(0, 2000),
+    ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60),
+    customerNotes: String((p as { customer_notes?: string }).customer_notes || "").trim().slice(0, 2000),
+    notes: [...refNotes, p.notes || ""].filter(Boolean).join("\n").slice(0, 2000),
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null, ...(reorderJobs.length > 1 ? { reorderJobs } : {}), ...(readingLeads && emailArt ? { emailArt: true } : {}),
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,

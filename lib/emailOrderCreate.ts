@@ -156,7 +156,11 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // the AI's notes are for the shop (what it noticed reading the email), not the customer: they go in the internal
   // production notes, never the order's notes, which print on the quote and invoice (Oct 20, Nick: #40089's quote showed
   // "please confirm these map to the same garment colors…" to the customer)
-  const notes = "";
+  // the customer's own words for the job and who sends the garments do go there (Oct 23, Nick on #40113: "Customer
+  // supplies their own PC330 Black tees… and the 'NOT A REPEAT ORDER - NEW LEFT CHEST LOGO…' should have gone under
+  // customer notes")
+  const goodsLine = d.goods?.supplied ? `Customer supplies the garments${d.goods.supplier ? ` (${d.goods.supplier})` : ""}${[d.goods.expected, d.goods.note].filter(Boolean).length ? `: ${[d.goods.expected, d.goods.note].filter(Boolean).join(". ")}` : ""}.` : "";
+  const notes = [(d.customerNotes || "").trim(), goodsLine].filter(Boolean).join("\n").slice(0, 2000);
   const shopNote = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity

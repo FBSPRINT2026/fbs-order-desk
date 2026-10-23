@@ -35,6 +35,8 @@ export const carryOf = (d: { carry?: CarryKey[] }, n: { customer: string; produc
   d.carry ?? (["customer", "production"] as CarryKey[]).filter((k) => n[k] && aboutThePrint(n[k]));
 export type EODraft = {
   v: 2; kind: "new" | "reorder"; summary: string; confidence: "high" | "medium" | "low";
+  /** the customer's own notes for the job, word for word (their ClickUp notes, the PO's instructions): the order's Customer notes */
+  customerNotes?: string;
   nickname: string; due_date: string | null; delivery: "pickup" | "ship" | "deliver"; ship_to: string; po_number: string; notes: string;
   /** customer supplied garments (wholesale): who sends them, from where, when */
   goods: { supplied: boolean; supplier: string; expected: string; note: string };
