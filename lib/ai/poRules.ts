@@ -5,6 +5,7 @@
  * Playbook.md", kept in the project as claude/po-reading-playbook.md), turned into this order's fields.
  */
 export const PO_RULES = `10. PURCHASE ORDERS. When an attached file (or the email itself) is a purchase order or work order from a distributor, brand or another shop, the PO is the order: read it with these rules. The PO file itself is a size_breakdown file (it goes in the order's files as the order sheet).
+Read it like a person typed it (Oct 22, Nick: "a lot of these customer POs are just hand typed… you're not going to get 6210 Banana Cream. You might get 6210 B.C. or 6210 Banana… don't assume because you're reading a PO a computer created it and it's all perfect"): abbreviations, initials, run-together words, typos and missing words are normal. Read "6210 B.C." / "6210 Banana" as the style's real color (Banana Cream), "NeonBlue" as Neon Blue, "Gld 5000" as Gildan 5000, "blk" as Black; write the real name in color/style. When you're not sure what they meant, put your reading as the guess in check_with_staff and ask.
 Who is who
 - The sender (letterhead, "Invoice To", "Bill To", "Sold To") is the customer ordering from us: never FBS (811 Alpha Dr, Ste 343, Richardson TX 75081). Their end client goes in the job name.
 - po_number = the PO / order / production form / work order number. nickname = the job, project, event, store, client or design name (Nine18: the Ship-To company, e.g. "All My Sons Dallas"; TCA: the Store Name; Tigerblue: CLIENT + NICKNAME; Logotology: the first design name).

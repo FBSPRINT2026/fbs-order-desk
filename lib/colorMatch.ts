@@ -37,6 +37,18 @@ function matchOne(asked: string, options: string[]): { color: string; sure: bool
     const best = sub[0], tie = sub.filter((x) => x.extra.length === best.extra.length).length > 1;
     return { color: best.o, sure: !tie && best.extra.every((w) => MODIFIERS.has(w)) };
   }
+  // hand-typed POs (Oct 22, Nick: "you're not going to get 6210 Banana Cream. You might get 6210 B.C. or 6210 Banana"):
+  // run together ("NeonBlue"), initials ("B.C.", "BC"), or the start of each word ("Ban Crm") — staff confirm the guess
+  const squash = (x: string) => key(x).replace(/ /g, "");
+  const run = options.filter((o) => squash(o) === squash(asked));
+  if (run.length === 1) return { color: run[0], sure: true };
+  const letters = asked.replace(/[^a-z]/gi, "").toLowerCase();
+  if (letters.length >= 2 && letters.length <= 4 && /^([a-z]\.?\s*){2,4}$/i.test(asked.trim())) {
+    const ini = options.filter((o) => words(o).map((w) => w[0]).join("") === letters);
+    if (ini.length === 1) return { color: ini[0], sure: false };
+  }
+  const pre = options.filter((o) => { const ow = words(o); return aw.length > 0 && aw.every((w) => ow.some((x) => x.startsWith(w))); }).sort((p, q) => words(p).length - words(q).length);
+  if (pre.length && (pre.length === 1 || words(pre[0]).length < words(pre[1]).length)) return { color: pre[0], sure: false };
   // closest by shared words and letters (a guess: staff confirm it)
   const score = (o: string) => {
     const ow = words(o), shared = aw.filter((w) => ow.includes(w)).length;
