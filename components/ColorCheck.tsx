@@ -38,9 +38,29 @@ export function applyColors(groups: Group[], rows: ColorRow[]): Group[] {
   return out;
 }
 
-export default function ColorCheck({ rows, onDone, onCancel }: { rows: ColorRow[]; onDone: (rows: ColorRow[]) => void; onCancel: () => void }) {
+export default function ColorCheck({ rows, onDone, onCancel, inline }: { rows: ColorRow[]; onDone: (rows: ColorRow[]) => void; onCancel: () => void;
+  /** inside Create order: the tool's own look, in its panel (Oct 23, Nick: "no matter which path you go down, it should all look the same") */ inline?: boolean }) {
   const [picks, setPicks] = useState(rows.map((r) => r.pick));
   const ask = rows.map((r, i) => ({ r, i })).filter(({ r }) => !r.exact);
+  if (inline) return (
+    <div className="ap" role="group" aria-label="Check the shirt colors">
+      <p className="ap-q">{ask.length === 1 ? "This shirt color isn't one of the style's colors. Which is it?" : "These shirt colors aren't the style's colors. Which are they?"}</p>
+      <p className="ap-why">Pick the real color so the mockup shows the right shirt.</p>
+      <div className="cc-rows">
+        {ask.map(({ r, i }) => (
+          <label key={i} className="cc-row">
+            <span className="cc-asked">They said <b>{r.asked || "(no color)"}</b>{r.pick ? <> · the {r.brand} {r.style} comes in <b>{r.pick}</b></> : <> · pick the {r.brand} {r.style} color</>}</span>
+            <select value={picks[i]} onChange={(e) => setPicks((p) => p.map((x, k) => (k === i ? e.target.value : x)))} aria-label={`Color for ${r.asked}`}>
+              <option value="">Choose a color…</option>
+              {r.options.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
+        <button type="button" className="btn primary" disabled={ask.some(({ i }) => !picks[i])} onClick={() => onDone(rows.map((r, i) => ({ ...r, pick: picks[i] || r.pick })))}>Use these colors</button></div>
+    </div>
+  );
   return (
     <div className="cc-back" role="dialog" aria-modal="true" aria-label="Check the shirt colors">
       <div className="cc">

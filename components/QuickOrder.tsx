@@ -814,7 +814,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {review && <ReviewConfirm a={review} onCancel={cancel} />}
-        {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
+        {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}

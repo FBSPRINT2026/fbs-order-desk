@@ -12501,3 +12501,31 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .arc-ready ul{margin:6px 0 8px;padding-left:18px;font-size:13.5px;color:var(--ink)}
 .arc-ready li{margin:2px 0}
 .arc-ready-b{display:flex;align-items:center;gap:12px}
+
+/* ── Create order: ONE look on every screen of the tool, whichever path (Oct 23, Nick: "it's like this is all one big
+   tool. So like no matter which path you go down, it should all look the same. Like the styling, the buttons, the way it
+   talks to you"). The start (.osp), the steps and every question (.qo .ap: Resolution Center, colors, their art, their
+   sheet, the check) share: the question line, the note under it, cards, choice buttons, fields and the footer ── */
+html body :is(.osp, .qo) h3{font-family:var(--body);font-size:17px;font-weight:700;line-height:1.3;color:var(--ink);margin:0 0 4px}
+html body :is(.osp, .qo) .dla-sub,html body .qo .ap-why{font-size:12.5px;color:var(--ink-3);margin:0}
+html body .qo .ap{gap:10px}
+html body .qo .ap-q{font-family:var(--body);font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);margin:0}
+/* cards: one border, one corner, one picked look */
+html body :is(.osp, .qo) :is(.osp-big, .arc-card, .rv-g, .rv-c, .arc-det-card, .ap-conf, .cc-row){border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface)}
+html body :is(.osp, .qo) :is(.osp-big.sug, .arc-card.art, .rv-c.on){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:var(--accent-soft)}
+html body :is(.osp, .qo) :is(.osp-big, .rv-c):hover{border-color:var(--accent)}
+html body .qo .arc-card.set{border-color:var(--ink-3);opacity:1}
+html body .qo .cc-row{padding:8px 10px}
+/* choice buttons and chips: the kit's 36px field look */
+html body .qo :is(.chip, .rv-c){min-height:36px;border-radius:var(--r,6px);font-size:13px}
+html body .qo .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent)}
+/* fields */
+html body .qo :is(.ap, .arc) :is(select, input[type=text], input[type=number], input:not([type])):not(.qc-rem input){height:36px;border:1px solid var(--line);border-radius:var(--r,6px);font:inherit;font-size:14px;color:var(--ink);background:var(--surface);padding:0 10px}
+/* links and the footer: Cancel on the left, the one primary button on the right */
+html body :is(.osp, .qo) .ap-link{color:var(--accent);font-size:13px}
+html body :is(.osp, .qo) .ap-cancel{color:var(--danger)}
+html body .qo .ap-foot,html body .qo .qo-foot{display:flex;align-items:center;gap:10px;padding-top:10px;margin-top:4px;border-top:1px solid var(--line)}
+html body .qo .ap-foot .btn.primary,html body .qo .qo-foot .btn.primary{margin-left:auto}
+/* small labels inside cards: the kit's small gray text */
+html body .qo :is(.faint, figcaption, .arc-hint, .rv-why){font-size:12px;color:var(--ink-3)}
+html body .qo .arc-hint.ok,html body .qo .rv-ok{color:var(--ok)}
