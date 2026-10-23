@@ -146,7 +146,10 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
  * than the recent jobs listed (portal orders by number, Printavo jobs by their number), this customer's first.
  */
 export async function jobsNamed(admin: SupabaseClient, told: string, customerId: string | null, have: PastJob[]): Promise<PastJob[]> {
-  const nums = [...new Set((told.match(/(?<![\d.$])#?(\d{4,6})(?![\d.])/g) || []).map((x) => x.replace("#", "")))].slice(0, 6);
+  // not a PMS ("PMS 2178C", "534 C"), a year ("2026") or part of a longer number (a tracking number)
+  const nums = [...new Set([...told.matchAll(/(?<![\d.$A-Za-z])#?(\d{4,6})(?![\d.]|\s?[CUcu]\b)/g)]
+    .filter((m) => !/pms\s*#?$|pantone\s*$/i.test(told.slice(Math.max(0, (m.index || 0) - 8), m.index)))
+    .map((m) => m[1]).filter((n) => !/^(19|20)\d\d$/.test(n)))].slice(0, 6);
   if (!nums.length) return [];
   const out: PastJob[] = [];
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
