@@ -85,7 +85,8 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
           if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
           return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
         }
-        if (mode !== "textures" && r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000) { photos.push(r); return; }
+        // a shirt photo is solid; a big picture with see-through parts is a texture over the art (Peticolas' mask)
+        if (mode !== "textures" && r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000 && !hasClear(src)) { photos.push(r); return; }
         if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
         return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
       };
@@ -139,6 +140,17 @@ export async function maskFromFile(f: File): Promise<File | null> {
   const c = document.createElement("canvas"); c.width = bm.width; c.height = bm.height;
   c.getContext("2d")!.drawImage(bm, 0, 0);
   return maskFile(c, f.name.replace(/\.[^.]+$/, "") + " mask.png");
+}
+
+/** a picture with see-through parts (sampled small): a texture or cut-out art, not a shirt photo */
+function hasClear(src: unknown) {
+  try {
+    const t = document.createElement("canvas"); t.width = 32; t.height = 32;
+    const x = t.getContext("2d", { willReadFrequently: true })!; x.drawImage(src as CanvasImageSource, 0, 0, 32, 32);
+    const d = x.getImageData(0, 0, 32, 32).data; let clear = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] < 200) clear++;
+    return clear > 32 * 32 * 0.15;
+  } catch { return false; }
 }
 
 /** a picture that's one flat color (sampled small): an artboard background, not art or a photo */
