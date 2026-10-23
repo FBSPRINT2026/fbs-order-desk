@@ -694,9 +694,15 @@ function PdfPages({ url }: { url: string }) {
     c.dataset.w = String(w);
     const pg = await doc.getPage(n), v1 = pg.getViewport({ scale: 1 }), dpr = Math.min(2, window.devicePixelRatio || 1);
     const vp = pg.getViewport({ scale: (w / v1.width) * dpr });
-    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    // drawn on a canvas of its own, then shown: a page redrawn while it was still drawing came out upside down for a while
+    // (Oct 23, Nick: "the first page was upside down for like a minute, then it rotated")
+    const off = document.createElement("canvas");
+    off.width = Math.round(vp.width); off.height = Math.round(vp.height);
+    await pg.render({ canvasContext: off.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+    if (c.dataset.w !== String(w)) return; // a newer size was asked for meanwhile
+    c.width = off.width; c.height = off.height;
     c.style.width = `${w}px`; c.style.height = `${Math.round(vp.height / dpr)}px`;
-    await pg.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+    c.getContext("2d")!.drawImage(off, 0, 0);
   };
   const [w, setW] = useState(0);
   useEffect(() => {
