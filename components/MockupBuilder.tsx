@@ -815,14 +815,28 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const g = garmentFor(l); if (!g || !l.color.trim()) continue;
       const imgs = g.color_images || {};
       if (Object.entries(imgs).some(([k, v]) => colorKey(k) === colorKey(l.color) && v?.front)) continue;
-      const base = tintBase(imgs); if (!base) continue;
-      const hex = Object.entries(imgs).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]?.hex || guessHex(l.color);
-      for (const v of ["front", "back"] as View[]) {
-        const k = `${g.style}|${colorKey(l.color)}|${v}`, src = v === "front" ? imgs[base].front : imgs[base].back;
-        if (!src || tinting.current.has(k)) continue;
-        tinting.current.add(k);
-        void tintPhoto(ssImg(src), hex.startsWith("#") ? hex : `#${hex}`).then((u) => setTinted((t) => ({ ...t, [k]: u }))).catch(() => null);
-      }
+      const k0 = `${g.style}|${colorKey(l.color)}`;
+      if (tinting.current.has(k0)) continue;
+      tinting.current.add(k0);
+      const color = l.color;
+      // the other supplier's photo first (Oct 22, Nick: "if S&S doesn't have it, I know SanMar does"), saved on the garment;
+      // else the style's own photo dyed to the color
+      void (async () => {
+        const r = await fetch("/api/garments/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId: g.id, color }) }).then((x) => x.json()).catch(() => null) as { name?: string; front?: string; back?: string; side?: string; hex?: string; none?: boolean } | null;
+        if (r?.front && r.name) {
+          const entry = { front: r.front, back: r.back || "", side: r.side || "", hex: r.hex || "" };
+          setCatalog((c) => c.map((x) => (x.id === g.id ? { ...x, color_images: { ...(x.color_images || {}), [r.name!]: entry } } : x)));
+          return;
+        }
+        const base = tintBase(imgs); if (!base) return;
+        const hex = Object.entries(imgs).find(([k]) => colorKey(k) === colorKey(color))?.[1]?.hex || guessHex(color);
+        for (const v of ["front", "back"] as View[]) {
+          const src = v === "front" ? imgs[base].front : imgs[base].back;
+          if (!src) continue;
+          const u = await tintPhoto(ssImg(src), hex.startsWith("#") ? hex : `#${hex}`).catch(() => "");
+          if (u) setTinted((t) => ({ ...t, [`${k0}|${v}`]: u }));
+        }
+      })();
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
