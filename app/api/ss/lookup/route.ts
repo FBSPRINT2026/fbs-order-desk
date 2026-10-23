@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ssConfigured, ssLookup } from "@/lib/ss";
 import { sanmarConfigured, sanmarLookup } from "@/lib/sanmar";
+import { sanmarStyles } from "@/lib/sanmarStyle";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,9 @@ export async function GET(req: Request) {
     };
     // S&S first (unless SanMar was asked for)
     if (want !== "sanmar" && ssConfigured()) {
-      const g = await ssLookup(q, id).catch((e) => { if (!sanmarConfigured() || id) throw e; return null; });
+      // SanMar's number for another brand's style (BC3001CVC, NL6210, G64400): S&S knows it as 3001CVC, 6210, 64400
+      const g = await ssLookup(q, id).catch((e) => { if (!sanmarConfigured() || id) throw e; return null; })
+        || (!id && /^(BC|NL|G|C|DT|AA)\d/i.test(q) ? await ssLookup(q.replace(/^(BC|NL|G|C|DT|AA)(?=\d)/i, "")).catch(() => null) : null);
       if (g) {
         const data = await save({ ...g, supplier: "ss", synced_at: new Date().toISOString() }, async () => {
           const { data: byId } = await admin.from("garments").select("id").eq("ss_style_id", g.ss_style_id).maybeSingle();
@@ -40,7 +43,9 @@ export async function GET(req: Request) {
     }
     // SanMar (Port Authority, Sport-Tek, District, Nike, OGIO, CornerStone… and anything S&S doesn't have)
     if (q && sanmarConfigured()) {
-      const g = await sanmarLookup(q);
+      // S&S's number for it at SanMar (3001CVC is BC3001CVC there: lib/sanmarStyle.ts)
+      let g = await sanmarLookup(q);
+      if (!g) for (const t of (await sanmarStyles(admin, q)).filter((t) => t !== q.toUpperCase())) { g = await sanmarLookup(t).catch(() => null); if (g) break; }
       if (g) {
         const data = await save({ ...g, ss_style_id: null, synced_at: new Date().toISOString() }, async () => {
           const { data: m } = await admin.from("garments").select("id").eq("supplier", "sanmar").ilike("supplier_style", g.supplier_style).maybeSingle();

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanmarConfigured, sanmarSkus } from "@/lib/sanmar";
+import { sanmarStyles } from "@/lib/sanmarStyle";
+import { matchColor } from "@/lib/colorMatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,10 +27,14 @@ export async function POST(req: Request) {
   if (have) return NextResponse.json({ name: have[0], ...have[1] });
   if (g.supplier === "sanmar" || !sanmarConfigured()) return NextResponse.json({ none: true });
   const st = String(g.supplier_style || g.style || "").trim().toUpperCase();
-  const tries = [...new Set([st, /^\d/.test(st) && /gildan/i.test(String(g.brand || "")) ? `G${st}` : "", st.replace(/^G(?=\d)/, "")].filter(Boolean))];
+  // SanMar's number for it (BC3001CVC for 3001CVC, G-numbers for some Gildan: lib/sanmarStyle.ts)
+  const tries = await sanmarStyles(admin, st, String(g.brand || ""));
   for (const t of tries) {
-    const skus = await sanmarSkus(t).catch(() => []);
-    const hit = skus.find((s) => (sq(s.color) === sq(color) || sq(s.catalogColor) === sq(color)) && (s.front || s.image));
+    const skus = (await sanmarSkus(t).catch(() => [])).filter((s) => s.front || s.image);
+    if (!skus.length) continue;
+    // SanMar shortens color names ("NeonBlue", "NeonRdOrng"): the same letters, else the closest name
+    let hit = skus.find((s) => sq(s.color) === sq(color) || sq(s.catalogColor) === sq(color));
+    if (!hit) { const names = [...new Set(skus.flatMap((s) => [s.color, s.catalogColor]).filter(Boolean))]; const m = matchColor(color, names); if (m?.sure) hit = skus.find((s) => s.color === m.color || s.catalogColor === m.color); }
     if (!hit) continue;
     const name = Object.keys(imgs).find((k) => sq(k) === sq(color)) || color.trim();
     const entry = { front: hit.front || hit.image, back: hit.back || "", side: "", hex: imgs[name]?.hex || "", from: "sanmar" };
