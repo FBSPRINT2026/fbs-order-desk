@@ -139,6 +139,8 @@ export type GLine = {
   /** their extras printed (true) or only counted and sent back blank (false); asked when the order is made (Oct 23,
    *  Nick: "are these extras? …to be printed or not to be printed… a little stamp next to that row") */
   extrasPrint?: boolean;
+  /** their extras at no charge (ticked by default); unticked = printed and charged like the rest */
+  extrasFree?: boolean;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */

@@ -198,7 +198,7 @@ function LineRows({ l, sizes, hex, single }: { l: Group["lines"][number]; sizes:
   return (
     <>
       <tr>
-        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : colorHex(l.color) || hex} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b> (no charge)</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
+        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : colorHex(l.color) || hex} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
         {sizes.map((z) => <td key={z} className="sz">{l.sizes?.[z as keyof typeof l.sizes] ? <b>{l.sizes[z as keyof typeof l.sizes]}</b> : ""}</td>)}
         <td className="tot"><b>{q}</b></td>
       </tr>
@@ -479,7 +479,7 @@ export function InvoiceDoc(p: DocData) {
                     <tr key={l.id}>
                       <td>
                         <b>{[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc.wholesale && <span className="faint"> (your garments)</span>}
-                        {l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b> (no charge)</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
+                        {l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
                         <div className="chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span className="chip" key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                         {i === lines.length - 1 && g.imprints.map((d) => {
                           const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = d.visualOnly ? [] : inkNames(d.inks);

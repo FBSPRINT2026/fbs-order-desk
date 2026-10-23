@@ -687,7 +687,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const small = qs.length >= 3 && qs.every((v) => v <= 2) && !!prev && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && qty(prev) >= 5 * qty(l);
         if (!l.extras && !small) continue;
         const n = qty(l), what = [l.style, l.color].filter(Boolean).join(" ") || "this garment";
-        d = { ...d, check: [...(d.check || []), { q: `${n} more ${what}${qs.every((v) => v === 1) ? ", one of each size" : ""}. Are these extras?`, guess: "Yes, printed extras", about: x.name, local: `xt:${l.id}`, choices: [{ label: "Yes, printed extras" }, { label: "Yes, not printed" }, { label: "No, charge for them" }] }] };
+        d = { ...d, check: [...(d.check || []), { q: `${n} more ${what}${qs.every((v) => v === 1) ? ", one of each size" : ""}. Are these extras?`, guess: "Yes, printed extras", about: x.name, local: `xt:${l.id}`, choices: [{ label: "Yes, printed extras" }, { label: "Yes, not printed" }] }] };
       }
     }
     // every print's size and inks, with how they were arrived at, for the check (whatever it says there is what's made)
@@ -733,10 +733,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const localOf = new Map((d.check || []).filter((c) => c.local).map((c) => [c.q, c.local!]));
       // their extras: printed, not printed (counted, sent back blank), or not extras (charged)
       for (const a of rv.answers.filter((x) => localOf.get(x.q)?.startsWith("xt:"))) {
-        const lid = localOf.get(a.q)!.slice(3), no = /\bno\b.*charge/i.test(a.answer), blank = /not printed/i.test(a.answer);
-        d = { ...d, groups: d.groups.map((y) => ({ ...y, lines: y.lines.map((l) => (l.id !== lid ? l : no ? { ...l, extras: undefined, extrasPrint: undefined, priceOverride: l.priceOverride === 0 ? null : l.priceOverride } : { ...l, extras: true, extrasPrint: !blank, priceOverride: 0 })) })) };
+        const lid = localOf.get(a.q)!.slice(3), no = /^\s*no\b|not extras/i.test(a.answer), blank = /not printed/i.test(a.answer), free = !/\bcharged\b/i.test(a.answer);
+        d = { ...d, groups: d.groups.map((y) => ({ ...y, lines: y.lines.map((l) => (l.id !== lid ? l : no ? { ...l, extras: undefined, extrasPrint: undefined, extrasFree: undefined, priceOverride: l.priceOverride === 0 ? null : l.priceOverride } : { ...l, extras: true, extrasPrint: !blank, extrasFree: free, priceOverride: free ? 0 : l.priceOverride === 0 ? null : l.priceOverride })) })) };
         const l0 = d.groups.flatMap((y) => y.lines).find((l) => l.id === lid);
-        did.push(`${[l0?.style, l0?.color].filter(Boolean).join(" ")}: ${no ? "not extras, charged" : blank ? "their extras, not printed (no charge)" : "their extras, printed (no charge)"}`);
+        did.push(`${[l0?.style, l0?.color].filter(Boolean).join(" ")}: ${no ? "not extras, charged" : `their extras, ${blank ? "not printed" : "printed"}, ${free ? "no charge" : "charged"}`}`);
       }
       for (const a of rv.answers.filter((x) => localOf.get(x.q)?.startsWith("bg:"))) {
         const [key, n0, list, bgName] = localOf.get(a.q)!.split("|"), id = key.slice(3), n = +n0 || 1;
@@ -1566,11 +1566,13 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
   });
   // a question whose answer is one of the files is the logo picker's job when there's a picker
   const checks = (d.check || []).filter((c) => !(arts.length > 1 && c.choices?.some((x) => x.path)));
-  const [rows, setRows] = useState(checks.map(() => ({ pick: 0, text: "", remember: false })));
+  // extras questions carry a No charge box, ticked to start (Oct 23, Nick: "yes, we print them sometimes for clients,
+  // but no, we don't charge for them… sometimes people supply extras, those would be printed, we do charge for")
+  const [rows, setRows] = useState(checks.map(() => ({ pick: 0, text: "", remember: false, free: true })));
   const set = (i: number, ch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...ch } : x)));
   const groupOf = (about?: string) => (about ? d.groups.findIndex((g) => sameName(g.name, about)) : -1);
-  const answerOf = (i: number) => { const r = rows[i], c = checks[i]; if (r.text.trim()) return r.text.trim(); if (r.pick > 0 && c.choices?.[r.pick]) { const ch = c.choices[r.pick]; return `${ch.label}${ch.name ? ` (${ch.name})` : ""}`; } return ""; };
-  const answered = checks.some((_, i) => !!answerOf(i));
+  const answerOf = (i: number) => { const r = rows[i], c = checks[i]; if (c.local?.startsWith("xt:") && !r.text.trim()) return `${c.choices?.[r.pick]?.label || "Yes, printed extras"}${r.free ? " · no charge" : " · charged"}`; if (r.text.trim()) return r.text.trim(); if (r.pick > 0 && c.choices?.[r.pick]) { const ch = c.choices[r.pick]; return `${ch.label}${ch.name ? ` (${ch.name})` : ""}`; } return ""; };
+  const answered = checks.some((c, i) => !c.local && !!answerOf(i));
   // a plain function, not a component: typing in its box keeps the focus
   const Q = (i: number) => {
     const c = checks[i], r = rows[i], mine = !!answerOf(i);
@@ -1583,9 +1585,10 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
               <span>{ch.label}{k === 0 ? <i className="faint"> (my guess)</i> : null}</span>
             </button>
           ))}
+          {c.local?.startsWith("xt:") && <label className="rv-c rv-chk"><input type="checkbox" checked={r.free} onChange={(e) => set(i, { free: e.target.checked })} /> No charge</label>}
           <input type="text" className="rv-txt" aria-label={`Something else: ${c.q}`} placeholder="Or say what to do…" value={r.text} onChange={(e) => set(i, { text: e.target.value })} />
         </div>
-        {mine && <label className="qc-rem"><input type="checkbox" checked={r.remember} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>}
+        {mine && !c.local && <label className="qc-rem"><input type="checkbox" checked={r.remember} onChange={(e) => set(i, { remember: e.target.checked })} /> Remember this for {a.customer}</label>}
       </div>
     );
   };
