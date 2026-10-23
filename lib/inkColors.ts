@@ -54,12 +54,29 @@ export function addStockInks(rows: { name: string; hex: string; line?: string }[
   }
 }
 
+/**
+ * The Ink Room's PMS formulas (Production → Ink Room → PMS formulas, read from IMS: 2,756 and growing), by number
+ * ("2178", "COOL GRAY 3"). Their colors come first; the old chart (lib/pms.ts, 1,341 colors) only fills in numbers the
+ * Ink Room doesn't have (Oct 23, Nick: "everything that's in the ink room for sure should be in the PMS formulas…
+ * Pantone adds colors all the time"; HALFF's PMS 2178 C was in the Ink Room but not the chart). A PMS in neither is
+ * still a real ink: it just has no screen color here. Filled once a page has read them (lib/inkFormulas.ts).
+ */
+export const FORMULA_HEX: Record<string, string> = {};
+export function addFormulaInks(rows: { name: string; hex: string }[]) {
+  for (const r of rows) {
+    const m = /^PANTONE\s+(.+?)\s+C$/i.exec((r.name || "").trim());
+    const hex = (r.hex || "").replace(/^#/, "");
+    if (!m || !/^[0-9a-f]{6}$/i.test(hex)) continue;
+    FORMULA_HEX[m[1].toUpperCase().replace(/\s+/g, " ")] = `#${hex.toUpperCase()}`;
+  }
+}
+
 /** Screen color for an ink name: Wilflex RFU, another stock ink, a PMS coated number ("PMS 186 C", "186 C", "PMS 186"), or a #hex. */
 export const colorHex = (name: string) => {
   if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
-  return m ? PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
+  return m ? FORMULA_HEX[m.toUpperCase().replace(/\s+/g, " ")] || PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
 };
 
 /** Main flat colors in a logo (transparent pixels ignored), largest first. */

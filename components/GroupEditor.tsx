@@ -3,6 +3,8 @@ import { inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
 import { colorHex, repaintLogo } from "@/lib/inkColors";
+import { loadInkFormulas } from "@/lib/inkFormulas";
+import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
@@ -69,6 +71,9 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+  // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
+  const [, setFormulas] = useState(0);
+  useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
   const [askSkip, setAskSkip] = useState(false);
   // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
   // you want to change all the items on this group to 2.25?")

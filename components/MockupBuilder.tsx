@@ -31,6 +31,7 @@ import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
+import { loadInkFormulas } from "@/lib/inkFormulas";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -574,6 +575,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const sh = onShirtsOf(d).length ? (line?.color || "") : "";
       const off = im.distress === "off" && !!urls[d.id + ":clean"];
       if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off) return;
+      // every PMS the Ink Room has, before the order's inks are matched to the logo's colors (PMS 2178 C, HALFF #40119)
+      if (!portal) await loadInkFormulas(sb).catch(() => 0);
       try {
         const img = await logoImg(d, off);
         // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved

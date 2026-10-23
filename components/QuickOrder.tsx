@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
+import { loadInkFormulas } from "@/lib/inkFormulas";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
@@ -125,6 +126,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const finishSteps = (state: "done" | "error" = "done") => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state } : x)));
 
   async function one(part: EOPart | null, of: string, again: string[] = []): Promise<Made | null> {
+    // every PMS in the Ink Room, for the inks read off the paperwork and our sheets (PMS 2178 C)
+    void loadInkFormulas(createClient()).catch(() => 0);
     const qs = `activity=${encodeURIComponent(activityId)}${part ? `&part=${encodeURIComponent(part.key)}` : ""}`;
     step(`${of}Reading the email${part ? ` for ${part.label}` : ""}…`);
     const g = await fetch(`/api/inbox/order?${qs}`).then((r) => r.json()).catch(() => null) as Loaded & { error?: string } | null;
