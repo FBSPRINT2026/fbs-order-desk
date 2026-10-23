@@ -44,16 +44,17 @@ export function MicButton({ target, onDone, append = false, keepListening = fals
   useEffect(() => { setOk(!!speechApi()); return () => { want.current = false; try { rec.current?.abort(); } catch { /* already stopped */ } }; }, []);
   const seen = useRef(autoStart); // only a new press starts it, never the value it mounted with
   useEffect(() => { if (!ok || !autoStart || autoStart === seen.current) return; seen.current = autoStart; if (!onRef.current) startRef.current(); }, [autoStart, ok]);
-  useEffect(() => { if (off && onRef.current) { want.current = false; try { rec.current?.stop(); } catch { /* already stopped */ } } }, [off]);
+  useEffect(() => { if (off && onRef.current) { want.current = false; setOn(false); try { rec.current?.stop(); } catch { /* already stopped */ } } }, [off]);
   if (!ok) return null;
 
   // keepListening: on until it's clicked off. The browser ends a recognition by itself after a pause, so it's started
   // again right away, keeping what was said (Oct 23, Nick: "the microphone… keeps turning off before I'm done talking…
   // because I'm pausing")
   const toggle = () => {
-    if (on) { want.current = false; rec.current?.stop(); return; }
+    // off: always off at once, even between the browser's stop and the restart (Oct 23, Nick: "doesn't shut off")
+    if (on) { want.current = false; setOn(false); try { rec.current?.stop(); } catch { /* already stopped */ } return; }
     const S = speechApi(); if (!S) return;
-    let said = "";
+    let said = "", typed = "";
     const before = append ? (target()?.value || "").replace(/\s+$/, "") : "";
     const join = (t: string) => (before && t ? `${before} ${t}` : before || t);
     want.current = true;
@@ -69,7 +70,10 @@ export function MicButton({ target, onDone, append = false, keepListening = fals
           if (e.results[i].isFinal) fin += t; else interim += t;
         }
         said = (base && fin ? `${base.replace(/\s+$/, "")} ${fin.replace(/^\s+/, "")}` : base + fin);
-        const el = target(); if (el) typeInto(el, join(`${said} ${interim}`.replace(/\s+/g, " ").trim()));
+        const el = target(); if (!el) return;
+        // the box was emptied while listening (the message was sent): what was said before isn't brought back
+        if (typed && !el.value.trim()) { want.current = false; setOn(false); try { r.stop(); } catch { /* */ } return; }
+        typed = join(`${said} ${interim}`.replace(/\s+/g, " ").trim()); typeInto(el, typed);
       };
       r.onend = () => {
         if (keepListening && want.current) { setTimeout(() => { if (want.current) { try { startRec(); } catch { want.current = false; setOn(false); } } }, 120); return; }

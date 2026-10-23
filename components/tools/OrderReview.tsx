@@ -292,7 +292,7 @@ export default function OrderReview({ orderId, onClose, did, next }: { orderId: 
           <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
-          <MicButton target={() => box.current} append keepListening label="Say what to change (click again when you're done)" />
+          <MicButton target={() => box.current} append keepListening off={!!busy} label="Say what to change (click again when you're done)" />
           <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>
         <div className="orv-quick">

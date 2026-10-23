@@ -1121,7 +1121,9 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
   const im = imp.inkMap && imp.inkMap.design === imp.design_id ? imp.inkMap.map : null;
   const want: Record<string, string> = {};
   if (im) for (const [src, v] of Object.entries(im)) if (v.name === "none" || (v.hex && v.hex.toLowerCase() !== src.toLowerCase())) want[src] = v.name === "none" ? "none" : v.hex;
-  const key = url && Object.keys(want).length ? `${imp.design_id}|${JSON.stringify(want)}` : "";
+  // keyed by the picture itself too: a fixed logo (the order check's art fixes) is a new file and must repaint (Oct 23:
+  // the blown-up logo still showed the gray outline after the blacks were made one)
+  const key = url && Object.keys(want).length ? `${url.split("?")[0]}|${JSON.stringify(want)}` : "";
   const [out, setOut] = useState(key ? paintedCache.get(key) || "" : "");
   useEffect(() => {
     if (!key) { setOut(""); return; }
