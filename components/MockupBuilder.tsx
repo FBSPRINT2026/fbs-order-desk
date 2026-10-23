@@ -615,7 +615,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             // (Oct 23, Logotology #40110: the order said "Reflex Blue" for an Electric Blue logo and the mockup went dark
             // blue: "if I uploaded that logo just naturally, it never suggests Reflex Blue")
             const near = useAsked ? nearestAsked(k.hex) : "";
-            const name = was ? was.name : near && dist(k.hex, colorHex(near)!) < 90 ** 2 ? near : onShirt || snap(k.hex, k.name);
+            // a logo color that's the shirt's own color doesn't print: the shirt shows through (Oct 23, Nick: "black on a
+            // black shirt, you should always think I'm removing it… yellow on a yellow shirt"; not on a heathered shirt)
+            const shirtOwn = plan.inks.length > 1 && !!line?.color && !isHeather(line.color) && dist(k.hex, shirtHex(line)) < 45 ** 2;
+            const name = was ? was.name : shirtOwn ? "none" : near && dist(k.hex, colorHex(near)!) < 90 ** 2 ? near : onShirt || snap(k.hex, k.name);
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
           }
