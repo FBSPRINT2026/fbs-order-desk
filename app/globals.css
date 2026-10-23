@@ -12681,3 +12681,4 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-bs-mask img{width:40px;height:40px;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:var(--surface-3)}
 .mk-bs-mask .faint{font-size:11.5px}
 .mk-bs-n{margin:2px 0 0;font-size:11.5px}
+.mk-ba-list{margin:4px 0 12px;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:4px}

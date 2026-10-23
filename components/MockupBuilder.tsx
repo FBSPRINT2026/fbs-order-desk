@@ -1280,10 +1280,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // is always 10.5" on the front"), applied on its own; and how it prints (fashion hit, soft hand), each new print's start
   const brandPrint = useMemo(() => (customers.find((c) => c.id === customerId)?.brand_print || null), [customers, customerId]);
   const brandSized = useRef<Record<string, string>>({}), brandHit = useRef<Record<string, string>>({});
+  const [sizeAskB, setSizeAskB] = useState<{ id: string; loc: string; have: number; want: number }[] | null>(null);
   const brandRule = (im: Imprint) => { const d = designOf(im); if (!d || !brandPrint) return null; const r = ratioIm(im); return brandSizeFor(brandPrint, d.id, r ? 1 / r : 0, im.location); };
   useEffect(() => {
     if (!brandPrint || viewId) return;
     const sizes: Record<string, string> = {}, hits: Record<string, { printStyle?: "fashion"; softHand?: boolean }> = {};
+    const ask: { id: string; loc: string; have: number; want: number }[] = [];
     for (const im of imprints) {
       const d = designOf(im); if (!d) continue;
       const rule = brandRule(im), k = `${d.id}|${im.location}`;
@@ -1291,7 +1293,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // times came back as their standard 3" each time the mockup was opened: "those sizes have to be set in stone"). The
       // standard size goes on a print that has none yet, or whose logo or spot is changed here.
       const was = brandSized.current[im.id];
-      if (was === undefined && (im.size || "").trim()) { brandSized.current[im.id] = k; }
+      if (was === undefined && (im.size || "").trim()) {
+        brandSized.current[im.id] = k;
+        // set, but not their standard: asked, never changed by itself (Oct 23, Nick: "a pop-up that says, hey, front
+        // should be 10.5 and back should be 3.5. Is that correct or not?… override or not")
+        if (rule && im.sizeFrom !== "customer" && im.sizeFrom !== "film") {
+          const m = (im.size || "").match(/^([\d.]+)/), r = ratioIm(im) || 0;
+          const have = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0;
+          if (have && Math.abs(have - rule.width) > 0.05) ask.push({ id: im.id, loc: im.location, have: Math.round(have * 100) / 100, want: rule.width });
+        }
+      }
       else if (rule && was !== k && im.sizeFrom !== "customer" && im.sizeFrom !== "film") { brandSized.current[im.id] = k; if (!(im.size || "").startsWith(`${rule.width}"`)) sizes[im.id] = `${rule.width}" wide`; }
       if (im.method === "screen" && brandHit.current[im.id] !== d.id) {
         brandHit.current[im.id] = d.id;
@@ -1299,6 +1310,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (h && im.printStyle == null && im.softHand == null) hits[im.id] = h;
       }
     }
+    if (ask.length && !portal) setSizeAskB((a) => [...(a || []).filter((x) => !ask.some((y) => y.id === x.id)), ...ask]);
     if (Object.keys(sizes).length || Object.keys(hits).length)
       setImprints((xs) => xs.map((x) => (sizes[x.id] || hits[x.id] ? { ...x, ...(sizes[x.id] ? { size: sizes[x.id], sizeFrom: "brand" as const } : {}), ...(hits[x.id] || {}) } : x)));
   }, [imprints, designs, brandPrint, trims]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2723,6 +2735,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         : <Link className="back" href={portal ? backHref || "/portal" : "/shop/artwork"}>← {portal ? "Dashboard" : "Artwork"}</Link>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
+      {sizeAskB && sizeAskB.length > 0 && (() => {
+        const who = custLabel(customers.find((c) => c.id === customerId)) || "this customer";
+        const stds = (brandPrint?.sizes || []).filter((r) => r.width > 0 && imprints.some((im) => im.location === r.location));
+        return (
+          <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Check the sizes against their brand standards">
+            <div className="dla" style={{ maxWidth: 480 }}>
+              <h3>Check the print sizes</h3>
+              <p className="dla-sub">{who}&apos;s brand standards: {stds.map((r) => `${r.location} ${r.width}" wide`).join(", ")}.</p>
+              <ul className="mk-ba-list">{sizeAskB.map((a) => <li key={a.id}><b>{a.loc}</b>: this order has <b>{a.have}&quot;</b> wide, their standard is <b>{a.want}&quot;</b>.</li>)}</ul>
+              <div className="dla-acts">
+                <button type="button" className="btn" onClick={() => setSizeAskB(null)}>Keep the order&apos;s size{sizeAskB.length === 1 ? "" : "s"}</button>
+                <button type="button" className="btn primary" onClick={() => { const a = sizeAskB; setImprints((xs) => xs.map((x) => { const y = a.find((z) => z.id === x.id); return y ? { ...x, size: `${y.want}" wide`, sizeFrom: "brand" as const } : x; })); setSizeAskB(null); setMsg("Set to their standard size. Save to keep it on the order."); }}>Use their standard</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{!portal && <span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
