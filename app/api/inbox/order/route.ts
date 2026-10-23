@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
-import { emailConversation, pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
+import { emailConversation, jobsNamed, pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
 import { anchorOf, type EmailPlan } from "@/lib/ai/emailPlan";
 import type { EODraft, EOFile, EOPart } from "@/lib/emailOrderShared";
@@ -43,11 +43,12 @@ export async function GET(req: Request) {
   const id = sp.get("activity") || "";
   const admin = createAdminClient();
   const part = await partOf(admin, id, sp.get("part") || "");
-  const { data: a } = await admin.from("activities").select("id, customer_id, meta").eq("id", id).maybeSingle();
+  const { data: a } = await admin.from("activities").select("id, customer_id, meta, subject, body").eq("id", id).maybeSingle();
   if (!a) return NextResponse.json({ error: "Email not found." }, { status: 404 });
   const [{ data: sg }, past, st, { data: cust }, cv] = await Promise.all([
     admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", part ? `email:${part.anchor || id}:order:${part.key}` : `email:${id}:order`).maybeSingle(),
-    pastJobs(admin, a.customer_id as string | null),
+    // the jobs it names first (their PO "86798" → Printavo #32997), then the recent ones
+    pastJobs(admin, a.customer_id as string | null).then(async (recent) => [...await jobsNamed(admin, `${a.subject || ""} ${String(a.body || "").slice(0, 3000)}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent]),
     aiState(admin),
     a.customer_id ? admin.from("customers").select("*").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     emailConversation(admin, id).catch(() => null),

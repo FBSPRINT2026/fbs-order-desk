@@ -146,13 +146,35 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
  * than the recent jobs listed (portal orders by number, Printavo jobs by their number), this customer's first.
  */
 export async function jobsNamed(admin: SupabaseClient, told: string, customerId: string | null, have: PastJob[]): Promise<PastJob[]> {
-  const nums = [...new Set((told.match(/(?<![\d.$])#?(\d{4,6})(?![\d.])/g) || []).map((x) => x.replace("#", "")))].slice(0, 4);
+  const nums = [...new Set((told.match(/(?<![\d.$])#?(\d{4,6})(?![\d.])/g) || []).map((x) => x.replace("#", "")))].slice(0, 6);
   if (!nums.length) return [];
   const out: PastJob[] = [];
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const prod = (st?.data as { production?: unknown } | null)?.production;
   for (const n of nums) {
-    if (have.some((j) => new RegExp(`^#${n}\\b`).test(j.label))) continue;
+    if (have.some((j) => new RegExp(`^#${n}\\b`).test(j.label)) || out.some((j) => j.label.includes(n))) continue;
+    // the customer's own PO number or a number in the job's name (Oct 22, Nick: Logotology's "Reorder from 86798" is
+    // their PO; Printavo #32997 is "PO 86798 HALFF"): searched in this customer's whole history, portal and Printavo
+    if (customerId) {
+      const like = `%${n}%`;
+      const [{ data: po }, { data: pa }] = await Promise.all([
+        admin.from("orders").select("id, number, nickname, status, created_at, groups, lines, customer_id").eq("customer_id", customerId).or(`po_number.ilike.${like},nickname.ilike.${like}`).order("created_at", { ascending: false }).limit(2),
+        admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("customer_id", customerId).eq("kind", "invoice").or(`po_number.ilike.${like},nickname.ilike.${like}`).order("order_date", { ascending: false, nullsFirst: false }).limit(2),
+      ]);
+      let hit = false;
+      for (const o of (po || []) as (Order & { created_at: string })[]) {
+        if (have.some((j) => j.ref === `o:${o.id}`) || out.some((j) => j.ref === `o:${o.id}`)) { hit = true; continue; }
+        const groups = groupsFromOrder(o);
+        out.push({ ref: `o:${o.id}`, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`, date: (o.created_at || "").slice(0, 10), qty: qtyOf(groups), groups, note: `Matches ${n} (their PO or the job name).` }); hit = true;
+      }
+      for (const r of (pa || []) as PvRow[]) {
+        if (have.some((j) => j.ref === `a:${r.id}`) || out.some((j) => j.ref === `a:${r.id}`)) { hit = true; continue; }
+        const groups = groupsFromPrintavo(r, prod);
+        if (!groups.length) continue;
+        out.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: `Printavo job matching ${n} (their PO or the job name).`, oldNotes: pvNotes(r) }); hit = true;
+      }
+      if (hit) continue;
+    }
     const { data: os } = await admin.from("orders").select("id, number, nickname, status, created_at, groups, lines, customer_id").eq("number", +n).limit(1);
     const o = os?.[0] as (Order & { created_at: string; customer_id: string | null }) | undefined;
     if (o && (!customerId || o.customer_id === customerId)) {
@@ -369,7 +391,9 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   ]);
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
   const memText = memoryText(mems, String(cust?.company || cust?.name || "this customer"));
-  let past = [...(told || memText ? await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")}`, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
+  // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
+  const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)}`;
+  let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
   // several jobs picked together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676: "create an order out of a
   // reorder from two separate Printavos"): all of them first, J1, J2…

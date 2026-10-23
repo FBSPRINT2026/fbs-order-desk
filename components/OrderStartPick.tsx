@@ -59,7 +59,8 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
   const list = useMemo(() => {
     const w = words(text), t = q.trim().toLowerCase();
     return (found || past || [])
-      .map((p) => { const pw = words(p.label.replace(/^#\d+\s*/, "")); let hit = 0; pw.forEach((x) => { if (w.has(x)) hit++; }); return { p, hit }; })
+      // a job the email names (their PO number, the job's name) goes to the top
+      .map((p) => { const pw = words(p.label.replace(/^#\d+\s*/, "")); let hit = /matches|matching/i.test(p.note || "") ? 10 : 0; pw.forEach((x) => { if (w.has(x)) hit++; }); return { p, hit }; })
       .filter(({ p }) => !!found || !t || p.label.toLowerCase().includes(t))
       .sort((a, b) => b.hit - a.hit || b.p.date.localeCompare(a.p.date));
   }, [past, found, text, q]);
