@@ -644,8 +644,13 @@ function FileRow({ f }: { f: MailFile }) {
  * On a phone with the bottom bar they live behind its Files button instead (inBar).
  */
 export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones: shown by the bottom bar's Files button instead */ inBar?: boolean; note?: string }) {
+  // a quick look in the page instead of a new tab (Oct 23, Nick: "when you click on the attachment… a little pop-up in
+  // the center screen that you can scroll down and quick view the art or the purchase order… I should be able to read
+  // the PO and read what you're saying at the same time"). Ctrl/⌘-click still opens a tab.
+  const [look, setLook] = useState<number | null>(null);
   if (!files.length) return null;
-  return (
+  const canLook = (f: MailFile) => !!f.href && (kindOf(f) === "pdf" || kindOf(f) === "img" || /^AI$/.test(ext(f)));
+  return (<>
     <section className={"mf-tray" + (inBar ? " in-bar" : "")} aria-label="Attachments">
       <div className="mf-tray-h"><span className="mf-tray-t">{TbIcon.clip}Attachments <b className="chip-n">{files.length}</b></span>
         {note && <span className="faint">{note}</span>}
@@ -655,10 +660,42 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
       <div className="mf-tray-g">{files.map((f) => {
         const body = <>{isImg(f) && f.href ? <img className="mf-tp" src={f.href} alt="" loading="lazy" /> : <span className={"mf-tp mf-ft " + kindOf(f)}>{ext(f)}</span>}
           <span className="mf-tn" title={f.name}>{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}</>;
-        return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer">{body}</a>
+        return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer"
+          onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || !canLook(f) || (typeof window !== "undefined" && window.innerWidth < 760)) return; e.preventDefault(); setLook(files.indexOf(f)); }}>{body}</a>
           : <button key={f.key} type="button" className="mf-tile" onClick={f.onOpen} disabled={!f.onOpen}>{body}</button>;
       })}</div>
     </section>
+    {look != null && files[look] && <QuickLook files={files.filter(canLook)} at={files.filter(canLook).indexOf(files[look])} onClose={() => setLook(null)} />}
+  </>);
+}
+
+/** an attachment shown in the page, over the email or job (not over the Create order panel on the right) */
+function QuickLook({ files, at, onClose }: { files: MailFile[]; at: number; onClose: () => void }) {
+  const [i, setI] = useState(Math.max(0, at));
+  const f = files[i];
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setI((x) => Math.min(files.length - 1, x + 1)); else if (e.key === "ArrowLeft" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setI((x) => Math.max(0, x - 1)); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [files.length, onClose]);
+  if (!f) return null;
+  return (
+    <div className="mf-look-bg" onClick={onClose}>
+      <div className="mf-look" role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>
+        <div className="mf-look-h">
+          {files.length > 1 && <button type="button" className="mf-look-nav" disabled={i === 0} onClick={() => setI(i - 1)} aria-label="Previous file">‹</button>}
+          <b title={f.name} data-notranslate>{f.name}</b>
+          {files.length > 1 && <span className="faint">{i + 1} of {files.length}</span>}
+          {files.length > 1 && <button type="button" className="mf-look-nav" disabled={i === files.length - 1} onClick={() => setI(i + 1)} aria-label="Next file">›</button>}
+          <span className="spacer" />
+          <a className="btn sm ghost" href={f.href} target="_blank" rel="noreferrer">Open in a tab</a>
+          <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="mf-look-b">
+          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : <iframe key={f.key} src={f.href} title={f.name} />}
+        </div>
+      </div>
+    </div>
   );
 }
 export function Attachments({ m, inBar }: { m: FullMsg; inBar?: boolean }) {
