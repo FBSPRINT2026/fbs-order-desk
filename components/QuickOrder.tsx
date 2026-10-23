@@ -651,6 +651,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(...said.map((x) => `You said: ${x} (in the order's notes)`));
       } else if (d.check?.length) did.push(`Went with my guesses on: ${d.check.map((c) => c.q).join(" · ")}`.slice(0, 400));
     }
+    // the prints in order on the order: the front, then the back, then sleeves (Oct 23, #40116 had the Full Back first)
+    d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: [...y.imprints].sort((p0, p1) => spotRank(p0.location) - spotRank(p1.location)) })) };
     setCommitting(true);
     step(`${of}Creating the order…`);
     note(d.kind === "reorder" ? "Copying the job with the new sizes as a quote…" : "Saving it as a quote…");

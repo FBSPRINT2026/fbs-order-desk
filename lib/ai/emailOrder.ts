@@ -749,6 +749,28 @@ ${staffSays}` : ""}`;
     if (loose.length && groups[0]) mockups[groups[0].id] = [...(mockups[groups[0].id] || []), ...loose];
     // the reference job (named, even with no print tied to it): its mockups in Production files, and said in the notes
     const rj = jobAt((p as { reference_job?: number | null }).reference_job);
+    // every print that matches one of the reference job's prints takes how it printed, not only the ones the reader tied
+    // (Oct 23, #40116: the reader tied only the Left Chest, so the Full Back missed #32303's size and inks)
+    const refJobs = [...new Set([...(rj ? [rj] : []), ...refUsed.keys()])];
+    for (const g of groups) for (const im of g.imprints) {
+      if (im.sameAs || !refJobs.length) continue;
+      const side = (l: string) => (/back|yoke|shoulder|nape/i.test(l) ? "b" : /sleeve/i.test(l) ? "s" : "f");
+      for (const sj of refJobs) {
+        const olds = sj.groups.flatMap((x) => x.imprints.map((o2) => ({ o2, x })));
+        const hit = olds.find((z) => z.o2.location === im.location) || olds.find((z) => side(z.o2.location) === side(im.location));
+        if (!hit) continue;
+        const o2 = hit.o2, lab = sj.label.replace(/\s*\(Printavo\)$/, "");
+        if (o2.colors) im.colors = o2.colors;
+        if (!im.inks && o2.inks) im.inks = o2.inks;
+        if (o2.method) im.method = o2.method;
+        const pic = ((hit.x.pvRef || [])[0]?.path) || ((hit.x.pvArt || [])[0]?.path) || (sj.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])])[0]?.path) || "";
+        const pdfs = [...new Set(sj.groups.flatMap((x) => (x.pvArt || []).map((f) => f.path)))].slice(0, 4);
+        im.sameAs = { ref: sj.ref, label: lab, ...(pic ? { pic } : {}), ...(pdfs[0] ? { pdf: pdfs[0], pdfs } : {}) };
+        im.notes = [im.notes, `Same process as ${lab}`].filter(Boolean).join(". ").slice(0, 300);
+        if (!refUsed.has(sj)) refUsed.set(sj, g);
+        break;
+      }
+    }
     if (rj && !refUsed.has(rj) && groups[0]) refUsed.set(rj, groups[0]);
     for (const [j, g] of refUsed) {
       const lab = j.label.replace(/\s*\(Printavo\)$/, "");

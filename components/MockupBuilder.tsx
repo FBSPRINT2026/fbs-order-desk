@@ -597,7 +597,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const nearestAsked = (hex: string) => asked.slice().sort((a, b) => dist(hex, colorHex(a)!) - dist(hex, colorHex(b)!))[0];
           // only when they name enough inks for every color in the logo: one ink named for a 3-color logo (a guess
           // from an old job, Oct 12 Peticolas) painted the whole logo that one ink, a solid circle on the mockup
-          const useAsked = asked.length > 0 && asked.length >= plan.inks.length;
+          // the logo's colors that print: the shirt's own color doesn't (Oct 23, #40116: Black counted made White + Scarlet
+          // look like too few inks, so they were thrown out for National Red and PMS Bright Red C)
+          const ownOf = (hex: string) => plan!.inks.length > 1 && !!line?.color && !isHeather(line.color) && dist(hex, shirtHex(line)) < 45 ** 2;
+          const useAsked = asked.length > 0 && asked.length >= plan.inks.filter((k) => !ownOf(k.hex)).length;
           // otherwise the customer's brand colors: a red in their logo becomes their PMS red (when it's close)
           const b = brandRef.current;
           // brand standards aren't applied on their own (Oct 16, Nick: a customer can have several sets): the "Apply brand
@@ -617,7 +620,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             const near = useAsked ? nearestAsked(k.hex) : "";
             // a logo color that's the shirt's own color doesn't print: the shirt shows through (Oct 23, Nick: "black on a
             // black shirt, you should always think I'm removing it… yellow on a yellow shirt"; not on a heathered shirt)
-            const shirtOwn = plan.inks.length > 1 && !!line?.color && !isHeather(line.color) && dist(k.hex, shirtHex(line)) < 45 ** 2;
+            const shirtOwn = ownOf(k.hex);
             const name = was ? was.name : shirtOwn ? "none" : near && dist(k.hex, colorHex(near)!) < 90 ** 2 ? near : onShirt || snap(k.hex, k.name);
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
