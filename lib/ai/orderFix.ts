@@ -24,7 +24,7 @@ export type OrderChange = {
 };
 export type FixResult = { reply: string; changes: OrderChange[]; applied: string[]; art: OrderChange[]; lesson?: string; rule?: string };
 
-const PRINT_FIELDS = ["size", "location", "inks", "colors", "drop", "underbase"];
+const PRINT_FIELDS = ["size", "location", "inks", "colors", "drop", "underbase", "confirm"];
 const ART_ACTIONS = ["one_black", "flatten", "remove_hairline"];
 /** the order's own fields (the order page's Job details and Totals, Oct 23, Nick: "change it to pickup"), each checked here */
 const yes = (v: string) => /^(y|true|on|1)/i.test(v);
@@ -80,7 +80,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
         what: { type: "string", enum: ["print", "line", "art", "order"] },
         id: { type: "string", description: "The print id (print and art), the line id (line), or \"order\"" },
         field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price. order: ${Object.keys(ORDER_FIELDS).join(", ")}` },
-        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
+        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; confirm (production confirms the print's details on the run, the Reorder Details screen): "both", "size", "ink" or "none" (take it off); art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
         say: { type: "string", description: "One plain sentence saying the change, past tense. An art change goes on the customer's proof, so say what we changed and why, in their words: \"Flattened the art to two colors, black and white (there was shading in the black)\", \"Removed the thin white outline around the hawk (too thin to print)\"" },
       }, required: ["what", "id", "field", "value", "say"] } },
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
@@ -90,7 +90,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
 
 You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
 
-Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
+Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; a print's details sent to production to confirm on the run (Reorder Details: "production needs to confirm the details" on a reorder → confirm "both", or just "size" / "ink"; "they confirmed it" / "take it off Reorder Details" → "none"); extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -148,6 +148,7 @@ function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "
     if (c.field === "colors") return num(v) === num(im.colors);
     if (c.field === "drop") return (num(v) || 0) === (num(im.drop) || 0);
     if (c.field === "inks") { const k = (x: string) => x.toUpperCase().replace(/PANTONE|PMS|\s+/g, "").split(",").filter(Boolean).sort().join(","); return k(v) === k(String(im.inks || "")); }
+    if (c.field === "confirm") { const k = v.toLowerCase(), off = /^(none|no|off|done)/.test(k); return off ? !im.confirm : !!im.confirm && !!im.confirm.size === /both|size|place|all/.test(k) && !!im.confirm.ink === /both|ink|color|all/.test(k); }
     if (c.field === "underbase") { const on = /^y|true|on/i.test(v); return on === !!im.underbase || (mode === "review" && !on); }
   }
   if (c.what === "line") {
@@ -186,6 +187,13 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
       else if (c.field === "colors") { const n = parseInt(v, 10); if (!(n > 0 && n < 13)) continue; im.colors = n; }
       else if (c.field === "drop") { const n = parseFloat(v); im.drop = n > 0 && n < 20 ? String(n) : ""; }
       else if (c.field === "underbase") { im.underbase = /^y|true|on/i.test(v); }
+      // Reorder Details (Oct 23, Nick: "this is a reorder, but I need production to confirm the details… like the furry
+      // feline, 40093"): the print waits for production to confirm its size and placement and/or inks on the run
+      else if (c.field === "confirm") {
+        const k = v.toLowerCase();
+        if (/^(none|no|off|done)/.test(k)) { delete im.confirm; im.visualOnly = false; }
+        else { const size = /both|size|place|all/.test(k), ink = /both|ink|color|all/.test(k); if (!size && !ink) continue; im.confirm = { size, ink, why: "Asked in the Order chat: production confirms on the run", filled: { by: `${by}, in the Order chat (what's on the order now)`, at: new Date().toISOString() } }; im.visualOnly = true; delete (im as { confirmed?: unknown }).confirmed; }
+      }
       else continue;
       // not added to the print's notes (Oct 23: they showed on the customer's proof); the order's history keeps it
     } else if (c.what === "line") {
