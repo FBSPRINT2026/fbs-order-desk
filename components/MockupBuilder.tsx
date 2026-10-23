@@ -19,7 +19,7 @@ import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
-import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, pmsOnPage, proofNotes } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
 import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -347,7 +347,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (su?.signedUrl) setBrandMask({ path: d.path, url: su.signedUrl, name: d.name || "their mask", layers: d.layers || 3 });
     });
   }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[] }>(null);
+  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
+    /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const helpIn = useRef<HTMLInputElement>(null);
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
@@ -1273,7 +1274,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
       const pms = await pmsOnPage(buf.slice(0));
       setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
-      type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number };
+      type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number; shirtHex?: string };
       let kind: "photos" | "drawn" | "art" = "photos";
       let got: P[] = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => []);
       if (!got.length) { kind = "drawn"; got = await artFromDrawnMockup(buf.slice(0), base).catch(() => []); }
@@ -1287,10 +1288,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // the biggest print on each side first; a second one at a spot that's taken waits unchecked
       got.sort((x, y) => Number(x.side === "back") - Number(y.side === "back") || y.widthIn * y.heightIn - x.widthIn * x.heightIn);
       const taken = new Set<string>(), rows: HelpRow[] = [];
-      for (const [i, pc] of got.entries()) {
-        const url = URL.createObjectURL(pc.file);
-        const img = await loadImg(url).catch(() => null);
-        const cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02) : [];
+      // the shirt's color on this file (most common among the prints' readings)
+      const sh = got.map((g) => g.shirtHex).filter(Boolean) as string[];
+      const shirt = sh.sort((a, b) => sh.filter((x) => x === b).length - sh.filter((x) => x === a).length)[0] || "";
+      let knocked = 0;
+      for (const [i, pc0] of got.entries()) {
+        let pc = pc0;
+        let url = URL.createObjectURL(pc.file);
+        let img = await loadImg(url).catch(() => null);
+        let cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02) : [];
+        // art in the shirt's own color is the shirt showing through (Oct 22, Nick: "if you see a blue shirt and the art
+        // has that blue… it should just knock it out and say remove that color, that's the shirt")
+        const sc = pc.shirtHex || shirt;
+        if (sc && cols.some((c) => deltaE(c.hex, sc) < 10)) {
+          const f2 = await knockColor(pc.file, sc).catch(() => null);
+          if (f2) {
+            URL.revokeObjectURL(url); pc = { ...pc, file: f2 }; url = URL.createObjectURL(f2); knocked++;
+            img = await loadImg(url).catch(() => null); cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02 && deltaE(c.hex, sc) >= 10) : [];
+          }
+        }
         // each color: the nearest PMS written on the page (when it's close), else our closest ink
         const inks: string[] = [];
         for (const c of cols) {
@@ -1310,7 +1326,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         taken.add(location);
       }
       const notes = await proofNotes(buf.slice(0)).catch(() => []);
-      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes });
+      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked });
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
@@ -2967,6 +2983,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
                       {" "}Check where each goes, its size and inks.
                     </p>
+                    {helper.shirtHex && (() => {
+                      // the closest color of the style picked, by its swatch (Oct 22, Nick: "add in that shirt color")
+                      const l = lines[active] || lines[0], g = l ? garmentFor(l) : null;
+                      const near = g ? Object.entries(g.color_images || {}).filter(([, v]) => v?.hex).map(([k, v]) => ({ k, e: deltaE((v.hex!.startsWith("#") ? v.hex! : "#" + v.hex), helper.shirtHex!) })).sort((a, b) => a.e - b.e)[0] : null;
+                      return (
+                        <div className="mk-help-shirt">
+                          <span className="mk-gc-dot" style={{ background: helper.shirtHex }} />
+                          <span>The shirt on this mockup{helper.knocked ? `; that color inside the art is taken out (the shirt shows through) on ${helper.knocked === 1 ? "1 print" : `${helper.knocked} prints`}` : ""}.</span>
+                          {near ? <button type="button" className="btn sm" title={`The closest ${[g?.brand, g?.style].filter(Boolean).join(" ")} color to it`} onClick={() => setLines((ls) => ls.map((x, j) => (j === (lines[active] ? active : 0) ? { ...x, color: near.k } : x)))}>Use {near.k}</button>
+                            : <span className="faint">Pick the style above to use its closest color.</span>}
+                        </div>
+                      );
+                    })()}
                     {(helper.notes || []).length > 0 && <p className="faint mk-help-t">The proof says: {helper.notes!.map((n) => `${n.where}${n.w ? ` ${n.w}" × ${n.h}"` : ""}${n.colors.length ? ` (${n.colors.join(", ")})` : ""}`).join("; ")}.</p>}
                     {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
                         want me to apply the mask to this mockup?") */}

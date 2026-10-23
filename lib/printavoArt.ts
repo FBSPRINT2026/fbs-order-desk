@@ -9,7 +9,8 @@ import { suggestInk } from "@/lib/inkColors";
  * from where it sits on the photo (the same supplier photos the Mockup Creator uses: 1000 px wide, 34 px per inch).
  */
 export type ArtPiece = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; hex: string; ink: string;
-  /** a texture laid over the art in the file (its distress), white = texture, the same size as `file`; and how sharp it is at print size */ mask?: File; maskPpi?: number };
+  /** a texture laid over the art in the file (its distress), white = texture, the same size as `file`; and how sharp it is at print size */ mask?: File; maskPpi?: number;
+  /** the shirt's color around it on the mockup */ shirtHex?: string };
 
 const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
@@ -306,7 +307,8 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
     const blob = await new Promise<Blob | null>((res) => hi.canvas.toBlob(res, "image/png"));
     if (!blob) continue;
     const hex = mainHex(hi.canvas), sug = suggestInk(hex);
-    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, ...(mask ? { mask, maskPpi } : {}) });
+    const shirtHex = isShirt ? "#" + shirt.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") : undefined;
+    out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, ...(mask ? { mask, maskPpi } : {}), ...(shirtHex ? { shirtHex } : {}) });
   }
   return out;
 }
@@ -750,4 +752,21 @@ export function knockOutBackground(c: HTMLCanvasElement, tol = 28, /** also the 
   }
   x.putImageData(img, 0, 0);
   return true;
+}
+
+/** a picture with one color taken out (the shirt's color inside the art: the shirt shows through there), soft at the edge */
+export async function knockColor(f: File, hex: string, lim = 34): Promise<File> {
+  const bm = await createImageBitmap(f);
+  const c = document.createElement("canvas"); c.width = bm.width; c.height = bm.height;
+  const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(bm, 0, 0);
+  const img = x.getImageData(0, 0, c.width, c.height), px = img.data;
+  const t = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  for (let i = 0; i < px.length; i += 4) {
+    if (!px[i + 3]) continue;
+    const dist = Math.hypot(px[i] - t[0], px[i + 1] - t[1], px[i + 2] - t[2]);
+    if (dist < 2 * lim) px[i + 3] = Math.round(px[i + 3] * Math.max(0, (dist - lim) / lim));
+  }
+  x.putImageData(img, 0, 0);
+  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+  return blob ? new File([blob], f.name, { type: "image/png" }) : f;
 }
