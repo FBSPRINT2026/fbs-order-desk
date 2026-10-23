@@ -14,6 +14,7 @@ import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/Send
 import { SITE_URL } from "@/lib/config";
 import { type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
+import { OrderReviewPanel } from "@/components/tools/OrderReview";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -141,6 +142,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [confirmRetail, setConfirmRetail] = useState(false);
   // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
   const [progOpen, setProgOpen] = useSticky("order.programOpen", false);
+  // the order check (Oct 23): "did I get everything right?" and changes by talking, the same panel as after Create order
+  const [checkOpen, setCheckOpen] = useState(false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
   // the customer's program: every rate card (Nine18 has one per location or brand), the design prices and whether new
   // orders take it by themselves; prog = the card this order uses (picked on the order, else guessed from its name)
@@ -960,6 +963,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
             </div>
           </details>
+          <button type="button" className="btn" onClick={async () => { await save(); setCheckOpen(true); }} title="Did I get everything right? Say what to change (the order or the art) and it's changed, without Illustrator">Check or change it</button>
+          {checkOpen && <OrderReviewPanel orderId={o.id} onClose={() => { setCheckOpen(false); window.location.reload(); }} />}
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">

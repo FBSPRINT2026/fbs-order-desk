@@ -106,6 +106,9 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** soft hand additive mixed into the inks */ softHand?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
+  /** changes made to the customer's art for this print (Oct 23, Nick: "here's your proof, here are the two changes we
+   *  made: we flattened the black and we removed the thin stroke"): shown on the proof and the work order */
+  artChanges?: string[];
   /** production (Jose) confirmed this print's details on a reorder: who and when (Reorder Details); `from` = taken
    *  from what production confirmed on an earlier order ("#40071"), lib/designSpecs.ts */
   confirmed?: { by: string; at: string; from?: string };

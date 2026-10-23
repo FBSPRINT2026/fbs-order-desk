@@ -17,13 +17,13 @@ export type ReorderCheck = { verdict: "good" | "check" | "problems"; summary: st
 
 const MAX_IMG = 3_600_000; // the API's 5 MB limit, after base64
 
-async function fileB64(admin: SupabaseClient, path: string) {
+export async function fileB64(admin: SupabaseClient, path: string) {
   const { data } = await admin.storage.from("proofs").download(path);
   if (!data) return null;
   const buf = Buffer.from(await data.arrayBuffer());
   return buf.length > MAX_IMG ? null : buf.toString("base64");
 }
-const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
+export const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 const SIZE = (k: string) => k.replace(/^size_/, "").toUpperCase();
 
 /**

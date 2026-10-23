@@ -13,6 +13,7 @@ import { storeInboundEmail } from "@/lib/crm/inbound";
 import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
 import { chatThread, orderChat } from "@/lib/ai/orderChat";
+import { applyChanges, keepCorrection, orderFix, type OrderChange } from "@/lib/ai/orderFix";
 import { emailChat, emailChatThread, noteEmail, type ActRow } from "@/lib/ai/emailChat";
 import { accountForUser } from "@/lib/mail/config";
 import { fixSignOff, writerNote } from "@/lib/mail/signoff";
@@ -434,5 +435,70 @@ export async function handOffArt(orderId: string, title: string, notes: string) 
     if (error) return { ok: false as const, error: error.message };
     await admin.from("order_events").insert({ order_id: orderId, kind: "art", detail: `Art handed to ${owner} to find${o?.number ? ` (#${o.number})` : ""}: ${title}`.slice(0, 500), actor: email || "staff" });
     return { ok: true as const, owner };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * "Did I get everything right?" after an order is made (lib/ai/orderFix.ts): review = what doesn't match what the
+ * customer sent (suggestions); change = staff say what's wrong and it's changed. Art fixes come back for the browser.
+ */
+export async function aiOrderFix(orderId: string, message: string, mode: "review" | "change") {
+  try {
+    const { admin, email } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, error: st.reason };
+    const r = await orderFix(admin, st.settings, orderId, email || "staff", message, mode);
+    if (r.ok) revalidatePath(`/shop/orders/${orderId}`);
+    return r.ok ? { ok: true as const, r: r.r } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/** the review's suggestions, made (staff said yes to them) */
+export async function applyOrderFixChanges(orderId: string, changes: OrderChange[], said = "") {
+  try {
+    const { admin, email } = await staff();
+    const a = await applyChanges(admin, orderId, email || "staff", changes.filter((c) => c.what !== "art"));
+    if (!a.ok) return a;
+    const { data: o } = await admin.from("orders").select("id, number, customer_id, nickname").eq("id", orderId).maybeSingle();
+    if (o) await keepCorrection(admin, o as Order, email || "staff", said || "From the check: did I get everything right?", changes);
+    revalidatePath(`/shop/orders/${orderId}`);
+    return { ok: true as const, applied: a.applied };
+  } catch (e) { return fail(e); }
+}
+
+/** an art fix made on a print: said on the print (the proof and the work order list it) */
+export async function noteArtChange(orderId: string, imprintId: string, say: string) {
+  try {
+    const { admin, email } = await staff();
+    const { data: o } = await admin.from("orders").select("id, groups").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false as const, error: "Order not found." };
+    const groups = (o.groups || []) as Group[];
+    const im = groups.flatMap((g) => g.imprints).find((x) => x.id === imprintId);
+    if (!im) return { ok: false as const, error: "That print isn't on the order anymore." };
+    const t = say.trim().slice(0, 200);
+    if (t && !(im.artChanges || []).includes(t)) im.artChanges = [...(im.artChanges || []), t].slice(-8);
+    const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
+    if (error) return { ok: false as const, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Art changed: ${t}`, actor: email });
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** a lesson for this order's customer: read first by their next Create order (and the Assistant) */
+export async function saveOrderLesson(orderId: string, text: string) {
+  try {
+    const { admin, email } = await staff();
+    const { data: o } = await admin.from("orders").select("customer_id, number, nickname").eq("id", orderId).maybeSingle();
+    if (!o?.customer_id) return { ok: false as const, error: "This order has no customer." };
+    return await saveMemory(admin, { customerId: o.customer_id as string, text: text.trim().slice(0, 300), by: email || "staff", subject: `Order #${o.number}${o.nickname ? ` ${o.nickname}` : ""}` });
+  } catch (e) { return fail(e); }
+}
+
+/** "Yes, it's right": said on the order's history */
+export async function markOrderChecked(orderId: string) {
+  try {
+    const { admin, email } = await staff();
+    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: "Checked after it was made: everything right", actor: email });
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

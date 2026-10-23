@@ -120,6 +120,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
                         {inks.length > 0 && <><dt>{d.method === "embroidery" ? "Thread" : "Ink"}</dt><dd>{inks.map((k) => <span className="ar-ink" key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b>{WILFLEX_HEX[k] ? <small>Wilflex RFU</small> : isPmsInk(k) ? <small>PMS match</small> : null}</span>)}</dd></>}
                         {des && <><dt>Art</dt><dd>D-{des.number}{des.name ? ` · ${des.name}` : ""}</dd></>}
                       </dl>}
+                      {(d.artChanges || []).length > 0 && <div className="ar-ann"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : `${d.artChanges!.length} changes we made to your art`}:</b> {d.artChanges!.join("; ")}. Look it over and approve, or tell us if it should stay as you sent it.</div>}
                       {max?.on && shownOn && max.on !== shownOn && <div className="ar-ann">Shown on the {shownOn}. One screen prints every size, so it&apos;s sized to fit the {max.on} too.</div>}
                     </div>
                   </div>

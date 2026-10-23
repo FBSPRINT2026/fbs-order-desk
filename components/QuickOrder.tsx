@@ -4,6 +4,7 @@ import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { loadInkFormulas } from "@/lib/inkFormulas";
+import OrderReview from "@/components/tools/OrderReview";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
@@ -859,8 +860,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const parts = start.parts?.length ? start.parts : [null];
   const many = parts.length > 1;
   return (
-    <div className={"dla-bg" + (dock ? " dock" + (help || confirm || review ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
-      <div className={"dla qo" + (help || confirm || review ? " wide" : "")}>
+    <div className={"dla-bg" + (dock ? " dock" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "") : "")} role="dialog" aria-modal={dock ? undefined : true} aria-label="Creating the order">
+      <div className={"dla qo" + (help || confirm || review || (done && made.length === 1 && !many) ? " wide" : "")}>
         {!done && !committing && <button type="button" className="qo-x" onClick={cancel} aria-label={made.length ? "Stop here: the orders already made stay" : "Cancel: nothing is saved"} title={made.length ? "Stop here: the orders already made stay; the one in progress isn't saved" : "Cancel: stop here, nothing is saved"}>×</button>}
         {many && !done && (() => {
           const p = parts[cur]!;
@@ -899,7 +900,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {!done ? <>
           <h3>Reading the email and creating the order…</h3>
           <p className="dla-sub">This takes about a minute. Nothing is sent to the customer.</p>
-        </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
+        </> : !(made.length === 1 && !many) ? <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3> : null}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {review && <ReviewConfirm a={review} onCancel={cancel} />}
@@ -907,7 +908,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}
-        {!many && made.map((m) => (
+        {/* one order made: the panel stays open to check it (Oct 23, Nick: "that never closes until I say, yes, we've
+            got everything right") */}
+        {done && !many && made.length === 1 && <OrderReview orderId={made[0].id} did={[...made[0].did, ...made[0].ask.map((q) => `Question for the customer (in the order's notes): ${q}`)]} onClose={onClose} />}
+        {!many && !(done && made.length === 1) && made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
             {m.did.length > 0 && <ul className="qo-did">{m.did.map((x, i) => <li key={i}>{x}</li>)}</ul>}
@@ -916,7 +920,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           </div>
         ))}
         {err && <div className="err">{err}</div>}
-        {done && (
+        {done && !(made.length === 1 && !many) && (
           <div className="dla-acts qo-foot">
             {!made.length && <button type="button" className="btn ghost" onClick={onReview}>Check the details by hand</button>}
             <button type="button" className="btn" onClick={onClose}>Back to the email</button>

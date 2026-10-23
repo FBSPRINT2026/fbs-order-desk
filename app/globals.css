@@ -12550,3 +12550,30 @@ html body .gl-stamp button.fee{padding:0 8px 0 0;font-weight:600;opacity:.85}
 html body .gl-stamp button.fee::before{content:"·";margin-right:6px}
 /* a check's tick box sitting with its answers (No charge on their extras) */
 html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+/* the order check after Create order makes it (Oct 23): what was made, its mockup, what changed */
+.orv{display:flex;flex-direction:column;gap:12px}
+.orv-g{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.orv-pics{display:flex;gap:8px;flex:none}
+.orv .ap-pic.big{width:150px}
+.orv-none{color:var(--ink-3);text-decoration:none}
+.orv-d{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--ink)}
+.orv-l,.orv-p{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.orv-stamp{height:22px;gap:4px;padding:0 8px;font-weight:700}
+.orv-art{margin:2px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-3);flex-basis:100%}
+.orv-did summary{cursor:pointer;font-size:12.5px;color:var(--ink-3)}
+.orv-did ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-3)}
+.orv-res{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2,#f7f8fa);font-size:13.5px}
+.orv-res p{margin:0}
+.orv-done,.orv-sug{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.orv-done li{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.orv-done li::before{content:"✓";color:var(--ok);font-weight:700}
+.orv-done li.doing::before{content:"…";color:var(--ink-3)}
+.orv-done li.error::before{content:"!";color:var(--danger)}
+.orv-tag{margin-left:6px;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.orv-sug label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.orv-lesson{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px}
+.orv-lesson input[type=text]{flex:1 1 220px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink)}
+.orv-talk{display:flex;flex-direction:column;gap:8px}
+.orv-talk textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:14px/1.4 var(--body);color:var(--ink);resize:vertical}
+.orv-talk-b{display:flex;justify-content:flex-end;gap:8px;align-items:center}
+.err-t{color:var(--danger);font-size:12.5px}

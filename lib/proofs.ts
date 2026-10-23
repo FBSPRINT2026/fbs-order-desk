@@ -20,7 +20,7 @@ type Staff = { email: string; name: string };
 type Mockup = { id: string; title: string; file_path: string; group_id: string | null; created_at: string };
 
 async function load(admin: SupabaseClient, orderId: string) {
-  const { data: order } = await admin.from("orders").select("id, number, nickname, status, customer_id").eq("id", orderId).maybeSingle();
+  const { data: order } = await admin.from("orders").select("id, number, nickname, status, customer_id, groups").eq("id", orderId).maybeSingle();
   if (!order) throw new Error("Order not found.");
   const { data: customer } = order.customer_id ? await admin.from("customers").select("id, name, company, email").eq("id", order.customer_id).maybeSingle() : { data: null };
   const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
@@ -53,10 +53,12 @@ async function makeVersion(admin: SupabaseClient, orderId: string, mocks: Mockup
   return next;
 }
 
-const proofEmail = (shop: string, number: number, nickname: string, link: string, reminder: boolean) => ({
+/** what was changed on the customer's art, said in the proof email */
+const artChangesOf = (o: { groups?: unknown }) => [...new Set(((o.groups || []) as { imprints?: { artChanges?: string[] }[] }[]).flatMap((g) => (g.imprints || []).flatMap((d) => d.artChanges || [])))].slice(0, 6);
+const proofEmail = (shop: string, number: number, nickname: string, link: string, reminder: boolean, artChanges: string[] = []) => ({
   subject: reminder ? `Reminder: your artwork proof for order #${number}` : `Artwork proof ready for order #${number}`,
   html: emailLayout(shop, reminder ? "Your artwork proof is waiting for you" : "Your artwork proof is ready",
-    `Please look over the proof for "${nickname || "your order"}" and approve it or tell us what to change. We start printing once it's approved.`, "Review artwork", link),
+    `Please look over the proof for "${nickname || "your order"}" and approve it or tell us what to change. We start printing once it's approved.${artChanges.length ? ` ${artChanges.length === 1 ? "One change we made to your art" : `${artChanges.length} changes we made to your art`}: ${artChanges.join("; ")}.` : ""}`, "Review artwork", link),
 });
 
 /** Send the current mockups to the customer as the next proof version. */
@@ -73,7 +75,7 @@ export async function sendProofs(admin: SupabaseClient, orderId: string, me: Sta
   const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: customer.email });
   await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} to ${customer.email}`, actor: me.email });
   const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
-  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, false) });
+  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, false, artChangesOf(order)) });
   return { ok: true as const, version, emailed, link };
 }
 
@@ -88,7 +90,7 @@ export async function remindProofs(admin: SupabaseClient, orderId: string, me: S
   await admin.from("proofs").update({ reminded_at: at }).in("id", waiting.map((p) => p.id));
   await admin.from("order_events").insert({ order_id: orderId, kind: "proof_reminder", detail: `Version ${waiting[0].version} to ${customer.email}`, actor: me.email });
   const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
-  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, true) });
+  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, true, artChangesOf(order)) });
   return { ok: true as const, emailed };
 }
 
