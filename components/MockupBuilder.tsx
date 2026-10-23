@@ -691,8 +691,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!img) continue;
       const targets: Record<string, string> = {};
       Object.entries(map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
-      // solid inks (a spot plan with no fades): every pixel one ink or the shirt, no photo shading left in it
-      const solid = pt.plan?.method === "spot" && !pt.plan.inks.some((k) => k.also?.length);
+      // the art as it is, painted in its inks: no automatic flattening (Oct 23, Nick: "you flatten that, two colors of
+      // black, automatically. I wouldn't want you to do that automatically now. I'd want to have to tell you to do
+      // that"). Flattening is an art fix asked for in the order check (lib/artFix.ts), so the shirt, the logo on the
+      // order page and its blown-up picture all show the same art.
+      const solid = false as boolean;
       const t = recolorTrim(img, pt.sources.map((x) => x.hex), targets, solid ? { shirt: shirtHex(lines[active] || lines[0]) } : undefined);
       next[im.id] = t.url;
       if (t.box) boxes[im.id] = { w: t.w, h: t.h };
