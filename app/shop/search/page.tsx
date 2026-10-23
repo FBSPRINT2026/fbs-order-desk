@@ -79,7 +79,9 @@ function SearchInner() {
       const ids = cs.slice(0, 6).map((x) => x.id);
       const [byNum, byWords, byCust] = await Promise.all([
         num ? sb.from("archived_orders").select(ASEL).eq("visual_id", num).limit(5) : Promise.resolve({ data: [] }),
-        num ? Promise.resolve({ data: [] }) : sb.rpc("search_archived_orders", { p_words: [low], p_limit: 40 }).select(ASEL).order("order_date", { ascending: false, nullsFirst: false }),
+        // a number is a job number AND anything with it in it: their PO number, the job's name (Oct 23, Nick: "I searched
+        // 85254… In Printavo it returns order 32303 because that's a customer PO. It should search deeper")
+        sb.rpc("search_archived_orders", { p_words: [num || low], p_limit: 40 }).select(ASEL).order("order_date", { ascending: false, nullsFirst: false }),
         ids.length && !num ? sb.from("archived_orders").select(ASEL).in("customer_id", ids).order("order_date", { ascending: false, nullsFirst: false }).limit(60) : Promise.resolve({ data: [] }),
       ]);
       const seen = new Set<string>();
@@ -134,7 +136,7 @@ function SearchInner() {
   // every order, ours and Printavo's, newest first
   const rows: Row[] = useMemo(() => {
     if (t.length < 2) return [];
-    const mine = ours.filter((o) => (num ? String(o.number) === num : `${o.nickname || ""} ${o.po_number || ""}`.toLowerCase().includes(low)) || (!num && o.customer_id && custIds.has(o.customer_id)));
+    const mine = ours.filter((o) => (num && String(o.number) === num) || `${o.nickname || ""} ${o.po_number || ""}`.toLowerCase().includes(num || low) || (!num && o.customer_id && custIds.has(o.customer_id)));
     const a: Row[] = mine.map((o) => ({ key: o.id, href: `/shop/orders/${o.id}`, number: o.number, quote: o.type === "quote", name: o.nickname || "Untitled Job", customer: custName(custMap[o.customer_id || ""]), customerId: o.customer_id, status: o.status, pv: pvStatusOf(o as never), archived: false, due: o.due_date, day: (o.created_at || "").slice(0, 10), pcs: o.qty, total: o.total, balance: o.type === "invoice" ? o.balance : 0 }));
     const b: Row[] = arch.map((r) => ({ key: r.id, href: `/shop/archive/${r.id}`, number: +r.visual_id || 0, quote: r.kind === "quote", name: r.nickname || "Untitled Job", customer: custName(r.customers), customerId: r.customer_id, status: "archived", label: r.status_name || "", color: r.status_color || "#888", archived: true, due: r.due_date, day: (r.order_date || "").slice(0, 10), pcs: r.qty || 0, total: +r.total || 0, balance: r.kind === "quote" ? 0 : +r.balance || 0 }));
     return [...a, ...b].sort((x, y) => y.day.localeCompare(x.day) || y.number - x.number);
