@@ -24,7 +24,15 @@ export async function pullOffMockup(file: Blob, name: string, opt: { /** read sh
   const buf = await file.arrayBuffer();
   const base = name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ").trim() || "Art";
   const photos = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => [] as ArtPiece[]);
-  if (photos.length) return { kind: "photos", pieces: photos };
+  if (photos.length && opt.drawn === false) return { kind: "photos", pieces: photos };
+  // a side the pictures didn't cover is read as drawn art too (Oct 23, All Star #34528: the front crest is a placed
+  // picture, the back is drawn in navy on page 2; only the front came off and the order stopped to ask)
+  if (photos.length) {
+    const have = new Set(photos.map((x) => x.side));
+    if (have.has("front") && have.has("back")) return { kind: "photos", pieces: photos };
+    const more = await artFromDrawnMockup(buf.slice(0), base).catch(() => [] as ArtPiece[]);
+    return { kind: "photos", pieces: [...photos, ...more.filter((x) => !have.has(x.side))] };
+  }
   if (opt.drawn === false) return null;
   const drawn = await artFromDrawnMockup(buf.slice(0), base).catch(() => [] as ArtPiece[]);
   if (drawn.length) return { kind: "drawn", pieces: drawn };

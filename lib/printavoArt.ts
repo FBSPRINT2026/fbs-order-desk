@@ -40,7 +40,10 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
     const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
     // our sized proof, known by what's printed on every one (Oct 23, Nick: yes, recognize it by that, not only by how its
     // size is written): a side with its inks but no size it can read is still ours (w 0: the art pulled off it gives it)
-    const ours = /the above sized proof|standard imprint colou?rs/i.test(t);
+    // or by the page itself (Oct 23, Nick: "visually… the whole bottom third of the sheet is the same on every one"): the
+    // same page as our blank sized proof (35" × 42", the shirt and the standard imprint colors chart)
+    const v = (pg as unknown as { getViewport: (o: { scale: number }) => { width: number; height: number } }).getViewport({ scale: 1 });
+    const ours = /the above sized proof|standard imprint colou?rs/i.test(t) || (Math.abs(v.width - 2528) < 3 && Math.abs(v.height - 3005.3) < 3);
     for (const m of t.matchAll(/(front|back|left sleeve|right sleeve)\s+imprint\b(?=(.{0,160}))/gi)) { // each side found, even one inside the side before's 160 letters
       const side = m[1].toLowerCase() as keyof typeof out;
       // this side's part only: up to the next "… Imprint" or the sheet's own text
@@ -376,7 +379,7 @@ export async function artFromDrawnMockup(buf: ArrayBuffer, name = "art"): Promis
   for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
     const page = await doc.getPage(n);
     const tpl = await templateFor(page, n).catch(() => null);
-    per.push({ n, got: await drawnPage(page, name, tpl).catch((e) => { console.warn("drawnPage", n, e); return []; }) });
+    per.push({ n, got: await drawnPage(page, name, tpl, n).catch((e) => { console.warn("drawnPage", n, e); return []; }) });
   }
   const withShirt = per.filter((p) => p.got.length);
   const onePerPage = withShirt.length > 1 && withShirt.every((p) => p.got.every((g) => g.shirts === 1));
@@ -450,7 +453,7 @@ async function templateFor(page: Page, n: number): Promise<Page | null> {
   return bs > 0.4 ? best : null;
 }
 
-async function drawnPage(page: Page, name: string, tpl: Page | null = null): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
+async function drawnPage(page: Page, name: string, tpl: Page | null = null, pageNo = 1): Promise<(ArtPiece & { shirtHex: string; shirts: number })[]> {
   const v1 = page.getViewport({ scale: 1 });
   const sized = Math.max(v1.width, v1.height) / 72 >= 20;
   // sharp enough to tell a seam line from art (about 50 px an inch on a real-size page, at most ~5 million pixels)
@@ -489,6 +492,7 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
   // a white shirt drawn in lines too light to stop the page around it (Oct 23, All Star #34528: our sized proof with its
   // shirt left white): no shirt is found in the file, so our template's shirt is where it is (the page around it and
   // the shirt itself taken from the template's drawing, its body only: not the sleeve boxes)
+  let viaTpl = false;
   if (!shirts.length && tpl) {
     const tc = document.createElement("canvas"); tc.width = W; tc.height = H;
     await tpl.render({ canvasContext: tc.getContext("2d")!, viewport: tpl.getViewport({ scale: s }), background: "rgba(255,255,255,1)" }).promise;
@@ -514,7 +518,7 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
       tComps.push(cp);
     }
     const body = tComps.filter((cp) => cp.n > W * H * 0.04 && cp.x1 - cp.x0 > W * 0.15).sort((a, b) => b.n - a.n)[0];
-    if (body) { outside.set(tOut); lab.set(tLab); shirts = [body]; }
+    if (body) { outside.set(tOut); lab.set(tLab); shirts = [body]; viaTpl = true; }
   }
   const out: (ArtPiece & { shirtHex: string; shirts: number })[] = [];
   const { REF_BODY } = await import("@/lib/garmentBody");
@@ -614,7 +618,8 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null): Pro
       cx2.putImageData(img, 0, 0);
       const blob = await new Promise<Blob | null>((res) => cc.toBlob(res, "image/png"));
       if (!blob) continue;
-      const side: "front" | "back" = shirts.length > 1 && si === shirts.length - 1 ? "back" : "front";
+      // our sized proof read by its template: page 1 is the front, page 2 the back
+      const side: "front" | "back" = viaTpl ? (pageNo >= 2 ? "back" : "front") : shirts.length > 1 && si === shirts.length - 1 ? "back" : "front";
       const hex = mainHex(cc), sug = suggestInk(hex), q4 = (v: number) => Math.round(v * 4) / 4;
       const shirtHex = "#" + fill.map((v) => Math.min(255, v).toString(16).padStart(2, "0")).join("");
       out.push({ shirts: shirts.length, side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: q4(widthIn), heightIn: q4(heightIn), dropIn: q4(Math.max(0, (r.y0 - neck) / ppi)), offIn: q4(((r.x0 + r.x1) / 2 - mid) / ppi), hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name, shirtHex, ...(mask ? { mask, maskPpi: tex.texPx ? Math.round(tex.texPx * (cc.width / Math.max(0.1, widthIn))) : 0 } : {}) });
