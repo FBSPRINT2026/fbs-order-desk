@@ -331,9 +331,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setO(d); latest.current = d;
       void loadDesigns(); void loadSide();
     };
+    // coming back to this tab from another page (the production view, the Mockup Creator, Reorder Details): the order as
+    // it is now, so an edit here can't save old copies of what was changed there (Oct 23: #40133's notes and drops came
+    // back after they were changed elsewhere)
+    const onFocus = () => { if (document.visibilityState === "visible") void onChanged(new CustomEvent("fbs:order-changed", { detail: { orderId: id } })); };
     window.addEventListener("fbs:order-save", onSave);
     window.addEventListener("fbs:order-changed", onChanged);
-    return () => { window.removeEventListener("fbs:order-save", onSave); window.removeEventListener("fbs:order-changed", onChanged); };
+    window.addEventListener("focus", onFocus);
+    return () => { window.removeEventListener("fbs:order-save", onSave); window.removeEventListener("fbs:order-changed", onChanged); window.removeEventListener("focus", onFocus); };
   }, [id, save, sb, loadDesigns, loadSide]);
   // closing the tab mid-edit: save now and ask the browser to wait
   useEffect(() => {

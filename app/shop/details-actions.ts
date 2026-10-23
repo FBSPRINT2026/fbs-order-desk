@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { shopNotes, type Group, type Imprint } from "@/lib/pricing";
+import { cleanPrintNotes, shopNotes, type Group, type Imprint } from "@/lib/pricing";
 import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { addSpec, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 
@@ -24,7 +24,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
     const { data: o } = await admin.from("orders").select("id, number, groups, customer_id, notes").eq("id", orderId).maybeSingle();
     if (!o) throw new Error("Order not found.");
     const groups = (o.groups || []) as Group[];
-    const at = new Date().toISOString(), lines: string[] = [], designs = new Map<string, string[]>(), entries: { design: string; e: SpecEntry }[] = [];
+    const at = new Date().toISOString(), pressNotes: string[] = [], lines: string[] = [], designs = new Map<string, string[]>(), entries: { design: string; e: SpecEntry }[] = [];
     // the old job this order repeats, so the next reorder of it takes what's confirmed here
     const { data: rev } = await admin.from("order_events").select("detail").eq("order_id", o.id).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
     const job = reorderLabel(rev?.detail) || reorderLabel(o.notes) || undefined;
@@ -45,8 +45,10 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       // the size is now what production says we printed (the Mockup Creator asks before changing it)
       if (im.size) im.sizeFrom = "film";
       const note = clip(p.notes, 240);
-      if (note && !String(im.notes || "").includes(note)) im.notes = [im.notes, `Press: ${note}`].filter(Boolean).join(". ").slice(0, 300);
-      im.notes = shopNotes(im.notes);
+      // the notes for next time go in the order's Production notes (Oct 23, Nick: "if I write something in the production
+      // notes in the production document, it should save to the production notes"), not squeezed onto the print
+      if (note) pressNotes.push(`${im.location}: ${note}`);
+      im.notes = cleanPrintNotes(shopNotes(im.notes));
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || "inks left blank", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
@@ -61,6 +63,12 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
     if (!lines.length) throw new Error("Nothing waiting on production details here (already confirmed?).");
     const { error } = await admin.from("orders").update({ groups }).eq("id", o.id);
     if (error) throw new Error(error.message);
+    if (pressNotes.length) {
+      const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();
+      const pn = String(inn?.production_notes || "").trim();
+      const add = pressNotes.filter((n) => !pn.includes(n.split(": ").slice(1).join(": ")));
+      if (add.length) await admin.from("order_internal").upsert({ order_id: o.id, production_notes: [pn, `Production (${by}, ${at.slice(0, 10)}):\n${add.join("\n")}`].filter(Boolean).join("\n\n").slice(-8000) });
+    }
     // every print confirmed: the "REORDER: confirm the print specs… <link>" line comes off the production notes
     if (!groups.some((g) => (g.imprints || []).some((x) => x.confirm && (x.confirm.size || x.confirm.ink)))) {
       const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();

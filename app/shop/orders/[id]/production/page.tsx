@@ -43,6 +43,16 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   // on screen (Oct 23, Nick on #40133: the front's drop ended up on the back)
   const [pid, setPid] = useState("");
   const [photos, setPhotos] = useState<JobFile[]>([]);
+  // one document, one Save (Oct 23, Nick: "I went to full front and put in the size, then went to upper back and put in
+  // the size, and then hit save… think of that more like a document where you're saving everything at once"): every
+  // print's form stays filled in while you move between them, and Save saves every print that changed or waits
+  const savers = useRef(new Map<string, { save: () => Promise<boolean>; dirty: boolean; pending: boolean }>());
+  const [unsaved, setUnsaved] = useState<Record<string, boolean>>({});
+  const [savingAll, setSavingAll] = useState("");
+  const register = useCallback((id: string, e: { save: () => Promise<boolean>; dirty: boolean; pending: boolean }) => {
+    savers.current.set(id, e);
+    setUnsaved((u) => (!!u[id] === e.dirty ? u : { ...u, [id]: e.dirty }));
+  }, []);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/orders/${id}/production`).catch(() => null);
@@ -72,6 +82,16 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
   const group = v.groups[Math.min(gi, v.groups.length - 1)];
   const gPrints = v.prints.filter((p) => p.groupId === group?.id);
   const print = gPrints.find((p) => p.id === pid) || gPrints[0];
+  const saveEverything = async () => {
+    setErr("");
+    const list = v.prints.filter((p) => { const e = savers.current.get(p.id); return e && (e.dirty || e.pending); });
+    for (const [i, p] of list.entries()) {
+      setSavingAll(`Saving ${p.location}${list.length > 1 ? ` (${i + 1} of ${list.length})` : ""}…`);
+      const ok = await savers.current.get(p.id)!.save();
+      if (!ok) { setSavingAll(""); return false; }
+    }
+    setSavingAll(""); return true;
+  };
   // a reorder is logged in one sitting (Oct 21, Nick: "the production man is gonna sit down with the press operator and log
   // it all in, one step… a one page here's what we did"): nothing waits on a step, one Save everything
   const oneSitting = !!v.order.reorderOf || v.prints.some((p) => !!p.confirm && !p.confirmed);
@@ -116,10 +136,15 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
       <section className="jv-card jv-confirm" aria-label="Confirm the print">
         {gPrints.length > 1 && (
           <div className="chips" role="tablist" aria-label="Print" data-toolbar>
-            {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPid(p.id)}>{p.location}{p.confirmed ? " ✓" : ""}</button>)}
+            {gPrints.map((p, i) => <button key={p.id} type="button" role="tab" aria-selected={p === print} className={"chip" + (p === print ? " on" : "")} onClick={() => setPid(p.id)}>{p.location}{unsaved[p.id] ? " •" : p.confirmed ? " ✓" : ""}</button>)}
           </div>
         )}
-        {print ? <ConfirmPrint key={print.id} p={print} busy={!!busy} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} photos={photos} reloadPhotos={loadPhotos} /> : <div className="faint">No prints on this group.</div>}
+        {print ? v.prints.map((pp) => (
+          <div key={pp.id} hidden={pp.id !== print.id}>
+            <ConfirmPrint p={pp} busy={!!busy || !!savingAll} post={post} one={oneSitting} v={v} orderId={id} reload={load} setErr={setErr} photos={photos} reloadPhotos={loadPhotos}
+              register={register} saveEverything={saveEverything} savingAll={savingAll} others={v.prints.filter((x) => x.id !== pp.id && unsaved[x.id]).map((x) => x.location)} />
+          </div>
+        )) : <div className="faint">No prints on this group.</div>}
       </section>
 
       {print?.screen && !oneSitting && (
@@ -162,7 +187,8 @@ const avgHex = (a: string, b: string) => { const p = (h: string) => [1, 3, 5].ma
  */
 /** a screen's key on the press: its name (the same name is the same screen) */
 const plateKey = (name: string) => "s-" + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36);
-function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, photos, reloadPhotos }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void; photos: JobFile[]; reloadPhotos: () => Promise<void> }) {
+function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, photos, reloadPhotos, register, saveEverything, savingAll, others }: { p: PvPrint; busy: boolean; post: (b: Record<string, unknown>, l?: string) => Promise<boolean>; one?: boolean; v: ProductionView; orderId: string; reload: () => Promise<void>; setErr: (s: string) => void; photos: JobFile[]; reloadPhotos: () => Promise<void>;
+  /** the page's one Save: this print tells it how to save itself and whether it has changes */ register: (id: string, e: { save: () => Promise<boolean>; dirty: boolean; pending: boolean }) => void; saveEverything: () => Promise<boolean>; savingAll: string; /** other prints with changes not saved yet */ others: string[] }) {
   const grp = v.groups.find((g) => g.id === p.groupId);
   const mockups = grp?.mockups || [];
   const shirts = grp?.shirts || [];
@@ -338,13 +364,17 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     setSaving("");
     await reload();
     if (ok) setErr("");
+    return ok;
   }
   const dirty = skipDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(named) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
+  const changed = dirty || !!pnotes.trim() || (!!film && film !== (p.film?.state || ""));
+  useEffect(() => { register(p.id, { save: one ? saveAll : save, dirty: changed, pending: one && pending }); });
   async function save() {
-    const ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
-    if (ok && p.screen && screens.length) await post({ op: "colors", print: p.id, screens, map: assign }, "save");
-    if (ok && p.screen && skipDirty) await post({ op: "byColor", print: p.id, skip: skipNow }, "save");
+    let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
+    if (ok && p.screen && screens.length) ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save");
+    if (ok && p.screen && skipDirty) ok = await post({ op: "byColor", print: p.id, skip: skipNow }, "save");
+    return ok;
   }
   // the art on the shirt color, like the Mockup Creator's close-ups (Oct 21, Nick): the picked shirt, else the first
   const viewShirt = shirt || shirts[0]?.color || "";
@@ -517,13 +547,13 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
       <Samples n={one ? (p.screen ? 7 : 4) : p.screen ? 4 : 3} p={p} v={v} orderId={orderId} busy={busy} post={post} photos={photos} reloadPhotos={reloadPhotos} setErr={setErr} />
       {one ? (
         <div className="jv-saveall">
-          <button type="button" className="btn primary" disabled={!!saving || busy} onClick={() => void saveAll()}>{saving || "Save everything"}</button>
-          <span>Saves the size, placement, screens, film and press setup to #{v.order.number} and confirms them on {p.design || "the design"}. The next reorder copies this.</span>
+          <button type="button" className="btn primary" disabled={!!saving || busy} onClick={() => void saveEverything()}>{savingAll || saving || "Save everything"}</button>
+          <span>Saves every print{others.length ? ` (this one and ${others.join(", ")})` : ""}: size, placement, screens, film and press setup to #{v.order.number}, confirmed on each design. The next reorder copies this.</span>
         </div>
       ) : (
       <div className="jv-pd-f">
-        <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save size, placement and screens"}</button>
-        <span className="faint">{dirty ? "Not saved yet" : "Saved on the order · confirmed for good with Confirm & save as printed"}</span>
+        <button type="button" className="btn primary" disabled={(!dirty && !others.length) || busy} onClick={() => void saveEverything()}>{savingAll || (busy ? "Saving…" : "Save size, placement and screens")}</button>
+        <span className="faint">{dirty || others.length ? `Not saved yet${others.length ? ` (also ${others.join(", ")})` : ""}` : "Saved on the order · confirmed for good with Confirm & save as printed"}</span>
       </div>
       )}
     </div>
