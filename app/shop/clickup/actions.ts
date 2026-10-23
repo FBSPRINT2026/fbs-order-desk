@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clickupTokens, ensureClickUpFiles, importClickUpTask, setClickUpBox, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
+import { clickupTokens, ensureClickUpFiles, importClickUpTask, reopenClickUpTask, setClickUpBox, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
 
 /** ClickUp Jobs (app/shop/clickup/page.tsx): the customers' ClickUp jobs, read by lib/clickup.ts */
 
@@ -189,4 +189,21 @@ export async function markClickUpDone(id: string, done: boolean) {
 export async function tickClickUpBox(id: string, name: string, on: boolean) {
   const v = await who(); if (!v) return NO;
   return setClickUpBox(createAdminClient(), id, String(name).slice(0, 120), !!on);
+}
+
+/** the ClickUp job an order was made from (asked when the order is deleted) */
+export async function clickUpJobOfOrder(orderId: string, number: number): Promise<{ id: string; name: string; team: string } | null> {
+  const v = await who(); if (!v) return null;
+  const admin = createAdminClient();
+  const { data } = await admin.from("clickup_tasks").select("id, name, team_id").or(`order_id.eq.${orderId},order_number.eq.${Math.floor(+number || 0)}`).limit(1);
+  const t = data?.[0] as { id: string; name: string; team_id: string } | undefined;
+  if (!t) return null;
+  const { data: team } = await admin.from("clickup_teams").select("name").eq("id", t.team_id).maybeSingle();
+  return { id: t.id, name: t.name, team: String(team?.name || "ClickUp") };
+}
+
+/** an order made from a ClickUp job was deleted: the job back on the New list (In Printavo unticked in ClickUp) */
+export async function reopenClickUpJob(taskId: string) {
+  const v = await who(); if (!v) return NO;
+  return reopenClickUpTask(createAdminClient(), String(taskId).slice(0, 40));
 }

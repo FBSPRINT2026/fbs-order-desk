@@ -2,6 +2,7 @@
 import { ownedFiles } from "@/lib/ownedFiles";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reopenClickUpTask } from "@/lib/clickup";
 
 /**
  * Bulk delete orders from the Orders list (Oct 15, Nick: "a bulk delete button… only for me… select a bunch and
@@ -38,6 +39,9 @@ export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; delet
     // only files an order owns (not the Printavo archive's copies, logos, mockups or email attachments it pointed at)
     const paths = gids.flatMap((id) => ownedFiles(id, [...((pr || []) as { file_path: string; order_id?: string }[]), ...((af || []) as { file_path: string; order_id?: string }[])].filter((x) => x.order_id === id).map((x) => x.file_path)));
     for (let i = 0; i < paths.length; i += 100) await admin.storage.from("proofs").remove(paths.slice(i, i + 100));
+    // an order made from a ClickUp job: the job goes back on the New list (Oct 22, Nick: Hudson Band was lost that way)
+    const { data: cus } = await admin.from("clickup_tasks").select("id").or(`order_id.in.(${gids.join(",")}),order_number.in.(${go.map((o) => o.number).join(",")})`);
+    for (const t of (cus || []) as { id: string }[]) await reopenClickUpTask(admin, t.id).catch(() => null);
     const { error } = await admin.from("orders").delete().in("id", gids);
     if (error) return { ok: false, error: error.message };
     return { ok: true, deleted: go.map((o) => o.number).sort((a, b) => a - b), skipped };

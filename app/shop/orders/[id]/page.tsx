@@ -53,6 +53,7 @@ import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
+import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -748,20 +749,26 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // Delete asks first, showing the art that goes with the order (Oct 17, Nick: "when we delete an order can we delete
   // the art that goes with it"): the drafts made for it and its mockups are ticked, library logos are offered unticked,
   // and a logo another order uses is never taken. Taken off = archived (kept, can be put back).
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean }>(null);
+  // the ClickUp job it was made from: put back on the New list (ticked), so deleting the order doesn't lose the job
+  // (Oct 22, Nick: Hudson Band was made into an order, deleted, and gone from New)
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean }>(null);
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
-    const r = await orderArtForDelete(o.id);
-    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set() });
+    const [r, cu] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null)]);
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true });
     const pick = new Set<string>([...r.logos.filter((l) => l.draft && !l.elsewhere).map((l) => l.id), ...r.mockups.map((m) => m.id)]);
-    setDelAsk({ logos: r.logos, mockups: r.mockups, pick });
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true });
   }
   async function confirmDel() {
     if (!o || !delAsk) return;
     setDelAsk({ ...delAsk, busy: true });
     const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
+    if (delAsk.cu && delAsk.cuBack) {
+      const r = await reopenClickUpJob(delAsk.cu.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+      if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: `The ClickUp job couldn't be put back on New: ${r.error}. Nothing was deleted.` }); return; }
+    }
     await reallyDel();
   }
   // this order's art that's still a draft (not in the customer's library until the order goes out)
@@ -990,6 +997,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                 ))}
+                {delAsk.cu && (
+                  <label className="dla-cu">
+                    <input type="checkbox" checked={!!delAsk.cuBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, cuBack: e.target.checked } : d))} />
+                    <span>Put the ClickUp job <b data-notranslate>{delAsk.cu.name}</b> back on the New list <small className="faint">({delAsk.cu.team}; In Printavo is unticked in ClickUp)</small></span>
+                  </label>
+                )}
                 {delAsk.error && <p className="err">{delAsk.error}</p>}
               </>
             )}

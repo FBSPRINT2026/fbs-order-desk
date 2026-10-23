@@ -457,6 +457,31 @@ export async function setClickUpDone(admin: SupabaseClient, taskId: string, done
 }
 
 /**
+ * An order made from a ClickUp job was deleted: the job goes back on the New list (Oct 22, Nick: "if there's a ClickUp
+ * task and you make it into an order… and you delete it, then it needs to go back into new"; Hudson Band was lost that
+ * way). The link to the order is cleared and the job's In Printavo box unticked in ClickUp (making the order ticked it),
+ * so the next read of ClickUp doesn't take it off again.
+ */
+export async function reopenClickUpTask(admin: SupabaseClient, taskId: string): Promise<{ ok: true; note?: string } | { ok: false; error: string }> {
+  const { data: t0 } = await admin.from("clickup_tasks").select("id, field_ids, fields").eq("id", taskId).maybeSingle();
+  if (!t0) return { ok: false, error: "That ClickUp job isn't on file." };
+  await admin.from("clickup_tasks").update({ order_id: null, order_number: null }).eq("id", taskId);
+  const names = [...Object.keys((t0.field_ids || {}) as Record<string, string>), ...Object.keys((t0.fields || {}) as Record<string, string>)];
+  const box = names.find((k) => /printavo/i.test(k));
+  let note = "";
+  if (box && clickupTokens().length) {
+    const r = await setClickUpBox(admin, taskId, box, false);
+    if (r.ok) return { ok: true };
+    note = `Its ${box} box couldn't be unticked in ClickUp (${r.error}): untick it there, or ClickUp's next read takes the job off New again.`;
+  }
+  // no box, or ClickUp couldn't be reached: back on New here
+  const { data: t } = await admin.from("clickup_tasks").select("team_id, parent, status_type, order_id, dismissed_at, pv_number, where_text, created_at_cu").eq("id", taskId).maybeSingle();
+  const { data: team } = t ? await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle() : { data: null };
+  if (t) await admin.from("clickup_tasks").update({ in_printavo: false, waiting: waitingOf({ parent: t.parent as string | null, status_type: String(t.status_type), in_printavo: false, order_id: null, dismissed_at: t.dismissed_at as string | null, pv_number: t.pv_number as string | null, where_text: String(t.where_text || ""), created_at_cu: t.created_at_cu as string | null }, !!team?.hidden) }).eq("id", taskId);
+  return { ok: true, ...(note ? { note } : {}) };
+}
+
+/**
  * Tick or untick one of a job's ClickUp check boxes from the workspace view (Oct 22, Nick: "can we check like in
  * Printavo here? And it'll check in ClickUp"): In Printavo, PO Ready, High Profile… Writes only that field.
  */
