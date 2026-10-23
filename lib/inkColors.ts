@@ -36,9 +36,27 @@ export const PMS_HEX: Record<string, string> = {
   "PMS 805 C (Neon Red)": "#FF7276", "PMS 806 C (Neon Pink)": "#FF3EB5", "PMS 807 C (Neon Magenta)": "#EA27C2",
 };
 
-/** Screen color for an ink name: Wilflex RFU, a PMS coated number ("PMS 186 C", "186 C", "PMS 186"), or a #hex. */
+/**
+ * The shop's other stock inks from the Ink Room (Production → Ink Room, the ones switched on as stocked): Monarch Bora
+ * Bora Sand, InkTek Khaki and Dark Brown, the shimmers… (Oct 22, Nick: "on the ink room, we have our standard inks
+ * logged… those colors need to be added to that standard colors list"). Filled once the page has read them
+ * (addStockInks); empty until then and for customers.
+ */
+export const STOCK_HEX: Record<string, string> = {};
+/** the stock inks a color can be matched to on its own (not whites, shimmers or bases: those are picked by hand) */
+const STOCK_MATCH: Record<string, string> = {};
+export function addStockInks(rows: { name: string; hex: string; line?: string }[]) {
+  for (const r of rows) {
+    const n = (r.name || "").trim();
+    if (!n || WILFLEX_HEX[n] || !/^#[0-9a-f]{6}$/i.test(r.hex || "") || /additive|base|mix/i.test(r.line || "")) continue;
+    STOCK_HEX[n] = r.hex.toUpperCase();
+    if (!/white|shimmer|metallic|glitter/i.test(`${n} ${r.line || ""}`)) STOCK_MATCH[n] = r.hex.toUpperCase();
+  }
+}
+
+/** Screen color for an ink name: Wilflex RFU, another stock ink, a PMS coated number ("PMS 186 C", "186 C", "PMS 186"), or a #hex. */
 export const colorHex = (name: string) => {
-  if (WILFLEX_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || PMS_HEX[name];
+  if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
   return m ? PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
@@ -198,8 +216,8 @@ const nearest = (hex: string, chart: Record<string, string>) => {
   for (const [name, h] of Object.entries(chart)) { const d = deltaE(hex, h); if (d < bd) { bd = d; best = name; } }
   return { name: best, hex: chart[best], dE: Math.round(bd * 10) / 10 };
 };
-/** The standard Wilflex RFU ink that looks closest to a color. */
-export const closestInk = (hex: string) => nearest(hex, WILFLEX_HEX);
+/** The standard stock ink (Wilflex RFU, or another one we stock) that looks closest to a color. */
+export const closestInk = (hex: string) => nearest(hex, Object.keys(STOCK_MATCH).length ? { ...WILFLEX_HEX, ...STOCK_MATCH } : WILFLEX_HEX);
 /** The Pantone coated color that looks closest (same idea as pantoneconverter.com's HEX to Pantone). */
 export const closestPms = (hex: string) => nearest(hex, PMS_COATED);
 

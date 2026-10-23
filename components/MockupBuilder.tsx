@@ -27,7 +27,7 @@ import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
-import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
+import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
@@ -320,6 +320,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
    *  a proof page per color, or a sales sheet with every color on one page */
   const [salesOpen, setSalesOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
+  // the Ink Room's other stock inks (Bora Bora Sand, Khaki…) in the ink lists and the closest-ink matching (Oct 22, Nick)
+  const [, setStockN] = useState(0);
+  useEffect(() => {
+    if (portal) return;
+    sb.from("stock_inks").select("name, hex, line").eq("stocked", true).is("archived_at", null).order("sort").then(({ data }) => {
+      if (!data?.length) return;
+      addStockInks(data as { name: string; hex: string; line: string }[]); inkNamesCache = null; setStockN(Object.keys(STOCK_HEX).length);
+    });
+  }, [portal]); // eslint-disable-line react-hooks/exhaustive-deps
   // the Helper (shop): art that came built onto a mockup, pulled off and walked through before it goes on (Oct 22)
   type HelpRow = { key: string; file: File; url: string; side: "front" | "back"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean };
   const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string }>(null);
@@ -3115,7 +3124,7 @@ function resolveInk(text: string, brand: Brand): { name: string; hex: string } |
   if (!t) return null;
   const lc = t.toLowerCase().replace(/^wilflex\s+/, "");
   for (const g of brand.groups) for (const b of g.colors) if (b.ink.toLowerCase() === lc || b.name.toLowerCase() === lc) return { name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888" };
-  const named = [...Object.keys(WILFLEX_HEX), ...Object.keys(PMS_HEX)].find((n) => n.toLowerCase() === lc);
+  const named = [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX)].find((n) => n.toLowerCase() === lc);
   if (named) return { name: named, hex: colorHex(named) };
   const num = t.replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "").trim();
   if (!num) return null;
@@ -3123,12 +3132,12 @@ function resolveInk(text: string, brand: Brand): { name: string; hex: string } |
   return PMS_COATED[key] ? { name: key, hex: PMS_COATED[key] } : null;
 }
 let inkNamesCache: string[] | null = null;
-const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
+const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
 
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
   const brand = useContext(BrandCtx);
   const listId = useId();
-  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name] || brand.groups.some((g) => g.colors.some((b) => b.ink === value.name)));
+  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || STOCK_HEX[value.name] || PMS_HEX[value.name] || brand.groups.some((g) => g.colors.some((b) => b.ink === value.name)));
   const [customMode, setCustom] = useState(false);
   const [text, setText] = useState(value?.name || "");
   // a reset from outside (↺, another pick) shows in the box
@@ -3166,6 +3175,7 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
       <option value="none">Remove (shirt shows through)</option>
       {brand.groups.filter((g) => g.colors.length).map((g) => <optgroup key={"g:" + g.key} label={g.label}>{g.colors.map((b) => <option key={"b:" + g.key + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>)}
       <optgroup label="Our stock inks (Wilflex RFU)">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
+      {Object.keys(STOCK_HEX).length > 0 && <optgroup label="Our other stock inks (Ink Room)">{Object.keys(STOCK_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>}
       <optgroup label="Common PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
     </select>
   );
