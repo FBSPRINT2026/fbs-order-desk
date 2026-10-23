@@ -11,6 +11,8 @@ import { uploadDesign } from "@/lib/designs";
 import { uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
 import { looksLikeSheet, measureDrop, splitSheet } from "@/lib/setupSheet";
+import { pagePicture, pdfLike, pieceFor, pullOffMockup, type Pulled } from "@/lib/mockupPull";
+import type { ArtPiece } from "@/lib/printavoArt";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
 import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
@@ -47,7 +49,8 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
  *  could have just used it, but you ignored it because you treated it as a reorder") */
 /** a customer's mockup sheet: what was read off it, to confirm (Oct 22, Nick: "you just ask me, what is this?… or you
  *  confirm it: hey, this is a customer mockup with sizing and information") */
-type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void };
+type SheetAsk = { name: string; art: string; mockup: string; background: string | null; specs: string[]; resolve: (a: "sheet" | "art") => void;
+  /** the art was on a shirt (a photo, a person, a mockup, drawn shirts) and the Helper pulled it off; more = the other prints pulled */ onShirt?: "photos" | "drawn"; more?: string[] };
 type ArtAsk = { job: string; /** the old job's files */ old?: { name: string; url: string; type: string }[]; /** the email's files they sent */ from?: string[]; items: { key: string; label: string; file: { name: string; url: string; type: string; path?: string } }[]; resolve: (a: "theirs" | "old") => void };
 
 /** Cancel clicked: stop where it is and take back what it made */
@@ -232,20 +235,34 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, ...(othersOnly ? { settled: sentArt.map((z) => `${z.x.name ? `${z.x.name} · ` : ""}${z.im.location}`) } : {}), lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
       setHelp(null);
       const made = new Map<File, string>();
-      // a picked file or upload saved as their logo (once per file)
+      // a file that's a mockup (the art on a shirt, a person, our old mockup or theirs): the Helper pulls the art off it,
+      // the art for that print's side becomes the logo, with the size and drop measured off the shirt (Oct 22, Nick: "if
+      // you see it in Printavo, any way, shape, and form… you've got to go in and use the helper and pull it out")
+      const pulledOf = new Map<File, Pulled | null>();
+      const pulledFor = new Map<string, { pc: ArtPiece; from: string; kind: Pulled["kind"] }>();
+      // a picked file or upload saved as their logo (once per file, or per print pulled off it)
       const designFor = async (picked: HelpPick, im: (typeof targets)[number]["im"]): Promise<string | null> => {
         if (picked.kind === "design") return picked.id;
         if (picked.kind !== "file" && picked.kind !== "upload") return null;
         const file = picked.file;
-        let id = made.get(file);
-        if (!id) {
-          // a print file (PDF, AI, EPS, SVG) keeps a picture of it, so the Mockup Creator can use it right away
-          const vector = picked.kind === "upload" && !/^image\/(png|jpe?g|gif|webp)$/i.test(file.type) && !/\.(png|jpe?g|gif|webp)$/i.test(file.name);
-          const preview = vector ? await makePreview(/\.ai$/i.test(file.name) ? new File([file], file.name, { type: "application/pdf" }) : file).catch(() => null) : null;
-          const dsg = await uploadDesign(createClient(), { draft: true, file, ...(preview ? { preview } : {}), customer_id: g.customer!.id, name: d!.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `For the reorder of ${jobLabel}`, method: im.method });
-          id = dsg.id; made.set(file, id); made0.current.add(id);
+        if (pdfLike(file) && !pulledOf.has(file)) {
+          note(`Is the art in ${file.name} on a shirt? Checking with the Helper…`);
+          pulledOf.set(file, await pullOffMockup(file, file.name).catch(() => null));
           guard();
         }
+        const pl = pulledOf.get(file) || null;
+        const pc = pl ? pieceFor(pl, im.location) || pieceFor(pl, "front") || pieceFor(pl, "back") : undefined;
+        const src = pc ? pc.file : file;
+        let id = made.get(src);
+        if (!id) {
+          // a print file (PDF, AI, EPS, SVG) keeps a picture of it, so the Mockup Creator can use it right away
+          const vector = !pc && picked.kind === "upload" && !/^image\/(png|jpe?g|gif|webp)$/i.test(file.type) && !/\.(png|jpe?g|gif|webp)$/i.test(file.name);
+          const preview = vector ? await makePreview(/\.ai$/i.test(file.name) ? new File([file], file.name, { type: "application/pdf" }) : file).catch(() => null) : null;
+          const dsg = await uploadDesign(createClient(), { draft: true, file: src, ...(preview ? { preview } : {}), customer_id: g.customer!.id, name: d!.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: pc ? `Pulled off ${file.name} with the Helper, for the reorder of ${jobLabel}` : `For the reorder of ${jobLabel}`, method: im.method });
+          id = dsg.id; made.set(src, id); made0.current.add(id);
+          guard();
+        }
+        if (pc && pl) pulledFor.set(id, { pc, from: file.name, kind: pl.kind });
         return id;
       };
       for (const { gi, ii, im } of targets) {
@@ -265,6 +282,12 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         try {
           const id = await designFor(picked, im);
           if (!id) continue;
+          const pu = pulledFor.get(id);
+          if (pu) {
+            setIm({ design_id: id, size: `${pu.pc.widthIn}" wide`, drop: String(pu.pc.dropIn) }, `Art pulled off ${pu.from} with the Helper: ${pu.pc.widthIn}" × ${pu.pc.heightIn}", ${pu.pc.dropIn}" below the collar${pu.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`);
+            did.push(`${im.location}: the art in ${pu.from} was on a shirt, so the Helper pulled it off (${pu.pc.widthIn}" wide, ${pu.pc.dropIn}" down)`);
+            continue;
+          }
           setIm({ design_id: id }, picked.kind === "upload" ? "Art uploaded when the reorder was made" : `Art from ${picked.name}`);
           did.push(`${im.location}: art ${picked.kind === "upload" ? "uploaded by you" : `from ${picked.name}`}`);
         } catch (e) { if (e instanceof Cancelled) throw e; did.push(`${im.location}: the art couldn't be saved (${e instanceof Error ? e.message : String(e)}): add it on the order`); }
@@ -375,6 +398,70 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           ...(upM.error ? [] : [{ path: mockPath, name: `${base} mockup.png`, type: "image/png", size: parts.mockup!.size, role: "mockup" as const, what: "their mockup page" }]),
         ] };
         did.push(`${f.name}: their mockup sheet. Art cut off page ${parts.artPage}${parts.background ? ", its background taken out (it doesn't print)" : ""}; page ${parts.mockupPage} is their mockup; the PDF is in Production files`);
+      }
+      // art that came ON A GARMENT (a person wearing it, a shirt photo, our old mockup or theirs, shirts drawn in their
+      // software): the Mockup Creator's Helper pulls the art off it before anything else, never the whole picture as
+      // the logo (Oct 22, Nick: McKenna's HUD 102026.ai, a man in the red tee, became a 10-color logo; "before you start,
+      // you should immediately identify: do I need to go upload the art or move this to the helper and pull that art out")
+      for (const path of [...new Set(Object.values(d.art || {}))]) {
+        const f = d.files.find((x) => x.path === path);
+        if (!f || !pdfLike(f)) continue;
+        guard();
+        const { data: blob } = await sb0.storage.from("proofs").download(f.path);
+        if (!blob) continue;
+        step(`${of}Is the art in ${f.name} on a shirt? Checking with the Helper…`);
+        const got: Pulled | null = await pullOffMockup(blob, f.name).catch(() => null);
+        guard();
+        if (!got) continue;
+        const used = new Set<ArtPiece>();
+        type Plan = { x: Group; im: Group["imprints"][number]; pc: ArtPiece };
+        const plan: Plan[] = d.groups.flatMap((x) => x.imprints.filter((im) => d!.art?.[im.id] === f.path).map((im) => {
+          const pc = pieceFor(got, im.location, used) || pieceFor(got, "front", used) || pieceFor(got, "back", used);
+          if (pc) used.add(pc);
+          return { x, im, pc };
+        })).filter((z): z is Plan => !!z.pc);
+        if (!plan.length) continue;
+        const page = await pagePicture(blob);
+        const shown: ArtPiece[] = [...new Set<ArtPiece>(plan.map((z) => z.pc))];
+        const urls = shown.map((pc) => URL.createObjectURL(pc.file)), mockUrl = page ? URL.createObjectURL(page) : "";
+        const specs = plan.map(({ im, pc }) => `${im.location}: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar${pc.ink ? ` · looks like ${pc.ink}` : ""}`);
+        note(`${f.name} has the art on a shirt: pulled it off with the Helper, checking with you`);
+        const ans = await waitFor<"sheet" | "art">((resolve) => setSheetAsk({ name: f.name, art: urls[0], more: urls.slice(1), mockup: mockUrl, background: null, specs, resolve, onShirt: got.kind }));
+        setSheetAsk(null);
+        if (ans === "art") { did.push(`${f.name}: used as the art, as sent (you said the art isn't on a shirt)`); continue; }
+        const key = `designs/pulled-${crypto.randomUUID().slice(0, 8)}`, base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "-").slice(0, 60);
+        const art2: Record<string, string> = { ...(d.art || {}) };
+        const added: EODraft["files"] = [];
+        const pathOf = new Map<ArtPiece, string>();
+        const ok = new Set<string>();
+        for (const [k, pc] of shown.entries()) {
+          const pth = `${key}/${base}-${pc.side}${k ? `-${k + 1}` : ""}.png`;
+          const up = await sb0.storage.from("proofs").upload(pth, pc.file, { contentType: "image/png" });
+          if (up.error) continue;
+          pathOf.set(pc, pth);
+          added.push({ path: pth, name: `${base} ${pc.side} art.png`, type: "image/png", size: pc.file.size, role: "art" as const, what: `art pulled off ${f.name} (the Helper)` });
+        }
+        for (const { im, pc } of plan) { const pth = pathOf.get(pc); if (pth) { art2[im.id] = pth; ok.add(im.id); } }
+        if (!ok.size) { did.push(`${f.name}: the art on it couldn't be saved: the file is used as sent`); continue; }
+        // their file is their mockup: a picture of it with the group's mockups (stamped, in Production files) and the file in Production files
+        const mockPath = `${key}/${base}-mockup.png`;
+        const upM = page ? await sb0.storage.from("proofs").upload(mockPath, page, { contentType: "image/png" }) : { error: { message: "no picture" } };
+        const mock2: Record<string, string[]> = { ...(d.mockups || {}) };
+        if (!upM.error) for (const x of new Set<Group>(plan.map((z) => z.x))) mock2[x.id] = [...new Set([...(mock2[x.id] || []).filter((p0) => p0 !== f.path), mockPath])];
+        // the size and drop measured off their shirt, where the order doesn't say
+        const by = new Map(plan.map((z) => [z.im.id, z.pc]));
+        d = { ...d, art: art2, mockups: mock2, groups: d.groups.map((x) => ({ ...x, imprints: x.imprints.map((im) => {
+          const pc = ok.has(im.id) ? by.get(im.id) : undefined;
+          if (!pc) return im;
+          const sized = parseFloat(String(im.size || "")) > 0;
+          return { ...im, ...(sized ? {} : { size: `${pc.widthIn}" wide` }), drop: im.drop || String(pc.dropIn), ...(!im.inks && pc.ink ? { inks: pc.ink } : {}),
+            notes: [im.notes, `Art pulled off ${f.name} with the Helper: ${pc.widthIn}" × ${pc.heightIn}", ${pc.dropIn}" below the collar${got.kind === "drawn" ? " (read off a drawn shirt: close, not exact)" : ""}`].filter(Boolean).join(". ").slice(0, 300) };
+        }) })), files: [
+          ...d.files.map((x) => (x.path === f.path ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)),
+          ...added,
+          ...(upM.error ? [] : [{ path: mockPath, name: `${base} mockup.png`, type: "image/png", size: page!.size, role: "mockup" as const, what: `their mockup (${f.name})` }]),
+        ] };
+        did.push(`${f.name}: the art was on ${got.kind === "drawn" ? "drawn shirts" : "a shirt"}, so the Helper pulled it off (${plan.map(({ im, pc }) => `${im.location} ${pc.widthIn}" wide`).join(", ")}); their file is the customer mockup, in Production files`);
       }
     }
     guard();
@@ -915,17 +1002,22 @@ function trimToArt(c: HTMLCanvasElement) {
 /** a customer's mockup sheet: the art cut off it, their shirt page and the specs read off it, to confirm */
 function SheetConfirm({ a, onCancel }: { a: SheetAsk; onCancel: () => void }) {
   return (
-    <div className="ap" role="group" aria-label="Their mockup sheet">
-      <p className="ap-q">This is their mockup sheet, with the sizing. Use it like this?</p>
-      <p className="ap-why">From the email: <b>{a.name}</b>. I took the art off the top{a.background ? <> and took out its background <i className="ap-sw" style={{ background: a.background }} /> (it doesn&apos;t print)</> : ""}. Their shirt page becomes the customer mockup, stamped and in Production files with the PDF.</p>
+    <div className="ap" role="group" aria-label={a.onShirt ? "Art on a shirt" : "Their mockup sheet"}>
+      {a.onShirt ? <>
+        <p className="ap-q">The art in this file is on {a.onShirt === "drawn" ? "drawn shirts" : "a shirt"}. Use the art pulled off it?</p>
+        <p className="ap-why"><b>{a.name}</b> is a mockup, not the print file, so I pulled the art off it with the Mockup Creator&apos;s Helper and measured it on the shirt. Their file becomes the customer mockup, stamped and in Production files.</p>
+      </> : <>
+        <p className="ap-q">This is their mockup sheet, with the sizing. Use it like this?</p>
+        <p className="ap-why">From the email: <b>{a.name}</b>. I took the art off the top{a.background ? <> and took out its background <i className="ap-sw" style={{ background: a.background }} /> (it doesn&apos;t print)</> : ""}. Their shirt page becomes the customer mockup, stamped and in Production files with the PDF.</p>
+      </>}
       <div className="ap-sent">
-        <figure className="ap-sent-i"><span className="ap-pic big ap-check"><img src={a.art} alt="" /></span><figcaption><b>The art</b><span className="faint">Cut off their sheet</span></figcaption></figure>
+        {[a.art, ...(a.more || [])].map((u, i) => <figure key={u} className="ap-sent-i"><span className="ap-pic big ap-check"><img src={u} alt="" /></span><figcaption><b>{i ? "More art" : "The art"}</b><span className="faint">{a.onShirt ? "Pulled off the shirt" : "Cut off their sheet"}</span></figcaption></figure>)}
         {a.mockup && <figure className="ap-sent-i"><span className="ap-pic big"><img src={a.mockup} alt="" /></span><figcaption><b>Their mockup</b><span className="faint">Saved as the customer mockup</span></figcaption></figure>}
       </div>
       {a.specs.length > 0 && <ul className="ap-specs">{a.specs.map((t, i) => <li key={i}>{t}</li>)}</ul>}
       <div className="ap-foot"><span className="ap-more"><button type="button" className="ap-link ap-cancel" onClick={onCancel}>Cancel</button></span>
-        <button type="button" className="btn" onClick={() => a.resolve("art")}>No, it&apos;s just art</button>
-        <button type="button" className="btn primary" onClick={() => a.resolve("sheet")}>Yes, that&apos;s right</button></div>
+        <button type="button" className="btn" onClick={() => a.resolve("art")}>{a.onShirt ? "No, use the file as it is" : <>No, it&apos;s just art</>}</button>
+        <button type="button" className="btn primary" onClick={() => a.resolve("sheet")}>{a.onShirt ? "Yes, use the pulled art" : <>Yes, that&apos;s right</>}</button></div>
     </div>
   );
 }

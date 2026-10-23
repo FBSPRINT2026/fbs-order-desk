@@ -1,7 +1,8 @@
 "use client";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
-import { artFromArtPdf, artFromMockupPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
+import { pullOffMockup } from "@/lib/mockupPull";
+import { artFromArtPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
 import type { EODraft } from "@/lib/emailOrderShared";
 import { bodyOf, REF_BODY } from "@/lib/garmentBody";
 
@@ -55,7 +56,8 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       if (!res?.ok) continue;
       const buf = await res.arrayBuffer();
       bufs.push({ f, buf: buf.slice(0) });
-      got = await artFromMockupPdf(buf, y.nickname || "Art").catch(() => []);
+      // the Helper's way: shirt photos (ours, a person) first, then shirts drawn flat (lib/mockupPull.ts)
+      got = (await pullOffMockup(new Blob([buf], { type: "application/pdf" }), `${y.nickname || "Art"}.pdf`).catch(() => null))?.pieces || [];
       if (got.length) { from = f.name; break; }
     }
     // not a mockup sheet: the PDF is the art itself (the customer's Illustrator file); the film says how big it printed
