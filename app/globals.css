@@ -13707,3 +13707,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-tbl .aa-t.aa-t1{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap}
 .aa-tbl .aa-t1 .aa-tn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .aa-tbl .aa-t1 .aa-arch{flex:none;white-space:nowrap}
+/* shop customer Artwork: smaller logo and mockup cards (the portal keeps its four across) (Oct 24, Nick: "way too big") */
+.aa-shop .aa-grid6{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}
+/* Brand standards header: room for "Show in their portal" beside Add / Edit / Set up with AI */
+.aa-shop .aa-card:has(> .bai) > .aa-sec-h{padding-right:300px}
+@media (max-width:640px){.aa-shop .aa-card:has(> .bai) > .aa-sec-h{padding-right:0}}
