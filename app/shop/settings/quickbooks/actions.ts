@@ -93,7 +93,7 @@ export async function qboLists(): Promise<R<QboLists>> {
   } catch (e) { return fail(e); }
 }
 
-const EDITABLE = ["enabled", "mode", "live_from_number", "adopt_from_number", "item_map", "deposit_account_id", "payment_method_map", "tax_mode", "tax_code_id", "exemption_reason_id", "term_map", "default_term_id", "discount_account_id", "po_field_id", "po_field_name", "class_id", "department_id"] as const;
+const EDITABLE = ["enabled", "mode", "live_from_number", "adopt_from_number", "item_map", "deposit_account_id", "payment_method_map", "tax_mode", "tax_code_id", "exempt_tax_code_id", "exemption_reason_id", "term_map", "default_term_id", "discount_account_id", "po_field_id", "po_field_name", "class_id", "department_id"] as const;
 /** The SQL that starts order numbers at `n` (Nicholas runs it at the cutover; the portal never changes numbering itself). */
 const restartSql = (n: number) => `alter sequence public.order_number_seq restart with ${n};`;
 

@@ -32,6 +32,10 @@ export async function GET(req: Request) {
     type Line = { DetailType?: string; Description?: string; Amount?: number; SalesItemLineDetail?: { ItemRef?: Ref; TaxCodeRef?: Ref; ClassRef?: Ref } };
     type Inv = { DocNumber?: string; TxnDate?: string; Line?: Line[]; SalesTermRef?: Ref; TxnTaxDetail?: { TotalTax?: number; TxnTaxCodeRef?: Ref }; CustomField?: { DefinitionId?: string; Name?: string; StringValue?: string }[]; ClassRef?: Ref; DepartmentRef?: Ref; PrivateNote?: string; CustomerMemo?: { value?: string }; ApplyTaxAfterDiscount?: boolean; GlobalTaxCalculation?: string };
     type Pay = { DepositToAccountRef?: Ref; PaymentMethodRef?: Ref; PrivateNote?: string; Line?: { LinkedTxn?: { TxnType?: string }[] }[] };
+    const [taxCodes, taxRates] = await Promise.all([
+      q.query<{ Id: string; Name: string; Active: boolean; Taxable?: boolean; TaxGroup?: boolean; SalesTaxRateList?: { TaxRateDetail?: { TaxRateRef?: Ref }[] } }>("TaxCode"),
+      q.query<{ Id: string; Name: string; Active: boolean; RateValue?: number; AgencyRef?: Ref }>("TaxRate"),
+    ]);
     const [invs, pays, items, terms, methods, prefs, classes, deps, accts, deposits] = await Promise.all([
       q.query<Inv>("Invoice", `WHERE TxnDate >= '${since}'`, 600),
       q.query<Pay>("Payment", `WHERE TxnDate >= '${since}'`, 600),
@@ -73,6 +77,8 @@ export async function GET(req: Request) {
       deposits: deposits.length,
       depositAccounts: tally(deposits, (d) => nm(d.DepositToAccountRef)),
       depositLineAccounts: tally(deposits.flatMap((d) => d.Line || []), (l) => nm(l.DepositLineDetail?.AccountRef)),
+      taxCodes: taxCodes.map((t) => `${t.Name} [${t.Id}]${t.Active ? "" : " (inactive)"}${t.TaxGroup ? " group" : ""} rates: ${(t.SalesTaxRateList?.TaxRateDetail || []).map((d) => nm(d.TaxRateRef)).join(", ")}`),
+      taxRates: taxRates.map((t) => `${t.Name} [${t.Id}] ${t.RateValue ?? "?"}%${t.Active ? "" : " (inactive)"} ${nm(t.AgencyRef)}`),
       items: items.filter((i) => i.Active).map((i) => `${i.Name} [${i.Id}] ${i.Type}${i.IncomeAccountRef ? ` → ${i.IncomeAccountRef.name}` : ""}`),
       terms_list: terms.filter((t) => t.Active).map((t) => `${t.Name} [${t.Id}]${t.DueDays != null ? ` ${t.DueDays}d` : ""}`),
       methods_list: methods.filter((m) => m.Active).map((m) => `${m.Name} [${m.Id}]`),

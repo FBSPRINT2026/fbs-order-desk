@@ -171,7 +171,8 @@ function Setup({ st, reload }: { st: QboStatus; reload: () => void }) {
                 <option value="tax_line">Its own line (the &quot;Sales tax&quot; item)</option>
                 <option value="none">None</option>
               </select></label>
-            <label className="row" style={{ gap: 8, justifyContent: "space-between" }}><span>Tax rate code (only without automated sales tax)</span><Pick value={s.tax_code_id} options={lists?.taxCodes} blank="(none)" onChange={(v) => setS({ ...s, tax_code_id: v })} /></label>
+            <label className="row" style={{ gap: 8, justifyContent: "space-between" }}><span>Tax rate for taxed orders</span><Pick value={s.tax_code_id} options={lists?.taxCodes} blank="(QuickBooks picks)" onChange={(v) => setS({ ...s, tax_code_id: v })} /></label>
+            <label className="row" style={{ gap: 8, justifyContent: "space-between" }}><span>Tax rate for orders with no tax</span><Pick value={s.exempt_tax_code_id} options={lists?.taxCodes} blank="(QuickBooks picks)" onChange={(v) => setS({ ...s, exempt_tax_code_id: v })} /></label>
             <label className="row" style={{ gap: 8, justifyContent: "space-between" }}><span>Exemption reason for tax-exempt customers</span>
               <select value={s.exemption_reason_id} onChange={(e) => setS({ ...s, exemption_reason_id: e.target.value })}>
                 <option value="">(none)</option>

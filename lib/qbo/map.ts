@@ -13,14 +13,17 @@ export type QboSettings = {
   enabled: boolean; mode: "preview" | "live"; live_from_number: number; adopt_from_number: number;
   realm_id: string; company_name: string;
   item_map: Record<string, string>; deposit_account_id: string; payment_method_map: Record<string, string>;
-  tax_mode: TaxMode; tax_code_id: string; exemption_reason_id: string;
+  tax_mode: TaxMode;
+  /** the QuickBooks tax rate for taxed orders (Texas Sales Tax 8.25%) and for orders with no tax (Tax Exempt 0%), so
+   * QuickBooks' tax reports add up (Oct 24, Nick: "QuickBooks reporting all works based on their taxing") */
+  tax_code_id: string; exempt_tax_code_id: string; exemption_reason_id: string;
   term_map: Record<string, string>; default_term_id: string; discount_account_id: string;
   po_field_id: string; po_field_name: string; class_id: string; department_id: string;
   /** when live sending was switched on (null = never) */ live_since?: string | null;
 };
 export const DEFAULT_QBO_SETTINGS: QboSettings = {
   enabled: false, mode: "preview", live_from_number: 50000, adopt_from_number: 40000, realm_id: "", company_name: "",
-  item_map: {}, deposit_account_id: "", payment_method_map: {}, tax_mode: "qbo_ast", tax_code_id: "", exemption_reason_id: "",
+  item_map: {}, deposit_account_id: "", payment_method_map: {}, tax_mode: "qbo_ast", tax_code_id: "", exempt_tax_code_id: "", exemption_reason_id: "",
   term_map: {}, default_term_id: "", discount_account_id: "", po_field_id: "", po_field_name: "", class_id: "", department_id: "",
 };
 export function qboSettingsOf(row: Partial<QboSettings> | null | undefined): QboSettings {
@@ -328,8 +331,12 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
     else if (taxMode === "qbo_ast") {
       // our tax amount (rate x taxable total), not QuickBooks' own calculation, so the invoice matches what the customer saw
       txnTax = { TotalTax: calc.tax, ...(qs.tax_code_id ? { TxnTaxCodeRef: { value: qs.tax_code_id } } : {}) };
+      if (!qs.tax_code_id) warnings.push("No QuickBooks tax rate is picked for taxed orders, so QuickBooks picks one (Settings → QuickBooks → Sales tax).");
       summary.push({ label: `Sales tax (${calc.rate}%)`, qty: 1, unit: calc.tax, amount: calc.tax, item: "(QuickBooks sales tax)" });
     } else problems.push(`This order has ${calc.tax} sales tax, but QuickBooks sales tax is set to "none".`);
+  } else if (taxMode === "qbo_ast" && qs.exempt_tax_code_id) {
+    // no tax on this order: QuickBooks' "Tax Exempt (0%)" rate, not its automatic calculation
+    txnTax = { TotalTax: 0, TxnTaxCodeRef: { value: qs.exempt_tax_code_id } };
   }
   if (missing.size) problems.push(`Pick a QuickBooks item for: ${[...missing].map((k) => ITEM_KEYS.find((x) => x.k === k)?.label || k).join(", ")} (Settings → QuickBooks → Items).`);
   if (!inp.customerRef) problems.push("The customer isn't in QuickBooks yet.");
