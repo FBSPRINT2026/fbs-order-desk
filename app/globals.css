@@ -12819,3 +12819,12 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .nav-g-production.side-screen .nav-h-production{color:var(--fbs-blue)}
 .side.mini .prod-side{display:none}
 .fee-row.fin-row{grid-template-columns:minmax(0,1fr) 110px auto 32px}
+/* Menu counts are a small calm dot, not a red bubble (Oct 24, Nick: "these little red bubbles are giving me anxiety…
+   a better way to show a notification that don't make it seem like something's urgent"; picked "small dot"). The
+   number stays in the badge's title, so it shows on hover. */
+.nav .badge,.nav .badge.soft,.nav-ai .badge{font-size:0!important;line-height:0;width:7px;height:7px;min-width:0;padding:0!important;border:0;border-radius:50%;background:var(--side-active);color:transparent;flex:none;box-shadow:none}
+.nav a .badge{align-self:center}
+.side:not(.mini) .nav-tools .badge,.nav-ai .badge{top:4px;right:4px}
+.side.mini .nav .badge{top:4px;right:6px}
+.side.auto:not(:hover):not(:has(:focus-visible)) .nav .badge{top:4px;left:34px}
+.nav-g-shoptools a.on .badge,.nav a.on .badge{background:#fff}
