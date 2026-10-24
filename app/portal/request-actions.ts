@@ -299,38 +299,79 @@ async function fromPictures(admin: ReturnType<typeof createAdminClient>, name: s
 export async function orderFromMockup(mockupId: string): Promise<Result> {
   try {
     const { supabase, admin, cust, email } = await me();
-    // row security: only their own mockups
-    const { data: mk } = await supabase.from("mockups").select("id, customer_id, number, title, snapshot").eq("id", mockupId).maybeSingle();
-    if (!mk) return { ok: false, error: "We couldn't find that mockup." };
-    const { data: rows } = mk.number
-      ? await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).order("created_at")
-      : await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("id", mk.id);
-    const all = (rows || []) as MockRow[];
-    type Snap = { name?: string; lines?: { style: string; brand: string; color: string; garment: string }[]; imprints?: Group["imprints"]; offsets?: Record<string, { dx: number; dy: number }>; mockupSize?: string | null };
-    const snap = (all.find((r) => (r.snapshot as Snap | null)?.lines?.length)?.snapshot || mk.snapshot) as Snap | null;
-    const name = snap?.name || String(mk.title || "").split(" — ")[0] || "Mockup";
-    const tag = mk.number ? `M-${mk.number}` : "your mockup";
-    const g: Group = snap?.lines?.length
-      ? { id: uid(), name, lines: snap.lines.map((l) => ({ ...newGLine(), style: l.style || "", brand: l.brand || "", garment: l.garment || "", color: l.color || "" })),
-          imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
-      : await fromPictures(admin, name, all);
-    g.customerMockups = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
-    // shown like our order screen: the shirts with the prints, read only (Oct 24, Nick)
-    if (snap?.lines?.length) {
-      g.fromMockup = { id: mk.id, number: mk.number ?? null };
-      g.mockupThumbs = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => r.file_path.replace(/\.png$/, "-thumb.png"));
-      g.mockupAt = new Date().toISOString();
-    }
+    const m = await groupFromMockup(supabase, admin, mockupId);
+    if (!m) return { ok: false, error: "We couldn't find that mockup." };
     const { data, error } = await admin.from("orders").insert({
-      customer_id: mk.customer_id, status: "request", type: "quote", source: "portal",
-      price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [g], total: 0,
-      nickname: name.slice(0, 120), notes: `From mockup ${tag}.`,
+      customer_id: m.customerId, status: "request", type: "quote", source: "portal",
+      price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [m.g], total: 0,
+      nickname: m.name.slice(0, 120), notes: `From mockup ${m.tag}.`,
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
-    await admin.from("order_events").insert({ order_id: data.id, kind: "from_mockup", detail: `From ${tag}`, actor: email });
+    await admin.from("order_events").insert({ order_id: data.id, kind: "from_mockup", detail: `From ${m.tag}`, actor: email });
     revalidatePath("/portal");
     return { ok: true, id: data.id };
   } catch (e) { return fail(e); }
+}
+
+/** An order group built from one of the customer's mockups (row security: their own mockups only). */
+async function groupFromMockup(supabase: Awaited<ReturnType<typeof me>>["supabase"], admin: ReturnType<typeof createAdminClient>, mockupId: string) {
+  const { data: mk } = await supabase.from("mockups").select("id, customer_id, number, title, snapshot").eq("id", mockupId).maybeSingle();
+  if (!mk) return null;
+  const { data: rows } = mk.number
+    ? await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).order("created_at")
+    : await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("id", mk.id);
+  const all = (rows || []) as MockRow[];
+  type Snap = { name?: string; lines?: { style: string; brand: string; color: string; garment: string }[]; imprints?: Group["imprints"]; offsets?: Record<string, { dx: number; dy: number }>; mockupSize?: string | null };
+  const snap = (all.find((r) => (r.snapshot as Snap | null)?.lines?.length)?.snapshot || mk.snapshot) as Snap | null;
+  const name = snap?.name || String(mk.title || "").split(" — ")[0] || "Mockup";
+  const tag = mk.number ? `M-${mk.number}` : "your mockup";
+  const g: Group = snap?.lines?.length
+    ? { id: uid(), name, lines: snap.lines.map((l) => ({ ...newGLine(), style: l.style || "", brand: l.brand || "", garment: l.garment || "", color: l.color || "" })),
+        imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
+    : await fromPictures(admin, name, all);
+  const own = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`));
+  g.customerMockups = own.map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
+  // shown like our order screen: the shirts with the prints, read only (Oct 24, Nick)
+  if (snap?.lines?.length) {
+    g.fromMockup = { id: mk.id, number: mk.number ?? null };
+    g.mockupThumbs = own.map((r) => r.file_path.replace(/\.png$/, "-thumb.png"));
+    g.mockupAt = new Date().toISOString();
+  }
+  return { g, name, tag, customerId: mk.customer_id as string };
+}
+
+/**
+ * The mockup made from an order they're building (Oct 24, Nick: "if they are making something from scratch, it just should
+ * start out by saying create mockup or upload your own existing mockup… in the imprint screen"): its shirts and prints go
+ * into that group, keeping the sizes already typed for the same style and color.
+ */
+export async function attachMockupToRequest(orderId: string, groupId: string, mockupId: string): Promise<Result> {
+  try {
+    const { supabase, admin, order } = await myDraft(orderId);
+    const m = await groupFromMockup(supabase, admin, mockupId);
+    if (!m || m.customerId !== order.customer_id) return { ok: false, error: "We couldn't find that mockup." };
+    const groups = orderGroups(order);
+    const i = groups.findIndex((x) => x.id === groupId);
+    const old = i >= 0 ? groups[i] : null;
+    const key = (l: { style: string; color: string }) => `${l.style}|${l.color}`.toLowerCase();
+    const g: Group = { ...m.g, id: old?.id || m.g.id, name: old?.name || m.g.name,
+      lines: m.g.lines.map((l) => ({ ...l, sizes: old?.lines.find((x) => key(x) === key(l))?.sizes || l.sizes })) };
+    if (i >= 0) groups[i] = g; else groups.push(g);
+    const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/portal/request/${orderId}`);
+    return { ok: true, id: orderId };
+  } catch (e) { return fail(e); }
+}
+
+/** The group of an order they're building, to start a mockup from what they've filled in (garments and prints). */
+export async function requestGroupSetup(orderId: string, groupId: string) {
+  try {
+    const { order } = await myDraft(orderId);
+    const g = orderGroups(order).find((x) => x.id === groupId);
+    if (!g) return { ok: false as const, error: "We couldn't find that group." };
+    return { ok: true as const, name: g.name || order.nickname || "", lines: g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand || "", color: l.color, garment: l.garment || "" })), imprints: g.imprints };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Couldn't load the order." }; }
 }
 
 /** One-time upload link for a mockup the customer made in their own software. */

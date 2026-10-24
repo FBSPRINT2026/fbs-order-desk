@@ -12,7 +12,7 @@ import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
-import { mockupUploadUrls, myLogos, portalCatalog, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
+import { attachMockupToRequest, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
@@ -161,6 +161,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** a saved mockup opened again to edit (Oct 22, Nick: "we definitely need to be able to edit a mock-up just like on an
    *  order"): its shirts, prints, places and inks as saved; saving again replaces that mockup's pictures */
   const reopenId = sp.get("mockup") || "";
+  /** a customer making the mockup for an order they're building (Oct 24, Nick: "create mockup… in the imprint screen"):
+   *  starts from that group's garments and prints, and goes back into it when saved */
+  const requestId = portal ? sp.get("request") || "" : "";
   const mockSet = useRef("");
   const wbInk = useRef<"" | "wait" | "done">(wbChat || reopenId ? "wait" : "");
   /** the customer's art review → "Make changes → change it myself": this proof's shirt and prints, saved back to the shop */
@@ -448,6 +451,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (mine[0]) setCustomerId(mine[0].id);
         // their saved mockup opened to edit (Oct 24, Nick: "they click on the mockup and they can either edit it or…")
         if (reopenId && !changeId && !viewId) { await reopenMockup(); return; }
+        if (requestId && groupId && !changeId && !viewId) {
+          const r = await requestGroupSetup(requestId, groupId);
+          if (!r.ok) { setMsg(r.error); return; }
+          if (r.name) setGroupName(r.name);
+          if (r.lines.length) setLines(r.lines);
+          if (r.imprints.some((d) => d.design_id)) {
+            setImprints(r.imprints.map((d) => ({ ...d })));
+            autoWant.current = Object.fromEntries(r.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
+          }
+          setMsg("Make the mockup for your order. Save it and it goes right into the order.");
+          return;
+        }
         if (changeId || viewId) {
           const r = await proofForChange(changeId || viewId, !!viewId);
           if (!r.ok) { setMsg(r.error); return; }
@@ -2443,6 +2458,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // saved again: the earlier pictures of this mockup step aside (it keeps its number)
         if (set && ids.length) await retireMyMockups(set, ids);
         if (set && ids[0]) setSavedMock({ id: ids[0], num });
+        // made for an order they're building: it goes into that group, then back to the order
+        if (requestId && ids[0]) {
+          const a = await attachMockupToRequest(requestId, groupId, ids[0]);
+          if (!a.ok) throw new Error(a.error);
+          window.location.href = `/portal/request/${requestId}`;
+          return;
+        }
         setSaved(out);
         setMsg(`Saved${num ? ` as M-${num}` : ""}: ${out.length} mockup${out.length > 1 ? "s" : ""} in your artwork. Order it from your artwork any time.`);
       } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }

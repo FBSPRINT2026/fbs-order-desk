@@ -29,6 +29,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string; aiAssist?: boolean;
 }) {
   const [mUrls, setMUrls] = useState(mu0);
+  void savedMockups;
   const [goods, setGoods] = useState<GoodsInfoValue | null>(gi0 || null);
   const [upBusy, setUpBusy] = useState("");
   const router = useRouter();
@@ -130,6 +131,26 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   const problems = [...requestProblems(o.groups), ...(o.delivery_method && o.delivery_method !== "pickup" && !(o.ship_to || "").trim() ? [`Add the address to ${o.delivery_method === "ship" ? "ship" : "deliver"} to`] : [])];
   const hints = problems.length ? [] : requestHints(o.groups);
 
+  // the mockup, beside the prints (Oct 24, Nick: "start out by saying create mockup or upload your own existing mockup… in the
+  // imprint screen"): made in our Mockup Creator for this group, or their own file
+  const mkLink = (q: string) => `${mockupHref}${mockupHref.includes("?") ? "&" : "?"}${q}`;
+  const mockupBtns = (g: Group, gi: number) => {
+    const own = (g.customerMockups || []).length > 0;
+    return (
+      <div className="rq-mk-acts">
+        {g.fromMockup
+          ? <a className="btn sm" href={mkLink(`mockup=${g.fromMockup.id}&request=${o.id}&group=${g.id}`)}>Edit mockup</a>
+          : <a className={"btn sm" + (own ? "" : " primary")} href={mkLink(`request=${o.id}&group=${g.id}`)}>Create mockup</a>}
+        {!g.fromMockup && (
+          <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === g.id ? "Uploading…" : "Upload your own mockup"}
+            <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
+          </label>
+        )}
+        {own && !g.fromMockup && <button type="button" className="btn sm ghost" onClick={() => patch((d) => { d.groups[gi].customerMockups = []; })}>Remove mockup</button>}
+      </div>
+    );
+  };
+
   async function send() {
     setBusy(true); setErr("");
     await flush();
@@ -197,46 +218,14 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className={"stack ord rq-ord" + (ws ? " ws" : " np-ord")}>
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
-          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
+          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]}
+            mockupExtra={mockupBtns(g, gi)} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}
             designs={designs} designUrls={urls} onUploadDesign={uploadLogo}
             onDuplicate={() => patch((d) => { const s = d.groups[gi]; d.groups.splice(gi + 1, 0, { ...structuredClone(s), id: uid(), lines: s.lines.map((l) => ({ ...l, id: uid() })), imprints: s.imprints.map((x) => ({ ...x, id: uid() })) } as Group); })}
             onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
-        )).flatMap((ed, gi) => [ed, o.groups[gi].fromMockup ? (
-          // from their mockup: the prints and garments are set; changing them is done on the mockup (Oct 24, Nick)
-          <div key={"mk" + o.groups[gi].id} className="rq-fixed faint">From your mockup{o.groups[gi].fromMockup!.number ? ` M-${o.groups[gi].fromMockup!.number}` : ""}: fill in your sizes. To change the shirts or the prints, <a href={`/portal/mockup?mockup=${o.groups[gi].fromMockup!.id}`}>edit the mockup</a> and order it again.</div>
-        ) : (
-          <section key={"mk" + o.groups[gi].id} className="panel rq-mock">
-            <div className="panel-h"><h2>Mockup for {o.groups[gi].name || `Group ${gi + 1}`}</h2><span className="faint" style={{ fontSize: 12 }}>Optional. Make one in our builder, or upload one from your own software. We still need each logo uploaded above.</span></div>
-            <div className="panel-b">
-              <div className="rq-mocks">
-                {(o.groups[gi].customerMockups || []).map((m, mi) => {
-                  const url = mUrls[m.path], isPdf = /\.pdf$/i.test(m.path);
-                  return (
-                    <div key={m.path} className="rq-mk">
-                      <a href={url} target="_blank" rel="noreferrer">{url && !isPdf ? <img src={url} alt={m.name} /> : <span className="rq-file">{isPdf ? "PDF" : "FILE"}</span>}</a>
-                      <span className="rq-mk-n" title={m.name}>{m.name}</span>
-                      <button type="button" className="btn icon ghost" aria-label="Remove this mockup" onClick={() => patch((d) => { d.groups[gi].customerMockups = (d.groups[gi].customerMockups || []).filter((_, j) => j !== mi); })}>✕</button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === o.groups[gi].id ? "Uploading…" : "Upload your own mockup"}
-                  <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
-                </label>
-                {savedMockups.length > 0 && (
-                  <select aria-label="Attach one of your saved mockups" value="" style={{ width: "auto" }} onChange={(e) => { const m = savedMockups.find((x) => x.path === e.target.value); if (m) patch((d) => { const g = d.groups[gi]; if (!(g.customerMockups || []).some((x) => x.path === m.path)) g.customerMockups = [...(g.customerMockups || []), m]; }); }}>
-                    <option value="">Attach a saved mockup…</option>
-                    {savedMockups.map((m) => <option key={m.path} value={m.path}>{m.name}</option>)}
-                  </select>
-                )}
-                <a className="btn sm ghost" href={mockupHref} target="_blank" rel="noreferrer">Make one in our builder ↗</a>
-              </div>
-            </div>
-          </section>
-        )])}
+        ))}
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add another group</button>
       </fieldset>
 

@@ -13069,3 +13069,5 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
    layout with the price cells left blank */
 .rq-ord .a-ea input,.rq-ord .upc,.rq-ord .upc input,.rq-ord .a-cs input{pointer-events:none}
 .rq-ord .a-ea input{border-color:transparent;background:transparent}
+.rq-mk-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch;margin-top:6px}
+.rq-mk-acts .btn{justify-content:center;text-align:center;text-decoration:none}
