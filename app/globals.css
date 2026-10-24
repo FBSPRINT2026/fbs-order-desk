@@ -13696,3 +13696,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .dc .panel-h .spacer{flex:1}
 .dc-portal{align-self:center;display:inline-flex;align-items:center;gap:6px}
 .dc-portal.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
+/* portal Artwork with a design catalog: the tab row (Design catalog · Artwork · Brand standards) with the search on it */
+.portal .aa-dc-bar{margin:0 0 14px;flex-wrap:nowrap}
+.portal .aa-dc-bar .aa-search{width:280px;max-width:40%}

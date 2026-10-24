@@ -16,10 +16,11 @@ const KINDS: { k: Kind; label: string }[] = [
   { k: "tees", label: "T-shirts" }, { k: "sweats", label: "Sweatshirts & jackets" }, { k: "hats", label: "Hats" }, { k: "drink", label: "Koozies & cups" }, { k: "other", label: "Other items" },
 ];
 
-export default function PortalDesignCatalog({ customerId, qs }: { customerId: string; qs: string }) {
+export default function PortalDesignCatalog({ customerId, qs, q: outerQ }: { customerId: string; qs: string; /** the search from the Artwork tab row (Oct 24): its own box is hidden then */ q?: string }) {
   const [cat, setCat] = useState<Catalog | null>(null);
   const [err, setErr] = useState("");
-  const [q, setQ] = useState("");
+  const [ownQ, setQ] = useState("");
+  const q = outerQ ?? ownQ;
   const [open, setOpen] = useState("");
   const [sort, setSort] = useSticky<"recent" | "most" | "az">("portal.designs.sort", "recent");
   const [kind, setKind] = useSticky<"all" | Kind>("portal.designs.kind", "all");
@@ -71,7 +72,7 @@ export default function PortalDesignCatalog({ customerId, qs }: { customerId: st
         </div>
         <span className="spacer" />
         <select className="pdc-sort" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="recent">Last ordered</option><option value="most">Most ordered</option><option value="az">A–Z</option></select>
-        <label className="aa-search aa-search-plain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search your designs" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        {outerQ === undefined && <label className="aa-search aa-search-plain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search your designs" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
       {list.length === 0 ? <div className="aa-card"><div className="aa-empty">{q ? `No design matches “${q}”.` : "No designs yet."}</div></div> : (
         <div className="dc-grid pdc-grid">

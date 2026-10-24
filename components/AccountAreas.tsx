@@ -1,7 +1,7 @@
 "use client";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import Link from "next/link";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -318,6 +318,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   ) : null;
   // the portal's main tabs never change (Oct 24, Nick: "the toolbar shouldn't change"): extras are tabs inside Artwork and Pricing
   const [artTab, setArtTab] = useSticky<string>("portal.artTab", "art");
+  // their design catalog turned on: Design catalog first, then Artwork, as the tab row in place of the Artwork title
+  // (Oct 24, Nick: "design catalog should be the first thing they see… then it should say artwork")
+  const dcOn = mode === "portal" && !!designsPanel;
+  const [dcTab, setDcTab] = useSticky<string>("portal.artTabDc", "catalog");
   const [priceTab, setPriceTab] = useSticky<string>("portal.priceTab", "list");
   const subBar = (subs: [string, string][], cur: string, set: (k: string) => void) => subs.length > 1 ? (
     <div className="toolbar aa-otabs aa-subtabs" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => set(k)}>{t}</button>)}</div></div>
@@ -891,7 +895,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div className="aa-home">
       <div className="aa-home-main stack">
       {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
-      {tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos")}
+      {!dcOn ? tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos") : showArch ? <div className="aa-sec-h"><h3>Archived artwork</h3></div> : null}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {mode !== "portal" && brandCardEl}
       <div className="aa-card">
@@ -1009,7 +1013,19 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   }
   else if (area === "designs" && designsPanel) body = designsPanel;
   // portal Artwork: Logos and mockups · Design catalog · Brand standards, as tabs under it (Oct 24, Nick)
-  if (mode === "portal" && area === "artwork") {
+  if (dcOn && area === "artwork") {
+    const subs: [string, string][] = [["catalog", "Design catalog"], ["art", "Artwork"], ...(brandCardEl ? [["brand", "Brand standards"] as [string, string]] : [])];
+    const cur = subs.find((x) => x[0] === dcTab)?.[0] || "catalog";
+    const dc = isValidElement(designsPanel) ? cloneElement(designsPanel as ReactElement<{ q?: string }>, { q }) : designsPanel;
+    body = <>
+      <div className="toolbar aa-otabs aa-subtabs aa-dc-bar" data-toolbar>
+        <div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setDcTab(k)}>{t}</button>)}</div>
+        <span className="spacer" />
+        {cur !== "brand" && search(cur === "catalog" ? "Search your designs" : showArch ? "Search archived" : "Search logos")}
+      </div>
+      {cur === "catalog" ? dc : cur === "brand" ? brandCardEl : body}
+    </>;
+  } else if (mode === "portal" && area === "artwork") {
     const subs: [string, string][] = [["art", "Logos and mockups"], ...(designsPanel ? [["catalog", "Design catalog"] as [string, string]] : []), ...(brandCardEl ? [["brand", "Brand standards"] as [string, string]] : [])];
     const cur = subs.find((x) => x[0] === artTab)?.[0] || "art";
     body = <>{subBar(subs, cur, setArtTab)}{cur === "catalog" ? designsPanel : cur === "brand" ? brandCardEl : body}</>;
