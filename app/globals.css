@@ -12942,3 +12942,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .qb-menu button,.qb-menu a{border:0;background:none;text-align:left;font:inherit;font-size:13px;color:var(--ink);padding:7px 10px;border-radius:6px;cursor:pointer;text-decoration:none;white-space:nowrap}
 .qb-menu button:hover,.qb-menu a:hover{background:var(--surface-2)}
 .qb-menu button:disabled{color:var(--ink-3);cursor:default}
+/* the customer portal's tabs in the shop's one look (Oct 24, Nick: "this toolbar lost the names… does it match our style
+   guidelines"): the order page's tab bar, a white bar with the picked tab underlined in blue, names in sentence case,
+   counts in small gray pills; replaces the filled colored tabs */
+.portal .aa-nav{padding:0 8px;gap:0;border-radius:12px}
+.portal .aa-tab{border-radius:0;padding:12px 10px;font-size:13.5px;letter-spacing:0;text-transform:none;font-weight:700;color:var(--ink-3)}
+.portal .aa-tab:hover{background:none;color:var(--ink)}
+.portal .aa-tab.on,.portal .aa-tab.on:nth-child(3n+1),.portal .aa-tab.on:nth-child(3n+2),.portal .aa-tab.on:nth-child(3n){background:none;color:var(--ink);box-shadow:inset 0 -2.5px 0 var(--accent)}
+.portal .aa-n,.portal .aa-tab.on .aa-n,.portal .aa-tab.on:nth-child(3n) .aa-n{background:var(--surface-2);color:var(--ink-3)}

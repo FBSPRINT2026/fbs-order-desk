@@ -219,13 +219,14 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: (mode as string) === "shop" },
     { id: "orders", label: "Orders", icon: I.orders, n: mode === "portal" ? inWork.length + quotes.filter((o) => !o.archived && o.status === "quote_sent").length : inWork.length },
     { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
-    { id: "program", label: "Program", icon: I.program, show: !!programPanel },
+    // only customers with a program see it (Oct 24, Nick, on the portal's tabs losing their names: one tab too many)
+    { id: "program", label: "Program", icon: I.program, show: !!programPanel && (!!hasProgram || area === "program") },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
-    { id: "messages", label: mode === "portal" ? "Message center" : "Messages", icon: I.messages, n: messages.length },
+    { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
-    { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Customer supplied goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
+    { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Your goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
