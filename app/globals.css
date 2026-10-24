@@ -13358,3 +13358,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx-left>.pdx-track{flex:1 1 auto}
 .pdx-left .pdx-track .pdx-track-list{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 .pdx-top>.pdx-col:not(.pdx-left)>.pdx-hold{flex:1 1 auto}
+/* Orders sent to FBS, nothing waiting (Oct 24, Nick: "we're all caught up… a nice little graphic") */
+.pdx-caught{display:flex;align-items:center;gap:14px;padding:6px 2px}
+.pdx-caught svg{flex:0 0 auto}
+.pdx-caught b{display:block;font-size:15px}
+.pdx-caught span{display:block;font-size:13px;color:var(--ink-3);margin-top:2px}

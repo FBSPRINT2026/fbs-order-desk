@@ -237,7 +237,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // sent in the last two weeks
   const twoWeeks = new Date(Date.now() - 14 * 864e5).toISOString();
   type SentRow = Order & { staff_seen_at?: string | null; cancel_requested_at?: string | null; simple_order?: unknown };
-  const sentDash = (orders as SentRow[]).filter((o) => o.submitted_at && (o.status === "request" || (o.submitted_at >= twoWeeks && o.status !== "completed")))
+  // once it's an order it leaves the list (Oct 24, Nick: "once it's turned into order, it should just go away… we're all caught up")
+  void twoWeeks;
+  const sentDash = (orders as SentRow[]).filter((o) => o.submitted_at && ["request", "quote", "quote_sent"].includes(String(o.status)))
     .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at))).slice(0, 6).map((o) => {
       const pcs = o.qty || 0, simpleO = o.simple_order != null;
       const st = String(o.status) === "void" ? { step: -1, label: "Canceled", tone: "off" as const, note: "This order was canceled." }

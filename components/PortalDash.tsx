@@ -101,10 +101,16 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
 
 
 
-      {sent.length > 0 && (
+      {(
         <section className="pdx-card pdx-sent">
           <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
-          <div className="pdx-sent-list">
+          {!sent.length && (
+            <div className="pdx-caught">
+              <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="var(--accent-soft)" /><circle cx="28" cy="28" r="18" fill="var(--surface)" stroke="var(--ok)" strokeWidth="2.5" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /><circle cx="47" cy="11" r="2.5" fill="var(--warn)" /><circle cx="9" cy="16" r="2" fill="var(--accent)" /><circle cx="46" cy="45" r="1.8" fill="var(--accent)" /></svg>
+              <div><b>You&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
+            </div>
+          )}
+          {sent.length > 0 && <div className="pdx-sent-list">
             {sent.map((x) => (
               <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
                 <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
@@ -112,7 +118,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
                 <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
               </Link>
             ))}
-          </div>
+          </div>}
         </section>
       )}
 
