@@ -18,6 +18,7 @@ import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { Pill } from "@/components/bits";
 import { StarOrder } from "@/components/PortalDashBits";
+import PortalSwitch from "@/components/PortalSwitch";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -302,7 +303,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
   const brandCardEl = (brandColors.length > 0 || brandEditor) ? (
         <div className="aa-card">
           <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}
-            {mode === "shop" && onBrandPortal && <><span className="spacer" style={{ flex: 1 }} /><label className="check bs-portal" title="Brand standards under Artwork in their portal"><input type="checkbox" checked={brandPortal} onChange={(e) => onBrandPortal(e.target.checked)} />Show in their portal</label></>}</div>
+            {mode === "shop" && onBrandPortal && <><span className="spacer" style={{ flex: 1 }} /><PortalSwitch on={brandPortal} onChange={onBrandPortal} what="their brand standards" /></>}</div>
           {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
             <div key={g || "_"} className="bs-group">
               {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}
