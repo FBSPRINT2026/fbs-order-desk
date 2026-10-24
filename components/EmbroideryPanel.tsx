@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
 import { mergeProduction, type ProductionSettings } from "@/lib/production";
 import { BACKINGS, THREAD_LINES, TOPPINGS, lineName, backingFor, closestThreads, coverageOf, cycleMinutes, embGarment, embMax, embWarnings, estimateStitches, findThreads, piecesPerHour, threadByName, threadLabel, type EmbSpec, type Thread } from "@/lib/embroidery";
-import { drawDst, readDst, type DstInfo } from "@/lib/dst";
+import { drawDst, type DstInfo } from "@/lib/dst";
+import { takeDigitized } from "@/lib/digitizedFiles";
 import { loadThreadStock, stockKey } from "@/lib/threadStock";
 import { lastOf, type EmbLast } from "@/lib/embroideryLast";
 
@@ -104,27 +105,15 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
     pv.current.innerHTML = "";
     const c = drawDst(dst, threadHexes, 360); c.className = "emb-dst-c"; pv.current.appendChild(c);
   }, [dst, threadHexes]);
-  async function takeDst(f: File) {
+  // the digitizer's files (Oct 23, Nick: "the DST is the main thing that we sew from, the .EMB is for the Hatch program
+  // that we can edit, the PDF shows us the details and how to sew it and the color changes"): the zip or the loose files
+  async function takeFiles(list: File[]) {
     setDstErr(""); setBusy(true);
     try {
-      const info = readDst(await f.arrayBuffer());
+      const { set, info } = await takeDigitized(createClient(), designId || null, list, { save: !portal });
       setDst(info);
-      let path = "";
-      if (!portal) {
-        const sb = createClient();
-        path = `embroidery/${designId || "loose"}/${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
-        const up = await sb.storage.from("proofs").upload(path, f, { contentType: "application/octet-stream" });
-        if (up.error) path = "";
-        // kept with the logo too, so a reorder finds it (the thread room's digitizing list reads it)
-        if (path && designId) {
-          const { data } = await sb.from("designs").select("specs").eq("id", designId).maybeSingle();
-          const sp = (data?.specs || {}) as Record<string, unknown>;
-          const files = (((sp.embroidery as { files?: unknown[] } | undefined)?.files) || []) as unknown[];
-          await sb.from("designs").update({ specs: { ...sp, embroidery: { ...(sp.embroidery as object || {}), files: [{ path, name: f.name, stitches: info.stitches, colors: info.colors, wIn: info.wIn, hIn: info.hIn, at: new Date().toISOString() }, ...files].slice(0, 10) } } }).eq("id", designId);
-        }
-      }
-      setIm({ stitches: info.stitches, emb: { stitchesFrom: "file", file: { path, name: f.name, stitches: info.stitches, colors: info.colors, wIn: info.wIn, hIn: info.hIn, at: new Date().toISOString() } } });
-    } catch (e) { setDstErr(e instanceof Error ? e.message : "Couldn't read that file."); }
+      setIm({ stitches: info.stitches, emb: { stitchesFrom: "file", file: set } });
+    } catch (e) { setDstErr(e instanceof Error ? e.message : "Couldn't read those files."); }
     setBusy(false);
   }
 
@@ -182,8 +171,8 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
         {!portal && (
           <div className="emb-row emb-file">
             <span className="emb-l">Digitized file</span>
-            {emb.file ? <span><b>{emb.file.name}</b> · {emb.file.stitches.toLocaleString()} stitches · {emb.file.colors} color{emb.file.colors === 1 ? "" : "s"} · {emb.file.wIn}&quot; × {emb.file.hIn}&quot;</span> : <span className="faint">Not digitized yet: the stitches are an estimate</span>}
-            <label className="btn sm" style={{ cursor: "pointer" }}>{busy ? "Reading…" : emb.file ? "Replace DST" : "Add the DST"}<input type="file" hidden accept=".dst,.DST" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void takeDst(f); }} /></label>
+            {emb.file ? <span><b>{emb.file.name}</b> · {emb.file.stitches.toLocaleString()} stitches · {emb.file.colors} color{emb.file.colors === 1 ? "" : "s"} · {emb.file.wIn}&quot; × {emb.file.hIn}&quot;{[emb.file.path && { p: emb.file.path, n: emb.file.name, l: "DST" }, emb.file.emb && { p: emb.file.emb.path, n: emb.file.emb.name, l: "EMB (Hatch)" }, emb.file.sheet && { p: emb.file.sheet.path, n: emb.file.sheet.name, l: "Worksheet" }].filter(Boolean).map((x) => { const f = x as { p: string; n: string; l: string }; return <a key={f.l} className="lc-link" href={`/api/files/open?${new URLSearchParams({ p: f.p, n: f.n })}`} target="_blank" rel="noreferrer">{f.l}</a>; })}</span> : <span className="faint">Not digitized yet: the stitches are an estimate</span>}
+            <label className="btn sm" style={{ cursor: "pointer" }} title="The digitizer's zip, or the DST (with the EMB and the PDF worksheet if you have them)">{busy ? "Reading…" : emb.file ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ""; if (fs.length) void takeFiles(fs); }} /></label>
           </div>
         )}
         {dstErr && <div className="err">{dstErr}</div>}

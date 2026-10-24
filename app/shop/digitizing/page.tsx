@@ -7,6 +7,7 @@ import { useCan, useRole } from "@/components/RoleContext";
 import { previewUrls } from "@/lib/designs";
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
 import { drawDst, readDst } from "@/lib/dst";
+import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import { lineName, threadByName } from "@/lib/embroidery";
 
 /**
@@ -21,7 +22,7 @@ import { lineName, threadByName } from "@/lib/embroidery";
  * A DST dropped here is read (lib/dst.ts) and kept on the logo (designs.specs.embroidery.files).
  */
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
-type EmbFile = { path: string; name: string; stitches: number; colors: number; wIn: number; hIn: number; at: string };
+type EmbFile = DigitizedSet;
 type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string } };
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "all";
@@ -36,7 +37,8 @@ export default function Digitizing() {
   const [filter, setFilter] = useSticky<Filter>("digitizing.filter", "need");
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState("");
-  const [vendor, setVendor] = useSticky<string>("digitizing.vendor", "");
+  // our digitizer (Oct 23, Nick): Volikes Creative, volikescreative.com
+  const [vendor, setVendor] = useSticky<string>("digitizing.vendor", "contact@volikescreative.com");
 
   async function load() {
     const sb = createClient();
@@ -57,21 +59,26 @@ export default function Digitizing() {
   const count = (f: Filter) => items.filter((it) => f === "all" || stateOf(it) === f).length;
 
   /** what the digitizer needs, written out */
+  /** what the digitizer needs, written out: Volikes Creative asks for the final size, placement, fabric and colors,
+   *  the machine format, what it's for, the due date and the quantity (volikescreative.com) */
   const requestText = (it: Item) => {
     const l = (it.g.lines || [])[0], im = it.im, emb = im.emb || {};
     const threadsTxt = (im.inks || "").split(/\s*,\s*/).filter(Boolean).map((n) => { const t = threadByName(n); return t ? `${t.code} ${t.name}${t.pms.length ? ` (PMS ${t.pms[0].replace(/^PMS\s*/i, "")})` : ""}` : n; });
     const colors = [...new Set((it.g.lines || []).map((x) => x.color).filter(Boolean))];
+    const pcs = (it.g.lines || []).reduce((a, x) => a + Object.values(x.sizes || {}).reduce((b, v) => b + (+(v || 0)), 0), 0);
+    const due = it.o.due_date ? new Date(it.o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
     return [
-      `Digitizing request: ${it.d ? designLabel(it.d) : "logo"} for ${it.o.customers?.company || it.o.customers?.name || "customer"} (our order #${it.o.number}${it.o.nickname ? `, ${it.o.nickname}` : ""})`,
+      `Digitizing request: ${it.d ? designLabel(it.d) : "logo"} for ${it.o.customers?.company || it.o.customers?.name || "customer"} (FBS order #${it.o.number}${it.o.nickname ? `, ${it.o.nickname}` : ""})`,
       "",
-      `Finished size: ${im.size || "see art"}${im.stitches ? ` (we estimate about ${im.stitches.toLocaleString()} stitches)` : ""}`,
+      `Final size: ${im.size || "see art"}${im.stitches && im.emb?.stitchesFrom !== "file" ? ` (we estimate about ${im.stitches.toLocaleString()} stitches)` : ""}`,
       `Placement: ${im.location}${im.drop ? `, ${im.drop}" below the collar` : ""}`,
-      `Garment: ${[l?.brand, l?.style, l?.garment].filter(Boolean).join(" ") || "see order"}${colors.length ? `, ${colors.join(" / ")}` : ""}`,
+      `Garment and fabric: ${[l?.brand, l?.style, l?.garment].filter(Boolean).join(" ") || "see order"}${colors.length ? `, ${colors.join(" / ")}` : ""}`,
       `Backing: ${emb.backing || "cutaway"}${emb.topping && emb.topping !== "None" ? `, with ${emb.topping}` : ""}`,
-      `Thread: ${lineName(emb.line || "Polyneon 40")}${threadsTxt.length ? `: ${threadsTxt.join(", ")}` : ""}`,
+      `Thread colors: ${lineName(emb.line || "Polyneon 40")}${threadsTxt.length ? `: ${threadsTxt.join(", ")}` : ""}`,
       emb.puff ? "Effects: 3D puff (please digitize for 3 mm foam)" : emb.metallic ? "Effects: metallic thread" : "",
+      "Machine format: Tajima DST to sew, plus the Wilcom EMB (we edit in Hatch) and the production worksheet PDF (stitch count, size, color stops).",
+      `Quantity: ${pcs ? `${pcs} pieces` : "see order"}${due ? ` · needed by ${due}` : ""}`,
       "",
-      "Please send back: the DST, the editable EMB (Wilcom), and the sew-out sheet (PDF) with the stitch count and color stops in order.",
       "Art is attached.",
     ].filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");
   };
@@ -85,23 +92,19 @@ export default function Digitizing() {
     setBusy("");
     if (error) setErr(error.message); else void load();
   }
-  async function takeDst(it: Item, f: File) {
+  // what the digitizer sends back: the zip, or the DST (to sew), EMB (to edit in Hatch) and PDF worksheet
+  async function takeFiles(it: Item, list: File[]) {
     if (!it.d) return;
     setBusy(it.key); setErr("");
     try {
-      const info = readDst(await f.arrayBuffer());
       const sb = createClient();
-      const path = `embroidery/${it.d.id}/${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
-      const up = await sb.storage.from("proofs").upload(path, f, { contentType: "application/octet-stream" });
-      if (up.error) throw new Error(up.error.message);
-      const file: EmbFile = { path, name: f.name, stitches: info.stitches, colors: info.colors, wIn: info.wIn, hIn: info.hIn, at: new Date().toISOString() };
-      const sp = (it.d.specs || {}) as Record<string, unknown>;
-      await sb.from("designs").update({ specs: { ...sp, embroidery: { ...embOf(it.d), files: [file, ...(embOf(it.d).files || [])].slice(0, 10) } } }).eq("id", it.d.id);
+      const { set, info } = await takeDigitized(sb, it.d.id, list);
+      if (!set.path) throw new Error("Couldn't save the DST.");
       // the order's print takes the file's stitch count (its price follows)
-      const groups = (it.o.groups || []).map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => (im.id === it.im.id ? { ...im, stitches: info.stitches, emb: { ...(im.emb || {}), stitchesFrom: "file" as const, file } } : im)) }));
+      const groups = (it.o.groups || []).map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => (im.id === it.im.id ? { ...im, stitches: info.stitches, emb: { ...(im.emb || {}), stitchesFrom: "file" as const, file: set } } : im)) }));
       await sb.from("orders").update({ groups }).eq("id", it.o.id);
       void load();
-    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that file."); }
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read those files."); }
     setBusy("");
   }
 
@@ -128,7 +131,7 @@ export default function Digitizing() {
                 const st = stateOf(it), e = embOf(it.d), f = it.im.emb?.file || e.files?.[0];
                 return (
                   <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={e.request} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
-                    canEdit={canEdit} busy={busy === it.key} text={requestText(it)} vendor={vendor} onAsked={() => void markAsked(it)} onDst={(file) => void takeDst(it, file)} />
+                    canEdit={canEdit} busy={busy === it.key} text={requestText(it)} vendor={vendor} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)} />
                 );
               })}</tbody>
             </table></div>
@@ -140,7 +143,7 @@ export default function Digitizing() {
   );
 }
 
-function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, vendor, onAsked, onDst }: { it: Item; pic: string; st: "need" | "asked" | "done"; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; vendor: string; onAsked: () => void; onDst: (f: File) => void }) {
+function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, vendor, onAsked, onDst }: { it: Item; pic: string; st: "need" | "asked" | "done"; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; vendor: string; onAsked: () => void; onDst: (f: File[]) => void }) {
   const pv = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -180,14 +183,19 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
                 <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? "Copied" : "Copy the request"}</button>
                 <a className="btn sm" href={`mailto:${encodeURIComponent(vendor)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`}>Open it in my mail</a>
                 {canEdit && st === "need" && it.d && <button type="button" className="btn sm primary" disabled={busy} onClick={onAsked}>Mark requested</button>}
-                {canEdit && it.d && <label className="btn sm" style={{ cursor: "pointer" }}>{busy ? "Reading…" : f ? "Replace the DST" : "Add the DST"}<input type="file" hidden accept=".dst,.DST" onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ""; if (x) onDst(x); }} /></label>}
+                {canEdit && it.d && <label className="btn sm" style={{ cursor: "pointer" }} title="The zip they send back, or the DST with the EMB and the PDF">{busy ? "Reading…" : f ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const x = [...(e.target.files || [])]; e.target.value = ""; if (x.length) onDst(x); }} /></label>}
               </div>
             </div>
             {f && (
               <div className="dgz-file">
-                <div className="imp-l">The digitized file</div>
+                <div className="imp-l">The digitized files</div>
                 <div><b>{f.name}</b></div>
-                <div className="faint">{f.stitches.toLocaleString()} stitches · {f.colors} color stop{f.colors === 1 ? "" : "s"} · {f.wIn}&quot; × {f.hIn}&quot;</div>
+                <div className="faint">{f.stitches.toLocaleString()} stitches · {f.colors} color{f.colors === 1 ? "" : "s"} · {f.wIn}&quot; × {f.hIn}&quot;</div>
+                <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                  {f.path && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer">DST (sew)</a>}
+                  {f.emb && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (edit in Hatch)</a>}
+                  {f.sheet && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet PDF (how to sew it, color stops)</a>}
+                </div>
                 <div ref={pv} className="emb-dst" aria-label="The stitches in the file" />
               </div>
             )}

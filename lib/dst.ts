@@ -12,7 +12,9 @@
 export type DstStitch = { x: number; y: number; kind: "stitch" | "jump" | "stop" };
 export type DstInfo = {
   name: string;
-  /** needle stitches (not counting jumps) */ stitches: number;
+  /** the stitch count, as the digitizer's worksheet gives it (Wilcom's "Stitches": the header's ST, every record
+   *  in the file). Volikes' Icon Only.DST: 4,333 on the sheet, 4,319 needle stitches */ stitches: number;
+  /** needle stitches only (no jumps, trims or stops) */ sewn: number;
   /** thread changes in the file (colors = changes + 1) */ changes: number; colors: number;
   jumps: number; trims: number;
   /** size, inches */ wIn: number; hIn: number;
@@ -55,8 +57,9 @@ export function readDst(buf: ArrayBuffer): DstInfo {
     if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
   }
   const kept = blocks.filter((b) => b.some((s) => !s.jump));
+  const st = parseInt(header.ST || "", 10);
   return {
-    name: header.LA || "", stitches, changes, colors: Math.max(1, kept.length), jumps, trims,
+    name: header.LA || "", stitches: st >= stitches && st < stitches * 1.5 ? st : stitches, sewn: stitches, changes, colors: Math.max(1, kept.length), jumps, trims,
     wIn: Math.round(((maxX - minX) / 254) * 100) / 100, hIn: Math.round(((maxY - minY) / 254) * 100) / 100,
     header, blocks: kept,
   };

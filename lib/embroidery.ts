@@ -100,12 +100,14 @@ export function findThreads(q: string, line?: Thread["line"], n = 30): Thread[] 
 
 /**
  * Stitches in a square inch of stitched area. Small logos are mostly satin and lettering (dense); big ones are mostly
- * fill (tatami ~650 a square inch bare). So it falls from 1,800 when 2 in² or less is stitched to 1,000 at 20 in² or
- * more, plus 20% underlay. Checked against published counts: a 3.5 × 1.75" left chest at half coverage ≈ 5,200; a
- * 4.5 × 2" cap front ≈ 10,000; a 10 × 10" back at 45% ≈ 54,000 (claude/embroidery.md has the sources).
+ * fill (tatami ~650 a square inch bare). So it falls from 2,400 when 2 in² or less is stitched to 1,000 at 20 in² or
+ * more, plus 20% underlay. Against published counts: a 3.5 × 1.75" left chest at half coverage ≈ 8,500 (5,000–10,000
+ * published); a 4.5 × 2" cap front ≈ 13,800 (8,000–15,000); a 10 × 10" back at 45% ≈ 54,000 (claude/embroidery.md).
  * Refit from real DST counts as they come in.
  */
-export const densityFor = (stitchedSqIn: number) => (stitchedSqIn <= 2 ? 1800 : stitchedSqIn >= 20 ? 1000 : 1800 - ((stitchedSqIn - 2) / 18) * 800);
+// Calibrated Oct 23 on Volikes' Gateway "Icon Only" (1.65" × 2.01", about 45% stitched: 4,333 on their worksheet; the
+// first figure, 1,800, came out ~25% low). Small logos are satin borders around fills: dense
+export const densityFor = (stitchedSqIn: number) => (stitchedSqIn <= 2 ? 2400 : stitchedSqIn >= 20 ? 1000 : 2400 - ((stitchedSqIn - 2) / 18) * 1400);
 export const UNDERLAY = 0.2;
 /** tie-ins, tie-offs and trims, a color */
 export const STITCHES_PER_COLOR = 20;
@@ -237,5 +239,5 @@ export type EmbSpec = {
   backing?: string; topping?: string;
   puff?: boolean; metallic?: boolean; detail?: boolean;
   line?: Thread["line"];
-  /** the digitized file (DST) for this print */ file?: { path: string; name: string; stitches: number; colors: number; wIn: number; hIn: number; at: string };
+  /** the digitized file (DST) for this print, with the EMB and the worksheet when they came with it */ file?: import("@/lib/digitizedFiles").DigitizedSet;
 };
