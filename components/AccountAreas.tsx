@@ -555,7 +555,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="aa-starred-g">{starredList.map((o) => (
           <div key={o.id} className="aa-star-t">
             <StarOrder id={o.id} on canAct={canAct} />
-            <Link href={orderHref(o.id)} className="aa-star-n"><b>#{o.number}{o.nickname ? ` ${o.nickname}` : ""}</b><small>{o.qty} pcs{o.due_date ? ` · In hands ${when(o.due_date)}` : ""}</small></Link>
+            <Link href={orderHref(o.id)} className="aa-star-n"><b><span className="onum">#{o.number}</span>{o.nickname ? ` ${o.nickname}` : ""}</b><small>{o.qty} pcs{o.due_date ? ` · In hands ${when(o.due_date)}` : ""}</small></Link>
             {pill(o)}
           </div>))}</div>
       </div>}

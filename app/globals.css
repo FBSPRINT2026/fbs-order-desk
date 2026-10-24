@@ -13618,3 +13618,23 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-star-n:hover b{color:var(--accent)}
 @media (max-width:900px){.aa-starred-g{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.aa-starred-g{grid-template-columns:1fr}}
+/* Dashboard and portal lists: calmer type (Oct 24, Nick: "way too much bold… the wrong font for the order numbers").
+   Order numbers in the body font, gray, regular; one emphasis per row (the name, 600); statuses, notes and links lighter. */
+.portal .onum{font-weight:500;color:var(--ink-3);margin-right:2px}
+.portal :is(.pjr-t small,.pdx-rt small,.pjr-pic,.pdx-rpic,.pd-o .n,.pdx-jt .n,.pdx-nopic,.pdx-ag-pic span,.pdx-ti){font-family:var(--body)}
+.portal .pjr-t small{font-size:12px}
+.portal :is(.pjr-t b,.pdx-trk-t b,.pdx-sent-name b,.pdx-hold-t b,.aa-star-n b,.pdx-ag b){font-weight:600}
+.portal :is(.pjr-btn,.pd-link,.pjr-owe,.pjr-msg,.pdx-go,.pdx-jmsg span,.pdx-more,.pdx-hold-go,.pdx-asst .pa-person){font-weight:600}
+.portal :is(.pdx-trk-h,.pdx-sent-pill){font-weight:500}
+.portal .pdx-trk.t-bad .pdx-trk-h,.portal .pdx-trk.t-act .pdx-trk-h{font-weight:600}
+.portal .pjr-now b{font-weight:600}
+.portal .pjs-st.cur b{font-weight:600}
+.portal :is(.pdx-aging b,.pdx-stmt-meta b,.pdx-pay-parts span){font-weight:600}
+.portal :is(.pdx-stmt-due small,.pdx-pay-big small){font-weight:600}
+.portal :is(.pdx-stmt-due.late span,.pdx-stmt-due.ok span,.pdx-pay-big span){font-weight:500}
+.portal .pdx-stmt-due b{font-weight:700}
+.portal .pdx-hold-acts .btn{font-weight:600}
+.portal .aa-otabs .chips>.chip{font-weight:600}
+.portal .aa-otabs .chips>.chip.on{font-weight:700}
+/* the portal has no code on it: every number in the body font (Oct 24, Nick) */
+.portal{--mono:var(--body)}

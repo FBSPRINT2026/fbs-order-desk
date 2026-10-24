@@ -40,14 +40,14 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // lists that never grow the page (Oct 24, Nick: "make that variable… without creating scroll bars… we don't want to create more page"): three show, the rest fold under "more"
   const trackRow = (t: DashTracked) => (
             <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
-              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
+              <Link href={t.href} className="pdx-trk-t"><b><span className="onum">#{t.number}</span>{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
               <span className="pdx-trk-h">{t.health.text}</span>
               {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
             </div>
   );
   const sentRow = (x: DashSent) => (
             <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
-              <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
+              <span className="pdx-sent-name"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
               <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
               <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
             </Link>
@@ -56,14 +56,14 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
     const points = x.hold.reason.split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).map((t) => t.trim()).filter(Boolean);
     if (size === "tight") return (
       <div key={x.id} className="pdx-hold-row tight">
-        <Link href={x.href} className="pdx-hold-t"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span></Link>
+        <Link href={x.href} className="pdx-hold-t"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span></Link>
         <Link className="pdx-hold-go" href={x.hold.href}>{x.hold.fixLabel} ›</Link>
       </div>
     );
     return (
       <div key={x.id} className={"pdx-hold-row " + size}>
         <div className="pdx-hold-t">
-          <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
+          <Link href={x.href}><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b></Link>
           <span>{x.hold.title}</span>
           {size === "full" ? <ul className="pdx-hold-pts">{points.map((t, i) => <li key={i}>{t}</li>)}</ul>
             : <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>}
