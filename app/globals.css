@@ -13130,3 +13130,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .req-accept textarea{width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;box-sizing:border-box}
 .pdx-more-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 .pdx-more-row a.pdx-more{text-decoration:none}
+/* payments: the "What do you want to pay?" suggestions small, two short lines at most (Oct 24, Nick) */
+.aa-payside .qp-chips{gap:4px}
+.aa-payside .qp-chip{padding:2px 8px;font-size:11.5px;font-weight:600;line-height:1.5}

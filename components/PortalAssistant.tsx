@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MicButton } from "@/components/SearchInput";
 import { greeting } from "@/lib/greeting";
 import { portalAssist, reorderArchived, type AssistAction, type AssistTurn } from "@/app/portal/assist-actions";
 import { describeMyOrder, reorderRequest, startRequest } from "@/app/portal/request-actions";
@@ -21,6 +22,7 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
   const [hello, setHello] = useState("Hello");
   useEffect(() => setHello(greeting()), []);
   const [q, setQ] = useState("");
+  const inRef = useRef<HTMLInputElement>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [doing, setDoing] = useState("");
@@ -79,7 +81,9 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
       {!bare && <h2 className="pa-hello">{hello}</h2>}
       <form className="pa-in" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
         <span className="pa-spark" aria-hidden="true">✨</span>
-        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
+        <input ref={inRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
+        {/* talk to it (Oct 24, Nick: "a microphone button in there so they can just talk to it"): what's said is asked */}
+        <MicButton target={() => inRef.current} label="Ask by voice" className="pa-mic" onDone={(t) => { if (t.trim()) ask(t.trim()); }} />
         <button type="submit" className="btn primary" disabled={busy || !q.trim()}>{busy ? "Thinking…" : "Ask"}</button>
       </form>
       {!turns.length && <div className="pa-ideas">{ideas.map((s) => <button key={s} type="button" onClick={() => ask(s)}>{s}</button>)}{personHref && <a className="pa-person" href={personHref}>Talk to a person →</a>}</div>}

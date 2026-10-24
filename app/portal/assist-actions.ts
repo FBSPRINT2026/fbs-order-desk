@@ -63,7 +63,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const { data: cs } = await supabase.from("customers").select("id, company, price_type, payment_terms");
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
-    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
+    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
     const orders = ((os || []) as (Order & { submitted_at: string | null })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
@@ -75,10 +75,59 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     (pays || []).forEach((p) => { paid[p.order_id] = (paid[p.order_id] || 0) + (+p.amount || 0); });
     const gmap = new Map(((goods || []) as { order_id: string; status: GoodsStatus; issue_type: string }[]).map((g) => [g.order_id, g]));
     const wholesale = (cs || []).some((c) => c.price_type === "wholesale");
+    // the full story of the orders that matter (Oct 24, Nick: asked about #40149 "it came back and said, it's a quote. We're
+    // waiting for your goods… but we haven't even confirmed it yet"; "was the artwork okay?… it didn't even see the
+    // artwork that we made in the mock-up creator"): where each one really is, its art (mockups, proofs, separations), the
+    // goods coming in and checked in, and what shipped. The helper isn't trained: it only knows what's written here.
+    const asked = new Set((turns.map((t) => t.text).join(" ").match(/\b\d{4,6}\b/g) || []).map(Number));
+    const deep = orders.filter((o) => asked.has(o.number) || o.status !== "completed").slice(0, 30);
+    const dids = deep.map((o) => o.id);
+    const none = Promise.resolve({ data: [] as unknown[] });
+    const [{ data: prf }, { data: seps }, { data: shp }, { data: gin }, { data: gck }] = await Promise.all([
+      dids.length ? admin.from("proofs").select("order_id, title, status, version, sent_at, decided_at, customer_change, archived_at").in("order_id", dids).is("archived_at", null).order("created_at", { ascending: false }) : none,
+      dids.length ? admin.from("separations").select("order_id, location, status").in("order_id", dids) : none,
+      dids.length ? admin.from("shipments").select("order_id, status, carrier, service, boxes, shipped_at, created_at").in("order_id", dids).order("created_at", { ascending: false }) : none,
+      dids.length ? admin.from("goods_shipments").select("order_id, carrier, tracking, boxes, est_delivery, delivered_at, track_status").in("order_id", dids) : none,
+      dids.length ? admin.from("goods_checkins").select("order_id, expected, received, boxes, status, note, created_at, resolution").in("order_id", dids).order("created_at", { ascending: false }) : none,
+    ]);
+    type Row = Record<string, unknown> & { order_id: string };
+    const by = (rows: unknown, id: string) => ((rows || []) as Row[]).filter((r) => r.order_id === id);
+    const stage = (o: Order & { submitted_at: string | null }) =>
+      o.status === "request" ? "sent to us; NOT confirmed by the shop yet (we're checking it; nothing is ordered, printed or waiting on goods until we confirm)"
+      : o.status === "quote_sent" ? "quote sent; waiting on the customer's approval"
+      : `${ST[o.status as keyof typeof ST]?.portal || o.status}${o.approved_at ? ` (confirmed ${String(o.approved_at).slice(0, 10)})` : ""}`;
+    const story = (o: Order & { submitted_at: string | null; groups?: unknown; approved_at?: string | null }) => {
+      const out: string[] = [`#${o.number} ${o.nickname || "(no name)"}: ${stage(o)}`];
+      const gs = Array.isArray(o.groups) ? (o.groups as { name?: string; fromMockup?: { number: number | null }; customerMockups?: unknown[]; mockupThumbs?: unknown[]; mockupAt?: string; imprints?: { location?: string; design_id?: string; inks?: string }[]; lines?: { style?: string; color?: string; sizes?: Record<string, number> }[] }[]) : [];
+      for (const g of gs) {
+        const art = g.fromMockup ? `art: made by the customer in our Mockup Creator (mockup M-${g.fromMockup.number ?? "?"})` : (g.customerMockups || []).length ? "art: the customer's own mockup file was attached" : g.mockupAt || (g.mockupThumbs || []).length ? "art: we made the mockup" : "art: no mockup yet";
+        const prints = (g.imprints || []).filter((d) => d.location).map((d) => `${d.location}${d.design_id ? "" : " (no logo picked)"}${d.inks ? ` in ${d.inks}` : ""}`).join("; ");
+        const garments = (g.lines || []).filter((l) => l.style).map((l) => `${l.style} ${l.color || ""}`.trim()).join(", ");
+        out.push(`  group ${g.name || ""}: ${garments || "garments not set"} | ${art}${prints ? ` | prints: ${prints}` : ""}`);
+      }
+      const pr = by(prf, o.id)[0];
+      out.push(pr ? `  proof: ${String(pr.title || "proof")} v${pr.version ?? 1} is ${pr.status}${pr.decided_at ? ` (${String(pr.decided_at).slice(0, 10)})` : pr.sent_at ? ` (sent ${String(pr.sent_at).slice(0, 10)})` : ""}` : "  proof: none sent yet");
+      const sp = by(seps, o.id);
+      out.push(sp.length ? `  separations (print films): ${sp.map((x) => `${x.location}: ${x.status}`).join("; ")}` : "  separations (print films): not started yet");
+      if (wholesale) {
+        const g = gmap.get(o.id), inbound = by(gin, o.id), chk = by(gck, o.id);
+        const parts: string[] = [];
+        if (o.status === "request") parts.push("not needed until we confirm the order");
+        else if (g) parts.push(GOODS[g.status]?.portal || g.status);
+        inbound.forEach((x) => parts.push(`coming by ${x.carrier || "carrier"}${x.tracking ? ` ${x.tracking}` : ""}${x.boxes ? `, ${x.boxes} boxes` : ""}${x.delivered_at ? `, delivered ${String(x.delivered_at).slice(0, 10)}` : x.est_delivery ? `, due ${String(x.est_delivery).slice(0, 10)}` : ""}`));
+        chk.slice(0, 2).forEach((x) => parts.push(`checked in ${String(x.created_at).slice(0, 10)}: ${x.boxes ?? "?"} boxes, ${x.received ?? "?"} of ${x.expected ?? "?"} pieces, ${x.status}${x.note ? ` (${x.note})` : ""}`));
+        out.push(`  their goods: ${parts.join("; ") || "nothing on file"}`);
+      }
+      const sh = by(shp, o.id);
+      if (o.delivery_method === "ship") out.push(`  shipping: ${sh.length ? sh.map((x) => `${x.carrier || ""} ${x.service || ""} ${x.status}${x.shipped_at ? ` ${String(x.shipped_at).slice(0, 10)}` : ""}`.replace(/\s+/g, " ").trim()).join("; ") : "not shipped yet"}${o.tracking ? ` | tracking ${o.ship_method || ""} ${o.tracking}` : ""}`);
+      else out.push(`  ${o.delivery_method === "deliver" ? "we deliver it" : "pickup at the shop"}`);
+      return out.join("\n");
+    };
+    const stories = deep.map(story);
     const lines = orders.map((o) => {
       const bal = o.type === "invoice" ? r2((+o.total || 0) - (paid[o.id] || 0)) : 0;
       const g = gmap.get(o.id);
-      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
+      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${o.status === "request" ? "sent to us, not confirmed yet" : `${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status}`} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g && o.status !== "request" ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
     });
     const old = ((arch || []) as { id: string; visual_id: string; nickname: string; status_name: string; order_date: string | null; total: number; qty: number }[])
       .map((a) => `#${a.visual_id} | ${a.order_date || ""} | ${a.nickname || "(no name)"} | past order (${a.status_name}) | total $${(+a.total || 0).toFixed(2)}${a.qty ? ` | ${a.qty} pcs` : ""}`);
@@ -107,8 +156,11 @@ Rules:
 - New orders described in words ("48 navy tees with our logo on the front"): offer "new_order_from_text" with their description as text. Otherwise "new_order".
 - Questions for a person, changes to an order in progress, rush requests, complaints: offer "message_shop" with a clear message written for them as text.
 - Use open_order for status questions about one order.
+- Order details below are the truth. An order "sent to us; NOT confirmed" is not a quote and isn't waiting on goods: say we got it and are checking it, and they'll get a message when we confirm.
+- Art questions: say how the art came in (their mockup from our Mockup Creator with its M-number, their own file, or ours), whether a proof was sent or approved, and whether separations have started. If nothing's wrong on file, say so plainly and that we'll reach out if anything comes up.
+- Goods questions: say what's coming, what's been checked in (boxes, pieces), and anything short or wrong. Shipping: carrier, date and tracking from the details.
 - Tracking: if the order ships and has a tracking number, give the carrier and number and offer "track" with that order number. If it's a pickup order, say it's for pickup (and whether it's ready). If it ships but has no tracking yet, say it hasn't shipped yet and when it's due. If they didn't say which order, use their most recent shipped or shipping orders.`,
-        prompt: `ACCOUNT\nCompany: ${(cs || [])[0]?.company || ""}\nBalance due: $${due.toFixed(2)}\n\nORDERS (newest first; number | date | name | status | money | details)\n${lines.join("\n") || "(none)"}\n\nPAST ORDERS FROM BEFORE THE PORTAL\n${old.join("\n") || "(none)"}\n\nCONVERSATION\n${turns.map((t) => `${t.role === "user" ? "Customer" : "Helper"}: ${t.text}`).join("\n")}`,
+        prompt: `ACCOUNT\nCompany: ${(cs || [])[0]?.company || ""}\nBalance due: $${due.toFixed(2)}\n\nORDERS (newest first; number | date | name | status | money | details)\n${lines.join("\n") || "(none)"}\n\nORDER DETAILS (open and asked-about orders)\n${stories.join("\n") || "(none)"}\n\nPAST ORDERS FROM BEFORE THE PORTAL\n${old.join("\n") || "(none)"}\n\nCONVERSATION\n${turns.map((t) => `${t.role === "user" ? "Customer" : "Helper"}: ${t.text}`).join("\n")}`,
       });
       if (!r.ok) return { ok: false, error: r.off ? "The helper is resting right now. Use the buttons below or message us." : r.error };
       reply = r.data.reply; raw = r.data.actions || [];

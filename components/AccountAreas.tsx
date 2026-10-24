@@ -701,7 +701,6 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           }}
           open={liveInvoices.filter((o) => o.balance > 0.004).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, status: o.status, total: o.total, balance: Math.round(o.balance * 100) / 100, created_at: o.created_at, due_date: o.due_date, pay_due: payDue(o), search: o.search }))} />
           )}
-          {searchBox}
           <div className="aa-paybox">
             <div className="aa-paybox-h">Pay orders</div>
             {sel.length ? <>
