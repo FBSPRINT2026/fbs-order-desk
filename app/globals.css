@@ -13652,3 +13652,25 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
   .portal .aa-tbl-cols col.c-dt{width:120px}
   .portal .aa-tbl-cols col.c-m{width:92px}
 }
+/* statement title: the color bar stays under the word, inside the sheet (Oct 24, Nick) */
+.portal .st-title h1::after{width:100%;min-width:0;margin-left:auto}
+/* On hold, nothing on hold: a calm check (Oct 24, Nick: "a graphic… everything is A-okay") */
+.pdx-hold-ok{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;padding:14px 10px}
+.pdx-hold-ok b{font-size:15px;font-weight:600;color:var(--ink)}
+.pdx-hold-ok span{font-size:12.5px;color:var(--ink-3);max-width:300px;line-height:1.45}
+/* portal Goods tab: one short row per job (Oct 24, Nick: "these boxes are huge") */
+.gb.dense{display:flex;flex-direction:column;gap:8px}
+.gb.dense .gc{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(220px,1fr) auto;column-gap:22px;row-gap:4px;align-items:center;padding:10px 14px;border-radius:10px}
+.gb.dense .gc-h{grid-column:1;grid-row:1;display:block}
+.gb.dense .gc-t b{font-size:14px;font-weight:600}
+.gb.dense .gc-t{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:6px}
+.gb.dense .gc-sub{flex-basis:100%}
+.gb.dense .gc-st{display:inline-block;margin-top:4px;padding:0;background:none;font-weight:600;font-size:12px}
+.gb.dense .gc-steps{grid-column:2;grid-row:1}
+.gb.dense .gc-steps li{font-size:10.5px;font-weight:500}
+.gb.dense .gc-acts{grid-column:3;grid-row:1;flex-wrap:nowrap}
+.gb.dense .gc-acts .spacer,.gb.dense .gc-acts .gc-link{display:none}
+.gb.dense .gc-from{grid-column:1 / -1;grid-row:2;padding:0;font-size:12px}
+.gb.dense .gc-from.need{display:none}
+.gb.dense :is(.gc-ships,.gc-last,.gc-form,.gc-issue,.gc-note,.gc-help){grid-column:1 / -1}
+@media (max-width:820px){.gb.dense .gc{grid-template-columns:1fr}.gb.dense :is(.gc-h,.gc-steps,.gc-acts,.gc-from){grid-column:1;grid-row:auto}.gb.dense .gc-acts{flex-wrap:wrap}}

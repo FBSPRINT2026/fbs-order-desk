@@ -130,7 +130,11 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
                 fourth on under "+N more" (Oct 24, Nick: fill the panel, never a scroll bar) */}
             {held.length === 1 ? holdRow(held[0], "full") : held.length === 2 ? held.map((x) => holdRow(x, "mid")) : held.slice(0, 3).map((x) => holdRow(x, "tight"))}
             {held.length > 3 && <details className="pdx-hold-more"><summary>+{held.length - 3} more on hold ›</summary>{held.slice(3).map((x) => holdRow(x, "tight"))}</details>}
-          </div> : <p className="pdx-track-none">Nothing is on hold. If we ever need something from you to keep an order moving, it shows up here.</p>}
+          </div> : <div className="pdx-hold-ok" role="status">
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <b>Nothing on hold</b>
+            <span>Everything&apos;s good to go. If we ever need something from you to keep an order moving, it shows up here.</span>
+          </div>}
         </section>
         </div>
       </div>

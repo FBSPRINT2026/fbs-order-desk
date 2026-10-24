@@ -9,13 +9,13 @@ import { portalAttachUrl, portalSend } from "@/app/portal/message-actions";
 import type { GoodsItem } from "@/lib/goods";
 
 /** The customer's goods area (wholesale). `hub`: a Messages hub is on the same page, so "Message" opens it there. */
-export default function PortalGoods({ items, incoming = [], canAct, qs, compact, hub, empty }: { items: GoodsItem[]; incoming?: PendingShipment[]; canAct: boolean; qs: string; compact?: boolean; hub?: boolean; empty?: string }) {
+export default function PortalGoods({ items, incoming = [], canAct, qs, compact, dense, hub, empty }: { items: GoodsItem[]; incoming?: PendingShipment[]; canAct: boolean; qs: string; compact?: boolean; dense?: boolean; hub?: boolean; empty?: string }) {
   const router = useRouter();
   const chatHref = (id: string) => `/portal${qs ? qs + "&" : "?"}area=messages&c=${id}:goods`;
   return (
     <>
     <PortalIncoming list={incoming} canAct={canAct} link={async (pick) => { const r = await linkIncoming(pick); if (r.ok) router.refresh(); return r; }} />
-    {(items.length > 0 || !incoming.length) && <GoodsBoard mode="portal" items={items} canAct={canAct} compact={compact} empty={empty}
+    {(items.length > 0 || !incoming.length) && <GoodsBoard mode="portal" items={items} canAct={canAct} compact={compact} dense={dense} empty={empty}
       act={{
         addTracking, saveInfo: saveGoodsInfo, changed: () => router.refresh(), chatHref,
         message: (id, body) => portalSend(id, body, [], "goods"),

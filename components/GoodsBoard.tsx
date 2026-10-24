@@ -34,9 +34,9 @@ const ago = (iso: string) => { const s = (Date.now() - Date.parse(iso)) / 1000; 
  * Customer supplied goods (wholesale): one card per job with the goods status, a step tracker,
  * shipments with tracking links, and quick actions: add tracking, message about the goods, and (shop) set the status.
  */
-export default function GoodsBoard({ mode, items, act, canAct = true, compact = false, empty }: { mode: "portal" | "shop"; items: GoodsItem[]; act: GoodsActions; canAct?: boolean; compact?: boolean; empty?: string }) {
+export default function GoodsBoard({ mode, items, act, canAct = true, compact = false, dense = false, empty }: { mode: "portal" | "shop"; items: GoodsItem[]; act: GoodsActions; canAct?: boolean; compact?: boolean; /** one short row per job (the portal Goods tab: Oct 24, Nick: "these boxes are huge… 30 orders… scroll forever") */ dense?: boolean; empty?: string }) {
   if (!items.length) return <div className="gb-empty">{empty || (mode === "portal" ? "No jobs are waiting on your goods right now." : "No customer supplied goods on open jobs.")}</div>;
-  return <div className={"gb" + (compact ? " compact" : "")}>{items.map((it) => <GoodsCard key={it.order.id} it={it} mode={mode} act={act} canAct={canAct} compact={compact} />)}</div>;
+  return <div className={"gb" + (compact ? " compact" : "") + (dense ? " dense" : "")}>{items.map((it) => <GoodsCard key={it.order.id} it={it} mode={mode} act={act} canAct={canAct} compact={compact || dense} />)}</div>;
 }
 
 function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "portal" | "shop"; act: GoodsActions; canAct: boolean; compact: boolean }) {

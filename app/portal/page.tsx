@@ -368,7 +368,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
-            goodsPanel={wholesale ? <PortalGoods items={goodsItems} incoming={incoming} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
+            goodsPanel={wholesale ? <PortalGoods items={goodsItems} incoming={incoming} canAct={!ctx.preview} qs={qs} dense empty="No open jobs need goods from you right now." /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length + incoming.length}
             onPaySelect={aiPaySelect}
