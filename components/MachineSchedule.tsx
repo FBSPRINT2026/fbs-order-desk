@@ -105,7 +105,8 @@ const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.len
 const abbrCo = (n: string) => n.replace(/[,.]?\s+(company|co|inc|llc|l\.l\.c|corp|corporation|ltd|limited)\.?$/i, "").replace(/\s+(and|&)\s+/gi, " & ").trim() || n;
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
-const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
+// the machine kinds (picked from the menu's SP / EMB / HP now; kept for the names)
+export const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
 const VIEW_OPTS = [["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
@@ -359,8 +360,9 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   // view); screen printing shows the screen presses, or the heat presses (heat press goes with screen printing)
   const [side] = useProdSide();
   const embSide = embOnly || side === "embroidery";
-  const typeF: "" | "screen" | "embroidery" | "heat" = embSide ? "embroidery" : typeF0 === "heat" ? "heat" : "screen";
-  const typeOpts = TYPE_OPTS.filter(([k]) => k === "screen" || k === "heat");
+  // the menu's SP / EMB / HP picks the machines (Oct 24): screen presses, embroidery heads, or the heat press
+  const typeF: "" | "screen" | "embroidery" | "heat" = embSide ? "embroidery" : side === "heat" ? "heat" : "screen";
+  void typeF0; void setTypeF;
   // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
   const [mine, setMine] = useSticky("cal.mine", false);
   const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
@@ -1526,8 +1528,6 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       <div className="ms-head-w">
       <div className="ms-head">
         <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
-        {!embSide && <div className="rv-seg ms-full">{typeOpts.map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>}
-        {!embSide && <select className="ms-cmp ms-sel" value={typeF} aria-label="Machines" onChange={(e) => setTypeF(e.target.value as typeof typeF)}>{typeOpts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
         <span className="spacer" />

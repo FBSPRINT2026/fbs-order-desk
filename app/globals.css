@@ -12806,16 +12806,15 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .set-sub{margin:-6px 0 14px}
 .set-sub .chip{text-decoration:none}
 /* screen printing / embroidery switch under Production (lib/prodSide.ts, Oct 24): quiet, the side shows in the color */
-.prod-side{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-family:var(--body);font-stretch:normal;letter-spacing:.04em}
-.prod-side button{border:0;background:transparent;padding:0;font:inherit;font-size:10px;font-weight:700;color:var(--side-ink);opacity:.45;cursor:pointer;line-height:1}
+.prod-side{display:inline-flex;align-items:center;gap:7px;margin-left:auto;font-family:var(--body);font-stretch:normal;letter-spacing:.04em}
+.prod-side button{border:0;background:transparent;padding:2px 0;font:inherit;font-size:10px;font-weight:700;color:var(--side-ink);opacity:.45;cursor:pointer;line-height:1}
 .prod-side button:hover{opacity:.8}
-.prod-side button.on{opacity:1;color:var(--side-ink-strong)}
-.prod-side .ps-sw{position:relative;width:20px;height:10px;border-radius:5px;background:rgba(255,255,255,.14);opacity:1;margin-left:2px}
-.prod-side .ps-sw i{position:absolute;top:1px;left:1px;width:8px;height:8px;border-radius:50%;background:var(--fbs-blue);transition:transform .15s}
-.prod-side .ps-sw.emb i{transform:translateX(10px);background:var(--fbs-salmon)}
-.nav-g-production.side-screen .prod-side button.on:not(.ps-sw){color:var(--fbs-blue)}
-.nav-g-production.side-embroidery .prod-side button.on:not(.ps-sw){color:var(--fbs-salmon)}
+.prod-side button.on{opacity:1}
+.nav-g-production.side-screen .prod-side button.on{color:var(--fbs-blue)}
+.nav-g-production.side-embroidery .prod-side button.on{color:var(--fbs-salmon)}
+.nav-g-production.side-heat .prod-side button.on{color:var(--fbs-orange)}
 .nav-g-production.side-screen a.on{background:var(--fbs-blue)}
+.nav-g-production.side-heat a.on{background:var(--fbs-orange);color:#1a1405}
 .side.mini .prod-side{display:none}
 .fee-row.fin-row{grid-template-columns:minmax(0,1fr) 110px auto 32px}
 /* Menu counts are a small calm dot, not a red bubble (Oct 24, Nick: "these little red bubbles are giving me anxiety…
@@ -12826,4 +12825,5 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .side:not(.mini) .nav-tools .badge,.nav-ai .badge{top:4px;right:4px}
 .side.mini .nav .badge{top:4px;right:6px}
 .side.auto:not(:hover):not(:has(:focus-visible)) .nav .badge{top:4px;left:34px}
-.nav-g-shoptools a.on .badge,.nav a.on .badge{background:#fff}
+.nav a.on .badge{background:#fff}
+.nav-g-shoptools a.on .badge,.nav-g-production.side-heat a.on .badge{background:#1a1405}

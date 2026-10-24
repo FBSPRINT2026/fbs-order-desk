@@ -316,22 +316,21 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}
-              {/* screen printing or embroidery: SP and EMB, small, with a tiny switch at the right end of the heading.
-                  The side shows in the menu's color (blue / salmon). */}
+              {/* screen printing, embroidery or heat press: SP / EMB / HP on the right of the heading. The picked one shows in
+                  its side's color (blue / salmon / orange), and so does the menu's picked item. */}
               {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
-                <span className="prod-side" role="radiogroup" aria-label="Screen printing or embroidery" data-notranslate>
-                  <button type="button" role="radio" aria-checked={side === "screen"} className={side === "screen" ? "on" : ""} title="Screen printing" onClick={() => setSide("screen")}>SP</button>
-                  <button type="button" role="radio" aria-checked={side === "embroidery"} className={side === "embroidery" ? "on" : ""} title="Embroidery" onClick={() => setSide("embroidery")}>EMB</button>
-                  <button type="button" className={"ps-sw" + (side === "embroidery" ? " emb" : "")} aria-label={side === "embroidery" ? "Switch to screen printing" : "Switch to embroidery"} title={side === "embroidery" ? "Embroidery" : "Screen printing"}
-                    onClick={() => setSide(side === "embroidery" ? "screen" : "embroidery")}><i /></button>
+                <span className="prod-side" role="radiogroup" aria-label="Screen printing, embroidery or heat press" data-notranslate>
+                  {([["screen", "SP", "Screen printing"], ["embroidery", "EMB", "Embroidery"], ["heat", "HP", "Heat press"]] as const).map(([k, l, t]) => (
+                    <button key={k} type="button" role="radio" aria-checked={side === k} className={side === k ? "on" : ""} title={t} onClick={() => setSide(k)}>{l}</button>
+                  ))}
                 </span>
               )}
             </div>
             {g.title === "Shop Tools"
               ? <div className="nav-tools">{g.items.map(link)}</div>
               : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))
-                  // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery
-                  .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks"] : ["/shop/digitizing", "/shop/threads"]).includes(href))
+                  // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery, neither for heat press
+                  .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks"] : side === "heat" ? ["/shop/separations", "/shop/inks", "/shop/digitizing", "/shop/threads"] : ["/shop/digitizing", "/shop/threads"]).includes(href))
                   .map(link)}
           </div>
         ))}

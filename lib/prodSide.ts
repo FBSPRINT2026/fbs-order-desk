@@ -3,14 +3,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useRole } from "@/components/RoleContext";
 
 /**
- * Screen printing or embroidery: the switch under Production in the menu (Oct 24, Nick: "underneath the word
+ * Screen printing, embroidery or heat press (SP / EMB / HP, Oct 24; heat press added that morning: "you'll have three
+ * buttons there, SP, EMB, and HP… heat press will go to its heat press schedule"): the switch beside Production in the menu (Oct 24, Nick: "underneath the word
  * production… a toggle between embroidery and screen printing… screen printing, that's Ink Room and their employees,
  * production, reorder details… embroidery, it's their employee section, thread, their reorder details"). One setting for
  * the whole shop side, remembered in this browser: the menu shows that side's tools, and Production, Employees and
  * Reorder Details show that side's machines, team and prints. Heat press goes with screen printing. Maria (the
  * embroidery role) is always on embroidery, with no switch.
  */
-export type ProdSide = "screen" | "embroidery";
+export type ProdSide = "screen" | "embroidery" | "heat";
 const OLD = "fbs:prod.side", EV = "fbs:prod-side";
 /**
  * Each person's own side (Oct 24, Nick: "Jose would automatically go into screen printing. Maria would automatically go
@@ -25,7 +26,8 @@ function read(role: string, email: string): ProdSide {
   try {
     let v = st.getItem(keyFor(email));
     if (v === null && role !== "production") v = localStorage.getItem(OLD); // the one shared setting from before
-    return v === "\"embroidery\"" ? "embroidery" : "screen";
+    const x = v ? JSON.parse(v) : "";
+    return x === "embroidery" || x === "heat" ? x : "screen";
   } catch { return "screen"; }
 }
 

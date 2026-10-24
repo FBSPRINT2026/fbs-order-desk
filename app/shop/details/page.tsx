@@ -52,7 +52,8 @@ export default function ProductionDetailsPage() {
   // what thread did we use, and what backing"): Maria sees the embroidered prints, screen printing's production the rest
   // and the menu's screen printing / embroidery switch (Oct 24): that side's prints
   const [side] = useProdSide();
-  const mine = (im: Imprint) => (role === "embroidery" || side === "embroidery" ? im.method === "embroidery" : im.method !== "embroidery");
+  // each side's own prints (the menu's SP / EMB / HP): screen prints, embroidered prints, or heat press (DTF) prints
+  const mine = (im: Imprint) => (role === "embroidery" || side === "embroidery" ? im.method === "embroidery" : side === "heat" ? im.method === "dtf" : im.method !== "embroidery" && im.method !== "dtf");
   const waitingOf = (r: Row) => printSets(r, (im) => needsDetails(im) && mine(im));
   const open0 = useSearchParams().get("order");
   const [tab, setTab] = useState<"waiting" | "done">("waiting");
