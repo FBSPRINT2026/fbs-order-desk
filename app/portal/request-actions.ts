@@ -4,7 +4,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { mergeSettings, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
@@ -241,18 +241,72 @@ export async function mockupUploadUrls() {
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
 }
 
-/** Record a mockup the customer made in their portal. */
-export async function saveMyMockup(meta: { path: string; title: string; design_ids: string[] }) {
+/**
+ * Record a mockup the customer made in their portal. It keeps its setup (garments, prints, inks, where each print sits) so
+ * it can be opened to edit and ordered (Oct 24, Nick); every shirt color saved together shares the set id and so one
+ * mockup number (M-1001, migration 202).
+ */
+export async function saveMyMockup(meta: { path: string; title: string; design_ids: string[]; snapshot?: Record<string, unknown> }) {
   try {
     const { admin, cust, email } = await me();
     if (!meta.path.startsWith(`mockups/${cust.id}/`)) return { ok: false as const, error: "Bad upload." };
     const { data: own } = await admin.from("designs").select("id").eq("customer_id", cust.id).in("id", meta.design_ids.length ? meta.design_ids : ["00000000-0000-0000-0000-000000000000"]);
     const ids = ((own || []) as { id: string }[]).map((d) => d.id);
-    const { error } = await admin.from("mockups").insert({ customer_id: cust.id, title: meta.title.slice(0, 200), file_path: meta.path, design_ids: ids, created_by: email });
+    const snap = meta.snapshot && typeof meta.snapshot.set === "string" && JSON.stringify(meta.snapshot).length < 400000 ? meta.snapshot : null;
+    const { data, error } = await admin.from("mockups").insert({ customer_id: cust.id, title: meta.title.slice(0, 200), file_path: meta.path, design_ids: ids, created_by: email, snapshot: snap }).select("id, number").single();
     if (error) return { ok: false as const, error: error.message };
+    revalidatePath("/portal");
+    return { ok: true as const, id: data.id as string, number: data.number as number | null };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
+}
+
+/** A mockup set saved again: its earlier pictures step aside (the number stays), so only the current version shows. */
+export async function retireMyMockups(set: string, keep: string[]) {
+  try {
+    const { admin, cust } = await me();
+    if (!set) return { ok: true as const };
+    const { data: old } = await admin.from("mockups").select("id").eq("customer_id", cust.id).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
+    const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !keep.includes(id));
+    if (gone.length) await admin.from("mockups").update({ archived_at: new Date().toISOString() }).in("id", gone);
     revalidatePath("/portal");
     return { ok: true as const };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
+}
+
+/**
+ * "Order this" on one of their mockups (Oct 24, Nick: "if they place an order, it starts an order with that already filled
+ * in"): a new order request with the mockup's garments and colors, its prints (logo, place, size, inks) and the mockup
+ * pictures. They add sizes and send it in like any order; the shop prices it.
+ */
+export async function orderFromMockup(mockupId: string): Promise<Result> {
+  try {
+    const { supabase, admin, cust, email } = await me();
+    // row security: only their own mockups
+    const { data: mk } = await supabase.from("mockups").select("id, customer_id, number, title, snapshot").eq("id", mockupId).maybeSingle();
+    if (!mk) return { ok: false, error: "We couldn't find that mockup." };
+    const { data: rows } = mk.number
+      ? await supabase.from("mockups").select("file_path, title, snapshot, created_at").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).order("created_at")
+      : await supabase.from("mockups").select("file_path, title, snapshot, created_at").eq("id", mk.id);
+    const all = (rows || []) as { file_path: string; title: string; snapshot: Record<string, unknown> | null }[];
+    type Snap = { name?: string; lines?: { style: string; brand: string; color: string; garment: string }[]; imprints?: Group["imprints"]; offsets?: Record<string, { dx: number; dy: number }>; mockupSize?: string | null };
+    const snap = (all.find((r) => (r.snapshot as Snap | null)?.lines?.length)?.snapshot || mk.snapshot) as Snap | null;
+    const name = snap?.name || String(mk.title || "").split(" — ")[0] || "Mockup";
+    const tag = mk.number ? `M-${mk.number}` : "your mockup";
+    const g: Group = snap?.lines?.length
+      ? { id: uid(), name, lines: snap.lines.map((l) => ({ ...newGLine(), style: l.style || "", brand: l.brand || "", garment: l.garment || "", color: l.color || "" })),
+          imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
+      : { ...newGroup(), name };
+    g.customerMockups = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
+    const { data, error } = await admin.from("orders").insert({
+      customer_id: mk.customer_id, status: "request", type: "quote", source: "portal",
+      price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [g], total: 0,
+      nickname: name.slice(0, 120), notes: `From mockup ${tag}.`,
+    }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: data.id, kind: "from_mockup", detail: `From ${tag}`, actor: email });
+    revalidatePath("/portal");
+    return { ok: true, id: data.id };
+  } catch (e) { return fail(e); }
 }
 
 /** One-time upload link for a mockup the customer made in their own software. */

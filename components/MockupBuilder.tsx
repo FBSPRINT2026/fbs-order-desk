@@ -12,7 +12,7 @@ import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
-import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
+import { mockupUploadUrls, myLogos, portalCatalog, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
@@ -158,7 +158,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const wbChat = portal ? "" : sp.get("wb") || "", wbCard = sp.get("card") || "";
   /** a saved mockup opened again to edit (Oct 22, Nick: "we definitely need to be able to edit a mock-up just like on an
    *  order"): its shirts, prints, places and inks as saved; saving again replaces that mockup's pictures */
-  const reopenId = portal ? "" : sp.get("mockup") || "";
+  const reopenId = sp.get("mockup") || "";
   const mockSet = useRef("");
   const wbInk = useRef<"" | "wait" | "done">(wbChat || reopenId ? "wait" : "");
   /** the customer's art review → "Make changes → change it myself": this proof's shirt and prints, saved back to the shop */
@@ -406,6 +406,24 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } finally { setLookingUp(""); }
   }
 
+  // a saved mockup opened again to edit, in the shop or the customer's portal (row security: a customer only reads their own)
+  async function reopenMockup() {
+    const { data: mk } = await sb.from("mockups").select("customer_id, title, snapshot").eq("id", reopenId).maybeSingle();
+    const snap = (mk?.snapshot || null) as { set?: string; name?: string; lines?: Line[]; imprints?: Imprint[]; offsets?: Record<string, Offset>; mockupSize?: string | null } | null;
+    if (!mk || !snap?.lines?.length) { wbInk.current = "done"; setMsg(mk ? "This mockup was saved before mockups kept their setup, so it can't be opened to edit. Make it again and save: from now on it can be." : "That mockup isn't there anymore."); }
+    else {
+      mockSet.current = snap.set || reopenId;
+      setCustomerId((mk.customer_id as string) || "");
+      setGroupName(snap.name || String(mk.title || "").split(" — ")[0]);
+      setLines(snap.lines);
+      setImprints((snap.imprints || []).map((d) => ({ ...d })));
+      setOffsets(snap.offsets || {});
+      if (snap.mockupSize) setShownSize(snap.mockupSize);
+      // prints with an ink but no saved logo colors (a setup rebuilt from the pictures): painted in that ink
+      autoWant.current = Object.fromEntries((snap.imprints || []).filter((d) => !d.inkMap).map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
+      setMsg("Editing the saved mockup. Save Mockup replaces it.");
+    }
+  }
   // load the order group (or start blank), catalog and customers. Opened from an order and the order still isn't here
   // after 8 seconds (a read that never came back: Oct 23, Nick on #40112 from Create order, "it just got stuck…
   // it says pick a customer"): it's loaded again, twice at most
@@ -424,6 +442,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const mine = (cu.data || []) as Customer[];
         setCustomers(mine);
         if (mine[0]) setCustomerId(mine[0].id);
+        // their saved mockup opened to edit (Oct 24, Nick: "they click on the mockup and they can either edit it or…")
+        if (reopenId && !changeId && !viewId) { await reopenMockup(); return; }
         if (changeId || viewId) {
           const r = await proofForChange(changeId || viewId, !!viewId);
           if (!r.ok) { setMsg(r.error); return; }
@@ -440,23 +460,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const [cat, cu] = await Promise.all([sb.from("garments").select("*"), sb.from("customers").select("*")]);
       setCatalog((cat.data || []) as Garment[]);
       setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
-      if (!orderId && reopenId) {
-        const { data: mk } = await sb.from("mockups").select("customer_id, title, snapshot").eq("id", reopenId).maybeSingle();
-        const snap = (mk?.snapshot || null) as { set?: string; name?: string; lines?: Line[]; imprints?: Imprint[]; offsets?: Record<string, Offset>; mockupSize?: string | null } | null;
-        if (!mk || !snap?.lines?.length) { wbInk.current = "done"; setMsg(mk ? "This mockup was saved before mockups kept their setup, so it can't be opened to edit. Make it again and save: from now on it can be." : "That mockup isn't there anymore."); }
-        else {
-          mockSet.current = snap.set || reopenId;
-          setCustomerId((mk.customer_id as string) || "");
-          setGroupName(snap.name || String(mk.title || "").split(" — ")[0]);
-          setLines(snap.lines);
-          setImprints((snap.imprints || []).map((d) => ({ ...d })));
-          setOffsets(snap.offsets || {});
-          if (snap.mockupSize) setShownSize(snap.mockupSize);
-          // prints with an ink but no saved logo colors (a setup rebuilt from the pictures): painted in that ink
-          autoWant.current = Object.fromEntries((snap.imprints || []).filter((d) => !d.inkMap).map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
-          setMsg("Editing the saved mockup. Save Mockup replaces it.");
-        }
-      }
+      if (!orderId && reopenId) await reopenMockup();
       if (!orderId && wbChat && wbCard) {
         const r = await mockupSpec(wbChat, wbCard);
         if (!r.ok) { wbInk.current = "done"; return setMsg(r.error); }
@@ -2392,7 +2396,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (portal) {
       // customers: upload with one-time links, then the server records the mockup on their account
       try {
-        const paths: string[] = [];
+        const paths: string[] = [], ids: string[] = [];
+        let num = 0;
+        // the mockup keeps its setup so it can be opened to edit and ordered; every color saved together is one set and
+        // one number (Oct 24, Nick). A proof being changed isn't a library mockup.
+        const set = changeId ? "" : (mockSet.current ||= crypto.randomUUID());
+        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
         for (const l of lines.filter((z) => z.style || z.color)) {
           const blob = await render(l), thumb = await render(l, true);
           const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -2401,8 +2410,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const a = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, blob, { contentType: "image/png" });
           if (a.error) throw new Error(a.error.message);
           await sb.storage.from("proofs").uploadToSignedUrl(t.thumbPath, t.thumbToken, thumb, { contentType: "image/jpeg" });
-          const r = await saveMyMockup({ path: t.path, title, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))] as string[] });
+          const r = await saveMyMockup({ path: t.path, title, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))] as string[], snapshot: snap });
           if (!r.ok) throw new Error(r.error);
+          if (r.id) ids.push(r.id);
+          if (r.number) num = r.number;
           paths.push(t.path);
           out.push({ title, url: URL.createObjectURL(blob) });
         }
@@ -2417,8 +2428,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           window.location.href = change ? `/portal/orders/${change.orderId}?reviewed=changes` : "/portal";
           return;
         }
+        // saved again: the earlier pictures of this mockup step aside (it keeps its number)
+        if (set && ids.length) await retireMyMockups(set, ids);
         setSaved(out);
-        setMsg(`Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to your artwork.`);
+        setMsg(`Saved${num ? ` as M-${num}` : ""}: ${out.length} mockup${out.length > 1 ? "s" : ""} in your artwork. Order it from your artwork any time.`);
       } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
       setSaving(false);
       return;
@@ -2439,7 +2452,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
         if (up.error) throw new Error(up.error.message);
         // a save is a mockup, not a proof (Oct 16, Nick): proofs are only the versions sent to the customer (lib/proofs.ts)
-        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: null, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "", draft }).select("id").single();
+        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: null, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "", draft, ...(orderId ? {} : { snapshot: { set: (mockSet.current ||= crypto.randomUUID()) } }) }).select("id").single();
         if (nm?.id) newMockups.push(nm.id);
         // a small photos-only picture for the order screen and the customer's artwork lists
         const thumb = await render(l, true);

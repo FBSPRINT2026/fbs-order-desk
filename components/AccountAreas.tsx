@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import MockupOrderButton from "@/components/MockupOrderButton";
 import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
@@ -23,7 +24,9 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
   /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
-export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
+export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
+  /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
+  /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
@@ -683,7 +686,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const dRows = live.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
     const aRows = archived.filter((d) => designMatches(d, q)).sort((a, b) => b.number - a.number);
     const ms = mockups.map((m) => (m.id in mStars ? { ...m, starred: mStars[m.id] } : m));
-    const mRows = ms.filter((m) => has(q, m.title, m.number)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred));
+    const mRows = ms.filter((m) => has(q, m.title, m.number, m.mno ? `M-${m.mno}` : "")).sort((a, b) => Number(!!b.starred) - Number(!!a.starred));
+    // a mockup set (every shirt color saved together) is one card
+    const mSets: AMockup[][] = [];
+    for (const m of mRows) { const g = m.mno ? mSets.find((x) => x[0].mno === m.mno) : undefined; if (g) g.push(m); else mSets.push([m]); }
     const starMock = async (m: AMockup) => {
       if (!onStarMockup) return;
       setStarErr("");
@@ -798,17 +804,29 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       </div>
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Mockups</h3></div>
-        {mRows.length ? (() => { const P = pageOf("mock", mRows, 12); return <>
+        {/* one card per mockup set, with its number (Oct 24, Nick: "Mockups all need a number… they click on the mockup and
+            they can either edit it or they can order it") */}
+        {mSets.length ? (() => { const P = pageOf("mock", mSets, 12); return <>
           <div className="design-grid aa-grid6">
-            {P.items.map((m) => (
-              <div key={m.id} className={"design-card" + (m.starred ? " starred" : "")}>
+            {P.items.map((set) => { const m = set[0], name = m.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
+              <div key={m.id} className={"design-card mk-card" + (m.starred ? " starred" : "")}>
                 <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
+                  {set.length > 1 && <span className="mk-card-n" title={set.map((x) => x.title.split(" — ")[1] || x.title).join("\n")}>{set.length} colors</span>}
                   {onStarMockup && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
                 </div>
-                <div className="dc-b"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.number ? `#${m.number}` : m.title.replace(/^Group \d+ — /, "")}</b></a><span className="faint" title={m.title}>{[m.number ? m.title.replace(/^Group \d+ — /, "") : "", when(m.created_at)].filter(Boolean).join(" · ")}</span></div>
+                <div className="dc-b">
+                  <b data-notranslate>{m.mno ? `M-${m.mno}` : name}</b>
+                  <span className="faint" title={m.title}>{[m.mno ? name : "", m.number ? `Order #${m.number}` : when(m.created_at)].filter(Boolean).join(" · ")}</span>
+                  {!m.number && (m.setup || mode === "portal") && (
+                    <div className="mk-card-acts">
+                      {m.setup && <a className="btn sm" href={mode === "portal" ? `/portal/mockup?mockup=${m.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${m.id}`}>Edit</a>}
+                      {mode === "portal" && <MockupOrderButton id={m.id} canAct={canAct} />}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}{slots(P.pad)}
-          </div>{pager("mock", mRows.length, P.p, P.n, 12)}</>; })()
+            ); })}{slots(P.pad)}
+          </div>{pager("mock", mSets.length, P.p, P.n, 12)}</>; })()
         : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
       {mode === "shop" && productionPanel}
@@ -828,7 +846,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         {favMocks.map((m) => (
           <div key={m.id} className="aa-fav">
             <a href={m.url} target="_blank" rel="noreferrer">{m.thumb ? <img src={m.thumb} alt="" /> : <span className="aa-fav-ph" />}</a>
-            <span className="aa-fav-t"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.title}</b></a><span className="faint">{m.number ? `Order #${m.number}` : when(m.created_at)}</span></span>
+            <span className="aa-fav-t"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.mno ? `M-${m.mno} · ` : ""}{m.title.split(" — ")[0]}</b></a><span className="faint">{m.number ? `Order #${m.number}` : when(m.created_at)}</span></span>
             {onStarMockup && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => starMock(m)}>★</button>}
           </div>
         ))}

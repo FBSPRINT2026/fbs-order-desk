@@ -13025,3 +13025,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .p-foot-soc svg{width:17px;height:17px;fill:currentColor}
 .p-foot-bot{max-width:1120px;margin:18px auto 0;padding:12px 20px 18px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:color-mix(in srgb,var(--side-ink) 70%,transparent);box-sizing:border-box}
 @media (max-width:600px){.p-foot-in{gap:14px}.p-foot-addr{padding-left:0;border-left:0;flex-basis:100%}.p-foot-ln i{display:none}.p-foot-soc{margin-left:0}}
+
+/* mockup cards: the number, how many colors, Edit / Order this (Oct 24, Nick) */
+.mk-card .dc-img{position:relative}
+.mk-card-n{position:absolute;left:6px;bottom:6px;font-size:11px;font-weight:700;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+.mk-card-acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.mk-card-acts .btn{flex:1 1 auto;justify-content:center;text-decoration:none}
+.mk-ord-msg{font-size:12px}

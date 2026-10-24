@@ -113,10 +113,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         const urls = await previewUrls(sb, fixed);
         setDesignUrls((m) => ({ ...m, ...urls }));
       }).catch(() => null);
-      const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[]);
+      const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null }[]);
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
-      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
+      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
       setMessages(((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
