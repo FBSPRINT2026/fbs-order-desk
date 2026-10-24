@@ -40,6 +40,11 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
   const done = async () => { await admin.from("qbo_settings").update({ last_run_at: new Date().toISOString(), ...(stats.error ? { last_error: stats.error, last_error_at: new Date().toISOString() } : {}) }).eq("id", 1); return stats; };
   // the sign-in was made for the other QuickBooks (sandbox vs production): refuse to run at all
   if (tokens?.env && env.env && tokens.env !== env.env) { stats.error = `The QuickBooks sign-in is for ${tokens.env}, but QBO_ENV is now ${env.env}. Nothing runs until QuickBooks is connected again.`; return done(); }
+  // test mode: invoices already sent as tests follow their orders every minute, whatever the sync's setting
+  if (connected && !(tokens?.env && env.env && tokens.env !== env.env)) {
+    try { const n = await followTests(admin, qs); if (n) stats.note = `Updated ${n} test invoice${n === 1 ? "" : "s"}.`; }
+    catch (e) { stats.note = `Test invoices: ${e instanceof Error ? e.message : String(e)}`; }
+  }
   if (opts.mode === "auto" && !qs.enabled) {
     // off: only keep the sign-in alive (about once a day)
     if (connected && (!qs.keepalive_at || Date.now() - new Date(qs.keepalive_at).getTime() > 20 * 3600000)) {
@@ -151,6 +156,38 @@ async function finish(admin: SupabaseClient, row: QRow, out: Outcome, live: bool
   // a newer change to the same record is already waiting (one open row each): this one is just closed
   if (error && /qbo_queue_open_uq|duplicate key/i.test(error.message)) ({ error } = await admin.from("qbo_queue").update({ ...patch, status: "skipped", reason: `Superseded by a newer change. (${out.reason})`.slice(0, 2000), done_at: t }).eq("id", row.id));
   if (error) throw new Error(`Couldn't update the queue: ${error.message}`);
+}
+
+/**
+ * Test mode (Oct 24, Nick: "while we're in this test mode… if we send an invoice and we do actually sync it, those
+ * invoices are actually syncing back and forth… Don't sync anything else"): an order whose invoice went to QuickBooks
+ * as a TEST-… invoice is kept up to date like every invoice will be once the sync is on: its change waiting in the queue
+ * updates the TEST invoice (Pusher.testInvoice), and the row is closed. Nothing else is sent. A deleted order's test
+ * invoice was voided by its Delete, so its void row is just closed.
+ */
+async function followTests(admin: SupabaseClient, qs: QboSettings): Promise<number> {
+  const { data: rows } = await admin.from("qbo_queue").select("*").eq("entity", "invoice").in("status", ["pending", "error"]).lte("run_after", new Date().toISOString()).order("id").limit(200);
+  const open = (rows || []) as QRow[];
+  if (!open.length) return 0;
+  const { data: links } = await admin.from("qbo_links").select("local_id").eq("entity", "invoice").eq("source", "test").in("local_id", open.map((r) => r.local_id));
+  const tests = new Set((links || []).map((l) => String(l.local_id)));
+  const mine = open.filter((r) => tests.has(r.local_id)).slice(0, 10);
+  if (!mine.length) return 0;
+  const qbo = new Qbo(admin);
+  const realm = await qbo.realm();
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const pusher = new Pusher(admin, qs, mergeSettings(st?.data), qbo, realm, true, true);
+  let n = 0;
+  for (const row of mine) {
+    let out: Outcome;
+    if (row.op === "void") out = { status: "skipped", reason: "A test invoice: voided from the order's Delete." };
+    else {
+      try { out = await pusher.testInvoice(row.local_id); if (out.status === "done") n++; }
+      catch (e) { out = failed(e, row, true); }
+    }
+    await finish(admin, row, out, true);
+  }
+  return n;
 }
 
 /* ---------- changes made in QuickBooks ---------- */
