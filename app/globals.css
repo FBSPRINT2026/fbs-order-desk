@@ -13641,3 +13641,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* the star on a job picture stays on the picture's corner (the wrapper added for the 9-limit message) */
 .pjr-picw .ostar-w{position:static;display:contents}
 .pjr-picw .ostar-err{top:60px;left:0}
+/* portal order lists: the star sits in the # cell, and the columns give the order name more room */
+.aa-noc{display:inline-flex;align-items:center;gap:8px}
+.portal .aa-noc .ostar:not(.on){opacity:.45}
+.portal .aa-tbl tr:hover .aa-noc .ostar{opacity:1}
+@media (min-width:641px){
+  .portal .aa-tbl-cols col.c-no{width:104px}
+  .portal .aa-tbl-cols col.c-ty{width:92px}
+  .portal .aa-tbl-cols col.c-st{width:150px}
+  .portal .aa-tbl-cols col.c-dt{width:120px}
+  .portal .aa-tbl-cols col.c-m{width:92px}
+}
