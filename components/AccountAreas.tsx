@@ -513,12 +513,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
-    const tab = (oTab === "sent" && !sentQ.length) || (oTab === "drafts" && !draftsLive.length) ? "all" : oTab;
+    const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
     const done = invoices.filter((o) => o.status === "completed");
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number]] : []), ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
     body = <>
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
@@ -552,7 +552,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       </>}
       {tab === "sent" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
-        {orderTable(sentQ, "quote")}
+        {sentQ.length ? orderTable(sentQ, "quote") : <div className="aa-none-q faint">Nothing waiting on us. Orders you send show here until we confirm them.</div>}
       </>}
       {tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}

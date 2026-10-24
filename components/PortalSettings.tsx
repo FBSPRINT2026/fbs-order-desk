@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { mySavedMethods, removeSavedMethod, type SavedPM } from "@/app/portal/pay-actions";
+import { mySavedMethods, removeSavedMethod, setStaffCharge, staffConsentWords, type SavedPM } from "@/app/portal/pay-actions";
+import AddPayMethod from "@/components/AddPayMethod";
 import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setMessageEmail, type Person } from "@/app/portal/settings-actions";
 
 type C = { address: string; ship_address: string };
@@ -10,7 +11,7 @@ type C = { address: string; ship_address: string };
  * The customer's Settings (app/portal/settings): the people at the company (everyone signs in with their own email),
  * addresses, and their company logo for their sales sheets. The company name is ours to set.
  */
-export default function PortalSettings({ c, customerId, logoUrl, preview, shopName, mailOn }: { c: C; customerId: string; logoUrl: string; preview: boolean; shopName: string; /** our messages emailed to them too */ mailOn: boolean }) {
+export default function PortalSettings({ staxToken = "", c, customerId, logoUrl, preview, shopName, mailOn }: { /** Stax.js web payments token, to add a card */ staxToken?: string; c: C; customerId: string; logoUrl: string; preview: boolean; shopName: string; /** our messages emailed to them too */ mailOn: boolean }) {
   const [mail, setMail] = useState(mailOn);
   const [v, setV] = useState(c);
   const [logo, setLogo] = useState(logoUrl);
@@ -40,7 +41,7 @@ export default function PortalSettings({ c, customerId, logoUrl, preview, shopNa
     <div className="stack ps-wrap">
       {err && <div className="banner" role="alert">{err}</div>}
       <People customerId={customerId} preview={preview} shopName={shopName} />
-      <SavedCards preview={preview} />
+      <SavedCards preview={preview} staxToken={staxToken} />
       <section className="panel">
         <div className="panel-h"><h2>Messages</h2></div>
         <div className="panel-b">
@@ -159,29 +160,39 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
   );
 }
 
-/** Their cards and bank accounts on file (Oct 24, Nick): only the brand and last 4; remove any time. */
-function SavedCards({ preview }: { preview: boolean }) {
+/** Their cards and bank accounts on file (Oct 24, Nick): only the brand and last 4; add one, remove one, and let us
+ *  charge it when they ask ("can you go in and run my card?"). */
+function SavedCards({ preview, staxToken }: { preview: boolean; staxToken: string }) {
   const [list, setList] = useState<SavedPM[] | null>(null);
-  const [armed, setArmed] = useState(""), [err, setErr] = useState("");
-  useEffect(() => { void mySavedMethods().then((r) => setList(r.list)); }, []);
+  const [consent, setConsent] = useState({ card: "", bank: "" }), [staffWords, setStaffWords] = useState({ card: "", bank: "" });
+  const [armed, setArmed] = useState(""), [err, setErr] = useState(""), [adding, setAdding] = useState(false), [askStaff, setAskStaff] = useState("");
+  const load = () => void mySavedMethods().then((r) => { setList(r.list); setConsent(r.consent); });
+  useEffect(() => { load(); void staffConsentWords().then(setStaffWords).catch(() => null); }, []);
   if (!list) return null;
+  const label = (x: SavedPM) => (x.method === "bank" ? `${x.brand || "Bank account"} ending ${x.last4}` : `${x.brand ? x.brand.charAt(0).toUpperCase() + x.brand.slice(1) : "Card"} ending ${x.last4}`);
   return (
     <section className="panel">
-      <div className="panel-h"><h2>Saved payment methods</h2><span className="faint">Tick &ldquo;Keep this on file&rdquo; when you pay to save one. The numbers stay with our payment processor (Stax).</span></div>
-      <div className="panel-b">
+      <div className="panel-h"><h2>Payment methods</h2></div>
+      <div className="panel-b stack" style={{ gap: 10 }}>
         {err && <div className="banner" role="alert">{err}</div>}
         {list.length ? (
           <ul className="ps-cards">{list.map((x) => (
             <li key={x.id}>
-              <span><b>{x.method === "bank" ? `${x.brand || "Bank account"} ending ${x.last4}` : `${x.brand ? x.brand.charAt(0).toUpperCase() + x.brand.slice(1) : "Card"} ending ${x.last4}`}</b>{x.exp ? <span className="faint"> · exp {x.exp}</span> : null}{x.holder ? <span className="faint"> · {x.holder}</span> : null}</span>
-              <button type="button" className={"btn sm ghost" + (armed === x.id ? " danger armed" : "")} disabled={preview} onClick={async () => {
+              <span className="ps-card-t"><b>{label(x)}</b>{x.exp ? <span className="faint"> · exp {x.exp}</span> : null}{x.holder ? <span className="faint"> · {x.holder}</span> : null}
+                {x.staff_charge_ok ? <small className="ps-card-ok">FBS can charge it when you ask · <button type="button" className="linkbtn" disabled={preview} onClick={async () => { const r = await setStaffCharge(x.id, false); if (r.ok) load(); else setErr(r.error || ""); }}>Turn off</button></small>
+                  : askStaff === x.id ? <small className="ps-card-ask">{x.method === "bank" ? staffWords.bank : staffWords.card} <button type="button" className="btn sm primary" disabled={preview} onClick={async () => { const r = await setStaffCharge(x.id, true); setAskStaff(""); if (r.ok) load(); else setErr(r.error || ""); }}>I agree</button> <button type="button" className="btn sm ghost" onClick={() => setAskStaff("")}>Cancel</button></small>
+                  : <small><button type="button" className="linkbtn" disabled={preview} onClick={() => setAskStaff(x.id)}>Let FBS charge it when I ask</button></small>}
+              </span>
+              <button type="button" className={"btn sm" + (armed === x.id ? " danger armed" : " ghost danger")} disabled={preview} onClick={async () => {
                 if (armed !== x.id) { setArmed(x.id); setTimeout(() => setArmed((a) => (a === x.id ? "" : a)), 3500); return; }
                 setArmed(""); const r = await removeSavedMethod(x.id);
                 if (r.ok) setList((l) => (l || []).filter((y) => y.id !== x.id)); else setErr(r.error || "Couldn't remove it.");
-              }}>{armed === x.id ? "Remove it?" : "Remove"}</button>
+              }}>{armed === x.id ? "Delete it?" : "Delete"}</button>
             </li>
           ))}</ul>
-        ) : <div className="faint">Nothing saved yet.</div>}
+        ) : !adding && <div className="faint">No cards or bank accounts saved.</div>}
+        {adding && staxToken ? <AddPayMethod staxToken={staxToken} consent={consent} staffConsent={staffWords} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />
+          : <div><button type="button" className="btn" disabled={preview || !staxToken} title={staxToken ? undefined : "Online payments aren't set up yet"} onClick={() => setAdding(true)}>+ Add a card or bank account</button></div>}
       </div>
     </section>
   );

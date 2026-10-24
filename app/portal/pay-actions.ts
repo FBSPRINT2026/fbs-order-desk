@@ -162,7 +162,11 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
 const consentText = (shop: string, method: "card" | "bank") =>
   `I authorize ${shop} to keep this ${method === "bank" ? "bank account" : "card"} on file and charge it only for payments I choose in this portal. I can remove it any time in Settings.`;
 
-async function keepOnFile(admin: ReturnType<typeof createAdminClient>, customerId: string, pmId: string, method: "card" | "bank", email: string, shop: string) {
+/** The words they agree to when they let the shop charge it when they ask (Oct 24, Nick: "can you go in and run my card?"). */
+const staffConsentText = (shop: string, method: "card" | "bank") =>
+  `I authorize ${shop} to charge this ${method === "bank" ? "bank account" : "card"} for my orders when I ask them to (by phone, email or message). I can turn this off or remove it any time in Settings.`;
+
+async function keepOnFile(admin: ReturnType<typeof createAdminClient>, customerId: string, pmId: string, method: "card" | "bank", email: string, shop: string, staffOk = false) {
   const r = await fetch(`${STAX_API}/payment-method/${encodeURIComponent(pmId)}`, { headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, Accept: "application/json" } });
   const pm = (await r.json().catch(() => ({}))) as Record<string, unknown>;
   const exp = String(pm.card_exp || ""); // "112027"
@@ -171,6 +175,7 @@ async function keepOnFile(admin: ReturnType<typeof createAdminClient>, customerI
     brand: method === "bank" ? String(pm.bank_name || "Bank") : String(pm.card_type || "Card"),
     last4: String(pm.card_last_four || "").slice(-4), exp: /^\d{6}$/.test(exp) ? `${exp.slice(0, 2)}/${exp.slice(4)}` : "",
     holder: String(pm.person_name || ""), consent_text: consentText(shop, method), consented_by: email,
+    ...(staffOk ? { staff_charge_ok: true, staff_charge_consent: staffConsentText(shop, method), staff_charge_at: new Date().toISOString(), staff_charge_by: email } : {}),
   };
   // the same card saved again replaces the old entry
   if (row.last4) await admin.from("saved_payment_methods").update({ removed_at: new Date().toISOString(), removed_by: "replaced" }).eq("customer_id", customerId).eq("method", method).eq("last4", row.last4).eq("brand", row.brand).is("removed_at", null);
@@ -183,14 +188,14 @@ export async function mySavedMethods() {
     const { supabase, user, isStaff } = await getViewer();
     if (!user || isStaff) return { ok: true as const, list: [] as SavedPM[], consent: { card: "", bank: "" } };
     const [{ data }, { data: s }] = await Promise.all([
-      supabase.from("saved_payment_methods").select("id, method, brand, last4, exp, holder, last_used_at").is("removed_at", null).order("last_used_at", { ascending: false, nullsFirst: false }),
+      supabase.from("saved_payment_methods").select("id, method, brand, last4, exp, holder, last_used_at, staff_charge_ok").is("removed_at", null).order("last_used_at", { ascending: false, nullsFirst: false }),
       createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     const shop = mergeSettings(s?.data).shop.name;
     return { ok: true as const, list: (data || []) as SavedPM[], consent: { card: consentText(shop, "card"), bank: consentText(shop, "bank") } };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Couldn't load your saved payment methods.", list: [] as SavedPM[], consent: { card: "", bank: "" } }; }
 }
-export type SavedPM = { id: string; method: string; brand: string; last4: string; exp: string; holder: string };
+export type SavedPM = { id: string; method: string; brand: string; last4: string; exp: string; holder: string; /** they let the shop charge it when they ask */ staff_charge_ok?: boolean };
 
 /** Take a saved card or bank account off file: it can't be used again (kept in our records, marked removed). */
 export async function removeSavedMethod(id: string): Promise<Result> {
@@ -223,4 +228,51 @@ export async function sentPaymentNotice(input: { items: { orderId: string; kind:
     revalidatePath("/portal");
     return { ok: true, paid: sum };
   } catch (e) { return fail(e); }
+}
+
+/**
+ * Add a card or bank account in Settings without paying (Oct 24, Nick: "manage it and click like delete or add new
+ * payment"). paymentMethodId comes from Stax.js tokenize(): the numbers never touch our server.
+ */
+export async function addSavedMethod(input: { paymentMethodId: string; method: "card" | "bank"; staffOk?: boolean }): Promise<Result> {
+  try {
+    if (!process.env.STAX_API_KEY) return { ok: false, error: "Saving payment methods isn't set up yet. Please contact the shop." };
+    const { supabase, user, email, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    if (isStaff) return { ok: false, error: "This is a preview." };
+    if (!/^[\w-]{6,}$/.test(input.paymentMethodId || "")) return { ok: false, error: "Enter the details again." };
+    const { data: cs } = await supabase.from("customers").select("id").limit(1);
+    const cid = (cs || [])[0]?.id as string | undefined;
+    if (!cid) return { ok: false, error: "We couldn't find your account." };
+    const admin = createAdminClient();
+    const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    await keepOnFile(admin, cid, input.paymentMethodId, input.method === "bank" ? "bank" : "card", email, mergeSettings(s?.data).shop.name, !!input.staffOk);
+    revalidatePath("/portal/settings");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Let the shop charge a saved one when they ask, or stop it (the words they agreed to are kept). */
+export async function setStaffCharge(id: string, on: boolean): Promise<Result> {
+  try {
+    const { supabase, user, email, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    if (isStaff) return { ok: false, error: "This is a preview." };
+    const { data: sp } = await supabase.from("saved_payment_methods").select("id, method").eq("id", id).is("removed_at", null).maybeSingle();
+    if (!sp) return { ok: false, error: "We couldn't find that one." };
+    const admin = createAdminClient();
+    const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const shop = mergeSettings(s?.data).shop.name;
+    const { error } = await admin.from("saved_payment_methods").update(on
+      ? { staff_charge_ok: true, staff_charge_consent: staffConsentText(shop, sp.method === "bank" ? "bank" : "card"), staff_charge_at: new Date().toISOString(), staff_charge_by: email }
+      : { staff_charge_ok: false, staff_charge_at: new Date().toISOString(), staff_charge_by: email }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+export async function staffConsentWords(): Promise<{ card: string; bank: string }> {
+  const { data: s } = await createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle();
+  const shop = mergeSettings(s?.data).shop.name;
+  return { card: staffConsentText(shop, "card"), bank: staffConsentText(shop, "bank") };
 }

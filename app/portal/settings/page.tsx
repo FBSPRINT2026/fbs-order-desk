@@ -17,7 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <main className="p-main ps">
         <Link href={`/portal${qs}`} className="back">← Dashboard</Link>
         <div className="page-head"><div><h1>Settings</h1><div className="eyebrow" data-notranslate>{c.company || c.name || "Your company"}</div></div></div>
-        <PortalSettings mailOn={(c as unknown as { message_email?: boolean }).message_email !== false} preview={!!ctx.preview} customerId={String(c.id)} logoUrl={logoUrl} shopName={ctx.settings.shop.name} c={{ address: c.address || "", ship_address: c.ship_address || "" }} />
+        <PortalSettings staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} mailOn={(c as unknown as { message_email?: boolean }).message_email !== false} preview={!!ctx.preview} customerId={String(c.id)} logoUrl={logoUrl} shopName={ctx.settings.shop.name} c={{ address: c.address || "", ship_address: c.ship_address || "" }} />
       </main>
     </>
   );

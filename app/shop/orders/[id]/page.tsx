@@ -38,6 +38,7 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
+import ChargeOnFile from "@/components/ChargeOnFile";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
@@ -1770,6 +1771,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <button className="btn sm" type="button" onClick={() => setPayAmt(calc.balance.toFixed(2))}>Full balance</button>
                 </div>
               )}
+              {canPay && calc.balance > 0.004 && <ChargeOnFile orderId={o.id} customerId={o.customer_id} balance={calc.balance} feePct={settings.pay.cardFeePct} onDone={() => window.location.reload()} />}
             </div>
           </section>
           </div>
