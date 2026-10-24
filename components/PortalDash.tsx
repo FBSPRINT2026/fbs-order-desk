@@ -52,19 +52,29 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
               <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
             </Link>
   );
-  const holdRow = (x: DashHeld) => (
-    <div key={x.id} className="pdx-hold-row">
-      <div className="pdx-hold-t">
-        <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
-        <span><span className="pdx-hold-tag">On hold</span>{x.hold.title}</span>
-        <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>
+  const holdRow = (x: DashHeld, size: "full" | "mid" | "tight") => {
+    const points = x.hold.reason.split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).map((t) => t.trim()).filter(Boolean);
+    if (size === "tight") return (
+      <div key={x.id} className="pdx-hold-row tight">
+        <Link href={x.href} className="pdx-hold-t"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span></Link>
+        <Link className="pdx-hold-go" href={x.hold.href}>{x.hold.fixLabel} ›</Link>
       </div>
-      <div className="pdx-hold-acts">
-        <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
-        {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
+    );
+    return (
+      <div key={x.id} className={"pdx-hold-row " + size}>
+        <div className="pdx-hold-t">
+          <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
+          <span>{x.hold.title}</span>
+          {size === "full" ? <ul className="pdx-hold-pts">{points.map((t, i) => <li key={i}>{t}</li>)}</ul>
+            : <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>}
+        </div>
+        <div className="pdx-hold-acts">
+          <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
+          {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
   void mockupHref; void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
@@ -115,10 +125,11 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         {/* on hold, under Payments (Oct 24, Nick: "where tracking is right now… let that be the on hold, need your attention") */}
         <section className={"pdx-card pdx-hold" + (held.length ? " has" : "")}>
           <div className="pdx-h"><h2>On hold: needs your attention</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
-          {held.length ? <div className="pdx-hold-list">
-            {/* compact rows, no scrolling: three show, the rest open under "more" (Oct 24, Nick: "I don't want to have a scroll bar there") */}
-            {held.slice(0, 3).map((x) => holdRow(x))}
-            {held.length > 3 && <details className="pdx-hold-more"><summary>{held.length - 3} more on hold</summary>{held.slice(3).map((x) => holdRow(x))}</details>}
+          {held.length ? <div className={"pdx-hold-list n" + Math.min(held.length, 4)}>
+            {/* one: the reason as points; two: what's wrong and the buttons; three or more: a line each and one link, the
+                fourth on under "+N more" (Oct 24, Nick: fill the panel, never a scroll bar) */}
+            {held.length === 1 ? holdRow(held[0], "full") : held.length === 2 ? held.map((x) => holdRow(x, "mid")) : held.slice(0, 3).map((x) => holdRow(x, "tight"))}
+            {held.length > 3 && <details className="pdx-hold-more"><summary>+{held.length - 3} more on hold ›</summary>{held.slice(3).map((x) => holdRow(x, "tight"))}</details>}
           </div> : <p className="pdx-track-none">Nothing is on hold. If we ever need something from you to keep an order moving, it shows up here.</p>}
         </section>
         </div>

@@ -13570,3 +13570,17 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx .pdx-left .pdx-track .pdx-track-list.two{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}
 .pdx-track-list.two>.pdx-trk:nth-child(2){border-top:0}
 .pdx-ag>b{font-variant-numeric:tabular-nums}
+/* On hold fills its panel: 1 = points, 2 = what's wrong + buttons, 3+ = a line each (Oct 24, Nick) */
+.pdx-top>.pdx-col:not(.pdx-left)>.pdx-hold{display:flex;flex-direction:column}
+.pdx .pdx-col .pdx-hold-list{flex:1 1 auto;display:flex;flex-direction:column;gap:8px}
+.pdx .pdx-col .pdx-hold-list>.pdx-hold-row{flex:1 1 0;display:flex;flex-direction:column;justify-content:center}
+.pdx .pdx-col .pdx-hold-row.tight{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+.pdx-hold-row.tight .pdx-hold-t{display:flex;flex-direction:column;min-width:0;color:var(--ink);text-decoration:none}
+.pdx-hold-row.tight .pdx-hold-t span{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdx-hold-go{font-size:12.5px;font-weight:600;color:var(--accent);white-space:nowrap;text-decoration:none}
+.pdx-hold-go:hover{text-decoration:underline}
+.pdx-hold-pts{margin:6px 0 2px;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2,var(--ink));line-height:1.4}
+.pdx-hold-more>summary{font-size:12.5px}
+/* needs-you buttons on the jobs: blue, quieter than on-hold red/orange (Oct 24, Nick) */
+.pjr-btn.need{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
+.pjr-btn.need:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface));border-color:var(--accent)}
