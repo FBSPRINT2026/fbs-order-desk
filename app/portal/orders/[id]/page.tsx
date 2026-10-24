@@ -217,14 +217,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               </section>
             )}
 
-            {/* their goods for this order (Oct 24, Nick: "another tab… customer supplied goods when it's a wholesale order… waiting on
-                goods, goods received… upload tracking… it should be on each order too") */}
-            {goodsHere.length > 0 && (
-              <section className="panel" id="goods">
-                <div className="panel-h"><h2>Customer supplied goods</h2><span className="faint">Your garments for this order: send us tracking, see when they&apos;re here</span></div>
-                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={preview ? `?as=${ctx.preview!.id}` : ""} empty="" /></div>
-              </section>
-            )}
             <section className="panel" id="messages">
               <div className="panel-h"><h2>Messages</h2></div>
               <div className="panel-b"><MessageThread orderId={o.id} messages={messages} disabled={preview} shopName={ctx.settings.shop.name} /></div>
@@ -265,6 +257,15 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               </div>
             </section>
             </>}
+            {/* their goods for this order, in the side panel under Payment (Oct 24, Nick: "move the customer supplied goods to the right panel below pay") */}
+            {/* earlier: (Oct 24, Nick: "another tab… customer supplied goods when it's a wholesale order… waiting on
+                goods, goods received… upload tracking… it should be on each order too") */}
+            {goodsHere.length > 0 && (
+              <section className="panel" id="goods">
+                <div className="panel-h"><h2>Customer supplied goods</h2><span className="faint">Your garments: send us tracking, see when they&apos;re here</span></div>
+                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={preview ? `?as=${ctx.preview!.id}` : ""} empty="" /></div>
+              </section>
+            )}
             <section className="panel">
               <div className="panel-h"><h2>Questions?</h2></div>
               <div className="panel-b stack" style={{ fontSize: 13 }}>

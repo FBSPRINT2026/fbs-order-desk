@@ -12,12 +12,16 @@ export type DashThread = { key: string; label: string; title: string; from: stri
 export type DashNeed = { key: string; kind: string; title: string; text: string; pic: string; href: string; cta: string };
 export type DashPast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean };
 
+/** an order they sent us, until we've confirmed it (and two weeks after) */
+export type DashSent = { id: string; href: string; number: number; name: string; when: string; pcs: number; simple: boolean; step: number; label: string; tone: "wait" | "act" | "ok" | "off"; note: string };
+
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
+export default function PortalDash({ sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
+  /** Orders sent to FBS, above the jobs (Oct 24, Nick) */ sent?: DashSent[];
   /** an order they started and didn't send (Oct 24, Nick: "I saw you were making this order… bring it back up?") */ draft?: { href: string; name: string; when: string } | null;
   /** their mockups, under the artwork */ mocks?: { id: string; url: string; name: string }[]; mockupHref?: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
@@ -51,6 +55,21 @@ export default function PortalDash({ draft, assistant, threads, newMsgs, msgHref
           <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
       </div>
+
+      {sent.length > 0 && (
+        <section className="pdx-card pdx-sent">
+          <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
+          <div className="pdx-sent-list">
+            {sent.map((x) => (
+              <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
+                <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
+                <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
+                <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <DashJobs jobs={jobs} pastJobs={pastJobs} canAct={canAct} ordersHref={ordersHref} />
 

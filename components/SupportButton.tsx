@@ -6,6 +6,7 @@
  * if that's turned down, a picture can be pasted or attached instead.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { MicButton } from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
@@ -61,7 +62,30 @@ export default function SupportButton({ email, portal = false }: { email: string
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (!shot) { setUrl(""); return; } const u = URL.createObjectURL(shot); setUrl(u); return () => URL.revokeObjectURL(u); }, [shot]);
 
+  // the portal: the box opens first and asks; a screenshot only when they pick it (Oct 24, Nick: "just make it a
+  // question mark… do you need help? Are you having an issue with the portal?… give it an option to take a screenshot…
+  // you need an X out button")
+  function ask() {
+    page.current = { href: location.href, title: document.title };
+    setErr(""); setDone(false); setText(""); setShot(null); setBusy(""); setOpen(true);
+  }
+  async function snap() {
+    setOpen(false); setBusy("Taking a screenshot…");
+    await new Promise((r) => setTimeout(r, 250));
+    const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: unknown };
+    let b: Blob | null = null;
+    if (md?.getDisplayMedia && !window.matchMedia("(pointer: coarse)").matches) b = await grabTab();
+    if (!b) b = await drawPage();
+    if (b) setShot(b); else setErr("We couldn't take a screenshot. You can attach one from your Photos instead.");
+    setBusy(""); setOpen(true);
+  }
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) setOpen(false); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [open, busy]);
   async function start() {
+    if (portal) return ask();
     page.current = { href: location.href, title: document.title };
     setErr(""); setDone(false); setText(""); setShot(null); setBusy("Taking a screenshot…");
     // the screenshot first (the box isn't open yet, so it shows the page as it is). Phones: the menu closes first,
@@ -115,9 +139,8 @@ export default function SupportButton({ email, portal = false }: { email: string
   return (
     <>
       {portal ? (
-        <button type="button" className="btn sm p-help" onClick={start} disabled={!!busy && !open} aria-label="Get help: send us a screenshot and what's wrong">
-          <svg viewBox="0 0 24 24" aria-hidden width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></svg>
-          {busy && !open ? busy : "Get help"}
+        <button type="button" className="p-help" onClick={start} disabled={!!busy && !open} title="Need help?" aria-label="Need help? Tell us what's going on">
+          {busy && !open ? <span className="p-help-busy">…</span> : "?"}
         </button>
       ) : (
       <button type="button" className="nav-support" onClick={start} disabled={!!busy && !open} data-tip="Report an issue" aria-label="Report an issue: send a screenshot and what happened">
@@ -125,12 +148,19 @@ export default function SupportButton({ email, portal = false }: { email: string
         <span className="lbl-t">{busy && !open ? busy : "Report an issue"}</span>
       </button>
       )}
-      {open && (
-        <div className="sup-back" role="dialog" aria-modal="true" aria-label="Report an issue" onPaste={onPaste}>
-          <div className="sup-box">
-            <h3>{portal ? "Get help" : "Report an issue"}</h3>
+      {/* on the page itself, not inside the header (a fixed box in the portal header was stuck there) */}
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="sup-back" role="dialog" aria-modal="true" aria-label={portal ? "Need help?" : "Report an issue"} onPaste={onPaste} onClick={() => !busy && setOpen(false)}>
+          <div className="sup-box" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dla-x" aria-label="Close" disabled={!!busy} onClick={() => setOpen(false)}>×</button>
+            <h3>{portal ? "Need help?" : "Report an issue"}</h3>
+            {portal && !done && <p className="faint" style={{ fontSize: 13, margin: "0 0 4px" }}>Having trouble with the portal, or a question about an order? Tell us what&apos;s going on. A screenshot helps us see what you see.</p>}
             {done ? <p className="sep-ok">{portal ? "Sent. We'll take a look and get back to you in Messages. Thanks!" : "Sent. Nick will see it on the Support page. Thanks!"}</p> : <>
-              {url ? <img className="sup-shot" src={url} alt="Screenshot of the page" /> : <div className="sup-noshot faint">No screenshot. <label className="linkbtn">Attach one from your Photos<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>, paste one here (Windows: Win+Shift+S, then Ctrl+V), or <button type="button" className="linkbtn" onClick={async () => { setOpen(false); await new Promise((r) => setTimeout(r, 300)); const b = (await drawPage()) || (await grabTab()); setShot(b); setOpen(true); }}>try again</button>.</div>}
+              {portal && !url && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn sm" onClick={() => void snap()}>Take a screenshot</button>
+                <label className="btn sm" style={{ cursor: "pointer" }}>Attach a picture<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>
+              </div>}
+              {url ? <img className="sup-shot" src={url} alt="Screenshot of the page" /> : portal ? null : <div className="sup-noshot faint">No screenshot. <label className="linkbtn">Attach one from your Photos<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>, paste one here (Windows: Win+Shift+S, then Ctrl+V), or <button type="button" className="linkbtn" onClick={async () => { setOpen(false); await new Promise((r) => setTimeout(r, 300)); const b = (await drawPage()) || (await grabTab()); setShot(b); setOpen(true); }}>try again</button>.</div>}
               {url && <label className="linkbtn" style={{ fontSize: 12 }}>Use a screenshot from Photos instead<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>}
               {url && <div className="faint" style={{ fontSize: 12 }}>Wrong picture? <button type="button" className="linkbtn" onClick={() => setShot(null)}>Remove it</button></div>}
               <div className="sc-in">
@@ -145,7 +175,8 @@ export default function SupportButton({ email, portal = false }: { email: string
               </div>
             </>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

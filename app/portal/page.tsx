@@ -152,7 +152,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const link = (p: string) => (qs ? `${p}${p.includes("?") ? "&" : "?"}${qs.slice(1)}` : p);
   const msgHref = link("/portal?area=messages");
   const msgLink = (orderId: string | null) => link(`/portal?area=messages&c=${orderId || "general"}`);
-  const isJob = (o: Order) => o.status !== "completed" && !(o.status === "request" && !o.submitted_at);
+  // sent to us and not confirmed yet: in "Orders sent to FBS" above the jobs, not in the jobs (Oct 24, Nick)
+  const isJob = (o: Order) => o.status !== "completed" && o.status !== "request";
   const doneRecent = orders.filter((o) => o.status === "completed").slice(0, 1);
   const jobOrders = orders.filter(isJob).slice(0, 20);
   const pastPortal = orders.filter((o) => o.status === "completed" && !doneRecent.includes(o));
@@ -201,6 +202,23 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       goodsHref, ship: shipOf.get(o.id) || null, balance: o.type === "invoice" ? bal(o) : 0, payHref: link("/portal?area=payments"), pickup: shopAddr, pickupHref });
   };
   const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
+  // Orders sent to FBS (Oct 24, Nick: "as soon as you click that button, you want to keep track of it on the main
+  // dashboard… order sent to FBS, waiting on FBS… approved"): everything still with us, and what we did with the ones
+  // sent in the last two weeks
+  const twoWeeks = new Date(Date.now() - 14 * 864e5).toISOString();
+  type SentRow = Order & { staff_seen_at?: string | null; cancel_requested_at?: string | null; simple_order?: unknown };
+  const sentDash = (orders as SentRow[]).filter((o) => o.submitted_at && (o.status === "request" || (o.submitted_at >= twoWeeks && o.status !== "completed")))
+    .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at))).slice(0, 6).map((o) => {
+      const pcs = o.qty || 0, simpleO = o.simple_order != null;
+      const st = o.status === "void" ? { step: -1, label: "Canceled", tone: "off" as const, note: "This order was canceled." }
+        : o.cancel_requested_at ? { step: 1, label: "Cancel requested", tone: "wait" as const, note: "We got your request to cancel and we'll confirm." }
+        : o.status === "request" ? (o.staff_seen_at ? { step: 1, label: "FBS is reviewing", tone: "wait" as const, note: "We opened it and we're checking the details." } : { step: 0, label: "Waiting on FBS", tone: "wait" as const, note: "We have it. We'll open it soon." })
+        : o.status === "quote_sent" ? { step: 2, label: "Quote ready", tone: "act" as const, note: "Your quote is ready: review and approve it." }
+        : o.status === "quote" ? { step: 1, label: "Pricing it", tone: "wait" as const, note: "We're putting your quote together." }
+        : firstPending[o.id] ? { step: 2, label: "Proof ready", tone: "act" as const, note: "Your proof is ready: please approve it." }
+        : { step: 2, label: "Confirmed", tone: "ok" as const, note: "Confirmed. It's in your jobs below." };
+      return { id: o.id, href: firstPending[o.id] && st.label === "Proof ready" ? link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`) : link(`/portal/orders/${o.id}`), number: o.number, name: o.nickname || (simpleO ? "Simple order" : ""), when: short(o.submitted_at), pcs, simple: simpleO, ...st };
+    });
   const IDX_AFTER_ART = ["blanks", "production", "ready"];
   // what's waiting on them, with a picture and one button
   // the same balance the Payments tab shows: portal orders and invoices from before the portal
@@ -277,7 +295,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
-    <PortalDash draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
+    <PortalDash sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}

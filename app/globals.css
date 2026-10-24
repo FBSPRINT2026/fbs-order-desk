@@ -13233,3 +13233,25 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .rq-so-files{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
 .rq-so-files li{display:flex;align-items:center;gap:8px;font-size:13px}
 .rq-so-files .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* portal help: a question mark by Sign out (Oct 24, Nick) */
+.p-help{display:inline-grid;place-items:center;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-2,var(--ink));font:700 16px/1 var(--body);cursor:pointer}
+.p-help:hover{border-color:var(--accent);color:var(--accent)}
+.sup-box{position:relative}
+.sup-box h3{padding-right:36px}
+/* Orders sent to FBS, above the jobs on the portal dashboard (Oct 24, Nick) */
+.pdx-sent{margin-bottom:16px}
+.pdx-sent-list{display:flex;flex-direction:column;gap:8px}
+.pdx-sent-row{display:grid;grid-template-columns:minmax(0,1.2fr) auto minmax(0,1.4fr);gap:16px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;color:var(--ink);text-decoration:none;--sc:var(--accent)}
+.pdx-sent-row:hover{border-color:var(--accent)}
+.pdx-sent-row.t-act{--sc:var(--warn)}
+.pdx-sent-row.t-ok{--sc:var(--ok)}
+.pdx-sent-row.t-off{--sc:var(--ink-3)}
+.pdx-sent-name{display:flex;flex-direction:column;min-width:0}
+.pdx-sent-name b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdx-sent-name small,.pdx-sent-st small{font-size:12px;color:var(--ink-3)}
+.pdx-sent-steps{display:flex;gap:4px}
+.pdx-sent-steps i{width:26px;height:6px;border-radius:3px;background:var(--surface-3)}
+.pdx-sent-steps i.on{background:var(--sc)}
+.pdx-sent-st{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+.pdx-sent-pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--sc);background:color-mix(in srgb,var(--sc) 14%,transparent);white-space:nowrap}
+@media (max-width:700px){.pdx-sent-row{grid-template-columns:1fr auto}.pdx-sent-st{grid-column:1 / -1}}
