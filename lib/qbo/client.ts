@@ -3,11 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { QBO_AUTH_URL, QBO_MINOR_VERSION, QBO_REVOKE_URL, QBO_SCOPE, QBO_TOKEN_URL, qboEnv } from "@/lib/qbo/config";
 
 /**
- * Never delete or void anything in QuickBooks (Oct 24, Nick, before connecting the real company: "you're not ever
- * deleting anything in QuickBooks, right? You're just sending something to update… you can update it, but you can't
- * delete it for right now"). With this on, the sync only adds and updates: a deleted payment or a cancelled order goes to
- * Needs review ("do it in QuickBooks by hand"), and the client itself refuses delete and void requests. The one
- * exception is voiding the owner's own TEST-… invoice from Settings → QuickBooks.
+ * Never delete anything in QuickBooks (Oct 24, Nick, before connecting the real company: "you're not ever deleting
+ * anything in QuickBooks, right?… you can update it, but you can't delete it"). Voiding is fine, and is how a cancelled
+ * order is handled ("voiding an invoice is the correct way… you don't want to delete"): an invoice the portal made
+ * itself is voided when its order is cancelled here. A payment deleted here is never deleted in QuickBooks: it goes to
+ * Needs review to handle by hand. The client itself refuses any delete request.
  */
 export const QBO_NO_DELETES = true;
 
@@ -254,9 +254,9 @@ export class Qbo {
       return (await send(cur.SyncToken))[entity] as T;
     }
   }
-  /** voids: off (QBO_NO_DELETES) except the owner's own TEST-… invoice (testOnly) */
+  /** voiding is allowed (Nick: "voiding them is okay"); testOnly marks the owner's TEST-… invoice */
   async voidInvoice(id: string, syncToken: string, testOnly = false) {
-    if (QBO_NO_DELETES && !testOnly) throw new Error("Voiding in QuickBooks is turned off (QBO_NO_DELETES): void it in QuickBooks by hand.");
+    void testOnly;
     const r = await this.with({ qboId: id }).request<Resp>("POST", "invoice", { params: { operation: "void" }, body: { Id: id, SyncToken: syncToken }, label: `void Invoice ${id}` });
     return r.Invoice as Resp;
   }

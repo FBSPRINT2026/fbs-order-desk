@@ -250,7 +250,7 @@ export class Pusher {
 
   /**
    * One test invoice, sent on purpose by the owner (Oct 24, Nick: "the real quickbooks… just try to sync this one
-   * invoice to make sure it's working ok"). Any order, even a quote or a test customer's: the customer is made (or
+   * invoice to make sure it's working ok"). An invoice (never a quote), even a test customer's: the customer is made (or
    * found) in QuickBooks, and the invoice is made numbered "TEST-<order #>" with a note to void it, so it can't be
    * mistaken for (or collide with) a real invoice. The order isn't linked to it; testVoid() voids it by its id.
    */
@@ -259,6 +259,8 @@ export class Pusher {
     if (!o) return { status: "error", reason: "Order not found." };
     if (!this.qbo) return { status: "error", reason: "QuickBooks isn't connected." };
     if (!o.customer_id) return { status: "error", reason: "The order has no customer." };
+    // like the real sync (and Printavo): a quote never goes to QuickBooks, only an invoice (Oct 24, Nick)
+    if (!isInvoiceStatus(o.status)) return { status: "error", reason: `#${o.number} is still a quote. Quotes never go to QuickBooks: turn it into an invoice first, then send it.` };
     const n = +o.number, doc = `TEST-${n}`;
     const cust = await this.ourCustomer(o.customer_id);
     let custLink = await this.link("customer", o.customer_id);
@@ -327,7 +329,6 @@ export class Pusher {
     if (!link) return { status: "skipped", reason: "Never in QuickBooks: nothing to void." };
     if (link.source !== "created") return { status: "needs_review", reason: `QuickBooks invoice #${link.qbo_id} was made by Printavo, so it isn't voided automatically. Void it in QuickBooks if the order is cancelled, then Skip.` };
     const preview = { action: "void", qboId: link.qbo_id };
-    if (QBO_NO_DELETES) return { status: "needs_review", reason: `The order was cancelled here, but voiding in QuickBooks is turned off for now. Void QuickBooks invoice #${link.qbo_id} by hand if it should go, then Skip.`, preview };
     if (!this.qbo) return { status: "pending", reason: `Not connected: would void QuickBooks invoice #${link.qbo_id}.`, preview };
     if (!this.live) return { status: "pending", reason: `Preview: would void QuickBooks invoice #${link.qbo_id}.`, preview };
     const q = this.qbo.with({ entity: "invoice", localId: row.local_id, qboId: link.qbo_id });
