@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
 import { loadTokens, Qbo, QboError } from "@/lib/qbo/client";
 import { qboEnv } from "@/lib/qbo/config";
-import { loadQboSettings } from "@/lib/qbo/runner";
+import { claimLock, loadQboSettings, releaseLock, runQueue } from "@/lib/qbo/runner";
 import { explainQboError, Pusher } from "@/lib/qbo/push";
 
 /**
@@ -83,4 +83,39 @@ export async function qboProblemCount() {
     ]);
     return { ok: true as const, n: (a.count || 0) + (b.count || 0) };
   } catch { return { ok: true as const, n: 0 }; }
+}
+
+/**
+ * Sync this one order now (Oct 24, Nick: "when I right click on the sync symbol on an order… sync now… if you make a
+ * change, it immediately syncs back to QuickBooks… There's a way to do that in Printavo too"). Queues the order's
+ * invoice (and its customer) and runs just those rows, the same way the every-minute sync would: sent when the sync is
+ * on and live, previewed when it's off. Owners and admins.
+ */
+export async function qboSyncOrder(orderId: string) {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff || !["owner", "admin"].includes(v.role)) throw new Error("Only an owner or admin can sync to QuickBooks.");
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("id, number, type, customer_id").eq("id", orderId).maybeSingle();
+    if (!o) throw new Error("Order not found.");
+    if (o.type !== "invoice") return { ok: false as const, message: "It's a quote: quotes don't go to QuickBooks. Make it an invoice first." };
+    const qs = await loadQboSettings(admin);
+    if (+o.number < qs.adopt_from_number) return { ok: false as const, message: `#${o.number} is from before the portal; Printavo keeps it in QuickBooks.` };
+    if (o.customer_id) await admin.rpc("qbo_enqueue", { p_entity: "customer", p_local_id: o.customer_id, p_op: "upsert", p_reason: "sync now" });
+    await admin.rpc("qbo_enqueue", { p_entity: "invoice", p_local_id: o.id, p_op: "upsert", p_reason: "sync now" });
+    const { data: rows } = await admin.from("qbo_queue").select("id").in("status", ["pending", "error", "needs_review"]).or(`and(entity.eq.invoice,local_id.eq.${o.id})${o.customer_id ? `,and(entity.eq.customer,local_id.eq.${o.customer_id})` : ""}`);
+    const ids = (rows || []).map((r) => r.id as number);
+    if (!ids.length) return { ok: true as const, message: "Nothing waiting to sync." };
+    const lockId = await claimLock(admin);
+    if (!lockId) return { ok: false as const, message: "A sync is running right now. Try again in a minute." };
+    try { await runQueue(admin, { mode: qs.enabled ? "auto" : "preview", deadline: Date.now() + 100000, lockId, ids }); }
+    finally { await releaseLock(admin, lockId); }
+    const { data: q } = await admin.from("qbo_queue").select("status, reason").eq("entity", "invoice").eq("local_id", o.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    const st = String(q?.status || ""), why = String(q?.reason || "");
+    const live = qs.enabled && qs.mode === "live";
+    const message = st === "done" ? `Synced to QuickBooks. ${why}`.trim() : st === "skipped" ? `Not sent: ${why}` : st === "needs_review" ? `Didn't sync: ${why}` : !live ? `The QuickBooks sync is ${qs.enabled ? "in preview" : "off"}, so nothing was sent. ${why}`.trim() : `Will try again: ${why}`;
+    return { ok: st === "done" || st === "skipped" || !live, message: message.slice(0, 400) };
+  } catch (e) {
+    return { ok: false as const, message: e instanceof QboError ? explainQboError(e) : e instanceof Error ? e.message : String(e) };
+  }
 }

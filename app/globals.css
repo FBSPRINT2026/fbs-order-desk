@@ -12933,3 +12933,12 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .nav-g-shoptools .prod-side button.on{color:var(--fbs-orange)}
 .prod-side button.dot{position:relative}
 .prod-side button.dot::after{content:"";position:absolute;top:-3px;right:-5px;width:5px;height:5px;border-radius:50%;background:var(--side-active)}
+/* the order's QB mark: right-click menu (Sync now) */
+.qb-wrap{position:relative;display:inline-flex;align-self:center}
+.qb-tick.busy{animation:qbpulse 1s ease-in-out infinite}
+@keyframes qbpulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.qb-tick.busy{animation:none;opacity:.6}}
+.qb-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:40;display:flex;flex-direction:column;min-width:170px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(20,29,43,.14);padding:4px}
+.qb-menu button,.qb-menu a{border:0;background:none;text-align:left;font:inherit;font-size:13px;color:var(--ink);padding:7px 10px;border-radius:6px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.qb-menu button:hover,.qb-menu a:hover{background:var(--surface-2)}
+.qb-menu button:disabled{color:var(--ink-3);cursor:default}

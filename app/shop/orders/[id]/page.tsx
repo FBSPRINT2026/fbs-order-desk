@@ -55,7 +55,7 @@ import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
-import { qboOrderState, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
+import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 
@@ -822,6 +822,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
   // asked again after each save (a change turns it yellow until it syncs), and every minute while the page is open
+  const [qbMenu, setQbMenu] = useState(false), [qbBusy, setQbBusy] = useState(false);
+  async function qbSync() {
+    if (!o) return;
+    setQbBusy(true);
+    const r = await qboSyncOrder(o.id).catch((e) => ({ ok: false, message: e instanceof Error ? e.message : String(e) }));
+    setQbBusy(false); setQbMenu(false);
+    say(r.message);
+    qboOrderState(o.id).then((x) => setQbSt(x.ok ? x : null), () => null);
+  }
+  useEffect(() => { if (!qbMenu) return; const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".qb-wrap")) setQbMenu(false); }; document.addEventListener("click", h); return () => document.removeEventListener("click", h); }, [qbMenu]);
   const qbDeep = useRef("");
   useEffect(() => {
     if (!o?.id) return;
@@ -1060,7 +1070,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             const tip = k === "bad" ? `Didn't sync to QuickBooks: ${qbSt!.issue}` : k === "void" ? `Voided in QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}` : k === "ok" ? `Synced to QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber}${qbSt!.source === "test" ? ", a test" : ""})` : ""}` : k === "wait" ? (changed ? `Changed since it went to QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}: waiting to sync` : "Not synced to QuickBooks yet") : "A quote: quotes don't sync to QuickBooks";
             // just the QB mark, in its color (Oct 24, Nick: "remove the check mark… just use the QB logo and the color
             // coordination… when you hover over it, it should say the status")
-            return <span className={"qb-tick qb-" + k} title={tip} aria-label={tip} role="img"><QbMark /></span>;
+            // right-click: Sync now, this order only (Oct 24, Nick: "right click the QB thing at the top… sync now… it'll force
+            // it to sync that invoice")
+            return <span className="qb-wrap">
+              <span className={"qb-tick qb-" + k + (qbBusy ? " busy" : "")} title={`${tip}. Right-click to sync now.`} aria-label={tip} role="img" onContextMenu={(e) => { e.preventDefault(); setQbMenu(true); }}><QbMark /></span>
+              {qbMenu && <span className="qb-menu" role="menu" onMouseLeave={() => setQbMenu(false)}>
+                <button type="button" role="menuitem" disabled={qbBusy || !inv} onClick={() => void qbSync()}>{qbBusy ? "Syncing…" : inv ? "Sync now" : "Quotes don't sync"}</button>
+                <a role="menuitem" href="/shop/settings/quickbooks">QuickBooks settings</a>
+              </span>}
+            </span>;
           })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
