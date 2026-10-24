@@ -241,6 +241,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...pastPortal.slice(0, 3).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), date: o.completed_at || o.due_date || o.created_at })),
     ...archTop.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
+  // their mockups under the artwork (Oct 24, Nick: "on the dashboard… you've got artwork, but also put a line for mockups")
+  const mocks = mockups.filter((m) => m.thumb).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((m) => ({ id: m.id, url: m.thumb, name: m.title.replace(/^Group \d+ — /, "") }));
   const art = designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }));
   // payments get their own box on the dashboard (Oct 15, Nick: not a "Needs you" item)
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -272,7 +274,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const dash = (
     <PortalDash
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
-      threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} artHref={link("/portal?area=artwork")}
+      threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
       goods={wholesale && goodsOpen.length ? <section className="pdx-card"><div className="pdx-h"><h2>Customer supplied goods</h2><a className="pd-link" href={goodsHref}>See all</a></div><PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="" /></section> : undefined} />
   );

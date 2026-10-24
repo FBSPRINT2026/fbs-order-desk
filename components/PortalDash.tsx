@@ -15,9 +15,10 @@ export type DashPast = { id: string; number: number; nickname: string; when: str
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, pay, goods, canAct, ordersHref }: {
+export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
-  past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
+  past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
+  /** their mockups, under the artwork */ mocks?: { id: string; url: string; name: string }[]; mockupHref?: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
   // the dashboard (Oct 24, Nick, first look as a customer: "we don't want payments to be the first thing they see… where it
   // says message center, make that payments… a nice little customer statement looking… where you can pay now… past due
@@ -70,6 +71,11 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
           <div className="pdx-art">
             {art.map((a) => <Link key={a.id} href={artHref} title={a.name}><img src={a.url} alt={a.name} loading="lazy" /></Link>)}
             <Link href={artHref} className="add">＋ Upload<br />a logo</Link>
+          </div>
+          <div className="pdx-h" style={{ marginTop: 18 }}><h2>Your mockups</h2><Link href={artHref} className="pd-link">All mockups</Link></div>
+          <div className="pdx-art">
+            {mocks.map((m) => <Link key={m.id} href={artHref} title={m.name}><img src={m.url} alt={m.name} loading="lazy" /></Link>)}
+            {mockupHref && <Link href={mockupHref} className="add">＋ Make<br />a mockup</Link>}
           </div>
         </section>
       </div>
