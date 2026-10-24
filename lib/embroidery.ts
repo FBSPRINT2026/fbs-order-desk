@@ -24,16 +24,20 @@ export const lineBrand = (line: string) => (/isacord/i.test(line) ? "Isacord" : 
 /** the line's name with its brand: "Madeira Polyneon 40", "Isacord 40" */
 export const lineName = (line: string) => (/isacord/i.test(line) ? "Isacord 40" : `Madeira ${line}`);
 
-/** the threads with a color to compare (a thread with only its PMS gets the PMS's color) */
-let all: Thread[] | null = null;
-export function threads(): Thread[] {
+/** Madeira Polyneon 40 is the shop's standard thread (Oct 23, Nick); Rayon and Isacord when asked for */
+export const STANDARD_LINE: Thread["line"] = "Polyneon 40";
+/** the threads with a color to compare (a thread with only its PMS gets the PMS's color). `alt`: the color of the
+ *  PMS the maker matches it to, a second point to compare against (Madeira's chart is how the shop matches a logo's
+ *  PMS to a thread; Oct 23, Nick sent Madeira's Polyneon PANTONE chart) */
+let all: (Thread & { alt: string[] })[] | null = null;
+export function threads(): (Thread & { alt: string[] })[] {
   if (all) return all;
-  all = (MADEIRA_THREADS as Thread[]).map((t) => ({ ...t, hex: t.hex || pmsHex(t.pms[0] || "") || "" })).filter((t) => /^#[0-9a-f]{6}$/i.test(t.hex));
+  all = (MADEIRA_THREADS as Thread[]).map((t) => ({ ...t, hex: t.hex || pmsHex(t.pms[0] || "") || "", alt: t.pms.slice(0, 2).map(pmsHex).filter(Boolean) })).filter((t) => /^#[0-9a-f]{6}$/i.test(t.hex));
   return all;
 }
 const pmsHex = (p: string) => {
   if (!p) return "";
-  const norm = (s: string) => s.replace(/^(pms|pantone)\s*/i, "").replace(/\s+[cu]$/i, "").trim().toLowerCase();
+  const norm = (s: string) => s.replace(/^(pms|pantone)\s*/i, "").replace(/^process\s+/i, "").replace(/\s+[cu]$/i, "").trim().toLowerCase();
   const want = norm(p);
   const k = Object.keys(PMS_COATED).find((n) => norm(n) === want);
   return k ? PMS_COATED[k] : "";
@@ -57,12 +61,17 @@ export const threadKey = (line: string, code: string) => (/isacord/i.test(line) 
  * The Madeira threads closest to a color in the logo, closest first (CIEDE2000, the same measure the ink suggestions
  * use). `line` picks the thread line (Polyneon unless asked); `stock` (codes we carry) puts those first when as close.
  */
+/** each line's own black and white: a logo's black (or white) is that thread, not the nearest dark brown */
+const PLAIN: Record<string, { black: string; white: string }> = { "Polyneon 40": { black: "1800", white: "1801" }, "Isacord 40": { black: "0020", white: "0015" }, "Classic Rayon 40": { black: "1000", white: "1001" } };
 export function closestThreads(hex: string, o: { line?: Thread["line"]; n?: number; stock?: Set<string> } = {}): (Thread & { dE: number; word: string; stocked: boolean })[] {
   const line = o.line || "Polyneon 40";
+  const v = parseInt(hex.replace("#", ""), 16), r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+  const plain = Math.max(r, g, b) - Math.min(r, g, b) < 24 ? (Math.max(r, g, b) < 60 ? PLAIN[line]?.black : Math.min(r, g, b) > 235 ? PLAIN[line]?.white : "") : "";
   return threads().filter((t) => t.line === line)
-    .map((t) => { const dE = Math.round(deltaE(hex, t.hex) * 10) / 10; return { ...t, dE, word: matchWord(dE), stocked: !!o.stock?.has(threadKey(t.line, t.code)) }; })
-    // a thread we stock wins when it's about as close (under 1.5 apart): it's on the wall, nothing to order
-    .sort((a, b) => (a.dE + (a.stocked ? -1.5 : 0)) - (b.dE + (b.stocked ? -1.5 : 0)))
+    .map((t) => { const dE = Math.round(Math.min(deltaE(hex, t.hex), ...t.alt.map((a) => deltaE(hex, a))) * 10) / 10; return { ...t, dE, word: matchWord(dE), stocked: !!o.stock?.has(threadKey(t.line, t.code)) }; })
+    // a thread we stock wins when it's about as close (under 1.5 apart): it's on the wall, nothing to order; black
+    // and white are the line's own black and white
+    .sort((a, b) => (a.code === plain ? -1 : 0) - (b.code === plain ? -1 : 0) || (a.dE + (a.stocked ? -1.5 : 0)) - (b.dE + (b.stocked ? -1.5 : 0)))
     .slice(0, o.n || 5);
 }
 /** one pick per logo color: the closest thread */
