@@ -76,7 +76,18 @@ export function closestThreads(hex: string, o: { line?: Thread["line"]; n?: numb
     .slice(0, o.n || 5);
 }
 /** one pick per logo color: the closest thread */
-export const closestThread = (hex: string, o: { line?: Thread["line"]; stock?: Set<string> } = {}) => closestThreads(hex, { ...o, n: 1 })[0] || null;
+/**
+ * The thread a logo color gets, the way a stock ink is picked (Oct 23, Nick: "make these threads our standard thread…
+ * think of them like stock ink colors"): one of our standard colors when it's very close (under 3 apart) or about as
+ * close as anything on the card (within 1.5); otherwise the closest thread on the card (a special order).
+ */
+export function closestThread(hex: string, o: { line?: Thread["line"]; stock?: Set<string> } = {}) {
+  const near = closestThreads(hex, { ...o, n: 400 });
+  const best = near[0] || null;
+  if (!best || !o.stock?.size) return best;
+  const std = near.find((t) => t.stocked);
+  return std && (std.code === best.code || std.dE < 3 || std.dE <= best.dE + 1.5) ? std : best;
+}
 
 /** a thread found by what's typed: its number, name or PMS ("1843", "purple", "2745") */
 export function findThreads(q: string, line?: Thread["line"], n = 30): Thread[] {

@@ -212,22 +212,22 @@ function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; lin
               <span className="mk-srcs">{r.hexes.slice(0, 3).map((h) => <span key={h} className="sw" style={{ background: h }} />)}</span><span className="arrow">→</span>
               {cur?.name === "none" ? <span className="emb-tr-n faint">Not sewn (the shirt shows)</span> : <>
                 <span className="sw emb-spool" style={{ background: cur?.hex || r.hexes[0] }} />
-                <span className="emb-tr-n">{cur?.name || "Pick a thread"}{t?.pms.length ? <span className="faint"> · PMS {t.pms[0].replace(/^PMS\s*/i, "")}</span> : null}{t && stock.has(stockKey(t.line, t.code)) ? <span className="emb-stk">in stock</span> : null}</span>
+                <span className="emb-tr-n">{cur?.name || "Pick a thread"}{t?.pms.length ? <span className="faint"> · PMS {t.pms[0].replace(/^PMS\s*/i, "")}</span> : null}{t && stock.has(stockKey(t.line, t.code)) ? <span className="emb-stk">standard</span> : null}</span>
               </>}
               <span className="mk-bs-a" aria-hidden>{open === k ? "▾" : "▸"}</span>
             </button>
             {open === k && (
               <div className="emb-tr-pop">
-                <div className="emb-tr-h">Closest {lineName(line)} threads</div>
+                <div className="emb-tr-h">Closest {lineName(line)} threads <span className="faint">· standard colors are on the wall; the rest are special order</span></div>
                 {near.map((x) => (
                   <button key={x.code} type="button" className={"emb-opt" + (t?.code === x.code ? " on" : "")} onMouseEnter={() => onHover(r.hexes, { name: threadLabel(x), hex: x.hex })} onMouseLeave={() => onHover(r.hexes, null)} onClick={() => pickT(r, x)}>
-                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t" title={`${x.code} ${x.name}${x.pms.length ? ` · PMS ${x.pms[0]}` : ""}`}><b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{x.stocked && <span className="emb-stk">in stock</span>}<span className={"emb-dE " + (x.dE < 3 ? "ok" : x.dE < 6 ? "" : "far")}>{x.word}</span>
+                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t" title={`${x.code} ${x.name}${x.pms.length ? ` · PMS ${x.pms[0]}` : ""}`}><b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{x.stocked && <span className="emb-stk">standard</span>}<span className={"emb-dE " + (x.dE < 3 ? "ok" : x.dE < 6 ? "" : "far")}>{x.word}</span>
                   </button>
                 ))}
                 <input className="emb-q" placeholder="Find a thread: number, name or PMS" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a thread" autoFocus />
                 {found.map((x) => (
                   <button key={x.code} type="button" className="emb-opt" onMouseEnter={() => onHover(r.hexes, { name: threadLabel(x), hex: x.hex })} onMouseLeave={() => onHover(r.hexes, null)} onClick={() => pickT(r, x)}>
-                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t"><b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{stock.has(stockKey(x.line, x.code)) && <span className="emb-stk">in stock</span>}
+                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t"><b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{stock.has(stockKey(x.line, x.code)) && <span className="emb-stk">standard</span>}
                   </button>
                 ))}
                 {q.trim() && !found.length && <p className="faint emb-none">No {lineName(line)} thread matches “{q}”.</p>}

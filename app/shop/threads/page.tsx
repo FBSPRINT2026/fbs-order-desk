@@ -10,7 +10,9 @@ import { PMS_COATED } from "@/lib/pms";
 /**
  * Thread Room (Oct 23, Nick: "just like we have the ink room, we need to have the thread room… its little logo can be a
  * spool"). The embroidery side's Ink Room, for Maria and her team:
- *   - On the wall: the threads we keep, with cones on hand, the low mark and where each hangs
+ *   - Standard colors: the Madeira Polyneon colors we keep, like the stock inks (Oct 23, Nick: "make these threads
+ *     our standard thread… think of them like stock ink colors": the 42 Polyneon colors of Madeira's #919-48 kit), with
+ *     cones on hand, the low mark and where each hangs; first in every list
  *   - Thread cards: every Madeira Polyneon 40, Classic Rayon 40 and Isacord 40 color with its PMS; tap one to see it, put it on the
  *     wall or take it off (the Mockup Creator suggests a thread we stock first when it's about as close)
  *   - Match a color: a PMS or a color → the closest Madeira threads, the same match the Mockup Creator makes
@@ -87,7 +89,7 @@ export default function ThreadRoom() {
         <i style={{ background: t.hex || "#ddd" }} className="thr-spool" />
         <b data-notranslate>{t.code}</b>
         <small>{t.name}</small>
-        {s ? <small className={"ink-instock" + (isLow ? " low" : "")}>{s.cones != null ? `${s.cones} cone${s.cones === 1 ? "" : "s"}` : "On the wall"}{isLow ? " · low" : ""}</small> : t.pms.length ? <small className="faint" data-notranslate>PMS {t.pms[0].replace(/^PMS\s*/i, "")}</small> : null}
+        {s ? <small className={"ink-instock" + (isLow ? " low" : "")}>{s.cones != null ? `Standard · ${s.cones} cone${s.cones === 1 ? "" : "s"}` : "Standard"}{isLow ? " · low" : ""}</small> : t.pms.length ? <small className="faint" data-notranslate>PMS {t.pms[0].replace(/^PMS\s*/i, "")}</small> : null}
       </button>
     );
   };
@@ -96,7 +98,7 @@ export default function ThreadRoom() {
     <>
       <div className="page-head">
         <div><h1>Thread Room</h1><div className="eyebrow">Embroidery threads: Madeira Polyneon, Madeira Rayon and Isacord, matched to PMS</div></div>
-        <div className="faint" style={{ fontSize: 13 }}>{stock ? `${stock.length} on the wall${low ? ` · ${low} low` : ""}` : "Loading…"} {THREAD_LINES.map((l) => ` · ${all.filter((t) => t.line === l).length} ${lineName(l).replace(/^Madeira /, "")}`).join("")}</div>
+        <div className="faint" style={{ fontSize: 13 }}>{stock ? `${stock.length} standard colors${low ? ` · ${low} low` : ""}` : "Loading…"} {THREAD_LINES.map((l) => ` · ${all.filter((t) => t.line === l).length} ${lineName(l).replace(/^Madeira /, "")}`).join("")}</div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       <div className="ink-wrap">
@@ -104,7 +106,7 @@ export default function ThreadRoom() {
           <div className="panel-b stack" style={{ gap: 10 }}>
             <div className="toolbar">
               <div className="chips" role="tablist">
-                <button type="button" role="tab" aria-selected={tab === "wall"} className={"chip" + (tab === "wall" ? " on" : "")} onClick={() => setTab("wall")}>On the wall{stock ? ` (${stock.length})` : ""}</button>
+                <button type="button" role="tab" aria-selected={tab === "wall"} className={"chip" + (tab === "wall" ? " on" : "")} onClick={() => setTab("wall")}>Standard colors{stock ? ` (${stock.length})` : ""}</button>
                 <button type="button" role="tab" aria-selected={tab === "card"} className={"chip" + (tab === "card" ? " on" : "")} onClick={() => setTab("card")}>Thread cards</button>
                 <button type="button" role="tab" aria-selected={tab === "match"} className={"chip" + (tab === "match" ? " on" : "")} onClick={() => setTab("match")}>Match a color</button>
               </div>
@@ -123,7 +125,7 @@ export default function ThreadRoom() {
                           <td><span className="sw thr-sw" style={{ background: t.hex }} /> <b data-notranslate>{t.code}</b> {t.name}</td>
                           <td className="faint" data-notranslate>{t.pms.join(", ") || "—"}</td>
                           <td>{t.maker ? <b>{lineName(line).split(" ")[0]}&apos;s match for this PMS</b> : <>{t.word} <span className="faint">(ΔE {t.dE})</span></>}</td>
-                          <td>{t.stocked ? <span className="ink-instock">On the wall</span> : null}</td>
+                          <td>{t.stocked ? <span className="ink-instock">Standard</span> : null}</td>
                         </tr>
                       ))}</tbody>
                     </table>
@@ -133,11 +135,19 @@ export default function ThreadRoom() {
             ) : (
               <>
                 <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a thread: number, name or PMS" aria-label="Find a thread" />
-                {tab === "wall" && <div className="faint" style={{ fontSize: 13 }}>The threads we keep. {canEdit ? "Add them from the thread cards; tap one to set cones on hand, the low mark and where it hangs." : ""}</div>}
-                {tab === "card" && <div className="faint" style={{ fontSize: 13 }}>Every {lineName(line)} color with its PMS. {canEdit ? "Tap one to put it on the wall." : ""}</div>}
+                {tab === "wall" && <div className="faint" style={{ fontSize: 13 }}>Our standard colors: the threads we keep on the wall, like the stock inks. The Mockup Creator picks one of these when it&apos;s close; anything else is a special order. {canEdit ? "Tap one to set cones on hand, the low mark and where it hangs." : ""}</div>}
+                {tab === "card" && <div className="faint" style={{ fontSize: 13 }}>Every {lineName(line)} color with its PMS, our standard colors first. {canEdit ? "Tap one to make it a standard color or take it off." : ""}</div>}
                 {!stock ? <div className="faint">Loading…</div> : (() => {
                   const xs = tab === "wall" ? wall : card;
-                  if (!xs.length) return <div className="faint">{q ? `No thread matches “${q}”.` : tab === "wall" ? "Nothing on the wall yet. Open the thread cards and add the threads we keep." : "No threads on file for this line yet."}</div>;
+                  // the thread cards: our standard colors first, then the rest of the card
+                  if (tab === "card" && xs.length) {
+                    const std = xs.filter((t) => onWall(t)), rest = xs.filter((t) => !onWall(t));
+                    return <>
+                      {std.length > 0 && <div className="ink-group"><h3>Standard colors <span className="faint">{std.length}</span></h3><div className="ink-grid">{std.map(tile)}</div></div>}
+                      <div className="ink-group"><h3>{std.length ? "Special order" : `All ${lineName(line)} colors`} <span className="faint">{rest.length}</span></h3><div className="ink-grid">{rest.slice(0, 600).map(tile)}</div></div>
+                    </>;
+                  }
+                  if (!xs.length) return <div className="faint">{q ? `No thread matches “${q}”.` : tab === "wall" ? "No standard colors yet. Open the thread cards and add the threads we keep." : "No threads on file for this line yet."}</div>;
                   return <div className="ink-grid">{xs.slice(0, 600).map(tile)}</div>;
                 })()}
               </>
@@ -154,8 +164,8 @@ export default function ThreadRoom() {
                   <div className="thr-big"><i style={{ background: sel.hex }} /><div><h2 data-notranslate>{sel.code} {sel.name}</h2><div className="faint">{lineName(sel.line)}{sel.pms.length ? <> · PMS <span data-notranslate>{sel.pms.join(", ")}</span></> : ""}</div></div></div>
                   <div className="faint" style={{ fontSize: 12.5 }}>On an order it reads <b data-notranslate>{threadLabel(sel)}</b>. Screen colors are close, not exact: check the real cone.</div>
                   {canEdit && <div className="row" style={{ gap: 8 }}>
-                    {s ? <button type="button" className="btn" disabled={busy} onClick={() => void putOnWall(sel, false)}>Take off the wall</button>
-                      : <button type="button" className="btn primary" disabled={busy} onClick={() => void putOnWall(sel, true)}>Put on the wall</button>}
+                    {s ? <button type="button" className="btn" disabled={busy} onClick={() => void putOnWall(sel, false)}>Not a standard color</button>
+                      : <button type="button" className="btn primary" disabled={busy} onClick={() => void putOnWall(sel, true)}>Make it a standard color</button>}
                   </div>}
                   {s && draft && (
                     <div className="stack thr-form">
