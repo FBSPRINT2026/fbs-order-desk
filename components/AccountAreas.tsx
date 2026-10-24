@@ -269,12 +269,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div className="aa-card aa-tblcard">
         {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
         <table className="aa-tbl aa-tbl-cols">
-          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" /></colgroup>
-          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
+          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
+          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
-                <td className="num"><span className="aa-noc">{mode === "portal" && !o.archived && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}<Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></span></td>
+                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
                 <td className="m"><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
@@ -283,6 +283,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
                 {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : money(Math.max(0, o.balance))}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
+                {/* the star on the right (Oct 24, Nick) */}
+                {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived && <StarOrder id={o.id} on={!!o.starred} canAct={canAct} />}</td>}
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={9}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}

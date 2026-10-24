@@ -93,6 +93,11 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const { data: deep } = await admin.from("printavo_index").select("printavo_id").eq("status", "done").gte("created_at", since).or(`deep_at.is.null,deep_at.lt.${stale}`).order("created_at", { ascending: false }).limit(1);
     if (deep?.[0]) { if (Date.now() > deadline - 17000) break; await importOne(admin, deep[0].printavo_id, 0, did, true); continue; }
 
+    // 3b. Printavo invoices we still show as owing, however old: read again once a day, so a payment made in Printavo
+    // clears the balance in the portal and on statements (Oct 24, Nick: Peticolas showed $307 over 90 days)
+    const { data: owe } = await admin.from("printavo_open_invoices").select("printavo_id").or(`deep_at.is.null,deep_at.lt.${stale}`).order("deep_at", { ascending: true, nullsFirst: true }).limit(1);
+    if (owe?.[0]) { if (Date.now() > deadline - 17000) break; await importOne(admin, (owe[0] as { printavo_id: string }).printavo_id, 0, did, true); continue; }
+
     // 4. once a day: customers who have no orders yet (new ones in Printavo)
     if (!sync.customers_done_at || Date.now() - new Date(sync.customers_done_at).getTime() > 86400000 || sync.customers_cursor) { await customersPage(admin, sync, did, deadline); continue; }
     break; // all caught up

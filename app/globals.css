@@ -13674,3 +13674,9 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .gb.dense .gc-from.need{display:none}
 .gb.dense :is(.gc-ships,.gc-last,.gc-form,.gc-issue,.gc-note,.gc-help){grid-column:1 / -1}
 @media (max-width:820px){.gb.dense .gc{grid-template-columns:1fr}.gb.dense :is(.gc-h,.gc-steps,.gc-acts,.gc-from){grid-column:1;grid-row:auto}.gb.dense .gc-acts{flex-wrap:wrap}}
+/* portal order lists: the star at the end of the row (Oct 24, Nick: "on the right side") */
+.portal .aa-tbl col.c-star{width:44px}
+.portal .aa-tbl td.aa-starc{padding:0 10px 0 4px;text-align:right}
+.portal .aa-tbl td.aa-starc .ostar:not(.on){opacity:.5}
+.portal .aa-tbl tr:hover td.aa-starc .ostar{opacity:1}
+@media (min-width:641px){.portal .aa-tbl-cols col.c-no{width:88px}}
