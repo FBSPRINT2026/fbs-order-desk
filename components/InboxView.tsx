@@ -832,7 +832,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
                       <span className="ibx2-item-s">{i.subject || "(no subject)"}</span>
                       <time className="t2">{i.received_at ? ago(i.received_at) : ""}</time>
                     </span>
-                    {(() => { const sm = r?.x.meta?.triage?.summary || i.summary || ""; return sm && sm !== i.subject ? <span className="ibx2-item-2">{sm}</span> : null; })()}
+                    {/* no AI summary line in the list (Oct 24, Nick: "just the person it's from, the subject line, and then just our
+                        little flags"); the summary stays in the open email */}
                     <span className="ibx2-item-3">
                       {urgentG && <span className="itag urg">Urgent</span>}
                       {r ? <>{needsG ? <span className="itag rep">Needs reply</span> : r.answered ? <span className="itag fyi">Answered</span> : null}<span className="itag cus">Customer</span></>
@@ -847,7 +848,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                     {g.map((y) => { const ky = olKey(y), ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
                       <button key={y.id} type="button" className={"ibx2-cvi" + (olCur?.id === y.id ? " on" : "") + (y.unread ? " ol-unread" : "")} onClick={() => pickRow(ky)} onDoubleClick={() => ry && pickRow(ky, true)}>
                         <b>{personName(y.from_name) || y.from_email || nameOf(y)}</b><time>{y.received_at ? ago(y.received_at) : ""}</time>
-                        <span>{ry?.x.meta?.triage?.summary || y.summary || y.subject || "(no subject)"}</span>
+                        <span>{y.subject || "(no subject)"}</span>
                       </button>
                     ); })}
                   </div>}
@@ -864,7 +865,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                       {urgent && <em>Urgent</em>}
                       <time className={late ? "late" : ""}>{ago(x.occurred_at)}</time>
                     </span>
-                    <span className="ibx2-item-2">{x.meta?.triage?.summary || x.subject || "(no subject)"}</span>
+                    <span className="ibx2-item-2">{x.subject || "(no subject)"}</span>
                     {(ord || (x.meta?.lead && !x.customer_id) || answered || (x.meta?.attachments || []).length > 0) && <span className="ibx2-item-3">
                       {x.meta?.lead && !x.customer_id && <span>New sender</span>}
                       {ord && <span>#{ord.number}</span>}
