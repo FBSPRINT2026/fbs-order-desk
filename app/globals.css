@@ -13712,3 +13712,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* Brand standards header: room for "Show in their portal" beside Add / Edit / Set up with AI */
 .aa-shop .aa-card:has(> .bai) > .aa-sec-h{padding-right:300px}
 @media (max-width:640px){.aa-shop .aa-card:has(> .bai) > .aa-sec-h{padding-right:0}}
+/* portal design catalog: "← All designs" above the card (Oct 24, Nick) */
+.pdc-back{margin:0 0 8px}
+.pdc-back .linkbtn{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;padding:0;border:0;background:none;cursor:pointer}
+.pdc-back .linkbtn:hover{text-decoration:underline}

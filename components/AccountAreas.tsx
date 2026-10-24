@@ -1,7 +1,8 @@
 "use client";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
-import { cloneElement, isValidElement, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArtSearchContext } from "@/components/ArtSearchContext";
 import Link from "next/link";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -1019,7 +1020,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
   if (dcOn && area === "artwork") {
     const subs: [string, string][] = [["catalog", "Design catalog"], ["art", "Artwork"], ...(brandCardEl ? [["brand", "Brand standards"] as [string, string]] : [])];
     const cur = subs.find((x) => x[0] === dcTab)?.[0] || "catalog";
-    const dc = isValidElement(designsPanel) ? cloneElement(designsPanel as ReactElement<{ q?: string }>, { q }) : designsPanel;
+    const dc = <ArtSearchContext.Provider value={q}>{designsPanel}</ArtSearchContext.Provider>;
     body = <>
       <div className="toolbar aa-otabs aa-subtabs aa-dc-bar" data-toolbar>
         <div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setDcTab(k)}>{t}</button>)}</div>
