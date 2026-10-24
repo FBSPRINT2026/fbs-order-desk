@@ -1,4 +1,5 @@
 "use client";
+import { sizeRank } from "@/lib/sizeOrder";
 import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
@@ -1635,7 +1636,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
               <div key={l.id} className="rv-shirt">
                 <span className="rv-sw" style={{ background: shirtBg(l.color || "White") }} aria-hidden />
                 <span data-notranslate><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b> · {l.color || "no color"}</span>
-                <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
+                <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).sort(([a], [b]) => sizeRank(a) - sizeRank(b)).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
               </div>
             ))}
             {/* front first, then the back, then sleeves (Oct 23, Nick: "can you do the front first and the back second?") */}
