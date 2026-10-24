@@ -15,13 +15,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
+import { mySheetLayouts, removeSheetLayout, saveSheetLayout, type SheetLayout } from "@/app/sheet-layout-actions";
 
 export type SheetColor = { key: string; color: string; style: string; /** the shirt's color, for the art close-up */ hex?: string };
 type Sides = "both" | "front" | "back";
 type Align = "left" | "center" | "right";
 type Role = "title" | "sub" | "contact" | "details" | "text" | "logo" | "art" | "pic";
 type Base = { id: string; x: number; y: number; w: number; h: number };
-type TextEl = Base & { kind: "text"; role: Role; text: string; size: number; color: string; bold: boolean; align: Align };
+type TextEl = Base & { kind: "text"; role: Role; text: string; size: number; color: string; bold: boolean; align: Align; /** FONTS key */ font?: string };
 type ImgEl = Base & { kind: "img"; role: Role; src: string; name: string };
 type ShirtEl = Base & { kind: "shirt"; key: string; label: string; labelSize: number; showLabel: boolean };
 type El = TextEl | ImgEl | ShirtEl;
@@ -32,26 +33,41 @@ const PAGES = {
   square: { label: "Square post (1080 × 1080)", w: 1080, h: 1080 },
   story: { label: "Story (1080 × 1920)", w: 1080, h: 1920 },
   wide: { label: "Wide banner (1600 × 900)", w: 1600, h: 900 },
-  print: { label: "Print (11 × 8.5)", w: 2200, h: 1700 },
+  // Letter paper, portrait or landscape (Oct 24, Nick: "8.5 by 11, can you make that do portrait or landscape?")
+  letter: { label: "Letter (8.5 × 11)", w: 1700, h: 2200 },
   custom: { label: "Custom: drag the sheet's corner", w: 0, h: 0 },
 } as const;
 type PageKey = keyof typeof PAGES;
 const FONT = "Helvetica, Arial, sans-serif";
+// fonts to pick from (Oct 24, Nick: "the ability to choose some fonts"); the web ones load from Google Fonts on open
+const FONTS: { k: string; label: string; css: string; g?: string }[] = [
+  { k: "sans", label: "Clean", css: FONT },
+  { k: "montserrat", label: "Montserrat", css: "'Montserrat', Helvetica, sans-serif", g: "Montserrat:wght@400;800" },
+  { k: "oswald", label: "Oswald", css: "'Oswald', Impact, sans-serif", g: "Oswald:wght@400;700" },
+  { k: "bebas", label: "Bebas Neue", css: "'Bebas Neue', Impact, sans-serif", g: "Bebas+Neue" },
+  { k: "serif", label: "Classic serif", css: "Georgia, 'Times New Roman', serif" },
+  { k: "playfair", label: "Playfair", css: "'Playfair Display', Georgia, serif", g: "Playfair+Display:wght@400;800" },
+  { k: "slab", label: "Slab", css: "'Roboto Slab', Rockwell, serif", g: "Roboto+Slab:wght@400;800" },
+  { k: "script", label: "Script", css: "'Pacifico', cursive", g: "Pacifico" },
+  { k: "marker", label: "Marker", css: "'Permanent Marker', cursive", g: "Permanent+Marker" },
+];
+const famOf = (k?: string) => FONTS.find((f) => f.k === k)?.css || FONT;
+const FONT_CSS = `https://fonts.googleapis.com/css2?${FONTS.filter((f) => f.g).map((f) => `family=${f.g}`).join("&")}&display=swap`;
 const LH = 1.2;
 const uid = () => Math.random().toString(36).slice(2, 9);
 const load = (src: string) => new Promise<HTMLImageElement>((ok, no) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = () => no(new Error("picture")); im.src = src; });
 const dark = (hex: string) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex); if (!m) return false; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) < 110; };
 let measureCtx: CanvasRenderingContext2D | null = null;
-const fontOf = (bold: boolean, size: number) => `${bold ? 800 : 400} ${size}px ${FONT}`;
-function measure(text: string, size: number, bold: boolean) {
+const fontOf = (bold: boolean, size: number, font?: string) => `${bold ? 800 : 400} ${size}px ${famOf(font)}`;
+function measure(text: string, size: number, bold: boolean, font?: string) {
   measureCtx ||= document.createElement("canvas").getContext("2d");
-  const x = measureCtx!; x.font = fontOf(bold, size);
+  const x = measureCtx!; x.font = fontOf(bold, size, font);
   const lines = (text || " ").split("\n");
   return { w: Math.ceil(Math.max(8, ...lines.map((l) => x.measureText(l || " ").width))) + 2, h: Math.ceil(lines.length * size * LH) };
 }
 /** a text's box follows its words and size; centered text stays centered where it was, right-aligned stays right */
 function refit(t: TextEl): TextEl {
-  const m = measure(t.text, t.size, t.bold);
+  const m = measure(t.text, t.size, t.bold, t.font);
   const x = t.align === "center" ? t.x + t.w / 2 - m.w / 2 : t.align === "right" ? t.x + t.w - m.w : t.x;
   return { ...t, x, w: m.w, h: m.h };
 }
@@ -67,11 +83,15 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   /** the garment and each print (location, method, inks, size) for the Details block */ details?: string[];
   onClose: () => void;
 }) {
-  const [page0, setPage] = useSticky<PageKey>("ss.page2", "fit");
-  const page: PageKey = page0 in PAGES ? page0 : "fit";
+  const [page0, setPage] = useSticky<PageKey | "print">("ss.page2", "fit");
+  const page: PageKey = page0 === "print" ? "letter" : page0 in PAGES ? page0 as PageKey : "fit";
+  const [orient, setOrient] = useSticky<"portrait" | "landscape">("ss.orient", page0 === "print" ? "landscape" : "portrait");
+  /** a shape's size (Letter turns for landscape) */
+  const dimOf = (k: PageKey) => (k === "letter" && orient === "landscape" ? { w: PAGES.letter.h, h: PAGES.letter.w } : { w: PAGES[k].w, h: PAGES[k].h });
   const [fitW, setFitW] = useSticky<number>("ss.fitW", 1200);
   const [cust, setCust] = useSticky<{ w: number; h: number }>("ss.custom", { w: 1200, h: 1200 });
-  const [bg, setBg] = useSticky<string>("ss.bg", "#ffffff");
+  // always white (Oct 24, Nick: the background tool was "kind of a waste")
+  const bg = "#ffffff";
   const [sides, setSides] = useSticky<Sides>("ss.sides", "both");
   const [perRow, setPerRow] = useSticky<number>("ss.perRow2", 0); // 0 = Auto
   const [gap, setGap] = useSticky<number>("ss.gap", 3);
@@ -161,10 +181,10 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   };
 
   // ---- laying the sheet out (first open, Auto-arrange, a new shape, sides or colors) ----
-  function pageW() { return page === "fit" ? Math.max(400, Math.min(4000, fitW || 1200)) : page === "custom" ? cust.w : PAGES[page].w; }
+  function pageW() { return page === "fit" ? Math.max(400, Math.min(4000, fitW || 1200)) : page === "custom" ? cust.w : dimOf(page).w; }
   function arrange(prev: El[], first = false) {
     const W = pageW();
-    const fixedH = page === "fit" ? 0 : page === "custom" ? cust.h : PAGES[page].h;
+    const fixedH = page === "fit" ? 0 : page === "custom" ? cust.h : dimOf(page).h;
     const S = fixedH ? Math.min(W, fixedH) : W, M = Math.round(S * 0.045);
     const has = (r: Role) => first || prev.some((e) => e.kind !== "shirt" && e.role === r);
     const old = (r: Role) => prev.find((e): e is TextEl => e.kind === "text" && e.role === r);
@@ -235,7 +255,17 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     if (keepLayout.current) { keepLayout.current = false; return; }
     arrangeRef.current(els, !firstDone.current);
     firstDone.current = true;
-  }, [ready, page, fitW, sidesKey, order.join(), [...off].join(), perRow, gap, names]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, page, orient, fitW, sidesKey, order.join(), [...off].join(), perRow, gap, names]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the web fonts: loaded once, then every text's box is measured again in its font
+  useEffect(() => {
+    if (!document.querySelector(`link[data-ss-fonts]`)) { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = FONT_CSS; l.setAttribute("data-ss-fonts", "1"); document.head.appendChild(l); }
+    let live = true;
+    void Promise.all(FONTS.filter((f) => f.g).flatMap((f) => [document.fonts.load(`400 40px ${f.css}`), document.fonts.load(`800 40px ${f.css}`)])).catch(() => null).then(() => {
+      if (live) setEls((xs) => xs.map((e) => (e.kind === "text" ? refit(e) : e)));
+    });
+    return () => { live = false; };
+  }, []);
 
   // ---- picking, moving, sizing ----
   const stageRef = useRef<HTMLDivElement>(null);
@@ -323,7 +353,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
     x.fillStyle = bg; x.fillRect(0, 0, sheet.w, sheet.h);
     for (const e of els) {
       if (e.kind === "text") {
-        x.font = fontOf(e.bold, e.size); x.fillStyle = e.color; x.textAlign = e.align; x.textBaseline = "middle";
+        x.font = fontOf(e.bold, e.size, e.font); x.fillStyle = e.color; x.textAlign = e.align; x.textBaseline = "middle";
         const ax = e.align === "center" ? e.x + e.w / 2 : e.align === "right" ? e.x + e.w : e.x;
         e.text.split("\n").forEach((l, i) => x.fillText(l, ax, e.y + e.size * LH * (i + 0.5)));
       } else if (e.kind === "img") {
@@ -345,6 +375,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
   async function download() {
     setBusy(fmt === "pdf" ? "Making the PDF…" : "Making the picture…"); setSel(""); setEditing("");
     try {
+      await document.fonts.ready.catch(() => null);
       const R = Math.max(1, Math.min(4, res || 1));
       const st = R > 1.4 ? await hiStore(Math.min(3, R)) : undefined;
       const c = document.createElement("canvas"); paint(c, R, st);
@@ -358,6 +389,84 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't make it."); }
     setBusy("");
+  }
+
+  // ---- saved layouts (Oct 24, Nick: "save a layout and name it… when they use their sales tools moving forward… select it") ----
+  type SavedEl = (Omit<TextEl, "id"> | (Omit<ImgEl, "id" | "src"> & { src: string }) | { kind: "shirt"; i: number; x: number; y: number; w: number; h: number; labelSize: number; showLabel: boolean });
+  type LayoutData = { v: 1; page: PageKey; orient: "portrait" | "landscape"; fitW: number; cust: { w: number; h: number }; sides: Sides; perRow: number; gap: number; names: boolean; sheet: { w: number; h: number }; els: SavedEl[] };
+  const [layouts, setLayouts] = useState<SheetLayout[]>([]);
+  const [layoutId, setLayoutId] = useState("");
+  const [naming, setNaming] = useState<string | null>(null);
+  const [layoutMsg, setLayoutMsg] = useState("");
+  useEffect(() => { void mySheetLayouts().then(setLayouts).catch(() => null); }, []);
+  function layoutNow(): LayoutData {
+    let si = 0;
+    const out: SavedEl[] = [];
+    for (const e of els) {
+      if (e.kind === "shirt") { out.push({ kind: "shirt", i: si++, x: e.x, y: e.y, w: e.w, h: e.h, labelSize: e.labelSize, showLabel: e.showLabel }); continue; }
+      if (e.kind === "img") {
+        if (e.role === "logo") out.push({ kind: "img", role: "logo", src: "@logo", name: e.name, x: e.x, y: e.y, w: e.w, h: e.h });
+        else if (e.role === "art") { const ai = arts.findIndex((a) => a.url === e.src); if (ai >= 0) out.push({ kind: "img", role: "art", src: `@art:${ai}`, name: e.name, x: e.x, y: e.y, w: e.w, h: e.h }); }
+        continue; // pictures from their computer aren't kept
+      }
+      const { id: _id, ...t } = e; void _id;
+      out.push({ ...t, text: e.role === "title" ? "@title" : e.role === "details" ? "@details" : e.text });
+    }
+    return { v: 1, page, orient, fitW, cust, sides, perRow, gap, names, sheet, els: out };
+  }
+  async function saveLayout(name: string, id?: string) {
+    setLayoutMsg("Saving…");
+    const r = await saveSheetLayout(name, layoutNow() as unknown as Record<string, unknown>, id);
+    if (!r.ok || !r.layout) { setLayoutMsg(r.error || "Couldn't save it."); return; }
+    setLayouts((ls) => [r.layout!, ...ls.filter((l) => l.id !== r.layout!.id)]);
+    setLayoutId(r.layout.id); setNaming(null); setLayoutMsg(`Saved "${r.layout.name}".`);
+  }
+  function useLayout(id: string) {
+    setLayoutId(id); setLayoutMsg("");
+    const L = layouts.find((l) => l.id === id)?.data as unknown as LayoutData | undefined;
+    if (!L || L.v !== 1) return;
+    // its settings (without laying the sheet out again: its own places are used)
+    keepLayout.current = true;
+    setPage(L.page); setOrient(L.orient); setFitW(L.fitW); setCust(L.cust); setSides(L.sides); setPerRow(L.perRow); setGap(L.gap); setNames(L.names);
+    const title = els.find((e): e is TextEl => e.kind === "text" && e.role === "title")?.text || title0 || "Your title";
+    const out: El[] = [];
+    // the shirts: in their saved places when the count matches; otherwise laid out in the same area
+    const saved = L.els.filter((e): e is Extract<SavedEl, { kind: "shirt" }> => e.kind === "shirt");
+    if (saved.length === shown.length) shown.forEach((c, i) => { const p = saved[i]; out.push({ id: uid(), kind: "shirt", key: c.key, label: multiStyle ? `${c.color} · ${c.style}` : c.color, labelSize: p.labelSize, showLabel: p.showLabel, x: p.x, y: p.y, w: p.w, h: p.h }); });
+    else if (shown.length) {
+      const bx = saved.length ? { x0: Math.min(...saved.map((p) => p.x)), y0: Math.min(...saved.map((p) => p.y)), x1: Math.max(...saved.map((p) => p.x + p.w)), y1: Math.max(...saved.map((p) => p.y + p.h)) } : { x0: L.sheet.w * 0.05, y0: L.sheet.h * 0.2, x1: L.sheet.w * 0.95, y1: L.sheet.h * 0.8 };
+      const lab = saved[0]?.showLabel ?? L.names, ls = saved[0]?.labelSize || Math.round(L.sheet.w * 0.024), labH = lab ? ls * 1.5 : 0;
+      const unit = shown.map((c) => comp(c.key).cv), uw = Math.max(...unit.map((u) => u.width)), uh = Math.max(...unit.map((u) => u.height));
+      const W = bx.x1 - bx.x0, H = bx.y1 - bx.y0, g = (L.gap / 100) * L.sheet.w;
+      let best = { k: 0, cols: 1 };
+      for (let cols = 1; cols <= shown.length; cols++) { const rows = Math.ceil(shown.length / cols); const k = Math.min((W - (cols - 1) * g) / (cols * uw), (H - (rows - 1) * g - rows * labH) / (rows * uh)); if (k > best.k) best = { k, cols }; }
+      const { k, cols } = best, rows = Math.ceil(shown.length / cols), cw = uw * k, ch = uh * k + labH, usedH = rows * ch + (rows - 1) * g;
+      shown.forEach((c, i) => {
+        const col = i % cols, row = Math.floor(i / cols), inRow = row === rows - 1 ? shown.length - row * cols : cols, rowW = inRow * cw + (inRow - 1) * g;
+        const u = unit[i], w = u.width * k, ih = u.height * k;
+        out.push({ id: uid(), kind: "shirt", key: c.key, label: multiStyle ? `${c.color} · ${c.style}` : c.color, labelSize: ls, showLabel: lab,
+          x: bx.x0 + (W - rowW) / 2 + col * (cw + g) + (cw - w) / 2, y: bx.y0 + (H - usedH) / 2 + row * (ch + g) + (uh * k - ih), w, h: ih + labH });
+      });
+    }
+    for (const e of L.els) {
+      if (e.kind === "shirt") continue;
+      if (e.kind === "img") {
+        const src = e.src === "@logo" ? shop.logoUrl : e.src.startsWith("@art:") ? arts[+e.src.slice(5)]?.url || "" : "";
+        if (src && imgs.current.has(src)) out.push({ ...e, id: uid(), src } as ImgEl);
+        continue;
+      }
+      const t = e as Omit<TextEl, "id">;
+      if (t.role === "details" && !details.length) continue;
+      if (t.role === "logo") continue;
+      out.push(refit({ ...t, id: uid(), text: t.text === "@title" ? title : t.text === "@details" ? details.join("\n") : t.text }));
+    }
+    setSheet(L.sheet); setEls(out); setSel("");
+    setLayoutMsg(`Using "${layouts.find((l) => l.id === id)?.name || "layout"}".`);
+  }
+  async function dropLayout(id: string) {
+    const r = await removeSheetLayout(id);
+    if (!r.ok) { setLayoutMsg(r.error || "Couldn't remove it."); return; }
+    setLayouts((ls) => ls.filter((l) => l.id !== id)); if (layoutId === id) setLayoutId(""); setLayoutMsg("Removed.");
   }
 
   // ---- typing over a text ----
@@ -393,6 +502,10 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
                 <h3>{cur.kind === "shirt" ? `Shirt · ${colors.find((c) => c.key === cur.key)?.color || ""}` : ROLE_NAME[cur.role]}</h3>
                 {cur.kind === "text" && <>
                   <textarea rows={Math.min(6, cur.text.split("\n").length + 1)} value={cur.text} aria-label="Text" onChange={(e) => upd(cur.id, (z) => refit({ ...(z as TextEl), text: e.target.value }))} />
+                  <label className="mk-f"><span>Font</span>
+                    <select value={cur.font || "sans"} onChange={(e) => upd(cur.id, (z) => refit({ ...(z as TextEl), font: e.target.value }))} style={{ fontFamily: famOf(cur.font) }}>
+                      {FONTS.map((f) => <option key={f.k} value={f.k} style={{ fontFamily: f.css }}>{f.label}</option>)}
+                    </select></label>
                   <label className="mk-f"><span>Size: {cur.size}</span><input type="range" min={10} max={200} step={1} value={cur.size} onChange={(e) => upd(cur.id, (z) => refit({ ...(z as TextEl), size: +e.target.value }))} /></label>
                   <div className="ss-row">
                     <input type="color" value={cur.color} onChange={(e) => upd(cur.id, (z) => ({ ...(z as TextEl), color: e.target.value }))} aria-label="Text color" />
@@ -425,11 +538,33 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
                 <label className="btn sm">Picture<input type="file" accept="image/*" hidden onChange={(e) => { void addPic(e.target.files?.[0]); e.target.value = ""; }} /></label>
               </div>
             </section>
+            <section className="ss-layouts"><h3>Saved layouts</h3>
+              {layouts.length > 0 && <div className="ss-row">
+                <select aria-label="Saved layouts" value={layoutId} onChange={(e) => { if (e.target.value) useLayout(e.target.value); else setLayoutId(""); }}>
+                  <option value="">Use a saved layout…</option>
+                  {layouts.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                {layoutId && <button type="button" className="btn sm ghost danger" onClick={() => void dropLayout(layoutId)}>Remove</button>}
+              </div>}
+              {naming !== null ? (
+                <div className="ss-row">
+                  <input type="text" autoFocus placeholder="Name it, e.g. Team store flyer" value={naming} onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && naming.trim()) void saveLayout(naming); if (e.key === "Escape") setNaming(null); }} aria-label="Layout name" />
+                  <button type="button" className="btn sm primary" disabled={!naming.trim()} onClick={() => void saveLayout(naming)}>Save</button>
+                  <button type="button" className="btn sm ghost" onClick={() => setNaming(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="ss-row">
+                  <button type="button" className="btn sm" onClick={() => setNaming("")}>Save this layout</button>
+                  {layoutId && <button type="button" className="btn sm ghost" onClick={() => { const l = layouts.find((z) => z.id === layoutId); if (l) void saveLayout(l.name, l.id); }}>Update &ldquo;{layouts.find((z) => z.id === layoutId)?.name}&rdquo;</button>}
+                </div>
+              )}
+              {layoutMsg ? <span className="faint" style={{ fontSize: 12 }}>{layoutMsg}</span> : !layouts.length && <span className="faint" style={{ fontSize: 12 }}>Got it how you like it? Save the layout and pick it next time: your text, fonts, logo and where the shirts go.</span>}
+            </section>
             <section><h3>Layout</h3>
               <button type="button" className="btn sm" onClick={() => arrange(els)}>Auto-arrange everything</button>
               <label className="mk-f"><span>Shape</span><select value={page} onChange={(e) => setPage(e.target.value as PageKey)}>{(Object.keys(PAGES) as PageKey[]).map((k) => <option key={k} value={k}>{PAGES[k].label}</option>)}</select></label>
               {page === "fit" && <label className="mk-f"><span>Width: {fitW} px</span><input type="range" min={600} max={2400} step={50} value={fitW} onChange={(e) => setFitW(+e.target.value)} /></label>}
-              <div className="ss-row"><span>Background</span>{["#ffffff", "#f3f1ec", "#e9edf2", "#141d2b"].map((c) => <button key={c} type="button" className={"ss-sw" + (bg === c ? " on" : "")} style={{ background: c }} aria-label={`Background ${c}`} onClick={() => setBg(c)} />)}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} aria-label="Background color" /></div>
+              {page === "letter" && <div className="chips">{(["portrait", "landscape"] as const).map((k) => <button key={k} type="button" className={"chip" + (orient === k ? " on" : "")} onClick={() => setOrient(k)}>{k === "portrait" ? "Portrait" : "Landscape"}</button>)}</div>}
               {views.length > 1 && <div className="chips">{(["both", "front", "back"] as Sides[]).map((k) => <button key={k} type="button" className={"chip" + (sides === k ? " on" : "")} onClick={() => setSides(k)}>{k === "both" ? "Front and back" : k === "front" ? "Front" : "Back"}</button>)}</div>}
               <div className="ss-row"><span>Per row</span>{[0, 1, 2, 3, 4, 5].map((n) => <button key={n} type="button" className={"chip" + (perRow === n ? " on" : "")} onClick={() => setPerRow(n)}>{n || "Auto"}</button>)}</div>
               <label className="mk-f"><span>Space between shirts</span><input type="range" min={0} max={8} step={0.25} value={gap} onChange={(e) => setGap(+e.target.value)} /></label>
@@ -454,7 +589,7 @@ export default function SalesSheet({ colors, views, shirts, title0, customer, sh
                     onPointerDown={(ev) => onDown(ev, e, "move")}
                     onDoubleClick={(ev) => { ev.stopPropagation(); if (e.kind === "text" || (e.kind === "shirt" && e.showLabel)) { setSel(e.id); setEditing(e.id); } }}>
                     {e.kind === "text" && (
-                      <div className="ss-txt" style={{ font: fontOf(e.bold, e.size * s), lineHeight: LH, color: e.color, textAlign: e.align }}
+                      <div className="ss-txt" style={{ font: fontOf(e.bold, e.size * s, e.font), lineHeight: LH, color: e.color, textAlign: e.align }}
                         contentEditable={ed} suppressContentEditableWarning spellCheck={false}
                         ref={(n) => { if (n && ed && document.activeElement !== n) { n.focus(); const r = document.createRange(); r.selectNodeContents(n); const sl = window.getSelection(); sl?.removeAllRanges(); sl?.addRange(r); } }}
                         onBlur={(ev) => ed && commitText(e.id, ev.currentTarget)} onKeyDown={editKeys(e.id)}>{e.text}</div>
