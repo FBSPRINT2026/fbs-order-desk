@@ -313,7 +313,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {link(["/shop", "home", "My Day"])}
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
-        {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
+        {(crew ? [GROUPS[1], GROUPS[0], GROUPS[2]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}
               {/* screen printing, embroidery or heat press: SP / EMB / HP on the right of the heading. The picked one shows in
