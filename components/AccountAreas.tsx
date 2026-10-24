@@ -70,7 +70,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingHref, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -122,6 +122,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** portal: the customer's Settings page, on the right of the tab bar (Oct 24) */ settingsHref?: string;
+  /** portal, wholesale accounts: their price list, just before Settings (Oct 24, Nick) */ pricingHref?: string;
   /** portal: their unsent drafts (no number yet), to pick up again or throw away (Oct 24) */ drafts?: { id: string; name: string; updated: string; pcs: number }[];
   onDiscardDraft?: (id: string) => Promise<{ ok: boolean; error?: string }>;
   /** archive / bring back a mockup set (Oct 24) */ onArchiveMockup?: (mockupId: string, on: boolean) => Promise<{ ok: boolean; error?: string }>;
@@ -1001,7 +1002,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           </button>
         ))}
         {/* the customer's Settings, last on the bar (Oct 24, Nick: "on the toolbar all the way to the right") */}
-        {mode === "portal" && settingsHref && <Link className="aa-tab aa-tab-end" href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
+        {mode === "portal" && pricingHref && <Link className="aa-tab aa-tab-end" href={pricingHref}><Ico d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01" /><span>Pricing</span></Link>}
+        {mode === "portal" && settingsHref && <Link className={"aa-tab" + (pricingHref ? "" : " aa-tab-end")} style={pricingHref ? { textDecoration: "none" } : undefined} href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
       </nav>
       )}
       <section className="aa-body">{body}</section>

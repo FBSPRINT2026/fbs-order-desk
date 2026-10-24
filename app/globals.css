@@ -13307,3 +13307,34 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .po-held .stepper{opacity:.45;filter:grayscale(1)}
 .po-held .panel-b>.hold-stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-6deg);z-index:1}
 .po-hold{display:flex;flex-direction:column;gap:8px}
+/* the wholesale price list in the portal (Oct 24, Nick: "a nice version of the price list") */
+.pl .pl-lead{margin:4px 0 16px;color:var(--ink-3);font-size:14px;max-width:760px}
+.pl-sec{margin-bottom:16px}
+.pl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+.pl-tbl{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.pl-tbl th,.pl-tbl td{padding:9px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line-2,var(--line))}
+.pl-tbl thead th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;background:var(--surface-2)}
+.pl-tbl th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;color:var(--ink)}
+.pl-tbl thead th:first-child{background:var(--surface-2);color:var(--ink-3)}
+.pl-tbl tbody tr:nth-child(even) td,.pl-tbl tbody tr:nth-child(even) th{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.pl-tbl tbody tr:hover td{background:var(--accent-soft)}
+.pl-tbl tbody tr:last-child th,.pl-tbl tbody tr:last-child td{border-bottom:0}
+.pl-tbl td small{color:var(--ink-3);font-size:12px}
+.pl-narrow{max-width:560px}
+.pl-rules{margin:12px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:13.5px;color:var(--ink-2,var(--ink))}
+.pl-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pl-two .pl-sec{margin-bottom:16px}
+@media (max-width:800px){.pl-two{grid-template-columns:1fr}}
+.pl-dl{margin:0;display:flex;flex-direction:column}
+.pl-dl>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line-2,var(--line));font-size:14px}
+.pl-dl>div:last-child{border-bottom:0}
+.pl-dl dt{color:var(--ink)}
+.pl-dl dd{margin:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pl-dl dd small{color:var(--ink-3);font-size:12px}
+.pl-dl .tot{border-top:2px solid var(--line);border-bottom:0}
+.pl-ex p{margin:0 0 6px;font-size:14px}
+.pl-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));column-gap:28px}
+.pl-cols>div:last-child{border-bottom:1px solid var(--line-2,var(--line))}
+.pl-notes{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.pl-foot{margin:6px 0 24px;font-size:13px}
+@media print{.pl .back,.pl .page-head .row,.p-head,.p-foot,header,footer,.preview-bar{display:none!important}.pl-sec{break-inside:avoid}.pl-tbl tbody tr:hover td{background:none}}
