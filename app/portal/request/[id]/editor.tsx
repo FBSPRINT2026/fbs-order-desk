@@ -521,10 +521,10 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       )}
 
       {simple && (
-        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Send a simple order" onClick={() => !simpleBusy && setSimple(null)}>
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Send a simple order / quote" onClick={() => !simpleBusy && setSimple(null)}>
           <div className="dla rq-simple" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="dla-x" aria-label="Close" disabled={!!simpleBusy} onClick={() => setSimple(null)}>×</button>
-            <h3>Send a simple order</h3>
+            <h3>Send a simple order / quote</h3>
             <p className="dla-sub">{simple.note || "Tell us the basics and upload what you have. We'll build it and send you a confirmation."}</p>
             {err && <div className="banner" role="alert">{err}</div>}
             <div className="stack" style={{ gap: 12 }}>
