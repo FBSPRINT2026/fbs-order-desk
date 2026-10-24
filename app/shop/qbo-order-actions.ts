@@ -32,11 +32,17 @@ export async function qboOrderState(orderId: string, deep = false) {
     const v = await getViewer();
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can see this.");
     const x = await pusher(false);
-    if (!x) return { ok: true as const, synced: false, voided: false };
+    if (!x) return { ok: true as const, synced: false, voided: false, issue: "" };
     const { data: o } = await x.admin.from("orders").select("id, number").eq("id", orderId).maybeSingle();
-    if (!o) return { ok: true as const, synced: false, voided: false };
-    const st = await x.p.orderState(o.id, +o.number, deep);
-    return { ok: true as const, ...st };
+    if (!o) return { ok: true as const, synced: false, voided: false, issue: "" };
+    const [st, { data: q }] = await Promise.all([
+      x.p.orderState(o.id, +o.number, deep),
+      // a problem syncing it (the order's red QB): its latest queue row needs a look, or keeps failing
+      x.admin.from("qbo_queue").select("status, reason, attempts").eq("entity", "invoice").eq("local_id", o.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const row = q as { status: string; reason: string; attempts: number } | null;
+    const issue = row && (row.status === "needs_review" || (row.status === "error" && row.attempts >= 3)) ? row.reason || "It didn't sync." : "";
+    return { ok: true as const, ...st, issue };
   } catch (e) {
     return { ok: false as const, error: e instanceof QboError ? explainQboError(e) : e instanceof Error ? e.message : String(e) };
   }

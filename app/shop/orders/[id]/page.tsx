@@ -816,7 +816,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // (Oct 22, Nick: Hudson Band was made into an order, deleted, and gone from New)
   // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
   // order in QuickBooks?"); qbVoid = the yes
-  type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string };
+  type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string };
   const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
@@ -1038,7 +1038,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="ed-actions">
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
-          {qbSt?.synced && <span className={"qb-tick" + (qbSt.voided ? " void" : "")} title={qbSt.voided ? `Voided in QuickBooks${qbSt.docNumber ? ` (invoice ${qbSt.docNumber})` : ""}` : `In QuickBooks${qbSt.docNumber ? ` as invoice ${qbSt.docNumber}` : ""}${qbSt.source === "test" ? " (test)" : ""}`}><QbMark />{qbSt.voided ? "Void" : <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}</span>}
+          {/* QuickBooks, beside the status (Oct 24, Nick: "grayed out… it's a quote… not available yet to sync. Once it goes
+              to invoice and it's ready to be synced but not synced yet, yellow. Once it's synced, green. If it has an issue,
+              red") */}
+          {(() => {
+            const inv = o.type === "invoice";
+            const k = qbSt?.issue ? "bad" : qbSt?.voided ? "void" : qbSt?.synced ? "ok" : inv ? "wait" : "off";
+            const tip = k === "bad" ? `QuickBooks problem: ${qbSt!.issue}` : k === "void" ? `Voided in QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}` : k === "ok" ? `In QuickBooks${qbSt!.docNumber ? ` as invoice ${qbSt!.docNumber}` : ""}${qbSt!.source === "test" ? " (test)" : ""}` : k === "wait" ? "Ready for QuickBooks, not sent yet" : "A quote: quotes don't go to QuickBooks";
+            return <span className={"qb-tick qb-" + k} title={tip} aria-label={tip}><QbMark />{k === "ok" ? <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> : k === "bad" ? <b aria-hidden>!</b> : k === "void" ? "Void" : null}</span>;
+          })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
