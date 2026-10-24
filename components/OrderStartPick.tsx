@@ -56,6 +56,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
     return () => { live = false; };
   }, [activityId]);
   const [err, setErr] = useState("");
+  const [pickFirst, setPickFirst] = useState(false); // "one at a time": choosing which order to make first
   const [q, setQ] = useState("");
   // several jobs ticked: one order reordering them together (Oct 22, Nick: Hutchins T10A is #33633 and T11A is #33676,
   // "is there an option when we create a reorder to select multiple orders and bring those in as different line items?")
@@ -180,8 +181,19 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                       : <span className="faint">{p.kind === "reorder" ? (p.jobLabel ? `reorder of ${p.jobLabel}` : "reorder") : "new"}{" · "}{p.changes ? `new: ${p.changes}` : "exact reprint"}{p.pieces ? ` · ${p.pieces.toLocaleString("en-US")} pcs` : ""}{p.names?.length ? ` · ${p.names.length} file${p.names.length === 1 ? "" : "s"}` : ""}</span>}</li>
                   ))}
                 </ol>
-                {nx && <div className="osp-plan-acts">
-                  <button type="button" className="btn primary" onClick={() => onPick({ parts: [nx] })} title={`Makes ${nx.label} now; you check it in the Order chat, then it asks about the next one`}>{done.length ? `Make the next one (${at} of ${all.length})` : "One at a time"}</button>
+                {/* one at a time: which one first (Oct 24, Nick: "can you ask me which one you want to make… the In Every Season
+                    is the difficult one. The other ones are easy") */}
+                {nx && pickFirst && left.length > 1 ? <div className="osp-first">
+                  <b>Which one do you want to make {done.length ? "next" : "first"}?</b>
+                  {left.map((p) => (
+                    <button key={p.key} type="button" className="osp-first-it" onClick={() => onPick({ parts: [p] })}>
+                      <span><b>{p.label}</b><br /><span className="faint">{p.kind === "reorder" ? (p.jobLabel ? `reorder of ${p.jobLabel}` : "reorder") : "new"}{p.changes ? ` · new: ${p.changes}` : " · exact reprint"}{p.pieces ? ` · ${p.pieces} pcs` : ""}</span></span>
+                      <span className="osp-first-go" aria-hidden>›</span>
+                    </button>
+                  ))}
+                  <button type="button" className="btn ghost sm" onClick={() => setPickFirst(false)}>Back</button>
+                </div> : nx && <div className="osp-plan-acts">
+                  <button type="button" className="btn primary" onClick={() => (left.length > 1 ? setPickFirst(true) : onPick({ parts: [nx] }))} title={`Makes ${nx.label} now; you check it in the Order chat, then it asks about the next one`}>{done.length ? `Make the next one (${at} of ${all.length})` : "One at a time"}</button>
                   {left.length > 1 && <button type="button" className="btn" onClick={() => onPick({ parts: left })} title="Each one stops when it's made; you open it and go on to the next">{done.length ? `All ${left.length} left at once` : `All ${all.length} at once`}</button>}
                 </div>}
               </>;

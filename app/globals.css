@@ -12917,3 +12917,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .osp-mails label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
 .osp-mails input{margin-top:3px}
 .osp-mails-sep{font-size:12px;margin-top:4px}
+/* Create order → one at a time: which order first (Oct 24) */
+.osp-first{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.osp-first-it{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.osp-first-it:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.osp-first-it>span:first-child{flex:1;min-width:0}
+.osp-first-go{font-size:20px;color:var(--ink-3)}
+.osp-first .btn.ghost{align-self:flex-start}
