@@ -50,3 +50,6 @@ export function useProdSide(): [ProdSide, (s: ProdSide) => void, boolean] {
   }, [who, email]);
   return [locked ? "embroidery" : side, set, locked];
 }
+
+/** a print's side: embroidery, heat press (DTF) or screen printing (Reorder Details and its menu dot) */
+export const sideOfMethod = (method: string | undefined): ProdSide => (method === "embroidery" ? "embroidery" : method === "dtf" ? "heat" : "screen");

@@ -1,5 +1,5 @@
 "use client";
-import { useProdSide } from "@/lib/prodSide";
+import { sideOfMethod, useProdSide } from "@/lib/prodSide";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -53,7 +53,7 @@ export default function ProductionDetailsPage() {
   // and the menu's screen printing / embroidery switch (Oct 24): that side's prints
   const [side] = useProdSide();
   // each side's own prints (the menu's SP / EMB / HP): screen prints, embroidered prints, or heat press (DTF) prints
-  const mine = (im: Imprint) => (role === "embroidery" || side === "embroidery" ? im.method === "embroidery" : side === "heat" ? im.method === "dtf" : im.method !== "embroidery" && im.method !== "dtf");
+  const mine = (im: Imprint) => sideOfMethod(im.method) === (role === "embroidery" ? "embroidery" : side);
   const waitingOf = (r: Row) => printSets(r, (im) => needsDetails(im) && mine(im));
   const open0 = useSearchParams().get("order");
   const [tab, setTab] = useState<"waiting" | "done">("waiting");
@@ -208,7 +208,7 @@ export default function ProductionDetailsPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Production</div><h1>Reorder Details</h1>
+        <div><div className="eyebrow">Production · {(role === "embroidery" || side === "embroidery") ? "Embroidery" : side === "heat" ? "Heat press" : "Screen printing"}</div><h1>Reorder Details</h1>
           <p className="muted pdd-intro">Reorders of old Printavo jobs. The print size and inks are our best guess from the old film or mockup. Check them against what we printed before, fix anything that&apos;s off, and confirm. Leave a field blank if nobody knows.</p></div>
       </div>
       <div className="aa-sub pd-tabs pdd-tabs" role="tablist">

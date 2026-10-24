@@ -13,9 +13,9 @@ import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
-import { useProdSide } from "@/lib/prodSide";
+import { sideOfMethod, useProdSide } from "@/lib/prodSide";
 import { canOpen, ROLES } from "@/lib/roles";
-import { ordersNeedingDetails } from "@/lib/productionDetails";
+import { needsDetails, ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
@@ -99,7 +99,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     return () => window.removeEventListener("fbs:clickup-count", h);
   }, []);
   const [pvWaiting, setPvWaiting] = useState(0);
-  const [details, setDetails] = useState(0); // reorders waiting on production details
+  // reorders waiting on production details, counted per side (SP / EMB / HP): the dot is only for the side you're on
+  const [detailsBySide, setDetailsBySide] = useState<Record<string, number>>({});
+  const details = detailsBySide[side] || 0;
   const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
   const slowAt = useRef(0); // when the slower badges (email, Printavo) were last counted
   // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
@@ -201,7 +203,15 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       .then(({ count }) => setIncoming(count || 0));
     sb.from("clickup_tasks").select("id", { count: "exact", head: true }).eq("waiting", true)
       .then(({ count }) => setClickup(count || 0), () => null);
-    ordersNeedingDetails(sb, "id").then((r) => setDetails(r.length), () => null);
+    ordersNeedingDetails<{ id: string; groups: { imprints?: { method?: string; confirm?: { size?: boolean; ink?: boolean } }[] }[] | null }>(sb, "id, groups").then((r) => {
+      const n: Record<string, number> = {};
+      for (const o of r) {
+        const sides = new Set<string>();
+        for (const g of o.groups || []) for (const im of g.imprints || []) if (needsDetails(im as Parameters<typeof needsDetails>[0])) sides.add(sideOfMethod(im.method));
+        for (const k of sides) n[k] = (n[k] || 0) + 1;
+      }
+      setDetailsBySide(n);
+    }, () => null);
     // the slower badges at most once a minute, and after the page's own loading has had its turn (Oct 16: speed)
     const now = Date.now();
     if (now - slowAt.current < 60_000) return;
