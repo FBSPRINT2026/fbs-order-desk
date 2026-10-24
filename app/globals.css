@@ -13071,3 +13071,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .rq-ord .a-ea input{border-color:transparent;background:transparent}
 .rq-mk-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch;margin-top:6px}
 .rq-mk-acts .btn{justify-content:center;text-align:center;text-decoration:none}
+/* portal: the prints wait for a mockup (Oct 24, Nick) */
+.mk-cover.mk-need{cursor:default;border-color:var(--line)}
+.mk-cover.mk-need span{opacity:1;max-width:340px;text-align:center;line-height:1.45;font-size:13.5px;padding:10px 14px;box-shadow:var(--shadow)}
+/* portal: Choose a saved mockup (Oct 24, Nick) */
+.rq-pick{max-width:640px;width:calc(100vw - 32px)}
+.rq-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-height:55vh;overflow:auto;margin:10px 0}
+.rq-pick-c{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:8px;cursor:pointer;font:inherit;color:var(--ink)}
+.rq-pick-c:hover{border-color:var(--accent)}
+.rq-pick-c small{font-size:12px;color:var(--ink-3)}
+.rq-pick-img{width:100%;aspect-ratio:1;display:grid;place-items:center;background:#fff;border-radius:6px;overflow:hidden}
+.rq-pick-img img{max-width:100%;max-height:100%;object-fit:contain}

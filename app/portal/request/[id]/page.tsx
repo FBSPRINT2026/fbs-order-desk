@@ -32,8 +32,13 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
     withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) urls[x.id] = sg[i].signedUrl!; });
   }
   // mockups: ones already attached to this order, and the customer's saved ones they can attach
-  const { data: saved } = await admin.from("mockups").select("id,title,file_path,created_at").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }).limit(40);
-  const savedList = oneOfEach((saved || []) as { id: string; title: string; file_path: string; created_at: string }[]);
+  const { data: saved } = await admin.from("mockups").select("id,title,file_path,created_at,number,order_id,shelved_at").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }).limit(60);
+  const savedList = oneOfEach((saved || []) as { id: string; title: string; file_path: string; created_at: string; number: number | null; order_id: string | null; shelved_at: string | null }[]);
+  // their saved mockups to pick for a group (Oct 24, Nick: "choose a mock-up from the one that they've created"): one per
+  // set, not ones on an order or archived
+  const pickSets = savedList.filter((m, i, all) => !m.order_id && !m.shelved_at && (!m.number || all.findIndex((x) => x.number === m.number && !x.order_id) === i)).slice(0, 24);
+  const { data: pickSg } = pickSets.length ? await admin.storage.from("proofs").createSignedUrls(pickSets.map((m) => m.file_path.replace(/\.png$/, "-thumb.png")), 3600) : { data: [] };
+  const pickMockups = pickSets.map((m, i) => ({ id: m.id, number: m.number, name: m.title.split(" — ")[0], colors: savedList.filter((x) => m.number && x.number === m.number && !x.order_id).length || 1, when: m.created_at, thumb: pickSg?.[i]?.signedUrl || "" }));
   const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || [])]), ...savedList.map((m) => m.file_path)])];
   const mockupUrls: Record<string, string> = {};
   if (paths.length) {
@@ -43,7 +48,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</div>}
-      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
+      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} pickMockups={pickMockups} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
     </>
   );
 }

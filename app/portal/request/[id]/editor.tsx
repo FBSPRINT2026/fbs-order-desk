@@ -6,7 +6,7 @@ import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { attachMockupToRequest, describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
 import { saveGoodsInfo } from "@/app/portal/goods-actions";
@@ -23,10 +23,12 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
-export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
   /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
-  savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string; aiAssist?: boolean;
+  savedMockups: { path: string; name: string }[];
+  /** their saved mockups (one per set) to choose for a group */ pickMockups?: { id: string; number: number | null; name: string; colors: number; when: string; thumb: string }[];
+  mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string; aiAssist?: boolean;
 }) {
   const [mUrls, setMUrls] = useState(mu0);
   void savedMockups;
@@ -134,13 +136,16 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   // the mockup, beside the prints (Oct 24, Nick: "start out by saying create mockup or upload your own existing mockup… in the
   // imprint screen"): made in our Mockup Creator for this group, or their own file
   const mkLink = (q: string) => `${mockupHref}${mockupHref.includes("?") ? "&" : "?"}${q}`;
+  // the order's changes are saved before going to the Mockup Creator
+  const goMock = async (q: string) => { await flush(); window.location.href = mkLink(q); };
   const mockupBtns = (g: Group, gi: number) => {
     const own = (g.customerMockups || []).length > 0;
     return (
       <div className="rq-mk-acts">
         {g.fromMockup
-          ? <a className="btn sm" href={mkLink(`mockup=${g.fromMockup.id}&request=${o.id}&group=${g.id}`)}>Edit mockup</a>
-          : <a className={"btn sm" + (own ? "" : " primary")} href={mkLink(`request=${o.id}&group=${g.id}`)}>Create mockup</a>}
+          ? <button type="button" className="btn sm" onClick={() => goMock(`mockup=${g.fromMockup!.id}&request=${o.id}&group=${g.id}`)}>Edit mockup</button>
+          : <button type="button" className={"btn sm" + (own ? "" : " primary")} onClick={() => goMock(`request=${o.id}&group=${g.id}`)}>Create mockup</button>}
+        {!g.fromMockup && !own && pickMockups.length > 0 && <button type="button" className="btn sm" onClick={() => setPickFor(g.id)}>Choose a saved mockup</button>}
         {!g.fromMockup && (
           <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === g.id ? "Uploading…" : "Upload your own mockup"}
             <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
@@ -150,6 +155,18 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       </div>
     );
   };
+
+  // Choose a saved mockup: it goes into the group like one made for it (garments, colors, prints)
+  const [pickFor, setPickFor] = useState("");
+  const [picking, setPicking] = useState("");
+  async function pickMockup(id: string) {
+    if (preview || !pickFor) return;
+    setPicking(id); setErr("");
+    await flush();
+    const r = await attachMockupToRequest(o.id, pickFor, id);
+    if (!r.ok) { setPicking(""); return setErr(r.error || "Couldn't add the mockup."); }
+    window.location.reload();
+  }
 
   async function send() {
     setBusy(true); setErr("");
@@ -219,7 +236,8 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
           <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]}
-            mockupExtra={mockupBtns(g, gi)} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
+            mockupExtra={mockupBtns(g, gi)}
+            needMockup={pickMockups.length ? "Start with a mockup: create one, upload your own, or choose one you've already made. Your prints fill in from it." : "Start with a mockup: create one or upload your own. Your prints fill in from it."} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}
             designs={designs} designUrls={urls} onUploadDesign={uploadLogo}
@@ -228,6 +246,26 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         ))}
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add another group</button>
       </fieldset>
+
+      {pickFor && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Choose a saved mockup" onClick={() => !picking && setPickFor("")}>
+          <div className="dla rq-pick" onClick={(e) => e.stopPropagation()}>
+            <h3>Choose a saved mockup</h3>
+            <p className="dla-sub">Its shirts, colors and prints go into this group. Then add your sizes.</p>
+            <div className="rq-pick-grid">
+              {pickMockups.map((m) => (
+                <button key={m.id} type="button" className="rq-pick-c" disabled={!!picking || preview} onClick={() => pickMockup(m.id)}>
+                  <span className="rq-pick-img">{m.thumb ? <img src={m.thumb} alt="" /> : null}</span>
+                  <b>{m.number ? `M-${m.number}` : m.name}</b>
+                  <small>{[m.number ? m.name : "", m.colors > 1 ? `${m.colors} colors` : ""].filter(Boolean).join(" · ")}</small>
+                  {picking === m.id && <small>Adding…</small>}
+                </button>
+              ))}
+            </div>
+            <div className="dla-acts"><button type="button" className="btn ghost" disabled={!!picking} onClick={() => setPickFor("")}>Cancel</button></div>
+          </div>
+        </div>
+      )}
 
       {goods && (
         <section className="panel">

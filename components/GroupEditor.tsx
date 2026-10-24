@@ -54,6 +54,8 @@ type Props = {
   hidePrices?: boolean;
   /** don't gray out imprints waiting on a mockup (customer requests come with their own details) */
   noLock?: boolean;
+  /** the portal: the prints stay grayed out until the group has a mockup (made, uploaded or picked), with this note
+   *  (Oct 24, Nick: "gray out the print area… I don't want them to fill it in. I want them to make the mock-up") */ needMockup?: string;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
    *  the imprints blown up… you shouldn't be able to change anything at that point"): the prints read only like a group with
@@ -75,7 +77,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -361,7 +363,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     return () => { live = false; ro?.disconnect(); probe.remove(); };
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
-  const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
+  const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
   const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   // embroidery extras (specialty thread, 3D puff…): only on a group with embroidery
@@ -672,7 +674,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             </div>
           )}
           <div className={"mk-lock" + (locked ? " on" : "")}>
-          {locked && <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>}
+          {locked && (needMockup
+            ? <div className="mk-cover mk-need" role="note"><span>{needMockup}</span></div>
+            : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>)}
           <div inert={locked || fixed || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
@@ -816,7 +820,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
 
         {hasFoot && <div className="grp-foot">
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
-            {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
+            {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => { if (!needMockup) setAskSkip(true); }} />}
             <div inert={locked || fixed || undefined} className="mk-body">
             {(inksSec || embImps.length > 0) && (
               <div className="sbx">
