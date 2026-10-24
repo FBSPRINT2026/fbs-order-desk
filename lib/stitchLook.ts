@@ -361,7 +361,10 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
   const tx = new Float32Array(N), ty = new Float32Array(N);
   for (let i = 0; i < N; i++) { if (lab[i] < 0) continue; const th = 0.5 * Math.atan2(ay[i], ax[i]) + Math.PI / 2; tx[i] = Math.cos(th); ty[i] = Math.sin(th); }
   const cmin = new Float32Array(N), along = new Float32Array(N), satin = new Uint8Array(N);
-  const satinMax = 25 * pxMm, reach = Math.ceil(satinMax * 1.3);
+  const fixed = tune("fixed", -999);
+  // one stitch angle for everything (a plain look to compare against)
+  if (fixed > -999) for (let i = 0; i < N; i++) if (lab[i] >= 0) { const th = (fixed * Math.PI) / 180; tx[i] = Math.cos(th); ty[i] = Math.sin(th); ax[i] = Math.cos(2 * th + Math.PI); ay[i] = Math.sin(2 * th + Math.PI); }
+  const satinMax = tune("satinMax", 25) * pxMm, reach = Math.ceil(satinMax * 1.3);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x; if (lab[i] < 0) continue;
     const side = [0, 0];
