@@ -31,7 +31,9 @@ export function useMyDay() {
   return { d, setD, load, err };
 }
 
-export default function MyDay({ name, replies, replyCount, urgentCount }: { name: string; replies: React.ReactNode; replyCount: number; urgentCount: number }) {
+export default function MyDay({ name, replies, replyCount, urgentCount, side, children }: { name: string; replies: React.ReactNode; replyCount: number; urgentCount: number;
+  /** the owners' My Day (Oct 24, Nick: "the calendar, the to-dos, can you make that a side panel… and then go right into the
+   * favorites"): calendar, to-dos and replies stacked on the right, the page's own sections (children) on the left */ side?: boolean; children?: React.ReactNode }) {
   const { d, setD, load, err } = useMyDay();
   const [tab, setTab] = useState<"replies" | "todo" | "cal">("todo");
   const [shop, setShop] = useState<{ id: string; number: number; nickname: string; day: string; status: string; customer: string }[]>([]);
@@ -53,6 +55,19 @@ export default function MyDay({ name, replies, replyCount, urgentCount }: { name
         </div>
         <CheerSwitch />
       </header>
+      {side ? (
+        <div className="md2">
+          <aside className="md2-side" aria-label="Calendar and to-dos">
+            <div className="md-col md-cal"><CalendarPanel d={d} setD={setD} shop={shop} /></div>
+            <div className="md-col md-todo"><Todos d={d} setD={setD} load={load} err={err} /></div>
+            <div className="md-col md-replies">
+              <div className="md-col-h"><h2>Replies</h2>{replyCount > 0 && <span className="md-n">{replyCount}</span>}{urgentCount > 0 && <span className="md-hot">{urgentCount} urgent</span>}<span className="spacer" /><Link href="/shop/conversations" className="md-link">Conversations</Link></div>
+              {replies}
+            </div>
+          </aside>
+          <div className="md2-main">{children}</div>
+        </div>
+      ) : <>
       <div className="md-tabs" role="tablist" aria-label="My Day">
         <button type="button" role="tab" aria-selected={tab === "replies"} className={tab === "replies" ? "on" : ""} onClick={() => setTab("replies")}>Replies<b className={urgentCount ? "hot" : ""}>{replyCount}</b></button>
         <button type="button" role="tab" aria-selected={tab === "todo"} className={tab === "todo" ? "on" : ""} onClick={() => setTab("todo")}>To-do<b className={due ? "hot" : ""}>{open.length}</b></button>
@@ -70,6 +85,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount }: { name
           <CalendarPanel d={d} setD={setD} shop={shop} />
         </div>
       </div>
+      </>}
     </section>
   );
 }

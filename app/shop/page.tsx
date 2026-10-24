@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
-import AssistantStrip from "@/components/AssistantStrip";
 import AiSearch from "@/components/AiSearch";
 import SalesAnalytics from "@/components/SalesAnalytics";
 import { Pill, pvStatusOf } from "@/components/bits";
@@ -16,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
 import MyDay, { CrewTodos } from "@/components/MyDay";
+import FavoritesRecap from "@/components/FavoritesRecap";
 import { emailIsMine, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
@@ -189,6 +189,7 @@ export default function Dashboard() {
   const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
   // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
   const urgentIds = new Set(myUrgent.map((x) => x.id));
+  const needIds = useMemo(() => new Set(myNeeds.map((x) => x.id)), [myNeeds.map((x) => x.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))]
     .sort((a, b) => Number(!!b.mail && urgentIds.has(b.mail.id)) - Number(!!a.mail && urgentIds.has(a.mail.id)) || (a.mail && b.mail && urgentIds.has(a.mail.id) && urgentIds.has(b.mail.id) ? a.at.localeCompare(b.at) : b.at.localeCompare(a.at)));
   const openMail = (id: string) => router.push(`/shop/conversations?open=${id}`);
@@ -345,9 +346,13 @@ export default function Dashboard() {
     );
   }
 
+  // the owners' My Day (Oct 24, Nick: "I'd like to see mostly financial stuff… I like the charts… the calendar, the to-dos,
+  // can you make that a side panel… and then go right into the favorites"): sales charts and top customers, then the
+  // starred customers' recap; calendar, to-dos and replies on the right. Balances, the pipeline and production live on
+  // their own pages.
   return (
     <>
-      <MyDay name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
+      <MyDay side name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
               <div className="md-scroll">
                 {!v || !mailIn || !boxIn ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
                   <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
@@ -363,69 +368,18 @@ export default function Dashboard() {
                   ) : null)}</ul>
                 ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}
               </div>
-      } />
-
-      {/* what has to happen today or a date is missed (Job watcher + orders still in email) */}
-      <NeedsToday />
-
-      {/* the shop: everyone's numbers (Everyone / Mine narrows to my accounts) */}
-      <div className="md-shop-h">
-        <h2>The shop</h2>
-        <div className="rv-seg dash-who" role="group" aria-label="Whose accounts to show">
-          <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)} title="Show every account">Everyone</button>
-          <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)} title="Only the customers you own">Mine</button>
-        </div>
-      </div>
-      {!v ? <div className="empty">Loading your day…</div> : (
-        <div className="dash">
-          {/* follow-ups the Assistant found (quotes to chase, approvals…) */}
-          {panel("Follow-ups", "fade", null, <AssistantStrip keep={mine ? (c) => !c || isMine(c) : undefined} />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">quotes to chase, approvals and suggestions</span>)}
-
-          {/* sales: the numbers (1/3) beside the charts (2/3) */}
-          {boss && <div className="dash-row dash-2-1">
-            <section className="db-card db-orange db-sales">
-              <div className="db-card-h"><h2>Sales Charts</h2><span className="faint db-h-note">invoices by order date · closed quotes, quotes and holders don&apos;t count</span></div>
-              <SalesAnalytics part="charts" />
-            </section>
-            {panel("Sales", "orange", null, <SalesAnalytics part="side" />)}
-          </div>}
-
-
-          {pdnMine.length > 0 && detailsCard}
-
-          {/* 3. the order pipeline: every job by stage (follows Everyone / Mine) */}
-          <section className="db-card db-blue db-pipe">
-            <div className="db-card-h"><h2>{mine ? "My Order Pipeline" : "Order Pipeline"}</h2><span className="faint db-h-note">every job by stage · drag a card or use → to move it along</span></div>
-            <OrderBoard mine={mine} />
-          </section>
-
-          {/* 4. production (2/3) · open balances (1/3) */}
-          <div className="dash-row dash-2-1">
-            {prodSection}
-            {panel("Open balances", "salmon", owedMine.length, <div className="db-scroll">{list(owedMine.length, (
-              <>
-                <div className="db-owed-t">{money(owedMine.reduce((a, b) => a + b.balance, 0))} owed</div>
-                <ul className="db-list">{owedMine.slice(0, 25).map((b) => (
-                  <li key={b.id} className="db-row"><Link href={`/shop/archive/${b.id}`} className="db-num">#{b.number}</Link><span className="db-main"><b>{who(b.customer_id) || "—"}</b><span className="faint">{b.nickname}</span></span><span className="db-side"><b>{money(b.balance)}</b></span></li>
-                ))}</ul>
-              </>
-            ))}</div>)}
+      }>
+        {/* what has to happen today or a date is missed (Job watcher + orders still in email) */}
+        <NeedsToday />
+        {boss && <section className="db-card db-orange db-sales md2-sales">
+          <div className="db-card-h"><h2>Sales</h2><span className="faint db-h-note">invoices by order date · quotes and holders don&apos;t count</span></div>
+          <div className="md2-sales-g">
+            <SalesAnalytics part="charts" />
+            <SalesAnalytics part="side" />
           </div>
-
-          {/* 3. keep the money coming: reorders and quotes out */}
-          <div className="dash-row dash-2">
-            {panel("Ordered this time last year", "teal", myReorders.length, <div className="db-scroll sm">{list(myReorders.length, (
-              <ul className="db-list">{myReorders.slice(0, 20).map((r) => (
-                <li key={r.customer_id} className="db-row">
-                  <span className="db-main"><b><Link href={`/shop/customers/${r.customer_id}`}>{who(r.customer_id) || "Customer"}</Link></b><span className="faint">#{r.number} · {day(r.date)} last year · {money(r.total)}</span></span>
-                  <span className="db-side"><Link href={`/shop/customers/${r.customer_id}?area=messages`} className="btn sm">Reach out</Link></span>
-                </li>
-              ))}</ul>
-            ), "No reorder reminders today.")}</div>)}
-            {panel("Waiting on the customer", "blue", v.waiting.length, <div className="db-scroll sm">{list(v.waiting.length, <ul className="db-list">{v.waiting.slice(0, 40).map(jobRow)}</ul>)}</div>, ["/shop/orders", "Orders"])}
-          </div>
-        </div>
-      )}
+        </section>}
+        <FavoritesRecap jobs={jobs} msgs={myMsgs} needIds={needIds} mailMine={(e) => emailIsMine(e, myBox, myBoxEmail)} />
+      </MyDay>
     </>
   );
 }
