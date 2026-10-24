@@ -447,7 +447,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
           </label>
           <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()} title="A few questions and your files; we build it for you">
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
-            <b>Simple order</b>
+            <b>Simple order / quote</b>
           </button>
         <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => setRe({ q: "", list: null, pick: "", busy: "", text: "" })} title="Pick a past order; it fills in the form and you change the quantities">
           <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5" /></svg></span>
