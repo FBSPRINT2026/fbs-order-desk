@@ -84,6 +84,8 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
             <div className="field"><label htmlFor="s-email">Email</label><input id="s-email" type="email" value={s.shop.email} onChange={(e) => upd((d) => { d.shop.email = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-phone">Phone</label><input id="s-phone" type="tel" value={s.shop.phone} onChange={(e) => upd((d) => { d.shop.phone = e.target.value; })} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) upd((d) => { d.shop.phone = f; }); }} /></div>
             <div className="field"><label htmlFor="s-addr">Address</label><textarea id="s-addr" rows={2} value={s.shop.address} onChange={(e) => upd((d) => { d.shop.address = e.target.value; })} /></div>
+            <div className="field"><label htmlFor="s-fb">Facebook page link</label><input id="s-fb" type="url" placeholder="https://facebook.com/…" value={s.shop.facebook || ""} onChange={(e) => upd((d) => { d.shop.facebook = e.target.value; })} /></div>
+            <div className="field"><label htmlFor="s-ig">Instagram link</label><input id="s-ig" type="url" placeholder="https://instagram.com/…" value={s.shop.instagram || ""} onChange={(e) => upd((d) => { d.shop.instagram = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-terms">Terms (customers agree to these when approving)</label><textarea id="s-terms" rows={2} value={s.shop.terms} onChange={(e) => upd((d) => { d.shop.terms = e.target.value; })} /></div>
           </div>
         </section>

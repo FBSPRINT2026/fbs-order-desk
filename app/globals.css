@@ -13010,3 +13010,18 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-home:has(> .aa-home-main > .aa-bar:first-child) > .aa-favs{margin-top:var(--aa-bar-off,54px)}
 @media (max-width:1000px){.aa-home > .aa-favs{margin-top:0}}
 @media (max-width:700px){.portal .aa-attn.aa-favs{position:static}}
+
+/* portal footer (Oct 24, Nick): logo, address · phone, social icons, © year */
+.p-foot-in{padding:22px 20px 0;gap:28px;flex-wrap:wrap}
+.p-foot-addr{display:flex;flex-direction:column;gap:2px;line-height:1.45;padding-left:28px;border-left:1px solid rgba(255,255,255,.12)}
+.p-foot-addr b{color:var(--side-ink-strong);font-weight:600}
+.p-foot-ln{display:flex;flex-wrap:wrap;gap:0 8px}
+.p-foot-ln i{font-style:normal;opacity:.5}
+.p-foot a{color:var(--side-ink);text-decoration:none}
+.p-foot a:hover{color:var(--side-ink-strong);text-decoration:underline}
+.p-foot-soc{margin-left:auto;display:flex;gap:10px}
+.p-foot-soc>*{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);color:var(--side-ink-strong)}
+.p-foot-soc>a:hover{background:rgba(255,255,255,.16);text-decoration:none}
+.p-foot-soc svg{width:17px;height:17px;fill:currentColor}
+.p-foot-bot{max-width:1120px;margin:18px auto 0;padding:12px 20px 18px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:color-mix(in srgb,var(--side-ink) 70%,transparent);box-sizing:border-box}
+@media (max-width:600px){.p-foot-in{gap:14px}.p-foot-addr{padding-left:0;border-left:0;flex-basis:100%}.p-foot-ln i{display:none}.p-foot-soc{margin-left:0}}

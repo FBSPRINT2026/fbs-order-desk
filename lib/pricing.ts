@@ -340,7 +340,8 @@ export function isMe(owner: string, owners: AccountOwner[], me: { email: string;
 export type Settings = PriceList & {
   /** people who own customer accounts ("My accounts" views use this) */
   accountOwners?: AccountOwner[];
-  shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
+  shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string;
+    /** social links in the portal footer (Oct 24, Nick) */ facebook?: string; instagram?: string };
   /** The logo at the top of the shop's left menu (dark background, so a light version), its width, and the line under it. */
   brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string };
   markup: number; taxRate: number; depositPct: number;
