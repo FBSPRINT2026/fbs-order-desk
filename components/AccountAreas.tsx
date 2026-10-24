@@ -180,7 +180,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [goneDrafts, setGoneDrafts] = useState<Record<string, boolean>>({});
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
-  const [showArch, setShowArch] = useSticky("account.showArchived", false);
+  // a one-time look, not remembered: leaving Artwork or refreshing goes back to the live list (Oct 24, Nick)
+  const [showArch, setShowArch] = useState(false);
+  useEffect(() => { if (area !== "artwork") setShowArch(false); }, [area]); // eslint-disable-line react-hooks/exhaustive-deps
   const [shirtSel, setShirtSel] = useState<Record<string, number>>({});
   /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
