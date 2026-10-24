@@ -1798,7 +1798,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mask itself is kept with the logo, so the separation can stack it for the film (the customer's, or this file's)
         let maskPath = r.distress === "brand" ? brandMask?.path : "";
         if (dz && r.distress === "file" && r.mask) { const mp = `masks/${customerId}/${Date.now().toString(36)}-${r.key}.png`; const up = await sb.storage.from("proofs").upload(mp, r.mask, { contentType: "image/png" }); if (!up.error) maskPath = mp; }
-        const d = await uploadDesign(sb, { file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
+        const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
         made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
@@ -1826,17 +1826,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       let d: Design;
       if (portal) {
         // customers upload straight to storage with a one-time link, then the server records the logo
-        const r = await uploadMyLogo(sb, f);
+        const r = await uploadMyLogo(sb, f, undefined, { draft: true });
         d = r.design;
         setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
         if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
         setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
         askRaster(im.id, d);
-        setMsg(`Saved ${designLabel(d)} to your logos.`);
+        setMsg(`Added ${designLabel(d)} to this mockup.`);
         return;
       }
       const { data: u } = await sb.auth.getUser();
-      d = await uploadDesign(sb, { file: f, customer_id: customerId, by: u.user?.email || "" });
+      d = await uploadDesign(sb, { draft: true, file: f, customer_id: customerId, by: u.user?.email || "" });
       setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
       setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
       setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
@@ -3239,7 +3239,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               <div className="sd-modal">
                 <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} onCanva={showCanva ? () => { const sd = designerFor.side; setDesignerFor(null); void designInCanva(undefined, undefined, sd); } : undefined} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side} →`} onClose={() => setDesignerFor(null)}
                   subtitle={[customers.find((c) => c.id === customerId)?.company || customers.find((c) => c.id === customerId)?.name || "", designerFor.side === "sleeve" ? "Sleeve" : designerFor.side === "back" ? "Back" : "Front"].filter(Boolean).join(" · ")}
-                  logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id)).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
+                  logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id) && (!d.draft || imprints.some((x) => x.design_id === d.id))).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
                   onSave={async (out) => {
                     try {
                       const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
@@ -3445,7 +3445,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                       );
                     })() : (<>
-                    <DesignSearch designs={designs.filter((d) => !isQuick(d.id))} urls={urls} value={im.design_id} placeholder="Pick a logo…"
+                    <DesignSearch designs={designs.filter((d) => !isQuick(d.id) && (!d.draft || imprints.some((x) => x.design_id === d.id)))} urls={urls} value={im.design_id} placeholder="Pick a logo…"
                       onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? (d ? swapLogo(x, d) : { ...x, design_id: undefined }) : x))); if (d) askRaster(im.id, d); }}
                       onStar={async (d, starred) => {
                         setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));

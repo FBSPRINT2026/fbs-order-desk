@@ -111,7 +111,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     if (preview) return null;
     setErr("");
     try {
-      const r = await uploadMyLogo(createClient(), f, name);
+      const r = await uploadMyLogo(createClient(), f, name, { draft: true });
       setDesigns((x) => [r.design, ...x.filter((d) => d.id !== r.design.id)]);
       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
       return r.design;

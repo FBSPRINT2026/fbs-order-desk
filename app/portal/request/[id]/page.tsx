@@ -28,7 +28,10 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   ]);
   // customers never see our blank costs
   const catalog = ((g || []) as Garment[]).map((x) => ({ ...x, cost: 0, size_costs: {}, color_size_costs: {} }));
-  const designs = (d || []) as Design[];
+  // logos made for this order (drafts: not in the library yet) come along so its prints show (Oct 24)
+  const usedIds = [...new Set(order.groups.flatMap((x) => x.imprints.map((im) => im.design_id).filter(Boolean) as string[]))].filter((x) => !(d || []).some((y) => y.id === x));
+  const { data: dd } = usedIds.length ? await ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).in("id", usedIds) : { data: [] };
+  const designs = [...(d || []), ...(dd || [])] as Design[];
   const withPv = designs.filter((x) => x.preview_path);
   const urls: Record<string, string> = {};
   if (withPv.length) {

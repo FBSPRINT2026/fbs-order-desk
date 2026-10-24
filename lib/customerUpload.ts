@@ -19,7 +19,7 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
  * A customer uploads a logo from their portal: the original goes straight to storage with a one-time link,
  * files a browser can't show (PDF, AI, HEIC…) get a PNG preview made and uploaded too, then the server records it.
  */
-export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string } = {}): Promise<{ design: Design; url: string }> {
+export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string; /** made for an order or a mockup, not the logo library */ draft?: boolean } = {}): Promise<{ design: Design; url: string }> {
   // a see-through logo with empty space around it is saved cropped to the art (not designer saves, which bring a preview)
   if (!opts.preview && !opts.layers) f = (await cropFileToArt(f)) || f;
   // the same logo already on their account? ask before making another art number (lib/sameArt.ts; Oct 24, Nick)
@@ -57,7 +57,7 @@ export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, o
       if (!u3.error) layersPath = t3.path;
     }
   }
-  const r = await saveMyLogo({ artHash: artHashV || undefined, path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h, layersPath, colors: opts.colors, inks: opts.inks });
+  const r = await saveMyLogo({ draft: opts.draft, artHash: artHashV || undefined, path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h, layersPath, colors: opts.colors, inks: opts.inks });
   if (!r.ok) throw new Error(r.error);
   return { design: r.design as Design, url: r.url };
 }

@@ -198,7 +198,7 @@ export async function logoUploadUrl(fileName: string): Promise<{ ok: boolean; er
 }
 
 /** Step 2: save the uploaded file as one of the customer's logos. */
-export async function saveMyLogo(meta: { artHash?: string; path: string; fileName: string; fileType: string; name: string; previewable: boolean; previewPath?: string; w?: number; h?: number; layersPath?: string; colors?: number; inks?: string }) {
+export async function saveMyLogo(meta: { /** made while building an order or a mockup: kept on that order or mockup, not in the logo library until it's on a real order (Oct 24, Nick) */ draft?: boolean; artHash?: string; path: string; fileName: string; fileType: string; name: string; previewable: boolean; previewPath?: string; w?: number; h?: number; layersPath?: string; colors?: number; inks?: string }) {
   try {
     const { admin, cust, email } = await me();
     if (!/^designs\/[\w-]+\/[\w.\-]+$/.test(meta.path)) return { ok: false as const, error: "Bad upload." };
@@ -210,7 +210,7 @@ export async function saveMyLogo(meta: { artHash?: string; path: string; fileNam
       file_path: meta.path, file_name: meta.fileName, file_type: meta.fileType || "", preview_path: pvPath,
       width_px: meta.w || null, height_px: meta.h || null, method: "screen",
       colors: Math.max(1, Math.min(15, Math.round(meta.colors || 1))), inks: (meta.inks || "").slice(0, 300),
-      notes: meta.layersPath ? "Made in the shirt designer" : "", created_by: email,
+      notes: meta.layersPath ? "Made in the shirt designer" : "", created_by: email, draft: !!meta.draft,
       ...(meta.artHash && /^[0-9a-f]{16}$/.test(meta.artHash) ? { art_hash: meta.artHash } : {}),
       designer: meta.layersPath ? { file: meta.layersPath } : null,
     }).select("*").single();
@@ -234,7 +234,12 @@ export async function portalCatalog() {
 export async function myLogos() {
   try {
     const { admin, cust } = await me();
-    const { data } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).eq("draft", false).order("number", { ascending: false });
+    const { data: lib } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).eq("draft", false).order("number", { ascending: false });
+    // logos made for one of their mockups (not in the library) still come along, so a saved mockup reopens with its art
+    const { data: mk } = await admin.from("mockups").select("design_ids").eq("customer_id", cust.id).is("archived_at", null);
+    const mkIds = [...new Set((mk || []).flatMap((m) => ((m as { design_ids?: string[] | null }).design_ids || [])))].filter((id) => !(lib || []).some((d) => d.id === id));
+    const { data: extra } = mkIds.length ? await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).in("id", mkIds.slice(0, 300)) : { data: [] };
+    const data = [...(lib || []), ...(extra || [])];
     const list = (data || []) as { id: string; preview_path: string }[];
     const withPv = list.filter((d) => d.preview_path);
     const urls: Record<string, string> = {};

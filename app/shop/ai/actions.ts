@@ -165,7 +165,7 @@ export async function mockupSpec(chatId: string, cardId: string) {
           if ((await admin.storage.from("proofs").copy(f.path, to)).error) continue;
           let pv: string | null = /^image\/(png|jpe?g|gif|webp)$/i.test(f.type) ? to : null;
           if (!pv && f.preview?.path) { const pto = `${to.replace(/\.[^./]+$/, "")}-preview.png`; if (!(await admin.storage.from("proofs").copy(f.preview.path, pto)).error) pv = pto; }
-          const { data: d } = await admin.from("designs").insert({ customer_id: sp.customer_id, name: f.name.replace(/\.[^.]+$/, "").slice(0, 120), file_path: to, file_name: f.name, file_type: f.type || "", preview_path: pv, method: "screen", colors: p.ink ? 1 : null, inks: p.ink || "", notes: "From the AI Workbench", created_by: email }).select("id").single();
+          const { data: d } = await admin.from("designs").insert({ draft: true, customer_id: sp.customer_id, name: f.name.replace(/\.[^.]+$/, "").slice(0, 120), file_path: to, file_name: f.name, file_type: f.type || "", preview_path: pv, method: "screen", colors: p.ink ? 1 : null, inks: p.ink || "", notes: "From the AI Workbench", created_by: email }).select("id").single();
           if (d) designId = d.id as string;
         }
       }

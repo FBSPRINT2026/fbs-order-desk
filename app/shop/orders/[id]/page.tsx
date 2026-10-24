@@ -290,9 +290,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!custId) { say("Pick a customer first. New art is saved to their account."); return null; }
     try {
       const { data: u } = await sb.auth.getUser();
-      const d = await uploadDesign(sb, { file, name, customer_id: custId, by: u.user?.email || "" });
+      const d = await uploadDesign(sb, { draft: true, file, name, customer_id: custId, by: u.user?.email || "" }); // on this order; in their library once the order goes ahead
       await loadDesigns();
-      say(`Saved as ${designLabel(d)} on this customer's account.`);
+      say(`Added ${designLabel(d)} to this order. It goes in the customer's logos when the order goes ahead.`);
       return d;
     } catch (e) { say("Upload failed: " + (e instanceof Error ? e.message : String(e))); return null; }
   }
