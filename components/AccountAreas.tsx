@@ -702,7 +702,6 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       if (!r.ok) { setMStars((x) => ({ ...x, [m.id]: !!m.starred })); setStarErr(r.error || "Couldn't save the star."); }
     };
     const favMocks = ms.filter((m) => m.starred && !m.shelved);
-    const nArch = archived.length + new Set(ms.filter((m) => m.shelved).map((m) => String(m.mno ?? m.id))).size;
     const shelveMock = async (m: AMockup, on: boolean) => {
       if (!onArchiveMockup) return;
       setStarErr("");
@@ -771,11 +770,13 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div className="aa-home">
       <div className="aa-home-main stack">
       {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
-      {tableHead(<><h2>{showArch ? "Archived artwork" : "Artwork"}</h2>
-        <div className="chips aa-arch-chips">
-          <button type="button" className={"chip" + (!showArch ? " on" : "")} onClick={() => setShowArch(false)}>Active</button>
-          <button type="button" className={"chip" + (showArch ? " on" : "")} onClick={() => setShowArch(true)}>Archive{nArch ? <span className="n">{nArch}</span> : null}</button>
-        </div></>, showArch ? "Search archived" : "Search logos")}
+      <div className="aa-bar"><div className="aa-bar-l"><h2>{showArch ? "Archived artwork" : "Artwork"}</h2></div>
+        <div className="aa-bar-r">
+          {/* a small text button by the search (Oct 24, Nick: "just a very small text only button… show archive") */}
+          <button type="button" className="linkbtn aa-arch-link" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archive" : "Show archive"}</button>
+          {search(showArch ? "Search archived" : "Search logos")}
+        </div>
+      </div>
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {(brandColors.length > 0 || brandEditor) && (
         <div className="aa-card">
