@@ -20,6 +20,8 @@
   (shown in AI Workbench → Tools) with the component that IS the tool and the places it opens from. A button for a tool
   anywhere opens that component (Create order = `components/tools/CreateOrderTool.tsx`); never copy or fork a tool's flow
   into a page. Fix or change it in the tool, and add a new place to its `places` list.
+- **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
+  there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
