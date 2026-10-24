@@ -1034,7 +1034,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       setOld(olds); setFound(j.found || []);
       if (!olds.length) setElseOpen(true);
       for (const [k, f] of olds.entries()) {
-        const d = await drawFile(f.url, f.name, f.type).catch(() => null);
+        // a file that never finishes opening (a stuck PDF) can't hold up the rest: 25 seconds, then it's shown as a plain file
+        // (Oct 24, Nick: #34298 sat on "Opening the old job's files…")
+        const d = await Promise.race([drawFile(f.url, f.name, f.type).catch(() => null), new Promise<null>((ok) => setTimeout(() => ok(null), 25000))]);
         if (!live) return;
         setOld((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, d } : y)) : x));
       }
