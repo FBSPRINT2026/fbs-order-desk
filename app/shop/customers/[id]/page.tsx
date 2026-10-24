@@ -293,7 +293,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           </aside>
         </div>
       )}
-      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
+      <AccountAreas mode="shop" brandPortal={c?.brand_portal !== false} onBrandPortal={(v) => set("brand_portal", v)} brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} /> : undefined}

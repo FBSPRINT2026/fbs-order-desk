@@ -365,7 +365,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${fmtPhone(ctx.settings.shop.phone)}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" dash={dash} brandColors={acct?.brand_colors || []}
+          <AccountAreas mode="portal" dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
             designsPanel={acct?.design_catalog && (acct as { design_catalog_portal?: boolean }).design_catalog_portal ? <PortalDesignCatalog customerId={acct.id} qs={qs} /> : undefined}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}

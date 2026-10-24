@@ -73,7 +73,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -100,6 +100,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   programPanel?: ReactNode; hasProgram?: boolean;
   /** staff: the customer's designs, every way each was printed (Oct 20, Nick: Dear Heart) */
   designsPanel?: ReactNode;
+  /** shop: brand standards shown in their portal, switched on the card's header line (Oct 24, Nick) */ brandPortal?: boolean; onBrandPortal?: (v: boolean) => void;
   /** portal: the helper at the top of the dashboard ("What can I help you with today?") */
   assistant?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
@@ -300,7 +301,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   // brand standards (Oct 16): in the shop on the Artwork tab; in the portal on its own tab under Artwork (Oct 24, Nick)
   const brandCardEl = (brandColors.length > 0 || brandEditor) ? (
         <div className="aa-card">
-          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}</div>
+          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}
+            {mode === "shop" && onBrandPortal && <><span className="spacer" style={{ flex: 1 }} /><label className="check bs-portal" title="Brand standards under Artwork in their portal"><input type="checkbox" checked={brandPortal} onChange={(e) => onBrandPortal(e.target.checked)} />Show in their portal</label></>}</div>
           {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
             <div key={g || "_"} className="bs-group">
               {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}
