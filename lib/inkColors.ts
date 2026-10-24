@@ -301,7 +301,7 @@ export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, 
   const data = x.getImageData(0, 0, w, h), d = data.data;
   const rgbOf = (hx: string) => { const v = hx.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
   const pairs = Object.entries(map).map(([s, t]) => ({ s: rgbOf(s), t: t === "none" ? null : rgbOf(t) }));
-  if (!pairs.length) return c.toDataURL("image/png");
+  if (!pairs.length) return clearPage(c).toDataURL("image/png");
   const cache = new Map<number, number[] | null | undefined>();
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] === 0) continue;
@@ -319,5 +319,38 @@ export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, 
     d[i] = out[0]; d[i + 1] = out[1]; d[i + 2] = out[2];
   }
   x.putImageData(data, 0, 0);
-  return c.toDataURL("image/png");
+  return clearPage(c).toDataURL("image/png");
+}
+
+/**
+ * A logo picture made from a whole PDF page (a white page with the art on it) shown as art: the white page around the
+ * art is taken off and the picture cropped to the art (Oct 24, Nick: "these little boxes are appearing again over the
+ * mockups on the order"). Only white that touches the picture's edge goes, so white ink inside the art stays; a picture
+ * that's already see-through around its art is left as it is.
+ */
+export function clearPage(c: HTMLCanvasElement): HTMLCanvasElement {
+  const w = c.width, h = c.height, x = c.getContext("2d", { willReadFrequently: true })!;
+  const data = x.getImageData(0, 0, w, h), d = data.data;
+  const white = (p: number) => d[p * 4 + 3] > 200 && d[p * 4] > 236 && d[p * 4 + 1] > 236 && d[p * 4 + 2] > 236;
+  const seen = new Uint8Array(w * h), stack: number[] = [];
+  for (let i = 0; i < w; i++) { stack.push(i, (h - 1) * w + i); }
+  for (let j = 0; j < h; j++) { stack.push(j * w, j * w + w - 1); }
+  let cleared = 0;
+  while (stack.length) {
+    const p = stack.pop()!;
+    if (seen[p] || !white(p)) continue;
+    seen[p] = 1; d[p * 4 + 3] = 0; cleared++;
+    const px = p % w, py = (p - px) / w;
+    if (px > 0) stack.push(p - 1); if (px < w - 1) stack.push(p + 1); if (py > 0) stack.push(p - w); if (py < h - 1) stack.push(p + w);
+  }
+  if (cleared < w * h * 0.05) return c; // no white page around it
+  // crop to what's left
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] > 16) { if (i < x0) x0 = i; if (i > x1) x1 = i; if (j < y0) y0 = j; if (j > y1) y1 = j; }
+  x.putImageData(data, 0, 0);
+  if (x1 < 0) return c;
+  const pad = 2, cw = Math.min(w, x1 - x0 + 1 + pad * 2), ch = Math.min(h, y1 - y0 + 1 + pad * 2);
+  const o = document.createElement("canvas"); o.width = cw; o.height = ch;
+  o.getContext("2d")!.drawImage(c, Math.max(0, x0 - pad), Math.max(0, y0 - pad), cw, ch, 0, 0, cw, ch);
+  return o;
 }
