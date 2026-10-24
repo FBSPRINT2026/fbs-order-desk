@@ -1,4 +1,5 @@
 "use client";
+import { threadByName } from "@/lib/embroidery";
 import { cleanPrintNotes, inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
@@ -404,7 +405,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     const n = typed ? num0(d.pms) : pms.filter((x) => x.charge).length;
     const fee = n * (+(wpl.pmsFee || 0));
     return (
-      <InkLine key={"ink" + d.id} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
+      <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
         summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
@@ -412,7 +413,8 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       </InkLine>
     );
   };
-  const inksSec = !!g.specialtyInk || !!g.specialtyInkSet;
+  // the poly / dyed ink charge is a screen printing thing: an embroidered-only group doesn't show it (Oct 23)
+  const inksSec = (!!g.specialtyInk || !!g.specialtyInkSet) && scrImps.length > 0;
   const hasFoot = inksSec || embImps.length > 0 || (finishingAt === "group" && finList.length > 0);
   // the group's money in one line under its prints (Oct 15, Nick: "move the total up")
   const priceLine = hidePrices ? null : (() => {
@@ -1040,13 +1042,13 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 const printNotes = (s: string | null | undefined) => cleanPrintNotes(shopNotes(s));
 
 /** A print's inks: a swatch chip each (PMS matches marked), then the PMS charge; the pencil opens "standard, no charge". */
-function InkLine({ inks, charged, summary, editable, children }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode }) {
+function InkLine({ inks, charged, summary, editable, children, thread }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode; /** an embroidered print: its threads (Madeira, Isacord) */ thread?: boolean }) {
   const [edit, setEdit] = useState(false);
   return (
     <div className="pr-scr pr-inkl">
-      <span className="pr-scr-l">Inks</span>
+      <span className="pr-scr-l">{thread ? "Threads" : "Inks"}</span>
       <span className="pr-scr-v">
-        {inks.length > 0 && <span className="ink-chips">{inks.map((k) => <span key={k.name} className={"ink-chip" + (charged(k.name) ? " pms" : "")} title={charged(k.name) ? "PMS match: charged" : undefined}><i style={{ background: colorHex(k.name) || "#d6d6d6" }} />{k.name}</span>)}</span>}
+        {inks.length > 0 && <span className="ink-chips">{inks.map((k) => { const t = thread ? threadByName(k.name) : null; return <span key={k.name} className={"ink-chip" + (charged(k.name) ? " pms" : "")} title={charged(k.name) ? "PMS match: charged" : t?.pms.length ? `PMS ${t.pms[0]}` : undefined}><i style={{ background: t?.hex || colorHex(k.name) || "#d6d6d6" }} />{k.name}</span>; })}</span>}
         {summary}
       </span>
       {editable && <button type="button" className={"pr-scr-ed" + (edit ? " on" : "")} aria-label={edit ? "Done with the PMS charges" : "Change the PMS charges"} title={edit ? "Done" : "PMS charges"} onClick={() => setEdit(!edit)}>
