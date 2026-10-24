@@ -4,6 +4,7 @@ import { brandHitFor, brandSizeFor } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
@@ -2918,7 +2919,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               const pickStyle = (ids: string[], gg: { style: string; brand: string; description: string; colors?: string[] }) => setStyle(ids, (x) => ({ ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : "" }));
               const removeLine = (i: number) => { setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ...ls[0], color: "" }])); setActive((a) => (a >= i && a > 0 ? a - 1 : a)); };
               return (
-                <div className="mk-f mk-gar"><span>Garments</span>
+                <div className="mk-f mk-gar"><span className="mk-gar-h"><span>Garments</span><span>Color</span></span>
                   {groups.map((gr) => {
                     const l0 = lines[gr.idx[0]], g = garmentFor(l0), ids = gr.idx.map((i) => lines[i].id);
                     const have = gr.idx.map((i) => lines[i].color).filter(Boolean);
@@ -3693,50 +3694,109 @@ function resolveInk(text: string, brand: Brand): { name: string; hex: string } |
 let inkNamesCache: string[] | null = null;
 const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
 
+/**
+ * The ink a logo color prints as, in ONE field (Oct 24, Nick: "I don't like how this double drop down arrow thing
+ * happens… you click it and then it drops down… then it goes to standard colors… rethink how we do that"): type to find
+ * (a stock ink, a brand ink, any Pantone by number: "241" → PMS 241 C) or open the list with the one ▾. Each ink shows
+ * its swatch. "Keep as uploaded" and "Remove" sit at the top of the list.
+ */
+type InkOpt = { name: string; hex: string; sub?: string; act?: "keep" | "none" | "typed" };
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
   const brand = useContext(BrandCtx);
-  const listId = useId();
-  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || STOCK_HEX[value.name] || PMS_HEX[value.name] || brand.groups.some((g) => g.colors.some((b) => b.ink === value.name)));
-  const [customMode, setCustom] = useState(false);
-  const [text, setText] = useState(value?.name || "");
-  // a reset from outside (↺, another pick) shows in the box
-  useEffect(() => { if (value?.name && value.name !== text && resolveInk(text, brand)?.name !== value.name) setText(value.name); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [value?.name]);
-  // any PMS from the full chart (or a typed one) shows as its name + color instead of the short list
-  const custom = customMode || (!!value && !known);
-  if (custom) {
-    // Oct 20, Nick: "how could I key in a customer's Pantone… it needs to be Pantone 241 and you're picking up 375"
-    const hit = resolveInk(text, brand);
-    return (
-      <span className="ink-type">
-        <span className="sw" style={{ background: hit?.hex || value?.hex || "#888888" }} />
-        <input type="text" list={listId} aria-label="PMS number or ink name" placeholder="Type a PMS # or ink: 241, Royal…" autoFocus={customMode} value={text}
-          onChange={(e) => { const t = e.target.value; setText(t); if (!t.trim()) return; onChange(resolveInk(t, brand) || { name: t.trim(), hex: value?.hex || "#888888" }); }} />
-        <datalist id={listId}>
-          {brand.groups.flatMap((g) => g.colors).map((b) => <option key={"b:" + b.ink} value={b.ink}>{b.name !== b.ink ? b.name : undefined}</option>)}
-          {allInkNames().map((k) => <option key={k} value={k} />)}
-        </datalist>
-        {!hit && text.trim() && <input type="color" aria-label="Screen color" title="Not on the Pantone chart: pick the color to show" value={value?.hex || "#888888"} onChange={(e) => onChange({ name: value?.name || text.trim() || "Custom", hex: e.target.value })} style={{ width: 30, padding: 0, height: 28 }} />}
-        <button type="button" className="btn icon ghost" title="Back to the list" onClick={() => { setCustom(false); setText(""); onChange(null); }}>▾</button>
-        {text.trim() && <span className={"ink-type-note" + (hit ? "" : " warn")}>{hit ? (hit.name.toLowerCase() !== text.trim().toLowerCase() ? `= ${hit.name}` : "") : "Not on the chart: pick its color"}</span>}
-      </span>
-    );
-  }
+  const box = useRef<HTMLSpanElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const inp = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState<string | null>(null); // what's being typed (null = show the picked ink)
+  const [active, setActive] = useState(0);
+  const [at, setAt] = useState<{ left: number; width: number; top?: number; bottom?: number; max: number } | null>(null);
+  const shown = value?.name === "none" ? "Remove (shirt shows through)" : value?.name || "";
+  const q = (text ?? "").trim().toLowerCase().replace(/^pantone\s*/, "pms ").replace(/\s+/g, " ");
+  const hit = text && text.trim() ? resolveInk(text, brand) : null;
+  const groups = useMemo(() => {
+    const has = (n: string, sub = "") => !q || n.toLowerCase().includes(q) || sub.toLowerCase().includes(q) || n.toLowerCase().replace(/^pms /, "").startsWith(q.replace(/^pms ?/, ""));
+    const out: { label: string; opts: InkOpt[] }[] = [];
+    const seen = new Set<string>();
+    const add = (label: string, opts: InkOpt[]) => { const o = opts.filter((x) => !seen.has(x.name) && has(x.name, x.sub)); o.forEach((x) => seen.add(x.name)); if (o.length) out.push({ label, opts: o }); };
+    if (hit) { out.push({ label: "", opts: [hit] }); seen.add(hit.name); }
+    if (!q) out.push({ label: "", opts: [{ name: "Keep as uploaded", hex: "", act: "keep" }, { name: "Remove (shirt shows through)", hex: "", act: "none" }] });
+    for (const g of brand.groups) if (g.colors.length) add(g.label, g.colors.map((b) => ({ name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888", sub: b.name !== b.ink ? b.name : undefined })));
+    add("Our stock inks (Wilflex RFU)", Object.keys(WILFLEX_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
+    add("Our other stock inks (Ink Room)", Object.keys(STOCK_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
+    add("Common PMS", Object.keys(PMS_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
+    if (q) {
+      const chart = Object.keys(PMS_COATED).filter((k) => !seen.has(k) && has(k)).slice(0, 40).map((k) => ({ name: k, hex: PMS_COATED[k] }));
+      if (chart.length) { out.push({ label: "Pantone chart", opts: chart }); chart.forEach((x) => seen.add(x.name)); }
+      if (!hit && text!.trim()) out.push({ label: "", opts: [{ name: text!.trim(), hex: value?.hex || "#888888", act: "typed" }] });
+    }
+    return out;
+  }, [q, brand, hit, text, value?.hex]);
+  const flat = groups.flatMap((g) => g.opts);
+  const place = () => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    const below = window.innerHeight - r.bottom - 8, above = r.top - 8, up = below < 240 && above > below;
+    setAt({ left: r.left, width: Math.max(r.width, 260), max: Math.min(340, up ? above : below), ...(up ? { bottom: window.innerHeight - r.top + 2 } : { top: r.bottom + 2 }) });
+  };
+  const show = () => { place(); setOpen(true); const i = flat.findIndex((o) => o.name === value?.name); setActive(Math.max(0, i)); };
+  const close = () => { setOpen(false); setText(null); };
+  const choose = (o: InkOpt) => {
+    if (o.act === "keep") onChange(null);
+    else if (o.act === "none") onChange({ name: "none", hex: "" });
+    else onChange({ name: o.name, hex: o.hex });
+    close(); inp.current?.blur();
+  };
+  // the list follows the field; a scroll elsewhere closes it
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: Event) => { if (menu.current?.contains(e.target as Node)) return; if (e.type === "scroll") close(); else if (!box.current?.contains(e.target as Node)) close(); };
+    window.addEventListener("scroll", off, true); window.addEventListener("resize", close); document.addEventListener("pointerdown", off);
+    return () => { window.removeEventListener("scroll", off, true); window.removeEventListener("resize", close); document.removeEventListener("pointerdown", off); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // not on any chart (typed as the customer wrote it): pick the color to show
+  const offChart = !!value && value.name !== "none" && !!value.name && !resolveInk(value.name, brand);
+  let n = -1;
   return (
-    <select aria-label="Ink color" value={value?.name || ""} style={{ flex: 1, minWidth: 0 }}
-      onChange={(e) => {
-        const n = e.target.value;
-        if (n === "__custom") { setCustom(true); setText(""); return; }
-        if (!n) return onChange(null);
-        onChange({ name: n, hex: n === "none" ? "" : colorHex(n) });
-      }}>
-      <option value="">Keep as uploaded</option>
-      <option value="__custom">Type a PMS # or any ink…</option>
-      <option value="none">Remove (shirt shows through)</option>
-      {brand.groups.filter((g) => g.colors.length).map((g) => <optgroup key={"g:" + g.key} label={g.label}>{g.colors.map((b) => <option key={"b:" + g.key + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>)}
-      <optgroup label="Our stock inks (Wilflex RFU)">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
-      {Object.keys(STOCK_HEX).length > 0 && <optgroup label="Our other stock inks (Ink Room)">{Object.keys(STOCK_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>}
-      <optgroup label="Common PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
-    </select>
+    <span className="ink-dd" ref={box}>
+      <input ref={inp} type="text" aria-label="Ink color" role="combobox" aria-expanded={open} autoComplete="off" spellCheck={false}
+        placeholder="Keep as uploaded" value={text ?? shown}
+        onFocus={(e) => { e.currentTarget.select(); show(); }}
+        onClick={() => { if (!open) show(); }}
+        onChange={(e) => { setText(e.target.value); setActive(0); if (!open) show(); }}
+        onBlur={() => { if (hit && text) onChange(hit); setTimeout(close, 120); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") { e.preventDefault(); if (!open) show(); else setActive((a) => Math.min(flat.length - 1, a + 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+          else if (e.key === "Enter") { e.preventDefault(); if (open && flat[active]) choose(flat[active]); }
+          else if (e.key === "Escape") { close(); e.currentTarget.blur(); }
+        }} />
+      <button type="button" className="ink-dd-car" tabIndex={-1} aria-label="Show the inks" onMouseDown={(e) => { e.preventDefault(); if (open) close(); else inp.current?.focus(); }}>
+        <svg viewBox="0 0 12 12" aria-hidden><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
+      </button>
+      {offChart && <input type="color" className="ink-dd-hex" aria-label="Screen color" title="Not on the Pantone chart: pick the color to show" value={value!.hex || "#888888"} onChange={(e) => onChange({ name: value!.name, hex: e.target.value })} />}
+      {open && at && typeof document !== "undefined" && createPortal(
+        <div ref={menu} className="ink-menu" role="listbox" style={{ left: at.left, width: at.width, top: at.top, bottom: at.bottom, maxHeight: at.max }}>
+          {groups.map((g, gi) => (
+            <div key={gi}>
+              {g.label && <div className="ink-menu-g">{g.label}</div>}
+              {g.opts.map((o) => {
+                const i = ++n, cur = o.act === "keep" ? !value : o.act === "none" ? value?.name === "none" : value?.name === o.name;
+                return (
+                  <div key={(o.act || "") + o.name} role="option" aria-selected={cur} className={"sm-item" + (i === active ? " on" : "") + (cur ? " cur" : "")}
+                    ref={i === active ? (el) => { el?.scrollIntoView({ block: "nearest" }); } : undefined}
+                    onMouseDown={(e) => { e.preventDefault(); choose(o); }} onMouseEnter={() => setActive(i)}>
+                    <i className={o.act === "keep" || o.act === "none" ? "x " + o.act : ""} style={o.hex ? { background: o.hex } : undefined} />
+                    <b data-notranslate={o.act ? undefined : true}>{o.act === "typed" ? `Use “${o.name}” (not on the chart)` : o.name}</b>
+                    {o.sub ? <span data-notranslate>{o.sub}</span> : <span />}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          {!flat.length && <div className="ink-menu-g">No ink by that name</div>}
+        </div>, document.body)}
+    </span>
   );
 }
 

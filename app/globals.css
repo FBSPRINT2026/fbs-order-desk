@@ -12977,3 +12977,29 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pp-modal{align-items:center;z-index:3000}
 .pp-modal .field input{width:100%;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);box-sizing:border-box}
 .pp-modal .field input:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
+
+/* Mockup Creator: a Color heading over the garments' colors (Oct 24, Nick: "mockup name, garment, then color") */
+.mk-gar-h{display:grid;grid-template-columns:220px minmax(0,1fr) 32px;gap:12px}
+@media (max-width:700px){.mk-gar-h>span:nth-child(2){display:none}}
+
+/* logo colors: ONE ink field (Oct 24, Nick: "this double drop down arrow thing… rethink how we do that"): type to find
+   or open the list with the one caret; each ink shows its swatch */
+.ink-dd{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:6px}
+.ink-dd>input[type=text]{flex:1;width:100%;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 30px 0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);box-sizing:border-box;text-overflow:ellipsis}
+.ink-dd>input[type=text]:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
+.ink-dd>input[type=text]::placeholder{color:var(--ink)}
+.ink-dd>input[type=text]:focus::placeholder{color:var(--ink-3)}
+.ink-dd-car{all:unset;position:absolute;right:5px;top:50%;transform:translateY(-50%);width:22px;height:22px;display:grid;place-items:center;color:var(--ink-3);cursor:pointer;border-radius:4px}
+.ink-dd:has(.ink-dd-hex) .ink-dd-car{right:43px}
+.ink-dd-car:hover{color:var(--ink);background:var(--surface-2)}
+.ink-dd-car svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ink-dd-hex{flex:none;width:36px;height:36px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--surface);box-sizing:border-box;cursor:pointer}
+.ink-menu{position:fixed;z-index:3100;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:4px;box-sizing:border-box}
+.ink-menu-g{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:8px 8px 4px}
+.ink-menu .sm-item{grid-template-columns:16px auto minmax(0,1fr);align-items:center;font-size:13.5px}
+.ink-menu .sm-item i{width:16px;height:16px;border-radius:4px;border:1px solid var(--line);box-sizing:border-box}
+.ink-menu .sm-item i.x{background:repeating-linear-gradient(45deg,var(--surface-2) 0 3px,var(--surface) 3px 6px)}
+.ink-menu .sm-item i.none{background:linear-gradient(135deg,transparent 45%,var(--ink-3) 45% 55%,transparent 55%)}
+.ink-menu .sm-item b{font-weight:500;white-space:nowrap}
+.ink-menu .sm-item.cur b{font-weight:700}
+.ink-menu .sm-item span{font-size:12px;color:var(--ink-3)}
