@@ -287,8 +287,9 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
       const st = per[0]?.st ?? 60, br = A - st, co = coMax, deB = B - A;
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
-      const ea = widest(".gl .a-ea input", 28, 54, 120);
-      const to = Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
+      // no prices shown (retail builder): no room kept for them, so the qty sits at the right end (Oct 24, Nick)
+      const ea = hidePrices ? 0 : widest(".gl .a-ea input", 28, 54, 120);
+      const to = hidePrices ? 0 : Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
       // a size box is never narrower than its number (+6 for the border and room to spare; +8 for a phone's tap button,
       // which has 2px of padding), its size name, or its 2XL+ charge underneath (which may use the gap)
       const num = Math.max(widest(".gl .a-sz input.sz", 6, 0, 80), widest(".gl .a-sz .sz-tap", 8, 0, 80));

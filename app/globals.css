@@ -13716,3 +13716,5 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdc-back{margin:0 0 8px}
 .pdc-back .linkbtn{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;padding:0;border:0;background:none;cursor:pointer}
 .pdc-back .linkbtn:hover{text-decoration:underline}
+/* no prices (retail builder): the qty sits at the right end of the garment line (Oct 24, Nick) */
+.line.np .gl .a-qt{justify-self:end;text-align:right}
