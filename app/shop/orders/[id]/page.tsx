@@ -868,7 +868,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
     // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)
     const gone = await reallyDel(false);
-    if (!gone) { setDelAsk({ ...delAsk, busy: false, error: "Couldn't delete the order. Nothing else was changed in ClickUp." }); return; }
+    if (!gone) { setDelAsk({ ...delAsk, busy: false, qbVoid: false, error: `Couldn't delete the order${delErr.current ? `: ${delErr.current}` : "."}${delAsk.qbVoid ? " (It was already voided in QuickBooks.)" : ""} Nothing else was changed in ClickUp.` }); return; }
     if (delAsk.cu && delAsk.cuBack) {
       const r = await reopenClickUpJob(delAsk.cu.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
       const say2 = !r.ok ? `Order deleted, but the ClickUp job couldn't be put back on New: ${r.error}` : "note" in r && r.note ? `Order deleted and the job is back on New. ${r.note}` : "";
@@ -900,6 +900,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDrafts({ logos: 0, mockups: 0 });
     say("The art is in the customer's library now.");
   }
+  const delErr = useRef("");
   async function reallyDel(go = true): Promise<boolean> {
     if (!o) return false;
     if (timer.current) clearTimeout(timer.current);
@@ -907,7 +908,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const paths = ownedFiles(o.id, [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)]);
     if (paths.length) await sb.storage.from("proofs").remove(paths);
     const { error } = await sb.from("orders").delete().eq("id", o.id);
-    if (error) { say("Couldn't delete: " + error.message); return false; }
+    if (error) { delErr.current = error.message; say("Couldn't delete: " + error.message); return false; }
     if (go) leave();
     return true;
   }
