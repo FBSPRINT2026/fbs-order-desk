@@ -94,13 +94,15 @@ export default function CustomersPage() {
         <table className="tbl">
           <thead><tr><th>Customer</th><th>Contact</th><th>Follow-up</th><th className="r">Orders</th><th className="r">Lifetime</th><th className="r">Owes</th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : list.length ? [...list.filter((c) => c.is_test), ...list.filter((c) => !c.is_test)].map((c, i, all) => {
+            {loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : list.length ? list.map((c, i, all) => {
               const s = stats[c.id] || { n: 0, spent: 0, owed: 0 };
-              // test companies first under their own heading, then the real customers
-              const head = i === 0 && c.is_test ? "Test companies" : !c.is_test && (i === 0 || all[i - 1].is_test) && all.some((x) => x.is_test) ? "Customers" : "";
+              // starred customers in their own section on top, then everyone else under "All customers" (Oct 24, Nick:
+              // "it's a favorites and then put the favorites underneath… and then the other customers go underneath that")
+              const fav = isFav(c), anyFav = isFav(all[0]);
+              const head = !anyFav ? "" : i === 0 ? "fav" : !fav && isFav(all[i - 1]) ? "all" : "";
               return [
-                head ? <tr key={"h" + c.id} className="cu-grp"><td colSpan={6}>{head}{head === "Test companies" ? <span className="faint"> · fake accounts for trying things out; their jobs can be cleared</span> : null}</td></tr> : null,
-                <tr key={c.id} tabIndex={0} className={c.is_test ? "cu-test" : undefined} onClick={() => router.push(`/shop/customers/${c.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/customers/${c.id}`)}>
+                head ? <tr key={"h" + c.id} className={"cu-grp" + (head === "fav" ? " fav" : " rest")}><td colSpan={6}>{head === "fav" ? <><span className="cu-grp-star" aria-hidden>★</span>Favorites</> : "All customers"}</td></tr> : null,
+                <tr key={c.id} tabIndex={0} className={fav ? "cu-favrow" : undefined} onClick={() => router.push(`/shop/customers/${c.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/customers/${c.id}`)}>
                   <td className="cu-td"><div><button type="button" className={"cu-star sm" + (isFav(c) ? " on" : "")} onClick={(e) => { e.stopPropagation(); void star(c); }} aria-pressed={isFav(c)} aria-label={isFav(c) ? "Unstar" : "Star"} title={isFav(c) ? "Starred: at the top of the list" : "Star: keep at the top of the list"}>{isFav(c) ? "★" : "☆"}</button><b>{c.company || c.name || "Unnamed"}</b>{c.is_test && <span className="ta-tag">Test</span>}{c.price_type === "wholesale" && <span className="tag i" style={{ marginLeft: 6 }}>Wholesale</span>}</div><div className="sub">{c.company ? c.name : ""}{(c.tags || []).length ? <>{c.company && c.name ? " · " : ""}{(c.tags || []).join(", ")}</> : null}</div></td>
                   <td><div className="cu-em" title={c.email || undefined}>{c.email}</div><div className="sub">{fmtPhone(c.phone)}</div></td>
                   <td>{c.next_follow_up ? <span className={(daysUntil(c.next_follow_up) ?? 1) <= 0 ? "due-late" : ""}>{fmtDate(c.next_follow_up)}</span> : <span className="faint">—</span>}<div className="sub">{c.last_contact_at ? `Last ${fmtStamp(c.last_contact_at).split(",")[0]}` : ""}</div></td>
