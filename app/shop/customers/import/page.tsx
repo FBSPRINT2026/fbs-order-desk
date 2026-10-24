@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import PrintavoSync from "@/components/PrintavoSync";
+import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { PrintavoBackup, PrintavoMissedFiles } from "@/components/PrintavoKeep";
 import RestorePoint from "@/components/RestorePoint";
 import SearchInput from "@/components/SearchInput";
@@ -88,9 +89,8 @@ export default function ImportPage() {
   return (
     <>
       <Link className="back" href="/shop/customers">← Customers</Link>
-      <div className="page-head" style={{ marginTop: 8 }}>
-        <div><div className="eyebrow">Printavo</div><h1>Import from Printavo</h1></div>
-      </div>
+      <SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" />
+      <SettingsTabs />
       <p className="faint" style={{ maxWidth: 720, marginTop: -6 }}>
         Brings a customer over with every old Printavo invoice and quote: line items, sizes, prices, imprints, mockups, fees, payments, notes, files, tasks and messages.
         Old orders are kept as <b>archived orders</b>: read-only, shown the way Printavo showed them, and separate from new orders. Nothing in Printavo is changed.

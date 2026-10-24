@@ -12801,3 +12801,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .emb-sew{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px}
 .emb-sew img{width:56px;height:56px;object-fit:cover;border-radius:6px}
 .emb-sew>span{display:flex;flex-direction:column;font-size:12.5px}
+/* Settings tabs (components/SettingsTabs.tsx, Oct 24) */
+.set-nav .aa-tab{text-decoration:none}
+.set-sub{margin:-6px 0 14px}
+.set-sub .chip{text-decoration:none}

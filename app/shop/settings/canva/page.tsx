@@ -1,5 +1,5 @@
 import { getViewer } from "@/lib/supabase/server";
-import SettingsTabs from "@/components/SettingsTabs";
+import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import CanvaSettings from "@/components/CanvaSettings";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function CanvaPage() {
   const v = await getViewer();
   return (
     <>
-      <div className="page-head"><div><div className="eyebrow">Settings</div><h1>Canva</h1></div></div>
+      <SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" />
       <SettingsTabs />
       {v.role !== "owner" ? <div className="empty">Only the owner can open the Canva settings.</div> : <CanvaSettings />}
     </>

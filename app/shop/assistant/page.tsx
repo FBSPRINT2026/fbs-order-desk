@@ -119,7 +119,7 @@ export default function AssistantPage() {
       <div className="page-head">
         <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</div><h1>Assistant</h1></div>
         <div className="row">
-          <Link href="/shop/settings#assistant" className={"as-ai" + (ai.ready ? " on" : "")} title={`${ai.reason || (ai.ready ? "AI is on" : "")} · Click to change AI settings`}>{ai.ready ? "AI on" : "AI off"} ⚙</Link>
+          <Link href="/shop/settings/assistant" className={"as-ai" + (ai.ready ? " on" : "")} title={`${ai.reason || (ai.ready ? "AI is on" : "")} · Click to change AI settings`}>{ai.ready ? "AI on" : "AI off"} ⚙</Link>
           <button type="button" className="btn" onClick={() => setMail(mail ? null : { from: "", subject: "", text: "" })}>Paste an email</button>
           <button type="button" className="btn" onClick={() => { setLoading(true); load(); }}>Refresh</button>
         </div>
@@ -187,7 +187,7 @@ export default function AssistantPage() {
 
       <p className="faint" style={{ fontSize: 12, marginTop: 22 }}>
         Rules: quotes after {settings.assistant.quoteFollowUpDays} days, proofs after {settings.assistant.proofFollowUpDays} days, replies after {settings.assistant.replyWithinHours} hours,
-        jobs due within {settings.assistant.atRiskDays} days, customers idle {settings.assistant.reorderAfterDays} days. Change these in <Link href="/shop/settings#assistant">Pricing &amp; shop → Assistant &amp; AI</Link>.
+        jobs due within {settings.assistant.atRiskDays} days, customers idle {settings.assistant.reorderAfterDays} days. Change these in <Link href="/shop/settings/assistant">Settings → Assistant &amp; AI</Link>.
       </p>
     </>
   );

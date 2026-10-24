@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import SettingsTabs from "@/components/SettingsTabs";
+import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { createClient } from "@/lib/supabase/client";
 import { accessOf, PERMS, permsFor, roleDefaults, ROLES, type Perms, type Role } from "@/lib/roles";
 import { useRole } from "@/components/RoleContext";
@@ -43,7 +43,7 @@ export default function AccessPage() {
   }
   return (
     <>
-      <div className="page-head"><div><div className="eyebrow">Settings</div><h1>User Access</h1></div></div>
+      <SettingsHead title="People" note="Who signs in to the shop side, and who owns which customers" />
       <SettingsTabs />
       <p className="faint" style={{ margin: "0 0 14px", maxWidth: 820 }}>What each person on the shop staff can see and do. Each person starts from their role (Owner and Admin: everything; Production, Receiving, Shipping: the work, no money); switch single things on or off for that person and Save. Owners always have everything. To see it the way they do, use View as on the Sign out line.</p>
       {!people ? <div className="empty">Loading…</div> : (
