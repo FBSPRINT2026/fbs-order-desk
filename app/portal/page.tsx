@@ -251,6 +251,18 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     pvCount: owedList.filter((o) => o.archived).length, portalCount: owedList.filter((o) => !o.archived).length,
     pastDue: owedList.filter((o) => { const d = o.archived ? o.due_date || o.created_at?.slice(0, 10) : o.pay_due; return !!d && d < todayIso; }).reduce((a, o) => a + o.balance, 0),
     last: lastPay ? `${short(lastPay.paid_on || lastPay.created_at)} · ${money(+lastPay.amount)}` : "",
+    // a little statement: what's owed by how late it is (the same buckets as the printable statement)
+    aging: (() => {
+      const age = (o: (typeof owedList)[number]) => { const d = o.archived ? o.due_date || o.created_at?.slice(0, 10) : o.pay_due; return d ? Math.floor((Date.parse(todayIso) - Date.parse(d)) / 86400000) : null; };
+      const b = [
+        { k: "Current", f: (n: number | null) => n === null || n < 0 },
+        { k: "1–30 days", f: (n: number | null) => n !== null && n >= 0 && n <= 30 },
+        { k: "31–60", f: (n: number | null) => n !== null && n > 30 && n <= 60 },
+        { k: "61–90", f: (n: number | null) => n !== null && n > 60 && n <= 90 },
+        { k: "Over 90", f: (n: number | null) => n !== null && n > 90 },
+      ];
+      return b.map((x) => ({ k: x.k, amt: owedList.filter((o) => x.f(age(o))).reduce((a, o) => a + o.balance, 0), late: x.k !== "Current" }));
+    })(),
     terms: `${PAY_TERMS[acct?.payment_terms || "receipt"] || "Due on receipt"}${acct?.tax_exempt ? " · tax exempt" : ""}`,
     href: link("/portal?area=payments"), statementHref: link("/portal/statement"),
   };

@@ -12,12 +12,18 @@ export type DashThread = { key: string; label: string; title: string; from: stri
 export type DashNeed = { key: string; kind: string; title: string; text: string; pic: string; href: string; cta: string };
 export type DashPast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean };
 
-export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string };
+export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
+  /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
 export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
+  // the dashboard (Oct 24, Nick, first look as a customer: "we don't want payments to be the first thing they see… where it
+  // says message center, make that payments… a nice little customer statement looking… where you can pay now… past due
+  // in 30 days… then where you have payments right now, I want that to be your jobs… get rid of the needs you section
+  // and the customer supplied goods… your artwork underneath it"). Messages stay a tab.
+  void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
 
@@ -26,56 +32,24 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
           <div className="pdx-h"><h2>✨ Your FBS AI Assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
           {assistant}
         </section>
-        <section className="pdx-card pdx-msgs">
-          <div className="pdx-h"><h2>Message center</h2>{newMsgs > 0 ? <span className="pdx-badge">{newMsgs} new</span> : <Link href={msgHref} className="pd-link">Open</Link>}</div>
-          {threads.length ? threads.map((t) => (
-            <Link key={t.key} href={t.href} className={"pdx-th" + (t.isNew ? " new" : "")}>
-              <span className={"pdx-ti" + (t.label === "FBS" ? " g" : "")}>{t.label}</span>
-              <span className="pdx-tt"><b>{t.title}</b><small>{t.from}: {t.text}</small></span>
-              <span className="pdx-tw">{t.when}</span>
-            </Link>
-          )) : <div className="pdx-none">No messages yet.</div>}
-          <div className="pdx-note">Art, changes, questions about a job. <b>We reply within one business day.</b> Where your order is shows on its timeline below.</div>
-          <div className="pdx-mc"><Link className="btn primary" href={msgHref}>New message</Link><Link className="btn" href={msgHref}>Open message center</Link></div>
+        {/* payments: a small statement, with Pay now */}
+        <section className="pdx-card pdx-stmt">
+          <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
+          <div className="pdx-stmt-top">
+            <div className={"pdx-stmt-due" + (pay.due > 0.004 ? (pay.pastDue > 0.004 ? " late" : " owe") : " ok")}>
+              <small>Balance due</small><b>{money(pay.due)}</b>
+              <span>{pay.due <= 0.004 ? "All paid up. Thank you!" : pay.pastDue > 0.004 ? `${money(pay.pastDue)} is past due` : "Nothing past due"}</span>
+            </div>
+            <div className="pdx-stmt-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
+          </div>
+          {pay.due > 0.004 && pay.aging && <div className="pdx-aging">{pay.aging.map((a) => (
+            <div key={a.k} className={a.late && a.amt > 0.004 ? "late" : a.amt > 0.004 ? "has" : ""}><span>{a.k}</span><b>{money(a.amt)}</b></div>
+          ))}</div>}
+          <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
       </div>
 
-      {/* payments: their own box (Oct 15, Nick) */}
-      <section className="pdx-card pdx-pay">
-        <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
-        <div className="pdx-pay-row">
-          <div className={"pdx-pay-big" + (pay.due > 0.004 ? " owe" : " ok")}><small>Balance due</small><b>{money(pay.due)}</b>{pay.due <= 0.004 && <span>All paid up</span>}</div>
-          {pay.due > 0.004 && <div className="pdx-pay-parts">
-            {pay.portalDue > 0.004 && <div><span>New portal orders</span><b>{money(pay.portalDue)}</b><small>{pay.portalCount} order{pay.portalCount === 1 ? "" : "s"}</small></div>}
-            {pay.pvDue > 0.004 && <div><span>Printavo orders</span><b>{money(pay.pvDue)}</b><small>{pay.pvCount} invoice{pay.pvCount === 1 ? "" : "s"}</small></div>}
-            {pay.pastDue > 0.004 && <div className="late"><span>Past due</span><b>{money(pay.pastDue)}</b><small>included above</small></div>}
-          </div>}
-          <div className="pdx-pay-meta">
-            <div><span>Payment terms</span><b>{pay.terms}</b></div>
-            {pay.last && <div><span>Last payment</span><b>{pay.last}</b></div>}
-          </div>
-          <div className="pdx-pay-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
-        </div>
-      </section>
-
-      {needs.length > 0 && (
-        <section className="pdx-card">
-          <div className="pdx-h"><h2>Needs you</h2><span className="faint">{needs.length} thing{needs.length === 1 ? "" : "s"}</span></div>
-          <div className="pdx-needs">
-            {needs.map((n) => (
-              <div className="pdx-need" key={n.key}>
-                {n.pic ? <img src={n.pic} alt="" /> : <span className="pdx-need-ic" aria-hidden>{n.kind === "quote" || n.kind === "pay" ? "$" : n.kind === "receive" ? "📦" : "✎"}</span>}
-                <div><div className="k">{n.title}</div><div className="t">{n.text}</div></div>
-                <Link className="btn primary" href={n.href}>{n.cta}</Link>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       <DashJobs jobs={jobs} pastJobs={pastJobs} canAct={canAct} ordersHref={ordersHref} />
-
-      {goods}
 
       <div className="pdx-bottom">
         <section className="pdx-card">
