@@ -13638,3 +13638,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .portal .aa-otabs .chips>.chip.on{font-weight:700}
 /* the portal has no code on it: every number in the body font (Oct 24, Nick) */
 .portal{--mono:var(--body)}
+/* the star on a job picture stays on the picture's corner (the wrapper added for the 9-limit message) */
+.pjr-picw .ostar-w{position:static;display:contents}
+.pjr-picw .ostar-err{top:60px;left:0}
