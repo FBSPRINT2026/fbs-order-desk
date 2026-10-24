@@ -18,6 +18,6 @@ export default function MockupOrderButton({ id, canAct, className = "btn sm prim
       onClick={() => start(async () => {
         const r = await orderFromMockup(id);
         if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else setMsg(r.error || "Couldn't start the order.");
-      })}>{pending ? "Starting…" : "Order this"}</button>
+      })}>{pending ? "Starting…" : "Order"}</button>
   );
 }

@@ -271,3 +271,25 @@ export async function starMyMockup(mockupId: string, starred: boolean): Promise<
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Archive / bring back one of their mockups (Oct 24, Nick: "you need to be able to archive… it's not trash, you just archive
+ * it"): the whole set (every shirt color with its number) moves to Archive. Staff can do it for any customer.
+ */
+export async function archiveMyMockup(mockupId: string, on: boolean): Promise<Result> {
+  try {
+    const { supabase, user, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    // row security: a customer only sees their own mockups
+    const { data: mk } = await supabase.from("mockups").select("id, customer_id, number").eq("id", mockupId).maybeSingle();
+    if (!mk) return { ok: false, error: "We couldn't find that mockup." };
+    const admin = createAdminClient();
+    let q = admin.from("mockups").update({ shelved_at: on ? new Date().toISOString() : null }).eq("customer_id", mk.customer_id);
+    q = mk.number ? q.eq("number", mk.number).is("archived_at", null) : q.eq("id", mk.id);
+    const { error } = await q;
+    if (error) return { ok: false, error: error.message };
+    void isStaff;
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

@@ -1,4 +1,5 @@
 "use client";
+import { archiveMyMockup } from "@/app/portal/actions";
 import { oneOfEach } from "@/lib/mockupList";
 import { logoShirtsFrom } from "@/lib/logoShirts";
 import BackLink from "@/components/BackLink";
@@ -113,10 +114,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         const urls = await previewUrls(sb, fixed);
         setDesignUrls((m) => ({ ...m, ...urls }));
       }).catch(() => null);
-      const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null }[]);
+      const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
-      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
+      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
       setMessages(((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -316,6 +317,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         logoShirts={logoShirts} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
+        onArchiveMockup={archiveMyMockup}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onUploadLogos={async (files, star, progress) => {
           const sb = createClient();

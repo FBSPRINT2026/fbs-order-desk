@@ -273,6 +273,24 @@ export async function retireMyMockups(set: string, keep: string[]) {
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
 }
 
+type MockRow = { file_path: string; title: string; snapshot: Record<string, unknown> | null; design_ids?: string[] | null };
+/**
+ * A mockup saved before mockups kept their setup: the garments from the pictures' names ("Name — Next Level 6210 Black")
+ * matched to the catalog, and its logo on the front.
+ */
+async function fromPictures(admin: ReturnType<typeof createAdminClient>, name: string, rows: MockRow[]): Promise<Group> {
+  const { data: cat } = await admin.from("garments").select("style, brand, description");
+  const gs = ((cat || []) as { style: string; brand: string; description: string }[]).map((x) => ({ ...x, key: `${x.brand} ${x.style}`.toLowerCase() })).sort((a, b) => b.key.length - a.key.length);
+  const lines = rows.map((r) => {
+    const tail = (r.title.split(" — ")[1] || "").trim(), lc = tail.toLowerCase();
+    const hit = gs.find((x) => lc.startsWith(x.key + " ") || lc === x.key);
+    return hit ? { ...newGLine(), style: hit.style, brand: hit.brand, garment: hit.description, color: tail.slice(hit.key.length).trim() } : null;
+  }).filter(Boolean) as ReturnType<typeof newGLine>[];
+  const design = rows.flatMap((r) => r.design_ids || [])[0];
+  const g = newGroup();
+  return { ...g, name, lines: lines.length ? lines : g.lines, imprints: [{ ...g.imprints[0], ...(design ? { design_id: design } : {}) }] };
+}
+
 /**
  * "Order this" on one of their mockups (Oct 24, Nick: "if they place an order, it starts an order with that already filled
  * in"): a new order request with the mockup's garments and colors, its prints (logo, place, size, inks) and the mockup
@@ -285,9 +303,9 @@ export async function orderFromMockup(mockupId: string): Promise<Result> {
     const { data: mk } = await supabase.from("mockups").select("id, customer_id, number, title, snapshot").eq("id", mockupId).maybeSingle();
     if (!mk) return { ok: false, error: "We couldn't find that mockup." };
     const { data: rows } = mk.number
-      ? await supabase.from("mockups").select("file_path, title, snapshot, created_at").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).order("created_at")
-      : await supabase.from("mockups").select("file_path, title, snapshot, created_at").eq("id", mk.id);
-    const all = (rows || []) as { file_path: string; title: string; snapshot: Record<string, unknown> | null }[];
+      ? await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).order("created_at")
+      : await supabase.from("mockups").select("file_path, title, snapshot, created_at, design_ids").eq("id", mk.id);
+    const all = (rows || []) as MockRow[];
     type Snap = { name?: string; lines?: { style: string; brand: string; color: string; garment: string }[]; imprints?: Group["imprints"]; offsets?: Record<string, { dx: number; dy: number }>; mockupSize?: string | null };
     const snap = (all.find((r) => (r.snapshot as Snap | null)?.lines?.length)?.snapshot || mk.snapshot) as Snap | null;
     const name = snap?.name || String(mk.title || "").split(" — ")[0] || "Mockup";
@@ -295,7 +313,7 @@ export async function orderFromMockup(mockupId: string): Promise<Result> {
     const g: Group = snap?.lines?.length
       ? { id: uid(), name, lines: snap.lines.map((l) => ({ ...newGLine(), style: l.style || "", brand: l.brand || "", garment: l.garment || "", color: l.color || "" })),
           imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
-      : { ...newGroup(), name };
+      : await fromPictures(admin, name, all);
     g.customerMockups = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
     const { data, error } = await admin.from("orders").insert({
       customer_id: mk.customer_id, status: "request", type: "quote", source: "portal",

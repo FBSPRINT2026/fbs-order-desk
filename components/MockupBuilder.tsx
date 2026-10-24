@@ -18,6 +18,7 @@ import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
+import MockupOrderButton from "@/components/MockupOrderButton";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
@@ -343,6 +344,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const saveRef = useRef<(force?: boolean) => void>(() => {});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
+  /** the customer's mockup just saved (its number and a picture's id): Order it from here (Oct 24, Nick) */
+  const [savedMock, setSavedMock] = useState<{ id: string; num: number } | null>(null);
   const refreshed = useRef(new Set<number>());
   // Export PDF: art only, or with the company, description and print details (the choice is remembered)
   const [pdfOpen, setPdfOpen] = useState(false), [pdfBusy, setPdfBusy] = useState(false), [pdfDesc, setPdfDesc] = useState("");
@@ -2430,6 +2433,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }
         // saved again: the earlier pictures of this mockup step aside (it keeps its number)
         if (set && ids.length) await retireMyMockups(set, ids);
+        if (set && ids[0]) setSavedMock({ id: ids[0], num });
         setSaved(out);
         setMsg(`Saved${num ? ` as M-${num}` : ""}: ${out.length} mockup${out.length > 1 ? "s" : ""} in your artwork. Order it from your artwork any time.`);
       } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
@@ -3215,6 +3219,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           })()}
           {saved.length > 0 && (
             <div className="mk-saved">{saved.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.title} /><span>{s.title}</span></a>)}</div>
+          )}
+          {/* saved from the customer's portal: order it right here (Oct 24, Nick: "when you make the mock-up and you save it
+              from the customer view… the order button needs to be in there too") */}
+          {portal && savedMock && (
+            <div className="mk-saved-order">
+              <span><b>{savedMock.num ? `M-${savedMock.num}` : "Your mockup"} is saved</b> in your artwork. Order it now, or come back any time.</span>
+              <MockupOrderButton id={savedMock.id} canAct />
+            </div>
           )}
         </div>
 

@@ -26,7 +26,8 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
-  /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean };
+  /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean;
+  /** archived by the customer or the shop: shown under Archive */ shelved?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
@@ -66,7 +67,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -117,6 +118,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   usedIds?: string[];
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** archive / bring back a mockup set (Oct 24) */ onArchiveMockup?: (mockupId: string, on: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** shop: an archived logo deleted for good (its orders keep their mockups) */
   onDeleteForever?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -155,6 +157,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [starErr, setStarErr] = useState("");
   const [gone, setGone] = useState<Record<string, boolean>>({});
   const [mStars, setMStars] = useState<Record<string, boolean>>({});
+  // mockups archived / brought back here (Oct 24): set id → archived
+  const [mShelf, setMShelf] = useState<Record<string, boolean>>({});
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
@@ -685,8 +689,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
     const dRows = live.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
     const aRows = archived.filter((d) => designMatches(d, q)).sort((a, b) => b.number - a.number);
-    const ms = mockups.map((m) => (m.id in mStars ? { ...m, starred: mStars[m.id] } : m));
-    const mRows = ms.filter((m) => has(q, m.title, m.number, m.mno ? `M-${m.mno}` : "")).sort((a, b) => Number(!!b.starred) - Number(!!a.starred));
+    const ms = mockups.map((m) => ({ ...m, ...(m.id in mStars ? { starred: mStars[m.id] } : {}), shelved: String(m.mno ?? m.id) in mShelf ? mShelf[String(m.mno ?? m.id)] : !!m.shelved }));
+    const mRows = ms.filter((m) => !!m.shelved === !!showArch && has(q, m.title, m.number, m.mno ? `M-${m.mno}` : "")).sort((a, b) => Number(!!b.starred) - Number(!!a.starred));
     // a mockup set (every shirt color saved together) is one card
     const mSets: AMockup[][] = [];
     for (const m of mRows) { const g = m.mno ? mSets.find((x) => x[0].mno === m.mno) : undefined; if (g) g.push(m); else mSets.push([m]); }
@@ -697,7 +701,16 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       const r = await onStarMockup(m.id, !m.starred);
       if (!r.ok) { setMStars((x) => ({ ...x, [m.id]: !!m.starred })); setStarErr(r.error || "Couldn't save the star."); }
     };
-    const favMocks = ms.filter((m) => m.starred);
+    const favMocks = ms.filter((m) => m.starred && !m.shelved);
+    const nArch = archived.length + new Set(ms.filter((m) => m.shelved).map((m) => String(m.mno ?? m.id))).size;
+    const shelveMock = async (m: AMockup, on: boolean) => {
+      if (!onArchiveMockup) return;
+      setStarErr("");
+      const k = String(m.mno ?? m.id);
+      setMShelf((x) => ({ ...x, [k]: on }));
+      const r = await onArchiveMockup(m.id, on);
+      if (!r.ok) { setMShelf((x) => ({ ...x, [k]: !on })); setStarErr(r.error || "Couldn't archive the mockup."); }
+    };
     const star = async (d: Design) => {
       if (!onStar) return;
       setStarErr("");
@@ -705,19 +718,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       const r = await onStar(d.id, !d.starred);
       if (!r.ok) { setStars((s) => ({ ...s, [d.id]: !!d.starred })); setStarErr(r.error || "Couldn't save the star."); }
     };
-    const used = new Set(usedIds);
-    // unused logos can be deleted (two clicks); logos on a mockup or order can only be archived
+    // archive, never trash (Oct 24, Nick: "it's not trash, you just archive it"); archived logos are under Archive
     const remove = async (d: Design) => {
       setStarErr("");
-      if (!used.has(d.id)) {
-        if (armedDel !== d.id) { setArmedDel(d.id); setTimeout(() => setArmedDel((x) => (x === d.id ? "" : x)), 3500); return; }
-        setArmedDel("");
-        if (!onDelete) return;
-        setGone((g) => ({ ...g, [d.id]: true }));
-        const r = await onDelete(d.id);
-        if (!r.ok) { setGone((g) => ({ ...g, [d.id]: false })); setStarErr(r.error || "Couldn't delete the logo."); }
-        return;
-      }
       if (!onArchive) return;
       setArch((x) => ({ ...x, [d.id]: new Date().toISOString() }));
       const r = await onArchive(d.id, true);
@@ -734,16 +737,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="dc-img">{designUrls[d.id] ? <LogoPic url={designUrls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
           {(() => { const k = shirtSel[d.id] ?? 0, v = views[k], own = v?.path ? designUrls[v.path] : ""; return v && designUrls[d.id] ? <ShirtView className="main" url={own || designUrls[d.id]} shirt={v.shirt} ink={own ? "Original colors" : v.ink} /> : null; })()}
+          {/* archive top left, the star top right (Oct 24, Nick: "make the archive button on the top left, like the opposite
+              side of the star") */}
+          {!isArchived && onArchive && <button type="button" className="dc-arch" title="Archive this logo (find it under Archive)" aria-label="Archive logo" onClick={() => remove(d)}><Ico d={I.archive} size={14} /></button>}
           <div className="dc-tools">
             {!isArchived && onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
             {!isArchived && mode === "shop" && <Link className="dc-edit" href={`/shop/artwork/${d.id}?edit=1`} title="Edit this logo: remove the white, change its colors, crop" aria-label="Edit logo">✎</Link>}
-            {!isArchived && (onDelete || onArchive) && (
-              <button type="button" className={"dc-del" + (armedDel === d.id ? " armed" : "")} onClick={() => remove(d)}
-                title={used.has(d.id) ? "Used on a mockup or order, so it can't be deleted. Archive it instead." : armedDel === d.id ? "Click again to delete for good" : "Delete this logo"}
-                aria-label={used.has(d.id) ? "Archive logo" : "Delete logo"}>
-                {used.has(d.id) ? <Ico d={I.archive} size={15} /> : armedDel === d.id ? "Delete?" : <Ico d={I.trash} size={15} />}
-              </button>
-            )}
           </div>
         </div>
         {/* how it looks on each background (set in Edit logo → Backgrounds); scrolls sideways when there are many */}
@@ -771,7 +770,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     body = <>
       <div className="aa-home">
       <div className="aa-home-main stack">
-      {tableHead(<h2>Artwork</h2>, "Search logos")}
+      {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
+      {tableHead(<><h2>{showArch ? "Archived artwork" : "Artwork"}</h2>
+        <div className="chips aa-arch-chips">
+          <button type="button" className={"chip" + (!showArch ? " on" : "")} onClick={() => setShowArch(false)}>Active</button>
+          <button type="button" className={"chip" + (showArch ? " on" : "")} onClick={() => setShowArch(true)}>Archive{nArch ? <span className="n">{nArch}</span> : null}</button>
+        </div></>, showArch ? "Search archived" : "Search logos")}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {(brandColors.length > 0 || brandEditor) && (
         <div className="aa-card">
@@ -792,15 +796,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </div>
       )}
       <div className="aa-card">
-        <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
-        {dRows.length ? (() => { const P = pageOf("logos", dRows, 12); return <><div className="design-grid aa-grid6">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n, 12)}</>; })()
+        <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Archive the ones you don't need; they stay under Archive.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
+        {showArch
+          ? (aRows.length ? (() => { const P = pageOf("arch", aRows, 12); return <><div className="design-grid aa-grid6">{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n, 12)}</>; })()
+            : <div className="aa-empty">{archived.length ? `No archived logos match “${q}”.` : "No archived logos."}</div>)
+          : dRows.length ? (() => { const P = pageOf("logos", dRows, 12); return <><div className="design-grid aa-grid6">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n, 12)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
-        {archived.length > 0 && (
-          <div className="aa-arch">
-            <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
-            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows, 12); return <><div className="design-grid aa-grid6" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n, 12)}<button type="button" className="btn sm" style={{ marginTop: 10 }} onClick={() => { setShowArch(false); document.querySelector(".aa-logos-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>← Back to logos (hide archived)</button></>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
-          </div>
-        )}
       </div>
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Mockups</h3></div>
@@ -811,13 +812,15 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             {P.items.map((set) => { const m = set[0], name = m.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
               <div key={m.id} className={"design-card mk-card" + (m.starred ? " starred" : "")}>
                 <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
+                  {!m.shelved && onArchiveMockup && <button type="button" className="dc-arch" title="Archive this mockup (find it under Archive)" aria-label="Archive mockup" onClick={() => shelveMock(m, true)}><Ico d={I.archive} size={14} /></button>}
                   {set.length > 1 && <span className="mk-card-n" title={set.map((x) => x.title.split(" — ")[1] || x.title).join("\n")}>{set.length} colors</span>}
-                  {onStarMockup && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
+                  {onStarMockup && !m.shelved && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
                 </div>
                 <div className="dc-b">
                   <b data-notranslate>{m.mno ? `M-${m.mno}` : name}</b>
                   <span className="faint" title={m.title}>{[m.mno ? name : "", m.number ? `Order #${m.number}` : when(m.created_at)].filter(Boolean).join(" · ")}</span>
-                  {!m.number && (m.setup || mode === "portal") && (
+                  {m.shelved ? <div className="mk-card-acts"><button type="button" className="btn sm" onClick={() => shelveMock(m, false)}>Restore</button></div>
+                  : !m.number && (m.setup || mode === "portal") && (
                     <div className="mk-card-acts">
                       {m.setup && <a className="btn sm" href={mode === "portal" ? `/portal/mockup?mockup=${m.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${m.id}`}>Edit</a>}
                       {mode === "portal" && <MockupOrderButton id={m.id} canAct={canAct} />}
@@ -827,7 +830,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
               </div>
             ); })}{slots(P.pad)}
           </div>{pager("mock", mSets.length, P.p, P.n, 12)}</>; })()
-        : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
+        : <div className="aa-empty">{showArch ? "No archived mockups." : mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
       {mode === "shop" && productionPanel}
       </div>

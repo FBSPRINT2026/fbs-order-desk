@@ -9,7 +9,7 @@ import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
-import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
+import { archiveMyMockup, customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { orderSearchText } from "@/lib/search";
 import { withFiles, type HubMsg } from "@/lib/messages";
@@ -74,10 +74,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
       withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) designUrls[x.id] = sg[i].signedUrl!; });
     }
-    const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null }[]);
+    const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
     if (ml.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]), 3600);
-      mockups = ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "" }));
+      mockups = ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "" }));
     }
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
     hubMsgs = await withFiles((msg.data || []) as never[], async (paths) => {
@@ -242,7 +242,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...archTop.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
   // their mockups under the artwork (Oct 24, Nick: "on the dashboard… you've got artwork, but also put a line for mockups")
-  const mocks = mockups.filter((m, i, all) => m.thumb && (!m.mno || all.findIndex((x) => x.mno === m.mno) === i)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((m) => ({ id: m.id, url: m.thumb, name: `${m.mno ? `M-${m.mno} · ` : ""}${m.title.split(" — ")[0]}` }));
+  const mocks = mockups.filter((m, i, all) => m.thumb && !m.shelved && (!m.mno || all.findIndex((x) => x.mno === m.mno) === i)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((m) => ({ id: m.id, url: m.thumb, name: `${m.mno ? `M-${m.mno} · ` : ""}${m.title.split(" — ")[0]}` }));
   const art = designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }));
   // payments get their own box on the dashboard (Oct 15, Nick: not a "Needs you" item)
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -306,7 +306,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup}
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}

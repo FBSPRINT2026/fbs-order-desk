@@ -13032,3 +13032,16 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-card-acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .mk-card-acts .btn{flex:1 1 auto;justify-content:center;text-decoration:none}
 .mk-ord-msg{font-size:12px}
+
+/* artwork: Active / Archive at the top; archive top left of a card, the star top right (Oct 24, Nick) */
+.aa-arch-chips{margin-left:12px}
+.aa-bar-l{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.design-card .dc-img{position:relative}
+.dc-arch{position:absolute;top:6px;left:6px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--line);background:rgba(255,255,255,.95);border-radius:8px;cursor:pointer;color:var(--ink-3);padding:0}
+.dc-arch:hover{color:var(--ink);border-color:var(--ink-3)}
+.aa-grid6 .dc-arch{top:4px;left:4px;width:24px;height:24px}
+.design-card .dc-arch{opacity:0;transition:opacity .12s}
+.design-card:hover .dc-arch,.design-card:focus-within .dc-arch{opacity:1}
+@media (hover:none){.design-card .dc-arch{opacity:1}}
+.mk-saved-order{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13.5px}
+.mk-saved-order .btn{margin-left:auto}
