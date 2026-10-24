@@ -189,13 +189,16 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
-          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
+          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}
             designs={designs} designUrls={urls} onUploadDesign={uploadLogo}
             onDuplicate={() => patch((d) => { const s = d.groups[gi]; d.groups.splice(gi + 1, 0, { ...structuredClone(s), id: uid(), lines: s.lines.map((l) => ({ ...l, id: uid() })), imprints: s.imprints.map((x) => ({ ...x, id: uid() })) } as Group); })}
             onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
-        )).flatMap((ed, gi) => [ed, (
+        )).flatMap((ed, gi) => [ed, o.groups[gi].fromMockup ? (
+          // from their mockup: the prints and garments are set; changing them is done on the mockup (Oct 24, Nick)
+          <div key={"mk" + o.groups[gi].id} className="rq-fixed faint">From your mockup{o.groups[gi].fromMockup!.number ? ` M-${o.groups[gi].fromMockup!.number}` : ""}: fill in your sizes. To change the shirts or the prints, <a href={`/portal/mockup?mockup=${o.groups[gi].fromMockup!.id}`}>edit the mockup</a> and order it again.</div>
+        ) : (
           <section key={"mk" + o.groups[gi].id} className="panel rq-mock">
             <div className="panel-h"><h2>Mockup for {o.groups[gi].name || `Group ${gi + 1}`}</h2><span className="faint" style={{ fontSize: 12 }}>Optional. Make one in our builder, or upload one from your own software. We still need each logo uploaded above.</span></div>
             <div className="panel-b">

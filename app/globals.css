@@ -13059,3 +13059,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .ps-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px}
 /* portal tab bar: Settings sits at the far right (Oct 24, Nick) */
 .aa-nav .aa-tab-end{margin-left:auto;text-decoration:none}
+/* a customer's order from their mockup: garments and prints fixed (Oct 24, Nick) */
+.line.fixed .gl-sty,.line.fixed .a-co{opacity:.85}
+.line.fixed .grp-name{border-color:transparent;background:transparent}
+.rq-fixed{font-size:12.5px;margin:-6px 0 4px 2px}

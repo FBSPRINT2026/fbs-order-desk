@@ -183,6 +183,8 @@ export type Group = { id: string; name?: string;
   /** where each print was dragged to on the shirt pictures in the Mockup Creator (reference-photo pixels, by imprint id or
    *  "<line id>:<imprint id>"), so a reopened mockup shows it where it was put (Oct 22, Nick: "it returns back to the
    *  original placement") */ mockupOffsets?: Record<string, { dx: number; dy: number }>;
+  /** made from the customer's saved mockup (Oct 24): its prints and garments are fixed on their order request */
+  fromMockup?: { id: string; number: number | null };
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
   /** a reorder of an old Printavo job: its mockup PDF(s), where the art is pulled from when the order is made */

@@ -315,6 +315,12 @@ export async function orderFromMockup(mockupId: string): Promise<Result> {
           imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
       : await fromPictures(admin, name, all);
     g.customerMockups = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
+    // shown like our order screen: the shirts with the prints, read only (Oct 24, Nick)
+    if (snap?.lines?.length) {
+      g.fromMockup = { id: mk.id, number: mk.number ?? null };
+      g.mockupThumbs = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`)).map((r) => r.file_path.replace(/\.png$/, "-thumb.png"));
+      g.mockupAt = new Date().toISOString();
+    }
     const { data, error } = await admin.from("orders").insert({
       customer_id: mk.customer_id, status: "request", type: "quote", source: "portal",
       price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [g], total: 0,

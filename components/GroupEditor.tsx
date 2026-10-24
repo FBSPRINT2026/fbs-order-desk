@@ -54,6 +54,9 @@ type Props = {
   hidePrices?: boolean;
   /** don't gray out imprints waiting on a mockup (customer requests come with their own details) */
   noLock?: boolean;
+  /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
+   *  the imprints blown up… you shouldn't be able to change anything at that point"): the prints read only like a group with
+   *  a mockup, the garments and colors fixed; only the sizes are theirs to fill in */ fixed?: boolean;
   /** a reorder print waiting on production details: where production confirms it */
   detailsHref?: string;
 };
@@ -71,7 +74,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -143,7 +146,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
   }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
-  const frozen = !!onMockup && !!g.mockupAt && !g.mockupSkipped;
+  const frozen = fixed || (!!onMockup && !!g.mockupAt && !g.mockupSkipped);
   // the group's shirt color (first garment): behind each print's logo, like the Mockup Creator's close-ups (Oct 15, Nick)
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
@@ -446,16 +449,16 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
     );
   })();
   return (
-    <section className={"line" + (hidePrices ? " np" : "")}>
+    <section className={"line" + (hidePrices ? " np" : "") + (fixed ? " fixed" : "")}>
       <div className="line-h">
-        <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
+        <input type="text" className="grp-name" readOnly={fixed} aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {/* the group description, right on the group's line (Oct 22, Nick: "move it where you have the add group
             description… if you put in a little text, it just goes right there"); it prints on the quote, invoice and work order */}
         <textarea className="grp-desc-in" rows={1} aria-label="Group description" title="Group description: prints on the quote, invoice and work order" placeholder="+ Add group description"
           value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
           onBlur={(e) => { if (!e.target.value.trim() && g.description != null) update((x) => { delete x.description; }); }} />
         <span className="spacer" />
-        <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
+        {!fixed && <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>}
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
@@ -482,7 +485,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
               <div key={l.id} className={"gl" + (same ? " same" : "")}>
-                {!same && <div className="gl-sty">
+                {!same && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
                       onType={(v) => onStyle(li, v)}
@@ -496,7 +499,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
                 {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}
                 <div className="gl-row gl-r2">
-                  <div className="a-co">
+                  <div className="a-co" inert={fixed || undefined}>
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
                       const ln = x.lines[li], was = ln.color; ln.color = v;
                       // a color with its own supplier prices: its 2XL+ charges, and its blank cost unless someone typed their own
@@ -538,7 +541,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
                       <button type="button" tabIndex={-1} className="x" aria-label="Not extras: charge for this line" title="Not extras: charge for this line" onClick={() => update((x) => { const ln = x.lines[li]; delete ln.extras; delete ln.extrasPrint; delete ln.extrasFree; if (ln.priceOverride === 0) ln.priceOverride = null; })}>×</button>
                     </span>}
                     {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 6h14M5 11h14M5 16h8" /></svg></button>}
-                    {g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
+                    {g.lines.length > 1 && !fixed && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
                   </div>
                 </div>
                 {(l.note != null || noteOpen === l.id) && (
@@ -556,14 +559,14 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
           {/* the add buttons on the totals line: one row, not two (Oct 15, Nick: "a lot of wasted space… vertically") */}
           <span className="a-de gl-foot"><span className="gl-adds">
           {/* one button (Oct 21, Nick: "combine these three buttons into one… a drop down") */}
-          <details className="ot-more gl-addm" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+          {!fixed && <details className="ot-more gl-addm" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn sm">+ Add garment ▾</summary>
             <div className="ot-menu">
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push(newGLine()); }); }}>New garment</button>
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, extras: undefined, id: uid(), color: "", sizes: {}, priceOverride: null }); }); }}>Same style, new color</button>
               <button type="button" disabled={!!yth?.busy || !!cmp?.busy} title="The youth, women's, long sleeve… styles that go with this garment, in the same color" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void openCompanions(); }}>{cmp?.busy ? "Finding companion styles…" : "Companion style (youth, women's…)"}</button>
             </div>
-          </details>
+          </details>}
           </span><span className="lbl2">Total pieces</span></span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
@@ -631,7 +634,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
         <div className="imp-sec">
         <div className="lbl gsec">Imprints
-          {tagFin && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag Print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
+          {tagFin && !fixed && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag Print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
         </div>
         <div className="imp-wrap">
         <div className="imp-mock">
@@ -668,7 +671,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
           )}
           <div className={"mk-lock" + (locked ? " on" : "")}>
           {locked && <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>}
-          <div inert={locked || undefined} className="mk-body">
+          <div inert={locked || fixed || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
@@ -812,7 +815,7 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         {hasFoot && <div className="grp-foot">
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
-            <div inert={locked || undefined} className="mk-body">
+            <div inert={locked || fixed || undefined} className="mk-body">
             {(inksSec || embImps.length > 0) && (
               <div className="sbx">
                 {inksSec ? <div className="sbx-sec">

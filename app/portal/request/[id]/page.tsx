@@ -34,7 +34,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   // mockups: ones already attached to this order, and the customer's saved ones they can attach
   const { data: saved } = await admin.from("mockups").select("id,title,file_path,created_at").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }).limit(40);
   const savedList = oneOfEach((saved || []) as { id: string; title: string; file_path: string; created_at: string }[]);
-  const paths = [...new Set([...order.groups.flatMap((g) => (g.customerMockups || []).map((m) => m.path)), ...savedList.map((m) => m.file_path)])];
+  const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || [])]), ...savedList.map((m) => m.file_path)])];
   const mockupUrls: Record<string, string> = {};
   if (paths.length) {
     const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
