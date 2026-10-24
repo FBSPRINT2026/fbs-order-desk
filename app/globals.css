@@ -13584,3 +13584,9 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* needs-you buttons on the jobs: blue, quieter than on-hold red/orange (Oct 24, Nick) */
 .pjr-btn.need{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
 .pjr-btn.need:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface));border-color:var(--accent)}
+/* aging boxes: the amount is never cut off; each box is at least as wide as its number and the row wraps when it must (Oct 24, Nick) */
+.pdx-aging{display:flex;flex-wrap:wrap;gap:1px;background:var(--line)}
+.pdx-aging>div{flex:1 1 auto;min-width:max-content;border-left:0;background:var(--surface)}
+.pdx-aging>div.late{background:var(--danger-soft)}
+.pdx-aging b{overflow:visible;text-overflow:clip;font-variant-numeric:tabular-nums}
+.pdx-aging span{overflow:visible;text-overflow:clip}
