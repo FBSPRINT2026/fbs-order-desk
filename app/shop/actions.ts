@@ -154,21 +154,30 @@ export async function shopMarkRead(customerId: string, orderId: string | null, t
  * send them a message in their message center"). The request becomes an approved order (their sending it in is their
  * OK; the prices are their wholesale prices), and our note goes to their Messages. Staff click it; nothing is automatic.
  */
-export async function acceptRequest(orderId: string, note: string) {
+export async function acceptRequest(orderId: string, note: string, mode: "as_is" | "changes" = "as_is") {
   try {
     const { email: staffEmail } = await requireStaff();
     const { admin, order } = await loadOrderAndCustomer(orderId);
     const { data: o } = await admin.from("orders").select("status, submitted_at").eq("id", orderId).maybeSingle();
     if (!o || order.status !== "request" || !o.submitted_at) return { ok: false, error: "Only an order request the customer sent in can be accepted." };
     const now = new Date().toISOString();
-    const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", sent_at: now, approved_at: now, approved_name: "Sent in by the customer" }).eq("id", orderId).eq("status", "request");
+    // Accept as is (Oct 24, Nick: "if they make it in the mock-up, there's no proof step anymore… it should go to waiting on
+    // goods or in production, depending on what's going on with it"): their mockup is the approved art; with their goods
+    // already checked in it's In production, otherwise Waiting on goods. Accept with changes: Proof (we edit the mockup
+    // and send it back for their OK).
+    let status = "art";
+    if (mode === "as_is") {
+      const { data: g } = await admin.from("order_goods").select("status").eq("order_id", orderId).maybeSingle();
+      status = g?.status === "received" ? "production" : "blanks";
+    }
+    const { error } = await admin.from("orders").update({ status, type: "invoice", sent_at: now, approved_at: now, approved_name: "Sent in by the customer" }).eq("id", orderId).eq("status", "request");
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert([
-      { order_id: orderId, kind: "accepted", detail: "Order request accepted", actor: staffEmail },
-      { order_id: orderId, kind: "status", detail: "approved", actor: staffEmail },
+      { order_id: orderId, kind: "accepted", detail: mode === "as_is" ? "Order and art accepted as sent" : "Order accepted; art being changed for a proof", actor: staffEmail },
+      { order_id: orderId, kind: "status", detail: status, actor: staffEmail },
     ]);
     const text = note.trim();
-    if (text) { const m = await staffMessage(orderId, text); if (!m.ok) return { ok: true, warn: m.error }; }
-    return { ok: true };
+    if (text) { const m = await staffMessage(orderId, text); if (!m.ok) return { ok: true, warn: m.error, status }; }
+    return { ok: true, status };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't accept it." }; }
 }

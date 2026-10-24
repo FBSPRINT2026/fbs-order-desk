@@ -25,6 +25,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   const [proofs, setProofs] = useState<ProofRow[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [ask, setAsk] = useState<"" | "send" | "remind" | "approve" | string>("");
+  const [sendNote, setSendNote] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
@@ -109,7 +110,8 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
           {groups.length > 2 && <button type="button" className="linkbtn mkh-more" onClick={() => setShowAll((x) => !x)}>{showAll ? "Fewer saves" : `${groups.length - 2} older save${groups.length - 2 === 1 ? "" : "s"}`}</button>}
           {current.length > 0 && unsentCurrent && (ask === "send"
             ? <div className="ca-confirm"><div>Email <b>{email || "the customer"}</b> “Artwork proof ready for your order” with a link to review <b>Version {nextV}</b>?</div>
-                <div className="row"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => act("send", () => sendProofVersion(orderId), (r) => r.emailed ? `Version ${r.version} sent to ${email}.` : `Version ${r.version} is in their portal. Email is off, so send them the portal link.`)}>{busy === "send" ? "Sending…" : `Send Version ${nextV}`}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>
+                <label className="mk-f"><span>What did you change? (goes with the proof)</span><textarea rows={2} value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="e.g. Picked PMS 157 for the logo like you asked" /></label>
+                <div className="row"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => act("send", () => sendProofVersion(orderId, sendNote), (r) => r.emailed ? `Version ${r.version} sent to ${email}.` : `Version ${r.version} is in their portal. Email is off, so send them the portal link.`)}>{busy === "send" ? "Sending…" : `Send Version ${nextV}`}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>
             : <div className="mkh-foot"><button type="button" className="btn primary" onClick={() => setAsk("send")} disabled={!email}>Send to customer as Version {nextV}</button>{!email && <span className="faint">The customer has no email address.</span>}</div>)}
         </div>
       </section>

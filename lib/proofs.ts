@@ -62,7 +62,7 @@ const proofEmail = (shop: string, number: number, nickname: string, link: string
 });
 
 /** Send the current mockups to the customer as the next proof version. */
-export async function sendProofs(admin: SupabaseClient, orderId: string, me: Staff) {
+export async function sendProofs(admin: SupabaseClient, orderId: string, me: Staff, /** what we changed on their art (Oct 24, Nick: "we've got to say what we did to it") */ note = "") {
   const { order, customer, settings } = await load(admin, orderId);
   if (!customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
   if (order.status === "quote") return { ok: false as const, error: "Send the quote first so the customer can see this order." };
@@ -73,9 +73,12 @@ export async function sendProofs(admin: SupabaseClient, orderId: string, me: Sta
   if (same && live.some((p) => p.status === "pending")) return { ok: false as const, error: "The customer already has this version. Use Remind instead." };
   const at = new Date().toISOString();
   const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: customer.email });
-  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} to ${customer.email}`, actor: me.email });
+  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} to ${customer.email}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
+  // what we changed goes with the proof: in their Messages on the order, and in the email
+  if (note.trim()) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: `Proof version ${version}: ${note.trim().slice(0, 2000)}` });
   const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
-  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, false, artChangesOf(order)) });
+  const em = proofEmail(settings.shop.name, order.number, order.nickname, link, false, [...(note.trim() ? [note.trim()] : []), ...artChangesOf(order)]);
+  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...em });
   return { ok: true as const, version, emailed, link };
 }
 

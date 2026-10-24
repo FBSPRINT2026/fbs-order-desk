@@ -783,16 +783,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
 
   const [accepting, setAccepting] = useState<string | null>(null), [acceptBusy, setAcceptBusy] = useState(false);
+  const [acceptMode, setAcceptMode] = useState<"as_is" | "changes">("as_is");
   async function accept() {
     if (!o || accepting == null) return;
     setAcceptBusy(true);
     await save();
-    const r = await acceptRequest(o.id, accepting);
+    const r = await acceptRequest(o.id, accepting, acceptMode);
     setAcceptBusy(false);
     if (!r.ok) return say(r.error || "Couldn't accept it.");
     setAccepting(null);
-    setO((p) => (p ? { ...p, status: "approved", type: "invoice" } : p));
-    say(r.warn ? `Accepted. The message didn't send: ${r.warn}` : "Accepted. They'll see your message in their Messages.");
+    const st = ("status" in r && r.status ? r.status : "approved") as Order["status"];
+    setO((p) => (p ? { ...p, status: st, type: "invoice" } : p));
+    // with changes: straight to the mockup to change it, then send the proof from the order
+    if (acceptMode === "changes") { const g = o.groups.find((x) => x.fromMockup || x.mockupAt) || o.groups[0]; if (g) { router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); return; } }
+    say(r.warn ? `Accepted. The message didn't send: ${r.warn}` : st === "production" ? "Accepted: In production (their goods are here)." : st === "blanks" ? "Accepted: Waiting on goods." : "Accepted.");
     loadSide();
   }
 
@@ -1289,11 +1293,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {accepting != null ? (
             <div className="req-accept">
               <label className="mk-f"><span>Message to them (goes to their Messages)</span><textarea rows={2} value={accepting} onChange={(e) => setAccepting(e.target.value)} /></label>
-              <div className="row"><button type="button" className="btn primary" disabled={acceptBusy} onClick={accept}>{acceptBusy ? "Accepting…" : "Accept order & send message"}</button><button type="button" className="btn ghost" onClick={() => setAccepting(null)}>Cancel</button></div>
+              <div className="faint" style={{ fontSize: 12.5 }}>{acceptMode === "as_is" ? "Their mockup is the approved art: no proof. It goes to Waiting on goods, or In production if their goods are already checked in." : "You'll go to their mockup to change it. Then send the proof from the order with a note on what you changed; it waits on their OK."}</div>
+              <div className="row"><button type="button" className="btn primary" disabled={acceptBusy} onClick={accept}>{acceptBusy ? "Accepting…" : acceptMode === "as_is" ? "Accept as is & send message" : "Accept & change the art"}</button><button type="button" className="btn ghost" onClick={() => setAccepting(null)}>Cancel</button></div>
             </div>
           ) : (
             <div className="row">
-              {o.submitted_at && o.price_type === "wholesale" && <button type="button" className="btn primary" onClick={() => setAccepting("Thanks for the order! We've got it and we're good to go. We'll keep you posted here as it moves along.")}>Accept order</button>}
+              {o.submitted_at && o.price_type === "wholesale" && <>
+                <button type="button" className="btn primary" onClick={() => { setAcceptMode("as_is"); setAccepting("Thanks for the order! We've got it and we're good to go. We'll keep you posted here as it moves along."); }}>Accept as is</button>
+                <button type="button" className="btn" onClick={() => { setAcceptMode("changes"); setAccepting("Thanks for the order! We're making a small change to the art and will send you a proof to approve."); }}>Accept with changes</button>
+              </>}
               <button type="button" className={"btn" + (o.submitted_at && o.price_type === "wholesale" ? "" : " primary")} onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button>
               <button type="button" className="btn ghost" onClick={() => setTab("msg")}>Their questions</button>
             </div>

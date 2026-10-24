@@ -76,7 +76,7 @@ async function me() {
 const run = async <T,>(f: () => Promise<T>) => { try { return await f(); } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." }; } };
 
 /** Send the current mockups to the customer as the next proof version (emailed). */
-export async function sendProofVersion(orderId: string) { return run(async () => sendProofs(createAdminClient(), orderId, await me())); }
+export async function sendProofVersion(orderId: string, note = "") { return run(async () => sendProofs(createAdminClient(), orderId, await me(), note)); }
 /** Remind the customer to review the proof waiting on them (emailed). */
 export async function remindProof(orderId: string) { return run(async () => remindProofs(createAdminClient(), orderId, await me())); }
 /** The customer approved another way: overrides every other approval. */
