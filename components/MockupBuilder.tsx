@@ -1620,7 +1620,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
-  const closeUp = (im: Imprint, size: number) => {
+  // one shirt-color picker: on the first close-up under the photos only (Oct 24, Nick: "we only need one… keep it on the first one on the bottom left")
+  const closeUp = (im: Imprint, size: number, eye = false) => {
                 const d = designOf(im); const r = ratioIm(im) || 0.6;
                 const wIn = printWidth(im, im.location, ratioIm(im));
                 const sp = spotFor(im.location);
@@ -1630,7 +1631,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
-                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={() => void pickShirtColor()} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
@@ -3260,7 +3261,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
                 const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
                 return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
-              }).map(({ im }) => closeUp(im, cuSize))}
+              }).map(({ im }, i) => closeUp(im, cuSize, i === 0))}
             </div>
           </div>
           {designerFor && (
