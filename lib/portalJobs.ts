@@ -82,7 +82,9 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     shipped ? x.ship!.when : o.due_date ? day(o.due_date) : "",
     done ? short(o.completed_at || o.updated_at) : shipped ? x.ship!.carrier : "",
   ];
-  const labels = [quote || asked ? "Quote" : "Placed", "Art", "Garments", kind === "embroidery" ? "Stitching" : "Printing", shipped ? "Shipped" : "Ready", how];
+  // the same steps as the order page (Oct 24, Nick): Sent to FBS / Quote, Proof, Goods, In production, Ready, Done
+  const labels = [asked ? "Sent to FBS" : "Quote", "Proof", "Goods", "In production", shipped ? "Shipped" : "Ready", how];
+  void kind;
   const keys = ["placed", "art", "goods", "print", "ready", shipped ? "ship" : o.delivery_method === "ship" ? "ship" : o.delivery_method === "pickup" ? "pickup" : "out"];
   const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
   if (done) steps.forEach((s) => { s.state = "done"; });

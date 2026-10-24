@@ -22,7 +22,7 @@ export type StatusKey =
   | "request" | "quote" | "quote_sent" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
 
 export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quote" | "invoice"; c: string }[] = [
-  { k: "request", label: "Order request", portal: "Order request", type: "quote", c: "#0E9F9A" },
+  { k: "request", label: "Order request", portal: "Sent to FBS", type: "quote", c: "#0E9F9A" },
   { k: "quote", label: "Quote", portal: "Draft", type: "quote", c: "#7C8799" },
   { k: "quote_sent", label: "Quote Sent", portal: "Awaiting your approval", type: "quote", c: "#6477D6" },
   { k: "approved", label: "Approved", portal: "Approved", type: "invoice", c: "#0A8FC0" },

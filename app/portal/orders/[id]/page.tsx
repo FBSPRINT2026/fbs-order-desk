@@ -11,23 +11,26 @@ import { customerStatus, type Flag } from "@/lib/orderStages";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import { fmtPhone } from "@/lib/phone";
 
+// the order's steps the customer sees (Oct 24, Nick: "sent to FBS, quote, proof, approved, and then you'd have waiting on
+// goods… in production, ready, and then done"); a quote and its proof usually go out together
 const STEPS: { label: string; keys: string[] }[] = [
-  { label: "Requested", keys: ["request"] },
+  { label: "Sent to FBS", keys: ["request"] },
   { label: "Quote", keys: ["quote_sent"] },
+  { label: "Proof", keys: ["art"] },
   { label: "Approved", keys: ["approved"] },
-  { label: "Artwork", keys: ["art"] },
-  { label: "Garments", keys: ["blanks"] },
-  { label: "Printing", keys: ["production"] },
+  { label: "Waiting on goods", keys: ["blanks"] },
+  { label: "In production", keys: ["production"] },
   { label: "Ready", keys: ["ready"] },
   { label: "Done", keys: ["completed"] },
 ];
 // orders run here (not from Printavo): the customer statuses (Oct 21, the order statuses doc). The shop's steps
 // (goods, film, screens, press) are never shown: it's all "In production"
 const CSTEPS: { label: string; keys: string[] }[] = [
-  { label: "Requested", keys: ["request"] },
+  { label: "Sent to FBS", keys: ["request"] },
   { label: "Quote", keys: ["quote", "quote_sent", "changes"] },
-  { label: "Approved", keys: ["approved"] },
   { label: "Proof", keys: ["proof"] },
+  { label: "Approved", keys: ["approved"] },
+  { label: "Waiting on goods", keys: ["goods"] },
   { label: "In production", keys: ["production", "waiting", "delayed"] },
   { label: "Ready", keys: ["ready", "shipped", "delivered"] },
   { label: "Done", keys: ["completed"] },

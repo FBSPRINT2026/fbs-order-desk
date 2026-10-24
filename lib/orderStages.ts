@@ -86,15 +86,16 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
   const flag = (k: FlagKey) => flags.find((f) => f.key === k);
   const say = (key: string, label: string, text: string) => ({ key, label, text });
   if (o.status === "void") return say("canceled", "Canceled", "This order was canceled.");
-  if (o.status === "request") return say("request", "Request received", "We got your request and are putting a quote together.");
+  if (o.status === "request") return say("request", "Sent to FBS", "We got your order and we're checking it. You'll get a message when we confirm.");
   if (o.status === "quote") return say("quote", "Quote in progress", "We're putting your quote together.");
   if (o.status === "quote_sent") return extra.changesRequested ? say("changes", "Changes requested", "We're updating your quote.") : say("quote_sent", "Quote sent", "Your quote is ready to review and approve.");
   if (o.status === "completed") return say("completed", "Completed", "Completed. Thank you!");
   // a hold the customer must act on, or a delay, comes first
   for (const k of ["hold_customer", "art_problem", "hold_payment", "customer_goods", "delayed"] as FlagKey[]) {
     const f = flag(k); const def = FLAGS.find((x) => x.key === k);
-    if (f && def?.customer) return say(k === "delayed" ? "delayed" : "waiting", k === "delayed" ? "Delayed" : "Waiting on you", def.customer(f));
+    if (f && def?.customer) return k === "customer_goods" ? say("goods", "Waiting on goods", def.customer(f)) : say(k === "delayed" ? "delayed" : "waiting", k === "delayed" ? "Delayed" : "Waiting on you", def.customer(f));
   }
+  if (o.status === "blanks") return say("goods", "Waiting on goods", "Your garments are on the way to us. When they're in and counted, we print.");
   if (o.status === "ready") {
     if (extra.delivered) return say("delivered", "Delivered", "Delivered.");
     if (extra.shipped || flag("partial")) return say("shipped", flag("partial") ? "Partly shipped" : "Shipped", flag("partial") ? "Part of your order shipped." : "Your order shipped.");
@@ -102,7 +103,7 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
     if (o.delivery_method === "deliver") return say("ready", "Out for delivery", "Your order is ready and on its way to you.");
     return say("ready", "Ready for pickup", "Your order is ready to pick up.");
   }
-  if (o.status === "approved") return say("approved", "Approved", "Approved, thank you. Next: your art proof.");
+  if (o.status === "approved") return say("approved", "Approved", "Approved, thank you.");
   if (o.status === "art") return extra.proofSent ? say("proof", "Proof ready", "Your proof is ready: please approve it.") : say("approved", "Approved", "Approved, thank you. We're working on your art proof.");
   return say("production", "In production", "Your order is in production.");
 }
