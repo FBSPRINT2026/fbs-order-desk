@@ -37,7 +37,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // says message center, make that payments… a nice little customer statement looking… where you can pay now… past due
   // in 30 days… then where you have payments right now, I want that to be your jobs… get rid of the needs you section
   // and the customer supplied goods… your artwork underneath it"). Messages stay a tab.
-  void threads; void newMsgs; void msgHref; void needs; void goods;
+  void mockupHref; void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
       {draft && <div className="draft-rec pdx-draft" role="status"><b>Pick it back up?</b><span>You started <Link href={draft.href}>{draft.name || "an order"}</Link>{draft.when ? ` (${draft.when})` : ""} and haven&apos;t sent it yet.</span><Link className="btn sm primary" href={draft.href}>Continue</Link></div>}
@@ -134,12 +134,11 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
           <div className="pdx-h" style={past.length ? { marginTop: 18 } : undefined}><h2>Your artwork</h2><Link href={artHref} className="pd-link">All artwork</Link></div>
           <div className="pdx-art">
             {art.map((a) => <Link key={a.id} href={artHref} title={a.name}><img src={a.url} alt={a.name} loading="lazy" /></Link>)}
-            <Link href={artHref} className="add">＋ Upload<br />a logo</Link>
           </div>
           <div className="pdx-h" style={{ marginTop: 18 }}><h2>Your mockups</h2><Link href={artHref} className="pd-link">All mockups</Link></div>
           <div className="pdx-art">
+            {/* just a look at their work: every picture goes to Your artwork (Oct 24, Nick) */}
             {mocks.map((m) => <Link key={m.id} href={artHref} title={m.name}><img src={m.url} alt={m.name} loading="lazy" /></Link>)}
-            {mockupHref && <Link href={mockupHref} className="add">＋ Make<br />a mockup</Link>}
           </div>
         </section>
       </div>
