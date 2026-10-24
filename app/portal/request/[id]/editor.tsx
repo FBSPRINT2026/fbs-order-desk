@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
+import type { NeckLabelSet } from "@/lib/neckLabels";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
@@ -24,7 +25,8 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
-export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+export default function RequestEditor({ neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+  /** their tag label sets on file (Tag Print) */ neckSets?: NeckLabelSet[];
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
   /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
   savedMockups: { path: string; name: string }[];
@@ -117,6 +119,18 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   }
 
 
+  /** Tag Print with no tag on file: their tag art, kept with the group (Oct 24, Nick: "let them upload there") */
+  async function uploadTag(f: File): Promise<{ path: string; name: string } | null> {
+    if (preview) return null;
+    try {
+      const t = await requestFileUrl(o.id, f.name);
+      if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload isn't available right now.");
+      const up = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
+      if (up.error) throw new Error(up.error.message);
+      if (/^image\//.test(f.type)) setMUrls((u) => ({ ...u, [t.path!]: URL.createObjectURL(f) }));
+      return { path: t.path, name: f.name };
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); return null; }
+  }
   /** A mockup the customer made in their own software (picture or PDF). */
   async function uploadOwnMockup(gi: number, f: File) {
     if (preview) return;
@@ -367,7 +381,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
           <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]}
-            mockupExtra={mockupBtns(g, gi)} sizesBelow
+            mockupExtra={mockupBtns(g, gi)} sizesBelow onUploadTag={uploadTag} neckSets={neckSets}
             needMockup={pickMockups.length ? "Start with a mockup: create one, upload your own, or choose one you've already made. Your prints fill in from it." : "Start with a mockup: create one or upload your own. Your prints fill in from it."} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}

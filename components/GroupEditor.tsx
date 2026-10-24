@@ -57,6 +57,7 @@ type Props = {
   /** the portal: the prints stay grayed out until the group has a mockup (made, uploaded or picked), with this note
    *  (Oct 24, Nick: "gray out the print area… I don't want them to fill it in. I want them to make the mock-up") */ needMockup?: string;
   /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
+  /** the customer's builder: Tag Print with no tag on file uploads their tag art (shown from thumbUrls) */ onUploadTag?: (f: File) => Promise<{ path: string; name: string } | null>;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
    *  the imprints blown up… you shouldn't be able to change anything at that point"): the prints read only like a group with
@@ -78,7 +79,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -384,6 +385,7 @@ export default function GroupEditor({ sizesBelow = false, finishingAt = "group",
   // frozen with the prints once there's a mockup (it was finishing before, and it doesn't change the mockup's art)
   const tagFin = finList.find((f) => isRelabel(f));
   const tagOn = !!tagFin && (g.finishing || []).includes(tagFin.id);
+  const [tagBusy, setTagBusy] = useState(false);
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
@@ -639,9 +641,7 @@ export default function GroupEditor({ sizesBelow = false, finishingAt = "group",
         {/* the mockup big on the left, the imprints beside it (Oct 15, Nick: "make it large and move to the left of the
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
         <div className="imp-sec">
-        <div className="lbl gsec">Imprints
-          {tagFin && !fixed && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag Print<span className="faint"> · remove the maker&apos;s tags and print their label</span></label>}
-        </div>
+        <div className="lbl gsec">Imprints</div>
         <div className="imp-wrap">
         <div className="imp-mock">
           {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
@@ -778,44 +778,6 @@ export default function GroupEditor({ sizesBelow = false, finishingAt = "group",
               </div>
             ))}
           </div>
-          {tagOn && tagFin && (() => {
-            // the tag print as a print row like the ones above (Oct 21, Nick: "make it look exactly like the thing
-            // above… the little mock-up on the left")
-            const live = (neckSets || []).filter((x) => !x.archived), cur = setFor(neckSets, g.neckLabel);
-            const ink = cur?.ink || "Light gray";
-            return (
-              <div className="pr pr-tag">
-                <div className="pr-logo pr-tag-pic" style={{ background: shirtHex }} title={cur ? `${cur.name || "Their tag"}: inside the neck` : "No tag art on file yet"}>
-                  {cur ? <TagTile set={cur} size={mainSize([g])} shirtHex={shirtHex} /> : <span>No tag yet</span>}
-                </div>
-                <div className="pr-main">
-                  <div className="pr-top">
-                    <b>Tag Print</b>
-                    <span className="pr-how">Inside the neck</span>
-                    {!hidePrices && <span className="pr-each">each <span className="qp-amt-in tagp-amt"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)}
-                      onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span></span>}
-                  </div>
-                  <div className="pr-specs">
-                    <span>1 color</span>
-                    <span className="pr-ink">{ink}</span>
-                    <span>{cur?.widthIn || 2.5}&quot; wide</span>
-                    <span>The maker&apos;s tag removed</span>
-                  </div>
-                  <div className="pr-art tagp-which">
-                    {live.length > 1 ? (
-                      <select value={cur?.id || ""} onChange={(e) => update((x) => { x.neckLabel = e.target.value || undefined; })} aria-label="Which tag">
-                        {!cur && <option value="">Pick their tag…</option>}
-                        {live.map((x) => <option key={x.id} value={x.id}>{x.name || "Tag"}</option>)}
-                      </select>
-                    ) : cur ? <span>{cur.name || "Their tag"}</span> : <span className="faint">No tag art on file.</span>}
-                    {customerId && <a className="linkbtn" href={`/shop/customers/${customerId}`} target="_blank" rel="noreferrer">{cur ? "Change their tag art ↗" : "Add their tag art ↗"}</a>}
-                    <button type="button" className="linkbtn danger" onClick={() => tick(tagFin.id, false)}>Remove</button>
-                  </div>
-                  {cur?.note && <div className="pr-notes">{cur.note}</div>}
-                </div>
-              </div>
-            );
-          })()}
           {priceLine}
           <div className="row" style={{ gap: 8 }}>
           {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
@@ -825,6 +787,57 @@ export default function GroupEditor({ sizesBelow = false, finishingAt = "group",
         </div>
         </div>
         </div>
+
+        {/* Tag Print under the prints, on the right (Oct 24, Nick: "it should not be right next to imprints. It should be
+            underneath on the right… let them upload there somehow or use their tag on file") */}
+        {tagFin && (!fixed || !!onUploadTag) && (
+          <div className={"tagp-sec" + (tagOn ? " on" : "")}>
+            {!tagOn && <label className="check tagp-cb" title="Remove the maker's tags and print the customer's label inside the neck"><input type="checkbox" checked={tagOn} onChange={(e) => tick(tagFin.id, e.target.checked)} />Tag Print<span className="faint"> · remove the maker&apos;s tags and print {onUploadTag ? "your" : "their"} label</span></label>}
+          {tagOn && tagFin && (() => {
+              // the tag print as a print row like the ones above (Oct 21, Nick: "make it look exactly like the thing
+              // above… the little mock-up on the left")
+              const live = (neckSets || []).filter((x) => !x.archived), cur = setFor(neckSets, g.neckLabel);
+              const ink = cur?.ink || "Light gray";
+              return (
+                <div className="pr pr-tag">
+                  <div className="pr-logo pr-tag-pic" style={{ background: shirtHex }} title={cur ? `${cur.name || "Their tag"}: inside the neck` : "No tag art on file yet"}>
+                    {cur ? <TagTile set={cur} size={mainSize([g])} shirtHex={shirtHex} /> : g.tagArt && thumbUrls?.[g.tagArt.path] ? <img src={thumbUrls[g.tagArt.path]} alt="Your tag art" style={{ maxWidth: "80%", maxHeight: "80%", objectFit: "contain" }} /> : <span>No tag yet</span>}
+                  </div>
+                  <div className="pr-main">
+                    <div className="pr-top">
+                      <b>Tag Print</b>
+                      <span className="pr-how">Inside the neck</span>
+                      {!hidePrices && <span className="pr-each">each <span className="qp-amt-in tagp-amt"><span>$</span><input type="number" step="0.05" min="0" inputMode="decimal" aria-label="Tag print price a piece" value={g.tagPrice ?? ""} placeholder={(+tagFin.price).toFixed(2)}
+                        onChange={(e) => update((x) => { x.tagPrice = e.target.value === "" ? undefined : Math.max(0, +e.target.value); })} /></span></span>}
+                    </div>
+                    <div className="pr-specs">
+                      <span>1 color</span>
+                      <span className="pr-ink">{ink}</span>
+                      <span>{cur?.widthIn || 2.5}&quot; wide</span>
+                      <span>The maker&apos;s tag removed</span>
+                    </div>
+                    <div className="pr-art tagp-which">
+                      {live.length > 1 ? (
+                        <select value={cur?.id || ""} onChange={(e) => update((x) => { x.neckLabel = e.target.value || undefined; })} aria-label="Which tag">
+                          {!cur && <option value="">Pick their tag…</option>}
+                          {live.map((x) => <option key={x.id} value={x.id}>{x.name || "Tag"}</option>)}
+                        </select>
+                      ) : cur ? <span>{cur.name || "Their tag"}</span> : g.tagArt ? <span>{g.tagArt.name}</span> : <span className="faint">{onUploadTag ? "No tag on file yet." : "No tag art on file."}</span>}
+                      {onUploadTag && !cur && (
+                        <label className="linkbtn" style={{ cursor: "pointer" }}>{tagBusy ? "Uploading…" : g.tagArt ? "Replace your tag art" : "Upload your tag art"}
+                          <input type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" disabled={tagBusy} onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setTagBusy(true); const r = await onUploadTag(f).catch(() => null); setTagBusy(false); if (r) update((x) => { x.tagArt = r; }); }} />
+                        </label>
+                      )}
+                      {customerId && <a className="linkbtn" href={`/shop/customers/${customerId}`} target="_blank" rel="noreferrer">{cur ? "Change their tag art ↗" : "Add their tag art ↗"}</a>}
+                      <button type="button" className="linkbtn danger" onClick={() => tick(tagFin.id, false)}>Remove</button>
+                    </div>
+                    {cur?.note && <div className="pr-notes">{cur.note}</div>}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {hasFoot && <div className="grp-foot">
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>

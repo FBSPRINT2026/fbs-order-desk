@@ -4,6 +4,7 @@ import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, type Design, type Garment, type Message, type Order } from "@/lib/pricing";
 import RequestEditor from "./editor";
+import type { NeckLabelSet } from "@/lib/neckLabels";
 import { hasAiKey } from "@/lib/ai/claude";
 
 /** reading an uploaded PO with the AI can take a minute (Oct 24: Upload a PO) */
@@ -42,7 +43,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const pickSets = savedList.filter((m, i, all) => !m.order_id && !m.shelved_at && (!m.number || all.findIndex((x) => x.number === m.number && !x.order_id) === i)).slice(0, 24);
   const { data: pickSg } = pickSets.length ? await admin.storage.from("proofs").createSignedUrls(pickSets.map((m) => m.file_path.replace(/\.png$/, "-thumb.png")), 3600) : { data: [] };
   const pickMockups = pickSets.map((m, i) => ({ id: m.id, number: m.number, name: m.title.split(" — ")[0], colors: savedList.filter((x) => m.number && x.number === m.number && !x.order_id).length || 1, when: m.created_at, thumb: pickSg?.[i]?.signedUrl || "" }));
-  const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || [])]), ...savedList.map((m) => m.file_path)])];
+  const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || []), ...(g.tagArt ? [g.tagArt.path] : [])]), ...savedList.map((m) => m.file_path)])];
   const mockupUrls: Record<string, string> = {};
   if (paths.length) {
     const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
@@ -51,7 +52,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</div>}
-      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} pickMockups={pickMockups} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
+      <RequestEditor neckSets={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels || []} initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} pickMockups={pickMockups} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
     </>
   );
 }

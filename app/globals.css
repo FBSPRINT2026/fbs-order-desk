@@ -13433,3 +13433,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .same-art-pics img{max-width:100%;max-height:100%;object-fit:contain}
 .same-art-pics figcaption{font-size:13px;text-align:center}
 .same-art-pics small{color:var(--ink-3)}
+/* Tag Print under the prints, on the right (Oct 24, Nick) */
+.tagp-sec{display:flex;flex-direction:column;align-items:flex-end;margin-top:10px}
+.tagp-sec.on{align-items:stretch}
+.tagp-sec .tagp-cb{margin-left:0}

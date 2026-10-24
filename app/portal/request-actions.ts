@@ -59,6 +59,8 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
         lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const, sizeUpSet: undefined })),
         // only files from their own account
         customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && m.path.startsWith(`mockups/${cust.id}/`)).slice(0, 10),
+        // their tag art (Tag Print, no tag on file): only files they uploaded to this order
+        tagArt: g.tagArt && typeof g.tagArt.path === "string" && g.tagArt.path.startsWith(`requests/${cust.id}/${id}/`) ? { path: g.tagArt.path, name: String(g.tagArt.name || "Tag").slice(0, 120) } : undefined,
       }));
       row.groups = groups;
       // a wholesale account sees its prices while building, so the order keeps its total (Oct 24: #40149 showed $0.00)
