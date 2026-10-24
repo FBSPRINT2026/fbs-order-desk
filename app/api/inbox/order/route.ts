@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
-import { CAMERA_NAME, emailConversation, jobsNamed, pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
+import { CAMERA_NAME, emailConversation, jobsNamed, pastJobs, READER_REV, suggestEmailOrder } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
 import { anchorOf, type EmailPlan } from "@/lib/ai/emailPlan";
 import type { EODraft, EOFile, EOPart } from "@/lib/emailOrderShared";
@@ -65,7 +65,9 @@ export async function GET(req: Request) {
     if (fresh) pl = fresh.payload;
   }
   const stale = !!pl && sg?.status !== "done" && st.ready && (pl.seen ? newest > pl.seen : (cv?.convo.length || 1) > 1);
-  const draft = pl?.v === 2 && !stale ? (pl as { draft: EODraft }).draft : null;
+  // read with older rules: read again (READER_REV); an order already made from it keeps it
+  const oldRules = !!pl && sg?.status !== "done" && st.ready && (pl as { rev?: string }).rev !== READER_REV;
+  const draft = pl?.v === 2 && !stale && !oldRules ? (pl as { draft: EODraft }).draft : null;
   // the files from the whole conversation, newest first
   type F = { name: string; path: string; type: string; size: number };
   const all: F[] = [];

@@ -382,6 +382,10 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 }
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
+/** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
+ *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
+export const READER_REV = "2026-10-24b";
+
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
@@ -822,7 +826,7 @@ ${staffSays}` : ""}`;
     customer_id: a.customer_id, order_id: null, activity_id: C.id,
     title: `${draft.kind === "reorder" ? "Reorder" : "New order"} in ${cust?.company || cust?.name || a.from_email}'s email`,
     body: `${draft.summary}${draft.questions.length ? `\nStill need: ${draft.questions.join("; ")}` : ""}`,
-    payload: { v: 2, draft, groups: draft.groups, proposal: p, qty: r2(qtyOf(groups)), seen: convo[0].occurred_at, emails: convo.length },
+    payload: { v: 2, rev: READER_REV, draft, groups: draft.groups, proposal: p, qty: r2(qtyOf(groups)), seen: convo[0].occurred_at, emails: convo.length },
   };
   const { error } = await admin.from("ai_suggestions").upsert(row, { onConflict: "dedupe_key" });
   if (error) return { ok: false, error: error.message };
