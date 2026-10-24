@@ -6,12 +6,13 @@ import MockupBuilder from "@/components/MockupBuilder";
 export default async function PortalMockup({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
   const { as } = await searchParams;
   const ctx = await getPortalCtx(as, "/portal/mockup");
+  // back to the home dashboard (Oct 24, Nick: "I click go back to dashboard, it takes you to artwork")
   const back = `/portal${as ? `?as=${as}` : ""}`;
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s Mockup Creator. Saving works from the customer&apos;s own login.</div>}
       <main className="p-main mk-portal">
-        <Suspense fallback={<div className="empty">Loading…</div>}><MockupBuilder portal backHref={`${back}${back.includes("?") ? "&" : "?"}area=artwork`} /></Suspense>
+        <Suspense fallback={<div className="empty">Loading…</div>}><MockupBuilder portal backHref={back} /></Suspense>
       </main>
     </>
   );

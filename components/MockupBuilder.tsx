@@ -354,6 +354,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // Export PDF: art only, or with the company, description and print details (the choice is remembered)
   const [pdfOpen, setPdfOpen] = useState(false), [pdfBusy, setPdfBusy] = useState(false), [pdfDesc, setPdfDesc] = useState("");
   const [pdfOurs, setPdfOurs] = useSticky<boolean>("mk.pdfOurs", true), [pdfCompany, setPdfCompany] = useSticky<boolean>("mk.pdfCompany", true);
+  // a customer's PDF is theirs to brand (Oct 24, Nick: "the point is they can brand something without our logo on it… make
+  // those tabs… private label, and then you select your logo"): FBS Print, Private label (their logo and name), or no logo
+  const [pdfBrand, setPdfBrand] = useSticky<"fbs" | "private" | "none">("mk.pdfBrand", "private");
+  const [pdfFor, setPdfFor] = useState("");
   /** Export PDF's layout (Oct 22, Nick: "like a marketing sheet or a sales sheet… our mock-ups, the front and the back"):
    *  a proof page per color, or a sales sheet with every color on one page */
   const [salesOpen, setSalesOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
@@ -1930,7 +1934,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * print blown up on the shirt color with its size drawn on, the largest print area, placement, how it's printed and
    * its inks. Drawn from what's on screen (the drags on each color included), at 300 dpi.
    */
-  async function exportPdf(o: { ours: boolean; company: boolean; description: string }) {
+  async function exportPdf(o: { ours: boolean; company: boolean; description: string; /** private label: their own name and logo on top */ brand?: { name: string; logoUrl: string }; /** who it's for, typed (a customer's own client) */ forName?: string }) {
     const todo = lines.filter((z) => z.style || z.color);
     if (!todo.length) return setMsg("Add a garment and color first.");
     if (!imprints.some((im) => designOf(im))) return setMsg("Put a logo on the shirt first.");
@@ -1940,7 +1944,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       await Promise.all(["800 40px Archivo", '400 20px "Public Sans"', '600 20px "Public Sans"', '700 20px "Public Sans"', '800 20px "Public Sans"'].map((f) => document.fonts.load(f).catch(() => null)));
       let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
       if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
-      const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
+      if (o.brand) shop = { ...shop, name: o.brand.name, logoUrl: o.brand.logoUrl };
+      const logo = o.ours ? (o.brand ? (o.brand.logoUrl ? await loadImg(o.brand.logoUrl).catch(() => null) : null) : await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null)) : null;
       const cust = customers.find((c) => c.id === customerId);
       // layout in units of 1/200": the order proof's sizes (inches, points, CSS px) turned into these
       const DPI = 200, PW = 8.5 * DPI, PH = 11 * DPI, R = 1.5, IN = DPI, PT = DPI / 72, PX = DPI / 96;
@@ -2021,7 +2026,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         y += Math.max(0.5 * IN, (22 + 4 + 11 + 3 + 10 + 3) * PT) + 12 * PX;
         // who it's for, the job, in hands
         const cols: { k: string; b: string; f: string; w: number }[] = [];
-        if (who) cols.push({ k: "For", b: cust?.company || cust?.name || "—", f: [cust?.company && cust?.name && cust.name !== cust.company ? cust.name : "", cust?.email].filter(Boolean).join(" · "), w: 1.6 });
+        if (o.forName !== undefined) { if (o.forName.trim()) cols.push({ k: "For", b: o.forName.trim(), f: "", w: 1.6 }); }
+        else if (who) cols.push({ k: "For", b: cust?.company || cust?.name || "—", f: [cust?.company && cust?.name && cust.name !== cust.company ? cust.name : "", cust?.email].filter(Boolean).join(" · "), w: 1.6 });
         cols.push({ k: "Job", b: jobName, f: [order?.po_number ? `PO ${order.po_number}` : "", o.description.trim()].filter(Boolean).join(" · "), w: 1.2 });
         if (order) {
           const d = parseDate(order.due_date);
@@ -2889,7 +2895,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       })()}
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
       {!portal && orderId ? <a className="back" href={`/shop/orders/${orderId}`}>← Order #{order?.number || ""}</a>
-        : <Link className="back" href={portal ? backHref || "/portal" : "/shop/artwork"}>← {portal ? "Dashboard" : "Artwork"}</Link>}
+        : <Link className="back" href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"}>← {portal ? (requestId ? "Back to the order" : "Dashboard") : "Artwork"}</Link>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       {sizeAskB && sizeAskB.length > 0 && (() => {
@@ -2941,14 +2947,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         {pdfOpen && (
           <section className="panel mk-pdf">
             <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">Laid out like the order's art proof, ready to send the customer.</span></div>
-            <div className="mk-pdf-opts">
+            {portal ? (
+              <div className="mk-pdf-opts">
+                <div className="chips">{([["private", "Private label (your logo)"], ["fbs", "FBS Print"], ["none", "No logo"]] as const).map(([k, t]) => <button key={k} type="button" className={"chip" + (pdfBrand === k ? " on" : "")} onClick={() => setPdfBrand(k)}>{t}</button>)}</div>
+                <span className="faint">{pdfBrand === "private" ? "Your company's name and logo on top (set your logo in Settings). Nothing from FBS." : pdfBrand === "fbs" ? "FBS Print's logo on top." : "No logo on top."}</span>
+                {pdfBrand !== "fbs" && <label className="mk-f"><span>For (your client, optional)</span><input type="text" value={pdfFor} placeholder="e.g. Lakeview Booster Club" onChange={(e) => setPdfFor(e.target.value)} /></label>}
+              </div>
+            ) : (
+                        <div className="mk-pdf-opts">
               <label className="sep-chk"><input type="checkbox" checked={pdfOurs} onChange={(e) => setPdfOurs(e.target.checked)} /> Our logo &amp; contact (FBS)</label>
               <label className="sep-chk"><input type="checkbox" checked={pdfCompany} onChange={(e) => setPdfCompany(e.target.checked)} /> Company name ({custLabel(customers.find((c) => c.id === customerId)) || "the customer"})</label>
             </div>
+            )}
             <p className="faint mk-pdf-note">Page 1: the first shirt big, the prints, the garments and the approval box (they can check a box and sign in Acrobat). Then each other color on its own page, and each print blown up on its own page with its size and inks.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
             <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc })}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
+              <button type="button" className="btn primary" disabled={pdfBusy} onClick={async () => {
+                if (!portal) return exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc });
+                if (pdfBrand === "fbs") return exportPdf({ ours: true, company: true, description: pdfDesc });
+                const b = pdfBrand === "private" ? await mySheetBrand() : null;
+                return exportPdf({ ours: pdfBrand === "private", company: false, description: pdfDesc, brand: b && b.ok ? { name: b.name, logoUrl: b.logoUrl } : { name: "", logoUrl: "" }, forName: pdfFor });
+              }}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
               <button type="button" className="btn ghost" onClick={() => setPdfOpen(false)}>Close</button>
             </div>
           </section>
