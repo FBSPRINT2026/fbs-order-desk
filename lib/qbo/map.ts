@@ -168,9 +168,10 @@ export function ownedFromOurs(c: OurCustomer, qs: Pick<QboSettings, "term_map" |
   const o: Owned = {
     DisplayName: displayNameOf(c), CompanyName: s(c.company).slice(0, 100), PrimaryEmailAddr: cleanEmail(c.email), PrimaryPhone: s(c.phone).slice(0, 30),
     // taxable: only when we know (a customer with tax_exempt not set never flips QuickBooks' setting). A tax-exempt customer
-    // stays TAXABLE in QuickBooks (Oct 24): QuickBooks puts a tax-exempt customer's invoices on Automatic Calculation and
-    // won't keep "Tax Exempt (0%)"; the exemption is on each invoice instead (every line not taxed, the Tax Exempt rate)
-    BillAddr: addrKey(parseAddress(c.address)), ShipAddr: addrKey(parseAddress(c.ship_address)), Taxable: c.tax_exempt == null ? "" : "true",
+    // is tax-exempt in QuickBooks too (like Printavo did). Tried keeping them taxable on Oct 24 so QuickBooks would keep
+    // "Tax Exempt (0%)" on their invoices: it didn't help (QuickBooks' automated sales tax picks the rate on an invoice
+    // with no taxed lines whatever is sent), so that was put back.
+    BillAddr: addrKey(parseAddress(c.address)), ShipAddr: addrKey(parseAddress(c.ship_address)), Taxable: c.tax_exempt == null ? "" : c.tax_exempt ? "false" : "true",
     SalesTermRef: (c.payment_terms && qs.term_map[c.payment_terms]) || qs.default_term_id || "",
   };
   return o;
@@ -196,7 +197,7 @@ export function ownedBody(c: OurCustomer, qs: QboSettings, fields: readonly Owne
     else if (f === "PrimaryPhone") b.PrimaryPhone = { FreeFormNumber: o.PrimaryPhone };
     else if (f === "BillAddr") b.BillAddr = parseAddress(c.address) || {};
     else if (f === "ShipAddr") b.ShipAddr = parseAddress(c.ship_address) || {};
-    else if (f === "Taxable" && c.tax_exempt != null) { b.Taxable = true; void qs.exemption_reason_id; }
+    else if (f === "Taxable" && c.tax_exempt != null) { b.Taxable = !c.tax_exempt; if (c.tax_exempt && qs.exemption_reason_id) b.TaxExemptionReasonId = qs.exemption_reason_id; }
     else if (f === "SalesTermRef" && o.SalesTermRef) b.SalesTermRef = { value: o.SalesTermRef };
   }
   return b;
