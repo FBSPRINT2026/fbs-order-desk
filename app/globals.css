@@ -12793,7 +12793,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .sow-h.tr{right:-12px;top:-12px;cursor:nesw-resize}.sow-h.bl{left:-12px;bottom:-12px;cursor:nesw-resize}
 .sow-list{display:flex;flex-direction:column;gap:8px}
 .sow-item{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:8px}
-.sow-item img{width:96px;height:96px;object-fit:cover;border-radius:6px;background:var(--surface-2)}
+.sow-item img{width:96px;height:96px;object-fit:contain;border-radius:6px;background:var(--surface-2)}
 .sow-item.old{opacity:.6}
 .pv-err.sow-msg{background:var(--ok-soft);color:var(--ok)}
 .sow-card{display:flex;flex-direction:column;gap:4px;width:180px;text-decoration:none;color:var(--ink);font-size:13px}

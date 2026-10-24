@@ -74,7 +74,7 @@ export default async function SewoutReview({ params, searchParams }: { params: P
                     <div className="muted">{[im.size, im.stitches ? `${im.stitches.toLocaleString()} stitches` : "", des ? `D-${des.number}${des.name ? ` · ${des.name}` : ""}` : ""].filter(Boolean).join(" · ")}</div>
                   </div>}
                   {threads.length > 0 && <div className="ar-gar"><b>Thread colors</b>
-                    {threads.map((k) => { const t = threadByName(k); return <div className="ar-c" key={k}><span className="ar-sw" style={{ background: t?.hex || "#ccc" }} />{k}{t?.pms[0] ? <small className="muted"> · PMS {t.pms[0].replace(/^PMS\s*/i, "")}</small> : null}</div>; })}
+                    {threads.map((k) => { const t = threadByName(k); return <div className="ar-c" key={k}><span className="ar-sw" style={{ background: t?.hex || "#ccc" }} />{k}{t?.pms[0] ? <small className="muted" style={{ whiteSpace: "nowrap" }}> · PMS {t.pms[0].replace(/^PMS\s*/i, "")}</small> : null}</div>; })}
                   </div>}
                   {lines.map((l) => (
                     <div className="ar-gar" key={l.id}>
