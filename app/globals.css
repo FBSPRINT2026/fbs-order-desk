@@ -13048,3 +13048,4 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* artwork: "Show archive" is a small text button beside the search (Oct 24, Nick) */
 .aa-bar-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .aa-arch-link{font-size:12.5px;white-space:nowrap}
+.aa-arch-foot{display:flex;justify-content:flex-end;margin-top:-6px}

@@ -770,13 +770,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div className="aa-home">
       <div className="aa-home-main stack">
       {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
-      <div className="aa-bar"><div className="aa-bar-l"><h2>{showArch ? "Archived artwork" : "Artwork"}</h2></div>
-        <div className="aa-bar-r">
-          {/* a small text button by the search (Oct 24, Nick: "just a very small text only button… show archive") */}
-          <button type="button" className="linkbtn aa-arch-link" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archive" : "Show archive"}</button>
-          {search(showArch ? "Search archived" : "Search logos")}
-        </div>
-      </div>
+      {tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos")}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {(brandColors.length > 0 || brandEditor) && (
         <div className="aa-card">
@@ -833,6 +827,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           </div>{pager("mock", mSets.length, P.p, P.n, 12)}</>; })()
         : <div className="aa-empty">{showArch ? "No archived mockups." : mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
+      {/* a small text button under the mockups, on the right (Oct 24, Nick: "at the bottom right-hand corner under mockups") */}
+      <div className="aa-arch-foot"><button type="button" className="linkbtn aa-arch-link" onClick={() => { setShowArch(!showArch); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{showArch ? "Hide archive" : "Show archive"}</button></div>
       {mode === "shop" && productionPanel}
       </div>
       <aside className="aa-attn aa-favs">
