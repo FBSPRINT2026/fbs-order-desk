@@ -354,3 +354,19 @@ export function clearPage(c: HTMLCanvasElement): HTMLCanvasElement {
   o.getContext("2d")!.drawImage(c, Math.max(0, x0 - pad), Math.max(0, y0 - pad), cw, ch, 0, 0, cw, ch);
   return o;
 }
+
+/** a picture file on a white page (a film PNG, a scan): the page taken off and cropped to the art, as a PNG; null when
+ *  there's no white page around it (or it can't be read) */
+export async function clearPageFile(f: File): Promise<File | null> {
+  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type) && !/\.(png|jpe?g|webp)$/i.test(f.name)) return null;
+  try {
+    const bm = await createImageBitmap(f);
+    const k = Math.min(1, 8000 / Math.max(bm.width, bm.height)); // full resolution: this is the print art
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(bm.width * k)); c.height = Math.max(1, Math.round(bm.height * k));
+    c.getContext("2d", { willReadFrequently: true })!.drawImage(bm, 0, 0, c.width, c.height);
+    const o = clearPage(c);
+    if (o === c) return null;
+    const blob = await new Promise<Blob | null>((ok) => o.toBlob(ok, "image/png"));
+    return blob ? new File([blob], f.name.replace(/\.(jpe?g|webp)$/i, ".png"), { type: "image/png" }) : null;
+  } catch { return null; }
+}

@@ -1,5 +1,6 @@
 "use client";
 import { sizeRank } from "@/lib/sizeOrder";
+import { clearPageFile } from "@/lib/inkColors";
 import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
@@ -294,14 +295,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const used = usedOf.get(file) || new Set<ArtPiece>(); usedOf.set(file, used);
         const pc = pl ? pieceFor(pl, im.location, used) || pieceFor(pl, "front", used) || pieceFor(pl, "back", used) : undefined;
         if (pc) used.add(pc);
-        const src = pc ? pc.file : file;
-        let id = made.get(src);
+        const src0 = pc ? pc.file : file;
+        let id = made.get(src0);
+        // a film PNG or scan on a white page: kept as the art itself, page off and cropped (Oct 24, Nick on #40166)
+        const src = id ? src0 : (await clearPageFile(src0)) || src0;
         if (!id) {
           // a print file (PDF, AI, EPS, SVG) keeps a picture of it, so the Mockup Creator can use it right away
           const vector = !pc && picked.kind === "upload" && !/^image\/(png|jpe?g|gif|webp)$/i.test(file.type) && !/\.(png|jpe?g|gif|webp)$/i.test(file.name);
           const preview = vector ? await makePreview(/\.ai$/i.test(file.name) ? new File([file], file.name, { type: "application/pdf" }) : file).catch(() => null) : null;
           const dsg = await uploadDesign(createClient(), { draft: true, file: src, ...(preview ? { preview } : {}), customer_id: g.customer!.id, name: d!.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: pc ? `Pulled off ${file.name} with the Helper, for the reorder of ${jobLabel}` : `For the reorder of ${jobLabel}`, method: im.method });
-          id = dsg.id; made.set(src, id); made0.current.add(id);
+          id = dsg.id; made.set(src0, id); made0.current.add(id);
           guard();
         }
         if (pc && pl) pulledFor.set(id, { pc, from: file.name, kind: pl.kind });

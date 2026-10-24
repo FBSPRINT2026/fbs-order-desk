@@ -1,4 +1,5 @@
 "use client";
+import { clearPage } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { colorHex } from "@/lib/inkColors";
@@ -270,6 +271,10 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     const k = Math.min(1, 1800 / Math.max(i.naturalWidth, i.naturalHeight));
     c.width = Math.max(1, Math.round(i.naturalWidth * k)); c.height = Math.max(1, Math.round(i.naturalHeight * k));
     const x = c.getContext("2d", { willReadFrequently: true })!; x.imageSmoothingQuality = "high"; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
+    // art on a whole white page (a film PNG): the page comes off and it's cropped to the art, so the page isn't painted as
+    // ink (Oct 24, Nick on #40166: the Center Chest showed as one big sand box)
+    const cl = clearPage(c);
+    if (cl !== c) { c.width = cl.width; c.height = cl.height; x.clearRect(0, 0, c.width, c.height); x.drawImage(cl, 0, 0); }
     if (!p.plan.length) return;
     const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
     const off = new Set((shirt && byColor ? skip[shirt] || [] : []).map((n) => n.toLowerCase()));
