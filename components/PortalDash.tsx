@@ -96,7 +96,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
         {!sent.length && (
           <div className="pdx-caught">
-            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="var(--accent-soft)" /><circle cx="28" cy="28" r="18" fill="var(--surface)" stroke="var(--ok)" strokeWidth="2.5" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /><circle cx="47" cy="11" r="2.5" fill="var(--warn)" /><circle cx="9" cy="16" r="2" fill="var(--accent)" /><circle cx="46" cy="45" r="1.8" fill="var(--accent)" /></svg>
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <div><b>You&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
           </div>
         )}
