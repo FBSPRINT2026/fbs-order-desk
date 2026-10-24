@@ -380,7 +380,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
           <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")}>
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg></span>
             <span><b>{poBusy || "Upload a PO"}</b><small>We read it and fill in the form. You check it before it&apos;s sent.</small></span>
-            <input type="file" hidden multiple disabled={preview || !!poBusy} accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []); e.target.value = ""; void uploadPo(l); }} />
+            <input type="file" hidden multiple disabled={preview || !!poBusy} accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void uploadPo(l); }} />
           </label>
           <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()}>
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
@@ -455,7 +455,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
                 <div className="rq-so-up">
                   {([["po", "Upload your PO"], ["art", "Upload your art"], ["other", "Other files or a .zip"]] as const).map(([k, label]) => (
                     <label key={k} className={"btn sm" + (simpleBusy ? " disabled" : "")} style={{ cursor: "pointer" }}>{label}
-                      <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []); e.target.value = ""; void addSimpleFiles(l, k); }} />
+                      <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void addSimpleFiles(l, k); }} />
                     </label>
                   ))}
                 </div>

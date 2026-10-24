@@ -6,7 +6,7 @@ import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/l
 import { fmtDateLong, money } from "@/lib/format";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
-import { jobFor, kindFromWords, type JobKind, type JobShip } from "@/lib/portalJobs";
+import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } from "@/lib/portalJobs";
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
@@ -205,22 +205,22 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const starOf = (o: Order) => !!(o as Order & { customer_starred_at?: string | null }).customer_starred_at;
   // on hold, and why (Oct 24, Nick: "a stamp… that says order on hold… see the reason why")
   const holdOf = (o: Order) => {
-    const h = customerHold(o.flags as never);
+    const h = customerHold((o as Order & { flags?: unknown }).flags as never);
     if (!h) return null;
     const href = h.fix === "pay" ? link("/portal?area=payments") : h.fix === "art" ? msgLink(o.id) : h.fix === "goods" ? link(`/portal/orders/${o.id}#goods`) : msgLink(o.id);
     return { title: h.title, reason: h.reason, href, fixLabel: h.fix === "pay" ? "Pay now" : h.fix === "art" ? "Send new art" : h.fix === "goods" ? "See the goods" : "Reply" };
   };
-  const jobs = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = doneRecent.map(jobOf);
+  const jobs: PortalJob[] = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = doneRecent.map(jobOf);
   const held = jobs.filter((j) => j.hold).map((j) => ({ id: j.id, href: j.href, number: j.number, name: j.nickname, hold: j.hold!, msgHref: msgLink(j.id) }));
   // the orders they're tracking (★), each with where it is and whether it's on time (Oct 24, Nick: "tracking this order,
   // here's the current status. This is the date… on time or waiting on you")
-  const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const tracked = orders.filter((o) => starOf(o) && o.status !== "completed" && o.status !== "void")
+  const todayCt = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const tracked = orders.filter((o) => starOf(o) && !["completed", "void"].includes(String(o.status)))
     .sort((a, b) => String((b as Order & { customer_starred_at?: string }).customer_starred_at).localeCompare(String((a as Order & { customer_starred_at?: string }).customer_starred_at)))
     .slice(0, 4).map((o) => {
       const j = jobs.find((x) => x.id === o.id) || jobOf(o);
       const cs = customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) });
-      const late = !!o.due_date && o.due_date < todayIso && !["ready", "completed"].includes(o.status);
+      const late = !!o.due_date && o.due_date < todayCt && !["ready", "completed"].includes(o.status);
       const health = j.hold ? { text: "On hold", tone: "bad" as const }
         : cs.key === "delayed" ? { text: "Delayed", tone: "bad" as const }
         : j.stage === "need" || ["waiting", "proof", "quote_sent"].includes(cs.key) ? { text: "Waiting on you", tone: "act" as const }
@@ -239,7 +239,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const sentDash = (orders as SentRow[]).filter((o) => o.submitted_at && (o.status === "request" || (o.submitted_at >= twoWeeks && o.status !== "completed")))
     .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at))).slice(0, 6).map((o) => {
       const pcs = o.qty || 0, simpleO = o.simple_order != null;
-      const st = o.status === "void" ? { step: -1, label: "Canceled", tone: "off" as const, note: "This order was canceled." }
+      const st = String(o.status) === "void" ? { step: -1, label: "Canceled", tone: "off" as const, note: "This order was canceled." }
         : o.cancel_requested_at ? { step: 1, label: "Cancel requested", tone: "wait" as const, note: "We got your request to cancel and we'll confirm." }
         : o.status === "request" ? (o.staff_seen_at ? { step: 1, label: "FBS is reviewing", tone: "wait" as const, note: "We opened it and we're checking the details." } : { step: 0, label: "Waiting on FBS", tone: "wait" as const, note: "We have it. We'll open it soon." })
         : o.status === "quote_sent" ? { step: 2, label: "Quote ready", tone: "act" as const, note: "Your quote is ready: review and approve it." }
