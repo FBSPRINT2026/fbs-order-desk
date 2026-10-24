@@ -1,3 +1,6 @@
+import PortalGoods from "@/components/PortalGoods";
+import { needsGoods } from "@/lib/goods";
+import { loadGoodsItems } from "@/lib/goodsServer";
 import { proofViewed } from "@/lib/proofs";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -55,6 +58,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (!ctx.isStaff && (pr.data || []).length) await proofViewed(createAdminClient(), id).catch(() => null);
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
+  const goodsHere = needsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
   // the mockup they made comes with the order (Oct 24, Nick: "it doesn't show the art, even though they're the ones that
   // created it… it should just come along with it"): its shirts, from their Mockup Creator mockup or their own file
   const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length);
@@ -213,6 +217,14 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               </section>
             )}
 
+            {/* their goods for this order (Oct 24, Nick: "another tab… customer supplied goods when it's a wholesale order… waiting on
+                goods, goods received… upload tracking… it should be on each order too") */}
+            {goodsHere.length > 0 && (
+              <section className="panel" id="goods">
+                <div className="panel-h"><h2>Customer supplied goods</h2><span className="faint">Your garments for this order: send us tracking, see when they&apos;re here</span></div>
+                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={preview ? `?as=${ctx.preview!.id}` : ""} empty="" /></div>
+              </section>
+            )}
             <section className="panel" id="messages">
               <div className="panel-h"><h2>Messages</h2></div>
               <div className="panel-b"><MessageThread orderId={o.id} messages={messages} disabled={preview} shopName={ctx.settings.shop.name} /></div>
