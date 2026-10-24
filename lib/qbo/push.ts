@@ -38,7 +38,7 @@ const r2 = (n: number) => Math.round((+n || 0) * 100) / 100;
 
 export class Pusher {
   /** qbo: null when QuickBooks isn't connected (previews are still built). live: false = preview, nothing is sent. */
-  constructor(private admin: SupabaseClient, private qs: QboSettings, private settings: Settings, private qbo: Qbo | null, private realm: string, private live: boolean) {}
+  constructor(private admin: SupabaseClient, private qs: QboSettings, private settings: Settings, private qbo: Qbo | null, private realm: string, private live: boolean, private test = false) {}
 
   async process(row: QRow): Promise<Outcome> {
     if (row.entity === "customer") return this.customer(row);
@@ -96,7 +96,7 @@ export class Pusher {
   async customer(row: QRow, dependency = false): Promise<Outcome & { qboId?: string }> {
     const c = await this.ourCustomer(row.local_id);
     if (!c) return { status: "skipped", reason: "The customer was deleted." };
-    if (c.is_test) return { status: "skipped", reason: "Test customer: never sent." };
+    if (c.is_test && !this.test) return { status: "skipped", reason: "Test customer: never sent." };
     let link = await this.link("customer", c.id);
     const res = (row.resolution || {}) as { link_qbo_id?: string; force_fields?: string[] };
 
@@ -246,6 +246,53 @@ export class Pusher {
     const diff = r2(+(rec.TotalAmt || 0) - build.storedTotal);
     if (Math.abs(diff) >= 0.01) return { status: "needs_review", reason: `Sent, but QuickBooks' total for #${n} is ${r2(+(rec.TotalAmt || 0)).toFixed(2)} and the order's saved total is ${build.storedTotal.toFixed(2)} (difference ${diff.toFixed(2)}). Usually the sales tax setting: check it, then Retry.`, preview, result: { qboId: rec.Id, qboTotal: rec.TotalAmt } };
     return { status: "done", reason: `${link ? "Updated" : "Created"} QuickBooks invoice #${n} (${build.total.toFixed(2)}).`, preview, result: { qboId: rec.Id, total: rec.TotalAmt }, qboId: rec.Id };
+  }
+
+  /**
+   * One test invoice, sent on purpose by the owner (Oct 24, Nick: "the real quickbooks… just try to sync this one
+   * invoice to make sure it's working ok"). Any order, even a quote or a test customer's: the customer is made (or
+   * found) in QuickBooks, and the invoice is made numbered "TEST-<order #>" with a note to void it, so it can't be
+   * mistaken for (or collide with) a real invoice. The order isn't linked to it; testVoid() voids it by its id.
+   */
+  async testInvoice(orderId: string): Promise<Outcome & { qboId?: string; docNumber?: string; customerQboId?: string }> {
+    const o = await this.order(orderId);
+    if (!o) return { status: "error", reason: "Order not found." };
+    if (!this.qbo) return { status: "error", reason: "QuickBooks isn't connected." };
+    if (!o.customer_id) return { status: "error", reason: "The order has no customer." };
+    const n = +o.number, doc = `TEST-${n}`;
+    const cust = await this.ourCustomer(o.customer_id);
+    let custLink = await this.link("customer", o.customer_id);
+    if (!custLink) {
+      const co = await this.customer({ id: 0, entity: "customer", local_id: o.customer_id, op: "upsert", status: "pending", reason: "test", attempts: 0, request_key: `test-${o.customer_id}`, resolution: null, result: null }, true);
+      if (co.status !== "done") return { status: "error", reason: `Couldn't add the customer to QuickBooks: ${co.reason}`, preview: co.preview || null };
+      custLink = await this.link("customer", o.customer_id);
+      if (!custLink) return { status: "error", reason: "The customer was made in QuickBooks but the link wasn't saved." };
+    }
+    const build = invoicePayload({ order: o, customer: cust, customerRef: { value: custLink.qbo_id }, settings: this.settings, qs: this.qs });
+    const body = { ...build.body, DocNumber: doc, PrivateNote: `TEST from the FBS portal: void this. ${String((build.body as { PrivateNote?: string }).PrivateNote || "")}`.slice(0, 4000) };
+    const preview = { action: "create", docNumber: doc, total: build.total, storedTotal: build.storedTotal, summary: build.summary, warnings: build.warnings, problems: build.problems, body };
+    const localProblems = build.problems.filter((p) => !/isn't in QuickBooks yet/.test(p));
+    if (localProblems.length) return { status: "needs_review", reason: localProblems.join(" "), preview };
+    const q = this.qbo.with({ entity: "invoice", localId: o.id });
+    const ex = await q.query<Rec & { TotalAmt?: number }>("Invoice", `WHERE DocNumber = '${esc(doc)}'`);
+    if (ex.length) return { status: "done", reason: `QuickBooks already has the test invoice ${doc} (QuickBooks #${ex[0].Id}, ${r2(+(ex[0].TotalAmt || 0)).toFixed(2)}).`, preview, qboId: ex[0].Id, docNumber: doc, customerQboId: custLink.qbo_id };
+    const rec = await q.create<Rec & { TotalAmt?: number }>("Invoice", body, `fbs-test-${hashOf([o.id, doc, Date.now()])}`);
+    const diff = r2(+(rec.TotalAmt || 0) - build.total);
+    return {
+      status: Math.abs(diff) >= 0.01 ? "needs_review" : "done",
+      reason: Math.abs(diff) >= 0.01 ? `Made test invoice ${doc} (QuickBooks #${rec.Id}), but QuickBooks' total is ${r2(+(rec.TotalAmt || 0)).toFixed(2)} and ours is ${build.total.toFixed(2)} (usually the sales tax setting).` : `Made test invoice ${doc} in QuickBooks (#${rec.Id}) for ${r2(+(rec.TotalAmt || 0)).toFixed(2)}, the same as ours.`,
+      preview, result: { qboId: rec.Id, total: rec.TotalAmt }, qboId: rec.Id, docNumber: doc, customerQboId: custLink.qbo_id,
+    };
+  }
+  /** Void a test invoice made by testInvoice (only one numbered TEST-…). */
+  async testVoid(qboId: string): Promise<Outcome> {
+    if (!this.qbo) return { status: "error", reason: "QuickBooks isn't connected." };
+    const q = this.qbo.with({ entity: "invoice", localId: "test", qboId });
+    const cur = await q.read<Rec & { DocNumber?: string }>("Invoice", qboId);
+    if (!cur) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't there.` };
+    if (!/^TEST-/.test(String(cur.DocNumber || ""))) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't a test invoice (its number is ${cur.DocNumber}), so it wasn't voided.` };
+    await q.voidInvoice(qboId, cur.SyncToken);
+    return { status: "done", reason: `Voided test invoice ${cur.DocNumber} (QuickBooks #${qboId}).` };
   }
 
   /** #40000-#49999: Printavo made the QuickBooks invoice; we link to it by its number and never make our own. */

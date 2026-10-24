@@ -110,6 +110,7 @@ function Setup({ st, reload }: { st: QboStatus; reload: () => void }) {
             {st.connected && <button className="btn sm" type="button" disabled={!!busy} onClick={() => run("test", qboTest)}>{busy === "test" ? "Checking…" : "Check connection"}</button>}
             {st.connected && <button className="btn sm ghost danger" type="button" disabled={!!busy} onClick={disconnect}>Disconnect</button>}
           </div>
+          {st.connected && <TestInvoice />}
         </div>
       </section>
 
@@ -548,5 +549,36 @@ function Log() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * One test invoice (Oct 24, Nick: "just try to sync this one invoice to make sure it's working ok"): sends a single
+ * order to QuickBooks numbered TEST-<order #>, even while the sync is off, then voids it. Nothing else is touched.
+ */
+function TestInvoice() {
+  const [num, setNum] = useState("40135");
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; text: string; qboId?: string } | null>(null);
+  async function go(payload: Record<string, unknown>) {
+    setBusy(true); setOut(null);
+    try {
+      const r = await fetch("/api/qbo/test-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const j = await r.json();
+      setOut(j.error ? { ok: false, text: j.error } : { ok: j.status === "done", text: j.reason || "Done.", qboId: j.qboId });
+    } catch (e) { setOut({ ok: false, text: e instanceof Error ? e.message : "Couldn't reach the server." }); }
+    setBusy(false);
+  }
+  return (
+    <div className="stack" style={{ gap: 6, marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+      <b>Send one test invoice</b>
+      <span className="faint" style={{ fontSize: 12.5 }}>Makes one invoice in QuickBooks numbered TEST-&lt;order #&gt; (and its customer, if they aren&apos;t there yet), even while the sync is off, so you can check it there. Then void it here.</span>
+      <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="number" value={num} onChange={(e) => setNum(e.target.value)} aria-label="Order number" style={{ width: 120 }} />
+        <button type="button" className="btn sm primary" disabled={busy || !num} onClick={() => void go({ number: +num })}>{busy ? "Sending…" : "Send it to QuickBooks"}</button>
+        {out?.qboId && <button type="button" className="btn sm ghost danger" disabled={busy} onClick={() => void go({ voidId: out.qboId })}>Void the test invoice</button>}
+      </div>
+      {out && <div className={out.ok ? "okmsg" : "pv-err"} style={{ margin: 0 }}>{out.text}</div>}
+    </div>
   );
 }
