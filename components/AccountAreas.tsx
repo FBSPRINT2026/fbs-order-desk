@@ -173,7 +173,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   // the Orders tab's own tabs (Oct 24, Nick: "if they've got a bunch of quotes sitting there, they don't even get to the
   // orders… all quotes and orders just like we have on our order screen")
-  const [oTab, setOTab] = useSticky<"all" | "quotes" | "sent" | "orders">("portal.ordersTab", "all");
+  const [oTab, setOTab] = useSticky<"all" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   const [showOldOwed, setShowOldOwed] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
@@ -249,7 +249,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const search = (ph: string) => (
     <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><SearchInput placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
-  const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice") => {
+  // what a row is, in the Orders tab's All list (Oct 24, Nick: "a bubble… that says sent to FBS, quote, or invoice")
+  const kindOf = (o: AOrder) => (o.type === "invoice" ? "Order" : o.status === "request" && o.sent ? "Sent to FBS" : "Quote");
+  const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice", all = false) => {
     const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : "", o.search));
     return (
       <div className="aa-card aa-tblcard">
@@ -261,11 +263,11 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                <td className="m"><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
+                <td className="m"><div className="aa-t">{all && <span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span>}{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
                 <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
-                {cols !== "quote" && <td className="r num paid" data-l="Paid">{money(o.paid)}</td>}
-                {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
+                {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
+                {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : money(Math.max(0, o.balance))}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
               </tr>
             ))}
@@ -497,29 +499,36 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const tab = oTab === "sent" && !sentQ.length ? "all" : oTab;
-    const show = (k: "quotes" | "sent" | "orders") => tab === "all" || tab === k;
+    const done = invoices.filter((o) => o.status === "completed");
+    // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
+    // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
+    const allRows = [...sentQ, ...quotes2, ...invoices].sort((x, y) => y.number - x.number);
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number]] : []), ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
     body = <>
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
-          {([["all", "All", 0], ["quotes", "Quotes", quotes2.length], ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length]] : []), ["orders", "Orders", invoices.length]] as [typeof oTab, string, number][]).map(([k, t, n]) => (
-            <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>
-          ))}
+          {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
         </div>
-        {search(tab === "orders" ? "Search orders" : tab === "quotes" ? "Search quotes" : "Search quotes and orders")}
+        <span className="spacer" />
+        <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
-      {show("sent") && sentQ.length > 0 && <>
+      {tab === "all" && orderTable(allRows, "invoice", true)}
+      {tab === "sent" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
         {orderTable(sentQ, "quote")}
       </>}
-      {show("quotes") && <>
-        {/* the Quotes section and its checkbox stay even with no quotes (Oct 15, Nick) */}
+      {tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
           <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
       </>}
-      {show("orders") && <>
+      {tab === "orders" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
         {orderTable(invoices, "invoice")}
+      </>}
+      {tab === "done" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
+        {orderTable(done, "invoice")}
       </>}
     </>;
   } else if (area === "orders" || area === "invoices") body = <>
