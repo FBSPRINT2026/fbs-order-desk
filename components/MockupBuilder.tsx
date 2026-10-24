@@ -3110,7 +3110,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <div className="row mk-add-row" style={{ gap: 8 }}>
                     <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
                     {/* a garment the suppliers don't carry (Oct 24, Nick: "images not in catalog, upload my own images") */}
-                    <button className="btn sm ghost mk-add" type="button" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })}>Not in the catalog? Upload photos</button>
+                    <button className="btn sm ghost mk-add mk-own-up" type="button" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })}>Not in the catalog? Upload photos</button>
                   </div>
                 </div>
               );

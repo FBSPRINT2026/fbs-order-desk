@@ -13724,3 +13724,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .line.np .gl .a-quote .aq-ph{display:inline-block;height:30px;line-height:28px;padding:0 12px;border:1px dashed var(--line);border-radius:6px;font-size:13px;color:var(--ink-3);background:var(--surface)}
 .line.np .gl .a-quote small{font-size:12px;color:var(--ink-3)}
 .line.np .gl .a-qt{justify-self:end}
+/* Mockup Creator: "Not in the catalog? Upload photos" at the bottom right of the garments bar (Oct 24, Nick) */
+.mk-add-row{width:100%;align-self:stretch}
+.mk-add-row .mk-own-up{margin-left:auto}
