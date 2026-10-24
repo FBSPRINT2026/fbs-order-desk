@@ -12929,3 +12929,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .osp-first-go{font-size:20px;color:var(--ink-3)}
 .osp-first .btn.ghost{align-self:flex-start}
 .dla-qb .qb-mark{color:var(--ok)}
+/* Shop Tools / Admin Tools switch (ADM / SHOP), the owner's menu (Oct 24): like SP / EMB / HP, in Shop Tools' color */
+.nav-g-shoptools .prod-side button.on{color:var(--fbs-orange)}
+.prod-side button.dot{position:relative}
+.prod-side button.dot::after{content:"";position:absolute;top:-3px;right:-5px;width:5px;height:5px;border-radius:50%;background:var(--side-active)}

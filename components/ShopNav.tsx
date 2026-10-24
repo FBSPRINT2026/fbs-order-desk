@@ -111,6 +111,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
   // back up to the full menu and folds it again
   const [miniSet, setMini] = useSticky<boolean>("nav.mini", true);
+  // my Admin Tools share the Shop Tools spot (Oct 24, Nick: "where it says shop tools… put ADM and then SHOP, and then
+  // it'll toggle between all my admin tools and then my shop tools"); remembered like the other switches
+  const [toolSide, setToolSide] = useSticky<"shop" | "adm">("nav.tools", "shop");
   // a tool panel open on the right (Create order): the menu folds to icons for the room, and comes back as it was when
   // the panel closes (Oct 23, Nick: "automatically minimize the toolbar on the left until we close the reorder")
   const [docked, setDocked] = useState(false);
@@ -288,6 +291,18 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
             </select>
           </span>
   );
+  // my Admin Tools (shown in the Shop Tools spot when ADM is picked): the same size as the shop tools
+  const adminTools = <>
+    {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
+    {link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
+    {link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
+    {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
+    {link(["/shop/necklines", "necks", "Necklines"])}
+    {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
+    {link(["/shop/support", "support", "Support"])}
+    {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
+    {realRole === "owner" && !viewAs && viewAsEl}
+  </>;
   return (
     <>
     {/* the Home Screen app: straight to the page chosen for this phone (Oct 15, Nick: open right to my email) */}
@@ -341,9 +356,16 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
                   ))}
                 </span>
               )}
+              {g.title === "Shop Tools" && role === "owner" && (
+                <span className="prod-side" role="radiogroup" aria-label="Admin tools or shop tools" data-notranslate>
+                  {([["adm", "ADM", "Admin tools"], ["shop", "SHOP", "Shop tools"]] as const).map(([k, l, t]) => (
+                    <button key={k} type="button" role="radio" aria-checked={toolSide === k} className={(toolSide === k ? "on" : "") + (k === "adm" && toolSide !== "adm" && (qbProblems + pvWaiting + support) > 0 ? " dot" : "")} title={t} onClick={() => setToolSide(k)}>{l}</button>
+                  ))}
+                </span>
+              )}
             </div>
             {g.title === "Shop Tools"
-              ? <div className="nav-tools">{g.items.map(link)}</div>
+              ? <div className="nav-tools">{role === "owner" && toolSide === "adm" ? adminTools : g.items.map(link)}</div>
               : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))
                   // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery, neither for heat press
                   .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks"] : side === "heat" ? ["/shop/separations", "/shop/inks", "/shop/digitizing", "/shop/threads"] : ["/shop/digitizing", "/shop/threads"]).includes(href))
@@ -383,29 +405,12 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         )}
       </div>
       )}
-      {/* the bottom of the menu: Admin Tools, small icons with their names on hover like Shop Tools (Oct 16, Nick) */}
-      {/* Admin Tools: only for me (the owner), and not while viewing as someone (Oct 16, Nick) */}
-      {role === "owner" && (
-      <div className="nav-g nav-g-admintools nav-foot-g">
-      {/* the portal's version, on the Admin Tools title line at the right, my view only (Oct 20, Nick) */}
-      <div className="nav-h nav-h-admintools nav-h-ver"><span>Admin Tools</span><VersionTag /></div>
-      <nav className="nav nav-foot nav-tools">
-        {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
-        {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
-        {role === "owner" && link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
-        {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
-        {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
-        {role === "owner" && link(["/shop/necklines", "necks", "Necklines"])}
-        {role === "owner" && link(["/shop/support", "support", "Support"])}
-        {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
-        {realRole === "owner" && !viewAs && viewAsEl}</nav>
-      </div>
-      )}
       <div className="side-user">
         {/* the version for everyone, just above Sign out (Oct 22, Nick: "on Jose's computer I can't see if you've
             updated… just above the log out button"); it takes no room, so the bottom bar stays where it was. The
             owner has it on the Admin Tools line. */}
-        {role !== "owner" && <span className="nav-ver-all"><VersionTag /></span>}
+        {/* everyone, me included (Oct 24, Nick: "move the version… to where it is for everybody else") */}
+        <span className="nav-ver-all"><VersionTag /></span>
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
         {(() => {
