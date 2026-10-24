@@ -2931,6 +2931,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           <SalesSheet colors={lines.filter((z) => z.style && z.color).map((z) => ({ key: z.id, color: z.color, style: [z.brand, z.style].filter(Boolean).join(" "), hex: shirtHex(z) }))}
             arts={imprints.filter((im) => designOf(im) && artUrl(im)).map((im) => ({ label: im.location, url: artUrl(im) }))}
             views={views as ("front" | "back")[]} shirts={sheetShirts} title0={groupName} customer={portal ? "" : custLabel(customers.find((c) => c.id === customerId)) || ""}
+            details={[
+              // the garments, then each print: where, how, its inks and size (Oct 24, Nick: "add the details, the imprint locations")
+              ...[...new Set(lines.filter((z) => z.style).map((z) => [z.brand, z.style, garmentFor(z)?.description || z.garment].filter(Boolean).join(" ")))],
+              ...imprints.filter((im) => im.location).map((im) => [im.location, METHODS[im.method], im.inks, im.size ? `${im.size}` : ""].filter(Boolean).join(" · ")),
+            ]}
             shop={sheetShop} onClose={() => setSheetOpen(false)} />
         )}
         {pdfOpen && (

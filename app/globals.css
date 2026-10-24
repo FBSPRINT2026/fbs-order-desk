@@ -13093,3 +13093,25 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
   .aa-tbl-cols col.c-dt.wide{width:370px}
   .aa-tbl-cols col.c-m{width:110px}
 }
+
+/* Sales sheet creator as an editor (Oct 24, Nick: "click your logo and move it anywhere… click final test and just rename
+   it… only the mock-up contents can't be edited"): every piece is picked, dragged, sized and typed over on the sheet */
+.ss-dl select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink)}
+.ss-sheet{position:relative;flex:none;box-shadow:0 4px 18px rgba(20,29,43,.16);touch-action:none;user-select:none}
+.ss-el{position:absolute;cursor:move;outline:1px dashed transparent;outline-offset:2px}
+.ss-el:hover{outline-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.ss-el.on{outline:2px solid var(--accent)}
+.ss-el img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.ss-shirt img{height:auto}
+.ss-txt{white-space:pre;outline:none;cursor:inherit}
+.ss-txt[contenteditable=true],.ss-lab[contenteditable=true]{cursor:text;user-select:text;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.ss-lab{text-align:center;white-space:nowrap;outline:none}
+.ss-handle{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#fff;border:2px solid var(--accent);cursor:nwse-resize;z-index:3}
+.ss-guide{position:absolute;top:0;bottom:0;left:50%;width:0;border-left:1px dashed var(--accent);pointer-events:none;z-index:4}
+.ss-pick{padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.ss-pick textarea{width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;box-sizing:border-box}
+.ss-pick input[type=text]{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px}
+.ss-tip{margin:0;padding:10px;border:1px dashed var(--line);border-radius:var(--r);font-size:13px}
+.ss-adds{display:flex;flex-wrap:wrap;gap:6px}
+.ss-adds .btn{cursor:pointer}
+.ss-stage .ss-corner{right:-7px;bottom:-7px}
