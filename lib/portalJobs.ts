@@ -18,6 +18,7 @@ export type PortalJob = {
   /** a balance on this job, with where to pay it */ owe?: { text: string; href: string; external?: boolean };
   /** the in-hands date, short ("Mon Oct 26"), and its date for sorting */ inHands: string; inHandsIso: string;
   /** the customer is tracking it on their dashboard (★) */ starred?: boolean;
+  /** on hold, and why (lib/orderStages.ts customerHold) */ hold?: { title: string; reason: string; href: string; fixLabel: string } | null;
 };
 export type JobStage = "need" | "work" | "ready" | "out" | "done";
 export type JobAction = { label: string; href: string; tone: "need" | "go" | "ok" | ""; sub?: string; external?: boolean };

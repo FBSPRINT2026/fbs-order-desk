@@ -18,14 +18,18 @@ export type DashSent = { id: string; href: string; number: number; name: string;
 /** an order they're tracking (★) */
 export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null };
 
+/** an order on hold, with why (Oct 24, Nick: "there's got to be an on hold panel on the dashboard for the customer") */
+export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { title: string; reason: string; href: string; fixLabel: string } };
+
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ tracked = [], sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
+export default function PortalDash({ held = [], tracked = [], sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
   /** Orders sent to FBS, above the jobs (Oct 24, Nick) */ sent?: DashSent[];
   /** the orders they starred to track */ tracked?: DashTracked[];
+  /** orders on hold */ held?: DashHeld[];
   /** an order they started and didn't send (Oct 24, Nick: "I saw you were making this order… bring it back up?") */ draft?: { href: string; name: string; when: string } | null;
   /** their mockups, under the artwork */ mocks?: { id: string; url: string; name: string }[]; mockupHref?: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
@@ -72,6 +76,28 @@ export default function PortalDash({ tracked = [], sent = [], draft, assistant, 
         </section>
         </div>
       </div>
+
+      {held.length > 0 && (
+        <section className="pdx-card pdx-hold">
+          <div className="pdx-h"><h2>On hold: needs your attention</h2><span className="faint" style={{ fontSize: 12 }}>{held.length === 1 ? "1 order is" : `${held.length} orders are`} stopped until this is sorted out</span></div>
+          <div className="pdx-hold-list">
+            {held.map((x) => (
+              <div key={x.id} className="pdx-hold-row">
+                <span className="hold-stamp" aria-hidden>On hold</span>
+                <div className="pdx-hold-t">
+                  <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
+                  <span>{x.hold.title}</span>
+                  <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>
+                </div>
+                <div className="pdx-hold-acts">
+                  <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
+                  {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {sent.length > 0 && (
         <section className="pdx-card pdx-sent">

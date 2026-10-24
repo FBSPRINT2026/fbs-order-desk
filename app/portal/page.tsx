@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
-import { customerStatus } from "@/lib/orderStages";
+import { customerHold, customerStatus } from "@/lib/orderStages";
 import { jobFor, kindFromWords, type JobKind, type JobShip } from "@/lib/portalJobs";
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
@@ -203,7 +203,15 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       goodsHref, ship: shipOf.get(o.id) || null, balance: o.type === "invoice" ? bal(o) : 0, payHref: link("/portal?area=payments"), pickup: shopAddr, pickupHref });
   };
   const starOf = (o: Order) => !!(o as Order & { customer_starred_at?: string | null }).customer_starred_at;
-  const jobs = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o) })), pastJobs = doneRecent.map(jobOf);
+  // on hold, and why (Oct 24, Nick: "a stamp… that says order on hold… see the reason why")
+  const holdOf = (o: Order) => {
+    const h = customerHold(o.flags as never);
+    if (!h) return null;
+    const href = h.fix === "pay" ? link("/portal?area=payments") : h.fix === "art" ? msgLink(o.id) : h.fix === "goods" ? link(`/portal/orders/${o.id}#goods`) : msgLink(o.id);
+    return { title: h.title, reason: h.reason, href, fixLabel: h.fix === "pay" ? "Pay now" : h.fix === "art" ? "Send new art" : h.fix === "goods" ? "See the goods" : "Reply" };
+  };
+  const jobs = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = doneRecent.map(jobOf);
+  const held = jobs.filter((j) => j.hold).map((j) => ({ id: j.id, href: j.href, number: j.number, name: j.nickname, hold: j.hold!, msgHref: msgLink(j.id) }));
   // the orders they're tracking (★), each with where it is and whether it's on time (Oct 24, Nick: "tracking this order,
   // here's the current status. This is the date… on time or waiting on you")
   const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -213,7 +221,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       const j = jobs.find((x) => x.id === o.id) || jobOf(o);
       const cs = customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) });
       const late = !!o.due_date && o.due_date < todayIso && !["ready", "completed"].includes(o.status);
-      const health = cs.key === "delayed" ? { text: "Delayed", tone: "bad" as const }
+      const health = j.hold ? { text: "On hold", tone: "bad" as const }
+        : cs.key === "delayed" ? { text: "Delayed", tone: "bad" as const }
         : j.stage === "need" || ["waiting", "proof", "quote_sent"].includes(cs.key) ? { text: "Waiting on you", tone: "act" as const }
         : cs.key === "goods" && o.price_type === "wholesale" ? { text: "Waiting on your goods", tone: "act" as const }
         : o.status === "request" ? { text: "Waiting on FBS", tone: "wait" as const }
@@ -315,7 +324,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
-    <PortalDash tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
+    <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}

@@ -93,9 +93,11 @@ function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
     <div className={"pjr" + (j.stage === "need" ? " need" : "")}>
       <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
       <Link href={j.href} className="pjr-t"><small>#{j.number}</small><b>{j.nickname}</b><em>{j.summary}</em></Link>
-      <div className="pjr-mid">
-        <JobSteps j={j} />
-        {(j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
+      <div className={"pjr-mid" + (j.hold ? " held" : "")}>
+        <span className="pjr-stepsw"><JobSteps j={j} />{j.hold && <span className="hold-stamp" aria-label="On hold">On hold</span>}</span>
+        {j.hold
+          ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></div>
+          : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
         {a && (a.external

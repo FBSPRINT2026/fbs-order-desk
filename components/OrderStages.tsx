@@ -68,7 +68,7 @@ export default function OrderStages({ orderId, printavo, bump = 0 }: { orderId: 
               <option value="">Hold or flag…</option>
               {FLAGS.map((f) => <option key={f.key} value={f.key}>{f.label}{f.customer ? " (customer sees it)" : ""}</option>)}
             </select>
-            <input value={adding.note} onChange={(e) => setAdding({ ...adding, note: e.target.value })} placeholder={adding.key === "hold_customer" ? "What we need from them" : "Note (optional)"} aria-label="Note" />
+            <input value={adding.note} onChange={(e) => setAdding({ ...adding, note: e.target.value })} placeholder={["hold_customer", "art_problem", "goods_wrong", "hold_payment"].includes(adding.key) ? "Why it's on hold (the customer sees this)" : "Note (optional)"} aria-label="Note" />
             {adding.key === "delayed" && <input type="date" value={adding.date} onChange={(e) => setAdding({ ...adding, date: e.target.value })} aria-label="New date" />}
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="btn sm primary" disabled={!adding.key || busy} onClick={async () => { await post({ op: "flag", key: adding.key, on: true, note: adding.note, date: adding.date }); setAdding(null); }}>Add</button>

@@ -11,7 +11,7 @@ import ImprintSpecs from "@/components/ImprintSpecs";
 import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
-import { customerStatus, type Flag } from "@/lib/orderStages";
+import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import { fmtPhone } from "@/lib/phone";
 
@@ -88,6 +88,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const runHere = !pvStatusOf(o as never);
   const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method }, { proofSent: proofs.length > 0 }) : null;
   const steps = cs ? CSTEPS : STEPS;
+  const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
   const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
   const pendingProofs = proofs.filter((x) => x.status === "pending");
   const deposit = Math.min(c.balance, Math.round(c.total * ctx.settings.depositPct) / 100);
@@ -115,7 +116,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        <div className="panel"><div className="panel-b">
+        {/* on hold: a stamp across the steps, and why (Oct 24, Nick) */}
+        <div className={"panel" + (hold ? " po-held" : "")}><div className="panel-b">
+          {hold && <span className="hold-stamp big" aria-hidden>On hold</span>}
           <div className="stepper" aria-label="Order progress">
             {steps.map((s, i) => (
               <div key={s.label} className={"step" + (i < curIdx ? " done" : "") + (i === curIdx ? " cur" : "")}>
@@ -125,7 +128,16 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div></div>
 
-        {cs && (cs.key === "waiting" || cs.key === "delayed") && <div className={"callout" + (cs.key === "waiting" ? " warn" : "")}><h2>{cs.label}</h2><div className="muted">{cs.text}</div></div>}
+        {hold ? (
+          <div className="callout warn po-hold">
+            <h2>This order is on hold: {hold.title}</h2>
+            <div className="muted">{hold.reason}</div>
+            <div className="row" style={{ gap: 8 }}>
+              <a className="btn primary sm" href={hold.fix === "pay" ? `/portal?area=payments${preview ? `&as=${ctx.preview!.id}` : ""}` : hold.fix === "goods" ? "#goods" : "#messages"}>{hold.fix === "pay" ? "Pay now" : hold.fix === "goods" ? "See your goods" : hold.fix === "art" ? "Send new art in Messages" : "Reply in Messages"}</a>
+              {hold.fix !== "reply" && hold.fix !== "art" && <a className="btn sm" href="#messages">Ask us</a>}
+            </div>
+          </div>
+        ) : cs && (cs.key === "waiting" || cs.key === "delayed") && <div className={"callout" + (cs.key === "waiting" ? " warn" : "")}><h2>{cs.label}</h2><div className="muted">{cs.text}</div></div>}
         {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
         {sewDone && <div className="callout good"><h2>{sewDone === "approved" ? "Thanks, your sew-out is approved" : "Thanks, we got your changes"}</h2><div className="muted">{sewDone === "approved" ? "We'll run your order. It's kept on file for reorders." : "We'll fix it and send you a new sew-out."}</div></div>}
         {pendingSew.length > 0 && (
