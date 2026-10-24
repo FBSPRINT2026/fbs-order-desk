@@ -13452,3 +13452,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .apm{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .apm-ok{align-items:flex-start;font-size:13px;line-height:1.45}
 .apm-ok input{margin-top:3px}
+/* Skip the form: Place a reorder (Oct 24, Nick) */
+.rq-fast-wide{flex-direction:row!important;min-height:44px!important;margin-top:8px;gap:10px!important}
+.rq-fast-wide .ic{width:28px!important;height:28px!important}
+.rq-re{width:min(600px,100%);display:flex;flex-direction:column;gap:10px}
+.rq-re-list{display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);padding:4px}
+.rq-re-row{all:unset;cursor:pointer;display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;font-size:14px}
+.rq-re-row:hover{background:var(--surface-2)}
+.rq-re-row.on{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.rq-re-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rq-re-row .faint{font-size:12px;white-space:nowrap}
+.rq-re-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}

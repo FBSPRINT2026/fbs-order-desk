@@ -8,7 +8,7 @@ import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProbl
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
-import { readFiles } from "@/lib/ai/emailOrder";
+import { groupsFromPrintavo, readFiles } from "@/lib/ai/emailOrder";
 
 type Result = { ok: boolean; error?: string; id?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -534,5 +534,68 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     });
     revalidatePath("/portal");
     return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+// ---------- Place a reorder (Oct 24, Nick: "place reorder… search and click… update the quantities… pull it into the form") ----------
+export type Reorderable = { ref: string; number: string; name: string; when: string; qty: number; from: "portal" | "printavo" };
+
+/** their past orders to reorder: ours and their Printavo history, newest first, searched by number or name */
+export async function myReorderables(q = ""): Promise<Reorderable[]> {
+  try {
+    const { supabase, admin, cust } = await me();
+    const term = q.trim().replace(/[%,()]/g, " ").slice(0, 60);
+    const num = term.replace(/^#/, "");
+    let oq = supabase.from("orders").select("id, number, nickname, created_at, qty, status, draft").eq("customer_id", cust.id).not("status", "in", "(request,quote,void)").is("discarded_at", null).order("number", { ascending: false }).limit(25);
+    if (term) oq = /^\d+$/.test(num) ? oq.eq("number", +num) : oq.ilike("nickname", `%${term}%`);
+    let aq = admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date").eq("customer_id", cust.id).order("order_date", { ascending: false }).limit(25);
+    if (term) aq = /^\d+$/.test(num) ? aq.eq("visual_id", num) : aq.ilike("nickname", `%${term}%`);
+    const [{ data: os }, { data: as }] = await Promise.all([oq, aq]);
+    const a: Reorderable[] = ((os || []) as { id: string; number: number; nickname: string | null; created_at: string; qty: number | null; draft?: boolean }[]).filter((o) => !o.draft)
+      .map((o) => ({ ref: `o:${o.id}`, number: String(o.number), name: o.nickname || "", when: String(o.created_at || "").slice(0, 10), qty: o.qty || 0, from: "portal" as const }));
+    const b: Reorderable[] = ((as || []) as { id: string; visual_id: string | number | null; nickname: string | null; qty: number | null; order_date: string | null }[])
+      .map((o) => ({ ref: `a:${o.id}`, number: String(o.visual_id || ""), name: o.nickname || "", when: String(o.order_date || "").slice(0, 10), qty: o.qty || 0, from: "printavo" as const }));
+    return [...a, ...b].sort((x, y) => y.when.localeCompare(x.when)).slice(0, 30);
+  } catch { return []; }
+}
+
+/** pull a past order into this draft: the same garments, sizes and prints, for them to change the quantities */
+export async function reorderInto(id: string, ref: string): Promise<Result & { groups?: Group[]; nickname?: string; label?: string }> {
+  try {
+    const { admin, order, cust, email, supabase } = await myDraft(id);
+    let groups: Group[] = [], label = "", nick = "";
+    if (ref.startsWith("o:")) {
+      const { data: src } = await supabase.from("orders").select("*").eq("id", ref.slice(2)).maybeSingle();
+      if (!src || src.customer_id !== cust.id) return { ok: false, error: "We couldn't find that order." };
+      groups = orderGroups(src as Order).map((g) => ({
+        id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
+        lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
+        imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+        customerMockups: (g.customerMockups || []).filter((m) => m.path.startsWith(`mockups/${cust.id}/`)),
+        // the prints are what was printed before: shown, not waiting on a new mockup
+        mockupSkipped: true,
+      })) as Group[];
+      label = `#${src.number}`; nick = src.nickname || "";
+    } else if (ref.startsWith("a:")) {
+      const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("id", ref.slice(2)).eq("customer_id", cust.id).maybeSingle();
+      if (!r) return { ok: false, error: "We couldn't find that order." };
+      const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
+        ...g, id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+        customerMockups: [], mockupSkipped: true,
+      })) as Group[];
+      label = `#${r.visual_id}`; nick = String(r.nickname || "");
+    } else return { ok: false, error: "Pick an order to reorder." };
+    if (!groups.length) return { ok: false, error: "That order has no garments to copy. Send it to us as a simple order instead." };
+    const cur = orderGroups(order);
+    const blank = cur.length <= 1 && !cur.some((g) => g.lines.some((l) => l.style || l.color || Object.values(l.sizes || {}).some((v) => +v)) || g.imprints.some((d) => d.design_id) || (g.customerMockups || []).length || g.fromMockup);
+    const all = blank ? groups : [...cur, ...groups];
+    const row: Record<string, unknown> = { groups: all, notes: [order.notes || "", `Reorder of ${label}${nick ? ` (${nick})` : ""}.`].filter(Boolean).join("\n").slice(0, 2000) };
+    if (!order.nickname) row.nickname = `${nick || `Order ${label}`} (reorder)`.slice(0, 120);
+    row.qty = all.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+    const { error } = await admin.from("orders").update(row).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: id, kind: "reorder", detail: `From ${label}`, actor: email });
+    return { ok: true, groups: all, nickname: (row.nickname as string) || undefined, label };
   } catch (e) { return fail(e); }
 }
