@@ -455,9 +455,9 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
         <input type="text" className="grp-name" readOnly={fixed} aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {/* the group description, right on the group's line (Oct 22, Nick: "move it where you have the add group
             description… if you put in a little text, it just goes right there"); it prints on the quote, invoice and work order */}
-        <textarea className="grp-desc-in" rows={1} aria-label="Group description" title="Group description: prints on the quote, invoice and work order" placeholder="+ Add group description"
+        {!fixed && <textarea className="grp-desc-in" rows={1} aria-label="Group description" title="Group description: prints on the quote, invoice and work order" placeholder="+ Add group description"
           value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
-          onBlur={(e) => { if (!e.target.value.trim() && g.description != null) update((x) => { delete x.description; }); }} />
+          onBlur={(e) => { if (!e.target.value.trim() && g.description != null) update((x) => { delete x.description; }); }} />}
         <span className="spacer" />
         {!fixed && <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>}
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
