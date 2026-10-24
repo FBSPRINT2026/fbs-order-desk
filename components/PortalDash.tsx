@@ -37,6 +37,21 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // says message center, make that payments… a nice little customer statement looking… where you can pay now… past due
   // in 30 days… then where you have payments right now, I want that to be your jobs… get rid of the needs you section
   // and the customer supplied goods… your artwork underneath it"). Messages stay a tab.
+  // lists that never grow the page (Oct 24, Nick: "make that variable… without creating scroll bars… we don't want to create more page"): three show, the rest fold under "more"
+  const trackRow = (t: DashTracked) => (
+            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
+              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
+              <span className="pdx-trk-h">{t.health.text}</span>
+              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
+            </div>
+  );
+  const sentRow = (x: DashSent) => (
+            <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
+              <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
+              <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
+              <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
+            </Link>
+  );
   const holdRow = (x: DashHeld) => (
     <div key={x.id} className="pdx-hold-row">
       <div className="pdx-hold-t">
@@ -64,13 +79,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
         <section className="pdx-card pdx-track">
           <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
-          {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
-            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
-              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
-              <span className="pdx-trk-h">{t.health.text}</span>
-              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
-            </div>
-          ))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+          {tracked.length ? <div className="pdx-track-list">{tracked.slice(0, 3).map((t) => trackRow(t))}{tracked.length > 3 && <details className="pdx-more-fold"><summary>{tracked.length - 3} more</summary><div className="pdx-track-list">{tracked.slice(3).map((t) => trackRow(t))}</div></details>}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
       <section className="pdx-card pdx-sent">
@@ -82,13 +91,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
           </div>
         )}
         {sent.length > 0 && <div className="pdx-sent-list">
-          {sent.map((x) => (
-            <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
-              <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
-              <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
-              <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
-            </Link>
-          ))}
+          {sent.slice(0, 3).map((x) => sentRow(x))}{sent.length > 3 && <details className="pdx-more-fold"><summary>{sent.length - 3} more</summary><div className="pdx-sent-list">{sent.slice(3).map((x) => sentRow(x))}</div></details>}
         </div>}
       </section>
 

@@ -13536,3 +13536,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 @media (max-width:760px){.pdx-thumbs{grid-template-columns:1fr}}
 .pdx-thumbs .pdx-art{grid-template-columns:repeat(auto-fill,64px);gap:8px}
 .pdx-thumbs .pdx-art a{width:64px;height:64px;border-radius:8px}
+.pdx-more-fold>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent);padding:4px 0 0;list-style:none}
+.pdx-more-fold>summary::-webkit-details-marker{display:none}
+.pdx-more-fold[open]>summary{margin-bottom:6px}
+.pdx-more-fold>.pdx-track-list,.pdx-more-fold>.pdx-sent-list{display:flex;flex-direction:column;gap:6px}
