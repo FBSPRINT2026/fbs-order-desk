@@ -54,7 +54,7 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
       // customers never set prices: drop any overrides and costs that came along
       const groups = patch.groups.map((g) => ({
         ...g,
-        lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const })),
+        lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const, sizeUpSet: undefined })),
         // only files from their own account
         customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && m.path.startsWith(`mockups/${cust.id}/`)).slice(0, 10),
       }));

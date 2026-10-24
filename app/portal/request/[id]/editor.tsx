@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
+import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
 import { describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
@@ -46,6 +47,11 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   const latest = useRef(o);
   const calc = useMemo(() => calcOrder(o, settings, []), [o, settings]);
   const prices = priceList(settings, o.price_type);
+  // an approved wholesale account sees its prices, like our order screen, and sends it to us to confirm (Oct 24, Nick:
+  // "if the customer is an approved wholesale client, then they should be able to submit and see pricing… send to FBS for
+  // confirmation"); retail looks the same with the prices left off, and we price it
+  const ws = o.price_type === "wholesale";
+  const sendLabel = ws ? "Send to FBS for confirmation" : "Send to FBS for pricing";
   const arm = (k: string) => { setArmed(k); setTimeout(() => setArmed((a) => (a === k ? "" : a)), 3500); };
 
   async function flush() {
@@ -152,10 +158,12 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
         <div className="row"><span className="save-state">{state}</span>
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? "Delete this order?" : "Delete"}</button>
-          <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
+          <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : sendLabel}</button>
         </div>
       </div>
-      <div className="rq-note">Add your garments, sizes and where each logo goes. <b>You won&apos;t see prices yet:</b> we&apos;ll check everything, price it and send it back for your final OK.</div>
+      <div className="rq-note">{ws
+        ? <>Add your garments, sizes and where each logo goes. <b>Your wholesale prices are shown.</b> Send it to us to confirm: we&apos;ll check everything and put it through.</>
+        : <>Add your garments, sizes and where each logo goes. <b>You won&apos;t see prices yet:</b> we&apos;ll check everything, price it and send it back for your final OK.</>}</div>
       {err && <div className="banner" role="alert">{err}</div>}
 
       {aiAssist && (
@@ -186,11 +194,11 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         <div className="field"><label htmlFor="rq-notes">Notes for us</label><textarea id="rq-notes" rows={2} placeholder="Anything we should know: event date, who the shirts are for, colors to avoid…" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
       </div></section>
 
-      <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
+      <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className={"stack ord rq-ord" + (ws ? " ws" : " np-ord")}>
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
           <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
-            armed={armed} arm={arm} hidePrices update={(fn) => patch((d) => fn(d.groups[gi]))}
+            armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}
             designs={designs} designUrls={urls} onUploadDesign={uploadLogo}
             onDuplicate={() => patch((d) => { const s = d.groups[gi]; d.groups.splice(gi + 1, 0, { ...structuredClone(s), id: uid(), lines: s.lines.map((l) => ({ ...l, id: uid() })), imprints: s.imprints.map((x) => ({ ...x, id: uid() })) } as Group); })}
@@ -261,8 +269,8 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
       )}
       <div className="rq-foot">
-        <span><b>{calc.qty}</b> pieces</span><span className="spacer" />
-        <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
+        <span><b>{calc.qty}</b> pieces</span>{ws && calc.qty > 0 && <span>Total <b className="num">{money(calc.total - calc.tax)}</b> <span className="faint">before tax</span></span>}<span className="spacer" />
+        <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : sendLabel}</button>
       </div>
     </main>
   );

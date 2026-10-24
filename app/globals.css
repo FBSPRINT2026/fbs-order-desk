@@ -13063,3 +13063,9 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .line.fixed .gl-sty,.line.fixed .a-co{opacity:.85}
 .line.fixed .grp-name{border-color:transparent;background:transparent}
 .rq-fixed{font-size:12.5px;margin:-6px 0 4px 2px}
+
+/* the customer's order builder looks like our order screen (Oct 24, Nick: "it should be directly the same as our order
+   screen"): the groups use the order page's styles; a wholesale account sees its prices (read only), retail the same
+   layout with the price cells left blank */
+.rq-ord .a-ea input,.rq-ord .upc,.rq-ord .upc input,.rq-ord .a-cs input{pointer-events:none}
+.rq-ord .a-ea input{border-color:transparent;background:transparent}
