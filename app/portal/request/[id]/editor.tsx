@@ -226,7 +226,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     }
     return out;
   }
-  const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", po: o.po_number || "", method: "", qty: "", goodsOn: !!goods, garments: "", files, note });
+  const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", po: o.po_number || "", method: "", qty: "", goodsOn: false, garments: "", files, note });
   async function uploadPo(list: File[]) {
     if (preview || !list.length) return;
     setErr(""); setPoBusy("Uploading…");
@@ -367,7 +367,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
           <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]}
-            mockupExtra={mockupBtns(g, gi)}
+            mockupExtra={mockupBtns(g, gi)} sizesBelow
             needMockup={pickMockups.length ? "Start with a mockup: create one, upload your own, or choose one you've already made. Your prints fill in from it." : "Start with a mockup: create one or upload your own. Your prints fill in from it."} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
             onSaveToCatalog={() => {}} onLookup={lookupStyle} lookingUp={lookingUp}

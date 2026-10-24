@@ -56,6 +56,7 @@ type Props = {
   noLock?: boolean;
   /** the portal: the prints stay grayed out until the group has a mockup (made, uploaded or picked), with this note
    *  (Oct 24, Nick: "gray out the print area… I don't want them to fill it in. I want them to make the mock-up") */ needMockup?: string;
+  /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
    *  the imprints blown up… you shouldn't be able to change anything at that point"): the prints read only like a group with
@@ -77,7 +78,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -327,9 +328,11 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
       };
       if (!phone) {
         // everything on one line whenever it fits (Oct 22, Nick: "when you have the ability to make everything one line")
-        if (deB > 0 && one(true, true)) mode = "w0";
-        else if (one(true)) mode = "w1";
-        else if (cs && one(false)) mode = "w1c";
+        // the customer's builder always puts the sizes under the garment (Oct 24, Nick: "the garment is the top line, the
+        // sizes below"), so it never gets scrunched beside the side panel
+        if (!sizesBelow && deB > 0 && one(true, true)) mode = "w0";
+        else if (!sizesBelow && one(true)) mode = "w1";
+        else if (!sizesBelow && cs && one(false)) mode = "w1c";
         else {
           // the shirt line: the empty middle column has a gap on each side
           for (const [g2] of steps) if (st + g2 + br + g2 + co + g2 + g2 + (cs ? cs + g2 : 0) + qt + g2 + ea + g2 + to + g2 + X <= W) { mode = "w"; gap = g2; break; }
