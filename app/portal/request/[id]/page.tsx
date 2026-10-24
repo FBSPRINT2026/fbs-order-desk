@@ -6,6 +6,9 @@ import { orderGroups, type Design, type Garment, type Message, type Order } from
 import RequestEditor from "./editor";
 import { hasAiKey } from "@/lib/ai/claude";
 
+/** reading an uploaded PO with the AI can take a minute (Oct 24: Upload a PO) */
+export const maxDuration = 120;
+
 /** A customer building their own order (no prices). Once sent in it becomes read-only. */
 export default async function RequestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string }> }) {
   const { id } = await params;

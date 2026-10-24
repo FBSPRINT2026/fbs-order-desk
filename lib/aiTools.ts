@@ -21,7 +21,7 @@ export type AiTool = {
 
 export const AI_TOOLS: AiTool[] = [
   { id: "create-order", group: "Orders", name: "Create order / reorder", what: "Reads an email, a ClickUp job or files (POs, work orders, art) and makes the order or the reorder: asks what doesn't add up, checks shirt colors, pulls art off mockups, brings in a Printavo job's art.",
-    places: ["Inbox and folder emails: Create order", "Conversations: Create order", "ClickUp jobs: Create order", "AI Workbench: Tools", "Order chat: the next order from the same email"], component: "components/tools/CreateOrderTool.tsx", open: { here: true } },
+    places: ["Inbox and folder emails: Create order", "Conversations: Create order", "ClickUp jobs: Create order", "AI Workbench: Tools", "Order chat: the next order from the same email", "Order page: a portal simple order (Build it with Create order)"], component: "components/tools/CreateOrderTool.tsx", open: { here: true } },
   { id: "mockup-helper", group: "Art & mockups", name: "Mockup Helper", what: "Pulls the art off a mockup (ours, the customer's, a person wearing it, shirts drawn in their software): front and back, size, drop, inks.",
     places: ["Mockup Creator: Helper panel", "Create order: art that came on a shirt", "Printavo reorders: the old mockup"], component: "lib/mockupPull.ts + MockupBuilder Helper", open: { href: "/shop/artwork/mockup?helper=1", label: "Open the Helper" } },
   { id: "reply", group: "Email", name: "Reply writer", what: "Writes the reply to a customer's email from what you tell it (typed or spoken). Never sends it.", places: ["Every email's reply box: Tell the AI what to say"], component: "app/shop/ai-actions.ts (reply)", open: { href: "/shop/inbox", label: "Open the Inbox" } },

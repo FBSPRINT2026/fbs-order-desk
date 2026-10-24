@@ -6,7 +6,8 @@ import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { attachMockupToRequest, describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { attachMockupToRequest, describeMyOrder, discardRequest, ownMockupUploadUrl, readMyPo, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type RqFile } from "@/app/portal/request-actions";
+import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
 import { saveGoodsInfo } from "@/app/portal/goods-actions";
@@ -201,6 +202,73 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     return () => document.removeEventListener("click", onClick, true);
   }, [o.draft, preview]);
 
+  // Have a PO, or just want to send the details? (Oct 24, Nick: "they upload the PO and it fills out the form and they can
+  // confirm all the details… And there's just upload a simple order… when's it due, where's it going, about how many
+  // units, upload art, upload PO. If you have it, tell us about the goods")
+  const [poBusy, setPoBusy] = useState("");
+  const [poRead, setPoRead] = useState<{ read: PoRead; files: RqFile[] } | null>(null);
+  const [simple, setSimple] = useState<{ name: string; about: string; due: string; qty: string; garments: string; files: RqFile[]; note: string } | null>(null);
+  const [simpleBusy, setSimpleBusy] = useState("");
+  async function upFiles(list: File[], kind: RqFile["kind"]): Promise<RqFile[]> {
+    const out: RqFile[] = [];
+    for (const f0 of list) {
+      // a .zip is opened here and each file sent on its own, so we can read them
+      let fs: File[] = [f0];
+      if (/\.zip$/i.test(f0.name)) { try { const x = await unzip(f0); if (x.length) fs = x.slice(0, 20); } catch { /* sent as the zip */ } }
+      for (const f of fs) {
+        if (f.size > 50 * 1024 * 1024) throw new Error(`${f.name} is too big (50 MB at most). Send a smaller copy, or a link in Questions for us.`);
+        const t = await requestFileUrl(o.id, f.name);
+        if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload isn't available right now.");
+        const up = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
+        if (up.error) throw new Error(up.error.message);
+        out.push({ path: t.path, name: f.name, type: f.type || "", size: f.size, kind });
+      }
+    }
+    return out;
+  }
+  const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", qty: "", garments: "", files, note });
+  async function uploadPo(list: File[]) {
+    if (preview || !list.length) return;
+    setErr(""); setPoBusy("Uploading…");
+    let files: RqFile[] = [];
+    try { files = await upFiles(list, "po"); } catch (e) { setPoBusy(""); return setErr(e instanceof Error ? e.message : "Upload failed."); }
+    setPoBusy("Reading your PO… this can take a minute");
+    await flush();
+    const r = await readMyPo(o.id, files);
+    setPoBusy("");
+    if (!r.ok || !r.read) return openSimple(files, r.error || "We couldn't read that PO. Send it to us as is and we'll fill it in.");
+    setPoRead({ read: r.read, files });
+  }
+  function applyPo() {
+    const r = poRead?.read; setPoRead(null);
+    if (!r) return;
+    patch((d) => {
+      d.groups = r.groups;
+      if (r.nickname && !d.nickname) d.nickname = r.nickname;
+      if (r.due_date && !d.due_date) d.due_date = r.due_date;
+      if (r.po_number && !d.po_number) d.po_number = r.po_number;
+      if (r.delivery && !(d.ship_to || "").trim()) { d.delivery_method = r.delivery as Order["delivery_method"]; if (r.ship_to) d.ship_to = r.ship_to; }
+    });
+    setDescNote(`We filled in the form from your PO. Check the styles, colors and sizes, add a mockup for each group, then send it to us.${r.questions.length ? ` We'll also need: ${r.questions.join("; ")}.` : ""}`);
+  }
+  async function addSimpleFiles(list: File[], kind: RqFile["kind"]) {
+    if (!simple || !list.length) return;
+    setSimpleBusy("Uploading…"); setErr("");
+    try { const got = await upFiles(list, kind); setSimple((x) => (x ? { ...x, files: [...x.files, ...got].slice(0, 20) } : x)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
+    setSimpleBusy("");
+  }
+  async function sendSimple() {
+    if (!simple) return;
+    setSimpleBusy("Sending…"); setErr("");
+    await flush();
+    if (goods) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
+    const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files });
+    if (!r.ok) { setSimpleBusy(""); return setErr(r.error || "Couldn't send it."); }
+    try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ }
+    router.push(`/portal/orders/${o.id}?sent=1`);
+  }
+
   async function send() {
     setBusy(true); setErr("");
     await flush();
@@ -306,6 +374,20 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       </fieldset>
       </div>
       <aside className="rq-side stack">
+      <section className="panel rq-fast">
+        <div className="panel-h"><h2>Have a PO, or just want to send the details?</h2><span className="faint" style={{ fontSize: 12 }}>Skip the form. Either way we check everything and send you a confirmation.</span></div>
+        <div className="panel-b stack" style={{ gap: 8 }}>
+          <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")}>
+            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg></span>
+            <span><b>{poBusy || "Upload a PO"}</b><small>We read it and fill in the form. You check it before it&apos;s sent.</small></span>
+            <input type="file" hidden multiple disabled={preview || !!poBusy} accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []); e.target.value = ""; void uploadPo(l); }} />
+          </label>
+          <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()}>
+            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
+            <span><b>Send a simple order</b><small>A few questions and your files (a .zip is fine). We build it for you.</small></span>
+          </button>
+        </div>
+      </section>
       {goods && (
         <section className="panel">
           <div className="panel-h"><h2>Your goods</h2><span className="faint" style={{ fontSize: 12 }}>You&apos;re sending us the garments. Tell us what you know now; tracking and dates can be added later in Customer supplied goods.</span></div>
@@ -323,6 +405,74 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       </section>
       </aside>
       </div>
+
+      {poRead && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Does this look right?" onClick={() => setPoRead(null)}>
+          <div className="dla rq-po" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dla-x" aria-label="Close" onClick={() => setPoRead(null)}>×</button>
+            <h3>Does this look right?</h3>
+            <p className="dla-sub">Here&apos;s what we read on your PO: {poRead.read.pieces} pieces.{poRead.read.po_number ? ` PO # ${poRead.read.po_number}.` : ""}{poRead.read.due_date ? ` Needed by ${new Date(poRead.read.due_date + "T12:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}.` : ""}</p>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Garment</th><th>Color</th><th>Sizes</th><th style={{ textAlign: "right" }}>Qty</th></tr></thead>
+              <tbody>{poRead.read.lines.map((l, i) => <tr key={i}><td>{l.garment}{l.group ? <div className="sub">{l.group}</div> : null}</td><td>{l.color || "—"}</td><td>{l.sizes || "—"}</td><td style={{ textAlign: "right" }}>{l.qty}</td></tr>)}</tbody>
+            </table></div>
+            {poRead.read.ship_to && <p className="dla-sub">{poRead.read.delivery === "deliver" ? "Deliver" : "Ship"} to: {poRead.read.ship_to}</p>}
+            {poRead.read.questions.length > 0 && <p className="dla-sub">We&apos;ll also need: {poRead.read.questions.join("; ")}.</p>}
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" onClick={() => { const f = poRead.files; setPoRead(null); openSimple(f, "Tell us what we got wrong, and we'll fill it in from your PO."); }}>Not quite: send it to us as is</button>
+              <button type="button" className="btn primary" autoFocus onClick={applyPo}>Yes, fill in the form</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {simple && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Send a simple order" onClick={() => !simpleBusy && setSimple(null)}>
+          <div className="dla rq-simple" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dla-x" aria-label="Close" disabled={!!simpleBusy} onClick={() => setSimple(null)}>×</button>
+            <h3>Send a simple order</h3>
+            <p className="dla-sub">{simple.note || "Tell us what you need and upload what you have. We'll build the order and send you a confirmation."}</p>
+            {err && <div className="banner" role="alert">{err}</div>}
+            <div className="stack" style={{ gap: 10 }}>
+              <div className="field"><label htmlFor="so-about">What do you need?</label><textarea id="so-about" rows={3} placeholder="e.g. Shirts for our fall 5K: black tees, our logo on the front, sponsors on the back" value={simple.about} onChange={(e) => setSimple({ ...simple, about: e.target.value })} /></div>
+              <div className="grid g3">
+                <div className="field"><label htmlFor="so-name">Order name (optional)</label><input id="so-name" type="text" placeholder="e.g. Fall 5K" value={simple.name} onChange={(e) => setSimple({ ...simple, name: e.target.value })} /></div>
+                <div className="field"><label htmlFor="so-due">Need it by</label><input id="so-due" type="date" value={simple.due} onChange={(e) => setSimple({ ...simple, due: e.target.value })} /></div>
+                <div className="field"><label htmlFor="so-qty">About how many pieces</label><input id="so-qty" type="number" min={1} inputMode="numeric" placeholder="e.g. 150" value={simple.qty} onChange={(e) => setSimple({ ...simple, qty: e.target.value })} /></div>
+              </div>
+              <div className="grid g3">
+                <div className="field"><label htmlFor="so-del">How you&apos;ll get it</label>
+                  <select id="so-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Order["delivery_method"]; })}>
+                    <option value="pickup">I&apos;ll pick it up</option><option value="ship">Ship it to me</option><option value="deliver">Local delivery</option>
+                  </select></div>
+                {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="so-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="so-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
+              </div>
+              {goods
+                ? <div className="field"><label>Your goods</label><GoodsInfoFields v={goods} onChange={setGoods} /></div>
+                : <div className="field"><label htmlFor="so-g">The garments, if you know</label><input id="so-g" type="text" placeholder="e.g. Gildan 5000 in black, or “help me pick”" value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>}
+              {goods && <div className="field"><label htmlFor="so-g">The garments (style and colors)</label><input id="so-g" type="text" placeholder="e.g. Next Level 6210, Banana Cream" value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>}
+              <div className="field"><label>Your files</label>
+                <div className="rq-so-up">
+                  {([["po", "Upload your PO"], ["art", "Upload your art"], ["other", "Other files or a .zip"]] as const).map(([k, label]) => (
+                    <label key={k} className={"btn sm" + (simpleBusy ? " disabled" : "")} style={{ cursor: "pointer" }}>{label}
+                      <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []); e.target.value = ""; void addSimpleFiles(l, k); }} />
+                    </label>
+                  ))}
+                </div>
+                {simple.files.length > 0 && <ul className="rq-so-files">{simple.files.map((f, i) => (
+                  <li key={f.path}><span className="pill">{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</span><span className="nm">{f.name}</span>
+                    <button type="button" className="btn sm ghost" aria-label={`Remove ${f.name}`} onClick={() => setSimple({ ...simple, files: simple.files.filter((_, j) => j !== i) })}>Remove</button></li>
+                ))}</ul>}
+              </div>
+            </div>
+            <div className="dla-acts">
+              <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>{simpleBusy}</span>
+              <button type="button" className="btn ghost" disabled={!!simpleBusy} onClick={() => setSimple(null)}>Cancel</button>
+              <button type="button" className="btn primary" disabled={!!simpleBusy || preview || (simple.about.trim().length < 5 && !simple.files.length)} onClick={() => void sendSimple()}>Send to FBS</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pickFor && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Choose a saved mockup" onClick={() => !picking && setPickFor("")}>

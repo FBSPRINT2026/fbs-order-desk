@@ -8,6 +8,7 @@ import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProbl
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
+import { readFiles } from "@/lib/ai/emailOrder";
 
 type Result = { ok: boolean; error?: string; id?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -418,4 +419,115 @@ export async function myDesignerDoc(designId: string) {
     const { data } = await admin.storage.from("proofs").createSignedUrl(file, 600);
     return data?.signedUrl ? { ok: true as const, url: data.signedUrl } : { ok: false as const };
   } catch { return { ok: false as const }; }
+}
+
+// ---------- Have a PO, or just want to send us the details? (Oct 24, Nick) ----------
+// "they upload the PO and it fills out the form and they can confirm all the details… And there's just upload a simple
+// order… when's it due, where's it going, about how many units, upload art, upload PO. If you have it, tell us about
+// the goods." Their files go with the order (Production notes & files); the PO is read with the same rules the shop
+// uses for a PO that comes by email (lib/ai/poRules.ts).
+
+export type RqFile = { path: string; name: string; type: string; size: number; kind?: "po" | "art" | "other" };
+const cleanFiles = (files: RqFile[], custId: string, orderId: string) => (files || [])
+  .filter((f) => typeof f.path === "string" && f.path.startsWith(`requests/${custId}/${orderId}/`))
+  .slice(0, 20).map((f) => ({ path: f.path, name: String(f.name || "file").slice(0, 160), type: String(f.type || "").slice(0, 120), size: Math.max(0, +f.size || 0), kind: f.kind === "po" || f.kind === "art" ? f.kind : "other" as const }));
+
+/** a one-time link to upload one file for this order */
+export async function requestFileUrl(orderId: string, fileName: string): Promise<{ ok: boolean; error?: string; path?: string; token?: string }> {
+  try {
+    const { admin, cust } = await myDraft(orderId);
+    const path = `requests/${cust.id}/${orderId}/${crypto.randomUUID().slice(0, 8)}-${fileName.replace(/[^\w.\-]+/g, "_").slice(-120) || "file"}`;
+    const { data, error } = await admin.storage.from("proofs").createSignedUploadUrl(path);
+    if (error || !data) return { ok: false, error: error?.message || "Upload isn't available right now." };
+    return { ok: true, path, token: data.token };
+  } catch (e) { return fail(e); }
+}
+
+/** keep their files with the order (once each) */
+async function keepFiles(admin: ReturnType<typeof createAdminClient>, orderId: string, files: ReturnType<typeof cleanFiles>) {
+  if (!files.length) return;
+  const { data: have } = await admin.from("art_files").select("file_path").eq("order_id", orderId);
+  const got = new Set((have || []).map((x) => x.file_path as string));
+  const rows = files.filter((f) => !got.has(f.path)).map((f) => ({ order_id: orderId, name: f.name, file_path: f.path, file_type: f.type,
+    category: f.kind === "po" ? "order_sheet" : f.kind === "art" ? "art" : null, note: f.kind === "po" ? "The customer's PO (uploaded in the portal)" : "Uploaded by the customer in the portal" }));
+  if (rows.length) await admin.from("art_files").insert(rows);
+}
+
+export type PoRead = { groups: Group[]; nickname?: string; due_date?: string | null; po_number?: string; delivery?: string | null; ship_to?: string; questions: string[];
+  /** what we read, for "Does this look right?" */ lines: { group: string; garment: string; color: string; qty: number; sizes: string }[]; pieces: number };
+
+/** Upload a PO: read it and fill in the form; they check it before sending */
+export async function readMyPo(orderId: string, files: RqFile[]): Promise<Result & { read?: PoRead }> {
+  try {
+    const { admin, order, email, cust } = await myDraft(orderId);
+    const fs = cleanFiles(files, cust.id, orderId).map((f) => ({ ...f, kind: "po" as const }));
+    if (!fs.length) return { ok: false, error: "Upload your PO first." };
+    await keepFiles(admin, orderId, fs);
+    const st = await aiState(admin);
+    if (!st.ready || !st.settings.assistant.ai.customerAssist) return { ok: false, error: "We can't read it automatically right now. Send it to us as is and we'll fill it in." };
+    const { count } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("created_by", email).gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count || 0) >= 10) return { ok: false, error: "Send it to us as is and we'll fill it in. (You can try reading another PO in an hour.)" };
+    const read = await readFiles(admin, fs.map((f) => ({ name: f.name, path: f.path, type: f.type, size: f.size })) as never);
+    if (!read.images.length && !read.documents.length && !read.listing.some((l) => l.includes("contents:"))) return { ok: false, error: "We couldn't open that file. Send it to us as is and we'll fill it in." };
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const r = await orderFromText(st.settings, `${cust.company || cust.name} uploaded their purchase order on our website to fill in this order. Read the files.`, { admin, order_id: orderId, customer_id: order.customer_id, by: email, today, files: read });
+    if (!r.ok) return { ok: false, error: "We couldn't read that PO. Send it to us as is and we'll fill it in." };
+    const groups = proposalToGroups(r.data).map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, cost: "" as const, priceOverride: null })) }));
+    if (!groups.length) return { ok: false, error: "We couldn't find garments and sizes on that PO. Send it to us as is and we'll fill it in." };
+    const cur = orderGroups(order);
+    const blank = cur.length <= 1 && !cur.some((g) => g.lines.some((l) => l.style || l.color || Object.values(l.sizes || {}).some((v) => +v)) || g.imprints.some((d) => d.design_id) || (g.customerMockups || []).length || g.fromMockup);
+    const all = blank ? groups : [...cur, ...groups];
+    const d = r.data as typeof r.data & { po_number?: string; delivery?: string | null; ship_to?: string };
+    const row: Record<string, unknown> = {};
+    if (!order.nickname && d.nickname) row.nickname = d.nickname.slice(0, 120);
+    if (!order.due_date && d.due_date && /^\d{4}-\d{2}-\d{2}$/.test(d.due_date)) row.due_date = d.due_date;
+    if (!order.po_number && d.po_number) row.po_number = String(d.po_number).slice(0, 60);
+    if (d.delivery && ["pickup", "ship", "deliver"].includes(d.delivery) && !(order.ship_to || "").trim()) { row.delivery_method = d.delivery; if (d.ship_to) row.ship_to = String(d.ship_to).slice(0, 500); }
+    const qtyOf = (g: Group) => g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0);
+    // nothing is saved until they say it looks right (the builder saves it then)
+    const lines = groups.flatMap((g) => g.lines.map((l) => ({ group: g.name || "", garment: [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment", color: l.color || "",
+      qty: Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), sizes: Object.entries(l.sizes || {}).filter(([, v]) => +v).map(([k, v]) => `${k} ${v}`).join(", ") })));
+    void admin;
+    return { ok: true, read: { groups: all, nickname: row.nickname as string | undefined, due_date: (row.due_date as string) || null, po_number: (row.po_number as string) || undefined,
+      delivery: (row.delivery_method as string) || null, ship_to: (row.ship_to as string) || undefined, questions: (r.data.questions || []).slice(0, 6), lines, pieces: groups.reduce((a, g) => a + qtyOf(g), 0) } };
+  } catch (e) { return fail(e); }
+}
+
+export type SimpleOrder = { name?: string; about: string; due?: string | null; qty?: number | null; delivery?: string; ship_to?: string; garments?: string; files: RqFile[] };
+
+/** "Send us a simple order": their answers and files, sent in; we build the order from them */
+export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<Result> {
+  try {
+    const { admin, order: o0, cust, email, supabase } = await myDraft(orderId);
+    const about = String(s.about || "").trim().slice(0, 4000);
+    const files = cleanFiles(s.files, cust.id, orderId);
+    if (about.length < 5 && !files.length) return { ok: false, error: "Tell us what you need, or upload a file." };
+    const delivery = ["pickup", "ship", "deliver"].includes(String(s.delivery)) ? String(s.delivery) : "pickup";
+    const shipTo = String(s.ship_to || "").trim().slice(0, 500);
+    if (delivery !== "pickup" && !shipTo) return { ok: false, error: `Add the address to ${delivery === "ship" ? "ship" : "deliver"} to.` };
+    const due = s.due && /^\d{4}-\d{2}-\d{2}$/.test(s.due) ? s.due : null;
+    const qty = Math.max(0, Math.min(1_000_000, Math.round(+(s.qty || 0)))) || null;
+    const garments = String(s.garments || "").trim().slice(0, 1000);
+    await keepFiles(admin, orderId, files);
+    const { error: ue } = await admin.from("orders").update({
+      nickname: (String(s.name || "").trim() || o0.nickname || "").slice(0, 120) || null, due_date: due, delivery_method: delivery, ship_to: shipTo, ...(qty ? { qty } : {}),
+      simple_order: { about, qty, garments, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
+    }).eq("id", orderId);
+    if (ue) return { ok: false, error: ue.message };
+    const { data: num, error: ce } = await supabase.rpc("order_commit", { p_id: orderId });
+    if (ce) return { ok: false, error: ce.message };
+    const number = Number(num) || o0.number;
+    const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "request_submitted", detail: `Simple order${qty ? `, about ${qty} pcs` : ""}${files.length ? `, ${files.length} file${files.length === 1 ? "" : "s"}` : ""}`, actor: email });
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const settings = mergeSettings(st?.data);
+    if (SHOP_NOTIFY_EMAIL) await sendEmail({
+      to: SHOP_NOTIFY_EMAIL,
+      subject: `Simple order #${number} from ${cust.company || cust.name}`,
+      html: emailLayout(settings.shop.name, `Simple order #${number}`, `${cust.company || cust.name} sent the details instead of filling in the form${qty ? ` (about ${qty} pieces)` : ""}. Build it with Create order on the order page.`, "Open it", `${siteUrl()}/shop/orders/${orderId}`),
+    });
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
 }

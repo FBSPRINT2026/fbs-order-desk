@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude, type AiCtx } from "@/lib/ai/claude";
 import { LOCATIONS, SIZES, type Settings } from "@/lib/pricing";
 import type { ProposedOrder } from "@/lib/ai/normalize";
+import { PO_RULES } from "@/lib/ai/poRules";
 
 // The AI jobs the order desk can hand to Claude. Each one has a clear job description, the shop's
 // facts it needs, and a strict answer format. Add new jobs here the same way.
@@ -55,11 +56,15 @@ const ORDER_TOOL = {
 };
 
 /** Read an email / message / description and propose order inputs. */
-export function orderFromText(s: Settings, text: string, ctx: AiCtx & { admin?: SupabaseClient; today?: string }) {
+export function orderFromText(s: Settings, text: string, ctx: AiCtx & { admin?: SupabaseClient; today?: string;
+  /** files the customer uploaded (a PO, a size sheet, art), read the same way as an email's (lib/ai/emailOrder.ts readFiles) */
+  files?: { images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[]; documents: { data: string; label: string }[]; listing: string[] } }) {
+  const f = ctx.files;
   return askClaude<ProposedOrder>({
-    task: "order_from_text", model: s.assistant.ai.model, maxTokens: 3000, ctx, admin: ctx.admin, tool: ORDER_TOOL,
-    system: `${SHOP_CONTEXT(s)}\n\nYour job: read what a customer wrote and fill in the order form for the shop to check. Only include what the customer actually said or clearly implied. Put garments that share the same prints in one group. Today is ${ctx.today || new Date().toISOString().slice(0, 10)}.`,
-    prompt: `Customer's words:\n"""\n${text.slice(0, 20000)}\n"""`,
+    task: "order_from_text", model: s.assistant.ai.model, maxTokens: f ? 6000 : 3000, ctx, admin: ctx.admin, tool: ORDER_TOOL,
+    ...(f ? { images: f.images, documents: f.documents, timeoutMs: 110_000 } : {}),
+    system: `${SHOP_CONTEXT(s)}${f ? `\n\nThe customer uploaded files on our website (usually their purchase order). Read every file; the same rules the shop uses for a PO sent by email apply:\n${PO_RULES}` : ""}\n\nYour job: read what a customer wrote and fill in the order form for the shop to check. Only include what the customer actually said or clearly implied. Put garments that share the same prints in one group. Today is ${ctx.today || new Date().toISOString().slice(0, 10)}.`,
+    prompt: `${f ? `Their files:\n${f.listing.join("\n")}\n\n` : ""}Customer's words:\n"""\n${text.slice(0, 20000)}\n"""`,
   });
 }
 

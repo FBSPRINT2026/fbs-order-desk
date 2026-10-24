@@ -181,3 +181,46 @@ export async function acceptRequest(orderId: string, note: string, mode: "as_is"
     return { ok: true, status };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't accept it." }; }
 }
+
+/**
+ * A simple order from the portal (the customer sent their answers and files instead of filling in the form): brought
+ * in like an email so the one Create order tool (components/tools/CreateOrderTool.tsx) reads it, the PO with the PO
+ * rules, the art as art. meta.into_order: Create order fills in THIS order instead of making a new one.
+ */
+export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; activityId: string; text: string } | { ok: false; error: string }> {
+  try {
+    const { email } = await requireStaff();
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, delivery_method, ship_to, po_number, notes, submitted_at, simple_order").eq("id", orderId).maybeSingle();
+    if (!o?.simple_order) return { ok: false, error: "This isn't a simple order." };
+    const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; by?: string };
+    const { data: cust } = await admin.from("customers").select("company, name, email").eq("id", o.customer_id).maybeSingle();
+    const { data: files } = await admin.from("art_files").select("name, file_path, file_type, category").eq("order_id", orderId).like("file_path", "requests/%");
+    const sizes = await Promise.all((files || []).map(async (f) => {
+      const dir = String(f.file_path).replace(/\/[^/]+$/, ""), base = String(f.file_path).split("/").pop() || "";
+      const { data: l } = await admin.storage.from("proofs").list(dir, { search: base, limit: 5 });
+      return (l || []).find((x) => x.name === base)?.metadata?.size as number | undefined;
+    }));
+    const atts = (files || []).slice(0, 12).map((f, i) => ({ name: String(f.name), path: String(f.file_path), type: String(f.file_type || ""), size: sizes[i] || 0 }));
+    const kindOf = new Map((files || []).map((f) => [String(f.file_path), f.category === "order_sheet" ? "their PO" : f.category === "art" ? "art" : "a file"]));
+    const body = [
+      `${cust?.company || cust?.name || "The customer"} sent this order from our customer portal as a "simple order": they answered a few questions and uploaded files instead of filling in the order form. It is order #${o.number}; fill it in from what they sent.`,
+      s.about ? `What they need, in their words:\n${s.about}` : "",
+      o.nickname ? `Order name: ${o.nickname}` : "",
+      o.due_date ? `Need it by: ${o.due_date}` : "",
+      s.qty ? `About how many pieces: ${s.qty}` : "",
+      s.garments ? `The garments (what they know): ${s.garments}` : "",
+      `How they'll get it: ${o.delivery_method === "ship" ? `ship to ${o.ship_to}` : o.delivery_method === "deliver" ? `local delivery to ${o.ship_to}` : "they'll pick it up"}`,
+      atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
+    ].filter(Boolean).join("\n\n");
+    const ext = `portal-simple:${orderId}`;
+    const row = { customer_id: o.customer_id, kind: "portal", direction: "in", subject: `Simple order #${o.number}${o.nickname ? `: ${o.nickname}` : ""}`, body, from_email: s.by || cust?.email || "", to_email: "",
+      external_id: ext, thread_id: ext, occurred_at: o.submitted_at || new Date().toISOString(), order_id: null,
+      meta: { source: "portal", from_name: cust?.name || cust?.company || "", attachments: atts, att_checked: true, into_order: orderId }, created_by: email };
+    const { data: have } = await admin.from("activities").select("id").eq("external_id", ext).maybeSingle();
+    if (have) { const { error } = await admin.from("activities").update(row).eq("id", have.id); if (error) return { ok: false, error: error.message }; return { ok: true, activityId: have.id as string, text: row.subject }; }
+    const { data: made, error } = await admin.from("activities").insert(row).select("id").single();
+    if (error || !made) return { ok: false, error: error?.message || "Couldn't bring it in." };
+    return { ok: true, activityId: made.id as string, text: row.subject };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}

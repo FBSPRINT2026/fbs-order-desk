@@ -36,7 +36,8 @@ import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
-import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
+import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
+import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
@@ -801,6 +802,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
 
   const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
+  // a simple order from the portal: Create order (the one tool) reads their answers and files and fills this order in
+  const [simpleAct, setSimpleAct] = useState<{ id: string; text: string } | null>(null);
+  const [simpleBusy, setSimpleBusy] = useState("");
+  const buildSimple = async () => {
+    setSimpleBusy("Bringing in what they sent…");
+    if (!o) return;
+    const r = await simpleOrderActivity(o.id);
+    setSimpleBusy(r.ok ? "" : r.error);
+    if (r.ok) setSimpleAct({ id: r.activityId, text: r.text });
+  };
   // ---- drafts: Save gives it its number; Discard sets it aside (never deleted; it never had a number) ----
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   async function commitDraft() {
@@ -1132,6 +1143,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button type="button" className="btn primary" onClick={() => void commitDraft()}>Save</button>
         </div>
       )}
+      {(o as Order & { simple_order?: unknown }).simple_order != null && o.status === "request" && (() => {
+        const so = (o as Order & { simple_order: { about?: string; qty?: number | null; garments?: string; files?: { name: string }[] } }).simple_order;
+        return (
+          <div className="draft-bar" role="status">
+            <span><b>Simple order.</b> They sent the details instead of filling in the form{so.qty ? ` (about ${so.qty} pcs)` : ""}{so.files?.length ? `, with ${so.files.length} file${so.files.length === 1 ? "" : "s"}` : ""}.{so.about ? <> &ldquo;{so.about.slice(0, 220)}{so.about.length > 220 ? "…" : ""}&rdquo;</> : null}{so.garments ? <> Garments: {so.garments.slice(0, 120)}</> : null}{simpleBusy ? <> <i>{simpleBusy}</i></> : null}</span>
+            <span className="spacer" />
+            <button type="button" className="btn primary" disabled={!!simpleBusy && simpleBusy.endsWith("…")} onClick={() => void buildSimple()}>Build it with Create order</button>
+          </div>
+        );
+      })()}
+      {simpleAct && <CreateOrderTool activityId={simpleAct.id} text={simpleAct.text} guess="new" onClose={() => setSimpleAct(null)} onCreated={() => { setSimpleAct(null); window.location.reload(); }} />}
       {(o as Order & { cancel_requested_at?: string | null }).cancel_requested_at && (
         <div className="draft-bar" role="alert">
           <span><b>The customer asked to cancel</b> ({(o as Order & { cancel_reason?: string }).cancel_reason || "no reason given"}) on {new Date(String((o as Order & { cancel_requested_at?: string | null }).cancel_requested_at)).toLocaleDateString()}. Their note is in Messages; reply there and change the status if you cancel it.</span>

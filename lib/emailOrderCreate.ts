@@ -180,14 +180,19 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const { data: ct } = await admin.from("clickup_tasks").select("priority").eq("id", cuSrc.clickup.id).maybeSingle();
     if (/^(urgent|high)$/.test(String(ct?.priority || ""))) flag = "🚩 ";
   }
-  const { data: o, error } = await admin.from("orders").insert({
+  // a simple order from the portal (app/shop/actions.ts simpleOrderActivity): filled in where it is, keeping its number
+  const intoId = String(((a?.meta || {}) as { into_order?: string }).into_order || "");
+  const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     ...(d.firm && d.due_date ? { firm: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
-  }).select("id, number").single();
+  };
+  const { data: o, error } = intoId
+    ? await admin.from("orders").update({ ...orderRow, source: "portal" }).eq("id", intoId).eq("customer_id", custId).select("id, number").single()
+    : await admin.from("orders").insert(orderRow).select("id, number").single();
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
   // a job from the customer's ClickUp board (ClickUp Jobs, lib/clickup.ts)
@@ -239,7 +244,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out
-  for (const f of (d.files || []).filter((x) => x.role === "sheet" || (x.role === "other" && !isPicture(x)))) {
+  for (const f of (d.files || []).filter((x) => (x.role === "sheet" || (x.role === "other" && !isPicture(x))) && !(intoId && x.path.startsWith("requests/")))) {
     const to = `art/${oid}/${Date.now().toString(36)}-${safe(f.name)}`;
     const cp = await admin.storage.from("proofs").copy(f.path, to);
     if (cp.error) continue;
