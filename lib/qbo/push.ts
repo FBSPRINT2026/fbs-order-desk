@@ -277,6 +277,10 @@ export class Pusher {
       if (co.status !== "done") return { status: "error", reason: `Couldn't add the customer to QuickBooks: ${co.reason}`, preview: co.preview || null };
       custLink = await this.link("customer", o.customer_id);
       if (!custLink) return { status: "error", reason: "The customer was made in QuickBooks but the link wasn't saved." };
+    } else {
+      // already there: bring its fields up to date first (Taxable, name, address…)
+      const cu = await this.customer({ id: 0, entity: "customer", local_id: o.customer_id, op: "upsert", status: "pending", reason: "test", attempts: 0, request_key: `test-${o.customer_id}-u`, resolution: { force_fields: ["Taxable"] }, result: null }, true);
+      if (cu.status === "error") return { status: "error", reason: `Couldn't update the customer in QuickBooks: ${cu.reason}`, preview: cu.preview || null };
     }
     const build = invoicePayload({ order: o, customer: cust, customerRef: { value: custLink.qbo_id }, settings: this.settings, qs: this.qs });
     const body = { ...build.body, DocNumber: doc, PrivateNote: `TEST from the FBS portal: void this. ${String((build.body as { PrivateNote?: string }).PrivateNote || "")}`.slice(0, 4000) };
