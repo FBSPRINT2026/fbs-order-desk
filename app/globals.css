@@ -13683,3 +13683,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* an FBS-made (or ordered) mockup opened in the portal: look, or make a copy (Oct 24, Nick) */
 .mk-lock-note{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .mk-lock-note .btn{margin-left:auto}
+/* the FBS-made mockup bar: slim, one line (Oct 24, Nick: "doesn't need to be so big… FBS mockup on one side… only editable by staff in the middle… make a copy to edit on the right") */
+.mk-lockbar{display:flex;align-items:center;gap:14px;margin:0 0 12px;padding:6px 8px 6px 12px;background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:var(--r)}
+.mk-lockbar-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.mk-lockbar-l b{font-size:14px;font-weight:600;color:var(--ink)}
+.mk-lockbar-fbs{display:inline-block;background:var(--ink);color:var(--surface);font:700 12px/1 var(--body);letter-spacing:.02em;padding:4px 6px;border-radius:5px}
+.mk-lockbar-m{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--ink-3);white-space:nowrap}
+.mk-lockbar .btn{white-space:nowrap}
+@media (max-width:640px){.mk-lockbar{flex-wrap:wrap}.mk-lockbar-m{justify-content:flex-start;flex-basis:100%;order:3}}

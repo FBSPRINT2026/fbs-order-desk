@@ -2965,7 +2965,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
       {!portal && orderId ? <a className="back" href={`/shop/orders/${orderId}`}>← Order #{order?.number || ""}</a>
         : <Link className="back" href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"}>← {portal ? (requestId ? "Back to the order" : "Dashboard") : "Artwork"}</Link>}
-      {portal && lock && <div className="callout mk-change mk-lock-note"><b>{lock.fbs ? "FBS made this mockup" : `This mockup is on order #${lock.orderNo}`}{lock.fbs && lock.orderNo ? ` for order #${lock.orderNo}` : ""}.</b> You can look it over, turn it and zoom in. To try changes, make your own copy: the original stays as it is. <button type="button" className="btn sm primary" onClick={copyLocked}>Make a copy</button></div>}
+      {portal && lock && <div className="mk-lockbar" role="note">
+        <span className="mk-lockbar-l"><span className="mk-lockbar-fbs" aria-hidden>fbs</span><b>{lock.fbs ? "FBS made mockup" : "Ordered mockup"}</b></span>
+        <span className="mk-lockbar-m"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>{lock.orderNo ? `On order #${lock.orderNo}` : "Only editable by FBS staff"}</span>
+        <button type="button" className="btn sm primary" onClick={copyLocked}>Make a copy to edit</button>
+      </div>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       {sizeAskB && sizeAskB.length > 0 && (() => {
