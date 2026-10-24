@@ -13465,3 +13465,15 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .rq-re-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 /* the portal's tabs inside a tab (Artwork, Pricing; Oct 24, Nick) */
 .portal .aa-subtabs{margin:0 0 12px}
+/* Skip the form: three buttons, one size, icon then words (Oct 24, Nick) */
+.rq-fast.rq-fast3{grid-template-columns:1fr;gap:8px}
+.rq-fast.rq-fast3 .rq-fast-o{flex-direction:row;justify-content:flex-start;text-align:left;min-height:48px;height:48px;padding:0 14px;gap:12px}
+.rq-fast.rq-fast3 .rq-fast-o .ic{width:30px;height:30px;flex:0 0 30px}
+.rq-fast.rq-fast3 .rq-fast-o b{font-size:14px}
+/* the reorder list: a picture, the order, View */
+.rq-re-row{grid-template-columns:52px minmax(0,1fr) auto!important;outline:0}
+.rq-re-pic{width:52px;height:52px;border:1px solid var(--line);border-radius:6px;background:#fff;display:grid;place-items:center;overflow:hidden;font-size:11px;color:var(--ink-3)}
+.rq-re-pic img{width:100%;height:100%;object-fit:contain}
+.rq-re-t{display:flex;flex-direction:column;min-width:0}
+.rq-re-t .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rq-re-t b{font-size:13.5px}
