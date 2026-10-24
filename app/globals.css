@@ -13407,3 +13407,21 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .so-toggle input:checked+.so-sw::after{transform:translateX(16px)}
 .so-toggle input:focus-visible+.so-sw{outline:2px solid var(--accent);outline-offset:2px}
 .so-goods{padding:12px;border:1px solid var(--line-2,var(--line));border-radius:8px;background:color-mix(in srgb,var(--surface-2) 40%,var(--surface))}
+/* Mockup Creator: their own garment photos, and the close-up eyedropper (Oct 24, Nick) */
+.mk-own b{display:block;font-size:14px;line-height:36px;height:36px;padding:0 10px;border:1px dashed var(--line);border-radius:6px;background:var(--surface-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-own-add{all:unset;cursor:pointer;display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px dashed var(--line);border-radius:999px;font-size:12.5px;color:var(--accent)}
+.mk-own-add:hover{border-color:var(--accent)}
+.mk-own-dlg{width:min(560px,100%)}
+.mk-own-pics{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.mk-own-pic{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:4/5;border:1.5px dashed var(--line);border-radius:10px;background:var(--surface-2);cursor:pointer;color:var(--accent);font-weight:600;font-size:13.5px;overflow:hidden}
+.mk-own-pic:hover{border-color:var(--accent)}
+.mk-own-pic.has{border-style:solid;background:#fff}
+.mk-own-pic img{max-width:100%;max-height:85%;object-fit:contain}
+.mk-own-pic small{font-size:11.5px;color:var(--ink-3);font-weight:400}
+.mk-cu-h{position:relative}
+.mk-cu-eye{display:inline-flex;align-items:center;gap:3px;margin-left:auto}
+.mk-cu-eyeb{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-3)}
+.mk-cu-eyeb:hover{border-color:var(--accent);color:var(--accent)}
+.mk-cu-eyeb .sw{width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+.mk-cu-eyer{all:unset;cursor:pointer;font-size:13px;color:var(--ink-3);padding:0 3px}
+.mk-cu-eyer:hover{color:var(--accent)}

@@ -20,6 +20,7 @@ import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import MockupOrderButton from "@/components/MockupOrderButton";
 import { mySheetBrand } from "@/app/portal/settings-actions";
+import { garmentPhotoUploadUrl, garmentPhotoUrls } from "@/app/garment-photo-actions";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
@@ -56,7 +57,9 @@ import { ColorPicker, StylePicker } from "@/components/GroupEditor";
 import { fmtPhone } from "@/lib/phone";
 import { bareStyle } from "@/lib/ai/normalize";
 
-type Line = { id: string; style: string; brand: string; color: string; garment: string };
+type Line = { id: string; style: string; brand: string; color: string; garment: string;
+  /** a garment that isn't in the catalog: the photos they uploaded (storage paths; Oct 24, Nick: "LA Apparel isn't offered at either of those two suppliers") */ own?: { front: string; back?: string };
+  /** the shirt's color picked off the photo with the eyedropper (close-ups and logo tiles; Oct 24, Nick) */ hex?: string };
 type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
@@ -945,6 +948,43 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
+  // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
+  const [ownUp, setOwnUp] = useState<{ name: string; color: string; front: File | null; back: File | null; lock?: boolean; busy?: string; err?: string } | null>(null);
+  async function addOwn() {
+    const o = ownUp; if (!o?.front) return;
+    setOwnUp({ ...o, busy: "Uploading…", err: "" });
+    try {
+      const up = async (f: File) => {
+        const t = await garmentPhotoUploadUrl(f.name, customerId || undefined);
+        if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload isn't available right now.");
+        const r = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
+        if (r.error) throw new Error(r.error.message);
+        return t.path;
+      };
+      const front = await up(o.front), back = o.back ? await up(o.back) : undefined;
+      const urls = await garmentPhotoUrls([front, ...(back ? [back] : [])], customerId || undefined);
+      setOwnUrls((u) => ({ ...u, ...urls })); ownAsked.current.add(front); if (back) ownAsked.current.add(back);
+      const nl: Line = { id: uid(), style: o.name.trim().slice(0, 80), brand: "", color: o.color.trim().slice(0, 60), garment: "Their own garment (photos uploaded)", own: { front, ...(back ? { back } : {}) } };
+      setLines((ls) => {
+        const blank = ls.length === 1 && !ls[0].style.trim() && !ls[0].color;
+        const out = blank ? [nl] : [...ls, nl];
+        setTimeout(() => setActive(out.length - 1), 0);
+        return out;
+      });
+      setOwnUp(null);
+    } catch (e) { setOwnUp({ ...o, busy: "", err: e instanceof Error ? e.message : "Upload failed." }); }
+  }
+  /** the close-up's shirt color, picked off the photo (the browser's eyedropper; a color box where there isn't one) */
+  async function pickShirtColor() {
+    const li = active, l = lines[li]; if (!l) return;
+    const set = (hex: string) => setLines((ls) => ls.map((x, j) => (j === li ? { ...x, hex: hex.toLowerCase() } : x)));
+    const ED = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+    if (ED) { try { const r = await new ED().open(); if (r?.sRGBHex) set(r.sRGBHex); } catch { /* closed without picking */ } return; }
+    const inp = document.createElement("input"); inp.type = "color"; inp.value = shirtHex(l);
+    inp.oninput = () => set(inp.value); inp.click();
+  }
+  const resetShirtColor = () => { const li = active; setLines((ls) => ls.map((x, j) => (j === li ? { ...x, hex: undefined } : x))); };
+
   const garmentFor = (l: Line) => {
     // "Gildan 64000" on an order: the style is the number (lib/ai/normalize.ts bareStyle)
     const st = bareStyle(l.style, l.brand).style.toLowerCase();
@@ -952,12 +992,22 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       || catalog.find((g) => g.style.toLowerCase() === st);
   };
 
+  // links for uploaded garment photos (signed for a week, asked for whenever a line has new ones)
+  const [ownUrls, setOwnUrls] = useState<Record<string, string>>({});
+  const ownAsked = useRef(new Set<string>());
+  useEffect(() => {
+    const want = lines.flatMap((l) => (l.own ? [l.own.front, l.own.back || ""] : [])).filter((p) => p && !ownAsked.current.has(p));
+    if (!want.length) return;
+    want.forEach((p) => ownAsked.current.add(p));
+    void garmentPhotoUrls(want, customerId || undefined).then((m) => setOwnUrls((u) => ({ ...u, ...m })));
+  }, [lines, customerId]);
+
   // a style on the order that isn't in the catalog yet (so no photos): pull it from S&S / SanMar once
   useEffect(() => {
     if (!catalog.length && !orderId) return;
     lines.forEach((l) => {
       const st = bareStyle(l.style, l.brand).style;
-      if (!st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
+      if (l.own || !st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
       tried.current.add(st.toUpperCase());
       // SanMar's brands (Port Authority, Sport-Tek, District…) go straight to SanMar
       if (orderId) lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined);
@@ -979,6 +1029,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [lines, catalog]);
 
   const photo = (l: Line, view: View) => {
+    // their own photos (a garment not in the catalog): the side they uploaded, else a drawn tee of its color
+    if (l.own) { const p = view === "front" ? l.own.front : l.own.back || ""; const u = p ? ownUrls[p] : ""; return u || teeSvg(l.hex || guessHex(l.color), view, isHeather(l.color)); }
     const g = garmentFor(l);
     // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
@@ -1491,7 +1543,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
@@ -1560,7 +1612,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
-                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={() => void pickShirtColor()} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
@@ -2434,7 +2486,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mockup keeps its setup so it can be opened to edit and ordered; every color saved together is one set and
         // one number (Oct 24, Nick). A proof being changed isn't a library mockup.
         const set = changeId ? "" : (mockSet.current ||= crypto.randomUUID());
-        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
+        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
         for (const l of lines.filter((z) => z.style || z.color)) {
           const blob = await render(l), thumb = await render(l, true);
           const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -2453,7 +2505,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (changeId) {
           // their version goes to the shop with the proof; we check it and send a new proof
           const r2 = await submitOwnChange(changeId, {
-            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })),
+            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })),
             imprints: imprints.map((d) => ({ ...d })),
             mockupPaths: paths, note: "",
           });
@@ -2509,7 +2561,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!orderId && newMockups.length) {
         const set = mockSet.current || crypto.randomUUID();
         mockSet.current = set;
-        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
+        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
         await sb.from("mockups").update({ snapshot: snap }).in("id", newMockups);
         const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
         const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
@@ -2999,16 +3051,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     const have = gr.idx.map((i) => lines[i].color).filter(Boolean);
                     return (
                       <div key={l0.id} className="mk-gar-row">
-                        <div className="mk-style">
+                        {l0.own ? (
+                          <div className="mk-style mk-own"><b data-notranslate>{l0.style || "Your garment"}</b><small className="mk-style-n">Your photos · not from a supplier</small></div>
+                        ) : <div className="mk-style">
                           <StylePicker value={l0.style} catalog={catalog} busy={!!lookingUp}
                             onType={(v) => setLines((ls) => ls.map((x) => (ids.includes(x.id) ? { ...x, style: v, brand: "", garment: "" } : x)))}
                             onPick={(gg) => pickStyle(ids, gg)}
                             onPickSS={async (h) => { const gg = await lookupStyle(h.style, h.styleID || undefined, h.supplier); if (gg) pickStyle(ids, gg); }} />
                           <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l0.style.trim() ? "Pick a style from the list" : "Type a style #, e.g. 6210, 5000, PC54"}</small>
-                        </div>
+                        </div>}
                         <div className="mk-gar-colors">
                           {gr.idx.filter((i) => lines[i].color).map((i) => {
-                            const l = lines[i], hex = garmentHex(g?.color_images?.[l.color]?.hex, l.color);
+                            const l = lines[i], hex = l.own || l.hex ? shirtHex(l) : garmentHex(g?.color_images?.[l.color]?.hex, l.color);
                             return (
                               // drag a color to put it in order (Oct 23, Nick: "I should be able to drag that chip over so it shows in
                               // that order… when I make the sales tools"): the colors' order is the order everywhere after
@@ -3022,6 +3076,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                               </span>
                             );
                           })}
+                          {l0.own && <button type="button" className="mk-gc-add mk-own-add" title="Add another color: upload its photos" onClick={() => setOwnUp({ name: l0.style, color: "", front: null, back: null, lock: true })}>＋ Color</button>}
                           {g && <AddColor colors={(g.colors || []).filter((c) => !have.includes(c))} onAdd={(c) => {
                             const blank = gr.idx.find((i) => !lines[i].color);
                             if (blank != null) { setLines((ls) => ls.map((x, j) => (j === blank ? { ...x, color: c } : x))); setActive(blank); }
@@ -3032,12 +3087,47 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       </div>
                     );
                   })}
-                  <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
+                  <div className="row mk-add-row" style={{ gap: 8 }}>
+                    <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
+                    {/* a garment the suppliers don't carry (Oct 24, Nick: "images not in catalog, upload my own images") */}
+                    <button className="btn sm ghost mk-add" type="button" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })}>Not in the catalog? Upload photos</button>
+                  </div>
                 </div>
               );
             })()}
           </section>
         )}
+      {ownUp && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Upload your own garment photos" onClick={() => !ownUp.busy && setOwnUp(null)}>
+          <div className="dla mk-own-dlg" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dla-x" aria-label="Close" disabled={!!ownUp.busy} onClick={() => setOwnUp(null)}>×</button>
+            <h3>{ownUp.lock ? `Another color of ${ownUp.name}` : "Your own garment photos"}</h3>
+            <p className="dla-sub">For a garment we don&apos;t carry: a straight-on photo of the front (and the back, if you have one), on a plain background. We find the shirt and place your art on it; drag the art to line it up.</p>
+            <div className="grid g2" style={{ gap: 10 }}>
+              <div className="field"><label htmlFor="own-n">Garment</label><input id="own-n" type="text" placeholder="e.g. LA Apparel 1801" value={ownUp.name} disabled={ownUp.lock} onChange={(e) => setOwnUp({ ...ownUp, name: e.target.value })} /></div>
+              <div className="field"><label htmlFor="own-c">Color</label><input id="own-c" type="text" placeholder="e.g. Black" value={ownUp.color} onChange={(e) => setOwnUp({ ...ownUp, color: e.target.value })} /></div>
+            </div>
+            <div className="mk-own-pics">
+              {(["front", "back"] as const).map((sd) => {
+                const f = ownUp[sd];
+                return (
+                  <label key={sd} className={"mk-own-pic" + (f ? " has" : "")}>
+                    {f ? <img src={URL.createObjectURL(f)} alt="" /> : <span>＋ {sd === "front" ? "Front photo" : "Back photo (optional)"}</span>}
+                    <input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => { const x = e.target.files?.[0] || null; e.target.value = ""; setOwnUp((o) => (o ? { ...o, [sd]: x } : o)); }} />
+                    {f && <small>{sd === "front" ? "Front" : "Back"} · click to change</small>}
+                  </label>
+                );
+              })}
+            </div>
+            {ownUp.err && <div className="pv-err">{ownUp.err}</div>}
+            <div className="dla-acts">
+              <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>{ownUp.busy}</span>
+              <button type="button" className="btn ghost" disabled={!!ownUp.busy} onClick={() => setOwnUp(null)}>Cancel</button>
+              <button type="button" className="btn primary" disabled={!!ownUp.busy || !ownUp.front || !ownUp.name.trim() || !ownUp.color.trim()} onClick={() => void addOwn()}>Use these photos</button>
+            </div>
+          </div>
+        </div>
+      )}
       {askUploaded && (
         <div className="confirm-bar" style={{ marginBottom: 10 }}>
           <span>Some design colors are still &quot;as uploaded&quot; instead of a standard ink ({imprints.filter((im) => !(im.visualOnly && !im.confirmed) && unsetColors(im).length).map((im) => `${im.location}: ${unsetColors(im).length}`).join(", ")}). Set them to the closest Wilflex RFU inks?</span>
@@ -3883,7 +3973,8 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onEnd, onPick }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex }: {
+  /** pick the shirt's color off the photo (Oct 24, Nick: "an eyedropper to select the color in the shirt") */ onEyedrop?: () => void; picked?: boolean; onResetHex?: () => void;
   size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   colors: { hex: string; name: string }[];
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void; onEnd?: () => void;
@@ -3907,7 +3998,15 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
   const cy = (topAlign ? top0 + (hIn * PX) / 2 : H / 2) + offIn.y * PX; // same spot as on the photos: top of the area for full front/back, else centered
   return (
     <div className="mk-sleeve" style={{ width: BOX }}>
-      <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span></div>
+      <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span>
+        {onEyedrop && <span className="mk-cu-eye">
+          <button type="button" className="mk-cu-eyeb" title="Shirt color wrong? Click, then click the shirt to pick its color" aria-label="Pick the shirt color" onClick={onEyedrop}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m2 22 1-1h3l9-9M3 21v-3l9-9M15 6l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3z" /></svg>
+            <span className="sw" style={{ background: hex }} />
+          </button>
+          {picked && onResetHex && <button type="button" className="mk-cu-eyer" title="Back to the color from the photo" aria-label="Reset the shirt color" onClick={onResetHex}>↺</button>}
+        </span>}
+      </div>
       <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex, alignSelf: "center" }}
         onPointerMove={(e) => {
           const d = drag.current; if (!d) return;
