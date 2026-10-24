@@ -91,8 +91,9 @@ function run(L: Int16Array, W: number, H: number, dx: 1 | -1, t: number, step: n
  * The stitched look of a picture (a painted logo, see-through around it). `pxPerIn`: how many of its pixels make an
  * inch at the print size; left out, the logo is taken as about 3.5" wide.
  */
-export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: number; debug?: boolean | "obj" } = {}): Promise<string> {
+export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: number; debug?: boolean | "obj"; tune?: Record<string, number> } = {}): Promise<string> {
   const img = await loadImg(src);
+  const tune = (k: string, d: number) => (o.tune && typeof o.tune[k] === "number" ? o.tune[k] : d);
   const k = Math.min(1, (o.maxSide || 900) / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
   const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k)), N = w * h;
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -263,11 +264,24 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
       // stem going on up past a bar owns the join (the bar tucks under it); where two strokes turn a corner the join
       // splits on the diagonal (a mitred corner, like the top of an F or the corners of an outline)
       const len = fw[j] + bw[j] - st;
-      const tr = Sxx[i] + Syy[i], coh = tr > 1e-6 ? Math.sqrt((Sxx[i] - Syy[i]) ** 2 + 4 * Sxy[i] ** 2) / tr : 0;
-      const tang = 0.5 * Math.atan2(2 * Sxy[i], Sxx[i] - Syy[i]) + Math.PI / 2, ca = Math.cos(ang - tang);
-      const sc = (Math.min(fw[j], bw[j]) + 0.3 * len) * (1 + 0.6 * coh * coh * ca * ca);
-      lens[a * N + i] = Math.min(65535, Math.round(sc * 8));
       lensRaw[a * N + i] = Math.min(65535, Math.round(len * 4)); mins[a * N + i] = Math.min(65535, Math.round(Math.min(fw[j], bw[j]) * 4));
+    }
+  }
+  // only a way the stroke actually runs (well longer than the stroke is wide) can own a spot by how far it goes on:
+  // the short way across a bar never does, so a bar runs straight on out to its end, no cap (Nick: "this font has no
+  // serif… you should have just continued on")
+  const LAMBDA = tune("lambda", 0.3), BETA = tune("curve", 0.6);
+  for (let i = 0; i < N; i++) {
+    if (lab[i] < 0) continue;
+    let wmin = Infinity;
+    for (let a = 0; a < DIRS; a++) wmin = Math.min(wmin, lensRaw[a * N + i]);
+    const tr = Sxx[i] + Syy[i], coh = tr > 1e-6 ? Math.sqrt((Sxx[i] - Syy[i]) ** 2 + 4 * Sxy[i] ** 2) / tr : 0;
+    const tang = 0.5 * Math.atan2(2 * Sxy[i], Sxx[i] - Syy[i]) + Math.PI / 2;
+    for (let a = 0; a < DIRS; a++) {
+      const len = lensRaw[a * N + i] / 4, mn = mins[a * N + i] / 4, ca = Math.cos((a * Math.PI) / DIRS - tang);
+      const runs = lensRaw[a * N + i] >= tune("runs", 1.6) * wmin;
+      const sc = ((runs ? mn : 0) + LAMBDA * len) * (1 + BETA * coh * coh * ca * ca);
+      lens[a * N + i] = Math.min(65535, Math.round(sc * 8));
       if (sc > bestScore[i]) { bestScore[i] = sc; runLen[i] = len; }
     }
   }
@@ -298,7 +312,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     let mx = 0;
     for (let a = 0; a < DIRS; a++) mx = Math.max(mx, lens[a * N + i]);
     let sx = 0, sy = 0;
-    for (let a = 0; a < DIRS; a++) { const v = Math.pow(lens[a * N + i] / (mx || 1), 16); sx += v * C2[a]; sy += v * S2[a]; }
+    for (let a = 0; a < DIRS; a++) { const v = Math.pow(lens[a * N + i] / (mx || 1), tune("power", 16)); sx += v * C2[a]; sy += v * S2[a]; }
     const m = Math.hypot(sx, sy) || 1; ax[i] = sx / m; ay[i] = sy / m;
   }
   // specks: a few pixels pointing their own way inside a stroke take the way most of their neighbors go
@@ -327,8 +341,8 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     ax = nx; ay = ny;
   }
   // even it out inside each stroke only: neighbors on another line (more than ~20° off) don't count
-  const rs = Math.max(1, Math.round(0.7 * pxMm)), agreeMin = Math.cos((50 * Math.PI) / 180);
-  for (let pass = 0; pass < 3; pass++) {
+  const rs = Math.max(1, Math.round(tune("smooth", 0.7) * pxMm)), agreeMin = Math.cos((2 * tune("agree", 25) * Math.PI) / 180);
+  for (let pass = 0; pass < tune("passes", 3); pass++) {
     const nx = new Float32Array(N), ny = new Float32Array(N);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = y * w + x; if (lab[i] < 0) continue;
@@ -379,9 +393,11 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
   let seed = 7;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   for (let i = 0; i < N; i++) raw[i] = rnd() + rnd() + rnd() - 1.5;
+  const grain = tune("grain", 1);
+  if (grain > 1) { const r2 = raw.slice(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw[y * w + x] = r2[Math.floor(y / grain) * w + Math.floor(x / grain)]; }
   const sm = blur(raw, w, h, 1);
   const noise = new Float32Array(N);
-  for (let i = 0; i < N; i++) noise[i] = 0.9 * raw[i] + 0.3 * sm[i];
+  for (let i = 0; i < N; i++) noise[i] = (1 - tune("soft", 0.25)) * raw[i] + tune("soft", 0.25) * 1.6 * sm[i];
   const tex = new Float32Array(N), S = 18;
   let var_ = 0, nIn = 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -419,13 +435,13 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     let lit: number, round = 0.5;
     const th = Math.atan2(ty[i], tx[i]);
     const isSatin = lab[i] >= 0 && satin[i] === 1;
-    const sheen = 1 + (isSatin ? 0.05 : 0.02) * Math.cos(2 * (th - sheenRef));
+    const sheen = 1 + (isSatin ? tune("sheen", 0.05) : 0.02) * Math.cos(2 * (th - sheenRef));
     if (lab[i] < 0) lit = 0.82; // a soft edge pixel: the ragged end of a stitch
     else if (isSatin) {
       // the round of the column: gray at the edges, bright on top, the edge ragged thread by thread
-      const ue = Math.min(1, Math.max(0, along[i] + 0.04 * T));
+      const ue = Math.min(1, Math.max(0, along[i] + tune("ragged", 0.04) * T));
       round = Math.max(0, Math.sin(Math.PI * ue));
-      lit = (0.78 + 0.26 * Math.pow(round, 0.7)) * sheen * (1 + 0.03 * T);
+      lit = (tune("edge", 0.78) + (1.04 - tune("edge", 0.78)) * Math.pow(round, 0.7)) * sheen * (1 + tune("tex", 0.03) * T);
     } else {
       // too wide for one stitch: a fill sewn the same way, rows of shorter stitches with staggered needle points
       const ct = tx[i], st = ty[i];
@@ -448,7 +464,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
         if (Math.abs(u) <= 1 && Math.abs(v) <= 1) seam = Math.max(seam, Math.min(1, (0.55 - agree) / 0.9));
         if (runLen[j] > runLen[i] * 1.1) under = Math.max(under, near);
       }
-      lit *= (1 - 0.14 * seam) * (1 - 0.14 * under);
+      lit *= (1 - tune("seam", 0.14) * seam) * (1 - tune("under", 0.14) * under);
     }
     // raised edges
     const off = rb, ix = Math.max(0, x - off), iy = Math.max(0, y - off), jx = Math.min(w - 1, x + off), jy = Math.min(h - 1, y + off);
