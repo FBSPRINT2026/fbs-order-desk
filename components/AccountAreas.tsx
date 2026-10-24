@@ -250,7 +250,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><SearchInput placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
   // what a row is, in the Orders tab's All list (Oct 24, Nick: "a bubble… that says sent to FBS, quote, or invoice")
-  const kindOf = (o: AOrder) => (o.type === "invoice" ? "Order" : o.status === "request" && o.sent ? "Sent to FBS" : "Quote");
+  const kindOf = (o: AOrder) => (o.type === "invoice" ? "Order" : o.status === "request" ? (o.sent ? "Sent to FBS" : "Draft") : "Quote");
   const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice", all = false) => {
     const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : "", o.search));
     return (

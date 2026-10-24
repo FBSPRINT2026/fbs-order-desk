@@ -13168,3 +13168,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* Get help in the portal's top bar; customer reports marked on Support */
 .p-help{display:inline-flex;align-items:center;gap:6px}
 .sup-cust{display:inline-block;margin-right:6px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--fbs-orange,#F7941D) 18%,transparent);color:#a35c00}
+.aa-kind.k-draft{background:var(--surface-2);color:var(--ink-3)}
+@media (min-width:641px){.aa-tbl-cols col.c-ty{width:120px}}
+.aa-tbl .aa-kind{margin-right:0;white-space:nowrap}

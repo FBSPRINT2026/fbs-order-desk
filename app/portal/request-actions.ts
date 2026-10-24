@@ -4,7 +4,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
+import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
@@ -59,6 +59,12 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
         customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && m.path.startsWith(`mockups/${cust.id}/`)).slice(0, 10),
       }));
       row.groups = groups;
+      // a wholesale account sees its prices while building, so the order keeps its total (Oct 24: #40149 showed $0.00)
+      if ((cust.price_type || "retail") === "wholesale") {
+        const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+        const { data: cur } = await admin.from("orders").select("*").eq("id", id).maybeSingle();
+        if (cur) row.total = calcOrder({ ...(cur as Order), groups, price_type: "wholesale" }, mergeSettings(st?.data), []).total;
+      }
       row.qty = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
     }
     if (patch.nickname !== undefined) row.nickname = patch.nickname.slice(0, 120);
