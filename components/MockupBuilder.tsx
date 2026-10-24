@@ -12,6 +12,7 @@ import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
+import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
@@ -964,6 +965,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
+  /** "Need help picking garments?": our most popular garments to pick from (Oct 24, Nick) */
+  const [popOpen, setPopOpen] = useState(false);
   const [ownUp, setOwnUp] = useState<{ name: string; color: string; front: File | null; back: File | null; lock?: boolean; busy?: string; err?: string } | null>(null);
   async function addOwn() {
     const o = ownUp; if (!o?.front) return;
@@ -3107,6 +3110,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       </div>
                     );
                   })}
+                  <div className="mk-help-row"><button type="button" className="btn sm mk-help-pick" onClick={() => setPopOpen(true)}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden><path d="M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z" /></svg>Need help picking garments?</button></div>
+                  {popOpen && <PopularGarments askHref={portal ? `/portal?area=messages${asId ? `&as=${asId}` : ""}` : undefined} onClose={() => setPopOpen(false)} onPick={(g) => {
+                    setPopOpen(false);
+                    setLines((ls) => { const blank = ls.find((x) => !x.style.trim()); const ln = { style: g.style, brand: g.brand, color: "", garment: g.garment }; return blank ? ls.map((x) => (x.id === blank.id ? { ...x, ...ln } : x)) : [...ls, { id: uid(), ...ln }]; });
+                    setMsg(`Added ${g.brand} ${g.style}. Pick its color.`);
+                  }} />}
                   <div className="row mk-add-row" style={{ gap: 8 }}>
                     <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
                     {/* a garment the suppliers don't carry (Oct 24, Nick: "images not in catalog, upload my own images") */}

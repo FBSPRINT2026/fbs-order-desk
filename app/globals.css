@@ -13727,3 +13727,30 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* Mockup Creator: "Not in the catalog? Upload photos" at the bottom right of the garments bar (Oct 24, Nick) */
 .mk-add-row{width:100%;align-self:stretch}
 .mk-add-row .mk-own-up{margin-left:auto}
+/* Mockup Creator: "Need help picking garments?" above "Not in the catalog?", and its pop-up (Oct 24, Nick) */
+.mk-help-row{display:flex;justify-content:flex-end;margin:4px 0 -2px}
+.mk-help-pick{display:inline-flex;align-items:center;gap:6px;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.mk-help-pick:hover{background:var(--accent-soft)}
+.pg{max-width:680px;width:calc(100vw - 32px)}
+.pg h3{margin:0 0 2px}
+.pg-k{font-size:12px;color:var(--ink-3);margin:12px 0 6px}
+.pg-uses{display:flex;flex-wrap:wrap;gap:6px}
+.pg-use{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2,var(--ink));cursor:pointer}
+.pg-use.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent);font-weight:600}
+.pg-kinds{margin:12px 0 10px}
+.pg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:min(52vh,460px);overflow:auto;padding:2px}
+.pg-card{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.pg-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.pg-card.on{border:2px solid var(--accent);padding:9px}
+.pg-pic{flex:none;width:64px;height:64px;border-radius:8px;background:var(--surface-2);overflow:hidden;display:grid;place-items:center}
+.pg-pic img{width:100%;height:100%;object-fit:contain}
+.pg-t{display:flex;flex-direction:column;min-width:0;gap:1px}
+.pg-tag{font-size:11.5px;color:var(--accent);font-weight:600}
+.pg-t b{font-size:14px;font-weight:600;color:var(--ink)}
+.pg-why{font-size:12.5px;color:var(--ink-2,var(--ink));line-height:1.35}
+.pg-meta{font-size:12px;color:var(--ink-3)}
+.pg-foot{display:flex;align-items:center;gap:10px;margin-top:14px}
+.pg-foot .faint{flex:1;font-size:12.5px}
+@media (max-width:560px){.pg-grid{grid-template-columns:1fr}}
+.pgs-tbl input,.pgs-tbl select{width:100%;min-width:70px}
+.pgs-uses{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;min-width:220px}

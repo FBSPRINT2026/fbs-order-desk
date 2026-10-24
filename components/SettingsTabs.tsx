@@ -14,7 +14,7 @@ const I = (d: string) => <svg viewBox="0 0 24 24" aria-hidden className="ot-ic">
 export const SETTINGS_GROUPS: Group[] = [
   { k: "shop", label: "Shop", icon: I("M3 10l9-6 9 6v10H3z"), subs: [["/shop/settings/shop", "Shop info"]] },
   { k: "pricing", label: "Pricing", icon: I("M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"), subs: [["/shop/settings/pricing/retail", "Retail"], ["/shop/settings/pricing/wholesale", "Wholesale"], ["/shop/settings/pricing/addons", "Add-ons"], ["/shop/settings/pricing/payments", "Tax & payments"]] },
-  { k: "garments", label: "Garments", icon: I("M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z"), subs: [["/shop/catalog", "Garment catalog"]] },
+  { k: "garments", label: "Garments", icon: I("M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z"), subs: [["/shop/catalog", "Garment catalog"], ["/shop/settings/garments/popular", "Popular garments"]] },
   { k: "production", label: "Production", icon: I("M3 7h18v10H3zM7 7V4h10v3"), subs: [["/shop/settings/production", "Machines & crews"], ["/shop/settings/production/times", "Run times"], ["/shop/settings/production/speed", "Real speed"]] },
   { k: "people", label: "People", icon: I("M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20c0-3 3-5 6-5s6 2 6 5M16 11a3 3 0 1 0 0-6M21 20c0-2-1-4-4-5"), subs: [["/shop/settings/people/staff", "Staff"], ["/shop/settings/access", "User access"], ["/shop/settings/people/owners", "Account owners"]] },
   { k: "assistant", label: "Assistant & AI", icon: I("M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"), subs: [["/shop/settings/assistant", "Assistant & AI"]] },
