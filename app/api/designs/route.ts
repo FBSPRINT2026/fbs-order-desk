@@ -17,9 +17,19 @@ export const maxDuration = 60;
  */
 export async function GET(req: Request) {
   const v = await getViewer();
-  if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const sp = new URL(req.url).searchParams, cid = sp.get("customer") || "";
   if (!cid) return NextResponse.json({ error: "Which customer?" }, { status: 400 });
+  // the customer themselves, read-only, when staff turned it on for their portal (Oct 24, Nick: Dear Hearts); their own
+  // account only (row security), and only the designs: no staff grouping notes, deleted groupings or loose orders
+  if (v.user && !v.isStaff) {
+    const { data: me } = await v.supabase.from("customers").select("id, design_catalog, design_catalog_portal").eq("id", cid).maybeSingle();
+    if (!me || !me.design_catalog || !me.design_catalog_portal || sp.get("site")) return NextResponse.json({ error: "Not available." }, { status: 403 });
+    try {
+      const c = await buildCatalog(createAdminClient(), cid);
+      return NextResponse.json({ ...c, rules: { names: {}, merge: {}, jobs: {}, hidden: [] }, hidden: [], other: [], designs: c.designs.map((d) => ({ ...d, pics: [] })) });
+    } catch { return NextResponse.json({ error: "Couldn't load your designs." }, { status: 500 }); }
+  }
+  if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   // just their website (the customer's settings): the one saved, and the one their email suggests
   if (sp.get("site")) {
     const admin = createAdminClient();

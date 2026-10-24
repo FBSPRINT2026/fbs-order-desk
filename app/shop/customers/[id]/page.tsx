@@ -245,7 +245,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               </select>
             </div>
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
-            <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} />
+            <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} />
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
             </div>
           </form>

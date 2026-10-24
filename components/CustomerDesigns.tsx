@@ -448,7 +448,7 @@ function ThumbPicker({ d, customerId, onSet, onClose }: { d: CatalogDesign; cust
 }
 
 /** a version's picture: Printavo kept only a 100 px thumbnail, so a PDF mockup is drawn here at full size */
-function VerPic({ thumb, full }: { thumb: string; full: string }) {
+export function VerPic({ thumb, full }: { thumb: string; full: string }) {
   const [big, setBig] = useState("");
   useEffect(() => {
     if (!full || !(isPdf(full) || isPsd(full))) return;

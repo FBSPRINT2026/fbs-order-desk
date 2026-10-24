@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
  * thumbnail… uses their site"). On: the customer gets the Designs tab (their orders grouped by design, every time each
  * was printed), with a picture of each from their website when it can be found, else from the job's own files.
  */
-export default function DesignCatalogSetting({ customerId, on, onChange }: { customerId: string; on: boolean; onChange: (v: boolean) => void }) {
+export default function DesignCatalogSetting({ customerId, on, onChange, portalOn = false, onPortal }: { customerId: string; on: boolean; onChange: (v: boolean) => void; /** shown to the customer in their portal too */ portalOn?: boolean; onPortal?: (v: boolean) => void }) {
   const [site, setSite] = useState(""), [guess, setGuess] = useState(""), [saved, setSaved] = useState(""), [msg, setMsg] = useState("");
   useEffect(() => {
     fetch(`/api/designs?customer=${customerId}&site=1`).then((r) => r.json()).then((j) => { setSite(j.site || ""); setSaved(j.site || ""); setGuess(j.guess || ""); }).catch(() => {});
@@ -22,6 +22,7 @@ export default function DesignCatalogSetting({ customerId, on, onChange }: { cus
     <div className="field dcs">
       <label className="check"><input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> <b>Design catalog</b></label>
       <span className="faint" style={{ fontSize: 12 }}>Their orders grouped by design: every time we&apos;ve printed each one, on what, and how many, with a picture of each. Shows as a Design catalog tab on this customer, next to Artwork.</span>
+      {on && onPortal && <label className="check dcs-portal"><input type="checkbox" checked={portalOn} onChange={(e) => onPortal(e.target.checked)} /> Show it in their portal <span className="faint" style={{ fontSize: 12 }}>(Artwork → Design catalog, to look at and search)</span></label>}
       {on && (
         <div className="dcs-site">
           <label htmlFor="dcs-site">Their website (where design pictures come from)</label>
