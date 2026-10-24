@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole } from "@/components/RoleContext";
-import { THREAD_LINES, closestThreads, lineBrand, lineName, threadLabel, threads, type Thread } from "@/lib/embroidery";
+import { THREAD_LINES, closestThreads, lineBrand, lineName, pmsOf, threadLabel, threads, type Thread } from "@/lib/embroidery";
 import { forgetThreadStock, stockKey, type StockThread } from "@/lib/threadStock";
 import { PMS_COATED } from "@/lib/pms";
 
@@ -16,9 +16,11 @@ import { PMS_COATED } from "@/lib/pms";
  *   - Thread cards: every Madeira Polyneon 40, Classic Rayon 40 and Isacord 40 color with its PMS; tap one to see it, put it on the
  *     wall or take it off (the Mockup Creator suggests a thread we stock first when it's about as close)
  *   - Match a color: a PMS or a color → the closest Madeira threads, the same match the Mockup Creator makes
+ *   - PMS chart (Oct 23, Nick: "map the PMS colors in the thread room"): every thread beside its PMS, the maker's match
+ *     from their conversion chart, or the closest PMS by eye (marked ≈) when the chart has none
  * Kept in stock_threads (archived, never deleted). Changing it takes the Thread Room permission.
  */
-type Tab = "wall" | "card" | "match";
+type Tab = "wall" | "card" | "pms" | "match";
 type Draft = { cones: string; min: string; spot: string; notes: string };
 const pmsHexOf = (q: string) => {
   const t = q.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s+/g, " ");
@@ -83,13 +85,14 @@ export default function ThreadRoom() {
 
   const low = (stock || []).filter((s) => s.cones != null && s.min_cones != null && s.cones <= s.min_cones).length;
   const tile = (t: Thread) => {
-    const s = onWall(t), isLow = !!s && s.cones != null && s.min_cones != null && s.cones <= s.min_cones;
+    const s = onWall(t), isLow = !!s && s.cones != null && s.min_cones != null && s.cones <= s.min_cones, p = pmsOf(t);
     return (
-      <button key={t.line + t.code} type="button" className={"ink-tile thr-tile" + (sel?.code === t.code && sel.line === t.line ? " on" : "") + (s ? " in" : "")} onClick={() => pick(t)} title={`${threadLabel(t)}${t.pms.length ? ` · PMS ${t.pms[0]}` : ""}`}>
+      <button key={t.line + t.code} type="button" className={"ink-tile thr-tile" + (sel?.code === t.code && sel.line === t.line ? " on" : "") + (s ? " in" : "")} onClick={() => pick(t)} title={`${threadLabel(t)}${p ? ` · ${p.maker ? "" : "≈ "}PMS ${p.name}` : ""}`}>
         <i style={{ background: t.hex || "#ddd" }} className="thr-spool" />
         <b data-notranslate>{t.code}</b>
         <small>{t.name}</small>
-        {s ? <small className={"ink-instock" + (isLow ? " low" : "")}>{s.cones != null ? `Standard · ${s.cones} cone${s.cones === 1 ? "" : "s"}` : "Standard"}{isLow ? " · low" : ""}</small> : t.pms.length ? <small className="faint" data-notranslate>PMS {t.pms[0].replace(/^PMS\s*/i, "")}</small> : null}
+        {p && <small className="thr-pms" data-notranslate title={p.maker ? `${lineName(t.line).split(" ")[0]}'s match for this thread` : `No PMS on ${lineName(t.line).split(" ")[0]}'s chart: the closest PMS by eye`}><i style={{ background: p.hex || "#ddd" }} />{p.maker ? "" : "≈ "}PMS {p.name}</small>}
+        {s && <small className={"ink-instock" + (isLow ? " low" : "")}>{s.cones != null ? `Standard · ${s.cones} cone${s.cones === 1 ? "" : "s"}` : "Standard"}{isLow ? " · low" : ""}</small>}
       </button>
     );
   };
@@ -108,6 +111,7 @@ export default function ThreadRoom() {
               <div className="chips" role="tablist">
                 <button type="button" role="tab" aria-selected={tab === "wall"} className={"chip" + (tab === "wall" ? " on" : "")} onClick={() => setTab("wall")}>Standard colors{stock ? ` (${stock.length})` : ""}</button>
                 <button type="button" role="tab" aria-selected={tab === "card"} className={"chip" + (tab === "card" ? " on" : "")} onClick={() => setTab("card")}>Thread cards</button>
+                <button type="button" role="tab" aria-selected={tab === "pms"} className={"chip" + (tab === "pms" ? " on" : "")} onClick={() => setTab("pms")}>PMS chart</button>
                 <button type="button" role="tab" aria-selected={tab === "match"} className={"chip" + (tab === "match" ? " on" : "")} onClick={() => setTab("match")}>Match a color</button>
               </div>
               <select value={line} onChange={(e) => setLine(e.target.value as Thread["line"])} aria-label="Thread line">{THREAD_LINES.map((l) => <option key={l} value={l}>{lineName(l)}</option>)}</select>
@@ -137,7 +141,26 @@ export default function ThreadRoom() {
                 <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a thread: number, name or PMS" aria-label="Find a thread" />
                 {tab === "wall" && <div className="faint" style={{ fontSize: 13 }}>Our standard colors: the threads we keep on the wall, like the stock inks. The Mockup Creator picks one of these when it&apos;s close; anything else is a special order. {canEdit ? "Tap one to set cones on hand, the low mark and where it hangs." : ""}</div>}
                 {tab === "card" && <div className="faint" style={{ fontSize: 13 }}>Every {lineName(line)} color with its PMS, our standard colors first. {canEdit ? "Tap one to make it a standard color or take it off." : ""}</div>}
-                {!stock ? <div className="faint">Loading…</div> : (() => {
+                {tab === "pms" && <div className="faint" style={{ fontSize: 13 }}>Each {lineName(line)} thread beside its PMS, our standard colors first. The PMS is {lineName(line).split(" ")[0]}&apos;s own match from their conversion chart; ≈ marks a thread their chart doesn&apos;t match, with the closest PMS by eye.</div>}
+                {!stock ? <div className="faint">Loading…</div> : tab === "pms" ? (() => {
+                  const xs = [...card.filter((t) => onWall(t)), ...card.filter((t) => !onWall(t))].slice(0, 600);
+                  if (!xs.length) return <div className="faint">{q ? `No thread matches “${q}”.` : "No threads on file for this line yet."}</div>;
+                  return (
+                    <div className="tbl-wrap">
+                      <table className="tbl thr-pmst">
+                        <thead><tr><th>Thread</th><th>PMS</th><th>From</th><th /></tr></thead>
+                        <tbody>{xs.map((t) => { const p = pmsOf(t); return (
+                          <tr key={t.code} onClick={() => pick(t)} className={sel?.code === t.code && sel.line === t.line ? "on" : ""}>
+                            <td><span className="thr-pair"><i style={{ background: t.hex }} /></span><b data-notranslate>{t.code}</b> {t.name}</td>
+                            <td data-notranslate>{p ? <><span className="thr-pair sq"><i style={{ background: p.hex || "#ddd" }} /></span>{p.maker ? "" : "≈ "}PMS {p.name}</> : <span className="faint">—</span>}</td>
+                            <td className="faint">{!p ? "" : p.maker ? `${lineName(line).split(" ")[0]}'s chart` : `Closest by eye (ΔE ${p.dE})`}</td>
+                            <td>{onWall(t) ? <span className="ink-instock">Standard</span> : null}</td>
+                          </tr>
+                        ); })}</tbody>
+                      </table>
+                    </div>
+                  );
+                })() : (() => {
                   const xs = tab === "wall" ? wall : card;
                   // the thread cards: our standard colors first, then the rest of the card
                   if (tab === "card" && xs.length) {
@@ -161,7 +184,10 @@ export default function ThreadRoom() {
               const s = onWall(sel);
               return (
                 <>
-                  <div className="thr-big"><i style={{ background: sel.hex }} /><div><h2 data-notranslate>{sel.code} {sel.name}</h2><div className="faint">{lineName(sel.line)}{sel.pms.length ? <> · PMS <span data-notranslate>{sel.pms.join(", ")}</span></> : ""}</div></div></div>
+                  <div className="thr-big"><i style={{ background: sel.hex }} /><div><h2 data-notranslate>{sel.code} {sel.name}</h2><div className="faint">{lineName(sel.line)}</div></div></div>
+                  {(() => { const p = pmsOf(sel); return p ? (
+                    <div className="thr-pmsbox"><i style={{ background: p.hex || "#ddd" }} /><div><b data-notranslate>{p.maker ? "" : "≈ "}PMS {p.name} C{sel.pms.length > 1 ? <span className="faint"> (also {sel.pms.slice(1).join(", ")})</span> : null}</b><div className="faint">{p.maker ? `${lineName(sel.line).split(" ")[0]}'s match for this thread` : `${lineName(sel.line).split(" ")[0]}'s chart has no PMS for it: the closest by eye`}{p.dE != null ? ` · ΔE ${p.dE} on screen` : ""}</div></div></div>
+                  ) : null; })()}
                   <div className="faint" style={{ fontSize: 12.5 }}>On an order it reads <b data-notranslate>{threadLabel(sel)}</b>. Screen colors are close, not exact: check the real cone.</div>
                   {canEdit && <div className="row" style={{ gap: 8 }}>
                     {s ? <button type="button" className="btn" disabled={busy} onClick={() => void putOnWall(sel, false)}>Not a standard color</button>

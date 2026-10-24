@@ -12246,7 +12246,7 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-help-ds{display:flex;align-items:center;gap:6px;font-size:12.5px;flex-wrap:wrap}
 .mk-help-ds select{min-width:0;max-width:100%}
 .mk-help-w input{width:72px}
-.mk-help-know{margin:0 0 8px;padding:8px 10px;border-radius:var(--r);background:var(--accent-soft, var(--surface-2));font-size:13px}
+.mk-help-know{margin:0 0 8px;padding:8px 10px;border-radius:var(--r);background:var(--accent-soft);font-size:13px}
 .mk-help-know p{margin:0 0 6px;line-height:1.45}
 
 /* computers too (Oct 22, Nick: "we used to have a button at the bottom… an AI tool that you spoke into and it reworded
@@ -12739,6 +12739,16 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .thr-big h2{margin:0}
 .thr-want{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .thr-want i{width:36px;height:36px;border-radius:6px;border:1px solid rgba(0,0,0,.1)}
+.thr-pms{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.thr-pms i{width:10px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,.12);flex:none}
+.thr-pair{display:inline-flex;margin-right:8px;vertical-align:-3px}
+.thr-pair i{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+.thr-pair.sq i{border-radius:3px}
+.thr-pmst tbody tr{cursor:pointer}
+.thr-pmst tbody tr.on td{background:var(--accent-soft)}
+.thr-pmst td{white-space:nowrap}
+.thr-pmsbox{display:flex;gap:12px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:6px}
+.thr-pmsbox i{width:40px;height:40px;border-radius:6px;border:1px solid rgba(0,0,0,.1);flex:none}
 .thr-sw{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;border:1px solid rgba(0,0,0,.1)}
 .thr-form input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px}
 .dgz-logo{display:flex;align-items:center;gap:8px}

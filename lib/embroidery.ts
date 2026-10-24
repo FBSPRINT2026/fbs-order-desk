@@ -46,6 +46,29 @@ const pmsHex = (p: string) => {
   return k ? PMS_COATED[k] : "";
 };
 
+/**
+ * A thread's PMS (Oct 23, Nick: "map the PMS colors in the thread room"): the maker's own match from their conversion
+ * chart when it has one, otherwise the closest Pantone coated color by eye (CIEDE2000), marked as not the maker's.
+ */
+export type ThreadPms = { name: string; hex: string; maker: boolean; dE: number | null };
+const pmsMemo = new Map<string, ThreadPms | null>();
+export function pmsOf(t: Pick<Thread, "line" | "code" | "hex" | "pms">): ThreadPms | null {
+  const k = t.line + t.code;
+  if (pmsMemo.has(k)) return pmsMemo.get(k) || null;
+  let r: ThreadPms | null = null;
+  const p = (t.pms[0] || "").trim();
+  if (p) {
+    const h = pmsHex(p);
+    r = { name: p.replace(/^(pms|pantone)\s*/i, "").replace(/\s+C$/i, ""), hex: h, maker: true, dE: h && t.hex ? Math.round(deltaE(t.hex, h) * 10) / 10 : null };
+  } else if (/^#[0-9a-f]{6}$/i.test(t.hex)) {
+    let best = "", bd = Infinity;
+    for (const [n, h] of Object.entries(PMS_COATED)) { const d = deltaE(t.hex, h); if (d < bd) { bd = d; best = n; } }
+    if (best) r = { name: best.replace(/^PMS\s*/, "").replace(/\s+C$/, ""), hex: PMS_COATED[best], maker: false, dE: Math.round(bd * 10) / 10 };
+  }
+  pmsMemo.set(k, r);
+  return r;
+}
+
 /** what a thread is called on the order, the work order and the thread room: "Madeira 1843 Purple" */
 export const threadLabel = (t: Pick<Thread, "line" | "code" | "name">) => `${t.line === "Isacord 40" ? "Isacord " : t.line === "Classic Rayon 40" ? "Madeira Rayon " : "Madeira "}${t.code}${t.name ? " " + t.name : ""}`;
 /** a name on an order that is one of our threads (an ink name never starts with Madeira or Isacord) */
