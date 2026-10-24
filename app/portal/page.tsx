@@ -47,12 +47,23 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   let payments: APayment[] = [], designs: Design[] = [], mockups: AMockup[] = [], messages: AMessage[] = [];
   const usedIds: string[] = [];
   const designUrls: Record<string, string> = {};
+  // the queries that only need the customer, started together up front (Oct 24, Nick: "the customer portal is slow")
+  const cids = ctx.customerIds;
+  const early = cids.length ? {
+    incoming: unmatchedGroups(admin, cids).catch(() => []),
+    projects: projectSummaries(admin, cids, true),
+    progs: (ctx.preview ? admin.from("programs").select("*").in("customer_id", cids).order("active", { ascending: false }) : admin.from("programs").select("*").in("customer_id", cids).eq("active", true)).limit(1),
+    ship: admin.from("shipments").select("order_id, archived_order_id, status, carrier, service, boxes, shipped_at, updated_at").in("customer_id", cids).in("status", ["labeled", "shipped"]).order("updated_at", { ascending: false }).limit(100),
+    used: Promise.all(cids.map((cid) => ctx.db.rpc("designs_in_use", { p_customer: cid }))),
+  } : null;
   // past orders from before the portal (read with the server key: only the summary and payments leave the server)
   let archived: (ArchiveSummary & { transactions: PvTransaction[] | null })[] = [];
   if (ctx.customerIds.length) {
-    const { data: ar } = await admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false });
+    const [{ data: ar }, { data }] = await Promise.all([
+      admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }),
+      ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }),
+    ]);
     archived = (ar || []) as never;
-    const { data } = await ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false });
     // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
     const all = (data || []) as (Order & { draft?: boolean })[];
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
@@ -75,7 +86,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     });
     rawMsgs = (msg.data || []) as typeof rawMsgs;
     designs = (d.data || []) as Design[];
-    for (const cid of ctx.customerIds) { const { data: u } = await ctx.db.rpc("designs_in_use", { p_customer: cid }); usedIds.push(...((u || []) as string[])); }
+    for (const { data: u } of (early ? await early.used : [])) usedIds.push(...((u || []) as string[]));
     const withPv = designs.filter((x) => x.preview_path);
     if (withPv.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
@@ -116,16 +127,15 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   // wholesale: the garments they send us for their jobs (goods have their own status)
   // supplier shipments on their account that aren't on one of their orders yet
-  const incoming = ctx.customerIds.length ? (await unmatchedGroups(admin, ctx.customerIds).catch(() => [])).filter((g) => !g.us) : [];
+  const incoming = early ? ((await early.incoming) as Awaited<ReturnType<typeof unmatchedGroups>>).filter((g) => !g.us) : [];
   const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0;
   const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
   const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
   // projects and program pricing
-  const projects = await projectSummaries(admin, ctx.customerIds, true);
+  const projects = early ? await early.projects : await projectSummaries(admin, ctx.customerIds, true);
   // staff previewing see the program even while it's off, marked so (Oct 17: to check it before the customer does)
-  const progQ = ctx.customerIds.length ? admin.from("programs").select("*").in("customer_id", ctx.customerIds) : null;
-  const { data: progs } = progQ ? await (ctx.preview ? progQ.order("active", { ascending: false }) : progQ.eq("active", true)).limit(1) : { data: [] };
+  const { data: progs } = early ? await early.progs : { data: [] };
   const program = ((progs || [])[0] || null) as Program | null;
   const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).is("archived_at", null).order("position") : { data: [] };
   const programItems = (pits || []) as ProgramItem[];
@@ -186,8 +196,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // shipments with tracking (Shipping Center), for "Track package" on the job (Oct 15, Nick)
   const shipOf = new Map<string, JobShip>();
   if (ctx.customerIds.length) {
-    const { data: sh } = await admin.from("shipments").select("order_id, archived_order_id, status, carrier, service, boxes, shipped_at, updated_at")
-      .in("customer_id", ctx.customerIds).in("status", ["labeled", "shipped"]).order("updated_at", { ascending: false }).limit(100);
+    const { data: sh } = early ? await early.ship : { data: [] };
     ((sh || []) as { order_id: string | null; archived_order_id: string | null; carrier: string; service: string; boxes: Box[] | null; shipped_at: string | null; updated_at: string }[]).forEach((r) => {
       const k = r.order_id || r.archived_order_id; const t = (r.boxes || []).find((b) => b.tracking)?.tracking;
       if (!k || !t || shipOf.has(k)) return;
