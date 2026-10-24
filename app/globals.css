@@ -13049,3 +13049,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-bar-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .aa-arch-link{font-size:12.5px;white-space:nowrap}
 .aa-arch-foot{display:flex;justify-content:flex-end;margin-top:-6px}
+
+/* portal Settings (Oct 24, Nick): contacts, addresses, company logo */
+.ps .page-head{margin:6px 0 14px}
+.ps-wrap{max-width:860px}
+.ps-logo{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.ps-logo-box{width:180px;height:100px;border:1px dashed var(--line);border-radius:6px;display:grid;place-items:center;background:var(--surface);padding:8px;box-sizing:border-box}
+.ps-logo-box img{max-width:100%;max-height:100%;object-fit:contain}
+.ps-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px}

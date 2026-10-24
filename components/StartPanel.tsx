@@ -5,7 +5,7 @@ import { useState } from "react";
 import { startRequest } from "@/app/portal/request-actions";
 
 /** Portal dashboard: the two things customers can start on their own. */
-export default function StartPanel({ preview, mockupHref, compact = false }: { preview: boolean; mockupHref: string; /** small action tiles for the dashboard's top bar */ compact?: boolean }) {
+export default function StartPanel({ preview, mockupHref, settingsHref, compact = false }: { preview: boolean; mockupHref: string; /** the customer's Settings (Oct 24) */ settingsHref?: string; /** small action tiles for the dashboard's top bar */ compact?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -20,6 +20,12 @@ export default function StartPanel({ preview, mockupHref, compact = false }: { p
         <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg></span>
         <span><b>Mockup Creator</b><small>Your logo on a shirt</small></span>
       </Link>
+      {settingsHref && (
+        <Link className="pd-act" href={settingsHref}>
+          <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg></span>
+          <span><b>Settings</b><small>Contacts, addresses, your logo</small></span>
+        </Link>
+      )}
     </>
   );
   return (

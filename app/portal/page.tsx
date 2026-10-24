@@ -286,7 +286,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {/* the customer's name with Start an order / Mockup Creator, above the tabs (Oct 15, Nick) */}
         <div className="pdx-hello">
           <div><h1 className="pdx-h1">{company || "Your Account"}</h1><div className="pdx-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}</div></div>
-          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
+          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} settingsHref={`/portal/settings${qs}`} /></div>}
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">

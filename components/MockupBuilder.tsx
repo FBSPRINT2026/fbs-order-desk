@@ -19,6 +19,7 @@ import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/acti
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
 import MockupOrderButton from "@/components/MockupOrderButton";
+import { mySheetBrand } from "@/app/portal/settings-actions";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
 import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
@@ -1884,6 +1885,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    */
   /** Sales tools → Sales sheet creator (components/SalesSheet.tsx): the shop's name, contact and logo for it */
   async function openSheet() {
+    // a customer's sheet carries their company (Oct 24, Nick: "the same button… put their company on there… to share
+    // with their clients"): their logo and contact line from their Settings, never ours
+    if (portal) {
+      const b = await mySheetBrand();
+      setSheetShop(b.ok ? { name: b.name, line: b.line, logoUrl: b.logoUrl } : { name: "", line: "", logoUrl: "" });
+      setSheetOpen(true);
+      return;
+    }
     let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
     const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
     if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) };
@@ -2880,7 +2889,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       })()}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{!portal && <span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{<span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
           {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
           <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
           // counting down back to the order: a click stays here
@@ -2899,7 +2908,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         {sheetOpen && (
           <SalesSheet colors={lines.filter((z) => z.style && z.color).map((z) => ({ key: z.id, color: z.color, style: [z.brand, z.style].filter(Boolean).join(" "), hex: shirtHex(z) }))}
             arts={imprints.filter((im) => designOf(im) && artUrl(im)).map((im) => ({ label: im.location, url: artUrl(im) }))}
-            views={views as ("front" | "back")[]} shirts={sheetShirts} title0={groupName} customer={custLabel(customers.find((c) => c.id === customerId)) || ""}
+            views={views as ("front" | "back")[]} shirts={sheetShirts} title0={groupName} customer={portal ? "" : custLabel(customers.find((c) => c.id === customerId)) || ""}
             shop={sheetShop} onClose={() => setSheetOpen(false)} />
         )}
         {pdfOpen && (
