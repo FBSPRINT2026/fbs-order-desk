@@ -41,3 +41,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e instanceof QboError ? explainQboError(e) : e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }
+
+/**
+ * The test companies' invoices, for the QuickBooks page's test list (Oct 24, Nick: "make sample invoices and then put
+ * them on the QuickBooks tool so I can sync them"): each with its tax, total and where it is in QuickBooks.
+ */
+export async function GET() {
+  const v = await getViewer();
+  if (!v.user || v.role !== "owner") return NextResponse.json({ error: "Owner only." }, { status: 403 });
+  const admin = createAdminClient();
+  const { data: cs } = await admin.from("customers").select("id, company, name").eq("is_test", true);
+  const ids = (cs || []).map((c) => c.id);
+  if (!ids.length) return NextResponse.json({ orders: [] });
+  const { data: os } = await admin.from("orders").select("id, number, nickname, customer_id, type, status, tax_exempt, total, updated_at").in("customer_id", ids).order("number", { ascending: false }).limit(30);
+  const oids = (os || []).map((o) => o.id);
+  const { data: ls } = oids.length ? await admin.from("qbo_links").select("local_id, qbo_id, note, last_seen_qbo, last_pushed_at, last_seen_at").eq("entity", "invoice").in("local_id", oids).eq("is_primary", true) : { data: [] };
+  const link = new Map((ls || []).map((l) => [String(l.local_id), l]));
+  const name = new Map((cs || []).map((c) => [c.id, c.company || c.name || "Test company"]));
+  return NextResponse.json({
+    orders: (os || []).map((o) => {
+      const l = link.get(o.id) as { qbo_id: string; note: string; last_seen_qbo: { DocNumber?: string; TotalAmt?: number; TxnTaxDetail?: { TotalTax?: number } } | null; last_pushed_at: string | null; last_seen_at: string | null } | undefined;
+      const sent = l ? String(l.last_pushed_at || l.last_seen_at || "") : "";
+      return {
+        id: o.id, number: o.number, nickname: o.nickname || "", customer: name.get(o.customer_id) || "", invoice: o.type === "invoice", exempt: !!o.tax_exempt, total: +o.total || 0,
+        qbo: l ? { id: l.qbo_id, doc: l.last_seen_qbo?.DocNumber || "", total: +(l.last_seen_qbo?.TotalAmt || 0), tax: +(l.last_seen_qbo?.TxnTaxDetail?.TotalTax || 0), voided: l.note === "voided", stale: !!sent && Date.parse(String(o.updated_at)) > Date.parse(sent) + 5000 } : null,
+      };
+    }),
+  });
+}

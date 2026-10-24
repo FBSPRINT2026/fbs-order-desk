@@ -606,26 +606,52 @@ function Log() {
  * order to QuickBooks numbered TEST-<order #>, even while the sync is off, then voids it. Nothing else is touched.
  */
 function TestInvoice() {
-  const [num, setNum] = useState("40135");
-  const [busy, setBusy] = useState(false);
-  const [out, setOut] = useState<{ ok: boolean; text: string; qboId?: string } | null>(null);
-  async function go(payload: Record<string, unknown>) {
-    setBusy(true); setOut(null);
+  const [num, setNum] = useState("");
+  const [busy, setBusy] = useState("");
+  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null);
+  // the test companies' invoices, each one click to send / update / void (Oct 24, Nick: "make sample invoices and then
+  // put them on the QuickBooks tool so I can sync them")
+  type T = { id: string; number: number; nickname: string; customer: string; invoice: boolean; exempt: boolean; total: number; qbo: { id: string; doc: string; total: number; tax: number; voided: boolean; stale: boolean } | null };
+  const [list, setList] = useState<T[] | null>(null);
+  const load = useCallback(() => fetch("/api/qbo/test-invoice").then((r) => r.json()).then((j) => setList(j.orders || [])).catch(() => setList([])), []);
+  useEffect(() => { load(); }, [load]);
+  async function go(key: string, payload: Record<string, unknown>) {
+    setBusy(key); setOut(null);
     try {
       const r = await fetch("/api/qbo/test-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j = await r.json();
-      setOut(j.error ? { ok: false, text: j.error } : { ok: j.status === "done", text: j.reason || "Done.", qboId: j.qboId });
+      setOut(j.error ? { ok: false, text: j.error } : { ok: j.status === "done", text: j.reason || "Done." });
     } catch (e) { setOut({ ok: false, text: e instanceof Error ? e.message : "Couldn't reach the server." }); }
-    setBusy(false);
+    setBusy(""); load();
   }
+  const money2 = (n: number) => "$" + n.toFixed(2);
   return (
     <div className="stack" style={{ gap: 6, marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
-      <b>Send one test invoice</b>
-      <span className="faint" style={{ fontSize: 12.5 }}>Makes one invoice in QuickBooks numbered TEST-&lt;order #&gt; (and its customer, if they aren&apos;t there yet), even while the sync is off, so you can check it there. Then void it here.</span>
+      <b>Test invoices</b>
+      <span className="faint" style={{ fontSize: 12.5 }}>The test companies&apos; invoices. Send one and it&apos;s made in QuickBooks as TEST-&lt;order #&gt; (with its customer), even while the sync is off; after that it follows its order like every invoice will. Void it when you&apos;re done.</span>
+      {!list ? <div className="faint">Loading…</div> : !list.length ? <div className="faint">No test company orders yet.</div> : (
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Order</th><th>Customer</th><th>Tax</th><th className="r">Our total</th><th>In QuickBooks</th><th /></tr></thead>
+          <tbody>{list.map((t) => (
+            <tr key={t.id} style={{ cursor: "default" }}>
+              <td><a href={`/shop/orders/${t.id}`} className="ordno">#{t.number}</a><div className="sub">{t.nickname}</div></td>
+              <td>{t.customer}</td>
+              <td>{t.exempt ? "Tax exempt" : "Taxed"}</td>
+              <td className="r">{money2(t.total)}</td>
+              <td style={{ fontSize: 13 }}>{!t.invoice ? <span className="faint">A quote (quotes never go)</span> : !t.qbo ? <span className="faint">Not sent</span> : t.qbo.voided ? <span className="faint">{t.qbo.doc} voided</span>
+                : <>{t.qbo.doc} · {money2(t.qbo.total)}{t.qbo.tax ? ` (tax ${money2(t.qbo.tax)})` : " (no tax)"}{t.qbo.stale ? <span style={{ color: "var(--warn)" }}> · changed since</span> : null}</>}</td>
+              <td className="r" style={{ whiteSpace: "nowrap" }}>
+                {t.invoice && !t.qbo?.voided && <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => void go(t.id, { number: t.number })}>{busy === t.id ? "Sending…" : t.qbo ? "Update" : "Send"}</button>}
+                {t.qbo && !t.qbo.voided && <button type="button" className="btn sm ghost danger" disabled={!!busy} style={{ marginLeft: 6 }} onClick={() => void go(t.id + "v", { voidId: t.qbo!.id })}>{busy === t.id + "v" ? "Voiding…" : "Void"}</button>}
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span className="faint" style={{ fontSize: 12.5 }}>Or any order number:</span>
         <input type="number" value={num} onChange={(e) => setNum(e.target.value)} aria-label="Order number" style={{ width: 120 }} />
-        <button type="button" className="btn sm primary" disabled={busy || !num} onClick={() => void go({ number: +num })}>{busy ? "Sending…" : "Send it to QuickBooks"}</button>
-        {out?.qboId && <button type="button" className="btn sm ghost danger" disabled={busy} onClick={() => void go({ voidId: out.qboId })}>Void the test invoice</button>}
+        <button type="button" className="btn sm" disabled={!!busy || !num} onClick={() => void go("num", { number: +num })}>{busy === "num" ? "Sending…" : "Send it to QuickBooks"}</button>
       </div>
       {out && <div className={out.ok ? "okmsg" : "pv-err"} style={{ margin: 0 }}>{out.text}</div>}
     </div>

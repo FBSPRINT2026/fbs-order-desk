@@ -12806,8 +12806,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .set-sub{margin:-6px 0 14px}
 .set-sub .chip{text-decoration:none}
 /* screen printing / embroidery switch under Production (lib/prodSide.ts, Oct 24): quiet, the side shows in the color */
-.prod-side{display:inline-flex;align-items:center;gap:7px;margin-left:auto;font-family:var(--body);font-stretch:normal;letter-spacing:.04em}
-.prod-side button{border:0;background:transparent;padding:2px 0;font:inherit;font-size:11px;font-weight:700;color:var(--side-ink);opacity:.45;cursor:pointer;line-height:1}
+.prod-side{display:inline-flex;align-items:baseline;align-self:baseline;gap:7px;margin-left:auto;font-family:var(--body);font-stretch:normal;letter-spacing:.04em}
+.prod-side button{border:0;background:transparent;padding:2px 0;font:inherit;font-size:10px;font-weight:700;color:var(--side-ink);opacity:.45;cursor:pointer;line-height:1}
 .prod-side button:hover{opacity:.8}
 .prod-side button.on{opacity:1}
 .nav-g-production.side-screen .prod-side button.on{color:var(--fbs-blue)}

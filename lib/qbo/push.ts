@@ -314,7 +314,10 @@ export class Pusher {
     const cur = await q.read<Rec & { DocNumber?: string }>("Invoice", qboId);
     if (!cur) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't there.` };
     if (!/^TEST-/.test(String(cur.DocNumber || ""))) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't a test invoice (its number is ${cur.DocNumber}), so it wasn't voided.` };
-    await q.voidInvoice(qboId, cur.SyncToken, true);
+    const v = await q.voidInvoice(qboId, cur.SyncToken, true);
+    // its order (if linked) shows it voided, and its number stays used
+    const l = await this.linkByQbo("invoice", qboId);
+    if (l) await this.saveLink({ entity: "invoice", local_id: l.local_id, qbo_id: qboId, source: l.source, rec: v as Rec, note: "voided" });
     return { status: "done", reason: `Voided test invoice ${cur.DocNumber} (QuickBooks #${qboId}).` };
   }
 
