@@ -258,6 +258,9 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
       )}
 
+      {/* the order on the left; their goods and questions for us beside it, like our order screen (Oct 24, Nick) */}
+      <div className="rq-cols">
+      <div className="rq-main stack">
       {aiAssist && (
         <section className="ai-box">
           <h3>✦ Describe your order and we&apos;ll fill in the form</h3>
@@ -283,7 +286,8 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
             </select></div>
           {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
         </div>
-        <div className="field"><label htmlFor="rq-notes">Notes for us</label><textarea id="rq-notes" rows={2} placeholder="Anything we should know: event date, who the shirts are for, colors to avoid…" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+        <div className="field"><label htmlFor="rq-notes">Order notes <span className="faint" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>for production: shipping, packing, who it&apos;s for</span></label><textarea id="rq-notes" rows={2} placeholder="e.g. Ship to our Tulsa store · fold and bag each shirt · these are for our fall event" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+        {/\?/.test(o.notes || "") && <div className="rq-q-hint">Is that a question? Ask it in <b>Questions for us</b> on the right so we can answer it. Order notes are for production details.</div>}
       </div></section>
 
       <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className={"stack ord rq-ord" + (ws ? " ws" : " np-ord")}>
@@ -300,6 +304,25 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         ))}
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add another group</button>
       </fieldset>
+      </div>
+      <aside className="rq-side stack">
+      {goods && (
+        <section className="panel">
+          <div className="panel-h"><h2>Your goods</h2><span className="faint" style={{ fontSize: 12 }}>You&apos;re sending us the garments. Tell us what you know now; tracking and dates can be added later in Customer supplied goods.</span></div>
+          <div className="panel-b"><GoodsInfoFields v={goods} onChange={setGoods} disabled={preview} /></div>
+        </section>
+      )}
+
+      <section className="panel">
+        <div className="panel-h"><h2>Questions for us</h2><span className="faint" style={{ fontSize: 12 }}>Anything you want us to answer: how soon can you have it, will this art print well, which colors to pick. We reply right here.</span></div>
+        <div className="panel-b stack">
+          {msgs.map((m) => <div key={m.id} className={"aa-msg " + (m.author_type === "staff" ? "shop" : "cust")}><div className="aa-msg-h"><b>{m.author_name}</b><span className="faint">{new Date(m.created_at).toLocaleString()}</span></div><div className="aa-msg-b">{m.body}</div></div>)}
+          <textarea rows={2} placeholder="Type a question…" value={q} disabled={preview} onChange={(e) => setQ(e.target.value)} />
+          <button type="button" className="btn" style={{ alignSelf: "flex-end" }} disabled={preview || !q.trim()} onClick={ask}>Send question</button>
+        </div>
+      </section>
+      </aside>
+      </div>
 
       {pickFor && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Choose a saved mockup" onClick={() => !picking && setPickFor("")}>
@@ -321,21 +344,6 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
       )}
 
-      {goods && (
-        <section className="panel">
-          <div className="panel-h"><h2>Your goods</h2><span className="faint" style={{ fontSize: 12 }}>You&apos;re sending us the garments. Tell us what you know now; tracking and dates can be added later in Customer supplied goods.</span></div>
-          <div className="panel-b"><GoodsInfoFields v={goods} onChange={setGoods} disabled={preview} /></div>
-        </section>
-      )}
-
-      <section className="panel">
-        <div className="panel-h"><h2>Questions for us</h2><span className="faint" style={{ fontSize: 12 }}>Not sure a logo will print well? Ask here. We&apos;ll answer on this order.</span></div>
-        <div className="panel-b stack">
-          {msgs.map((m) => <div key={m.id} className={"aa-msg " + (m.author_type === "staff" ? "shop" : "cust")}><div className="aa-msg-h"><b>{m.author_name}</b><span className="faint">{new Date(m.created_at).toLocaleString()}</span></div><div className="aa-msg-b">{m.body}</div></div>)}
-          <textarea rows={2} placeholder="Type a question…" value={q} disabled={preview} onChange={(e) => setQ(e.target.value)} />
-          <button type="button" className="btn" style={{ alignSelf: "flex-end" }} disabled={preview || !q.trim()} onClick={ask}>Send question</button>
-        </div>
-      </section>
 
       {problems.length > 0 && (
         <div className="rq-check">
