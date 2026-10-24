@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
 import { METHODS, type Group, type Imprint } from "@/lib/pricing";
+import { BACKINGS, TOPPINGS } from "@/lib/embroidery";
 import { DETAILS_LABEL, needsDetails, ordersNeedingDetails, type DetailsInput } from "@/lib/productionDetails";
 import { confirmDetails } from "../details-actions";
 
@@ -36,16 +37,20 @@ const printSets = (r: Row, which: (im: Imprint) => boolean = needsDetails): Set1
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No date");
 // blank, with our guesses shown greyed in each box (Oct 14, Nick: a guess must never become a fact by clicking through);
 // "Copy in our guesses" fills them in on purpose
-const formOf = (im: Imprint): DetailsInput => ({ id: im.id, size: "", inks: "", colors: im.colors || 1, underbase: "", drop: "", screensOnFile: !!im.remake, notes: "" });
+const formOf = (im: Imprint): DetailsInput => ({ id: im.id, size: "", inks: "", colors: im.colors || 1, underbase: "", drop: "", screensOnFile: !!im.remake, notes: "", stitches: "", backing: "", topping: "" });
 const isDone = (im: Imprint) => !!im.confirmed && !needsDetails(im);
-const guessOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || "", inks: im.inks || "", colors: im.colors || 1, underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "", drop: im.drop || "", screensOnFile: !!im.remake, notes: "" });
+const guessOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || "", inks: im.inks || "", colors: im.colors || 1, underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "", drop: im.drop || "", screensOnFile: !!im.remake, notes: "", stitches: im.stitches ? String(im.stitches) : "", backing: im.emb?.backing || "", topping: im.emb?.topping || "" });
 
 export default function ProductionDetailsPage() {
   const sb = useMemo(() => createClient(), []);
   const { role, realRole } = useRole();
   // Nick and Jose: the production view (Oct 21)
   const prodView = realRole === "owner" || realRole === "production";
-  const canConfirm = !role || ["owner", "admin", "production"].includes(role);
+  const canConfirm = !role || ["owner", "admin", "production", "embroidery"].includes(role);
+  // embroidery has its own reorder details (Oct 23, Nick: "a whole different section for reorder details for embroidery…
+  // what thread did we use, and what backing"): Maria sees the embroidered prints, screen printing's production the rest
+  const mine = (im: Imprint) => (role === "embroidery" ? im.method === "embroidery" : role === "production" ? im.method !== "embroidery" : true);
+  const waitingOf = (r: Row) => printSets(r, (im) => needsDetails(im) && mine(im));
   const open0 = useSearchParams().get("order");
   const [tab, setTab] = useState<"waiting" | "done">("waiting");
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -133,7 +138,7 @@ export default function ProductionDetailsPage() {
 
   const set = (id: string, p: Partial<DetailsInput>) => setForm((f) => ({ ...f, [id]: { ...f[id], ...p } }));
   async function save(r: Row) {
-    const prints = printSets(r).flatMap((x) => { const f = form[x.lead.id] || formOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
+    const prints = waitingOf(r).flatMap((x) => { const f = form[x.lead.id] || formOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
     setBusy(r.id); setMsg(null);
     const res = await confirmDetails(r.id, prints);
     setBusy("");
@@ -145,7 +150,7 @@ export default function ProductionDetailsPage() {
     if (res.left === 0) setTab("done");
   }
   async function saveEdit(r: Row) {
-    const prints = printSets(r, isDone).flatMap((x) => { const f = form[x.lead.id] || guessOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
+    const prints = printSets(r, (im) => isDone(im) && mine(im)).flatMap((x) => { const f = form[x.lead.id] || guessOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
     setBusy(r.id); setMsg(null);
     const res = await confirmDetails(r.id, prints, true);
     setBusy("");
@@ -166,9 +171,21 @@ export default function ProductionDetailsPage() {
         <div key={im.id} className="pdd-print">
           <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
           <div className="pdd-fields">
-            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups, one set of screens` : ""}</span></div>
+            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups${im.method === "embroidery" ? "" : ", one set of screens"}` : ""}</span></div>
             {vis && <div className="pdd-why faint">Visual mockup only: set what ran on press. The old job says {im.colors} color{im.colors === 1 ? "" : "s"}.</div>}
             {!vis && im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
+            {im.method === "embroidery" ? (
+            <div className="pdd-grid">
+              <label className="field"><span>Size</span><input type="text" value={f.size} placeholder={gs0.size ? `Guess: ${gs0.size}` : '3.5" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
+              <label className="field pdd-wide"><span>Threads (by number)</span><input type="text" value={f.inks} placeholder={gs0.inks ? `Guess: ${gs0.inks}` : "e.g. Madeira 1843, Madeira 1678 or Isacord 0015"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
+              <label className="field"><span>Thread colors</span><input type="number" min={1} max={15} value={f.colors} onChange={(e) => set(im.id, { colors: +e.target.value || 1 })} /></label>
+              <label className="field"><span>Stitches</span><input type="text" inputMode="numeric" value={f.stitches || ""} placeholder={im.stitches ? `Guess: ${im.stitches.toLocaleString()}` : "From the DST"} onChange={(e) => set(im.id, { stitches: e.target.value })} /></label>
+              <label className="field"><span>Backing</span><select value={f.backing || ""} onChange={(e) => set(im.id, { backing: e.target.value })}><option value="">Not sure</option>{BACKINGS.map((b) => <option key={b}>{b}</option>)}</select></label>
+              <label className="field"><span>Topping</span><select value={f.topping || ""} onChange={(e) => set(im.id, { topping: e.target.value })}><option value="">Not sure</option>{TOPPINGS.map((b) => <option key={b}>{b}</option>)}</select></label>
+              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={gs0.drop ? `Guess: ${gs0.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
+              <label className="field pdd-full"><span>Sew notes (optional)</span><input type="text" value={f.notes} placeholder="Machine, hoop, needle, speed, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
+            </div>
+            ) : (
             <div className="pdd-grid">
               <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={gs0.size ? `Guess: ${gs0.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
               <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={gs0.inks ? `Guess: ${gs0.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
@@ -178,11 +195,12 @@ export default function ProductionDetailsPage() {
               <label className="check pdd-chk"><input type="checkbox" checked={f.screensOnFile} onChange={(e) => set(im.id, { screensOnFile: e.target.checked })} />Screens on file</label>
               <label className="field pdd-full"><span>Press notes (optional)</span><input type="text" value={f.notes} placeholder="Mesh, flash, ink order, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
             </div>
+            )}
           </div>
         </div>
       );
     });
-  const waiting = rows || [];
+  const waiting = (rows || []).filter((r) => waitingOf(r).length > 0);
   return (
     <>
       <div className="page-head">
@@ -199,7 +217,7 @@ export default function ProductionDetailsPage() {
       {tab === "waiting" && (rows === null ? <div className="empty">Loading…</div> : !waiting.length ? <div className="empty">Nothing waiting. Reorders of old Printavo jobs show up here until their print details are confirmed.</div> : (
         <div className="pdd-list">
           {waiting.map((r) => {
-            const prints = printSets(r);
+            const prints = waitingOf(r);
             const isOpen = open === r.id;
             return (
               <section key={r.id} id={"pd-" + r.id} className={"panel pdd-card" + (isOpen ? " open" : "")}>
@@ -233,7 +251,7 @@ export default function ProductionDetailsPage() {
 
       {tab === "done" && msg && msg.bad && <div className="err">{msg.text}</div>}
       {tab === "done" && editing && (() => {
-        const r = editing, sets = printSets(r, isDone);
+        const r = editing, sets = printSets(r, (im) => isDone(im) && mine(im));
         return (
           <section className="panel pdd-card open">
             <div className="pdd-head"><span className="pdd-num">#{r.number}</span><span className="pdd-main"><b>{custs[r.customer_id || ""] || "Correct the confirmed details"}</b><span className="faint">{r.nickname || "Untitled Job"}</span></span><span className="pdd-tag">Editing</span></div>

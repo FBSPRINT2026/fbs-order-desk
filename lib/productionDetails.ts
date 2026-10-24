@@ -51,4 +51,5 @@ export function keepConfirmed(local: Group[], saved: Pick<Group, "id" | "imprint
 }
 
 /** What production fills in for one print. Blank = left blank (not known). */
-export type DetailsInput = { id: string; size: string; inks: string; colors: number; underbase: "" | "yes" | "no"; drop: string; screensOnFile: boolean; notes: string };
+export type DetailsInput = { id: string; size: string; inks: string; colors: number; underbase: "" | "yes" | "no"; drop: string; screensOnFile: boolean; notes: string;
+  /** embroidery (Oct 23, Maria's side): the stitch count, backing and topping it sewed with */ stitches?: string; backing?: string; topping?: string };

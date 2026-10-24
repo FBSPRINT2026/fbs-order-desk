@@ -4,13 +4,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cleanPrintNotes, shopNotes, type Group, type Imprint } from "@/lib/pricing";
 import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { addSpec, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
+import { rememberEmbroidery } from "@/lib/embroideryLast";
 
 /**
  * Reorder Details: production (Jose) confirms, corrects or leaves blank what an old Printavo reorder guessed for
  * each print (size, inks, colors, underbase, drop, screens on file, press notes). The confirmed details go on the order
  * and on the customer's design, so the next reorder starts from them.
  */
-const CAN = ["owner", "admin", "production"];
+const CAN = ["owner", "admin", "production", "embroidery"];
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) });
 const clip = (s: unknown, n: number) => String(s ?? "").trim().slice(0, n);
 
@@ -18,7 +19,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
   try {
     const v = await getViewer(", name");
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
-    if (!CAN.includes(v.role)) throw new Error("Production confirms these (production, owner or admin).");
+    if (!CAN.includes(v.role)) throw new Error("Production confirms these (production, embroidery, owner or admin).");
     const by = String(v.staff?.name || "") || v.email.split("@")[0];
     const admin = createAdminClient();
     const { data: o } = await admin.from("orders").select("id, number, groups, customer_id, notes").eq("id", orderId).maybeSingle();
@@ -34,14 +35,23 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       // edit: a print already confirmed, corrected (Oct 23, Nick: "you should be able to go back in and edit it… I made a
       // typo there. It should have been 2 inches")
       if (!im || !(needsDetails(im) || (edit && im.confirmed))) continue;
+      // embroidery's manager confirms the embroidered prints; screen printing's production confirms the rest
+      if (v.role === "embroidery" && im.method !== "embroidery") continue;
+      if (v.role === "production" && im.method === "embroidery") continue;
       const before = { size: im.size, inks: im.inks, colors: im.colors };
       im.size = clip(p.size, 80);
       im.inks = clip(p.inks, 200);
       const n = Math.round(+p.colors);
       if (n >= 1 && n <= 20) im.colors = n;
-      if (p.underbase === "yes") im.underbase = true; else if (p.underbase === "no") im.underbase = false; else delete im.underbase;
+      const emb = im.method === "embroidery";
+      if (!emb) { if (p.underbase === "yes") im.underbase = true; else if (p.underbase === "no") im.underbase = false; else delete im.underbase; }
       im.drop = clip(p.drop, 20);
-      if (p.screensOnFile) im.remake = true;
+      if (p.screensOnFile && !emb) im.remake = true;
+      if (emb) {
+        const st = Math.round(+String(p.stitches || "").replace(/[^\d.]/g, ""));
+        if (st >= 300 && st < 200000) im.stitches = st;
+        im.emb = { ...(im.emb || {}), ...(st >= 300 ? { stitchesFrom: "staff" as const } : {}), ...(clip(p.backing, 60) ? { backing: clip(p.backing, 60) } : {}), ...(clip(p.topping, 60) ? { topping: clip(p.topping, 60) } : {}) };
+      }
       // the size is now what production says we printed (the Mockup Creator asks before changing it)
       if (im.size) im.sizeFrom = "film";
       const note = clip(p.notes, 240);
@@ -51,13 +61,15 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       im.notes = cleanPrintNotes(shopNotes(im.notes));
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
-      const spec = [im.location, im.size || "size left blank", im.inks || "inks left blank", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
+      const spec = [im.location, im.size || "size left blank", im.inks || (emb ? "threads left blank" : "inks left blank"), emb && im.stitches ? `${im.stitches.toLocaleString()} stitches` : "", emb && im.emb?.backing ? im.emb.backing : "", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
       const changed = [before.size !== im.size && "size", before.inks !== im.inks && "inks", before.colors !== im.colors && "colors"].filter(Boolean);
       lines.push(`${spec}${edit ? " (corrected)" : changed.length ? ` (changed: ${changed.join(", ")})` : " (as guessed)"}`);
       if (im.design_id) {
         designs.set(im.design_id, [...(designs.get(im.design_id) || []), [im.location, im.size, im.inks, im.underbase === true ? "underbase" : ""].filter(Boolean).join(", ")]);
         const garment = [...new Set(groups.filter((g) => g.imprints.includes(im!)).flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
-        entries.push({ design: im.design_id, e: { location: im.location, method: im.method, size: im.size, drop: im.drop || "", inks: im.inks, colors: im.colors, ...(im.underbase !== undefined ? { underbase: im.underbase } : {}), garment, notes: note, by, at, order_id: o.id, order_number: o.number, ...(job ? { job } : {}), ...(im.pressOnly?.id ? { press: { id: im.pressOnly.id, name: im.pressOnly.name } } : {}), ...(im.byColor && Object.keys(im.byColor.skip || {}).length ? { skip: im.byColor.skip } : {}), ...(im.rounds && im.rounds > 1 ? { rounds: im.rounds } : {}) } });
+        // embroidery: what it sewed with, on the logo for its next reorder (the Mockup Creator's "Last time")
+        if (emb) await rememberEmbroidery(admin, im, o.number, garment).catch(() => null);
+        entries.push({ design: im.design_id, e: { location: im.location, method: im.method, size: im.size, drop: im.drop || "", inks: im.inks, colors: im.colors, ...(im.underbase !== undefined ? { underbase: im.underbase } : {}), garment, notes: [note, emb && im.stitches ? `${im.stitches} stitches` : "", emb ? [im.emb?.backing, im.emb?.topping && im.emb.topping !== "None" ? im.emb.topping : ""].filter(Boolean).join(" + ") : ""].filter(Boolean).join("; "), by, at, order_id: o.id, order_number: o.number, ...(job ? { job } : {}), ...(im.pressOnly?.id ? { press: { id: im.pressOnly.id, name: im.pressOnly.name } } : {}), ...(im.byColor && Object.keys(im.byColor.skip || {}).length ? { skip: im.byColor.skip } : {}), ...(im.rounds && im.rounds > 1 ? { rounds: im.rounds } : {}) } });
       }
     }
     if (!lines.length) throw new Error("Nothing waiting on production details here (already confirmed?).");

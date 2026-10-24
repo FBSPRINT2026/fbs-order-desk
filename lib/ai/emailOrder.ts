@@ -323,7 +323,8 @@ function tool(finishingIds: string[]) {
             note: { type: "string", description: "A note for this line only: \"Extras\" for an extras / overage line, a product or design name the PO lists apart from the style, a size breakdown that doesn't fit our sizes (waist sizes). Empty if nothing" },
           } } },
           prints: { type: "array", items: { type: "object", properties: {
-            method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, location: { type: "string" },
+            method: { type: "string", enum: ["screen", "embroidery", "dtf"], description: "embroidery = sewn with thread: the customer says embroidered, embroidery, stitched or 'emb', a stitch count or a DST/EMB file is mentioned, or it's a logo on a cap or polo they want embroidered. Otherwise screen (printed)" }, location: { type: "string" },
+            stitches: { type: ["integer", "null"], description: "Embroidery only: the stitch count when the email or the digitizer's sheet states it (e.g. 7,450). Null otherwise" },
             colors: { description: "Ink colors in the art (not the shirt color, not the underbase), or 'full'", anyOf: [{ type: "integer" }, { type: "string", enum: ["full"] }] },
             inks: { type: "string", description: "The ink colors by name ONLY when an email, a spec box or the paperwork names them (e.g. 'Gold, Black', 'PMS 286'). Never a guessed ink name: when nothing names the inks, leave this empty and the colors come from the art itself (Oct 23, Logotology #40110: 'Reflex Blue' was guessed for art that's Electric Blue and the mockup came out the wrong blue)" },
             size: { type: "string", description: "Print size only if the customer states it, e.g. '10\" wide' (it's then kept as theirs)" },
@@ -696,6 +697,9 @@ ${staffSays}` : ""}`;
       (pg.prints || []).slice(0, 10).forEach((pr, k) => {
         const im = g.imprints[k]; if (!im) return;
         const f = fileAt(pr.art_file); if (f) art[im.id] = f;
+        // embroidery: a stitch count they gave (a digitizer's sheet, the email) is kept as stated
+        const stc = Math.round(+((pr as { stitches?: number | null }).stitches || 0));
+        if (im.method === "embroidery" && stc >= 300 && stc < 200000) { im.stitches = stc; im.emb = { ...(im.emb || {}), stitchesFrom: "staff" }; }
         // done like a past job's print ("same process as order 85254"): its colors, inks and size, and its mockup to look at
         const sj = jobAt((pr as { same_as_job?: number | null }).same_as_job);
         if (sj) {
