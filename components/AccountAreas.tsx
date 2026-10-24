@@ -246,7 +246,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : "", o.search));
     return (
       <div className="aa-card aa-tblcard">
-        <table className="aa-tbl">
+        {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
+        <table className="aa-tbl aa-tbl-cols">
+          <colgroup><col className="c-no" /><col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" /></colgroup>
           <thead><tr><th>#</th><th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
           <tbody>
             {rows.map((o) => (

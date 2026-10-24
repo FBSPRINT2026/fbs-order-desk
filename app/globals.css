@@ -7275,7 +7275,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-chip.on b,.mf-dd.on>.mf-chip b,.ibx2-tabs button.on span:not(:empty){color:#fff;background:var(--accent);border-radius:999px;padding:0 6px;line-height:17px}
 .ibx2-tabs button span.hot{color:var(--danger)}
 .ibx2-tabs button.on span.hot{background:var(--danger);color:#fff}
-@media (min-width:761px){
+@media (min-width:641px){
   /* the toolbar is one white panel: two rows split by a hairline, sections split by a thin line, no boxes */
   .eh-bar:has(.tb-row){background:var(--surface);padding:0;border-bottom:1px solid var(--line-2)}
   .eh-bar:has(.tb-row) .tb{row-gap:0;gap:0}
@@ -9556,7 +9556,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .eh-ai.mini .eh-ai-b{flex-wrap:nowrap;cursor:pointer;overflow:hidden}
 .eh-ai.mini .eh-sum{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto}
 .eh-ai.mini .eh-ai-tags{display:none}
-@media (min-width:761px){
+@media (min-width:641px){
   .ibx2-sw{padding:2px!important;border-radius:8px!important}
   .ibx2-sw button{padding:3px 6px!important;font-size:12.5px!important}
   .eh-bar{padding:2px 6px!important}
@@ -9577,7 +9577,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .eh-from{gap:8px!important}
 }
 /* the toolbar's buttons keep their size (they were squeezing into each other); a narrow pane wraps to two lines */
-@media (min-width:761px){
+@media (min-width:641px){
   .eh-bar .tb{flex-wrap:wrap!important}
   .eh-bar .tb-row{flex:0 0 auto!important}
   .eh-bar .tb-b,.eh-bar .tb-m,.eh-bar .tb-g{flex:none!important}
@@ -9681,7 +9681,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-work>.ibx2-mail,.ibx2-work>.ibx2-ai{flex:1 1 0;min-height:0}
 }
 /* email screen: one even 14px space around and between the header, folder bar and panels (Oct 16, Nick) */
-@media (min-width:761px){
+@media (min-width:641px){
   .main:has(.ibx2){padding:14px 14px 14px!important}
   .main:has(.ibx2) > .page-head{margin-bottom:14px!important}
   .main:has(.ibx2) > .mf-bar{margin-bottom:14px!important}
@@ -9700,7 +9700,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .ibx2-briefbtn .ibx2-briefgo{width:14px!important;height:14px;fill:none;stroke:var(--fbs-orange);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:1!important;flex:none}
 /* no bubbles inside bubbles (Oct 16, Nick): the folder bar, the list's tabs, search and Inbox summary run edge to edge as
    flat strips; the tab / folder you're on is white with a blue underline */
-@media (min-width:761px){
+@media (min-width:641px){
   .main:has(.ibx2) .mf-bar{padding:0!important;gap:0!important;overflow:hidden;background:#f7f8fa!important;box-shadow:none!important;align-items:stretch}
   .main:has(.ibx2) .mf-bar::before{background:var(--surface);margin:0!important;padding:0 12px!important}
   .main:has(.ibx2) .mf-bar .mf-chip{border-radius:0!important;min-height:0!important;padding:11px 10px 9px!important;border-bottom:2px solid transparent!important;box-shadow:none!important;background:none}
@@ -10045,7 +10045,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .ink-type-note:empty{display:none}
 /* Email toolbar on the computer (Oct 20, Nick: "the buttons on top of the email should be large and labeled… they still
    look small"): every button a bigger icon with its word under it, at any width; a narrow pane wraps to a second line */
-@media (min-width:761px){
+@media (min-width:641px){
   .eh-bar{padding:4px 8px!important}
   .eh-bar .tb{flex-wrap:wrap!important;row-gap:4px!important}
   .eh-bar .tb-b,.eh-bar .tb-b.primary{flex-direction:column!important;justify-content:center!important;align-items:center!important;height:auto!important;min-height:48px!important;min-width:56px;width:auto!important;padding:4px 8px!important;gap:3px!important;font-size:11.5px!important;line-height:1.1!important}
@@ -11537,7 +11537,7 @@ html body .pbar .pbar-n{color:#fff}
 
 /* ── Order page top (Oct 21, Nick): the job name and the buttons on one line; what it is, created and saved in a
    small box at the end ── */
-@media (min-width:761px){
+@media (min-width:641px){
   html body main.main .ord .ed-head{flex-wrap:nowrap;align-items:center;gap:16px}
   html body main.main .ord .ed-head .ed-title{flex:1 1 auto;min-width:0}
   html body main.main .ord .ed-head .ed-title h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -11642,7 +11642,7 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
    the gray cost under the price, .fit-w the sizes on their own line, .fit-s stacked (phones always stack). The words in
    the style, brand, color and description boxes line up with the "Garments" heading (the box reaches into the gutter).
    The colors of one style sit together under it: no line between them, size names only on the first. ===== */
-@media (min-width:761px){
+@media (min-width:641px){
   html body .ord .line-b .gl-list .gl-row.gl-head{display:none}
   html body .ord .line-b .gl-list .gl{display:grid;column-gap:var(--gap,10px);row-gap:0;align-items:center;padding:12px 0 10px;border-top:1px solid var(--line-2)}
   html body .ord .line-b .gl-list .gl-head + .gl{border-top:0}
@@ -13082,3 +13082,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .rq-pick-c small{font-size:12px;color:var(--ink-3)}
 .rq-pick-img{width:100%;aspect-ratio:1;display:grid;place-items:center;background:#fff;border-radius:6px;overflow:hidden}
 .rq-pick-img img{max-width:100%;max-height:100%;object-fit:contain}
+
+/* order lists: one set of column widths, so the Quotes and Orders tables line up (Oct 24, Nick: "make it so these columns
+   align"). The quotes' date column spans where Paid and Balance sit below it. */
+@media (min-width:641px){
+  .aa-tbl.aa-tbl-cols{table-layout:fixed;width:100%}
+  .aa-tbl-cols col.c-no{width:110px}
+  .aa-tbl-cols col.c-st{width:170px}
+  .aa-tbl-cols col.c-dt{width:150px}
+  .aa-tbl-cols col.c-dt.wide{width:370px}
+  .aa-tbl-cols col.c-m{width:110px}
+}
