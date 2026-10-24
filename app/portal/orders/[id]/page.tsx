@@ -1,4 +1,5 @@
 import PortalGoods from "@/components/PortalGoods";
+import { StarOrder } from "@/components/PortalDashBits";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { proofViewed } from "@/lib/proofs";
@@ -105,6 +106,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
           <div className="row">
             {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
+            {!["completed", "void"].includes(o.status) && <StarOrder id={o.id} on={!!(o as typeof o & { customer_starred_at?: string | null }).customer_starred_at} canAct={!preview} label />}
             {o.type === "invoice" && <ReorderButton orderId={o.id} disabled={preview} />}
             {(() => { const x = o as typeof o & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null };
               const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";

@@ -348,3 +348,21 @@ export async function requestCancellation(orderId: string, reason: string, note:
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Star an order to track it on the dashboard (Oct 24, Nick: "a customer should be able to star an order or make it a
+ * priority… a priority order tracker"). Their own orders only (checked with their login); staff previews can't.
+ */
+export async function starMyOrder(orderId: string, starred: boolean): Promise<Result> {
+  try {
+    const { supabase, user, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    if (isStaff) return { ok: false, error: "This is a preview." };
+    const { data: o } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false, error: "We couldn't find that order." };
+    const { error } = await createAdminClient().from("orders").update({ customer_starred_at: starred ? new Date().toISOString() : null }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

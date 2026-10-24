@@ -13255,3 +13255,25 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx-sent-st{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
 .pdx-sent-pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--sc);background:color-mix(in srgb,var(--sc) 14%,transparent);white-space:nowrap}
 @media (max-width:700px){.pdx-sent-row{grid-template-columns:1fr auto}.pdx-sent-st{grid-column:1 / -1}}
+/* ★ track an order; the Tracking card under Payments on the portal dashboard (Oct 24, Nick) */
+.pdx-col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.pdx-col>.pdx-stmt{flex:0 0 auto}
+.ostar{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink-3);border-radius:999px;width:26px;height:26px;justify-content:center;padding:0;cursor:pointer}
+.ostar.lbl{width:auto;height:32px;padding:0 12px;font:600 13px var(--body);border-radius:6px}
+.ostar:hover:not(:disabled){color:var(--warn);border-color:var(--warn)}
+.ostar.on{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.ostar:disabled{cursor:default;opacity:.7}
+.pjr-picw{position:relative;display:block;width:64px;height:64px}
+.pjr-picw .ostar{position:absolute;top:-8px;left:-8px;box-shadow:0 1px 3px rgba(15,23,42,.15)}
+.pjr-picw .ostar:not(.on){opacity:0}
+.pjr:hover .pjr-picw .ostar,.pjr-picw .ostar:focus-visible{opacity:1}
+@media (hover:none){.pjr-picw .ostar:not(.on){opacity:1}}
+.pdx-track-list{display:flex;flex-direction:column;gap:8px}
+.pdx-trk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;--sc:var(--accent)}
+.pdx-trk.t-ok{--sc:var(--ok)}.pdx-trk.t-act{--sc:var(--warn)}.pdx-trk.t-bad{--sc:var(--danger)}.pdx-trk.t-wait{--sc:var(--accent)}
+.pdx-trk-t{display:flex;flex-direction:column;min-width:0;color:var(--ink);text-decoration:none}
+.pdx-trk-t b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdx-trk-t small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdx-trk-h{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--sc);background:color-mix(in srgb,var(--sc) 14%,transparent);white-space:nowrap}
+.pdx-trk .pd-link{grid-column:1 / -1;font-size:12.5px}
+.pdx-track-none{margin:0;font-size:12.5px;color:var(--ink-3)}

@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { reorderRequest } from "@/app/portal/request-actions";
 import { reorderArchived } from "@/app/portal/assist-actions";
+import { starMyOrder } from "@/app/portal/actions";
 import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
 import type { JobKind, JobStage, PortalJob } from "@/lib/portalJobs";
@@ -71,11 +72,26 @@ function JobSteps({ j }: { j: PortalJob }) {
   );
 }
 
-function JobRow({ j }: { j: PortalJob }) {
+/** ☆ / ★: track this order on the dashboard (Oct 24, Nick) */
+export function StarOrder({ id, on, canAct, label = false }: { id: string; on: boolean; canAct: boolean; label?: boolean }) {
+  const router = useRouter();
+  const [v, setV] = useState(on);
+  const [pending, start] = useTransition();
+  return (
+    <button type="button" className={"ostar" + (v ? " on" : "") + (label ? " lbl" : "")} disabled={!canAct || pending} aria-pressed={v}
+      title={!canAct ? "Turned off in preview" : v ? "Tracking this order. Click to stop tracking it." : "Track this order on your dashboard"}
+      onClick={() => { const n = !v; setV(n); start(async () => { const r = await starMyOrder(id, n); if (!r.ok) setV(!n); else router.refresh(); }); }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill={v ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z" /></svg>
+      {label && <span>{v ? "Tracking" : "Track this order"}</span>}
+    </button>
+  );
+}
+
+function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
   const a = j.action;
   return (
     <div className={"pjr" + (j.stage === "need" ? " need" : "")}>
-      <Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link>
+      <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
       <Link href={j.href} className="pjr-t"><small>#{j.number}</small><b>{j.nickname}</b><em>{j.summary}</em></Link>
       <div className="pjr-mid">
         <JobSteps j={j} />
@@ -129,7 +145,7 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
       {!jobs.length && !pastJobs.length && <div className="pdx-none">No jobs in progress right now. Start an order, or reorder one below.</div>}
       {jobs.length > 0 && !list.length && <div className="pdx-none">Nothing here right now.</div>}
       <div className="pjr-list">
-        {shown.map((j) => <JobRow key={j.id} j={j} />)}
+        {shown.map((j) => <JobRow key={j.id} j={j} canAct={canAct} />)}
         {list.length > 5 && <div className="pdx-more-row">
           {list.length > shown.length && <button type="button" className="pdx-more" onClick={() => setMore((m) => m + 1)}>Show the next {Math.min(10, list.length - shown.length)}</button>}
           <Link href={ordersHref} className="pdx-more">View all orders ({list.length})</Link>

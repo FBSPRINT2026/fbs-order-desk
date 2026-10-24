@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
+import { customerStatus } from "@/lib/orderStages";
 import { jobFor, kindFromWords, type JobKind, type JobShip } from "@/lib/portalJobs";
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
@@ -201,7 +202,26 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined,
       goodsHref, ship: shipOf.get(o.id) || null, balance: o.type === "invoice" ? bal(o) : 0, payHref: link("/portal?area=payments"), pickup: shopAddr, pickupHref });
   };
-  const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
+  const starOf = (o: Order) => !!(o as Order & { customer_starred_at?: string | null }).customer_starred_at;
+  const jobs = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o) })), pastJobs = doneRecent.map(jobOf);
+  // the orders they're tracking (★), each with where it is and whether it's on time (Oct 24, Nick: "tracking this order,
+  // here's the current status. This is the date… on time or waiting on you")
+  const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const tracked = orders.filter((o) => starOf(o) && o.status !== "completed" && o.status !== "void")
+    .sort((a, b) => String((b as Order & { customer_starred_at?: string }).customer_starred_at).localeCompare(String((a as Order & { customer_starred_at?: string }).customer_starred_at)))
+    .slice(0, 4).map((o) => {
+      const j = jobs.find((x) => x.id === o.id) || jobOf(o);
+      const cs = customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) });
+      const late = !!o.due_date && o.due_date < todayIso && !["ready", "completed"].includes(o.status);
+      const health = cs.key === "delayed" ? { text: "Delayed", tone: "bad" as const }
+        : j.stage === "need" || ["waiting", "proof", "quote_sent"].includes(cs.key) ? { text: "Waiting on you", tone: "act" as const }
+        : cs.key === "goods" && o.price_type === "wholesale" ? { text: "Waiting on your goods", tone: "act" as const }
+        : o.status === "request" ? { text: "Waiting on FBS", tone: "wait" as const }
+        : late ? { text: "Running late", tone: "bad" as const }
+        : ["ready", "shipped", "delivered"].includes(cs.key) ? { text: cs.label, tone: "ok" as const }
+        : o.due_date ? { text: "On time", tone: "ok" as const } : { text: "In progress", tone: "wait" as const };
+      return { id: o.id, href: j.href, number: o.number, name: o.nickname || "", status: cs.label, due: j.inHands || "", health, action: j.action ? { label: j.action.label, href: j.action.href, external: !!j.action.external } : null };
+    });
   // Orders sent to FBS (Oct 24, Nick: "as soon as you click that button, you want to keep track of it on the main
   // dashboard… order sent to FBS, waiting on FBS… approved"): everything still with us, and what we did with the ones
   // sent in the last two weeks
@@ -295,7 +315,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
-    <PortalDash sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
+    <PortalDash tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}

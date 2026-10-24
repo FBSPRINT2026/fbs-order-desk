@@ -15,13 +15,17 @@ export type DashPast = { id: string; number: number; nickname: string; when: str
 /** an order they sent us, until we've confirmed it (and two weeks after) */
 export type DashSent = { id: string; href: string; number: number; name: string; when: string; pcs: number; simple: boolean; step: number; label: string; tone: "wait" | "act" | "ok" | "off"; note: string };
 
+/** an order they're tracking (★) */
+export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null };
+
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
+export default function PortalDash({ tracked = [], sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
   /** Orders sent to FBS, above the jobs (Oct 24, Nick) */ sent?: DashSent[];
+  /** the orders they starred to track */ tracked?: DashTracked[];
   /** an order they started and didn't send (Oct 24, Nick: "I saw you were making this order… bring it back up?") */ draft?: { href: string; name: string; when: string } | null;
   /** their mockups, under the artwork */ mocks?: { id: string; url: string; name: string }[]; mockupHref?: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
@@ -39,6 +43,7 @@ export default function PortalDash({ sent = [], draft, assistant, threads, newMs
           <div className="pdx-h"><h2>✨ Your FBS AI Assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
           {assistant}
         </section>
+        <div className="pdx-col">
         {/* payments: a small statement, with Pay now */}
         <section className="pdx-card pdx-stmt">
           <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
@@ -54,6 +59,18 @@ export default function PortalDash({ sent = [], draft, assistant, threads, newMs
           ))}</div>}
           <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
+        {/* the orders they starred (Oct 24, Nick: "a priority order tracker… tracking this order, here's the current status… on time or waiting on you") */}
+        <section className="pdx-card pdx-track">
+          <div className="pdx-h"><h2>Tracking</h2>{tracked.length > 0 && <span className="faint" style={{ fontSize: 12 }}>{tracked.length} starred</span>}</div>
+          {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
+            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
+              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
+              <span className="pdx-trk-h">{t.health.text}</span>
+              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
+            </div>
+          ))}</div> : <p className="pdx-track-none">Star an order (☆ on a job below) to keep an eye on it here.</p>}
+        </section>
+        </div>
       </div>
 
       {sent.length > 0 && (

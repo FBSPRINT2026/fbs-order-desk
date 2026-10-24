@@ -17,6 +17,7 @@ export type PortalJob = {
   /** the line under the steps: "Waiting on you:" + "your proof is ready to look over" */ nowK: string; nowT: string;
   /** a balance on this job, with where to pay it */ owe?: { text: string; href: string; external?: boolean };
   /** the in-hands date, short ("Mon Oct 26"), and its date for sorting */ inHands: string; inHandsIso: string;
+  /** the customer is tracking it on their dashboard (★) */ starred?: boolean;
 };
 export type JobStage = "need" | "work" | "ready" | "out" | "done";
 export type JobAction = { label: string; href: string; tone: "need" | "go" | "ok" | ""; sub?: string; external?: boolean };
