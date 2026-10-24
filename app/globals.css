@@ -13754,3 +13754,5 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 @media (max-width:560px){.pg-grid{grid-template-columns:1fr}}
 .pgs-tbl input,.pgs-tbl select{width:100%;min-width:70px}
 .pgs-uses{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;min-width:220px}
+/* style search: our popular garments first, marked (Oct 24, Nick) */
+.style-menu .sm-item em.sm-pop{font-style:normal;font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 7px;margin-left:auto;white-space:nowrap}

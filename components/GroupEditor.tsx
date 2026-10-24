@@ -964,6 +964,21 @@ function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v:
 export type SSHit = { styleID: number; brand: string; style: string; title: string; image: string; supplier?: "ss" | "sanmar" };
 const inCatalog = (catalog: Garment[], h: SSHit) => h.supplier === "sanmar" ? catalog.some((c) => c.supplier === "sanmar" && (c.supplier_style || c.style).toLowerCase() === h.style.toLowerCase()) : catalog.some((c) => c.ss_style_id === h.styleID);
 /** Style # box: type a number and pick from your catalog or from every matching S&S and SanMar style. */
+/** the "Need help picking garments?" list (Settings → Garments → Popular garments), loaded once: those styles come up
+ *  first when someone types a brand (Oct 24, Nick: "if you just say Gildan… the 5000 comes up first because it's on our list") */
+let popularOnce: Promise<string[]> | null = null;
+const popKey = (brand: string, style: string) => `${brand}|${style}`.toLowerCase().replace(/[^a-z0-9|]/g, "");
+function usePopularStyles() {
+  const [keys, setKeys] = useState<string[]>([]);
+  useEffect(() => {
+    popularOnce ||= import("@/app/popular-garments-actions").then((m) => m.popularGarments()).then((r) => (r.ok ? r.list.map((g) => popKey(g.brand, g.style)) : [])).catch(() => []);
+    let live = true;
+    popularOnce.then((k) => { if (live) setKeys(k); });
+    return () => { live = false; };
+  }, []);
+  return keys;
+}
+
 export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
   value: string; catalog: Garment[]; busy: boolean;
   onType: (v: string) => void; onPick: (g: Garment) => void; onPickSS: (h: SSHit) => Promise<void>;
@@ -972,6 +987,7 @@ export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: 
   const [hits, setHits] = useState<SSHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
+  const popular = usePopularStyles();
   const q = value.trim().toLowerCase();
   useEffect(() => {
     if (!open || q.length < 2) { setHits([]); return; }
@@ -988,7 +1004,11 @@ export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: 
   }, [q, open]);
   const stripped = q.replace(/^[a-z]{1,2}(?=\d)/, "");
   const rank = (b: string) => { const i = ["gildan", "next level", "bella", "hanes"].findIndex((x) => (b || "").toLowerCase().startsWith(x)); return i < 0 ? 4 : i; };
-  const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); })).sort((a, b) => rank(a.brand) - rank(b.brand) || a.style.localeCompare(b.style)).slice(0, 8) : [];
+  // the brand typed loosely ("comfort colors", "bella canvas"): letters and digits only
+  const qn = q.replace(/[^a-z0-9]/g, "");
+  const popAt = (g: Garment) => { const i = popular.indexOf(popKey(g.brand, g.style)); return i < 0 ? (popular.some((k) => k.endsWith("|" + g.style.toLowerCase().replace(/[^a-z0-9]/g, ""))) ? 500 : 999) : i; };
+  const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); }) || (qn.length >= 3 && `${c.brand}${c.style}`.toLowerCase().replace(/[^a-z0-9]/g, "").startsWith(qn)))
+    .sort((a, b) => popAt(a) - popAt(b) || rank(a.brand) - rank(b.brand) || a.style.localeCompare(b.style)).slice(0, 8) : [];
   const items: ({ kind: "cat"; g: Garment } | { kind: "ss"; h: SSHit })[] = [
     ...local.map((g) => ({ kind: "cat" as const, g })),
     ...hits.filter((h) => !inCatalog(catalog, h)).map((h) => ({ kind: "ss" as const, h })),
@@ -1018,6 +1038,7 @@ export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: 
             <div key={it.kind === "cat" ? "c" + it.g.id : (it.h.supplier === "sanmar" ? "m" + it.h.style : "s" + it.h.styleID)} role="option" aria-selected={i === active}
               className={"sm-item" + (i === active ? " on" : "")} onMouseDown={(e) => { e.preventDefault(); choose(i); }} onMouseEnter={() => setActive(i)}>
               <b>{it.kind === "cat" ? `${it.g.brand} ${it.g.style}` : `${it.h.brand} ${it.h.style}`}</b>
+              {it.kind === "cat" && popAt(it.g) < 500 && <em className="sm-pop">Popular</em>}
               <span>{it.kind === "cat" ? it.g.description : it.h.title}</span>
               {it.kind === "ss" && <em>{it.h.supplier === "sanmar" ? "SANMAR" : "S&S"}</em>}
             </div>
