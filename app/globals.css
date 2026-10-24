@@ -13540,3 +13540,26 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx-more-fold>summary::-webkit-details-marker{display:none}
 .pdx-more-fold[open]>summary{margin-bottom:6px}
 .pdx-more-fold>.pdx-track-list,.pdx-more-fold>.pdx-sent-list{display:flex;flex-direction:column;gap:6px}
+/* fewer bubbles (Oct 24, Nick: "limit them a little bit… not so colorful… but not drab either") */
+/* tracking and sent: words, colored only when it needs them */
+.pdx-trk{border:0;border-top:1px solid var(--line-2,var(--line));border-radius:0;padding:7px 2px;grid-template-columns:8px minmax(0,1fr) auto}
+.pdx-track-list>.pdx-trk:first-child{border-top:0}
+.pdx-trk::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--line);align-self:center;grid-row:1}
+.pdx-trk.t-bad::before{background:var(--danger)}.pdx-trk.t-act::before{background:var(--warn)}
+.pdx-trk .pd-link{grid-column:2 / -1}
+.pdx-trk-h{background:none;padding:0;font-weight:600;color:var(--ink-3)}
+.pdx-trk.t-bad .pdx-trk-h{color:var(--danger)}.pdx-trk.t-act .pdx-trk-h{color:#a76a00}
+.pdx-left .pdx-sent-row{border:0;border-top:1px solid var(--line-2,var(--line));border-radius:0;padding:7px 2px;grid-template-columns:minmax(0,1fr) auto}
+.pdx-left .pdx-sent-list>.pdx-sent-row:first-child{border-top:0}
+.pdx-left .pdx-sent-steps{display:none}
+.pdx-sent-pill{background:none;padding:0;font-weight:600;color:var(--ink-3)}
+.pdx-sent-row.t-act .pdx-sent-pill{color:var(--accent)}
+.pdx-sent-row.t-act .pdx-sent-pill::after{content:" ›"}
+/* on hold: the panel says it, the rows don't repeat it */
+.pdx-hold-tag{display:none}
+/* the job steps: kept, quieter */
+.pjs::after{background:color-mix(in srgb,var(--fbs-blue) 55%,var(--line))}
+.pjs-st.done i{background:color-mix(in srgb,var(--fbs-blue) 12%,var(--surface));border-color:color-mix(in srgb,var(--fbs-blue) 45%,var(--line));color:var(--fbs-blue)}
+.pjs-st.cur i{background:var(--surface);border:2px solid var(--fbs-blue);color:var(--fbs-blue);box-shadow:none}
+.pjs-st.cur b{color:var(--ink);font-weight:700}
+.pjs-st b{font-weight:500}
