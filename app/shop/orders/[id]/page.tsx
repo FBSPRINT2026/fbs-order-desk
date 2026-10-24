@@ -827,8 +827,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o?.id) return;
     const ask = () => { const deep = o.type === "invoice" && qbDeep.current !== o.id; if (deep) qbDeep.current = o.id; qboOrderState(o.id, deep).then((r) => setQbSt(r.ok ? r : null), () => null); };
     const t0 = setTimeout(ask, 1500); // after the save's queue row is written
-    const t = setInterval(ask, 60000);
-    return () => { clearTimeout(t0); clearInterval(t); };
+    const t = setInterval(ask, 30000);
+    // coming back to the tab (after Sync now on the QuickBooks page) asks again right away
+    const back = () => { if (document.visibilityState === "visible") ask(); };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => { clearTimeout(t0); clearInterval(t); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
   }, [o?.id, o?.type, o?.status, saveState]); // eslint-disable-line react-hooks/exhaustive-deps
   async function del() {
     if (!o) return;
