@@ -1054,9 +1054,11 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     if (b) return { kind: "file", file: png(b, name), name: label };
     return d.raw instanceof File ? { kind: "upload", file: d.raw } : null;
   };
+  // the old job's paperwork left out by itself (its PO, work order, a supplier's blank order) isn't stepped through
+  const leftOut = (old || []).map((f, i) => ({ f, k: `O${i}` })).filter(({ k }) => as[k] === "none" && autoNone.current.has(k));
   const items: Item[] = [
     ...help.prints.filter((p) => p.design).map((p) => ({ key: `K${p.key}`, where: "kept" as const, only: p.key, tag: `Pulled for the ${p.label}`, name: "Art pulled from the old job", cutUrl: kept[p.design!] || "", asIsUrl: kept[p.design!] || "", canCut: false, ready: true, pick: () => ({ kind: "keep" as const }) })),
-    ...(old || []).map((f, i) => ({ key: `O${i}`, open: f.url, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
+    ...(old || []).map((f, i) => ({ f, i })).filter(({ i }) => !leftOut.some((x) => x.k === `O${i}`)).map(({ f, i }) => ({ key: `O${i}`, open: f.url, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
     ...Object.entries(pulls).filter(([k]) => as[k] === "mockup").flatMap(([k, pu]) => pu.pieces.map((x, n) => ({ key: `P${k}:${n}`, where: "pulled" as const, tag: `Pulled off ${pu.from} · ${x.pc.side === "back" ? "Back" : "Front"}, ${x.pc.widthIn}" × ${x.pc.heightIn}"`, name: `${pu.from} ${x.pc.side} art`, cutUrl: x.url, asIsUrl: x.url, canCut: false, ready: true,
       pick: () => ({ kind: "file" as const, file: x.pc.file, name: `the art pulled off ${pu.from}`, pc: x.pc, from: pu.from, how: pu.how, ...(pu.sheet?.[x.pc.side] ? { sheet: pu.sheet[x.pc.side] } : {}) }) }))),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
@@ -1091,7 +1093,12 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   useEffect(() => {
     if (asked.current || !old?.length) return;
     asked.current = true;
-    void fetch("/api/production/guess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: old.map((f) => ({ path: f.path, name: f.name })) }) }).then((r) => r.json()).then((j: { guesses?: Record<string, { kind: string; why: string }> }) => setAiG(j.guesses || {})).catch(() => null);
+    void fetch("/api/production/guess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: old.map((f) => ({ path: f.path, name: f.name })) }) }).then((r) => r.json()).then((j: { guesses?: Record<string, { kind: string; why: string }> }) => {
+      const g = j.guesses || {};
+      setAiG(g);
+      // the AI sees a supplier's blank order (an S&S order confirmation under any file name): left out, not asked
+      (old || []).forEach((f, i) => { if (g[f.path]?.kind === "supplier_order") { const k = `O${i}`; autoNone.current.add(k); setAs((a) => (a[k] ? a : { ...a, [k]: "none" })); } });
+    }).catch(() => null);
   }, [old]);
   const aiKind = (path?: string) => { const g = path ? aiG[path] : undefined; return g && g.kind !== "?" ? g.kind : ""; };
   // no jumping ahead by itself (Oct 20, Nick: "when I clicked production file it immediately took me to the next
@@ -1174,6 +1181,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       // ignore that old purchase order by default. The new one overrides it")
       // "Same thing with the work order too": both are replaced by the new ones on this email or job
       if (/purchase[\s_-]*order|work[\s_-]*order|(^|[^a-z])[pw]\.?o\.?[\s_#-]*\d/i.test(f.name)) { autoNone.current.add(k); setAs((a) => (a[k] ? a : { ...a, [k]: "none" })); }
+      // a supplier's order for the blanks (S&S, SanMar order confirmation): made for that old job, never needed again
+      // (Oct 24, Nick: "learn to ignore these on previous orders… those are manufactured")
+      if (/order[\s_-]*confirm|ss[\s_-]*activewear|s&s[\s_-]*(order|invoice)|sanmar[\s_-]*(order|invoice)/i.test(f.name)) { autoNone.current.add(k); setAs((a) => (a[k] ? a : { ...a, [k]: "none" })); }
       if (!f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) { setSheets((x) => ({ ...x, [k]: null })); continue; }
       setSheets((x) => ({ ...x, [k]: "reading" }));
       void f.d.raw.arrayBuffer().then((b) => sizesOnSheet(b)).then((r) => { const has = Object.keys(r).length > 0; setSheets((x) => ({ ...x, [k]: has ? r : null })); if (has) setAs((a) => (a[k] ? a : { ...a, [k]: "mockup" })); }).catch(() => setSheets((x) => ({ ...x, [k]: null })));
@@ -1349,6 +1359,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       {help.settled?.length ? <p className="ap-q">You&apos;re using the email&apos;s art for {help.settled.join(", ")}. {olds0.length === 1 ? "This file is" : `These ${olds0.length} files are`} on {help.job} too: keep any you still need?</p> : null}
       {!help.settled?.length && <p className="ap-q">{stage === "details" ? <>How did {help.job.replace(/^(#\d+).*/, "$1")} print?</> : old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>}
       <p className="ap-why">{help.settled?.length ? "Barcodes, labels, packing sheets…: mark them Production file and they go with this order. The old art they replaced: Not needed (or Production file to keep it for reference)." : stage === "details" ? "Tell me what you know. Leave it on \"Don't know\" when you're not sure." : <>Say what each one is: the art (and which items it&apos;s on), a mockup, a production file, or not needed. Next, how it printed.</>}</p>
+      {leftOut.length > 0 && stage !== "details" && <p className="ap-why ap-left" data-notranslate>Left out: {leftOut.map(({ f }) => f.name).join(", ")} (the old job&apos;s paperwork: blank orders, PO, work order).</p>}
       {stage === "details" && (() => {
         const spots = [...new Map(help.prints.map((p) => [p.location, p])).values()];
         // one line per question (Oct 20, Nick: "once you click I know, put it on the right instead of below where it

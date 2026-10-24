@@ -18,6 +18,7 @@ export const PROD_KINDS = [
   { k: "brand", label: "Style / brand guide", hint: "Their colors, fonts, logo rules" },
   { k: "ink", label: "Ink / color reference", hint: "PMS swatches, ink formulas, color matches" },
   { k: "order_sheet", label: "Size breakdown / order sheet", hint: "Their spreadsheet, store and warehouse sheets" },
+  { k: "supplier_order", label: "Blank order (supplier)", hint: "S&S, SanMar or another supplier's order confirmation or invoice for the blanks" },
   { k: "proof", label: "Approved proof", hint: "The signed-off proof" },
   { k: "photo", label: "Photo", hint: "A real photo: first off the press, finished product, a sample" },
   { k: "other", label: "Other", hint: "Anything else" },
