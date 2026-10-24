@@ -378,6 +378,9 @@ export class Pusher {
   async voidInvoice(row: QRow): Promise<Outcome> {
     const link = await this.link("invoice", row.local_id);
     if (!link) return { status: "skipped", reason: "Never in QuickBooks: nothing to void." };
+    // already voided when the order was deleted (it asked first), or a test invoice: nothing more to do
+    if (link.note === "voided") return { status: "done", reason: `QuickBooks invoice #${link.qbo_id} is already voided.` };
+    if (link.source === "test") return { status: "skipped", reason: "A test invoice: voided from the order's Delete, never by the sync." };
     if (link.source !== "created") return { status: "needs_review", reason: `QuickBooks invoice #${link.qbo_id} was made by Printavo, so it isn't voided automatically. Void it in QuickBooks if the order is cancelled, then Skip.` };
     const preview = { action: "void", qboId: link.qbo_id };
     if (!this.qbo) return { status: "pending", reason: `Not connected: would void QuickBooks invoice #${link.qbo_id}.`, preview };
