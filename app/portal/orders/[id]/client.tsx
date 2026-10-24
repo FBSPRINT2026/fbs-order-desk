@@ -7,7 +7,7 @@ import PayPanel, { type PayItem } from "@/components/PayPanel";
 import { approveQuote, archiveMyQuote, customerMessage, requestCancellation, requestQuoteChanges, startCheckout, withdrawSentRequest } from "../../actions";
 import { reorderRequest } from "../../request-actions";
 
-/** "Order this again": copies this order into a new request the customer can change and send in. */
+/** "Reorder": copies this order into a new request the customer can change and send in. */
 export function ReorderButton({ orderId, disabled }: { orderId: string; disabled: boolean }) {
   const router = useRouter();
   const [err, setErr] = useState("");
@@ -16,7 +16,7 @@ export function ReorderButton({ orderId, disabled }: { orderId: string; disabled
     <>
       <button className="btn" type="button" disabled={disabled || pending} title={disabled ? PREVIEW : "Start a new order with the same garments, sizes and logos"}
         onClick={() => start(async () => { setErr(""); const r = await reorderRequest(orderId); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else setErr(r.error || "Couldn't start the reorder."); })}>
-        {pending ? "Starting…" : "Order this again"}
+        {pending ? "Starting…" : "Reorder"}
       </button>
       {err && <span className="err">{err}</span>}
     </>

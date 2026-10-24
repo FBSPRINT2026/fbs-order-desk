@@ -56,6 +56,7 @@ type Props = {
   noLock?: boolean;
   /** the portal: the prints stay grayed out until the group has a mockup (made, uploaded or picked), with this note
    *  (Oct 24, Nick: "gray out the print area… I don't want them to fill it in. I want them to make the mock-up") */ needMockup?: string;
+  /** a reorder: the prints shown as they were printed (like a mockup's), not the full print form */ printsFixed?: boolean;
   /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
   /** the customer's builder: Tag Print with no tag on file uploads their tag art (shown from thumbUrls) */ onUploadTag?: (f: File) => Promise<{ path: string; name: string } | null>;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
@@ -79,7 +80,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -151,7 +152,7 @@ export default function GroupEditor({ onUploadTag, sizesBelow = false, finishing
   }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
-  const frozen = fixed || (!!onMockup && !!g.mockupAt && !g.mockupSkipped);
+  const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt && !g.mockupSkipped);
   // the group's shirt color (first garment): behind each print's logo, like the Mockup Creator's close-ups (Oct 15, Nick)
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
@@ -685,7 +686,7 @@ export default function GroupEditor({ onUploadTag, sizesBelow = false, finishing
                 <small>{needMockup}</small>
               </div>
             : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>)}
-          <div inert={locked || fixed || undefined} className="mk-body">
+          <div inert={locked || fixed || printsFixed || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>

@@ -168,7 +168,7 @@ Rules:
       // no AI: a simple guess from keywords, same buttons
       const t = last.toLowerCase();
       if (/\bpay|bill|balance|owe|invoice/.test(t)) { reply = due > 0.004 ? `Your balance is $${due.toFixed(2)}.` : "You're all paid up."; raw = [{ kind: "pay", label: "Choose what to pay", text: last }, { kind: "open_statement", label: "View statement" }]; }
-      else if (/reorder|again|same as/.test(t)) { reply = "Pick the order to repeat from your orders, then press Order this again."; raw = [{ kind: "open_orders", label: "See my orders" }]; }
+      else if (/reorder|again|same as/.test(t)) { reply = "Pick the order to repeat from your orders, then press Reorder."; raw = [{ kind: "open_orders", label: "See my orders" }]; }
       else if (/new order|place an order|quote|need shirts|order some/.test(t)) { reply = "Let's start a new order."; raw = [{ kind: "new_order", label: "Start an order" }]; }
       else if (/mockup|design|idea/.test(t)) { reply = "Try the Mockup Creator."; raw = [{ kind: "open_mockup", label: "Open Mockup Creator" }]; }
       else if (/track|package|shipment|deliver/.test(t)) {

@@ -13590,3 +13590,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx-aging>div.late{background:var(--danger-soft)}
 .pdx-aging b{overflow:visible;text-overflow:clip;font-variant-numeric:tabular-nums}
 .pdx-aging span{overflow:visible;text-overflow:clip}
+/* the portal "?" help button: small, in line with Sign out (Oct 24, Nick: "way too big") */
+.who .p-help{width:22px;height:22px;font-size:12px;border-color:var(--line-2,var(--line));color:var(--ink-3)}
+.rq-reo{font-size:12px;text-align:center}

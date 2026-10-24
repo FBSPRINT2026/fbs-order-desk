@@ -173,6 +173,8 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     const own = (g.customerMockups || []).length > 0;
     return (
       <div className="rq-mk-acts">
+        {g.reprintOf && <span className="faint rq-reo">Same prints as {g.reprintOf}</span>}
+        {g.reprintOf && <button type="button" className="btn sm" title="Change the prints: location, size, colors or art" onClick={() => patch((d) => { delete d.groups[gi].reprintOf; })}>Change the prints</button>}
         {g.fromMockup
           ? <button type="button" className="btn sm" onClick={() => goMock(`mockup=${g.fromMockup!.id}&request=${o.id}&group=${g.id}`)}>Edit mockup</button>
           : <button type="button" className={"btn sm" + (own ? "" : " primary")} onClick={() => goMock(`request=${o.id}&group=${g.id}`)}>Create mockup</button>}
@@ -408,7 +410,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className={"stack ord rq-ord" + (ws ? " ws" : " np-ord")}>
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
-          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} gc={calc.groups[gi]}
+          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} printsFixed={!!g.reprintOf} gc={calc.groups[gi]}
             mockupExtra={mockupBtns(g, gi)} sizesBelow onUploadTag={uploadTag} neckSets={neckSets}
             needMockup={pickMockups.length ? "Start with a mockup: create one, upload your own, or choose one you've already made. Your prints fill in from it." : "Start with a mockup: create one or upload your own. Your prints fill in from it."} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}

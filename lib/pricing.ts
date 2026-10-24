@@ -185,6 +185,8 @@ export type Group = { id: string; name?: string;
    *  original placement") */ mockupOffsets?: Record<string, { dx: number; dy: number }>;
   /** made from the customer's saved mockup (Oct 24): its prints and garments are fixed on their order request */
   fromMockup?: { id: string; number: number | null };
+  /** a customer's reorder (Oct 24, Nick): the prints are what was printed before ("#40123"), shown like a mockup's, fixed; the sizes are theirs */
+  reprintOf?: string;
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
   /** Tag Print: the label art the customer uploaded in the portal when there's no tag on file (storage path) */

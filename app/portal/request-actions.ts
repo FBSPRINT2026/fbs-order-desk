@@ -111,7 +111,7 @@ export async function submitRequest(id: string): Promise<Result> {
 }
 
 /**
- * "Order this again": a new order request copied from one of the customer's past orders
+ * "Reorder": a new order request copied from one of the customer's past orders
  * (garments, sizes, print locations and logos). They adjust it and send it in like any request.
  */
 export async function reorderRequest(fromId: string): Promise<Result> {
@@ -126,6 +126,9 @@ export async function reorderRequest(fromId: string): Promise<Result> {
       lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
       imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
       customerMockups: (g.customerMockups || []).filter((m) => m.path.startsWith(`mockups/${src.customer_id}/`)),
+      mockupThumbs: g.mockupThumbs, mockupSkipped: true,
+      // the prints as they were printed, fixed like a mockup's (Oct 24, Nick: "pulling up the old screen, not the new method")
+      reprintOf: `#${src.number}`,
     }));
     const { data, error } = await admin.from("orders").insert({
       customer_id: src.customer_id, status: "request", type: "quote", source: "portal", draft: true,
@@ -585,7 +588,7 @@ export async function reorderInto(id: string, ref: string): Promise<Result & { g
         imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
         customerMockups: (g.customerMockups || []).filter((m) => m.path.startsWith(`mockups/${cust.id}/`)),
         // the prints are what was printed before: shown, not waiting on a new mockup
-        mockupSkipped: true,
+        mockupSkipped: true, mockupThumbs: g.mockupThumbs, reprintOf: `#${src.number}`,
       })) as Group[];
       label = `#${src.number}`; nick = src.nickname || "";
     } else if (ref.startsWith("a:")) {
@@ -594,7 +597,7 @@ export async function reorderInto(id: string, ref: string): Promise<Result & { g
       const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
         ...g, id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
-        customerMockups: [], mockupSkipped: true,
+        customerMockups: [], mockupSkipped: true, reprintOf: `#${r.visual_id}`,
       })) as Group[];
       label = `#${r.visual_id}`; nick = String(r.nickname || "");
     } else return { ok: false, error: "Pick an order to reorder." };
