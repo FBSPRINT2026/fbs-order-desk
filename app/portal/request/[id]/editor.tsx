@@ -25,6 +25,14 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
+/** a group's numbers with every amount at $0 (counts kept): shown until the group is all there */
+const KEEP_N = /^(qty|pieces|n|count|colors|screens|stitches|number)$/i;
+function zeroMoney<T>(x: T): T {
+  if (Array.isArray(x)) return x.map(zeroMoney) as unknown as T;
+  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, v]) => [k, typeof v === "number" && !KEEP_N.test(k) ? 0 : zeroMoney(v)])) as T;
+  return x;
+}
+
 export default function RequestEditor({ neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
   /** their tag label sets on file (Tag Print) */ neckSets?: NeckLabelSet[];
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
@@ -52,6 +60,11 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(o);
   const calc = useMemo(() => calcOrder(o, settings, []), [o, settings]);
+  // no prices until a group is all there: garments with sizes and every print with its art (Oct 24, Nick: "you should
+  // never fill in pricing until all the stuff is there. So just have it say $0")
+  const groupDone = (g: Group) => g.lines.some((l) => Object.values(l.sizes || {}).some((v) => +v > 0)) && g.imprints.length > 0
+    && (g.imprints.every((d) => !!d.design_id) || (g.customerMockups || []).length > 0);
+  const allDone = o.groups.length > 0 && o.groups.every(groupDone);
   const prices = priceList(settings, o.price_type);
   // an approved wholesale account sees its prices, like our order screen, and sends it to us to confirm (Oct 24, Nick:
   // "if the customer is an approved wholesale client, then they should be able to submit and see pricing… send to FBS for
@@ -410,7 +423,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className={"stack ord rq-ord" + (ws ? " ws" : " np-ord")}>
         {o.groups.map((g, gi) => (
           // the mockup they made shows with the prints (Oct 24, Nick: ordered from a mockup, "it doesn't bring in the mock-up")
-          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} printsFixed={!!g.reprintOf} gc={calc.groups[gi]}
+          <GroupEditor key={g.id} gi={gi} g={g.mockupThumbs?.length ? g : { ...g, mockupThumbs: (g.customerMockups || []).filter((m) => !/\.pdf$/i.test(m.path)).map((m) => m.path) }} thumbUrls={mUrls} fixed={!!g.fromMockup} printsFixed={!!g.reprintOf} gc={groupDone(g) ? calc.groups[gi] : zeroMoney(calc.groups[gi])}
             mockupExtra={mockupBtns(g, gi)} sizesBelow onUploadTag={uploadTag} neckSets={neckSets}
             needMockup={pickMockups.length ? "Start with a mockup: create one, upload your own, or choose one you've already made. Your prints fill in from it." : "Start with a mockup: create one or upload your own. Your prints fill in from it."} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices={!ws} update={(fn) => patch((d) => fn(d.groups[gi]))}
@@ -602,7 +615,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
         </div>
       )}
       <div className="rq-foot">
-        <span><b>{calc.qty}</b> pieces</span>{ws && calc.qty > 0 && <span>Total <b className="num">{money(calc.total - calc.tax)}</b> <span className="faint">before tax</span></span>}<span className="spacer" />
+        <span><b>{calc.qty}</b> pieces</span>{ws && calc.qty > 0 && <span>Total <b className="num">{money(allDone ? calc.total - calc.tax : 0)}</b> <span className="faint">{allDone ? "before tax" : "once every group has its prints and art"}</span></span>}<span className="spacer" />
         <button type="button" className="btn primary" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
       </div>
     </main>
