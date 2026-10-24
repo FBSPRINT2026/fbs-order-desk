@@ -286,7 +286,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {/* the customer's name with Start an order / Mockup Creator, above the tabs (Oct 15, Nick) */}
         <div className="pdx-hello">
           <div><h1 className="pdx-h1">{company || "Your Account"}</h1><div className="pdx-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}</div></div>
-          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} settingsHref={`/portal/settings${qs}`} /></div>}
+          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">
@@ -306,7 +306,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup}
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} settingsHref={`/portal/settings${qs}`}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}

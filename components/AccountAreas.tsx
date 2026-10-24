@@ -58,6 +58,7 @@ const I = {
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
   projects: "M3 7h6l2 2h10v10H3zM3 7V5h6l2 2",
   program: "M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z",
+  settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 13.5l1.6 1.2-2 3.4-1.9-.7a7 7 0 0 1-1.8 1l-.3 2h-4l-.3-2a7 7 0 0 1-1.8-1l-1.9.7-2-3.4 1.6-1.2a7 7 0 0 1 0-3L3 9.3l2-3.4 1.9.7a7 7 0 0 1 1.8-1l.3-2h4l.3 2a7 7 0 0 1 1.8 1l1.9-.7 2 3.4-1.6 1.2a7 7 0 0 1 0 3z",
 };
 export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -67,7 +68,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -118,6 +119,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   usedIds?: string[];
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** portal: the customer's Settings page, on the right of the tab bar (Oct 24) */ settingsHref?: string;
   /** archive / bring back a mockup set (Oct 24) */ onArchiveMockup?: (mockupId: string, on: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** shop: an archived logo deleted for good (its orders keep their mockups) */
@@ -930,6 +932,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}
+        {/* the customer's Settings, last on the bar (Oct 24, Nick: "on the toolbar all the way to the right") */}
+        {mode === "portal" && settingsHref && <Link className="aa-tab aa-tab-end" href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
       </nav>
       )}
       <section className="aa-body">{body}</section>
