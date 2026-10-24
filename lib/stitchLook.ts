@@ -52,6 +52,24 @@ function blur(src: Float32Array, w: number, h: number, r: number): Float32Array 
  * Swept column by column; the next column's run is read between its two nearest pixels, so any angle works.
  * `L` is laid out W wide, H tall.
  */
+/** distance (px) from each pixel to the edge of its own color (3-4 chamfer, two passes) */
+function distance(lab: Int16Array, w: number, h: number): Float32Array {
+  const D = new Float32Array(w * h), BIG = 1e6;
+  for (let i = 0; i < w * h; i++) D[i] = lab[i] >= 0 ? BIG : 0;
+  const pass = (y: number, x: number, nb: [number, number, number][]) => {
+    const i = y * w + x; if (!D[i]) return;
+    let v = D[i];
+    for (const [dx, dy, c] of nb) { const X = x + dx, Y = y + dy; const q = Y * w + X;
+      v = Math.min(v, X < 0 || Y < 0 || X >= w || Y >= h || lab[q] !== lab[i] ? c : D[q] + c); }
+    D[i] = v;
+  };
+  const A: [number, number, number][] = [[-1, 0, 3], [0, -1, 3], [-1, -1, 4], [1, -1, 4]], Bn: [number, number, number][] = [[1, 0, 3], [0, 1, 3], [1, 1, 4], [-1, 1, 4]];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) pass(y, x, A);
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) pass(y, x, Bn);
+  for (let i = 0; i < w * h; i++) D[i] /= 3;
+  return D;
+}
+
 function run(L: Int16Array, W: number, H: number, dx: 1 | -1, t: number, step: number, out: Float32Array) {
   const dy = t * dx;
   for (let k = 0; k < W; k++) {
@@ -73,7 +91,7 @@ function run(L: Int16Array, W: number, H: number, dx: 1 | -1, t: number, step: n
  * The stitched look of a picture (a painted logo, see-through around it). `pxPerIn`: how many of its pixels make an
  * inch at the print size; left out, the logo is taken as about 3.5" wide.
  */
-export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: number } = {}): Promise<string> {
+export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: number; debug?: boolean | "obj" } = {}): Promise<string> {
   const img = await loadImg(src);
   const k = Math.min(1, (o.maxSide || 900) / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
   const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k)), N = w * h;
@@ -101,13 +119,135 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     for (let j = 0; j < pal.length; j++) { const e = pal[j], dd = (e.r - d[p]) ** 2 + (e.g - d[p + 1]) ** 2 + (e.b - d[p + 2]) ** 2; if (dd < bd) { bd = dd; best = j; } }
     labAll[i] = best; lab[i] = d[p + 3] >= 128 ? best : -1;
   }
+  // each letter is its own piece (Oct 23, Nick: "the machine… sews the F, then stops, then sews the E… it sews the D
+  // and the E separately. There's a space between them still"). Letters that touch in the art (FedEx's are kerned
+  // into each other) are pulled apart: shrink every color area by ~0.5 mm, the touching spots let go, each piece left
+  // is a letter, and every pixel goes back to the letter it grew from. Fine lettering that would vanish stays whole
+  {
+    const Dc = distance(lab, w, h), r = Math.max(1.5, 0.5 * pxMm);
+    const comp = (keep: (i: number) => boolean) => {
+      const id = new Int32Array(N).fill(-1); let n = 0; const st: number[] = [];
+      for (let s0 = 0; s0 < N; s0++) {
+        if (id[s0] >= 0 || !keep(s0)) continue;
+        id[s0] = n; st.push(s0);
+        while (st.length) { const i = st.pop()!, x = i % w, y = (i - x) / w;
+          for (let v = -1; v <= 1; v++) for (let u = -1; u <= 1; u++) { const X = x + u, Y = y + v;
+            if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const q = Y * w + X;
+            if (id[q] < 0 && keep(q) && lab[q] === lab[i]) { id[q] = n; st.push(q); } } }
+        n++;
+      }
+      return { id, n };
+    };
+    const whole = comp((i) => lab[i] >= 0), core = comp((i) => lab[i] >= 0 && Dc[i] > r);
+    // grow the cores back out, staying inside their own whole area
+    const obj = new Int32Array(N).fill(-1), q: number[] = [];
+    for (let i = 0; i < N; i++) if (core.id[i] >= 0) { obj[i] = core.id[i]; q.push(i); }
+    for (let k = 0; k < q.length; k++) { const i = q[k], x = i % w, y = (i - x) / w;
+      for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v;
+        if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const j = Y * w + X;
+        if (obj[j] < 0 && lab[j] >= 0 && whole.id[j] === whole.id[i]) { obj[j] = obj[i]; q.push(j); } } }
+    // areas with no core (fine lettering) stay whole
+    for (let i = 0; i < N; i++) if (lab[i] >= 0 && obj[i] < 0) obj[i] = core.n + whole.id[i];
+    // letters fused into a neighbor (FedEx's F runs into the e, the e into the d): a letter with a counter (e, d, o…)
+    // is the ring of thread around that counter. Each counter's ring is as thick as the letter's stroke (read off
+    // where the ring meets the fabric); what's left past it is another letter when it's big (the F), or part of the
+    // same letter when it's small (the top of the d's stem goes with the d)
+    const holeId = new Int32Array(N).fill(-1), holes: { px: number[]; border: boolean }[] = [];
+    for (let s0 = 0; s0 < N; s0++) {
+      if (lab[s0] >= 0 || holeId[s0] >= 0) continue;
+      const hp: number[] = [s0]; let border = false; holeId[s0] = holes.length;
+      for (let k = 0; k < hp.length; k++) { const i = hp[k], x = i % w, y = (i - x) / w;
+        if (x === 0 || y === 0 || x === w - 1 || y === h - 1) border = true;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v;
+          if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const j = Y * w + X;
+          if (lab[j] < 0 && holeId[j] < 0) { holeId[j] = holes.length; hp.push(j); } } }
+      holes.push({ px: hp, border });
+    }
+    const ringOf = new Int32Array(N).fill(-1), ringD = new Float32Array(N).fill(Infinity), dist = new Float32Array(N).fill(-1);
+    const minHole = (1.2 * pxMm) ** 2, cap = 15 * pxMm, ringArea = new Map<number, number>(), ringX = new Map<number, [number, number]>();
+    holes.forEach((H, hi) => {
+      if (H.border || H.px.length < minHole) return;
+      // a letter's own counter is closed in by that letter alone (not a gap closed in by two letters touching)
+      const by = new Map<number, number>(); let tot = 0;
+      for (const i of H.px) { const x = i % w, y = (i - x) / w;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v; if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X; if (lab[j] >= 0) { by.set(obj[j], (by.get(obj[j]) || 0) + 1); tot++; } } }
+      let own = -1, ownN = 0;
+      for (const [k2, n2] of by) if (n2 > ownN) { ownN = n2; own = k2; }
+      if (own < 0 || ownN < 0.85 * tot) return;
+      const seen: number[] = [], qq: number[] = [];
+      for (const i of H.px) { const x = i % w, y = (i - x) / w;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v; if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X; if (lab[j] >= 0 && obj[j] === own && dist[j] < 0) { dist[j] = 1; qq.push(j); seen.push(j); } } }
+      for (let k = 0; k < qq.length; k++) { const i = qq[k], x = i % w, y = (i - x) / w; if (dist[i] >= cap) continue;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v; if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X; if (lab[j] >= 0 && dist[j] < 0 && obj[j] === obj[i]) { dist[j] = dist[i] + 1; qq.push(j); seen.push(j); } } }
+      // the ring's thickness: how far its outside edge is from the counter, most of the way round
+      const edge: number[] = [];
+      for (const i of seen) { const x = i % w, y = (i - x) / w;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v;
+          const outside = X < 0 || Y < 0 || X >= w || Y >= h || (lab[Y * w + X] < 0 && holeId[Y * w + X] !== hi) || (lab[Y * w + X] >= 0 && obj[Y * w + X] !== obj[i]);
+          if (outside) { edge.push(dist[i]); break; } } }
+      if (edge.length >= 8) {
+        edge.sort((p1, p2) => p1 - p2);
+        const T = edge[Math.floor(edge.length * 0.25)] * 1.12 + 1;
+        let area = 0, x0 = w, x1 = 0;
+        for (const i of seen) if (dist[i] <= T && dist[i] < ringD[i]) { ringD[i] = dist[i]; ringOf[i] = hi; area++; const x = i % w; if (x < x0) x0 = x; if (x > x1) x1 = x; }
+        ringArea.set(hi, area); ringX.set(hi, [x0, x1]);
+      }
+      for (const i of seen) dist[i] = -1;
+    });
+    if (ringArea.size) {
+      // what's left outside the rings, piece by piece
+      const left = new Int32Array(N).fill(-1); const pieces: { px: number[]; rings: Set<number> }[] = [];
+      for (let s0 = 0; s0 < N; s0++) {
+        if (lab[s0] < 0 || ringOf[s0] >= 0 || left[s0] >= 0) continue;
+        const pc = { px: [s0], rings: new Set<number>() }; left[s0] = pieces.length;
+        for (let k = 0; k < pc.px.length; k++) { const i = pc.px[k], x = i % w, y = (i - x) / w;
+          for (let v = -1; v <= 1; v++) for (let u = -1; u <= 1; u++) { const X = x + u, Y = y + v; if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+            const j = Y * w + X; if (lab[j] < 0 || obj[j] !== obj[i]) continue;
+            if (ringOf[j] >= 0) pc.rings.add(ringOf[j]); else if (left[j] < 0) { left[j] = pieces.length; pc.px.push(j); } } }
+        pieces.push(pc);
+      }
+      const ids = new Map<string, number>(); let next = 0;
+      const idOf = (k: string) => { let v = ids.get(k); if (v === undefined) { v = next++; ids.set(k, v); } return v; };
+      const nobj = new Int32Array(N).fill(-1), grow: number[] = [];
+      for (let i = 0; i < N; i++) if (ringOf[i] >= 0) { nobj[i] = idOf(`r${ringOf[i]}:${obj[i]}`); grow.push(i); }
+      pieces.forEach((pc, k) => {
+        // another letter sits beside the ring (the F left of the e); the rest of the same letter sits over or under it
+        // (the e's tail under its eye, the top of the d's stem over its bowl)
+        let inside = 0;
+        for (const i of pc.px) { const x = i % w; for (const r2 of pc.rings) { const xr = ringX.get(r2); if (xr && x >= xr[0] && x <= xr[1]) { inside++; break; } } }
+        const other = !pc.rings.size || (inside < 0.5 * pc.px.length && pc.px.length >= 0.3 * Math.max(...[...pc.rings].map((r2) => ringArea.get(r2) || 0)));
+        if (other) for (const i of pc.px) nobj[i] = idOf(`p${k}`);
+      });
+      // small pieces join the ring they touch (the nearest one, pixel by pixel)
+      for (let k = 0; k < grow.length; k++) { const i = grow[k], x = i % w, y = (i - x) / w;
+        for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + u, Y = y + v; if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X; if (lab[j] >= 0 && nobj[j] < 0 && obj[j] === obj[i]) { nobj[j] = nobj[i]; grow.push(j); } } }
+      for (let i = 0; i < N; i++) if (lab[i] >= 0) obj[i] = nobj[i] >= 0 ? nobj[i] : idOf(`o${obj[i]}`);
+    }
+    for (let i = 0; i < N; i++) if (lab[i] >= 0) lab[i] = obj[i] % 32000;
+  }
+  if (o.debug === "obj") { const dbg = g.createImageData(w, h); for (let i = 0; i < N; i++) { if (lab[i] < 0) continue; const k2 = (lab[i] + 1) * 2654435761 >>> 0; dbg.data[i * 4] = k2 & 255; dbg.data[i * 4 + 1] = (k2 >> 8) & 255; dbg.data[i * 4 + 2] = (k2 >> 16) & 255; dbg.data[i * 4 + 3] = 255; } g.putImageData(dbg, 0, 0); return c.toDataURL(); }
   const labT = new Int16Array(N);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) labT[x * h + y] = lab[y * w + x];
 
   // each stroke's own line: at every pixel, the longest straight run through it (16 directions). A stem's longest run
   // is up its length, a bar's along the bar, a curve's along the curve; where two strokes meet the longer one owns the
   // spot (the F's stem goes on up through where its bars join it)
-  const lens = new Uint16Array(DIRS * N), bestScore = new Float32Array(N), runLen = new Float32Array(N);
+  // the way the nearby edges run (smoothed over ~1 mm): in a bowl or a script curve the stroke follows its edges, so
+  // a long straight run cutting across a curve (into a stem it touches) doesn't win there
+  const Dd = distance(lab, w, h), Dsm = blur(Dd, w, h, 1);
+  const Jxx = new Float32Array(N), Jyy = new Float32Array(N), Jxy = new Float32Array(N);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x; if (lab[i] < 0) continue;
+    const gx = (Dsm[i + 1] - Dsm[i - 1]) / 2, gy = (Dsm[i + w] - Dsm[i - w]) / 2;
+    Jxx[i] = gx * gx; Jyy[i] = gy * gy; Jxy[i] = gx * gy;
+  }
+  const rj = Math.max(1, Math.round(0.6 * pxMm));
+  const Sxx = blur(blur(Jxx, w, h, rj), w, h, rj), Syy = blur(blur(Jyy, w, h, rj), w, h, rj), Sxy = blur(blur(Jxy, w, h, rj), w, h, rj);
+  const lens = new Uint16Array(DIRS * N), lensRaw = new Uint16Array(DIRS * N), mins = new Uint16Array(DIRS * N), bestScore = new Float32Array(N), runLen = new Float32Array(N);
   const F = new Float32Array(N), B = new Float32Array(N), Ft = new Float32Array(N), Bt = new Float32Array(N);
   for (let a = 0; a < DIRS; a++) {
     const ang = (a * Math.PI) / DIRS, cs = Math.cos(ang), sn = Math.sin(ang);
@@ -122,8 +262,12 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
       // how far the stroke goes on past this point both ways (the nearer end), plus a little of its whole length: a
       // stem going on up past a bar owns the join (the bar tucks under it); where two strokes turn a corner the join
       // splits on the diagonal (a mitred corner, like the top of an F or the corners of an outline)
-      const len = fw[j] + bw[j] - st, sc = Math.min(fw[j], bw[j]) + 0.15 * len;
+      const len = fw[j] + bw[j] - st;
+      const tr = Sxx[i] + Syy[i], coh = tr > 1e-6 ? Math.sqrt((Sxx[i] - Syy[i]) ** 2 + 4 * Sxy[i] ** 2) / tr : 0;
+      const tang = 0.5 * Math.atan2(2 * Sxy[i], Sxx[i] - Syy[i]) + Math.PI / 2, ca = Math.cos(ang - tang);
+      const sc = (Math.min(fw[j], bw[j]) + 0.3 * len) * (1 + 0.6 * coh * coh * ca * ca);
       lens[a * N + i] = Math.min(65535, Math.round(sc * 8));
+      lensRaw[a * N + i] = Math.min(65535, Math.round(len * 4)); mins[a * N + i] = Math.min(65535, Math.round(Math.min(fw[j], bw[j]) * 4));
       if (sc > bestScore[i]) { bestScore[i] = sc; runLen[i] = len; }
     }
   }
@@ -135,11 +279,52 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     if (lab[i] < 0) continue;
     // every direction votes by its run to the 6th power, as a doubled angle: across-the-stroke votes point the
     // opposite way to along-the-stroke ones, so they cancel instead of blending, and the long way wins cleanly
+    // two strokes crossing (the x of FedEx): both go on well past this point both ways. One is sewn whole and the
+    // other goes under it, so the longer one (or, when they're as long, always the same one) takes the crossing
+    let wmin = Infinity;
+    for (let a = 0; a < DIRS; a++) wmin = Math.min(wmin, lensRaw[a * N + i]);
+    let c1 = -1, c2 = -1;
+    for (let a = 0; a < DIRS; a++) {
+      if (mins[a * N + i] < 0.8 * wmin || lensRaw[a * N + i] < 2 * wmin) continue;
+      if (c1 < 0 || lensRaw[a * N + i] > lensRaw[c1 * N + i]) { c2 = c1; c1 = a; } else if (c2 < 0 || lensRaw[a * N + i] > lensRaw[c2 * N + i]) c2 = a;
+    }
+    if (c1 >= 0 && c2 >= 0) {
+      const gap = Math.min((c1 - c2 + DIRS) % DIRS, (c2 - c1 + DIRS) % DIRS);
+      if (gap >= DIRS / 4) {
+        const pick = lensRaw[c1 * N + i] > lensRaw[c2 * N + i] * 1.15 ? c1 : Math.min(c1, c2);
+        ax[i] = C2[pick]; ay[i] = S2[pick]; runLen[i] = lensRaw[pick * N + i] / 4 * 1.25; continue;
+      }
+    }
     let mx = 0;
     for (let a = 0; a < DIRS; a++) mx = Math.max(mx, lens[a * N + i]);
     let sx = 0, sy = 0;
     for (let a = 0; a < DIRS; a++) { const v = Math.pow(lens[a * N + i] / (mx || 1), 16); sx += v * C2[a]; sy += v * S2[a]; }
     const m = Math.hypot(sx, sy) || 1; ax[i] = sx / m; ay[i] = sy / m;
+  }
+  // specks: a few pixels pointing their own way inside a stroke take the way most of their neighbors go
+  for (let pass = 0; pass < 2; pass++) {
+    const nx = ax.slice(), ny = ay.slice(), rr = Math.max(2, Math.round(0.6 * pxMm));
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (lab[i] < 0) continue;
+      let n = 0, agree = 0;
+      for (let v = -rr; v <= rr; v += 1) { const Y = y + v; if (Y < 0 || Y >= h) continue;
+        for (let u = -rr; u <= rr; u += 1) { const X = x + u; if (X < 0 || X >= w) continue;
+          const q = Y * w + X; if (lab[q] !== lab[i]) continue; n++;
+          if (ax[q] * ax[i] + ay[q] * ay[i] > 0.77) agree++; } }
+      if (agree >= n * 0.3) continue;
+      // the most common way among the neighbors: the neighbor that agrees with the most others
+      let best = -1, bestC = -1;
+      for (let v = -rr; v <= rr; v += 2) { const Y = y + v; if (Y < 0 || Y >= h) continue;
+        for (let u = -rr; u <= rr; u += 2) { const X = x + u; if (X < 0 || X >= w) continue;
+          const q = Y * w + X; if (lab[q] !== lab[i]) continue;
+          let c = 0;
+          for (let v2 = -rr; v2 <= rr; v2 += 2) { const Y2 = y + v2; if (Y2 < 0 || Y2 >= h) continue;
+            for (let u2 = -rr; u2 <= rr; u2 += 2) { const X2 = x + u2; if (X2 < 0 || X2 >= w) continue;
+              const q2 = Y2 * w + X2; if (lab[q2] === lab[i] && ax[q2] * ax[q] + ay[q2] * ay[q] > 0.77) c++; } }
+          if (c > bestC) { bestC = c; best = q; } } }
+      if (best >= 0) { nx[i] = ax[best]; ny[i] = ay[best]; }
+    }
+    ax = nx; ay = ny;
   }
   // even it out inside each stroke only: neighbors on another line (more than ~20° off) don't count
   const rs = Math.max(1, Math.round(0.7 * pxMm)), agreeMin = Math.cos((50 * Math.PI) / 180);
@@ -183,6 +368,12 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     if (ch <= satinMax) satin[i] = 1;
   }
 
+  if (o.debug) { // the stitch directions as colors (for tuning)
+    const dbg = g.createImageData(w, h);
+    for (let i = 0; i < N; i++) { if (lab[i] < 0) continue; const th = (Math.atan2(ty[i], tx[i]) + Math.PI) % Math.PI, k6 = (th / Math.PI) * 6, f = k6 - Math.floor(k6), sec = Math.floor(k6) % 6;
+      const rgb = [[1, f, 0], [1 - f, 1, 0], [0, 1, f], [0, 1 - f, 1], [f, 0, 1], [1, 0, 1 - f]][sec]; dbg.data[i * 4] = rgb[0] * 255; dbg.data[i * 4 + 1] = rgb[1] * 255; dbg.data[i * 4 + 2] = rgb[2] * 255; dbg.data[i * 4 + 3] = satin[i] ? 255 : 120; }
+    g.putImageData(dbg, 0, 0); return c.toDataURL();
+  }
   // the threads: fine noise smeared along each stitch (line integral convolution), staying in the same column
   const raw = new Float32Array(N);
   let seed = 7;
@@ -222,17 +413,19 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     const i = y * w + x, p = i * 4, a = d[p + 3];
     if (a < 8) continue;
     const L = labAll[i], e = pal[L];
-    const T = lab[i] >= 0 ? tex[i] / sd : 0;
+    // fine lettering (under ~2 mm) is a thin smooth satin line: little texture, no seams
+    const thin = lab[i] >= 0 && cmin[i] < 2 * pxMm;
+    const T = lab[i] >= 0 ? (tex[i] / sd) * (thin ? 0.3 : 1) : 0;
     let lit: number, round = 0.5;
     const th = Math.atan2(ty[i], tx[i]);
     const isSatin = lab[i] >= 0 && satin[i] === 1;
-    const sheen = 1 + (isSatin ? 0.07 : 0.03) * Math.cos(2 * (th - sheenRef));
-    if (lab[i] < 0) lit = 0.6; // a soft edge pixel: the ragged end of a stitch
+    const sheen = 1 + (isSatin ? 0.05 : 0.02) * Math.cos(2 * (th - sheenRef));
+    if (lab[i] < 0) lit = 0.82; // a soft edge pixel: the ragged end of a stitch
     else if (isSatin) {
       // the round of the column: gray at the edges, bright on top, the edge ragged thread by thread
       const ue = Math.min(1, Math.max(0, along[i] + 0.04 * T));
       round = Math.max(0, Math.sin(Math.PI * ue));
-      lit = (0.5 + 0.55 * Math.pow(round, 0.6)) * sheen * (1 + 0.03 * T);
+      lit = (0.78 + 0.26 * Math.pow(round, 0.7)) * sheen * (1 + 0.03 * T);
     } else {
       // too wide for one stitch: a fill sewn the same way, rows of shorter stitches with staggered needle points
       const ct = tx[i], st = ty[i];
@@ -243,7 +436,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     }
     // a seam where the stitches turn: two columns meeting. The shorter stroke was sewn first and sits under the
     // longer one, so it takes a shadow along the join
-    if (lab[i] >= 0) {
+    if (lab[i] >= 0 && !thin) {
       let seam = 0, under = 0;
       const rr = Math.max(1, Math.round(0.4 * pxMm));
       for (let v = -rr; v <= rr; v++) for (let u = -rr; u <= rr; u++) {
@@ -255,16 +448,16 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
         if (Math.abs(u) <= 1 && Math.abs(v) <= 1) seam = Math.max(seam, Math.min(1, (0.55 - agree) / 0.9));
         if (runLen[j] > runLen[i] * 1.1) under = Math.max(under, near);
       }
-      lit *= (1 - 0.3 * seam) * (1 - 0.35 * under);
+      lit *= (1 - 0.14 * seam) * (1 - 0.14 * under);
     }
     // raised edges
     const off = rb, ix = Math.max(0, x - off), iy = Math.max(0, y - off), jx = Math.min(w - 1, x + off), jy = Math.min(h - 1, y + off);
-    lit *= 1 + 0.35 * (Ab[iy * w + ix] - Ab[jy * w + jx]);
+    lit *= 1 + 0.2 * (Ab[iy * w + ix] - Ab[jy * w + jx]);
     // light threads keep room for the shading; dark ones still shine (a gray sheen along the top of each column)
     const lum = (e.r + e.g + e.b) / 3, kk = lum > 200 ? 0.9 : 1;
     const dark = (1 - lum / 255) ** 2;
     const gloss = (isSatin ? Math.pow(round, 1.5) : 0.5) * sheen * (1 + 0.3 * T);
-    const add = Math.max(0, lit - 0.92) * 160 + dark * 55 * Math.min(2, Math.max(0, gloss));
+    const add = Math.max(0, lit - 0.92) * 160 + dark * 30 * Math.min(2, Math.max(0, gloss));
     q[p] = Math.max(0, Math.min(255, e.r * kk * lit + add));
     q[p + 1] = Math.max(0, Math.min(255, e.g * kk * lit + add));
     q[p + 2] = Math.max(0, Math.min(255, e.b * kk * lit + add));
