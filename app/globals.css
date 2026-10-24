@@ -13691,3 +13691,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-lockbar-m{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--ink-3);white-space:nowrap}
 .mk-lockbar .btn{white-space:nowrap}
 @media (max-width:640px){.mk-lockbar{flex-wrap:wrap}.mk-lockbar-m{justify-content:flex-start;flex-basis:100%;order:3}}
+/* Design catalog (shop): the "Show in their portal" switch on the header line (Oct 24, Nick) */
+.dc .panel-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dc .panel-h .spacer{flex:1}
+.dc-portal{align-self:center;display:inline-flex;align-items:center;gap:6px}
+.dc-portal.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
