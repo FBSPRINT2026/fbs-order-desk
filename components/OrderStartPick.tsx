@@ -11,7 +11,8 @@ import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
  *  - Reorder, let the AI find the job.
  */
 export type OrderStart = { told?: string; job?: string; /** several past jobs reordered together in one order (a group per design) */ jobs?: string[]; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[];
-  /** open the full form to check every detail before it's made (otherwise it's made in one go, QuickOrder) */ review?: boolean };
+  /** open the full form to check every detail before it's made (otherwise it's made in one go, QuickOrder) */ review?: boolean;
+  /** which emails make up the order (Oct 24, Nick): other emails brought in, and conversation emails left out */ include?: string[]; exclude?: string[] };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -24,7 +25,21 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   // screen printing or embroidery first to start… some orders are both"): told to the AI with whatever's picked below
   const [how, setHow] = useState<"" | "screen" | "embroidery" | "both">("");
   const HOW_TOLD = { screen: "Every print on this order is SCREEN PRINTED.", embroidery: "Every print on this order is EMBROIDERED (method embroidery): threads, not inks; give each print's finished size.", both: "This order has BOTH embroidery and screen printing: say which method each print is (e.g. embroidered left chest, screen printed back)." } as const;
-  const onPick = (st: OrderStart) => onPick0(how ? { ...st, told: [st.told, HOW_TOLD[how]].filter(Boolean).join(" ") } : st);
+  // which emails make up the order (Oct 24, Nick: "you should first scan the email and maybe even ask me… I noticed these
+  // other messages. Are we bringing in all this information… Sometimes you need three or four emails"): the conversation's
+  // other emails are in (untick to leave one out), other recent emails from the customer are out (tick to bring one in)
+  type Mail = { id: string; at: string; out: boolean; from: string; subject: string; files: string[] };
+  const [mails, setMails] = useState<null | { convo: Mail[]; others: Mail[] }>(null);
+  const [mOff, setMOff] = useState<Set<string>>(new Set()), [mOn, setMOn] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/inbox/order/emails?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (live) setMails({ convo: j.convo || [], others: j.others || [] }); }).catch(() => { if (live) setMails({ convo: [], others: [] }); });
+    return () => { live = false; };
+  }, [activityId]);
+  const onPick = (st0: OrderStart) => {
+    const st = { ...st0, ...(mOn.size ? { include: [...mOn] } : {}), ...(mOff.size ? { exclude: [...mOff] } : {}) };
+    onPick0(how ? { ...st, told: [st.told, HOW_TOLD[how]].filter(Boolean).join(" ") } : st);
+  };
   const [past, setPast] = useState<PastJob[] | null>(null);
   // "same as order 85254", "screen print process same as PO 85254", "like job #31174": the past job a new order points at
   const like = (() => {
@@ -128,6 +143,23 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
           </div>
           {!how && <span className="faint osp-how-n">Not picked: the AI reads it from the email</span>}
         </div>
+        {mails && (mails.convo.length > 0 || mails.others.length > 0) && (
+          <div className="osp-mails">
+            <b>{mails.convo.length ? `This order is a conversation of ${mails.convo.length + 1} emails. Bring them all in?` : "Other emails from this customer"}</b>
+            <span className="faint">{mails.convo.length ? "Everything they said counts, and the latest change wins. Untick any that aren't about this order." : "Tick any that are part of this order (a size sheet or supplier invoice sent on its own)."}</span>
+            <ul>
+              {mails.convo.map((m) => (
+                <li key={m.id}><label><input type="checkbox" checked={!mOff.has(m.id)} onChange={() => setMOff((x) => { const y = new Set(x); if (y.has(m.id)) y.delete(m.id); else y.add(m.id); return y; })} />
+                  <span><b>{m.from}</b> · {fmt(m.at)}{m.files.length ? <span className="faint"> · {m.files.length} file{m.files.length === 1 ? "" : "s"}: {m.files.slice(0, 3).join(", ")}</span> : null}<br /><span className="faint">{m.subject}</span></span></label></li>
+              ))}
+              {mails.others.length > 0 && mails.convo.length > 0 && <li className="osp-mails-sep faint">Other emails from them in the last two weeks</li>}
+              {mails.others.map((m) => (
+                <li key={m.id}><label><input type="checkbox" checked={mOn.has(m.id)} onChange={() => setMOn((x) => { const y = new Set(x); if (y.has(m.id)) y.delete(m.id); else y.add(m.id); return y; })} />
+                  <span><b>{m.from}</b> · {fmt(m.at)}{m.files.length ? <span className="faint"> · {m.files.length} file{m.files.length === 1 ? "" : "s"}: {m.files.slice(0, 3).join(", ")}</span> : null}<br /><span className="faint">{m.subject}</span></span></label></li>
+              ))}
+            </ul>
+          </div>
+        )}
         {plan === null ? <p className="osp-plan-wait">Reading the emails for how many orders are in them…</p> : plan.parts.length > 1 && (
           <div className="osp-plan">
             {(() => {

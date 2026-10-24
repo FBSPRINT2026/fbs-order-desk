@@ -12911,3 +12911,9 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .qb-pr{color:var(--ink-2)}
 .qb-pa{display:flex;gap:6px}
 @media (max-width:760px){ .qb-probs li{grid-template-columns:minmax(0,1fr)} }
+/* Create order: which emails make up the order (components/OrderStartPick.tsx, Oct 24) */
+.osp-mails{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0;background:var(--surface-2);font-size:13px}
+.osp-mails ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.osp-mails label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.osp-mails input{margin-top:3px}
+.osp-mails-sep{font-size:12px;margin-top:4px}

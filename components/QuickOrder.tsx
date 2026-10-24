@@ -151,7 +151,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? "" : start.told || "", ...again].filter(Boolean).join("\n"), job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? "" : start.told || "", ...again].filter(Boolean).join("\n"), job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");

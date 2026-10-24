@@ -382,7 +382,8 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 }
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
-export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
+  /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
   const cv = await emailConversation(admin, activityId);
@@ -392,7 +393,12 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // point in the conversation and it still gathers all the details"). The newest email from the customer is the one
   // read in full; what was decided along the way counts, and the latest decision wins. Other recent emails with the
   // customer (other subjects) come after, marked as other topics.
-  const { clicked: C, convo, near } = cv;
+  const { clicked: C, near } = cv;
+  // the emails staff picked (Create order asks which make up the order): conversation emails unticked are left out,
+  // other emails from the customer ticked are added, all in date order, newest first
+  const drop = new Set((o.exclude || []).filter((id) => id !== C.id)), add = new Set(o.include || []);
+  const convo = [...cv.convo.filter((e) => !drop.has(e.id)), ...near.filter((e) => add.has(e.id) && !cv.convo.some((x) => x.id === e.id))]
+    .sort((x, y) => y.occurred_at.localeCompare(x.occurred_at));
   const inConvo = new Set(convo.map((e) => e.id));
   // the newest email from the customer is the one read in full (else the one clicked)
   const a0 = convo.find((e) => e.direction === "in") || C;
