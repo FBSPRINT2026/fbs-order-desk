@@ -1030,7 +1030,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   const photo = (l: Line, view: View) => {
     // their own photos (a garment not in the catalog): the side they uploaded, else a drawn tee of its color
-    if (l.own) { const p = view === "front" ? l.own.front : l.own.back || ""; const u = p ? ownUrls[p] : ""; return u || teeSvg(l.hex || guessHex(l.color), view, isHeather(l.color)); }
+    if (l.own) { const p = view === "front" ? l.own.front : l.own.back || ""; const u = p ? ownUrls[p] : ""; if (u) return u; const fu = l.own.front ? ownUrls[l.own.front] : ""; return teeSvg(l.hex || (fu && fits[fu]?.hex) || guessHex(l.color), view, isHeather(l.color)); }
     const g = garmentFor(l);
     // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
