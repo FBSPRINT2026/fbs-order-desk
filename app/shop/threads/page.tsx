@@ -47,7 +47,11 @@ export default function ThreadRoom() {
   const wall = useMemo(() => (stock || []).map((s) => all.find((t) => t.line === s.line && t.code === s.code) || ({ line: s.line as Thread["line"], code: s.code, name: s.name, hex: s.hex, pms: s.pms ? [s.pms] : [] } as Thread))
     .filter((t) => { const x = q.trim().toLowerCase(); return !x || t.code.startsWith(x) || t.name.toLowerCase().includes(x); }), [stock, all, q]);
   const want = pmsHexOf(mq);
-  const matches = want ? closestThreads(want.hex, { line, n: 8, stock: new Set((stock || []).map((s) => stockKey(s.line, s.code))) }) : [];
+  const stockSet = new Set((stock || []).map((s) => stockKey(s.line, s.code)));
+  // the maker's own match for a PMS first (their conversion chart), then the closest by color
+  const pmsKey = want && /^PMS /.test(want.label) ? want.label.replace(/^PMS\s*/, "").toLowerCase() : "";
+  const makers = pmsKey ? all.filter((t) => t.line === line && t.pms.some((p) => p.toLowerCase() === pmsKey)) : [];
+  const matches = want ? [...makers.map((t) => ({ ...closestThreads(want.hex, { line, n: 400, stock: stockSet }).find((x) => x.code === t.code)!, maker: true })).filter((x) => x.code), ...closestThreads(want.hex, { line, n: 8, stock: stockSet }).filter((x) => !makers.some((m) => m.code === x.code)).map((x) => ({ ...x, maker: false }))] : [];
 
   function pick(t: Thread) {
     setSel(t); setErr("");
@@ -118,7 +122,7 @@ export default function ThreadRoom() {
                         <tr key={t.code} onClick={() => pick(t)} style={{ cursor: "pointer" }}>
                           <td><span className="sw thr-sw" style={{ background: t.hex }} /> <b data-notranslate>{t.code}</b> {t.name}</td>
                           <td className="faint" data-notranslate>{t.pms.join(", ") || "—"}</td>
-                          <td>{t.word} <span className="faint">(ΔE {t.dE})</span></td>
+                          <td>{t.maker ? <b>{lineName(line).split(" ")[0]}&apos;s match for this PMS</b> : <>{t.word} <span className="faint">(ΔE {t.dE})</span></>}</td>
                           <td>{t.stocked ? <span className="ink-instock">On the wall</span> : null}</td>
                         </tr>
                       ))}</tbody>
