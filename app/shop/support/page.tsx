@@ -10,7 +10,7 @@ import { useRole } from "@/components/RoleContext";
  * report (with a link to the screenshot) on the clipboard to work through it with Claude. Claude can also read these
  * straight from the support_issues table.
  */
-type Issue = { id: string; created_at: string; by: string; page: string | null; page_title: string | null; message: string; screenshot: string | null; context: Record<string, unknown>; status: "open" | "working" | "fixed" | "wont"; notes: string };
+type Issue = { id: string; created_at: string; by: string; source?: string; customer_name?: string; customer_id?: string | null; page: string | null; page_title: string | null; message: string; screenshot: string | null; context: Record<string, unknown>; status: "open" | "working" | "fixed" | "wont"; notes: string };
 const STATUS: { v: Issue["status"]; label: string }[] = [{ v: "open", label: "Open" }, { v: "working", label: "Working on it" }, { v: "fixed", label: "Fixed" }, { v: "wont", label: "Won't fix" }];
 
 export default function SupportPage() {
@@ -19,6 +19,8 @@ export default function SupportPage() {
   const [rows, setRows] = useState<Issue[]>([]), [shots, setShots] = useState<Record<string, string>>({});
   const [err, setErr] = useState(""), [loading, setLoading] = useState(true), [big, setBig] = useState<string | null>(null);
   const [show, setShow] = useSticky<"open" | "all">("support.show", "open");
+  // customers' help requests and the team's own reports, each on their own (Oct 24, Nick)
+  const [from, setFrom] = useSticky<"all" | "customer" | "staff">("support.from", "all");
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     const r = await sb.from("support_issues").select("*").order("created_at", { ascending: false }).limit(300);
@@ -46,7 +48,9 @@ export default function SupportPage() {
   }
 
   if (realRole && realRole !== "owner") return <div className="page"><h1>Support</h1><p className="faint">Only the owner sees the support reports. To report a problem, use “Report an issue” in the menu.</p></div>;
-  const list = show === "open" ? rows.filter((x) => x.status === "open" || x.status === "working") : rows;
+  const isCust = (x: Issue) => x.source === "customer";
+  const list = (show === "open" ? rows.filter((x) => x.status === "open" || x.status === "working") : rows).filter((x) => from === "all" || (from === "customer" ? isCust(x) : !isCust(x)));
+  const nOpen = (f: (x: Issue) => boolean) => rows.filter((x) => (x.status === "open" || x.status === "working") && f(x)).length;
   const openN = rows.filter((x) => x.status === "open").length;
   return (
     <div className="page sup-page">
@@ -54,9 +58,10 @@ export default function SupportPage() {
         <div><h1>Support {openN > 0 && <span className="badge">{openN}</span>}</h1></div>
       </div>
       <div className="toolbar">
+        <div className="chips">{([["all", "Everyone", nOpen(() => true)], ["customer", "Customers", nOpen(isCust)], ["staff", "Our team", nOpen((x) => !isCust(x))]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (from === k ? " on" : "")} onClick={() => setFrom(k)}>{l}{n ? <span className="chip-n">{n}</span> : null}</button>)}</div>
         <div className="rv-seg">{([["open", "Open"], ["all", "All"]] as const).map(([k, l]) => <button key={k} type="button" className={show === k ? "on" : ""} onClick={() => setShow(k)}>{l}</button>)}</div>
       </div>
-      <p className="faint">Problems the team reported with “Report an issue”: what they said and what the screen looked like. Use “Copy for Claude” to work through one with Claude.</p>
+      <p className="faint">Problems reported with “Report an issue” (our team) and “Get help” (customers, from their portal): what they said and what the screen looked like. Answer a customer in their Messages. Use “Copy for Claude” to work through one with Claude.</p>
       {err && <div className="pv-err">{err}</div>}
       {loading ? <p className="faint">Loading…</p> : !list.length ? <p className="faint">{show === "open" ? "No open issues." : "No issues reported yet."}</p> : (
         <div className="sup-list">
@@ -64,7 +69,7 @@ export default function SupportPage() {
             <article key={x.id} className={"sup-card st-" + x.status}>
               {x.screenshot && shots[x.screenshot] ? <button type="button" className="sup-thumb" onClick={() => setBig(shots[x.screenshot!])} title="See it full size"><img src={shots[x.screenshot]} alt="Screenshot" /></button> : <div className="sup-thumb none faint">No screenshot</div>}
               <div className="sup-body">
-                <div className="sup-meta"><b data-notranslate>{x.by.split("@")[0]}</b> · {new Date(x.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                <div className="sup-meta">{isCust(x) && <span className="sup-cust">Customer</span>}<b data-notranslate>{isCust(x) ? `${x.customer_name || ""} · ${x.by}` : x.by.split("@")[0]}</b> · {new Date(x.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   {x.page && <> · <a href={x.page} target="_blank" rel="noreferrer" data-notranslate>{x.page_title || new URL(x.page).pathname}</a></>}</div>
                 <p className="sup-msg">{x.message || <span className="faint">(nothing typed)</span>}</p>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>

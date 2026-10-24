@@ -13160,3 +13160,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-kind.k-sent{background:color-mix(in srgb,var(--fbs-orange,#F7941D) 18%,transparent);color:#a35c00}
 .aa-kind.k-quote{background:color-mix(in srgb,var(--fbs-blue) 12%,transparent);color:var(--fbs-blue)}
 .aa-kind.k-order{background:color-mix(in srgb,var(--ok,#1a9b5f) 14%,transparent);color:var(--ok,#1a7f4f)}
+
+/* the portal's footer stays at the bottom of the window on a short page (Oct 24, Nick) */
+.portal{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.portal > .p-foot{margin-top:auto}
+.portal > main{width:100%;box-sizing:border-box}
+/* Get help in the portal's top bar; customer reports marked on Support */
+.p-help{display:inline-flex;align-items:center;gap:6px}
+.sup-cust{display:inline-block;margin-right:6px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--fbs-orange,#F7941D) 18%,transparent);color:#a35c00}

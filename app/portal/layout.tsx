@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
 import MobileTables from "@/components/MobileTables";
+import SupportButton from "@/components/SupportButton";
 import { fmtPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ export default async function PortalLayout({ children }: { children: React.React
           </Link>
           <div className="who">
             {email && <span>{email}</span>}
+            {/* Get help: a screenshot and what's wrong, to our Support page (Oct 24, Nick) */}
+            {email && <SupportButton email={email} portal />}
             {email && <form action="/auth/signout" method="post"><button className="btn sm" type="submit">Sign out</button></form>}
           </div>
         </div>

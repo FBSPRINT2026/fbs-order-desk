@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MicButton } from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
+import { customerSupport, supportUploadUrl } from "@/app/portal/support-actions";
 
 async function grabTab(): Promise<Blob | null> {
   const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (o: object) => Promise<MediaStream> };
@@ -50,7 +51,8 @@ async function drawPage(): Promise<Blob | null> {
   return null;
 }
 
-export default function SupportButton({ email }: { email: string }) {
+/** `portal`: a customer's "Get help" in their portal (Oct 24): saved for them by the server, under Customers on Support */
+export default function SupportButton({ email, portal = false }: { email: string; portal?: boolean }) {
   const sb = useMemo(() => createClient(), []);
   const { role, viewAs } = useRole();
   const [open, setOpen] = useState(false), [shot, setShot] = useState<Blob | null>(null), [url, setUrl] = useState("");
@@ -79,6 +81,21 @@ export default function SupportButton({ email }: { email: string }) {
     setBusy("Sending…"); setErr("");
     try {
       let path: string | null = null;
+      if (portal) {
+        if (shot) {
+          const t = await supportUploadUrl(shot.type === "image/png");
+          if (!t.ok) throw new Error(t.error);
+          const u = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, shot, { contentType: shot.type || "image/jpeg" });
+          if (u.error) throw new Error(u.error.message);
+          path = t.path;
+        }
+        const r = await customerSupport({ message: text, page: page.current.href, title: page.current.title, screenshot: path, context: { browser: navigator.userAgent, screen: `${innerWidth}×${innerHeight}` } });
+        if (!r.ok) throw new Error(r.error);
+        setDone(true);
+        setTimeout(() => setOpen(false), 2200);
+        setBusy("");
+        return;
+      }
       if (shot) {
         path = `support/${Date.now()}-${email.replace(/[^\w.-]+/g, "_")}.${shot.type === "image/png" ? "png" : "jpg"}`;
         const u = await sb.storage.from("proofs").upload(path, shot, { contentType: shot.type || "image/jpeg", upsert: false });
@@ -97,20 +114,27 @@ export default function SupportButton({ email }: { email: string }) {
 
   return (
     <>
+      {portal ? (
+        <button type="button" className="btn sm p-help" onClick={start} disabled={!!busy && !open} aria-label="Get help: send us a screenshot and what's wrong">
+          <svg viewBox="0 0 24 24" aria-hidden width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></svg>
+          {busy && !open ? busy : "Get help"}
+        </button>
+      ) : (
       <button type="button" className="nav-support" onClick={start} disabled={!!busy && !open} data-tip="Report an issue" aria-label="Report an issue: send a screenshot and what happened">
         <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></svg>
         <span className="lbl-t">{busy && !open ? busy : "Report an issue"}</span>
       </button>
+      )}
       {open && (
         <div className="sup-back" role="dialog" aria-modal="true" aria-label="Report an issue" onPaste={onPaste}>
           <div className="sup-box">
-            <h3>Report an issue</h3>
-            {done ? <p className="sep-ok">Sent. Nick will see it on the Support page. Thanks!</p> : <>
+            <h3>{portal ? "Get help" : "Report an issue"}</h3>
+            {done ? <p className="sep-ok">{portal ? "Sent. We'll take a look and get back to you in Messages. Thanks!" : "Sent. Nick will see it on the Support page. Thanks!"}</p> : <>
               {url ? <img className="sup-shot" src={url} alt="Screenshot of the page" /> : <div className="sup-noshot faint">No screenshot. <label className="linkbtn">Attach one from your Photos<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>, paste one here (Windows: Win+Shift+S, then Ctrl+V), or <button type="button" className="linkbtn" onClick={async () => { setOpen(false); await new Promise((r) => setTimeout(r, 300)); const b = (await drawPage()) || (await grabTab()); setShot(b); setOpen(true); }}>try again</button>.</div>}
               {url && <label className="linkbtn" style={{ fontSize: 12 }}>Use a screenshot from Photos instead<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>}
               {url && <div className="faint" style={{ fontSize: 12 }}>Wrong picture? <button type="button" className="linkbtn" onClick={() => setShot(null)}>Remove it</button></div>}
               <div className="sc-in">
-                <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} rows={4} autoFocus placeholder="What happened? What did you expect? (click the mic to talk)" aria-label="What happened" />
+                <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} rows={4} autoFocus placeholder={portal ? "What's going wrong? e.g. the Mockup Creator won't save my shirt (click the mic to talk)" : "What happened? What did you expect? (click the mic to talk)"} aria-label="What happened" />
                 <MicButton target={() => ta.current} append keepListening label="Say what happened (microphone)" className="sc-mic" />
               </div>
               <div className="faint" style={{ fontSize: 12 }} data-notranslate>{page.current.title || page.current.href}</div>
