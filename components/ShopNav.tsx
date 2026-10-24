@@ -315,15 +315,18 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {link(["/shop/my-calendar", "cal", "Calendar"])}
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
-            <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
-            {/* screen printing or embroidery: a quiet switch, the side shows in the menu's color (blue / salmon) */}
-            {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
-              <div className="prod-side" role="radiogroup" aria-label="Screen printing or embroidery">
-                {([["screen", "Screen print"], ["embroidery", "Embroidery"]] as const).map(([k, l]) => (
-                  <button key={k} type="button" role="radio" aria-checked={side === k} className={side === k ? "on" : ""} onClick={() => setSide(k)}>{l}</button>
-                ))}
-              </div>
-            )}
+            <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}
+              {/* screen printing or embroidery: SP and EMB, small, with a tiny switch at the right end of the heading.
+                  The side shows in the menu's color (blue / salmon). */}
+              {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
+                <span className="prod-side" role="radiogroup" aria-label="Screen printing or embroidery" data-notranslate>
+                  <button type="button" role="radio" aria-checked={side === "screen"} className={side === "screen" ? "on" : ""} title="Screen printing" onClick={() => setSide("screen")}>SP</button>
+                  <button type="button" role="radio" aria-checked={side === "embroidery"} className={side === "embroidery" ? "on" : ""} title="Embroidery" onClick={() => setSide("embroidery")}>EMB</button>
+                  <button type="button" className={"ps-sw" + (side === "embroidery" ? " emb" : "")} aria-label={side === "embroidery" ? "Switch to screen printing" : "Switch to embroidery"} title={side === "embroidery" ? "Embroidery" : "Screen printing"}
+                    onClick={() => setSide(side === "embroidery" ? "screen" : "embroidery")}><i /></button>
+                </span>
+              )}
+            </div>
             {g.title === "Shop Tools"
               ? <div className="nav-tools">{g.items.map(link)}</div>
               : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))

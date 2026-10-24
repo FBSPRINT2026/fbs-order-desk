@@ -173,7 +173,7 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
           <div className="panel-b stack">
             <div className="muted" style={{ fontSize: 13 }}>Per-piece extras you can tick on any group. &ldquo;Sometimes used&rdquo; ones aren&apos;t shown on every order: they&apos;re under + More, next to a custom one you can type in. Wholesale jobs use the contract finishing list on the Wholesale tab when it has one.</div>
             {s.finishing.map((f, i) => (
-              <div key={f.id} className="fee-row">
+              <div key={f.id} className="fee-row fin-row">
                 <input type="text" aria-label="Add-on name" placeholder="Fold & bag" value={f.name} onChange={(e) => upd((d) => { d.finishing[i].name = e.target.value; })} />
                 <input type="number" step="0.05" aria-label="Price per piece" value={f.price} onChange={(e) => upd((d) => { d.finishing[i].price = n(e.target.value); })} />
                 <label className="check" style={{ fontSize: 12.5, whiteSpace: "nowrap" }} title="Kept under + More on orders instead of shown every time"><input type="checkbox" checked={!!f.more} onChange={(e) => upd((d) => { d.finishing[i].more = e.target.checked || undefined; })} /> Sometimes used</label>
