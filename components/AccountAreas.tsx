@@ -22,7 +22,8 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
-  /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string };
+  /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
+  /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
@@ -136,7 +137,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const orderHref = (id: string, hash?: string) => hrefs[id] || `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;
   const pill = (o: AOrder) => o.archived
     ? <span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--ink-3)" }}>{o.statusLabel || "Archived"}</span>
-    : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
+    : o.status === "request" && mode === "portal"
+      // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
+      ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
+      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
   const rawArea = (sp.get("area") as Area) || "home";
   // portal: quotes and orders are one "Orders" tab with a Quotes / Orders switch inside
   // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
@@ -167,6 +171,9 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [shirtSel, setShirtSel] = useState<Record<string, number>>({});
   /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
+  // the Orders tab's own tabs (Oct 24, Nick: "if they've got a bunch of quotes sitting there, they don't even get to the
+  // orders… all quotes and orders just like we have on our order screen")
+  const [oTab, setOTab] = useSticky<"all" | "quotes" | "sent" | "orders">("portal.ordersTab", "all");
   const [showOldOwed, setShowOldOwed] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
@@ -484,17 +491,36 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
-    const recentQ = quotes.filter((o) => (o.created_at || "") >= cutoff), olderN = quotes.length - recentQ.length;
-    const shownQ = oldQuotes ? quotes : recentQ;
-    const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent").length;
+    const sentQ = quotes.filter((o) => o.status === "request" && o.sent);
+    const quotes2 = quotes.filter((o) => !(o.status === "request" && o.sent));
+    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff), olderN = quotes2.length - recentQ.length;
+    const shownQ = oldQuotes ? quotes2 : recentQ;
+    const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
+    const tab = oTab === "sent" && !sentQ.length ? "all" : oTab;
+    const show = (k: "quotes" | "sent" | "orders") => tab === "all" || tab === k;
     body = <>
-      {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search orders")}
-      {/* the Quotes section and its checkbox stay even with no quotes (Oct 15, Nick) */}
-      <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-        <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
-      {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
-      <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
-      {orderTable(invoices, "invoice")}
+      <div className="toolbar aa-otabs" data-toolbar>
+        <div className="chips">
+          {([["all", "All", 0], ["quotes", "Quotes", quotes2.length], ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length]] : []), ["orders", "Orders", invoices.length]] as [typeof oTab, string, number][]).map(([k, t, n]) => (
+            <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>
+          ))}
+        </div>
+        {search(tab === "orders" ? "Search orders" : tab === "quotes" ? "Search quotes" : "Search quotes and orders")}
+      </div>
+      {show("sent") && sentQ.length > 0 && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
+        {orderTable(sentQ, "quote")}
+      </>}
+      {show("quotes") && <>
+        {/* the Quotes section and its checkbox stay even with no quotes (Oct 15, Nick) */}
+        <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
+          <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
+        {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
+      </>}
+      {show("orders") && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
+        {orderTable(invoices, "invoice")}
+      </>}
     </>;
   } else if (area === "orders" || area === "invoices") body = <>
     {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}

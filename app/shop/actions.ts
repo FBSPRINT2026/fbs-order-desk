@@ -147,3 +147,28 @@ export async function shopMarkRead(customerId: string, orderId: string | null, t
   await q;
   return { ok: true };
 }
+
+/**
+ * Accept a customer's order request (Oct 24, Nick: "it's sent to us for confirmation. We're going to have to go in on our
+ * portal side and say, hey, we've got it, looks good, we can take it… thanks for the order, we're good to go. And then it'll
+ * send them a message in their message center"). The request becomes an approved order (their sending it in is their
+ * OK; the prices are their wholesale prices), and our note goes to their Messages. Staff click it; nothing is automatic.
+ */
+export async function acceptRequest(orderId: string, note: string) {
+  try {
+    const { email: staffEmail } = await requireStaff();
+    const { admin, order } = await loadOrderAndCustomer(orderId);
+    const { data: o } = await admin.from("orders").select("status, submitted_at").eq("id", orderId).maybeSingle();
+    if (!o || order.status !== "request" || !o.submitted_at) return { ok: false, error: "Only an order request the customer sent in can be accepted." };
+    const now = new Date().toISOString();
+    const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", sent_at: now, approved_at: now, approved_name: "Sent in by the customer" }).eq("id", orderId).eq("status", "request");
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert([
+      { order_id: orderId, kind: "accepted", detail: "Order request accepted", actor: staffEmail },
+      { order_id: orderId, kind: "status", detail: "approved", actor: staffEmail },
+    ]);
+    const text = note.trim();
+    if (text) { const m = await staffMessage(orderId, text); if (!m.ok) return { ok: true, warn: m.error }; }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't accept it." }; }
+}

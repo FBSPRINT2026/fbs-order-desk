@@ -36,7 +36,7 @@ import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
-import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
+import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
@@ -769,6 +769,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
+  const [accepting, setAccepting] = useState<string | null>(null), [acceptBusy, setAcceptBusy] = useState(false);
+  async function accept() {
+    if (!o || accepting == null) return;
+    setAcceptBusy(true);
+    await save();
+    const r = await acceptRequest(o.id, accepting);
+    setAcceptBusy(false);
+    if (!r.ok) return say(r.error || "Couldn't accept it.");
+    setAccepting(null);
+    setO((p) => (p ? { ...p, status: "approved", type: "invoice" } : p));
+    say(r.warn ? `Accepted. The message didn't send: ${r.warn}` : "Accepted. They'll see your message in their Messages.");
+    loadSide();
+  }
+
   async function send() {
     if (!o) return;
     const bad = (o.groups || []).flatMap((g) => g.imprints).find((d) => (d.method === "embroidery" || (d.method === "screen" && d.colors < 11)) && d.inks.trim() && d.inks.split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length !== d.colors);
@@ -1185,7 +1199,19 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="callout req-callout">
           <h2>Order request from the customer{o.submitted_at ? ` · sent ${new Date(o.submitted_at).toLocaleDateString()}` : " · still being built by the customer"}</h2>
           <div className="muted">They built this in their portal without prices. Prices below are <b>suggested from your pricing matrix</b>, with blank costs filled in from the garment catalog. Adjust anything, answer their questions in Messages, then finalize. They&apos;ll get it back as a quote for their final approval.</div>
-          <div className="row"><button type="button" className="btn primary" onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button><button type="button" className="btn ghost" onClick={() => setTab("msg")}>Their questions</button></div>
+          {/* a wholesale customer's order sent in at their prices: accept it, with a note to their Messages (Oct 24, Nick) */}
+          {accepting != null ? (
+            <div className="req-accept">
+              <label className="mk-f"><span>Message to them (goes to their Messages)</span><textarea rows={2} value={accepting} onChange={(e) => setAccepting(e.target.value)} /></label>
+              <div className="row"><button type="button" className="btn primary" disabled={acceptBusy} onClick={accept}>{acceptBusy ? "Accepting…" : "Accept order & send message"}</button><button type="button" className="btn ghost" onClick={() => setAccepting(null)}>Cancel</button></div>
+            </div>
+          ) : (
+            <div className="row">
+              {o.submitted_at && o.price_type === "wholesale" && <button type="button" className="btn primary" onClick={() => setAccepting("Thanks for the order! We've got it and we're good to go. We'll keep you posted here as it moves along.")}>Accept order</button>}
+              <button type="button" className={"btn" + (o.submitted_at && o.price_type === "wholesale" ? "" : " primary")} onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button>
+              <button type="button" className="btn ghost" onClick={() => setTab("msg")}>Their questions</button>
+            </div>
+          )}
         </div>
       )}
 

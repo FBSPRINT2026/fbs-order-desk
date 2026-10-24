@@ -96,7 +96,7 @@ function JobRow({ j }: { j: PortalJob }) {
 export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJob[]; pastJobs: PortalJob[]; canAct: boolean; ordersHref: string }) {
   const [tab, setTab] = useSticky("portal.jobsKind", "all");
   const [stg, setStg] = useSticky("portal.jobsStage", "all");
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(0);
   const sorted = [...jobs].sort((a, b) => ORDER[a.stage] - ORDER[b.stage] || (a.inHandsIso || "9999").localeCompare(b.inHandsIso || "9999") || b.number - a.number);
   const kinds = KIND_TABS.filter((t) => t.k === "all" || jobs.some((j) => t.test(j.kind)));
   const showKinds = kinds.length > 2;
@@ -106,7 +106,9 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   const showStages = jobs.length > 3 && stages.length > 2;
   const curS = showStages && stages.some((t) => t.k === stg) ? stg : "all";
   const list = byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j.stage));
-  const shown = !more ? list.slice(0, 8) : list;
+  // five on the dashboard (Oct 24, Nick: "cap it at 5 and then say view all orders… we don't want that list to go down and
+  // be like 50 things long")
+  const shown = list.slice(0, 5 + more * 10);
   return (
     <section className="pdx-card">
       <div className="pdx-h"><h2>Your jobs{jobs.length ? <span className="pdx-count">{jobs.length} in progress</span> : null}</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
@@ -114,12 +116,12 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
         <div className="pjf">
           {showStages && <div className="pdx-ktabs" role="tablist" aria-label="Where the job is">
             {stages.map((t) => { const n = byKind.filter((j) => t.test(j.stage)).length; return (
-              <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={(curS === t.k ? "on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(false); }}>{t.label}<span>{n}</span></button>
+              <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={(curS === t.k ? "on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(0); }}>{t.label}<span>{n}</span></button>
             ); })}
           </div>}
           {showKinds && <div className="pdx-ktabs" role="tablist" aria-label="Kind of job">
             {kinds.map((t) => { const n = t.k === "all" ? jobs.length : jobs.filter((j) => t.test(j.kind)).length; return (
-              <button key={t.k} type="button" role="tab" aria-selected={curK === t.k} className={curK === t.k ? "on" : ""} onClick={() => { setTab(t.k); setMore(false); }}>{t.label}<span>{n}</span></button>
+              <button key={t.k} type="button" role="tab" aria-selected={curK === t.k} className={curK === t.k ? "on" : ""} onClick={() => { setTab(t.k); setMore(0); }}>{t.label}<span>{n}</span></button>
             ); })}
           </div>}
         </div>
@@ -128,7 +130,10 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
       {jobs.length > 0 && !list.length && <div className="pdx-none">Nothing here right now.</div>}
       <div className="pjr-list">
         {shown.map((j) => <JobRow key={j.id} j={j} />)}
-        {list.length > shown.length && <button type="button" className="pdx-more" onClick={() => setMore(true)}>Show all {list.length}</button>}
+        {list.length > 5 && <div className="pdx-more-row">
+          {list.length > shown.length && <button type="button" className="pdx-more" onClick={() => setMore((m) => m + 1)}>Show the next {Math.min(10, list.length - shown.length)}</button>}
+          <Link href={ordersHref} className="pdx-more">View all orders ({list.length})</Link>
+        </div>}
       </div>
       {pastJobs.map((j) => <BigJob key={j.id} j={j} canAct={canAct} />)}
     </section>

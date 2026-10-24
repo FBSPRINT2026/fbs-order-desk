@@ -86,7 +86,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     });
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
-  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
+  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, sent: o.status === "request" && !!o.submitted_at, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
     pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
   const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);

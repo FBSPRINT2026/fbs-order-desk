@@ -13124,3 +13124,9 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .ps-ask{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);font-size:13.5px}
 .grid.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 @media (max-width:760px){.grid.g4{grid-template-columns:1fr 1fr}}
+/* portal Orders: All / Quotes / Sent to FBS / Orders on top (Oct 24, Nick) */
+.aa-otabs{margin-bottom:6px}
+.req-accept{display:flex;flex-direction:column;gap:8px;max-width:640px}
+.req-accept textarea{width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;box-sizing:border-box}
+.pdx-more-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.pdx-more-row a.pdx-more{text-decoration:none}
