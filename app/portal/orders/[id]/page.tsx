@@ -185,7 +185,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <div className="panel-h"><h2>Sew-outs</h2></div>
                 <div className="panel-b">
                   <div className="proofs">{sewouts.map((x, i) => (
-                    <a key={x.id} className="sw-card" href={`/portal/orders/${o.id}/sewout/${x.id}${preview ? `?as=${ctx.preview!.id}` : ""}`}>
+                    <a key={x.id} className="sow-card" href={`/portal/orders/${o.id}/sewout/${x.id}${preview ? `?as=${ctx.preview!.id}` : ""}`}>
                       {swSigned[i]?.signedUrl ? <img src={swSigned[i].signedUrl!} alt={`Sew-out version ${x.version}`} /> : null}
                       <b>Sew-out v{x.version}</b>
                       <span className="muted">{x.status === "approved" ? `Approved${x.decided_name ? ` by ${x.decided_name}` : ""}` : x.status === "changes" ? "Changes requested" : "Waiting for your approval"}</span>

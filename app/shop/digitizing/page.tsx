@@ -133,7 +133,7 @@ export default function Digitizing() {
         <div><h1>Digitizing</h1><div className="eyebrow">Embroidered logos on open orders: ask the digitizer, then bring the DST in</div></div>
       </div>
       {err && <div className="pv-err">{err}</div>}
-      {msg && <div className="pv-err sw-msg" role="status">{msg}</div>}
+      {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
@@ -230,8 +230,8 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
               <div className="imp-l">Sew-out</div>
               <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it: it&apos;s emailed to the customer to approve, and once approved it&apos;s kept with the logo for reorders.</div>
               {canEdit && <div><SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : undefined} onDone={onSew} /></div>}
-              {sws.length > 0 && <div className="sw-list">{sws.map((x) => (
-                <div key={x.id} className={"sw-item" + (x.archived_at ? " old" : "")}>
+              {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
+                <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
                   {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
                   <div className="stack" style={{ gap: 4, minWidth: 0 }}>
                     <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>

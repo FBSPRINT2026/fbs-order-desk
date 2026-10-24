@@ -35,7 +35,7 @@ function findStitching(c: HTMLCanvasElement): Box {
   }
   if (n < w * h * 0.01 || x1 < 0) return { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
   // a little fabric around it
-  const px = (x1 - x0) * 0.15 + 3, py = (y1 - y0) * 0.15 + 3;
+  const px = (x1 - x0) * 0.18 + 4, py = (y1 - y0) * 0.3 + 4;
   const bx = Math.max(0, x0 - px), by = Math.max(0, y0 - py), ex = Math.min(w, x1 + px), ey = Math.min(h, y1 + py);
   return { x: bx / w, y: by / h, w: (ex - bx) / w, h: (ey - by) / h };
 }
@@ -128,14 +128,13 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
       {err && !img && <div className="pv-err">{err}</div>}
       {img && (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sw-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) setImg(null); }}>
-          <div className="mk-modal sw-modal">
+          <div className="mk-modal sow-modal">
             <h2 id="sw-t">Crop the sew-out</h2>
             <p className="faint">Drag the box or its corners so it frames the stitching. This is the picture the customer gets.</p>
-            <div className="sw-stage" ref={wrap} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
+            <div className="sow-stage" ref={wrap} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
               {preview && <img src={preview} alt="The sew-out photo" draggable={false} />}
-              <div className="sw-dim" style={{ clipPath: `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${box.x * 100}% ${box.y * 100}%,${box.x * 100}% ${(box.y + box.h) * 100}%,${(box.x + box.w) * 100}% ${(box.y + box.h) * 100}%,${(box.x + box.w) * 100}% ${box.y * 100}%,${box.x * 100}% ${box.y * 100}%)` }} />
-              <div className="sw-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} onPointerDown={(e) => down("move", e)}>
-                {["tl", "tr", "bl", "br"].map((c) => <span key={c} className={"sw-h " + c} onPointerDown={(e) => down(c, e)} />)}
+              <div className="sow-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} onPointerDown={(e) => down("move", e)}>
+                {["tl", "tr", "bl", "br"].map((c) => <span key={c} className={"sow-h " + c} onPointerDown={(e) => down(c, e)} />)}
               </div>
             </div>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -143,7 +142,7 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
               <button type="button" className="btn sm" onClick={() => setTurn(turn + 1)} disabled={busy}>↻ Turn right</button>
               <button type="button" className="btn sm" onClick={() => cv.current && setBox(findStitching(cv.current))} disabled={busy}>Find the stitching</button>
             </div>
-            <label className="f-col"><span className="imp-l">Note for the customer (optional)</span>
+            <label className="sow-note"><span className="imp-l">Note for the customer (optional)</span>
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything they should know, like a thread we swapped" /></label>
             {err && <div className="pv-err">{err}</div>}
             <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
