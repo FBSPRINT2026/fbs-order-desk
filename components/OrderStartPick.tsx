@@ -31,6 +31,9 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   type Mail = { id: string; at: string; out: boolean; from: string; subject: string; files: string[] };
   const [mails, setMails] = useState<null | { convo: Mail[]; others: Mail[] }>(null);
   const [mOff, setMOff] = useState<Set<string>>(new Set()), [mOn, setMOn] = useState<Set<string>>(new Set());
+  /** the emails question: one line to answer, the list only when choosing, a small chip once answered (Oct 24, Nick:
+   *  "this panel here is good, but it's too long… you should be able to X out of it or minimize it or say yes, no") */
+  const [mView, setMView] = useState<"ask" | "list" | "done">("ask");
   useEffect(() => {
     let live = true;
     fetch(`/api/inbox/order/emails?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (live) setMails({ convo: j.convo || [], others: j.others || [] }); }).catch(() => { if (live) setMails({ convo: [], others: [] }); });
@@ -144,10 +147,29 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
           </div>
           {!how && <span className="faint osp-how-n">Not picked: the AI reads it from the email</span>}
         </div>
-        {mails && (mails.convo.length > 0 || mails.others.length > 0) && (
-          <div className="osp-mails">
-            <b>{mails.convo.length ? `This order is a conversation of ${mails.convo.length + 1} emails. Bring them all in?` : "Other emails from this customer"}</b>
-            <span className="faint">{mails.convo.length ? "Everything they said counts, and the latest change wins. Untick any that aren't about this order." : "Tick any that are part of this order (a size sheet or supplier invoice sent on its own)."}</span>
+        {mails && (mails.convo.length > 0 || mails.others.length > 0) && (() => {
+          const conv = mails.convo.length > 0, total = mails.convo.length + 1;
+          const inN = total - mails.convo.filter((m) => mOff.has(m.id)).length, extra = mOn.size;
+          const chip = conv ? (inN === total ? `All ${total} emails in` : inN === 1 ? "Just this email" : `${inN} of ${total} emails in`) + (extra ? ` + ${extra} other${extra === 1 ? "" : "s"}` : "")
+            : extra ? `${extra} other email${extra === 1 ? "" : "s"} added` : "No other emails added";
+          if (mView === "done") return <div className="osp-mchip-w"><button type="button" className="osp-mchip" onClick={() => setMView("ask")} title="Change which emails come in"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} aria-hidden><path d="M5 12l5 5L20 7" /></svg>{chip}<span className="osp-mchip-ch">change</span></button></div>;
+          return (
+            <div className={"osp-mails osp-mq" + (mView === "list" ? " open" : "")}>
+              <div className="osp-mq-line">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>
+                <span className="osp-mq-t">{conv ? <>This order is a conversation of <b>{total} emails</b>. Bring them all in?</> : <>Other emails from this customer. Add any?</>}</span>
+                {mView !== "list" && (conv ? <>
+                  <button type="button" className="btn sm primary" onClick={() => { setMOff(new Set()); setMView("done"); }}>Yes, all {total}</button>
+                  <button type="button" className="btn sm" onClick={() => { setMOff(new Set(mails.convo.map((m) => m.id))); setMView("done"); }}>Just this one</button>
+                  <button type="button" className="btn sm" onClick={() => setMView("list")}>Choose</button>
+                </> : <>
+                  <button type="button" className="btn sm" onClick={() => setMView("list")}>Add</button>
+                  <button type="button" className="btn sm" onClick={() => { setMOn(new Set()); setMView("done"); }}>No</button>
+                </>)}
+                <button type="button" className="btn icon ghost osp-mq-x" aria-label="Minimize" title="Minimize: keeps the emails as ticked" onClick={() => setMView("done")}>–</button>
+                <button type="button" className="btn icon ghost osp-mq-x" aria-label="Close" title="Close: keeps the emails as ticked" onClick={() => setMView("done")}>×</button>
+              </div>
+              {mView === "list" && <>
             <ul>
               {mails.convo.map((m) => (
                 <li key={m.id}><label><input type="checkbox" checked={!mOff.has(m.id)} onChange={() => setMOff((x) => { const y = new Set(x); if (y.has(m.id)) y.delete(m.id); else y.add(m.id); return y; })} />
@@ -159,8 +181,11 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                   <span><b>{m.from}</b> · {fmt(m.at)}{m.files.length ? <span className="faint"> · {m.files.length} file{m.files.length === 1 ? "" : "s"}: {m.files.slice(0, 3).join(", ")}</span> : null}<br /><span className="faint">{m.subject}</span></span></label></li>
               ))}
             </ul>
-          </div>
-        )}
+                <div className="osp-mq-done"><button type="button" className="btn sm" onClick={() => setMView("done")}>Done</button></div>
+              </>}
+            </div>
+          );
+        })()}
         {plan === null ? <p className="osp-plan-wait">Reading the emails for how many orders are in them…</p> : plan.parts.length > 1 && (
           <div className="osp-plan">
             {(() => {

@@ -13756,3 +13756,18 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pgs-uses{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;min-width:220px}
 /* style search: our popular garments first, marked (Oct 24, Nick) */
 .style-menu .sm-item em.sm-pop{font-style:normal;font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 7px;margin-left:auto;white-space:nowrap}
+/* Create order: the emails question on one line, the list only when choosing, a chip once answered (Oct 24, Nick) */
+.osp-mq{padding:0;overflow:hidden}
+.osp-mq-line{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:8px;background:var(--surface)}
+.osp-mq.open .osp-mq-line{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.osp-mq-line>svg{flex:none;color:var(--accent)}
+.osp-mq-t{flex:1;min-width:0;font-size:13.5px;color:var(--ink)}
+.osp-mq-t b{font-weight:600}
+.osp-mq-line .btn{white-space:nowrap}
+.osp-mq-x{width:26px;height:26px;padding:0;font-size:16px;color:var(--ink-3)}
+.osp-mq.open ul{margin:0;padding:6px 12px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-top:0;max-height:220px;overflow:auto}
+.osp-mq-done{display:flex;justify-content:flex-end;padding:6px 12px 8px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-top:0;border-radius:0 0 8px 8px}
+.osp-mchip-w{margin:2px 0 8px}
+.osp-mchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.osp-mchip-ch{font-weight:500;opacity:.8;margin-left:2px}
+.osp-mchip-ch::before{content:"· ";}
