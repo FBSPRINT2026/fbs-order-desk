@@ -34,9 +34,9 @@ const CSTEPS: { label: string; keys: string[] }[] = [
   { label: "Done", keys: ["completed"] },
 ];
 
-export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string }> }) {
+export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string }> }) {
   const { id } = await params;
-  const { as, paid: justPaid, sent: justSent, reviewed } = await searchParams;
+  const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
@@ -54,6 +54,11 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
   const messages = (m.data || []) as Message[];
+  // sew-outs: the photo of their logo stitched on our machine, to approve (lib/sewouts.ts)
+  const { data: swData } = await ctx.db.from("sewouts").select("id, version, photo_path, status, sent_at, decided_name, decided_at").eq("order_id", id).is("archived_at", null).order("created_at", { ascending: false });
+  const sewouts = (swData || []) as { id: string; version: number; photo_path: string; status: string; sent_at: string | null; decided_name: string | null; decided_at: string | null }[];
+  const swSigned = sewouts.length ? (await createAdminClient().storage.from("proofs").createSignedUrls(sewouts.map((x) => x.photo_path), 3600)).data || [] : [];
+  const pendingSew = sewouts.filter((x) => x.status === "pending");
   const c = calcOrder(o, ctx.settings, payments);
   const preview = !!ctx.preview;
   const back = preview ? `/portal?as=${ctx.preview!.id}` : "/portal";
@@ -105,6 +110,14 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
 
         {cs && (cs.key === "waiting" || cs.key === "delayed") && <div className={"callout" + (cs.key === "waiting" ? " warn" : "")}><h2>{cs.label}</h2><div className="muted">{cs.text}</div></div>}
         {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
+        {sewDone && <div className="callout good"><h2>{sewDone === "approved" ? "Thanks, your sew-out is approved" : "Thanks, we got your changes"}</h2><div className="muted">{sewDone === "approved" ? "We'll run your order. It's kept on file for reorders." : "We'll fix it and send you a new sew-out."}</div></div>}
+        {pendingSew.length > 0 && (
+          <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
+            <h2>Your sew-out is ready to approve</h2>
+            <div className="muted">Here&apos;s your logo stitched on our machine. Look it over and approve it, or tell us what to change.</div>
+            <a className="btn primary" href={`/portal/orders/${o.id}/sewout/${pendingSew[0].id}${preview ? `?as=${ctx.preview!.id}` : ""}`} style={{ alignSelf: "flex-start" }}>Review the sew-out</a>
+          </div>
+        )}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
 
         {isReq && (
@@ -166,6 +179,21 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 ) : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
             </section>
+
+            {sewouts.length > 0 && (
+              <section className="panel" id="sewouts">
+                <div className="panel-h"><h2>Sew-outs</h2></div>
+                <div className="panel-b">
+                  <div className="proofs">{sewouts.map((x, i) => (
+                    <a key={x.id} className="sw-card" href={`/portal/orders/${o.id}/sewout/${x.id}${preview ? `?as=${ctx.preview!.id}` : ""}`}>
+                      {swSigned[i]?.signedUrl ? <img src={swSigned[i].signedUrl!} alt={`Sew-out version ${x.version}`} /> : null}
+                      <b>Sew-out v{x.version}</b>
+                      <span className="muted">{x.status === "approved" ? `Approved${x.decided_name ? ` by ${x.decided_name}` : ""}` : x.status === "changes" ? "Changes requested" : "Waiting for your approval"}</span>
+                    </a>
+                  ))}</div>
+                </div>
+              </section>
+            )}
 
             <section className="panel" id="messages">
               <div className="panel-h"><h2>Messages</h2></div>

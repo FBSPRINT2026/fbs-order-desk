@@ -556,3 +556,74 @@ export function InvoiceDoc(p: DocData) {
     </section>
   );
 }
+
+// ───────────────────────────── sew-out approval ─────────────────────────────
+export type SewoutRow = { id: string; imprint_id: string; version: number; status: string; note: string; sent_at: string | null; decided_at: string | null; decided_name: string | null; customer_comment: string; approved_via: string };
+/**
+ * The sew-out approval PDF (Oct 24, Nick: "take a picture, crop it and say here's your sew out… put it on a PDF that
+ * has approval like our proof approval does now… on file for future reference"): the photo of the sewn logo big, what
+ * it is (where, size, stitches, backing, threads with their PMS), the garments, and the approval box, fillable like the
+ * art proof's. One page.
+ */
+export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: string }) {
+  const { o, cust, groups, sw } = p;
+  const sh = p.settings.shop;
+  const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
+  const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const gi = Math.max(0, groups.findIndex((g) => g.imprints.some((d) => d.id === sw.imprint_id)));
+  const g = groups[gi], d = g?.imprints.find((x) => x.id === sw.imprint_id);
+  const des = d?.design_id ? p.designs[d.design_id] : null;
+  const threads = d ? inkNames(d.inks) : [];
+  const shown = (g?.lines || []).filter((l) => l.style || l.color);
+  const garments = shown.filter((l, i) => shown.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i);
+  const ok = sw.status === "approved" && sw.decided_at
+    ? `${sw.decided_name || "Approved"}, ${new Date(sw.decided_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
+  const emb = d?.emb || {};
+  return (
+    <section className="sheet pf pf-cover">
+      <div className="top">
+        <div className="brand"><img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
+          {(sh.phone || sh.email) && <div className="sub">{[fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")}</div>}</div>
+        <div className="doc"><div className="k disp">Sew-out Approval</div><div className="n">#{o.number} · Version {sw.version}</div><div className="meta">Prepared {p.printed}</div>
+          {ok && <div className="stamp">APPROVED</div>}</div>
+      </div>
+      <div className="pf-who">
+        <div><div className="lbl">For</div><b>{cust.company || cust.name || "—"}</b><div className="faint">{[cust.company && cust.name && cust.name !== cust.company ? cust.name : "", cust.email].filter(Boolean).join(" · ")}</div></div>
+        <div><div className="lbl">Job</div><b>{o.nickname || "—"}</b>{o.po_number && <div className="faint">PO {o.po_number}</div>}</div>
+        <div><div className="lbl">In hands</div><b>{due || "To be set"}</b><div className="faint">{DELIVERY[o.delivery_method] || "Pickup"}</div></div>
+      </div>
+      <div className="pf-hero">
+        {p.photo ? <img src={p.photo} alt="Sew-out" /> : <div className="none">Sew-out photo</div>}
+        <span>Your logo stitched on our machine{d ? ` · ${d.location}` : ""}</span>
+      </div>
+      <div className="pf-sum">
+        <div>
+          <div className="lbl">Embroidery</div>
+          {d ? <div className="pf-pr">
+            <b>{d.location}</b>{d.size ? <> · <b>{d.size}</b></> : null}{d.stitches ? ` · ${d.stitches.toLocaleString()} stitches` : ""}
+            <div className="faint">{[des ? `D-${des.number}${des.name ? ` · ${des.name}` : ""}` : "", emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? "3D puff" : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</div>
+            {threads.length > 0 && <div className="pf-inks">{threads.map((k) => { const t = threadByName(k); return <span key={k}><Swatch c={t?.hex || "#ccc"} />{k}{t?.pms[0] ? ` (PMS ${t.pms[0].replace(/^PMS\s*/i, "")})` : ""}</span>; })}</div>}
+          </div> : <div className="pf-pr">This print isn&apos;t on the order anymore.</div>}
+        </div>
+        <div>
+          <div className="lbl">Garments</div>
+          {garments.map((l) => <div className="pf-pr" key={l.id}><Swatch c={colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
+          {sw.note && <div className="pf-pr"><b>Note:</b> {sw.note}</div>}
+        </div>
+      </div>
+      <div className="pf-ok">
+        <div className="t">Please check the sew-out before you approve</div>
+        <div className="s">Spelling, thread colors, size and the small details. This is the real stitching on our machine; the run is sewn to match it. We start the run once this sew-out is approved, and keep it on file for reorders.</div>
+        <div className="pf-boxes">
+          <span><i className="cb" data-pdf-check="sewout-approved" /> Approved as sewn</span>
+          <span><i className="cb" data-pdf-check="sewout-changes" /> Changes needed, send a new sew-out</span>
+        </div>
+        <div className="pf-notes" data-pdf-text="sewout-changes-text" data-pdf-multi="1"><span>Changes or notes</span></div>
+        <div className="pf-sign"><div data-pdf-text="sewout-signature">Signature</div><div data-pdf-text="sewout-name">Name</div><div data-pdf-text="sewout-date">Date</div></div>
+        {ok && <div className="s ok">Approved{sw.approved_via === "staff" ? "" : " online"}: {ok}</div>}
+        {sw.status === "changes" && sw.customer_comment && <div className="s">Changes asked: {sw.customer_comment}</div>}
+      </div>
+      <div className="foot"><span>Sew-out v{sw.version} · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page 1 of 1</span></div>
+    </section>
+  );
+}

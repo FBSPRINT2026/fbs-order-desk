@@ -45,9 +45,18 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
 
   // what this logo was sewn with last time (a reorder starts from it)
   const [last, setLast] = useState<EmbLast | null>(null);
+  // the sew-out the customer approved, on file with the logo (lib/sewouts.ts)
+  const [sew, setSew] = useState<{ url: string; order: number; version: number; by: string; at: string } | null>(null);
   useEffect(() => {
     if (!designId || portal) return;
-    void createClient().from("designs").select("specs").eq("id", designId).maybeSingle().then(({ data }) => setLast(lastOf(data?.specs)));
+    const sb = createClient();
+    void sb.from("designs").select("specs").eq("id", designId).maybeSingle().then(async ({ data }) => {
+      setLast(lastOf(data?.specs));
+      const so = (data?.specs as { embroidery?: { sewout?: { path: string; order: number; version: number; by: string; at: string } } } | null)?.embroidery?.sewout;
+      if (!so?.path) { setSew(null); return; }
+      const { data: u } = await sb.storage.from("proofs").createSignedUrl(so.path, 3600);
+      setSew(u?.signedUrl ? { url: u.signedUrl, order: so.order, version: so.version, by: so.by, at: so.at } : null);
+    });
   }, [designId, portal]);
 
   // how much of the logo is stitched: read off the painted logo
@@ -127,6 +136,12 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
           <div>{[last.threads, last.size && `${last.location} ${last.size}`, last.stitches && `${last.stitches.toLocaleString()} stitches`, last.backing, last.topping && last.topping !== "None" && last.topping, last.puff && "3D puff", last.metallic && "metallic"].filter(Boolean).join(" · ")}</div>
           {(last.backing !== emb.backing || last.topping !== emb.topping || !!last.puff !== !!emb.puff) && <button type="button" className="lc-link" onClick={() => setIm({ emb: { backing: last.backing || emb.backing, topping: last.topping || emb.topping, puff: last.puff || undefined, metallic: last.metallic || undefined, line: (last.line as EmbSpec["line"]) || emb.line } })}>Use the same backing and effects</button>}
         </div>
+      )}
+      {sew && (
+        <a className="emb-sew" href={sew.url} target="_blank" rel="noreferrer" title="Open the approved sew-out">
+          <img src={sew.url} alt="Approved sew-out" />
+          <span><b>Approved sew-out</b><span className="faint">#{sew.order} v{sew.version} · {sew.by} · {new Date(sew.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></span>
+        </a>
       )}
       <ThreadColors rows={rows} line={line} stock={stock} onPick={onPick} onHover={onHover} />
 

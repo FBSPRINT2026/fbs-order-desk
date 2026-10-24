@@ -5,14 +5,14 @@ import { calcOrder, mergeSettings, orderGroups, type Customer, type Order, type 
 import { loadGroupLook } from "@/lib/groupLook";
 import PrintButton from "./PrintButton";
 import { DOC_CSS } from "./docCss";
-import { InvoiceDoc, ProofDoc, WorkOrderDoc, type DocData } from "./Docs";
+import { InvoiceDoc, ProofDoc, SewoutDoc, WorkOrderDoc, type DocData, type SewoutRow } from "./Docs";
 
 export const dynamic = "force-dynamic";
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
-export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string }> }) {
+export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string; sewout?: string }> }) {
   const { id } = await params;
-  const { work, proof } = await searchParams;
+  const { work, proof, sewout } = await searchParams;
   const { supabase, user, isStaff } = await getViewer();
   if (!user) redirect(`/login?next=/print/${id}`);
   const db = isStaff ? createAdminClient() : supabase; // customers read through row security
@@ -63,6 +63,23 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };
   const nameOf = (kind: string) => [String(o.number), short(cust.company || cust.name || "", 24), short(o.nickname || "", 30), kind]
     .filter(Boolean).join(" - ").replace(/[\\/:*?"<>|#]+/g, "").replace(/\s+/g, " ").trim();
+
+  // the sew-out approval (?sewout=<id>): the photo of the sewn logo and the approval box (lib/sewouts.ts)
+  if (sewout) {
+    const { data: swr } = await db.from("sewouts").select("*").eq("id", sewout).eq("order_id", id).maybeSingle();
+    if (!swr) notFound();
+    const { data: ph } = await admin.storage.from("proofs").createSignedUrl((swr as { photo_path: string }).photo_path, 3600);
+    const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+    const sw = swr as SewoutRow;
+    return (
+      <div className="pdoc">
+        <title>{nameOf(`Sew-out v${sw.version}`)}</title>
+        <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
+        <div className="print-bar"><PrintButton fileName={nameOf(`Sew-out v${sw.version}`)} /></div>
+        <SewoutDoc {...data} printed={printed} sw={sw} photo={ph?.signedUrl || ""} />
+      </div>
+    );
+  }
 
   if (proof0) {
     // the proof's version: the one out with the customer when these mockups were sent, else the next one
