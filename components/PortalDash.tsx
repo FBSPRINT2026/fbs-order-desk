@@ -37,6 +37,19 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // says message center, make that payments… a nice little customer statement looking… where you can pay now… past due
   // in 30 days… then where you have payments right now, I want that to be your jobs… get rid of the needs you section
   // and the customer supplied goods… your artwork underneath it"). Messages stay a tab.
+  const holdRow = (x: DashHeld) => (
+    <div key={x.id} className="pdx-hold-row">
+      <div className="pdx-hold-t">
+        <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
+        <span><span className="pdx-hold-tag">On hold</span>{x.hold.title}</span>
+        <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>
+      </div>
+      <div className="pdx-hold-acts">
+        <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
+        {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
+      </div>
+    </div>
+  );
   void mockupHref; void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
@@ -59,6 +72,26 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
             </div>
           ))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
         </section>
+        {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
+      <section className="pdx-card pdx-sent">
+        <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
+        {!sent.length && (
+          <div className="pdx-caught">
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="var(--accent-soft)" /><circle cx="28" cy="28" r="18" fill="var(--surface)" stroke="var(--ok)" strokeWidth="2.5" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /><circle cx="47" cy="11" r="2.5" fill="var(--warn)" /><circle cx="9" cy="16" r="2" fill="var(--accent)" /><circle cx="46" cy="45" r="1.8" fill="var(--accent)" /></svg>
+            <div><b>You&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
+          </div>
+        )}
+        {sent.length > 0 && <div className="pdx-sent-list">
+          {sent.map((x) => (
+            <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
+              <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
+              <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
+              <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
+            </Link>
+          ))}
+        </div>}
+      </section>
+
         </div>
         <div className="pdx-col">
         {/* payments: a small statement, with Pay now */}
@@ -80,20 +113,9 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         <section className={"pdx-card pdx-hold" + (held.length ? " has" : "")}>
           <div className="pdx-h"><h2>On hold: needs your attention</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
           {held.length ? <div className="pdx-hold-list">
-            {held.map((x) => (
-              <div key={x.id} className="pdx-hold-row">
-                <span className="hold-stamp" aria-hidden>On hold</span>
-                <div className="pdx-hold-t">
-                  <Link href={x.href}><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b></Link>
-                  <span>{x.hold.title}</span>
-                  <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>
-                </div>
-                <div className="pdx-hold-acts">
-                  <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
-                  {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
-                </div>
-              </div>
-            ))}
+            {/* compact rows, no scrolling: three show, the rest open under "more" (Oct 24, Nick: "I don't want to have a scroll bar there") */}
+            {held.slice(0, 3).map((x) => holdRow(x))}
+            {held.length > 3 && <details className="pdx-hold-more"><summary>{held.length - 3} more on hold</summary>{held.slice(3).map((x) => holdRow(x))}</details>}
           </div> : <p className="pdx-track-none">Nothing is on hold. If we ever need something from you to keep an order moving, it shows up here.</p>}
         </section>
         </div>
@@ -101,26 +123,6 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
 
 
 
-      {(
-        <section className="pdx-card pdx-sent">
-          <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
-          {!sent.length && (
-            <div className="pdx-caught">
-              <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="var(--accent-soft)" /><circle cx="28" cy="28" r="18" fill="var(--surface)" stroke="var(--ok)" strokeWidth="2.5" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /><circle cx="47" cy="11" r="2.5" fill="var(--warn)" /><circle cx="9" cy="16" r="2" fill="var(--accent)" /><circle cx="46" cy="45" r="1.8" fill="var(--accent)" /></svg>
-              <div><b>You&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
-            </div>
-          )}
-          {sent.length > 0 && <div className="pdx-sent-list">
-            {sent.map((x) => (
-              <Link key={x.id} href={x.href} className={"pdx-sent-row t-" + x.tone}>
-                <span className="pdx-sent-name"><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when}{x.pcs ? ` · ${x.pcs} pcs` : ""}{x.simple ? " · Simple order" : ""}</small></span>
-                <span className="pdx-sent-steps" aria-hidden>{["Sent", "Reviewing", "Confirmed"].map((t, i) => <i key={t} className={x.step >= i ? "on" : ""} title={t} />)}</span>
-                <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
-              </Link>
-            ))}
-          </div>}
-        </section>
-      )}
 
       <DashJobs jobs={jobs} pastJobs={pastJobs} canAct={canAct} ordersHref={ordersHref} />
 
@@ -139,14 +141,16 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
               ))}
             </div>
           </>}
-          <div className="pdx-h" style={past.length ? { marginTop: 18 } : undefined}><h2>Your artwork</h2><Link href={artHref} className="pd-link">All artwork</Link></div>
-          <div className="pdx-art">
-            {art.map((a) => <Link key={a.id} href={artHref} title={a.name}><img src={a.url} alt={a.name} loading="lazy" /></Link>)}
-          </div>
-          <div className="pdx-h" style={{ marginTop: 18 }}><h2>Your mockups</h2><Link href={artHref} className="pd-link">All mockups</Link></div>
-          <div className="pdx-art">
-            {/* just a look at their work: every picture goes to Your artwork (Oct 24, Nick) */}
-            {mocks.map((m) => <Link key={m.id} href={artHref} title={m.name}><img src={m.url} alt={m.name} loading="lazy" /></Link>)}
+          {/* artwork and mockups side by side, small (Oct 24, Nick: "collapse that down. These are just little thumbnails") */}
+          <div className="pdx-thumbs" style={past.length ? { marginTop: 16 } : undefined}>
+            <div>
+              <div className="pdx-h"><h2>Your artwork</h2><Link href={artHref} className="pd-link">All artwork</Link></div>
+              <div className="pdx-art">{art.slice(0, 8).map((a) => <Link key={a.id} href={artHref} title={a.name}><img src={a.url} alt={a.name} loading="lazy" /></Link>)}</div>
+            </div>
+            <div>
+              <div className="pdx-h"><h2>Your mockups</h2><Link href={artHref} className="pd-link">All mockups</Link></div>
+              <div className="pdx-art">{mocks.slice(0, 8).map((m) => <Link key={m.id} href={artHref} title={m.name}><img src={m.url} alt={m.name} loading="lazy" /></Link>)}</div>
+            </div>
           </div>
         </section>
       </div>

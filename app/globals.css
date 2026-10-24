@@ -13488,3 +13488,51 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .aa-nr{color:var(--ink-3)}
 .aa-nf{color:var(--warn)}
 .aa-notready td{color:var(--ink-3)}
+/* portal dashboard clean-up (Oct 24, Nick: "it's very busy… clean it up a little bit") */
+/* on hold: compact rows, no scrolling */
+.pdx .pdx-col .pdx-hold-list{max-height:none;overflow:visible;gap:8px}
+.pdx .pdx-col .pdx-hold-row{grid-template-columns:minmax(0,1fr);gap:6px;padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--danger);border-radius:0}
+.pdx-hold-t b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdx-hold-t>span{font-size:12.5px}
+.pdx-hold-tag{display:inline-block;margin-right:6px;padding:1px 6px;border-radius:4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.pdx .pdx-col .pdx-hold-acts{justify-content:flex-start;gap:6px}
+.pdx .pdx-col .pdx-hold-acts .btn{height:28px;padding:0 10px;font-size:12.5px}
+.pdx-hold-more summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent);padding:2px 0;list-style:none}
+.pdx-hold-more summary::-webkit-details-marker{display:none}
+.pdx-hold-more[open]>summary{margin-bottom:8px}
+.pdx-hold-more>.pdx-hold-row+.pdx-hold-row{margin-top:8px}
+/* order tracking: one order per line */
+.pdx .pdx-left .pdx-track .pdx-track-list{grid-template-columns:minmax(0,1fr);gap:6px}
+.pdx-trk{padding:7px 10px}
+/* orders sent to FBS in the left column */
+.pdx-left .pdx-sent{margin:0}
+.pdx-left .pdx-sent-row{grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:8px 10px}
+.pdx-left .pdx-sent-st{flex-direction:row;align-items:center}
+.pdx-left .pdx-sent-st small{display:none}
+.pdx-left .pdx-caught svg{width:40px;height:40px}
+/* payments: the aging boxes never spill */
+.pdx-aging>div{padding:6px 6px}
+.pdx-aging span{font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+.pdx-aging b{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+/* your jobs: calmer rows */
+.pjr{grid-template-columns:56px minmax(0,1.1fr) minmax(0,1.7fr) 200px;gap:14px;padding:12px 4px}
+.pjr-pic,.pjr-picw{width:56px;height:56px}
+.pjr-t b{font-size:14.5px}
+.pjr-btn{border-radius:6px;padding:7px 10px;font-size:13px}
+.pjr-btn.need{background:color-mix(in srgb,#f0a500 14%,var(--surface));border-color:color-mix(in srgb,#f0a500 55%,var(--line));color:#8a5a00}
+.pjr-btn.need:hover{background:color-mix(in srgb,#f0a500 24%,var(--surface));border-color:#f0a500}
+.pjr-btn.ok{background:color-mix(in srgb,var(--ok) 12%,var(--surface));border-color:color-mix(in srgb,var(--ok) 50%,var(--line));color:var(--ok)}
+.pjs-st i{width:24px;height:24px}
+.pjs::before,.pjs::after{top:11px}
+.pdx-stabs{margin:0 0 6px}
+/* order again, artwork and mockups: small */
+.pdx-again{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.pdx-ag{flex-direction:row;align-items:center;gap:10px;padding:8px}
+.pdx-ag-pic{flex:0 0 56px;width:56px;height:56px}
+.pdx-ag>b{flex:1 1 auto;min-width:0;font-size:13px}
+.pdx-ag>small{display:none}
+.pdx-ag .btn{align-self:center}
+.pdx-thumbs{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:760px){.pdx-thumbs{grid-template-columns:1fr}}
+.pdx-thumbs .pdx-art{grid-template-columns:repeat(auto-fill,64px);gap:8px}
+.pdx-thumbs .pdx-art a{width:64px;height:64px;border-radius:8px}
