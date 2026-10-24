@@ -15,6 +15,7 @@ import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { sideOfMethod, useProdSide } from "@/lib/prodSide";
 import { qboProblemCount } from "@/app/shop/qbo-order-actions";
+import QbLogo from "@/components/QbLogo";
 import { canOpen, ROLES } from "@/lib/roles";
 import { needsDetails, ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
@@ -29,7 +30,7 @@ const ICONS: Record<string, React.ReactNode> = {
   inbox: <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
   necks: <svg viewBox="0 0 24 24"><path d="M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3" /><path d="M8 3c1 2.5 7 2.5 8 0" /><path d="M8.5 7.5h7" /></svg>,
-  qb: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M10 8v8a1.6 1.6 0 0 1-1.6-1.6v-2.2A2.2 2.2 0 0 1 10 9.7zm4 8V8a1.6 1.6 0 0 1 1.6 1.6v2.2a2.2 2.2 0 0 1-1.6 2.5zM10 8h1.8a2.1 2.1 0 0 1 0 4.2M14 16h-1.8a2.1 2.1 0 0 1 0-4.2" /></svg>,
+  qb: <QbLogo />,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,

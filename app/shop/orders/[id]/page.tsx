@@ -56,6 +56,7 @@ import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
+import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 
 const EVENT_LABEL: Record<string, string> = {
@@ -819,7 +820,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
-  useEffect(() => { if (!o?.id) return; qboOrderState(o.id).then((r) => setQbSt(r.ok ? r : null), () => null); }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
+  useEffect(() => { if (!o?.id) return; qboOrderState(o.id, o.type === "invoice").then((r) => setQbSt(r.ok ? r : null), () => null); }, [o?.id, o?.type]); // eslint-disable-line react-hooks/exhaustive-deps
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
@@ -1630,7 +1632,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-/** QuickBooks' mark, small: a green circle with "qb" (the order's "in QuickBooks" check and the delete question) */
+/** QuickBooks' mark, small, in QuickBooks green (the order's "in QuickBooks" check and the delete question) */
 function QbMark() {
-  return <svg className="qb-mark" viewBox="0 0 24 24" aria-label="QuickBooks" role="img"><circle cx="12" cy="12" r="11" fill="#2CA01C" /><path d="M9.2 7.5v8.2a2 2 0 0 1-2-2v-2.6a2.6 2.6 0 0 1 2-3.6zm5.6 9V8.3a2 2 0 0 1 2 2v2.6a2.6 2.6 0 0 1-2 3.6zM9.2 7.5h2.6a2.6 2.6 0 0 1 0 5.2h-.6M14.8 16.5h-2.6a2.6 2.6 0 0 1 0-5.2h.6" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" /></svg>;
+  return <QbLogo className="qb-mark" title="QuickBooks" />;
 }

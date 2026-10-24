@@ -12893,7 +12893,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .fv-none{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--ink-3);font-size:13.5px}
 @media (max-width:760px){ .fv-body{grid-template-columns:minmax(0,1fr)} .fv-col+.fv-col{border-left:0;border-top:1px solid var(--line-2)} .fv-top .btn{display:none} }
 /* the order's "in QuickBooks" check beside its status, and the delete question (Oct 24) */
-.qb-mark{width:15px;height:15px;flex:none}
+.qb-mark{width:15px;height:15px;flex:none;color:var(--ok)}
 .qb-tick{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;color:var(--ok);white-space:nowrap;margin-right:2px}
 .qb-tick svg:not(.qb-mark){width:13px;height:13px;fill:none;stroke:var(--ok);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .qb-tick.void{color:var(--ink-3)}
