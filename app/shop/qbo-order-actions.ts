@@ -33,7 +33,7 @@ export async function qboOrderState(orderId: string, deep = false) {
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can see this.");
     const x = await pusher(false);
     if (!x) return { ok: true as const, synced: false, voided: false, issue: "" };
-    const { data: o } = await x.admin.from("orders").select("id, number").eq("id", orderId).maybeSingle();
+    const { data: o } = await x.admin.from("orders").select("id, number, updated_at").eq("id", orderId).maybeSingle();
     if (!o) return { ok: true as const, synced: false, voided: false, issue: "" };
     const [st, { data: q }] = await Promise.all([
       x.p.orderState(o.id, +o.number, deep),
@@ -44,7 +44,13 @@ export async function qboOrderState(orderId: string, deep = false) {
     const issue = row && (row.status === "needs_review" || (row.status === "error" && row.attempts >= 3)) ? row.reason || "It didn't sync." : "";
     // changed since it went to QuickBooks (Oct 24, Nick: "once we make a change… turn it yellow… until it syncs back again
     // and goes green"): its newest change is still waiting in the queue
-    const pending = !issue && !!row && (row.status === "pending" || row.status === "running" || row.status === "error");
+    let pending = !issue && !!row && (row.status === "pending" || row.status === "running" || row.status === "error");
+    // a test invoice never goes through the sync: it's out of date when the order changed after it was last sent
+    if (st.synced && st.source === "test") {
+      const { data: l } = await x.admin.from("qbo_links").select("last_pushed_at, last_seen_at, created_at").eq("entity", "invoice").eq("local_id", o.id).eq("is_primary", true).maybeSingle();
+      const sent = String(l?.last_pushed_at || l?.last_seen_at || l?.created_at || "");
+      pending = !!o.updated_at && !!sent && Date.parse(String(o.updated_at)) > Date.parse(sent) + 5000;
+    }
     return { ok: true as const, ...st, issue, pending };
   } catch (e) {
     return { ok: false as const, error: e instanceof QboError ? explainQboError(e) : e instanceof Error ? e.message : String(e) };
@@ -99,6 +105,13 @@ export async function qboSyncOrder(orderId: string) {
     const { data: o } = await admin.from("orders").select("id, number, type, customer_id").eq("id", orderId).maybeSingle();
     if (!o) throw new Error("Order not found.");
     if (o.type !== "invoice") return { ok: false as const, message: "It's a quote: quotes don't go to QuickBooks. Make it an invoice first." };
+    // a test company's order: Sync now updates its TEST invoice (the sync never sends test companies)
+    const { data: cu } = o.customer_id ? await admin.from("customers").select("is_test").eq("id", o.customer_id).maybeSingle() : { data: null };
+    if (cu?.is_test) {
+      const x = await pusher(true);
+      const r = await x!.p.testInvoice(o.id);
+      return { ok: r.status === "done", message: r.reason.slice(0, 400) };
+    }
     const qs = await loadQboSettings(admin);
     if (+o.number < qs.adopt_from_number) return { ok: false as const, message: `#${o.number} is from before the portal; Printavo keeps it in QuickBooks.` };
     if (o.customer_id) await admin.rpc("qbo_enqueue", { p_entity: "customer", p_local_id: o.customer_id, p_op: "upsert", p_reason: "sync now" });

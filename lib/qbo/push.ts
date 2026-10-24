@@ -285,8 +285,18 @@ export class Pusher {
     if (localProblems.length) return { status: "needs_review", reason: localProblems.join(" "), preview };
     const q = this.qbo.with({ entity: "invoice", localId: o.id });
     const ex = await q.query<Rec & { TotalAmt?: number }>("Invoice", `WHERE DocNumber = '${esc(doc)}'`);
-    if (ex.length) await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: ex[0].Id, source: "test", rec: ex[0] });
-    if (ex.length) return { status: "done", reason: `QuickBooks already has the test invoice ${doc} (QuickBooks #${ex[0].Id}, ${r2(+(ex[0].TotalAmt || 0)).toFixed(2)}).`, preview, qboId: ex[0].Id, docNumber: doc, customerQboId: custLink.qbo_id };
+    // already there: update it to match the order (a changed quantity, a new tax setting), never a second copy, and never
+    // a voided one (Oct 24, Nick: "I just updated the quantity to 13 on the mediums… nothing has updated" in QuickBooks)
+    if (ex.length) {
+      const cur = ex[0] as Rec & { TotalAmt?: number; PrivateNote?: string };
+      if (/^voided/i.test(String(cur.PrivateNote || ""))) return { status: "needs_review", reason: `Test invoice ${doc} is voided in QuickBooks, so it isn't changed.`, preview, qboId: cur.Id, docNumber: doc };
+      const { DocNumber: _d, ...fields } = body as Record<string, unknown>;
+      void _d;
+      const up = await q.with({ qboId: cur.Id }).sparseUpdate<Rec & { TotalAmt?: number }>("Invoice", cur.Id, cur.SyncToken, fields);
+      await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: cur.Id, source: "test", rec: up, pushed: true });
+      const d2 = r2(+(up.TotalAmt || 0) - build.total);
+      return { status: Math.abs(d2) >= 0.01 ? "needs_review" : "done", reason: `Updated test invoice ${doc} (QuickBooks #${cur.Id}) to match the order: ${r2(+(up.TotalAmt || 0)).toFixed(2)}.${Math.abs(d2) >= 0.01 ? ` Ours is ${build.total.toFixed(2)}.` : ""}`, preview, qboId: cur.Id, docNumber: doc, customerQboId: custLink.qbo_id };
+    }
     const rec = await q.create<Rec & { TotalAmt?: number }>("Invoice", body, `fbs-test-${hashOf([o.id, doc, Date.now()])}`);
     // linked to the order, so the order shows it's in QuickBooks and deleting it offers to void it (Oct 24, Nick)
     await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: rec.Id, source: "test", rec });
