@@ -13191,3 +13191,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pb-due{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
 .pb-due b{font-size:20px}
 .pb-go{width:100%;justify-content:center}
+/* goods info: the hint on the label's own line, so the boxes line up (Oct 24, Nick) */
+.gi .gi-lab{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.gi .gi-lab small{display:inline;margin:0;font-weight:400;color:var(--ink-3)}

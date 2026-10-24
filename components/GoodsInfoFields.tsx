@@ -21,9 +21,9 @@ export default function GoodsInfoFields({ v, onChange, disabled }: { v: GoodsInf
         <button type="button" role="radio" aria-checked={v.supplier === ""} className={"chip" + (v.supplier === "" ? " on" : "")} disabled={disabled} onClick={() => onChange({ ...v, supplier: "" })}>Not sure yet</button>
       </div>
       <div className="gi-grid">
-        {other && <label>Supplier name<input type="text" autoFocus value={v.supplier === "__other" ? "" : v.supplier} disabled={disabled} onChange={(e) => onChange({ ...v, supplier: e.target.value || "__other" })} placeholder="e.g. alphabroder, your own stock" /></label>}
-        <label>Their order / PO # <small>(optional)</small><input type="text" value={v.supplier_po} disabled={disabled} onChange={(e) => onChange({ ...v, supplier_po: e.target.value })} /></label>
-        <label>Ships on <small>(if you know)</small><input type="date" value={v.ship_date || ""} disabled={disabled} onChange={(e) => onChange({ ...v, ship_date: e.target.value || null })} /></label>
+        {other && <label><span className="gi-lab">Supplier name</span><input type="text" autoFocus value={v.supplier === "__other" ? "" : v.supplier} disabled={disabled} onChange={(e) => onChange({ ...v, supplier: e.target.value || "__other" })} placeholder="e.g. alphabroder, your own stock" /></label>}
+        <label><span className="gi-lab">Supplier order # <small>(optional)</small></span><input type="text" value={v.supplier_po} disabled={disabled} onChange={(e) => onChange({ ...v, supplier_po: e.target.value })} /></label>
+        <label><span className="gi-lab">Ships on <small>(if you know)</small></span><input type="date" value={v.ship_date || ""} disabled={disabled} onChange={(e) => onChange({ ...v, ship_date: e.target.value || null })} /></label>
       </div>
     </div>
   );
