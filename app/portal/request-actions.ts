@@ -24,6 +24,20 @@ async function me() {
   return { supabase, email, cust, admin: createAdminClient() };
 }
 
+/** For reading only: the customer, or (staff previewing with ?as=) the customer being previewed (Oct 24: the Mockup
+ *  Creator preview loaded no garments and no logos, so a saved mockup opened blank) */
+async function readMe(as?: string) {
+  const v = await getViewer();
+  if (v.user && v.isStaff && as && /^[0-9a-f-]{36}$/i.test(as)) {
+    const admin = createAdminClient();
+    const { data: cust } = await admin.from("customers").select("*").eq("id", as).maybeSingle();
+    if (!cust) throw new Error("We couldn't find that customer.");
+    return { admin, cust, staff: true };
+  }
+  const m = await me();
+  return { admin: m.admin, cust: m.cust, staff: false };
+}
+
 /** A request this customer owns that they can still edit (not sent in yet). */
 async function myDraft(id: string) {
   const ctx = await me();
@@ -222,18 +236,18 @@ export async function saveMyLogo(meta: { /** made while building an order or a m
 }
 
 /** Garment catalog for the customer's mockup builder (no costs). */
-export async function portalCatalog() {
+export async function portalCatalog(as?: string) {
   try {
-    const { admin } = await me();
+    const { admin } = await readMe(as);
     const { data } = await admin.from("garments").select("*").order("style");
     return ((data || []) as Record<string, unknown>[]).map((g) => ({ ...g, cost: 0, size_costs: {}, color_size_costs: {} }));
   } catch { return []; }
 }
 
 /** The customer's logos (not archived) with preview links. */
-export async function myLogos() {
+export async function myLogos(as?: string) {
   try {
-    const { admin, cust } = await me();
+    const { admin, cust } = await readMe(as);
     const { data: lib } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).eq("draft", false).order("number", { ascending: false });
     // logos made for one of their mockups (not in the library) still come along, so a saved mockup reopens with its art
     const { data: mk } = await admin.from("mockups").select("design_ids").eq("customer_id", cust.id).is("archived_at", null);
@@ -249,6 +263,24 @@ export async function myLogos() {
     }
     return { ok: true as const, customerId: cust.id as string, designs: data || [], urls };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Couldn't load your logos." }; }
+}
+
+/**
+ * A saved mockup opened from the portal: made by FBS, or already on an order, it opens to look at; to try changes the
+ * customer makes their own copy (Oct 24, Nick: "if it's an FBS created mockup… you can't edit it. Would you like to copy
+ * and make a new version of it?").
+ */
+export async function mockupLock(id: string, as?: string): Promise<{ ok: boolean; fbs?: boolean; orderNo?: number | null; error?: string }> {
+  try {
+    const { admin, cust } = await readMe(as);
+    const { data: mk } = await admin.from("mockups").select("created_by, order_id, customer_id").eq("id", id).maybeSingle();
+    if (!mk || mk.customer_id !== cust.id) return { ok: false, error: "That mockup isn't there anymore." };
+    const by = String(mk.created_by || "").toLowerCase();
+    const { data: st } = by ? await admin.from("staff").select("email").eq("email", by).maybeSingle() : { data: null };
+    let orderNo: number | null = null;
+    if (mk.order_id) { const { data: o } = await admin.from("orders").select("number, status").eq("id", mk.order_id).maybeSingle(); if (o && !["request", "quote"].includes(String(o.status)) && +o.number > 0) orderNo = +o.number; }
+    return { ok: true, fbs: !!st, orderNo };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't open that mockup." }; }
 }
 
 /** One-time upload links for a saved mockup picture and its thumbnail. */

@@ -12,7 +12,7 @@ import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
-import { attachMockupToRequest, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
+import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
@@ -164,6 +164,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** a saved mockup opened again to edit (Oct 22, Nick: "we definitely need to be able to edit a mock-up just like on an
    *  order"): its shirts, prints, places and inks as saved; saving again replaces that mockup's pictures */
   const reopenId = sp.get("mockup") || "";
+  /** staff previewing a customer's Mockup Creator (?as=): reads that customer's garments and logos */
+  const asId = portal ? sp.get("as") || "" : "";
+  /** a saved mockup FBS made, or one already on an order: opened to look at, copied to change (Oct 24, Nick) */
+  const [lock, setLock] = useState<null | { fbs: boolean; orderNo: number | null }>(null);
   /** a customer making the mockup for an order they're building (Oct 24, Nick: "create mockup… in the imprint screen"):
    *  starts from that group's garments and prints, and goes back into it when saved */
   const requestId = portal ? sp.get("request") || "" : "";
@@ -436,7 +440,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // prints with an ink but no saved logo colors (a setup rebuilt from the pictures): painted in that ink
       autoWant.current = Object.fromEntries((snap.imprints || []).filter((d) => !d.inkMap).map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
       setMsg("Editing the saved mockup. Save Mockup replaces it.");
+      if (portal) {
+        const l = await mockupLock(reopenId, asId);
+        if (l.ok && (l.fbs || l.orderNo)) { setLock({ fbs: !!l.fbs, orderNo: l.orderNo ?? null }); setMsg(""); }
+      }
     }
+  }
+  /** their own copy of a locked mockup: a new mockup with the same setup, saved under its own name */
+  function copyLocked() {
+    mockSet.current = crypto.randomUUID();
+    setGroupName((n) => `${(n || "Mockup").replace(/\s*\(my copy\)$/i, "")} (my copy)`.slice(0, 120));
+    setLock(null);
+    setMsg("This is your copy. Change anything, then Save Mockup to keep it as a new mockup. The original stays as it was.");
   }
   // load the order group (or start blank), catalog and customers. Opened from an order and the order still isn't here
   // after 8 seconds (a read that never came back: Oct 23, Nick on #40112 from Create order, "it just got stuck…
@@ -451,7 +466,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     (async () => {
       if (portal) {
         // the customer's own account; catalog comes without our costs
-        const [cat, cu] = await Promise.all([portalCatalog(), sb.from("customers").select("*")]);
+        const [cat, cu] = await Promise.all([portalCatalog(asId), asId ? sb.from("customers").select("*").eq("id", asId) : sb.from("customers").select("*")]);
         setCatalog(cat as unknown as Garment[]);
         const mine = (cu.data || []) as Customer[];
         setCustomers(mine);
@@ -577,7 +592,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     (async () => {
       if (!customerId) { setDesigns([]); setUrls({}); return; }
       if (portal) {
-        const r = await myLogos();
+        const r = await myLogos(asId);
         if (r.ok) { setDesigns(r.designs as Design[]); setUrls(r.urls); } else setMsg(r.error);
         return;
       }
@@ -2950,6 +2965,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
       {!portal && orderId ? <a className="back" href={`/shop/orders/${orderId}`}>← Order #{order?.number || ""}</a>
         : <Link className="back" href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"}>← {portal ? (requestId ? "Back to the order" : "Dashboard") : "Artwork"}</Link>}
+      {portal && lock && <div className="callout mk-change mk-lock-note"><b>{lock.fbs ? "FBS made this mockup" : `This mockup is on order #${lock.orderNo}`}{lock.fbs && lock.orderNo ? ` for order #${lock.orderNo}` : ""}.</b> You can look it over, turn it and zoom in. To try changes, make your own copy: the original stays as it is. <button type="button" className="btn sm primary" onClick={copyLocked}>Make a copy</button></div>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       {sizeAskB && sizeAskB.length > 0 && (() => {
@@ -2973,7 +2989,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{<span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
           {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
-          <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
+          <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && !lock && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
           // counting down back to the order: a click stays here
           if (backIn != null) { setBackIn(null); setMsg("Saved. Staying here."); return; }
           setAdjust(false);

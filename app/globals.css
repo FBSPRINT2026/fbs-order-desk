@@ -13680,3 +13680,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .portal .aa-tbl td.aa-starc .ostar:not(.on){opacity:.5}
 .portal .aa-tbl tr:hover td.aa-starc .ostar{opacity:1}
 @media (min-width:641px){.portal .aa-tbl-cols col.c-no{width:88px}}
+/* an FBS-made (or ordered) mockup opened in the portal: look, or make a copy (Oct 24, Nick) */
+.mk-lock-note{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.mk-lock-note .btn{margin-left:auto}
