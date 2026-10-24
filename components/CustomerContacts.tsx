@@ -14,7 +14,7 @@ export default function CustomerContacts({ customerId }: { customerId: string })
   const [list, setList] = useState<Contact[] | null>(null);
   const [state, setState] = useState("");
   const load = useCallback(async () => {
-    const { data } = await sb.from("customer_contacts").select("id, name, email, phone, title, is_primary, portal_access, printavo_id").eq("customer_id", customerId).order("is_primary", { ascending: false }).order("name");
+    const { data } = await sb.from("customer_contacts").select("id, name, email, phone, title, is_primary, portal_access, printavo_id").eq("customer_id", customerId).is("removed_at", null).order("is_primary", { ascending: false }).order("name");
     setList((data || []) as Contact[]);
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);

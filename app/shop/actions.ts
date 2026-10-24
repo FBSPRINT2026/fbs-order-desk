@@ -17,7 +17,7 @@ async function loadOrderAndCustomer(orderId: string) {
   const { data: order } = await admin.from("orders").select("id,number,nickname,status,customer_id").eq("id", orderId).single();
   if (!order) throw new Error("Order not found.");
   const { data: customer } = order.customer_id
-    ? await admin.from("customers").select("id,name,company,email").eq("id", order.customer_id).single()
+    ? await admin.from("customers").select("id,name,company,email,message_email").eq("id", order.customer_id).single()
     : { data: null };
   const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   return { admin, order, customer, settings: mergeSettings(s?.data) };
@@ -82,7 +82,8 @@ export async function staffMessage(orderId: string, body: string, files: Attachm
   const { error } = await admin.from("messages").insert({ order_id: orderId, topic: tp, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
-  if (customer?.email && order.status !== "quote") {
+  // the customer can keep messages in their portal only (Settings: "Email me our messages", Oct 24)
+  if (customer?.email && order.status !== "quote" && customer.message_email !== false) {
     emailed = await sendEmail({
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
@@ -101,7 +102,7 @@ export async function staffCustomerMessage(customerId: string, body: string, fil
   if (!text && !attachments.length) return { ok: false, error: "Write a message first." };
   const admin = createAdminClient();
   const [{ data: customer }, { data: s }] = await Promise.all([
-    admin.from("customers").select("id,name,company,email").eq("id", customerId).maybeSingle(),
+    admin.from("customers").select("id,name,company,email,message_email").eq("id", customerId).maybeSingle(),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
   ]);
   if (!customer) return { ok: false, error: "Customer not found." };
@@ -109,7 +110,7 @@ export async function staffCustomerMessage(customerId: string, body: string, fil
   const { error } = await admin.from("messages").insert({ customer_id: customerId, project_id: projectId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
-  if (customer.email) {
+  if (customer.email && customer.message_email !== false) {
     emailed = await sendEmail({
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,

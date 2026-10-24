@@ -16,12 +16,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s settings. Saving is turned off in preview.</div>}
       <main className="p-main ps">
         <Link href={`/portal${qs}`} className="back">← Dashboard</Link>
-        <div className="page-head"><div><h1>Settings</h1><div className="eyebrow">Your contacts, addresses and company logo</div></div></div>
-        <PortalSettings preview={!!ctx.preview} logoUrl={logoUrl} shopName={ctx.settings.shop.name} c={{
-          company: c.company || "", name: c.name || "", email: c.email || "", phone: c.phone || "",
-          contact2_name: c.contact2_name || "", contact2_email: c.contact2_email || "", contact2_phone: c.contact2_phone || "",
-          address: c.address || "", ship_address: c.ship_address || "",
-        }} />
+        <div className="page-head"><div><h1>Settings</h1><div className="eyebrow" data-notranslate>{c.company || c.name || "Your company"}</div></div></div>
+        <PortalSettings mailOn={(c as unknown as { message_email?: boolean }).message_email !== false} preview={!!ctx.preview} customerId={String(c.id)} logoUrl={logoUrl} shopName={ctx.settings.shop.name} c={{ address: c.address || "", ship_address: c.ship_address || "" }} />
       </main>
     </>
   );
