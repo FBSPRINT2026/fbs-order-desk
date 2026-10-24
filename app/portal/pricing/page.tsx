@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { priceList } from "@/lib/pricing";
 import PrintButton from "./print";
+import PricingTabs from "./tabs";
 
 /**
  * The wholesale price list, for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we need to add pricing to
@@ -46,6 +47,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
         </div>
         <p className="pl-lead">Prices are per piece, per print location, on garments you supply. Your quotes and orders are priced from this list automatically; you&apos;ll see the total on every order before you confirm it.</p>
 
+        <PricingTabs tabs={[
+          { k: "screen", label: "Screen printing", body: <>
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Screen printing</h2><span className="faint">Per location, per piece, by the number of ink colors</span></div>
           <div className="panel-b">
@@ -89,6 +92,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
           </section>
         </div>
 
+          </> },
+          { k: "emb", label: "Embroidery", body: <>
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Embroidery</h2><span className="faint">Per location, per piece, up to {(pl.embStitches || 0).toLocaleString()} stitches</span></div>
           <div className="panel-b">
@@ -104,9 +109,10 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
           </div>
         </section>
 
-        {dtfOk && (
-          <section className="panel pl-sec">
-            <div className="panel-h"><h2>DTF transfers</h2><span className="faint">Full color, per location, per piece</span></div>
+          </> },
+          ...(dtfOk ? [{ k: "dtf", label: "DTF heat transfers", body: <>
+        <section className="panel pl-sec">
+            <div className="panel-h"><h2>DTF heat transfers</h2><span className="faint">Full color, per location, per piece</span></div>
             <div className="panel-b">
               <div className="pl-wrap"><table className="pl-tbl pl-narrow">
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>
@@ -114,7 +120,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
               </table></div>
             </div>
           </section>
-        )}
+          </> }] : []),
+        ]} />
 
         {fin.length > 0 && (
           <section className="panel pl-sec">

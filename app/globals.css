@@ -13338,3 +13338,5 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pl-notes{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .pl-foot{margin:6px 0 24px;font-size:13px}
 @media print{.pl .back,.pl .page-head .row,.p-head,.p-foot,header,footer,.preview-bar{display:none!important}.pl-sec{break-inside:avoid}.pl-tbl tbody tr:hover td{background:none}}
+.pl-tabs{margin:0 0 14px}
+@media print{.pl-tabs{display:none!important}}
