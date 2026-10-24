@@ -170,11 +170,14 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // sent to us and not confirmed yet: in "Orders sent to FBS" above the jobs, not in the jobs (Oct 24, Nick)
   const isJob = (o: Order) => o.status !== "completed" && o.status !== "request";
   const doneRecent = orders.filter((o) => o.status === "completed").slice(0, 1);
+  // recently completed (the last 60 days, up to 10): a tab beside Ready on the dashboard (Oct 24, Nick)
+  const sixty = new Date(Date.now() - 60 * 864e5).toISOString();
+  const recentDone = orders.filter((o) => o.status === "completed" && String((o as Order & { completed_at?: string | null }).completed_at || o.created_at || "") >= sixty).slice(0, 10);
   const jobOrders = orders.filter(isJob).slice(0, 20);
   const pastPortal = orders.filter((o) => o.status === "completed" && !doneRecent.includes(o));
   // pictures: each order's first mockup (photos only), else the customer's own mockup
   const picPath = (o: Order) => { const g = orderGroups(o)[0]; return g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; };
-  const picOrders = [...jobOrders, ...doneRecent, ...pastPortal.slice(0, 3)];
+  const picOrders = [...jobOrders, ...doneRecent, ...recentDone, ...pastPortal.slice(0, 3)];
   const picPaths = [...new Set(picOrders.map(picPath).filter(Boolean))];
   const { data: picSigned } = picPaths.length ? await admin.storage.from("proofs").createSignedUrls(picPaths, 3600) : { data: [] };
   const picOf = (o: Order) => { const p = picPath(o); const i = picPaths.indexOf(p); return i >= 0 ? picSigned?.[i]?.signedUrl || "" : ""; };
@@ -223,7 +226,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const href = h.fix === "pay" ? link("/portal?area=payments") : h.fix === "art" ? msgLink(o.id) : h.fix === "goods" ? link(`/portal/orders/${o.id}#goods`) : msgLink(o.id);
     return { title: h.title, reason: h.reason, href, fixLabel: h.fix === "pay" ? "Pay now" : h.fix === "art" ? "Send new art" : h.fix === "goods" ? "See the goods" : "Reply" };
   };
-  const jobs: PortalJob[] = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = doneRecent.map(jobOf);
+  const jobs: PortalJob[] = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = recentDone.map(jobOf);
   const held = jobs.filter((j) => j.hold).map((j) => ({ id: j.id, href: j.href, number: j.number, name: j.nickname, hold: j.hold!, msgHref: msgLink(j.id) }));
   // the orders they're tracking (★), each with where it is and whether it's on time (Oct 24, Nick: "tracking this order,
   // here's the current status. This is the date… on time or waiting on you")

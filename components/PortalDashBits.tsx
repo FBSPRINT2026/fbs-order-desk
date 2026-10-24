@@ -43,6 +43,8 @@ const STAGE_TABS: { k: string; label: string; test: (s: JobStage) => boolean }[]
   { k: "work", label: "In progress", test: (s) => s === "work" },
   { k: "ready", label: "Ready", test: (s) => s === "ready" },
   { k: "out", label: "On the way", test: (s) => s === "out" },
+  // recently completed, beside Ready (Oct 24, Nick: not a big card under the jobs)
+  { k: "done", label: "Recently completed", test: (s) => s === "done" },
 ];
 const ORDER: Record<JobStage, number> = { need: 0, out: 1, ready: 2, work: 3, done: 4 };
 
@@ -120,10 +122,11 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   const showKinds = kinds.length > 2;
   const curK = showKinds && kinds.some((t) => t.k === tab) ? tab : "all";
   const byKind = sorted.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind));
-  const stages = STAGE_TABS.filter((t) => t.k === "all" || byKind.some((j) => t.test(j.stage)));
-  const showStages = jobs.length > 3 && stages.length > 2;
+  const doneK = pastJobs.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind)).map((j) => ({ ...j, stage: "done" as JobStage }));
+  const stages = STAGE_TABS.filter((t) => t.k === "all" || (t.k === "done" ? doneK.length > 0 : byKind.some((j) => t.test(j.stage))));
+  const showStages = stages.length > 2 || (stages.length > 1 && doneK.length > 0);
   const curS = showStages && stages.some((t) => t.k === stg) ? stg : "all";
-  const list = byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j.stage));
+  const list = curS === "done" ? doneK : byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j.stage));
   // five on the dashboard (Oct 24, Nick: "cap it at 5 and then say view all orders… we don't want that list to go down and
   // be like 50 things long")
   const shown = list.slice(0, 5 + more * 10);
@@ -132,11 +135,11 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
       <div className="pdx-h"><h2>Your jobs{jobs.length ? <span className="pdx-count">{jobs.length} in progress</span> : null}</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
       {(showStages || showKinds) && (
         <div className="pjf">
-          {showStages && <div className="pdx-ktabs" role="tablist" aria-label="Where the job is">
-            {stages.map((t) => { const n = byKind.filter((j) => t.test(j.stage)).length; return (
-              <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={(curS === t.k ? "on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(0); }}>{t.label}<span>{n}</span></button>
+          {showStages && <div className="toolbar aa-otabs pdx-stabs" data-toolbar><div className="chips" role="tablist" aria-label="Where the job is">
+            {stages.map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j.stage)).length; return (
+              <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(0); }}>{t.label}{n ? <span className="chip-n">{n}</span> : null}</button>
             ); })}
-          </div>}
+          </div></div>}
           {showKinds && <div className="pdx-ktabs" role="tablist" aria-label="Kind of job">
             {kinds.map((t) => { const n = t.k === "all" ? jobs.length : jobs.filter((j) => t.test(j.kind)).length; return (
               <button key={t.k} type="button" role="tab" aria-selected={curK === t.k} className={curK === t.k ? "on" : ""} onClick={() => { setTab(t.k); setMore(0); }}>{t.label}<span>{n}</span></button>
@@ -153,12 +156,11 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
           <Link href={ordersHref} className="pdx-more">View all orders ({list.length})</Link>
         </div>}
       </div>
-      {pastJobs.map((j) => <BigJob key={j.id} j={j} canAct={canAct} />)}
     </section>
   );
 }
 
-function BigJob({ j, canAct }: { j: PortalJob; canAct: boolean }) {
+export function BigJob({ j, canAct }: { j: PortalJob; canAct: boolean }) {
   const [dk, dv] = j.dueLabel.split("|");
   const doneCount = j.steps.filter((s) => s.state === "done").length, curI = j.steps.findIndex((s) => s.state === "cur");
   const fill = j.done ? 100 : ((curI >= 0 ? curI : doneCount) / (j.steps.length - 1)) * 100;
