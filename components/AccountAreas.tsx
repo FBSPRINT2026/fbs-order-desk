@@ -245,15 +245,13 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: (mode as string) === "shop" },
     { id: "orders", label: "Orders", icon: I.orders, n: mode === "portal" ? inWork.length + quotes.filter((o) => !o.archived && o.status === "quote_sent").length : inWork.length },
     { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
-    // only customers with a program see it (Oct 24, Nick, on the portal's tabs losing their names: one tab too many)
-    { id: "program", label: "Program", icon: I.program, show: !!programPanel && (!!hasProgram || area === "program") },
+    // program pricing and the design catalog are tabs inside Pricing and Artwork (Oct 24, Nick: the main bar stays the same)
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
-    { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
-    { id: "pricing", label: "Pricing", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01", show: mode === "portal" && !!pricingPanel },
+    { id: "pricing", label: "Pricing", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01", show: mode === "portal" && (!!pricingPanel || (!!programPanel && !!hasProgram)) },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -292,6 +290,31 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   };
   const tableHead = (title: ReactNode, ph: string) => <div className="aa-bar"><div className="aa-bar-l">{title}</div>{search(ph)}</div>;
 
+  // brand standards (Oct 16): in the shop on the Artwork tab; in the portal on its own tab under Artwork (Oct 24, Nick)
+  const brandCardEl = (brandColors.length > 0 || brandEditor) ? (
+        <div className="aa-card">
+          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}</div>
+          {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
+            <div key={g || "_"} className="bs-group">
+              {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}
+              <div className="bs-list">
+                {brandColors.filter((x) => (x.group || "") === g).map((b, i) => { const hex = colorHex(b.ink); return (
+                  <div key={i} className="bs-item">
+                    <span className="bs-sw" style={{ background: hex || "transparent" }} />
+                    <span className="bs-t"><b>{b.name || b.ink}</b><small>{b.ink}{hex ? <span className="faint">{hex.toUpperCase()}</span> : null}</small></span>
+                  </div>
+                ); })}
+              </div>
+            </div>
+          ))}
+        </div>
+  ) : null;
+  // the portal's main tabs never change (Oct 24, Nick: "the toolbar shouldn't change"): extras are tabs inside Artwork and Pricing
+  const [artTab, setArtTab] = useSticky<string>("portal.artTab", "art");
+  const [priceTab, setPriceTab] = useSticky<string>("portal.priceTab", "list");
+  const subBar = (subs: [string, string][], cur: string, set: (k: string) => void) => subs.length > 1 ? (
+    <div className="toolbar aa-otabs aa-subtabs" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => set(k)}>{t}</button>)}</div></div>
+  ) : null;
   let body: ReactNode = null;
   if (area === "home" && mode === "portal" && dash) {
     body = dash;
@@ -847,24 +870,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
       {tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos")}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
-      {(brandColors.length > 0 || brandEditor) && (
-        <div className="aa-card">
-          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}</div>
-          {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
-            <div key={g || "_"} className="bs-group">
-              {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}
-              <div className="bs-list">
-                {brandColors.filter((x) => (x.group || "") === g).map((b, i) => { const hex = colorHex(b.ink); return (
-                  <div key={i} className="bs-item">
-                    <span className="bs-sw" style={{ background: hex || "transparent" }} />
-                    <span className="bs-t"><b>{b.name || b.ink}</b><small>{b.ink}{hex ? <span className="faint">{hex.toUpperCase()}</span> : null}</small></span>
-                  </div>
-                ); })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {mode !== "portal" && brandCardEl}
       <div className="aa-card">
         <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Archive the ones you don't need; they stay under Archive.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {showArch
@@ -973,8 +979,18 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     <div className="aa-bar"><div className="aa-bar-l"><h2>Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
     {projectsPanel}</>;
   else if (area === "program" && programPanel) body = programPanel;
-  else if (area === "pricing" && pricingPanel) body = pricingPanel;
+  else if (area === "pricing" && (pricingPanel || (programPanel && hasProgram))) {
+    const subs: [string, string][] = [...(pricingPanel ? [["list", "Price list"] as [string, string]] : []), ...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : [])];
+    const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
+    body = <>{subBar(subs, cur, setPriceTab)}{cur === "program" ? programPanel : pricingPanel}</>;
+  }
   else if (area === "designs" && designsPanel) body = designsPanel;
+  // portal Artwork: Logos and mockups · Design catalog · Brand standards, as tabs under it (Oct 24, Nick)
+  if (mode === "portal" && area === "artwork") {
+    const subs: [string, string][] = [["art", "Logos and mockups"], ...(designsPanel ? [["catalog", "Design catalog"] as [string, string]] : []), ...(brandCardEl ? [["brand", "Brand standards"] as [string, string]] : [])];
+    const cur = subs.find((x) => x[0] === artTab)?.[0] || "art";
+    body = <>{subBar(subs, cur, setArtTab)}{cur === "catalog" ? designsPanel : cur === "brand" ? brandCardEl : body}</>;
+  }
 
   return (
     <div className={"aa" + (mode === "shop" ? " aa-shop" : "")}>
