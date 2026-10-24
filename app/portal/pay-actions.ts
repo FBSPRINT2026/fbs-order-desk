@@ -61,11 +61,26 @@ const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100)
  * Pay one or more orders together with a card or bank account the customer entered in Stax's secure fields.
  * paymentMethodId comes from Stax.js tokenize(); the card or bank numbers never touch our server.
  */
-export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number; receiptTo?: string }): Promise<Result> {
+export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number; receiptTo?: string;
+  /** keep this card / bank account on file (they ticked the box and saw the authorization) */ save?: boolean;
+  /** pay with one of their saved ones (our id; the server looks up Stax's) */ savedId?: string }): Promise<Result> {
   try {
     if (!process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
-    if (!/^[\w-]{6,}$/.test(input.paymentMethodId || "")) return { ok: false, error: "Enter your payment details again." };
     const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
+    // a run of failed tries locks the pay form for a while (a bot testing stolen cards)
+    const since = new Date(Date.now() - 30 * 60000).toISOString();
+    const { count: fails } = await admin.from("pay_attempts").select("id", { count: "exact", head: true }).eq("email", email).eq("ok", false).gte("created_at", since);
+    if ((fails || 0) >= 5) return { ok: false, error: "Too many payment tries in a row. Please wait 30 minutes, or call us and we'll help." };
+    let pmId = input.paymentMethodId || "", saved: { id: string; method: string } | null = null;
+    if (input.savedId) {
+      // only their own saved card or account (row security), and not one they removed
+      const { supabase } = await getViewer();
+      const { data: sp } = await supabase.from("saved_payment_methods").select("id, stax_pm_id, method").eq("id", input.savedId).is("removed_at", null).maybeSingle();
+      if (!sp) return { ok: false, error: "That saved payment method isn't available any more. Choose another or enter a new one." };
+      pmId = sp.stax_pm_id; saved = { id: sp.id, method: sp.method };
+      input.method = sp.method === "bank" ? "bank" : "card";
+    }
+    if (!/^[\w-]{6,}$/.test(pmId)) return { ok: false, error: "Enter your payment details again." };
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     const fee = input.method === "card" ? cardFee(sum, settings.pay.cardFeePct) : 0;
     const total = r2(sum + fee);
@@ -74,7 +89,7 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
-        payment_method_id: input.paymentMethodId,
+        payment_method_id: pmId,
         total,
         pre_auth: 0,
         meta: {
@@ -91,8 +106,13 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     const txn = await res.json().catch(() => ({} as Record<string, unknown>));
     if (!res.ok || !txn || txn.success === false) {
       const why = (txn && (txn.message || (Array.isArray(txn.error) ? txn.error.join(" ") : txn.error))) || `The payment didn't go through (${res.status}).`;
+      await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: false, amount: total, error: String(why).slice(0, 300) });
       return { ok: false, error: String(why) };
     }
+    await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: true, amount: total });
+    if (saved) await admin.from("saved_payment_methods").update({ last_used_at: new Date().toISOString() }).eq("id", saved.id);
+    // kept on file: Stax's id and what's on a receipt (brand, last 4, expiry), read from Stax itself
+    if (input.save && !saved && customer?.id) await keepOnFile(admin, customer.id, pmId, input.method, email, settings.shop.name).catch(() => null);
     // record it on each order; the card fee is split across them so the order balances stay exact
     const methodName = input.method === "card" ? "Credit card" : "ACH";
     let feeLeft = fee;
@@ -135,6 +155,54 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     revalidatePath("/portal");
     lines.forEach((l) => revalidatePath(`/portal/orders/${l.o.id}`));
     return { ok: true, paid: total, fee, receiptTo };
+  } catch (e) { return fail(e); }
+}
+
+/** The words they agree to when they tick "Keep this on file". */
+const consentText = (shop: string, method: "card" | "bank") =>
+  `I authorize ${shop} to keep this ${method === "bank" ? "bank account" : "card"} on file and charge it only for payments I choose in this portal. I can remove it any time in Settings.`;
+
+async function keepOnFile(admin: ReturnType<typeof createAdminClient>, customerId: string, pmId: string, method: "card" | "bank", email: string, shop: string) {
+  const r = await fetch(`${STAX_API}/payment-method/${encodeURIComponent(pmId)}`, { headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, Accept: "application/json" } });
+  const pm = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  const exp = String(pm.card_exp || ""); // "112027"
+  const row = {
+    customer_id: customerId, stax_pm_id: pmId, method,
+    brand: method === "bank" ? String(pm.bank_name || "Bank") : String(pm.card_type || "Card"),
+    last4: String(pm.card_last_four || "").slice(-4), exp: /^\d{6}$/.test(exp) ? `${exp.slice(0, 2)}/${exp.slice(4)}` : "",
+    holder: String(pm.person_name || ""), consent_text: consentText(shop, method), consented_by: email,
+  };
+  // the same card saved again replaces the old entry
+  if (row.last4) await admin.from("saved_payment_methods").update({ removed_at: new Date().toISOString(), removed_by: "replaced" }).eq("customer_id", customerId).eq("method", method).eq("last4", row.last4).eq("brand", row.brand).is("removed_at", null);
+  await admin.from("saved_payment_methods").insert(row);
+}
+
+/** Their saved cards and bank accounts (only the brand, last 4 and expiry). */
+export async function mySavedMethods() {
+  try {
+    const { supabase, user, isStaff } = await getViewer();
+    if (!user || isStaff) return { ok: true as const, list: [] as SavedPM[], consent: { card: "", bank: "" } };
+    const [{ data }, { data: s }] = await Promise.all([
+      supabase.from("saved_payment_methods").select("id, method, brand, last4, exp, holder, last_used_at").is("removed_at", null).order("last_used_at", { ascending: false, nullsFirst: false }),
+      createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle(),
+    ]);
+    const shop = mergeSettings(s?.data).shop.name;
+    return { ok: true as const, list: (data || []) as SavedPM[], consent: { card: consentText(shop, "card"), bank: consentText(shop, "bank") } };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Couldn't load your saved payment methods.", list: [] as SavedPM[], consent: { card: "", bank: "" } }; }
+}
+export type SavedPM = { id: string; method: string; brand: string; last4: string; exp: string; holder: string };
+
+/** Take a saved card or bank account off file: it can't be used again (kept in our records, marked removed). */
+export async function removeSavedMethod(id: string): Promise<Result> {
+  try {
+    const { supabase, user, email, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    if (isStaff) return { ok: false, error: "This is a preview." };
+    const { data: sp } = await supabase.from("saved_payment_methods").select("id").eq("id", id).is("removed_at", null).maybeSingle();
+    if (!sp) return { ok: false, error: "We couldn't find that one." };
+    const { error } = await createAdminClient().from("saved_payment_methods").update({ removed_at: new Date().toISOString(), removed_by: email }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
   } catch (e) { return fail(e); }
 }
 

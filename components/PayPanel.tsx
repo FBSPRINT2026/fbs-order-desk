@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
-import { payOrders, sentPaymentNotice } from "@/app/portal/pay-actions";
+import { mySavedMethods, payOrders, sentPaymentNotice, type SavedPM } from "@/app/portal/pay-actions";
 
 export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number };
 type Method = "card" | "bank" | "Zelle" | "Venmo";
@@ -11,6 +11,7 @@ type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<stri
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+const cap = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "Card");
 const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
 
 /**
@@ -50,6 +51,18 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   }, [modal, onClose]);
   const busyRef = useRef(false);
   const stax = useRef<StaxJsT | null>(null);
+  // card / bank on file (Oct 24, Nick: "a button that says click and keep card on file"): their saved ones to pick, or a
+  // new one with "Keep this on file" (the authorization shown right there)
+  const [saved, setSaved] = useState<SavedPM[]>([]);
+  const [consent, setConsent] = useState({ card: "", bank: "" });
+  const [useSaved, setUseSaved] = useState("");
+  const [keep, setKeep] = useState(false);
+  useEffect(() => {
+    if (!canAct) return;
+    void mySavedMethods().then((r) => { setSaved(r.list); setConsent(r.consent); const first = r.list.find((x) => x.method === "card"); if (first) setUseSaved(first.id); });
+  }, [canAct]);
+  const savedHere = saved.filter((x) => (method === "bank" ? x.method === "bank" : method === "card" ? x.method === "card" : false));
+  const pickSaved = savedHere.find((x) => x.id === useSaved) || null;
 
   const sum = r2(items.reduce((a, it) => a + (single && kind === "deposit" && it.deposit ? it.deposit : it.balance), 0));
   const fee = method === "card" ? r2((sum * pay.cardFeePct) / 100) : 0;
@@ -91,6 +104,16 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       setMsg({ ok: true, text: `Thanks! We'll confirm your ${method} payment of ${money(r.paid)} and mark it paid.` });
       return router.refresh();
     }
+    if (receipt.trim() && !receipt.split(/[,;\s]+/).filter(Boolean).every((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) return setMsg({ ok: false, text: "Check the email address for your receipt." });
+    // a saved card or account: charged by its saved id, no form
+    if (pickSaved) {
+      setBusy(true); busyRef.current = true;
+      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: "", savedId: pickSaved.id, applyAmount: amount, receiptTo: receipt.trim() });
+      if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
+      else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
+      setBusy(false); busyRef.current = false;
+      return;
+    }
     if (!stax.current) return setMsg({ ok: false, text: "The secure payment form is still loading." });
     if (!f.first.trim() || !f.last.trim()) return setMsg({ ok: false, text: "Enter the name on the account." });
     const details: Record<string, unknown> = { firstname: f.first.trim(), lastname: f.last.trim(), total, match_customer: false, validate: false };
@@ -106,7 +129,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     setBusy(true); busyRef.current = true;
     try {
       const pm = await stax.current.tokenize(details);
-      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount, receiptTo: receipt.trim() });
+      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount, receiptTo: receipt.trim(), save: keep });
       if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
       else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
     } catch (e) {
@@ -119,7 +142,18 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   const done = msg?.ok;
   const FORMS = (<>
       {/* Stax's secure card fields stay mounted so the form only loads once */}
-      <div className="pp-form" hidden={!(online && (method === "card" || method === "bank"))}>
+      {(method === "card" || method === "bank") && online && savedHere.length > 0 && (
+        <div className="pp-saved" role="radiogroup" aria-label="Saved payment methods">
+          {savedHere.map((x) => (
+            <label key={x.id} className={"pp-sv" + (useSaved === x.id ? " on" : "")}>
+              <input type="radio" name="pp-saved" checked={useSaved === x.id} onChange={() => setUseSaved(x.id)} />
+              <span><b>{x.method === "bank" ? `${x.brand || "Bank account"} ending ${x.last4}` : `${cap(x.brand)} ending ${x.last4}`}</b>{x.exp ? <small> · exp {x.exp}</small> : null}{x.holder ? <small> · {x.holder}</small> : null}</span>
+            </label>
+          ))}
+          <label className={"pp-sv" + (!pickSaved ? " on" : "")}><input type="radio" name="pp-saved" checked={!pickSaved} onChange={() => setUseSaved("new")} /><span>Use a new {method === "bank" ? "bank account" : "card"}</span></label>
+        </div>
+      )}
+      <div className="pp-form" hidden={!(online && (method === "card" || method === "bank")) || !!pickSaved}>
         <div className="grid g2">
           <div className="field"><label htmlFor="pp-first">First name</label><input id="pp-first" autoComplete="given-name" value={f.first} onChange={set("first")} /></div>
           <div className="field"><label htmlFor="pp-last">Last name</label><input id="pp-last" autoComplete="family-name" value={f.last} onChange={set("last")} /></div>
@@ -144,6 +178,12 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
               <div className="field"><label htmlFor="pp-bh">Account holder</label><select id="pp-bh" value={f.holder} onChange={set("holder")}><option value="personal">Personal</option><option value="business">Business</option></select></div>
             </div>
           </div>
+        )}
+        {(consent.card || consent.bank) && (
+          <label className="pp-keep">
+            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
+            <span><b>Keep this {method === "bank" ? "bank account" : "card"} on file</b><small>{method === "bank" ? consent.bank : consent.card}</small></span>
+          </label>
         )}
         {!ready && <div className="faint" style={{ fontSize: 12 }}>Loading the secure payment form…</div>}
       </div>
@@ -230,7 +270,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   function payButton() {
     return <>
       {!done && (
-        <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || !ready))} onClick={submit}>
+        <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || (!ready && !pickSaved)))} onClick={submit}>
           {busy ? "Working…" : method === "Zelle" || method === "Venmo" ? `I sent ${money(total)} by ${method}` : `Pay ${money(total)}`}
         </button>
       )}
@@ -277,7 +317,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       {receiptBox}
       {msg && <div className={msg.ok ? "okmsg" : "banner"} role={msg.ok ? "status" : "alert"}>{msg.text}</div>}
       {!done && (
-        <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || !ready))} onClick={submit}>
+        <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || (!ready && !pickSaved)))} onClick={submit}>
           {busy ? "Working…" : method === "Zelle" || method === "Venmo" ? `I sent ${money(total)} by ${method}` : `Pay ${money(total)}`}
         </button>
       )}

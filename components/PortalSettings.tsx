@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mySavedMethods, removeSavedMethod, type SavedPM } from "@/app/portal/pay-actions";
 import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setMessageEmail, type Person } from "@/app/portal/settings-actions";
 
 type C = { address: string; ship_address: string };
@@ -39,6 +40,7 @@ export default function PortalSettings({ c, customerId, logoUrl, preview, shopNa
     <div className="stack ps-wrap">
       {err && <div className="banner" role="alert">{err}</div>}
       <People customerId={customerId} preview={preview} shopName={shopName} />
+      <SavedCards preview={preview} />
       <section className="panel">
         <div className="panel-h"><h2>Messages</h2></div>
         <div className="panel-b">
@@ -152,6 +154,34 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
           <span className="faint" style={{ fontSize: 12.5 }}>To change the main contact or your company name, send {shopName} a message.</span>
           <button type="button" className="btn" disabled={preview || !!edit} onClick={() => { setEdit(blank); setAsk(false); }}>+ Add a person</button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Their cards and bank accounts on file (Oct 24, Nick): only the brand and last 4; remove any time. */
+function SavedCards({ preview }: { preview: boolean }) {
+  const [list, setList] = useState<SavedPM[] | null>(null);
+  const [armed, setArmed] = useState(""), [err, setErr] = useState("");
+  useEffect(() => { void mySavedMethods().then((r) => setList(r.list)); }, []);
+  if (!list) return null;
+  return (
+    <section className="panel">
+      <div className="panel-h"><h2>Saved payment methods</h2><span className="faint">Tick &ldquo;Keep this on file&rdquo; when you pay to save one. The numbers stay with our payment processor (Stax).</span></div>
+      <div className="panel-b">
+        {err && <div className="banner" role="alert">{err}</div>}
+        {list.length ? (
+          <ul className="ps-cards">{list.map((x) => (
+            <li key={x.id}>
+              <span><b>{x.method === "bank" ? `${x.brand || "Bank account"} ending ${x.last4}` : `${x.brand ? x.brand.charAt(0).toUpperCase() + x.brand.slice(1) : "Card"} ending ${x.last4}`}</b>{x.exp ? <span className="faint"> · exp {x.exp}</span> : null}{x.holder ? <span className="faint"> · {x.holder}</span> : null}</span>
+              <button type="button" className={"btn sm ghost" + (armed === x.id ? " danger armed" : "")} disabled={preview} onClick={async () => {
+                if (armed !== x.id) { setArmed(x.id); setTimeout(() => setArmed((a) => (a === x.id ? "" : a)), 3500); return; }
+                setArmed(""); const r = await removeSavedMethod(x.id);
+                if (r.ok) setList((l) => (l || []).filter((y) => y.id !== x.id)); else setErr(r.error || "Couldn't remove it.");
+              }}>{armed === x.id ? "Remove it?" : "Remove"}</button>
+            </li>
+          ))}</ul>
+        ) : <div className="faint">Nothing saved yet.</div>}
       </div>
     </section>
   );
