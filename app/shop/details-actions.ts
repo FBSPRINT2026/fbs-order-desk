@@ -50,7 +50,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       if (emb) {
         const st = Math.round(+String(p.stitches || "").replace(/[^\d.]/g, ""));
         if (st >= 300 && st < 200000) im.stitches = st;
-        im.emb = { ...(im.emb || {}), ...(st >= 300 ? { stitchesFrom: "staff" as const } : {}), ...(clip(p.backing, 60) ? { backing: clip(p.backing, 60) } : {}), ...(clip(p.topping, 60) ? { topping: clip(p.topping, 60) } : {}) };
+        im.emb = { ...(im.emb || {}), ...(st >= 300 ? { stitchesFrom: im.emb?.file && im.emb.file.stitches === st ? "file" as const : "staff" as const } : {}), ...(clip(p.backing, 60) ? { backing: clip(p.backing, 60) } : {}), ...(clip(p.topping, 60) ? { topping: clip(p.topping, 60) } : {}) };
       }
       // the size is now what production says we printed (the Mockup Creator asks before changing it)
       if (im.size) im.sizeFrom = "film";
