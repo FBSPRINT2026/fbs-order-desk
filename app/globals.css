@@ -13183,3 +13183,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* drafts left behind: pick them back up (Oct 24, Nick) */
 .draft-rec{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:10px 14px;margin:0 0 12px;border:1px dashed color-mix(in srgb,var(--fbs-orange,#F7941D) 60%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--fbs-orange,#F7941D) 6%,var(--surface));font-size:13.5px}
 .pdx-draft .btn{margin-left:auto}
+/* the customer's order: their mockup with the order, and one Pay button (Oct 24, Nick) */
+.po-mock{display:flex;flex-direction:column;gap:8px}
+.po-mock-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.po-mock-pics{display:flex;gap:10px;flex-wrap:wrap}
+.po-mock-pics img{width:150px;height:150px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+.pb-due{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.pb-due b{font-size:20px}
+.pb-go{width:100%;justify-content:center}

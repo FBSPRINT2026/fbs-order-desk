@@ -8,8 +8,7 @@ import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type M
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerStatus, type Flag } from "@/lib/orderStages";
-import { MessageThread, OrderActions, ProofCard, QuoteApproval, ReorderButton } from "./client";
-import PayPanel from "@/components/PayPanel";
+import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import { fmtPhone } from "@/lib/phone";
 
 const STEPS: { label: string; keys: string[] }[] = [
@@ -53,6 +52,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (!ctx.isStaff && (pr.data || []).length) await proofViewed(createAdminClient(), id).catch(() => null);
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
+  // the mockup they made comes with the order (Oct 24, Nick: "it doesn't show the art, even though they're the ones that
+  // created it… it should just come along with it"): its shirts, from their Mockup Creator mockup or their own file
+  const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length);
+  const mkPaths = [...new Set(mkGroups.flatMap((g) => (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => !/\.pdf$/i.test(x))))];
+  const mkUrls: Record<string, string> = {};
+  if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
   const messages = (m.data || []) as Message[];
   // sew-outs: the photo of their logo stitched on our machine, to approve (lib/sewouts.ts)
   const { data: swData } = await ctx.db.from("sewouts").select("id, version, photo_path, status, sent_at, decided_name, decided_at").eq("order_id", id).is("archived_at", null).order("created_at", { ascending: false });
@@ -175,11 +180,18 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             </section>
 
             <section className="panel" id="proofs">
-              <div className="panel-h"><h2>Artwork proofs</h2></div>
-              <div className="panel-b">
+              <div className="panel-h"><h2>{mkGroups.length && !proofs.length ? "Artwork" : "Artwork proofs"}</h2></div>
+              <div className="panel-b stack">
+                {mkGroups.map((g) => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return (
+                  <div key={g.id} className="po-mock">
+                    <div className="po-mock-h"><b>{g.fromMockup ? `Your mockup${g.fromMockup.number ? ` M-${g.fromMockup.number}` : ""}` : "Your mockup"}</b><span className="faint">{g.fromMockup ? "made in our Mockup Creator" : "your own file"}{g.name ? ` · ${g.name}` : ""}</span></div>
+                    <div className="po-mock-pics">{pics.map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" /></a>)}</div>
+                    {!proofs.length && <div className="faint" style={{ fontSize: 12.5 }}>This is the art we print from. If anything needs changing, we&apos;ll send you a proof to approve.</div>}
+                  </div>
+                ); })}
                 {proofs.length ? (
                   <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} />)}</div>
-                ) : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
+                ) : mkGroups.length ? null : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
             </section>
 
@@ -229,8 +241,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b stack">
                 {(() => { const t = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt"; const d = o.type === "invoice" ? payDueDate(o, t) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[t]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                 {canPay ? (
-                  <PayPanel items={[{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined }]}
-                    pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} />
+                  <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined, quote: o.type === "quote" }}
+                    pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : ctx.customers.find((x) => x.id === o.customer_id)?.email || ctx.email} />
                 ) : o.type === "quote" ? (
                   <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
                 ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}
