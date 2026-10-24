@@ -822,13 +822,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
   // asked again after each save (a change turns it yellow until it syncs), and every minute while the page is open
-  const [qbMenu, setQbMenu] = useState(false), [qbBusy, setQbBusy] = useState(false);
+  const [qbMenu, setQbMenu] = useState(false), [qbBusy, setQbBusy] = useState(false), [qbNote, setQbNote] = useState("");
   async function qbSync() {
     if (!o) return;
     setQbBusy(true);
     const r = await qboSyncOrder(o.id).catch((e) => ({ ok: false, message: e instanceof Error ? e.message : String(e) }));
     setQbBusy(false); setQbMenu(false);
-    say(r.message);
+    // no message: the color says it (Oct 24, Nick: "I don't need that little pop-up… just go through the colors"); a
+    // sync that couldn't run shows its reason on hover
+    setQbNote(r.ok ? "" : r.message);
     qboOrderState(o.id).then((x) => setQbSt(x.ok ? x : null), () => null);
   }
   useEffect(() => { if (!qbMenu) return; const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".qb-wrap")) setQbMenu(false); }; document.addEventListener("click", h); return () => document.removeEventListener("click", h); }, [qbMenu]);
@@ -1073,7 +1075,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             // right-click: Sync now, this order only (Oct 24, Nick: "right click the QB thing at the top… sync now… it'll force
             // it to sync that invoice")
             return <span className="qb-wrap">
-              <span className={"qb-tick qb-" + k + (qbBusy ? " busy" : "")} title={`${tip}. Right-click to sync now.`} aria-label={tip} role="img" onContextMenu={(e) => { e.preventDefault(); setQbMenu(true); }}><QbMark /></span>
+              <span className={"qb-tick qb-" + k + (qbBusy ? " busy" : "")} title={`${tip}.${qbNote ? ` Last Sync now: ${qbNote}` : ""} Right-click to sync now.`} aria-label={tip} role="img" onContextMenu={(e) => { e.preventDefault(); setQbMenu(true); }}><QbMark /></span>
               {qbMenu && <span className="qb-menu" role="menu" onMouseLeave={() => setQbMenu(false)}>
                 <button type="button" role="menuitem" disabled={qbBusy || !inv} onClick={() => void qbSync()}>{qbBusy ? "Syncing…" : inv ? "Sync now" : "Quotes don't sync"}</button>
                 <a role="menuitem" href="/shop/settings/quickbooks">QuickBooks settings</a>
