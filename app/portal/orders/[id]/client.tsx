@@ -171,7 +171,7 @@ export function OrderActions({ orderId, kind, archived, cancelAsked, disabled }:
     <>
       {kind === "unseen"
         ? <button type="button" className="btn ghost danger" disabled={disabled} title={disabled ? PREVIEW : undefined} onClick={() => setOpen("delete")}>Delete</button>
-        : <button type="button" className="btn ghost" disabled={disabled} title={disabled ? PREVIEW : undefined} onClick={() => setOpen("cancel")}>Request cancellation</button>}
+        : <button type="button" className="btn" disabled={disabled} title={disabled ? PREVIEW : undefined} onClick={() => setOpen("cancel")}>Request cancellation</button>}
       {open && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label={open === "delete" ? "Delete this order?" : "Request cancellation"} onClick={() => !pending && setOpen("")}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>

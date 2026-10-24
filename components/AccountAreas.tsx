@@ -33,7 +33,7 @@ export type AMockup = { id: string; title: string; url: string; thumb: string; n
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "designs" | "messages" | "texts" | "receive" | "details" | "projects" | "program";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "designs" | "messages" | "texts" | "receive" | "details" | "projects" | "program" | "pricing";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -70,7 +70,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingHref, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -122,7 +122,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** portal: the customer's Settings page, on the right of the tab bar (Oct 24) */ settingsHref?: string;
-  /** portal, wholesale accounts: their price list, just before Settings (Oct 24, Nick) */ pricingHref?: string;
+  /** portal, wholesale accounts: their price list, a tab just before Settings (Oct 24, Nick) */ pricingPanel?: ReactNode;
   /** portal: their unsent drafts (no number yet), to pick up again or throw away (Oct 24) */ drafts?: { id: string; name: string; updated: string; pcs: number }[];
   onDiscardDraft?: (id: string) => Promise<{ ok: boolean; error?: string }>;
   /** archive / bring back a mockup set (Oct 24) */ onArchiveMockup?: (mockupId: string, on: boolean) => Promise<{ ok: boolean; error?: string }>;
@@ -250,6 +250,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Your goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
+    { id: "pricing", label: "Pricing", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01", show: mode === "portal" && !!pricingPanel },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -969,6 +970,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     <div className="aa-bar"><div className="aa-bar-l"><h2>Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
     {projectsPanel}</>;
   else if (area === "program" && programPanel) body = programPanel;
+  else if (area === "pricing" && pricingPanel) body = pricingPanel;
   else if (area === "designs" && designsPanel) body = designsPanel;
 
   return (
@@ -1002,8 +1004,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           </button>
         ))}
         {/* the customer's Settings, last on the bar (Oct 24, Nick: "on the toolbar all the way to the right") */}
-        {mode === "portal" && pricingHref && <Link className="aa-tab aa-tab-end" href={pricingHref}><Ico d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01" /><span>Pricing</span></Link>}
-        {mode === "portal" && settingsHref && <Link className={"aa-tab" + (pricingHref ? "" : " aa-tab-end")} style={pricingHref ? { textDecoration: "none" } : undefined} href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
+        {mode === "portal" && settingsHref && <Link className="aa-tab aa-tab-end" href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
       </nav>
       )}
       <section className="aa-body">{body}</section>

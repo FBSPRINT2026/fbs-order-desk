@@ -13340,3 +13340,16 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 @media print{.pl .back,.pl .page-head .row,.p-head,.p-foot,header,footer,.preview-bar{display:none!important}.pl-sec{break-inside:avoid}.pl-tbl tbody tr:hover td{background:none}}
 .pl-tabs{margin:0 0 14px}
 @media print{.pl-tabs{display:none!important}}
+/* On hold under Payments; Order tracking full width (Oct 24, Nick) */
+.pdx .pdx-hold,.pdx .pdx-sent{margin-bottom:0}
+.pdx-hold{border-color:var(--line)}
+.pdx-hold.has{border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
+.pdx-hold-n{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:12px;font-weight:700}
+.pdx-col .pdx-hold-row{grid-template-columns:auto minmax(0,1fr);gap:10px}
+.pdx-col .pdx-hold-acts{grid-column:1 / -1;justify-content:flex-start}
+.pdx-col .pdx-hold-row>.hold-stamp{font-size:10px;padding:2px 7px}
+.pdx-col .pdx-hold-list{max-height:320px;overflow:auto}
+.pdx-track .pdx-track-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.pl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:4px 0 4px}
+.pl-head h2{margin:0;font-family:var(--display);font-size:20px}
+@media print{.portal .aa-nav,.pl-head .row{display:none!important}}

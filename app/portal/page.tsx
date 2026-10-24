@@ -2,8 +2,9 @@ import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx } from "@/lib/portal";
 import { oneOfEach } from "@/lib/mockupList";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
+import { orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
+import PortalPricing from "@/components/PortalPricing";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
 import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } from "@/lib/portalJobs";
@@ -358,7 +359,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} drafts={drafts} onDiscardDraft={discardRequest} settingsHref={`/portal/settings${qs}`} pricingHref={ctx.customers.some((c) => c.price_type === "wholesale") ? `/portal/pricing${qs}` : undefined}
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} drafts={drafts} onDiscardDraft={discardRequest} settingsHref={`/portal/settings${qs}`} pricingPanel={ctx.customers.some((c) => c.price_type === "wholesale") ? <PortalPricing pl={priceList(ctx.settings, "wholesale")} company={ctx.customers[0]?.company || ctx.customers[0]?.name || ""} phone={ctx.settings.shop.phone || ""} msgHref={msgLink(null)} /> : undefined}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}

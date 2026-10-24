@@ -63,24 +63,10 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
           ))}</div>}
           <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
-        {/* the orders they starred (Oct 24, Nick: "a priority order tracker… tracking this order, here's the current status… on time or waiting on you") */}
-        <section className="pdx-card pdx-track">
-          <div className="pdx-h"><h2>Tracking</h2>{tracked.length > 0 && <span className="faint" style={{ fontSize: 12 }}>{tracked.length} starred</span>}</div>
-          {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
-            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
-              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
-              <span className="pdx-trk-h">{t.health.text}</span>
-              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
-            </div>
-          ))}</div> : <p className="pdx-track-none">Star an order (☆ on a job below) to keep an eye on it here.</p>}
-        </section>
-        </div>
-      </div>
-
-      {held.length > 0 && (
-        <section className="pdx-card pdx-hold">
-          <div className="pdx-h"><h2>On hold: needs your attention</h2><span className="faint" style={{ fontSize: 12 }}>{held.length === 1 ? "1 order is" : `${held.length} orders are`} stopped until this is sorted out</span></div>
-          <div className="pdx-hold-list">
+        {/* on hold, under Payments (Oct 24, Nick: "where tracking is right now… let that be the on hold, need your attention") */}
+        <section className={"pdx-card pdx-hold" + (held.length ? " has" : "")}>
+          <div className="pdx-h"><h2>On hold: needs your attention</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
+          {held.length ? <div className="pdx-hold-list">
             {held.map((x) => (
               <div key={x.id} className="pdx-hold-row">
                 <span className="hold-stamp" aria-hidden>On hold</span>
@@ -95,9 +81,23 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
                 </div>
               </div>
             ))}
-          </div>
+          </div> : <p className="pdx-track-none">Nothing is on hold. If we ever need something from you to keep an order moving, it shows up here.</p>}
         </section>
-      )}
+        </div>
+      </div>
+
+      {/* Order tracking, full width under the top row (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list") */}
+      <section className="pdx-card pdx-track">
+        <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
+        {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
+          <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
+            <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
+            <span className="pdx-trk-h">{t.health.text}</span>
+            {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
+          </div>
+        ))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+      </section>
+
 
       {sent.length > 0 && (
         <section className="pdx-card pdx-sent">
