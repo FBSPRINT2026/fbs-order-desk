@@ -162,7 +162,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
   const tx = new Float32Array(N), ty = new Float32Array(N);
   for (let i = 0; i < N; i++) { if (lab[i] < 0) continue; const th = 0.5 * Math.atan2(ay[i], ax[i]) + Math.PI / 2; tx[i] = Math.cos(th); ty[i] = Math.sin(th); }
   const cmin = new Float32Array(N), along = new Float32Array(N), satin = new Uint8Array(N);
-  const satinMax = 12 * pxMm, reach = Math.ceil(satinMax * 1.3);
+  const satinMax = 25 * pxMm, reach = Math.ceil(satinMax * 1.3);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x; if (lab[i] < 0) continue;
     const side = [0, 0];
@@ -190,7 +190,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
   for (let i = 0; i < N; i++) raw[i] = rnd() + rnd() + rnd() - 1.5;
   const sm = blur(raw, w, h, 1);
   const noise = new Float32Array(N);
-  for (let i = 0; i < N; i++) noise[i] = 0.7 * raw[i] + 0.6 * sm[i];
+  for (let i = 0; i < N; i++) noise[i] = 0.9 * raw[i] + 0.3 * sm[i];
   const tex = new Float32Array(N), S = 18;
   let var_ = 0, nIn = 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -230,9 +230,9 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     if (lab[i] < 0) lit = 0.6; // a soft edge pixel: the ragged end of a stitch
     else if (isSatin) {
       // the round of the column: gray at the edges, bright on top, the edge ragged thread by thread
-      const ue = Math.min(1, Math.max(0, along[i] + 0.05 * T));
+      const ue = Math.min(1, Math.max(0, along[i] + 0.04 * T));
       round = Math.max(0, Math.sin(Math.PI * ue));
-      lit = (0.5 + 0.55 * Math.pow(round, 0.6)) * sheen * (1 + 0.05 * T);
+      lit = (0.5 + 0.55 * Math.pow(round, 0.6)) * sheen * (1 + 0.03 * T);
     } else {
       // too wide for one stitch: a fill sewn the same way, rows of shorter stitches with staggered needle points
       const ct = tx[i], st = ty[i];
@@ -263,7 +263,7 @@ export async function stitchLook(src: string, o: { pxPerIn?: number; maxSide?: n
     // light threads keep room for the shading; dark ones still shine (a gray sheen along the top of each column)
     const lum = (e.r + e.g + e.b) / 3, kk = lum > 200 ? 0.9 : 1;
     const dark = (1 - lum / 255) ** 2;
-    const gloss = (isSatin ? Math.pow(round, 1.5) : 0.5) * sheen * (1 + 0.6 * T);
+    const gloss = (isSatin ? Math.pow(round, 1.5) : 0.5) * sheen * (1 + 0.3 * T);
     const add = Math.max(0, lit - 0.92) * 160 + dark * 55 * Math.min(2, Math.max(0, gloss));
     q[p] = Math.max(0, Math.min(255, e.r * kk * lit + add));
     q[p + 1] = Math.max(0, Math.min(255, e.g * kk * lit + add));
