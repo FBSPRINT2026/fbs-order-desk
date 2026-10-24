@@ -8,6 +8,7 @@ import { useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
+import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
 import { PAY_TERMS, type Design, type PayTerms } from "@/lib/pricing";
@@ -55,12 +56,22 @@ function SearchInner() {
   const searchedFor = useRef("");
   const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean; skip?: boolean } | null>(null);
 
+  // an order number or a customer's name goes straight there; anything else is searched (and the AI answers) (Oct 24, Nick)
+  const [jump, setJump] = useState<"wait" | "none">("wait");
+  useEffect(() => {
+    let live = true;
+    setJump("wait");
+    if (!q0) { setJump("none"); return; }
+    quickJump(q0).then((h) => { if (!live) return; if (h) router.replace(h); else setJump("none"); }, () => live && setJump("none"));
+    return () => { live = false; };
+  }, [q0]); // eslint-disable-line react-hooks/exhaustive-deps
   const t = q0.replace(/[%,()*]/g, " ").trim();
   const num = /^#?\d{3,7}$/.test(t) ? t.replace("#", "") : "";
   const low = t.toLowerCase();
 
   // customers, Printavo jobs, logos, messages, shipments, projects (our own orders come from the shop's order list)
   useEffect(() => {
+    if (jump !== "none") return;
     searchedFor.current = q0;
     setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setBestArch([]); setOtherStats({}); setMore(false);
     if (t.length < 2) { setPending(0); return; }
@@ -123,7 +134,7 @@ function SearchInner() {
       done();
     });
     return () => { live = false; };
-  }, [q0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q0, jump]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the customer it's about: one whose name has the words, the one with the most orders
   const best = useMemo(() => {
@@ -152,7 +163,7 @@ function SearchInner() {
 
   // the AI answer: once the results are in (it reads them too)
   useEffect(() => {
-    if (t.length < 3) { setAi(null); return; }
+    if (t.length < 3 || num || jump !== "none") { setAi(null); return; }
     if (loading || pending || searchedFor.current !== q0) return;
     const found = [...rows.slice(0, 20).map((r) => ({ ref: r.href.replace("/shop/orders/", "o:").replace("/shop/archive/", "a:"), text: `#${r.number} ${r.name} · ${r.customer} · ${r.archived ? r.label : r.status}${r.due ? ` · due ${r.due}` : ""} · total ${r.total}${r.balance > 0.004 ? ` · owes ${r.balance}` : ""}` })), ...custs.slice(0, 8).map((c) => ({ ref: `c:${c.id}`, text: `${c.company || c.name} · ${c.name} · ${c.email}` }))];
     let live = true;
@@ -160,7 +171,7 @@ function SearchInner() {
     fetch("/api/ai/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: t, found }) })
       .then((r) => r.json()).then((j) => { if (live) setAi(j.skip ? null : j); }).catch(() => { if (live) setAi({ error: "The AI couldn't answer right now." }); });
     return () => { live = false; };
-  }, [pending, loading, q0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending, loading, q0, jump]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the card's numbers for the best customer: all their orders, not only the ones the words found
   const card = useMemo(() => {
