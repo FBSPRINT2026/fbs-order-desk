@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { sendSewoutPhoto } from "@/app/shop/sewout-actions";
+import { SEWOUT_EMAILS } from "@/lib/customerContact";
 
 /**
  * The sew-out photo (Oct 24, Nick: "when our embroidery team does the sew out and they take a picture… crop it and
@@ -130,7 +131,7 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sw-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) setImg(null); }}>
           <div className="mk-modal sow-modal">
             <h2 id="sw-t">Crop the sew-out</h2>
-            <p className="faint">Drag the box or its corners so it frames the stitching. This is the picture the customer gets.</p>
+            <p className="faint">Drag the box or its corners so it frames the stitching. This is the picture the customer sees.{SEWOUT_EMAILS ? "" : " Customer emails are off, so saving doesn't send it."}</p>
             <div className="sow-stage" ref={wrap} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
               {preview && <img src={preview} alt="The sew-out photo" draggable={false} />}
               <div className="sow-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} onPointerDown={(e) => down("move", e)}>
@@ -147,7 +148,7 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
             {err && <div className="pv-err">{err}</div>}
             <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
               <button type="button" className="btn" onClick={() => setImg(null)} disabled={busy}>Cancel</button>
-              <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>{busy ? "Sending…" : "Save and send to the customer"}</button>
+              <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : SEWOUT_EMAILS ? "Save and send to the customer" : "Save the sew-out"}</button>
             </div>
           </div>
         </div>

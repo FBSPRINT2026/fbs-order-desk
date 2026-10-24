@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings, orderGroups, type Order } from "@/lib/pricing";
+import { SEWOUT_EMAILS } from "@/lib/customerContact";
 
 /**
  * Sew-out approval (Oct 24, Nick: "we sent it off to get digitized and then… we do a sew out, like a physical, so we
@@ -10,8 +11,9 @@ import { mergeSettings, orderGroups, type Order } from "@/lib/pricing";
  * automatically send an email for approval… crop it and say here's your sew out… put it on a PDF that has approval like
  * our proof approval does now, then you approve that, on file for future reference").
  *
- * - Maria takes the photo (Digitizing), crops it, and saving it sends it: the customer gets an email with the photo and a
- *   link to approve it (Nick picked "send right away"; it's sent by her click, so the customer-contact switch is kept).
+ * - Maria takes the photo (Digitizing), crops it, and saves it. With SEWOUT_EMAILS on, saving emails the customer the
+ *   photo and a link to approve it. It's off for now (Oct 24, Nick: "we're not gonna send any emails right now"): the
+ *   sew-out, its approval page and PDF are made, and nothing is sent.
  * - A newer photo of the same print is the next version; the one before steps aside (archived, still in the history).
  * - The customer approves (typing their name) or asks for changes; the shop hears either way. "Approved another way"
  *   records a call or an email.
@@ -51,14 +53,15 @@ export async function sendSewout(admin: SupabaseClient, x: { orderId: string; im
   const at = new Date().toISOString();
   const live = rows.filter((r) => !r.archived_at);
   if (live.length) await admin.from("sewouts").update({ archived_at: at }).in("id", live.map((r) => r.id));
-  const to = customer?.email || "";
+  const to = SEWOUT_EMAILS ? customer?.email || "" : "";
   const { data: made, error } = await admin.from("sewouts").insert({
     order_id: o.id, imprint_id: x.imprintId, design_id: pr.im.design_id || null, version, photo_path: x.photoPath, raw_path: x.rawPath || null,
     note: (x.note || "").trim().slice(0, 1000), sent_at: to ? at : null, sent_to: to || null, created_by: me.email,
   }).select("id").single();
   if (error || !made) return { ok: false as const, error: error?.message || "Couldn't save the sew-out." };
   const where = `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}`;
-  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_sent", detail: `Sew-out v${version} (${where})${to ? ` to ${to}` : ", not emailed: no customer email"}`, actor: me.email });
+  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_sent", detail: `Sew-out v${version} (${where})${to ? ` to ${to}` : SEWOUT_EMAILS ? ", not emailed: no customer email" : ", saved (customer emails are off)"}`, actor: me.email });
+  if (!SEWOUT_EMAILS) return { ok: true as const, id: made.id, version, emailed: false, error: `Sew-out v${version} saved. Customer emails are off, so nothing was sent.` };
   if (!to) return { ok: true as const, id: made.id, version, emailed: false, error: "Saved, but this customer has no email address, so it wasn't sent." };
   const emailed = await emailSewout(admin, { o, to, shop: settings.shop.name, id: made.id, photoPath: x.photoPath, where, note: x.note || "", reminder: false });
   return { ok: true as const, id: made.id, version, emailed };
@@ -79,6 +82,7 @@ async function emailSewout(admin: SupabaseClient, p: { o: Order; to: string; sho
 
 /** Remind the customer to review the sew-out waiting on them. */
 export async function remindSewout(admin: SupabaseClient, id: string, me: Staff) {
+  if (!SEWOUT_EMAILS) return { ok: false as const, error: "Customer emails are off, so no reminder was sent." };
   const { data: sw } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
   const s = sw as Sewout | null;
   if (!s || s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };

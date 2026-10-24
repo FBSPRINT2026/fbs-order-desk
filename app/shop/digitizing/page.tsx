@@ -11,6 +11,7 @@ import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { lineName, threadByName } from "@/lib/embroidery";
 import SewoutCapture from "@/components/SewoutCapture";
+import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import { approveSewoutAnother, remindSewoutAction } from "@/app/shop/sewout-actions";
 
 /**
@@ -138,7 +139,7 @@ export default function Digitizing() {
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
             <div className="chips" role="tablist">
-              {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Sew-out sent"], ["ok", "Approved"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
+              {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
                 <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
               ))}
             </div>
@@ -164,7 +165,7 @@ export default function Digitizing() {
   );
 }
 
-const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Sew-out sent", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
+const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
 function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, vendor, onAsked, onDst, sws, swUrls, onSew }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; vendor: string; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void }) {
@@ -228,20 +229,20 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
             )}
             <div className="dgz-file">
               <div className="imp-l">Sew-out</div>
-              <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it: it&apos;s emailed to the customer to approve, and once approved it&apos;s kept with the logo for reorders.</div>
+              <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it{SEWOUT_EMAILS ? ": it's emailed to the customer to approve" : ". It gets an approval page in the customer's portal and a PDF (customer emails are off, so nothing is sent)"}. Once approved it&apos;s kept with the logo for reorders.</div>
               {canEdit && <div><SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : undefined} onDone={onSew} /></div>}
               {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
                 <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
                   {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
                   <div className="stack" style={{ gap: 4, minWidth: 0 }}>
                     <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>
-                    <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : "Not emailed"}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
+                    <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not emailed`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
                     {x.decided_at && <div className="sub">{x.decided_name} · {day(x.decided_at)}</div>}
                     {x.customer_comment && <div style={{ fontSize: 13 }}>“{x.customer_comment}”</div>}
                     <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
                       <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Approval PDF</a>
                       {canEdit && !x.archived_at && x.status === "pending" && <>
-                        {x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
+                        {SEWOUT_EMAILS && x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
                         <button type="button" className="lc-link" onClick={() => setHow(how === x.id ? null : x.id)}>Approved another way…</button>
                       </>}
                     </div>

@@ -12,3 +12,10 @@
  * (lib/merchServer.ts sendConfirmation). Any new automation must check this first.
  */
 export const AUTO_CUSTOMER_CONTACT = false;
+
+/**
+ * Sew-out approval emails (lib/sewouts.ts). Oct 24, Nick: "we're not gonna send any emails right now". Saving a sew-out
+ * photo keeps it and makes its approval page and PDF, but emails no one; Remind is off too. Turn this on to have saving
+ * the photo email the customer right away (what Nick described for later).
+ */
+export const SEWOUT_EMAILS = false;
