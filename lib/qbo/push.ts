@@ -78,18 +78,6 @@ export class Pusher {
     const doc = String((x.rec as { DocNumber?: string } | null | undefined)?.DocNumber || "");
     if (x.entity === "invoice" && doc) await this.recordDoc(doc, x.local_id, x.qbo_id, exist?.source || x.source, x.note === "voided");
   }
-  /** the 0% rate inside the "no tax" tax code (read once from QuickBooks) */
-  private exemptRateCache: string | null | undefined;
-  async exemptRate(): Promise<string | null> {
-    if (this.exemptRateCache !== undefined) return this.exemptRateCache;
-    this.exemptRateCache = null;
-    if (!this.qbo || !this.qs.exempt_tax_code_id) return null;
-    try {
-      const tc = await this.qbo.read<Rec & { SalesTaxRateList?: { TaxRateDetail?: { TaxRateRef?: { value?: string } }[] } }>("TaxCode", this.qs.exempt_tax_code_id);
-      this.exemptRateCache = tc?.SalesTaxRateList?.TaxRateDetail?.[0]?.TaxRateRef?.value || null;
-    } catch { this.exemptRateCache = null; }
-    return this.exemptRateCache;
-  }
   async recordDoc(doc: string, orderId: string, qboId: string, source: string, voided = false) {
     const num = Number(doc.replace(/\D/g, "")) || null;
     const isUuid = /^[0-9a-f-]{36}$/i.test(orderId);
@@ -223,7 +211,7 @@ export class Pusher {
         return { status: "pending", reason: `Waiting for the customer: ${co.reason}`, retryMin: 10 };
       }
     }
-    const build = invoicePayload({ order: o, customer: cust, customerRef: custLink ? { value: custLink.qbo_id } : null, settings: this.settings, qs: this.qs, exemptRateId: await this.exemptRate() });
+    const build = invoicePayload({ order: o, customer: cust, customerRef: custLink ? { value: custLink.qbo_id } : null, settings: this.settings, qs: this.qs });
     const preview: Record<string, unknown> = { action: link ? "update" : "create", qboId: link?.qbo_id || null, total: build.total, storedTotal: build.storedTotal, summary: build.summary, warnings: build.warnings, problems: build.problems, body: build.body };
     const localProblems = build.problems.filter((p) => !/isn't in QuickBooks yet/.test(p));
     if (!this.qbo) return { status: "pending", reason: `Not connected: would ${link ? "update" : "create"} QuickBooks invoice #${n} for ${build.total.toFixed(2)}.`, preview };
@@ -290,7 +278,7 @@ export class Pusher {
       custLink = await this.link("customer", o.customer_id);
       if (!custLink) return { status: "error", reason: "The customer was made in QuickBooks but the link wasn't saved." };
     }
-    const build = invoicePayload({ order: o, customer: cust, customerRef: { value: custLink.qbo_id }, settings: this.settings, qs: this.qs, exemptRateId: await this.exemptRate() });
+    const build = invoicePayload({ order: o, customer: cust, customerRef: { value: custLink.qbo_id }, settings: this.settings, qs: this.qs });
     const body = { ...build.body, DocNumber: doc, PrivateNote: `TEST from the FBS portal: void this. ${String((build.body as { PrivateNote?: string }).PrivateNote || "")}`.slice(0, 4000) };
     const preview = { action: "create", docNumber: doc, total: build.total, storedTotal: build.storedTotal, summary: build.summary, warnings: build.warnings, problems: build.problems, body };
     const localProblems = build.problems.filter((p) => !/isn't in QuickBooks yet/.test(p));

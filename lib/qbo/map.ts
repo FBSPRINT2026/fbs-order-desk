@@ -259,9 +259,7 @@ export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks",
  * The QuickBooks invoice for one of our orders. `customerRef` is the QuickBooks customer it's billed to (the primary
  * link), or null in a preview before the customer exists there. Problems stop it from being sent; warnings are shown.
  */
-export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | null; customerRef: { value: string; name?: string } | null; settings: Settings; qs: QboSettings;
-  /** the rate inside the "no tax" tax code (Tax Exempt → its 0% rate), so QuickBooks keeps that code on an invoice with no
-   * taxable lines instead of switching it back to Automatic Calculation (Oct 24, TEST-40137) */ exemptRateId?: string | null }): InvoiceBuild {
+export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | null; customerRef: { value: string; name?: string } | null; settings: Settings; qs: QboSettings }): InvoiceBuild {
   const { order: o, customer: cu, settings, qs } = inp;
   const calc = calcOrder(o, settings);
   const groups = orderGroups(o);
@@ -338,10 +336,7 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
     } else problems.push(`This order has ${calc.tax} sales tax, but QuickBooks sales tax is set to "none".`);
   } else if (taxMode === "qbo_ast" && qs.exempt_tax_code_id) {
     // no tax on this order: QuickBooks' "Tax Exempt (0%)" rate, not its automatic calculation
-    txnTax = {
-      TotalTax: 0, TxnTaxCodeRef: { value: qs.exempt_tax_code_id },
-      ...(inp.exemptRateId ? { TaxLine: [{ DetailType: "TaxLineDetail", Amount: 0, TaxLineDetail: { TaxRateRef: { value: inp.exemptRateId }, PercentBased: true, TaxPercent: 0, NetAmountTaxable: r2(calc.items + calc.setup + calc.materials + calc.fees - calc.discount) } }] } : {}),
-    };
+    txnTax = { TotalTax: 0, TxnTaxCodeRef: { value: qs.exempt_tax_code_id } };
   }
   if (missing.size) problems.push(`Pick a QuickBooks item for: ${[...missing].map((k) => ITEM_KEYS.find((x) => x.k === k)?.label || k).join(", ")} (Settings → QuickBooks → Items).`);
   if (!inp.customerRef) problems.push("The customer isn't in QuickBooks yet.");
