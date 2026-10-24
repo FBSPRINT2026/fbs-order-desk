@@ -2588,7 +2588,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
 
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
-  const ready = !!customerId && lines.some((l) => l.style.trim() && garmentFor(l));
+  const ready = !!customerId && lines.some((l) => l.style.trim() && (garmentFor(l) || !!l.own));
   // a size bigger than the smallest size ordered can take (a 9.5" front on a 2T-4T run) is brought down to the
   // largest that fits, and the print says why (the note goes to the order with the mockup)
   useEffect(() => {
