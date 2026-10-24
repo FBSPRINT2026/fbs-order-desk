@@ -17,9 +17,10 @@ import { PMS_COATED } from "@/lib/pms";
 import { MADEIRA_THREADS } from "@/lib/madeiraThreads";
 
 export type Thread = { line: "Polyneon 40" | "Classic Rayon 40" | "Isacord 40"; code: string; name: string; hex: string; pms: string[] };
-/** the thread lines we sew with: Madeira Polyneon first, Madeira Rayon, and Isacord (Oct 23, Nick: "the other thread
- *  brand we use is Isacord. It also has PMS matching") */
-export const THREAD_LINES = ["Polyneon 40", "Classic Rayon 40", "Isacord 40"] as const;
+/** the thread lines we sew with: Madeira Polyneon (the standard) and Isacord (Oct 23, Nick: "the other thread
+ *  brand we use is Isacord. It also has PMS matching"). Classic Rayon isn't offered (Nick: "we typically don't use the
+ *  classic rayon, just focus on Polyneon") */
+export const THREAD_LINES = ["Polyneon 40", "Isacord 40"] as const;
 export const lineBrand = (line: string) => (/isacord/i.test(line) ? "Isacord" : "Madeira");
 /** the line's name with its brand: "Madeira Polyneon 40", "Isacord 40" */
 export const lineName = (line: string) => (/isacord/i.test(line) ? "Isacord 40" : `Madeira ${line}`);
