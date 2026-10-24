@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Proof } from "@/lib/pricing";
 import { fmtStamp } from "@/lib/format";
-import { approveQuote, customerMessage, requestQuoteChanges, startCheckout } from "../../actions";
+import { approveQuote, archiveMyQuote, customerMessage, requestCancellation, requestQuoteChanges, startCheckout, withdrawSentRequest } from "../../actions";
 import { reorderRequest } from "../../request-actions";
 
 /** "Order this again": copies this order into a new request the customer can change and send in. */
@@ -145,5 +145,59 @@ export function PayBox({ orderId, disabled, balance, deposit }: { orderId: strin
       <span className="sub">Secure card payment through Stripe.</span>
       {err && <div className="err">{err}</div>}
     </div>
+  );
+}
+
+/**
+ * What the customer can do with this order (Oct 24, Nick): a request we haven't opened can be deleted (asked first); once
+ * we've seen it, or it's an order, they ask us to cancel with a reason; a quote can be archived ("not going ahead").
+ */
+export function OrderActions({ orderId, kind, archived, cancelAsked, disabled }: { orderId: string; kind: "unseen" | "seen" | "quote" | "order"; archived?: boolean; cancelAsked?: boolean; disabled?: boolean }) {
+  const router = useRouter();
+  const [open, setOpen] = useState<"" | "delete" | "cancel">("");
+  const [reason, setReason] = useState("The customer canceled"), [note, setNote] = useState("");
+  const [err, setErr] = useState(""), [done, setDone] = useState("");
+  const [pending, start] = useTransition();
+  if (done) return <span className="faint oa-done">{done}</span>;
+  if (kind === "quote") return (
+    <button type="button" className="btn ghost" disabled={disabled || pending} title={disabled ? PREVIEW : archived ? "Back to your quotes" : "Not going ahead with this quote: it moves to your archived quotes"}
+      onClick={() => start(async () => { const r = await archiveMyQuote(orderId, !archived); if (r.ok) { setDone(archived ? "Back in your quotes." : "Archived. Find it under Show older quotes and archived."); router.refresh(); } else setErr(r.error || ""); })}>
+      {archived ? "Unarchive quote" : "Archive quote"}
+    </button>
+  );
+  if (cancelAsked) return <span className="pill oa-asked">Cancellation requested</span>;
+  return (
+    <>
+      {kind === "unseen"
+        ? <button type="button" className="btn ghost danger" disabled={disabled} title={disabled ? PREVIEW : undefined} onClick={() => setOpen("delete")}>Delete</button>
+        : <button type="button" className="btn ghost" disabled={disabled} title={disabled ? PREVIEW : undefined} onClick={() => setOpen("cancel")}>Request cancellation</button>}
+      {open && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label={open === "delete" ? "Delete this order?" : "Request cancellation"} onClick={() => !pending && setOpen("")}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            {open === "delete" ? <>
+              <h3>Delete this order?</h3>
+              <p className="dla-sub">FBS hasn&apos;t opened it yet, so it can still be taken back. Are you sure?</p>
+            </> : <>
+              <h3>Ask us to cancel this order</h3>
+              <p className="dla-sub">We&apos;ve already seen it, so we&apos;ll check where it is and reply in Messages.</p>
+              <div className="field"><label htmlFor="oa-why">Why?</label><select id="oa-why" value={reason} onChange={(e) => setReason(e.target.value)}>
+                {["The customer canceled", "Entered twice by mistake", "Ordered the wrong thing", "Other"].map((x) => <option key={x}>{x}</option>)}</select></div>
+              <div className="field"><label htmlFor="oa-note">Anything else? (optional)</label><textarea id="oa-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></div>
+            </>}
+            {err && <div className="banner" role="alert">{err}</div>}
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" disabled={pending} onClick={() => setOpen("")}>Keep it</button>
+              <button type="button" className={"btn " + (open === "delete" ? "danger" : "primary")} disabled={pending} onClick={() => start(async () => {
+                setErr("");
+                const r = open === "delete" ? await withdrawSentRequest(orderId) : await requestCancellation(orderId, reason, note);
+                if (!r.ok) return setErr(r.error || "Couldn't do that.");
+                setOpen("");
+                if (open === "delete") router.push("/portal?area=orders"); else { setDone("Cancellation requested. We'll reply in Messages."); router.refresh(); }
+              })}>{pending ? "Working…" : open === "delete" ? "Yes, delete it" : "Send the request"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

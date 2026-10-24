@@ -226,6 +226,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
       setSaveState("Saved");
+      // the shop has now seen the customer's sent order: from here they can only ask us to cancel it (Oct 24, Nick)
+      { const x = d as Order & { submitted_at?: string | null; staff_seen_at?: string | null }; if (x.submitted_at && !x.staff_seen_at) void sb.from("orders").update({ staff_seen_at: new Date().toISOString() }).eq("id", id).is("staff_seen_at", null); }
       // changes that never reached the server (the connection dropped, the tab closed mid-save): offer them back
       try {
         const raw = localStorage.getItem(`fbs:unsaved:${d.id}`);
@@ -1124,6 +1126,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <span className="spacer" />
           <button type="button" className="btn ghost" onClick={() => void discardDraft()}>Discard</button>
           <button type="button" className="btn primary" onClick={() => void commitDraft()}>Save</button>
+        </div>
+      )}
+      {(o as Order & { cancel_requested_at?: string | null }).cancel_requested_at && (
+        <div className="draft-bar" role="alert">
+          <span><b>The customer asked to cancel</b> ({(o as Order & { cancel_reason?: string }).cancel_reason || "no reason given"}) on {new Date(String((o as Order & { cancel_requested_at?: string | null }).cancel_requested_at)).toLocaleDateString()}. Their note is in Messages; reply there and change the status if you cancel it.</span>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={() => setTab("msg")}>Open Messages</button>
         </div>
       )}
       {recover && (

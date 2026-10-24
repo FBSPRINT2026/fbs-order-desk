@@ -225,7 +225,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Keep this draft?" onClick={() => setLeaveTo(null)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <h3>Keep this as a draft?</h3>
-            <p className="dla-sub">It hasn&apos;t been sent to us. Keep it to finish later (it&apos;s under Orders → Your drafts), or discard it and nothing is kept.</p>
+            <p className="dla-sub">It hasn&apos;t been sent to us. Keep it to finish later (under Orders → Drafts), or discard it and nothing is kept.</p>
             <div className="dla-acts">
               <button type="button" className="btn ghost" onClick={() => setLeaveTo(null)}>Keep editing</button>
               <button type="button" className="btn ghost danger" onClick={async () => { const to = leaveTo; setLeaveTo(null); const r = await discardRequest(o.id); if (r.ok) router.push(to); else setErr(r.error || ""); }}>Discard</button>

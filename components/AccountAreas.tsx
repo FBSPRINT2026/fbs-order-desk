@@ -23,7 +23,8 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
   /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
-  /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean };
+  /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean;
+  /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
@@ -139,6 +140,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const orderHref = (id: string, hash?: string) => hrefs[id] || `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;
   const pill = (o: AOrder) => o.archived
     ? <span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--ink-3)" }}>{o.statusLabel || "Archived"}</span>
+    : o.cancelAsked && mode === "portal" ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Cancellation requested</span>
+    : o.archivedQ && mode === "portal" ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--ink-3)" }}>Archived</span>
     : o.status === "request" && mode === "portal"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
@@ -176,7 +179,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   // the Orders tab's own tabs (Oct 24, Nick: "if they've got a bunch of quotes sitting there, they don't even get to the
   // orders… all quotes and orders just like we have on our order screen")
-  const [oTab, setOTab] = useSticky<"all" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
+  const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   const [showOldOwed, setShowOldOwed] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
@@ -500,34 +503,18 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
     const sentQ = quotes.filter((o) => o.status === "request" && o.sent);
     const quotes2 = quotes.filter((o) => !(o.status === "request" && o.sent));
-    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff), olderN = quotes2.length - recentQ.length;
+    // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
+    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
-    const tab = oTab === "sent" && !sentQ.length ? "all" : oTab;
+    const tab = (oTab === "sent" && !sentQ.length) || (oTab === "drafts" && !draftsLive.length) ? "all" : oTab;
     const done = invoices.filter((o) => o.status === "completed");
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
-    const allRows = [...sentQ, ...quotes2, ...invoices].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number]] : []), ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number]] : []), ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     body = <>
-      {/* drafts: started, never sent, no number yet (Oct 24, Nick) */}
-      {draftsLive.length > 0 && (
-        <div className="aa-drafts">
-          <b>Your drafts</b><span className="faint">Not sent to us yet</span>
-          {draftsLive.map((d) => (
-            <span key={d.id} className="aa-draft">
-              <Link href={`/portal/request/${d.id}${hrefQuery}`}>{d.name || "Untitled order"}</Link>
-              <small className="faint">{d.pcs ? `${d.pcs} pcs · ` : ""}{when(d.updated)}</small>
-              {onDiscardDraft && <button type="button" className={"linkbtn" + (armedDel === "d" + d.id ? " danger" : "")} disabled={!canAct} onClick={async () => {
-                if (armedDel !== "d" + d.id) { setArmedDel("d" + d.id); setTimeout(() => setArmedDel((x) => (x === "d" + d.id ? "" : x)), 3500); return; }
-                setArmedDel(""); setGoneDrafts((g) => ({ ...g, [d.id]: true }));
-                const r = await onDiscardDraft(d.id); if (!r.ok) setGoneDrafts((g) => ({ ...g, [d.id]: false }));
-              }}>{armedDel === "d" + d.id ? "Discard it?" : "Discard"}</button>}
-            </span>
-          ))}
-        </div>
-      )}
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
@@ -536,13 +523,35 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
       {tab === "all" && orderTable(allRows, "invoice", true)}
+      {/* drafts: started, never sent, no number yet (Oct 24, Nick: "something before sent to FBS that says drafts") */}
+      {tab === "drafts" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Drafts</h3><span className="faint">Not sent to us yet. Pick one up or discard it.</span></div>
+        <div className="aa-card aa-tblcard"><table className="aa-tbl">
+          <thead><tr><th>Draft</th><th>Pieces</th><th>Last changed</th><th /></tr></thead>
+          <tbody>{draftsLive.map((d) => (
+            <tr key={d.id} onClick={() => router.push(`/portal/request/${d.id}${hrefQuery}`)}>
+              <td className="m"><div className="aa-t">{d.name || "Untitled order"}</div></td>
+              <td>{d.pcs || "—"}</td>
+              <td className="dt">{when(d.updated)}</td>
+              <td className="r" onClick={(e) => e.stopPropagation()}>
+                <Link className="btn sm" href={`/portal/request/${d.id}${hrefQuery}`}>Continue</Link>{" "}
+                {onDiscardDraft && <button type="button" className={"btn sm ghost" + (armedDel === "d" + d.id ? " danger armed" : "")} disabled={!canAct} onClick={async () => {
+                  if (armedDel !== "d" + d.id) { setArmedDel("d" + d.id); setTimeout(() => setArmedDel((x) => (x === "d" + d.id ? "" : x)), 3500); return; }
+                  setArmedDel(""); setGoneDrafts((g) => ({ ...g, [d.id]: true }));
+                  const r = await onDiscardDraft(d.id); if (!r.ok) setGoneDrafts((g) => ({ ...g, [d.id]: false }));
+                }}>{armedDel === "d" + d.id ? "Discard it?" : "Discard"}</button>}
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </>}
       {tab === "sent" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
         {orderTable(sentQ, "quote")}
       </>}
       {tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-          <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
+          <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label></div>
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
       </>}
       {tab === "orders" && <>

@@ -293,3 +293,58 @@ export async function archiveMyMockup(mockupId: string, on: boolean): Promise<Re
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+
+/*
+ * What a customer can do to an order (Oct 24, Nick): "customer can never delete an order… They can archive quotes… If
+ * it's sent to FBS and we haven't viewed it yet… delete… are you sure… once we open it… request cancellation… customer
+ * canceled the order… entered double by mistake". Nothing is ever deleted: a removed request is set aside.
+ */
+type OrderX = Order & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null; draft?: boolean };
+
+/** A request they sent that we haven't opened yet: taken back (set aside, never deleted). */
+export async function withdrawSentRequest(orderId: string): Promise<Result> {
+  try {
+    const { admin, order, email } = await customerOrder(orderId);
+    const o = order as OrderX;
+    if (o.status !== "request" || !o.submitted_at) return { ok: false, error: "Only an order you've sent us can be taken back." };
+    if (o.staff_seen_at) return { ok: false, error: "We've already opened this one, so it can't be deleted. Ask us to cancel it instead." };
+    const { error } = await admin.from("orders").update({ discarded_at: new Date().toISOString() }).eq("id", orderId).is("staff_seen_at", null);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "customer_withdrew", detail: "Taken back by the customer before we opened it", actor: email });
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** A quote they're not going ahead with: into their archived quotes (or back out). */
+export async function archiveMyQuote(orderId: string, on: boolean): Promise<Result> {
+  try {
+    const { admin, order, email } = await customerOrder(orderId);
+    if (order.type !== "quote" || order.status === "request") return { ok: false, error: "Only a quote can be archived." };
+    const { error } = await admin.from("orders").update({ customer_archived_at: on ? new Date().toISOString() : null }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: on ? "customer_archived" : "customer_unarchived", detail: on ? "Quote not accepted (archived by the customer)" : "Quote brought back by the customer", actor: email });
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Ask us to cancel an order we've already seen: a message to the shop with their reason; we decide. */
+export async function requestCancellation(orderId: string, reason: string, note: string): Promise<Result> {
+  try {
+    const { admin, order, email, who, settings } = await customerOrder(orderId);
+    const o = order as OrderX;
+    if (o.status === "completed") return { ok: false, error: "This order is complete. Send us a message if something's wrong." };
+    if (o.cancel_requested_at) return { ok: false, error: "You've already asked us to cancel this one. We'll reply in Messages." };
+    const why = reason.trim().slice(0, 80) || "Other";
+    const text = `Cancellation requested: ${why}.${note.trim() ? ` ${note.trim().slice(0, 1000)}` : ""}`;
+    const now = new Date().toISOString();
+    const { error } = await admin.from("orders").update({ cancel_requested_at: now, cancel_reason: why }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: text });
+    await admin.from("order_events").insert({ order_id: orderId, kind: "cancel_requested", detail: text.slice(0, 300), actor: email });
+    await notifyShop(`Cancellation requested: #${o.number}`, `${who} asked to cancel #${o.number}`, text, orderId, settings.shop.name);
+    revalidatePath(`/portal/orders/${orderId}`);
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

@@ -8,7 +8,7 @@ import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type M
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerStatus, type Flag } from "@/lib/orderStages";
-import { MessageThread, ProofCard, QuoteApproval, ReorderButton } from "./client";
+import { MessageThread, OrderActions, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import PayPanel from "@/components/PayPanel";
 import { fmtPhone } from "@/lib/phone";
 
@@ -94,6 +94,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div className="row">
             {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
             {o.type === "invoice" && <ReorderButton orderId={o.id} disabled={preview} />}
+            {(() => { const x = o as typeof o & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null };
+              const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";
+              return kind ? <OrderActions orderId={x.id} kind={kind} archived={!!x.customer_archived_at} cancelAsked={!!x.cancel_requested_at} disabled={preview} /> : null; })()}
             <a className="btn" href={`/print/${o.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} target="_blank" rel="noreferrer">Print or save PDF</a>
           </div>
         </div>
