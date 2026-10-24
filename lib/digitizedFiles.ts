@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readDst, type DstInfo } from "@/lib/dst";
 import { unzip } from "@/lib/unzip";
+import { parseWorksheet, type Worksheet } from "@/lib/worksheet";
 
 /**
  * The files a digitizer sends back (Oct 23, Nick: Volikes Creative's "RUSH Order Gateway Rebrand.zip": the DST for the
@@ -9,7 +10,8 @@ import { unzip } from "@/lib/unzip";
  * (designs.specs.embroidery.files) so every reorder of it has them.
  */
 export type DigitizedSet = { path: string; name: string; stitches: number; colors: number; wIn: number; hIn: number; at: string;
-  /** the editable Wilcom file and the worksheet, when they came with it */ emb?: { path: string; name: string }; sheet?: { path: string; name: string } };
+  /** the editable Wilcom file and the worksheet, when they came with it */ emb?: { path: string; name: string }; sheet?: { path: string; name: string };
+  /** what the worksheet says: the totals and the stop sequence (needle, thread, stitches at each stop) */ ws?: Worksheet };
 
 /** the files, with any zip opened up */
 export async function expandFiles(list: File[]): Promise<File[]> {
@@ -36,7 +38,12 @@ export async function takeDigitized(sb: SupabaseClient, designId: string | null,
     return r.error ? undefined : { path, name: f.name };
   };
   const d = await up(dst, "application/octet-stream"), e = await up(emb, "application/octet-stream"), s = await up(sheet, "application/pdf");
-  const set: DigitizedSet = { path: d?.path || "", name: dst.name, stitches: info.stitches, colors: info.colors, wIn: info.wIn, hIn: info.hIn, at, ...(e ? { emb: e } : {}), ...(s ? { sheet: s } : {}) };
+  // the worksheet's stop sequence: which thread sews at each of the DST's stops (the DST itself only has the stops)
+  let ws: Worksheet | null = null;
+  if (sheet) {
+    try { const { pdfText } = await import("@/lib/printavoArt"); ws = parseWorksheet(await pdfText(await sheet.arrayBuffer())); } catch { ws = null; }
+  }
+  const set: DigitizedSet = { path: d?.path || "", name: dst.name, stitches: info.stitches, colors: ws?.threads.length || info.colors, wIn: info.wIn, hIn: info.hIn, at, ...(e ? { emb: e } : {}), ...(s ? { sheet: s } : {}), ...(ws ? { ws } : {}) };
   if (designId && d && o.save !== false) {
     const { data } = await sb.from("designs").select("specs").eq("id", designId).maybeSingle();
     const sp = (data?.specs || {}) as Record<string, unknown>;

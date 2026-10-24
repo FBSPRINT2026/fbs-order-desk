@@ -97,7 +97,7 @@ export default function ThreadRoom() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Thread Room</h1><div className="eyebrow">Embroidery threads: Madeira Polyneon, Madeira Rayon and Isacord, matched to PMS</div></div>
+        <div><h1>Thread Room</h1><div className="eyebrow">Embroidery threads: Madeira Polyneon (our standard) and Isacord, matched to PMS</div></div>
         <div className="faint" style={{ fontSize: 13 }}>{stock ? `${stock.length} standard colors${low ? ` · ${low} low` : ""}` : "Loading…"} {THREAD_LINES.map((l) => ` · ${all.filter((t) => t.line === l).length} ${lineName(l).replace(/^Madeira /, "")}`).join("")}</div>
       </div>
       {err && <div className="pv-err">{err}</div>}

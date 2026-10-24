@@ -21,6 +21,8 @@ export type Thread = { line: "Polyneon 40" | "Classic Rayon 40" | "Isacord 40"; 
  *  brand we use is Isacord. It also has PMS matching"). Classic Rayon isn't offered (Nick: "we typically don't use the
  *  classic rayon, just focus on Polyneon") */
 export const THREAD_LINES = ["Polyneon 40", "Isacord 40"] as const;
+// (Classic Rayon stays in the thread data only to name and color the threads a digitizer's worksheet uses: Volikes'
+// PBF sheet mixes Madeira Classic 40 and PolyNeon 40)
 export const lineBrand = (line: string) => (/isacord/i.test(line) ? "Isacord" : "Madeira");
 /** the line's name with its brand: "Madeira Polyneon 40", "Isacord 40" */
 export const lineName = (line: string) => (/isacord/i.test(line) ? "Isacord 40" : `Madeira ${line}`);

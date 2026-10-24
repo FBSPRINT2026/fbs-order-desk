@@ -1,4 +1,5 @@
-import { threadByName } from "@/lib/embroidery";
+import { threadByName, threads as threadsAll } from "@/lib/embroidery";
+import { sheetThreadName } from "@/lib/worksheet";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
@@ -246,7 +247,16 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
         {specs.map(([k, v]) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v">{v}</div></div>)}
         {fills.map((k) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v fill" /></div>)}
       </div>
-      {d.method === "embroidery" ? (
+      {d.method === "embroidery" && emb?.file?.ws?.threads.length ? (
+        // the digitizer's worksheet: each thread on its needle, then the stops in order (Oct 23, PBF: 12 threads, 58 stops)
+        <>
+          <table className="ink">
+            <thead><tr><th style={{ width: ".55in" }}>Needle</th><th>Thread</th><th className="w">Stitches</th><th className="w">Stops</th><th style={{ width: ".7in" }}>Threaded</th></tr></thead>
+            <tbody>{emb.file.ws.threads.map((t) => { const nm = t.name || threadsAll().find((x) => x.code === t.code && (/classic|rayon/i.test(t.chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(t.chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.name || ""; return <tr key={t.chart + t.code}><td><b>{t.needle}</b></td><td><Swatch c={threadsAll().find((x) => x.code === t.code && (/classic|rayon/i.test(t.chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(t.chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.hex || "#ccc"} /><b>{sheetThreadName({ ...t, name: nm })}</b></td><td>{t.stitches.toLocaleString()}</td><td>{t.stops}</td><td><span className="cb" /></td></tr>; })}</tbody>
+          </table>
+          {emb.file.ws.sequence.length > 1 && <div className="n2"><b>Stop order (needles):</b> {emb.file.ws.sequence.map((x) => x.needle).join(" → ")} <span className="faint">· {emb.file.ws.stops} stops, {emb.file.ws.trims} trims</span></div>}
+        </>
+      ) : d.method === "embroidery" ? (
         <table className="ink">
           <thead><tr><th style={{ width: ".4in" }}>#</th><th>Thread</th><th className="w">Needle</th><th style={{ width: ".7in" }}>Done</th></tr></thead>
           <tbody>{inkRows.map((k, i) => <tr key={i}><td><b>{i + 1}</b></td><td>{k ? <><Swatch c={threadByName(k)?.hex || colorHex(k) || "#ccc"} /><b>{k}</b>{threadByName(k)?.pms.length ? <small>PMS {threadByName(k)!.pms[0].replace(/^PMS\s*/i, "")}</small> : null}</> : null}</td><td /><td><span className="cb" /></td></tr>)}</tbody>

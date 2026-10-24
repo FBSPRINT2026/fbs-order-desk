@@ -8,6 +8,7 @@ import { previewUrls } from "@/lib/designs";
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
 import { drawDst, readDst } from "@/lib/dst";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
+import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { lineName, threadByName } from "@/lib/embroidery";
 
 /**
@@ -155,7 +156,8 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
       if (!data || !live || !pv.current) return;
       try {
         const info = readDst(await data.arrayBuffer());
-        const colors = (it.im.inks || "").split(/\s*,\s*/).map((n) => threadByName(n)?.hex || "").filter(Boolean);
+        // each stop in its thread's color when the worksheet says which (else the order's threads in turn)
+        const colors = f.ws?.sequence.length ? f.ws.sequence.map(sheetHex) : (it.im.inks || "").split(/\s*,\s*/).map((n) => threadByName(n)?.hex || "").filter(Boolean);
         const c = drawDst(info, colors, 320); c.className = "emb-dst-c";
         pv.current.innerHTML = ""; pv.current.appendChild(c);
       } catch { /* not readable */ }
@@ -197,6 +199,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
                   {f.sheet && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet PDF (how to sew it, color stops)</a>}
                 </div>
                 <div ref={pv} className="emb-dst" aria-label="The stitches in the file" />
+                {f.ws && <SewSequence ws={f.ws} />}
               </div>
             )}
           </div>

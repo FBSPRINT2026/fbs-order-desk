@@ -6,6 +6,7 @@ import { mergeProduction, type ProductionSettings } from "@/lib/production";
 import { BACKINGS, THREAD_LINES, TOPPINGS, lineName, backingFor, closestThreads, coverageOf, cycleMinutes, embGarment, embMax, embWarnings, estimateStitches, findThreads, piecesPerHour, threadByName, threadLabel, type EmbSpec, type Thread } from "@/lib/embroidery";
 import { drawDst, type DstInfo } from "@/lib/dst";
 import { takeDigitized } from "@/lib/digitizedFiles";
+import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { loadThreadStock, stockKey } from "@/lib/threadStock";
 import { lastOf, type EmbLast } from "@/lib/embroideryLast";
 
@@ -103,8 +104,8 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
   useEffect(() => {
     if (!dst || !pv.current) return;
     pv.current.innerHTML = "";
-    const c = drawDst(dst, threadHexes, 360); c.className = "emb-dst-c"; pv.current.appendChild(c);
-  }, [dst, threadHexes]);
+    const c = drawDst(dst, emb.file?.ws?.sequence.length ? emb.file.ws.sequence.map(sheetHex) : threadHexes, 360); c.className = "emb-dst-c"; pv.current.appendChild(c);
+  }, [dst, threadHexes, emb.file?.ws]);
   // the digitizer's files (Oct 23, Nick: "the DST is the main thing that we sew from, the .EMB is for the Hatch program
   // that we can edit, the PDF shows us the details and how to sew it and the color changes"): the zip or the loose files
   async function takeFiles(list: File[]) {
@@ -178,6 +179,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
         {dstErr && <div className="err">{dstErr}</div>}
         {emb.file && wIn > 0 && Math.abs(emb.file.wIn - wIn) > 0.15 && <p className="emb-warn-1">The file sews {emb.file.wIn}&quot; wide; this print is set to {wIn.toFixed(2)}&quot;. A digitized file can&apos;t be resized much: ask the digitizer for the new size.</p>}
         {dst && <div className="emb-dst" ref={pv} aria-label="The stitches in the file" />}
+        {emb.file?.ws && <SewSequence ws={emb.file.ws} />}
       </div>
     </div>
   );

@@ -12760,3 +12760,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .emb-facts{min-width:0;overflow:hidden}
 .emb-opt-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .emb-opt .emb-dE{margin-left:0}
+/* the digitizer's sew sequence (Oct 23: PBF, 12 threads over 58 stops) */
+.sew{display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.sew-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.sew-t{border-collapse:collapse;width:100%}
+.sew-t th{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;text-align:left;padding:3px 6px;border-bottom:1px solid var(--line)}
+.sew-t td{padding:3px 6px;border-bottom:1px solid var(--line-2, var(--line))}
+.sew-t .r{text-align:right;white-space:nowrap}
+.sew-sw{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
+.sew-seq{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px}
+.sew-seq li{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--surface)}
+.sew-seq li small{color:var(--ink-3)}

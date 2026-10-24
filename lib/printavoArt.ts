@@ -27,6 +27,16 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
   return pdfjs.getDocument({ data: buf }).promise;
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
+/** a PDF's words, page after page (the digitizer's worksheet: lib/worksheet.ts) */
+export async function pdfText(buf: ArrayBuffer, maxPages = 6): Promise<string> {
+  const doc = await openDoc(buf);
+  const out: string[] = [];
+  for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+    const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
+    out.push((await pg.getTextContent()).items.map((x) => x.str || "").join(" "));
+  }
+  return out.join(" ").replace(/\s+/g, " ");
+}
 /**
  * The print sizes written on one of our mockup sheets ("Back Imprint · SIZE: W 10"", "Front Imprint · SIZE: W 3" H 3.21"")
  * (Oct 23, Nick on PO 92785: the back was measured off #32303's sheet at 14" wide, which we can't even print; the sheet
