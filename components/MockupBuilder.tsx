@@ -1828,7 +1828,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // customers upload straight to storage with a one-time link, then the server records the logo
         const r = await uploadMyLogo(sb, f);
         d = r.design;
-        setDesigns((x) => [d, ...x]);
+        setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
         if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
         setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
         askRaster(im.id, d);
@@ -1837,7 +1837,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
       const { data: u } = await sb.auth.getUser();
       d = await uploadDesign(sb, { file: f, customer_id: customerId, by: u.user?.email || "" });
-      setDesigns((x) => [d, ...x]);
+      setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
       setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
       setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
       askRaster(im.id, d);

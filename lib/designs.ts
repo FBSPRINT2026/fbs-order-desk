@@ -2,6 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Design } from "@/lib/pricing";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
+import { checkSameArt } from "@/lib/sameArt";
 
 /** Files the browser can draw as a preview. AI / EPS / PDF originals need a separate preview image. */
 export const PREVIEWABLE = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
@@ -24,6 +25,13 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
   if (!opts.preview) { const cropped = await cropFileToArt(opts.file); if (cropped) opts = { ...opts, file: cropped }; }
+  // the same logo already on their account? ask before making another art number (lib/sameArt.ts; Oct 24, Nick)
+  let artHashV: string | null = null;
+  if (opts.customer_id && !opts.draft && !opts.preview && !opts.clean) {
+    const chk = await checkSameArt(opts.file, PREVIEWABLE.test(opts.file.type) ? opts.file : null, opts.name || opts.file.name.replace(/\.[^.]+$/, ""), opts.customer_id);
+    if (chk.use) return chk.use.design as unknown as Design;
+    artHashV = chk.hash;
+  }
   const key = crypto.randomUUID();
   const orig = `designs/${key}/${safe(opts.file.name)}`;
   const up = await sb.storage.from("proofs").upload(orig, opts.file, { contentType: opts.file.type || undefined });
@@ -68,6 +76,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
     colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "", draft: !!opts.draft,
+    ...(artHashV ? { art_hash: artHashV } : {}),
     ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}), ...(opts.distress ? { distress: opts.distress } : {}) } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);

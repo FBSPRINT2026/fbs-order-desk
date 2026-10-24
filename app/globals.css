@@ -13425,3 +13425,11 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-cu-eyeb .sw{width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
 .mk-cu-eyer{all:unset;cursor:pointer;font-size:13px;color:var(--ink-3);padding:0 3px}
 .mk-cu-eyer:hover{color:var(--accent)}
+/* the same-art check (Oct 24, Nick) */
+.same-art{width:min(560px,100%)}
+.same-art-pics{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 4px}
+.same-art-pics figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.same-art-pics figure>div{aspect-ratio:4/3;border:1px solid var(--line);border-radius:10px;background:#fff;display:grid;place-items:center;overflow:hidden;padding:10px}
+.same-art-pics img{max-width:100%;max-height:100%;object-fit:contain}
+.same-art-pics figcaption{font-size:13px;text-align:center}
+.same-art-pics small{color:var(--ink-3)}

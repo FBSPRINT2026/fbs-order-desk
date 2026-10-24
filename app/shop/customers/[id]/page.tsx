@@ -331,7 +331,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "couldn't upload"}`); }
             progress(i + 1);
           }
-          if (made.length) { setDesigns((ds) => [...made, ...ds]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
+          if (made.length) { setDesigns((ds) => [...made, ...ds.filter((d) => !made.some((m) => m.id === d.id))]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
           return bad.length ? `Couldn't add ${bad.join("; ")}` : undefined;
         }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}

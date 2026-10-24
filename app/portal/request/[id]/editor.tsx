@@ -110,7 +110,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     setErr("");
     try {
       const r = await uploadMyLogo(createClient(), f, name);
-      setDesigns((x) => [r.design, ...x]);
+      setDesigns((x) => [r.design, ...x.filter((d) => d.id !== r.design.id)]);
       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
       return r.design;
     } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); return null; }
@@ -308,12 +308,12 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       )}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
-          <Link href={backHref} className="back">← Dashboard</Link>
+          <div><Link href={backHref} className="back">← Dashboard</Link></div>
           <h1 style={{ margin: "6px 0 0" }}>Build Your Order</h1>
         </div>
         <div className="row"><span className="save-state">{state}</span>
           {/* Draft beside Discard (Oct 24, Nick: "put the word draft… right next to discard") */}
-          {o.draft ? <span className="pill rq-draft" title="Not sent to us yet">Draft</span> : <span className="faint" style={{ fontSize: 12.5 }}>#{o.number}</span>}
+          {o.draft ? <span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }} title="Not sent to us yet"><span className="pill-t">Draft</span></span> : <span className="faint" style={{ fontSize: 12.5 }}>#{o.number}</span>}
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? (o.draft ? "Discard this draft?" : "Delete this order?") : o.draft ? "Discard" : "Delete"}</button>
           <button type="button" className="btn primary" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
         </div>

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { PREVIEWABLE_TYPES, type Design } from "@/lib/pricing";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import { logoUploadUrl, saveMyLogo } from "@/app/portal/request-actions";
+import { checkSameArt } from "@/lib/sameArt";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
   return new Promise((res) => {
@@ -21,6 +22,15 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string } = {}): Promise<{ design: Design; url: string }> {
   // a see-through logo with empty space around it is saved cropped to the art (not designer saves, which bring a preview)
   if (!opts.preview && !opts.layers) f = (await cropFileToArt(f)) || f;
+  // the same logo already on their account? ask before making another art number (lib/sameArt.ts; Oct 24, Nick)
+  const direct0 = PREVIEWABLE_TYPES.test(f.type) && !opts.preview;
+  const early = !direct0 && !opts.preview && !opts.layers ? await makePreview(f) : null;
+  let artHashV: string | null = null;
+  if (!opts.layers) {
+    const chk = await checkSameArt(f, direct0 ? f : opts.preview || early, name || f.name.replace(/\.[^.]+$/, ""));
+    if (chk.use) return { design: chk.use.design as unknown as Design, url: chk.use.url };
+    artHashV = chk.hash;
+  }
   const t = await logoUploadUrl(f.name);
   if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");
   const up = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
@@ -29,7 +39,7 @@ export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, o
   let previewPath: string | undefined;
   let dims = direct ? await imageSize(f) : null;
   if (!direct) {
-    const pv = opts.preview || await makePreview(f);
+    const pv = opts.preview || early || await makePreview(f);
     if (pv) {
       const t2 = await logoUploadUrl(pv.name);
       if (t2.ok && t2.path && t2.token) {
@@ -47,7 +57,7 @@ export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, o
       if (!u3.error) layersPath = t3.path;
     }
   }
-  const r = await saveMyLogo({ path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h, layersPath, colors: opts.colors, inks: opts.inks });
+  const r = await saveMyLogo({ artHash: artHashV || undefined, path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h, layersPath, colors: opts.colors, inks: opts.inks });
   if (!r.ok) throw new Error(r.error);
   return { design: r.design as Design, url: r.url };
 }

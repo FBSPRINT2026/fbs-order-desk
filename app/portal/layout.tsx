@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
 import MobileTables from "@/components/MobileTables";
 import SupportButton from "@/components/SupportButton";
+import SameArtPrompt from "@/components/SameArtPrompt";
 import { fmtPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const year = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", year: "numeric" });
   return (
     <div className="portal">
+      <SameArtPrompt />
       <header className="p-top">
         <div className="p-top-in">
           <Link href="/portal" className="shop p-brand">

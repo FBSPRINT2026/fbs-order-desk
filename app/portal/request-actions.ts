@@ -193,7 +193,7 @@ export async function logoUploadUrl(fileName: string): Promise<{ ok: boolean; er
 }
 
 /** Step 2: save the uploaded file as one of the customer's logos. */
-export async function saveMyLogo(meta: { path: string; fileName: string; fileType: string; name: string; previewable: boolean; previewPath?: string; w?: number; h?: number; layersPath?: string; colors?: number; inks?: string }) {
+export async function saveMyLogo(meta: { artHash?: string; path: string; fileName: string; fileType: string; name: string; previewable: boolean; previewPath?: string; w?: number; h?: number; layersPath?: string; colors?: number; inks?: string }) {
   try {
     const { admin, cust, email } = await me();
     if (!/^designs\/[\w-]+\/[\w.\-]+$/.test(meta.path)) return { ok: false as const, error: "Bad upload." };
@@ -206,6 +206,7 @@ export async function saveMyLogo(meta: { path: string; fileName: string; fileTyp
       width_px: meta.w || null, height_px: meta.h || null, method: "screen",
       colors: Math.max(1, Math.min(15, Math.round(meta.colors || 1))), inks: (meta.inks || "").slice(0, 300),
       notes: meta.layersPath ? "Made in the shirt designer" : "", created_by: email,
+      ...(meta.artHash && /^[0-9a-f]{16}$/.test(meta.artHash) ? { art_hash: meta.artHash } : {}),
       designer: meta.layersPath ? { file: meta.layersPath } : null,
     }).select("*").single();
     if (error) return { ok: false as const, error: error.message };
