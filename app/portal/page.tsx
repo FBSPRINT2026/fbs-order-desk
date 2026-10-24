@@ -7,6 +7,7 @@ import { fmtDateLong, money } from "@/lib/format";
 import PortalPricing from "@/components/PortalPricing";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
+import { payState } from "@/lib/payReady";
 import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } from "@/lib/portalJobs";
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
@@ -105,7 +106,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
   const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, sent: o.status === "request" && !!o.submitted_at, archivedQ: !!(o as { customer_archived_at?: string | null }).customer_archived_at, cancelAsked: !!(o as { cancel_requested_at?: string | null }).cancel_requested_at && o.status !== "canceled", number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
-    pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null }));
+    pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null,
+    // what can be paid now (lib/payReady.ts)
+    ...(() => { const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: paid[o.id] || 0, depositPct: ctx.settings.depositPct }); return { payCan: ps.can, payWhy: ps.why, notFinal: ps.notFinal, payNote: ps.note }; })() }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
   const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);
   const payUrls: Record<string, string> = {};

@@ -24,7 +24,8 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
   /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
   /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean;
-  /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean };
+  /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean;
+  /** portal: what can be paid now (lib/payReady.ts), why not, and whether charges may still change */ payCan?: "none" | "deposit" | "full"; payWhy?: string; notFinal?: boolean; payNote?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
@@ -599,8 +600,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
     const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
-    const sel = [...open, ...waitingQuotes].filter((o) => paySel.includes(o.id));
-    const selSum = sel.reduce((a, o) => a + o.balance, 0);
+    // only what's open for paying (Oct 24, Nick): a deposit-only order pays its deposit; one that isn't ready can't be picked
+    const payable = (o: AOrder) => mode !== "portal" || o.payCan !== "none";
+    const itemOf = (o: AOrder): PayItem => { const it = item(o); return o.payCan === "deposit" && it.deposit ? { ...it, balance: it.deposit, notFinal: o.notFinal, notFinalNote: o.payNote } : { ...it, notFinal: o.notFinal, notFinalNote: o.payNote }; };
+    const amtOf = (o: AOrder) => (o.payCan === "deposit" ? itemOf(o).balance : o.balance);
+    const sel = [...open, ...waitingQuotes].filter((o) => paySel.includes(o.id) && payable(o));
+    const selSum = sel.reduce((a, o) => a + amtOf(o), 0);
     const toggle = (id: string, on?: boolean) => setPaySel((x) => ((on ?? !x.includes(id)) ? [...x.filter((y) => y !== id), id] : x.filter((y) => y !== id)));
     // aging: what's owed on orders, by how far past the in-hands date it is
     const aging = [
@@ -615,18 +620,18 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     });
     const payTable = (list: AOrder[], isQuote: boolean) => (
       <table className="aa-tbl">
-        <thead><tr>{canPay && <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all" checked={list.length > 0 && list.every((o) => paySel.includes(o.id))} onChange={(e) => list.forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>{isQuote ? "Quote" : "Order"}</th><th>Status</th><th className="r">Total</th>{!isQuote && <th className="r">Paid</th>}<th className="r">{isQuote ? "Due" : "Balance"}</th>{canPay && <th />}</tr></thead>
+        <thead><tr>{canPay && <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all" checked={list.filter(payable).length > 0 && list.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => list.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>{isQuote ? "Quote" : "Order"}</th><th>Status</th><th className="r">Total</th>{!isQuote && <th className="r">Paid</th>}<th className="r">{isQuote ? "Due" : "Balance"}</th>{canPay && <th />}</tr></thead>
         <tbody>
           {list.map((o) => (
-            <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
-              {canPay && <td className="ck" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
+            <tr key={o.id} className={(paySel.includes(o.id) && payable(o) ? "sel" : "") + (payable(o) ? "" : " aa-notready")} onClick={() => (canPay && payable(o) ? toggle(o.id) : router.push(orderHref(o.id)))}>
+              {canPay && <td className="ck" onClick={(e) => e.stopPropagation()}>{payable(o) ? <input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /> : null}</td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-              <td className="m"><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? "" : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
+              <td className="m"><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{mode === "portal" && o.payCan === "none" ? <span className="aa-nr">Not ready to pay · {o.payWhy}</span> : mode === "portal" && o.payCan === "deposit" ? `Deposit now (${money(amtOf(o))}); the rest when it's ready` : isQuote ? "" : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}{mode === "portal" && o.notFinal ? <span className="aa-nf"> · Not final: {o.payNote || "charges may still change"}</span> : null}</div></td>
               <td>{pill(o)}</td>
               <td className="r num" data-l="Total">{money(o.total)}</td>
               {!isQuote && <td className="r num" data-l="Paid">{money(o.paid)}</td>}
               <td className="r num aa-due" data-l="Balance">{money(o.balance)}</td>
-              {canPay && <td className="r pay" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => { setPayAmt(undefined); setPayNow([item(o)]); }}>Pay</button></td>}
+              {canPay && <td className="r pay" onClick={(e) => e.stopPropagation()}>{payable(o) ? <button type="button" className="btn sm" onClick={() => { setPayAmt(undefined); setPayNow([itemOf(o)]); }}>{o.payCan === "deposit" ? "Pay deposit" : "Pay"}</button> : <span className="faint" style={{ fontSize: 12 }}>Not yet</span>}</td>}
             </tr>
           ))}
           {!list.length && <tr><td colSpan={8}><div className="aa-empty">{isQuote ? "No quotes waiting." : "Nothing due right now. Thank you!"}</div></td></tr>}
@@ -766,15 +771,15 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             const byId = new Map(liveInvoices.map((o) => [o.id, o]));
             setPaySel(parts.map((p) => p.id));
             setPayAmt(amount);
-            setPayNow(parts.map((p) => { const o = byId.get(p.id)!; return { id: o.id, number: o.number, nickname: o.nickname, balance: p.amount, full: Math.round(o.balance * 100) / 100 }; }));
+            setPayNow(parts.map((p) => { const o = byId.get(p.id)!; return { id: o.id, number: o.number, nickname: o.nickname, balance: p.amount, full: Math.round(amtOf(o) * 100) / 100, notFinal: o.notFinal, notFinalNote: o.payNote }; }));
           }}
-          open={liveInvoices.filter((o) => o.balance > 0.004).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, status: o.status, total: o.total, balance: Math.round(o.balance * 100) / 100, created_at: o.created_at, due_date: o.due_date, pay_due: payDue(o), search: o.search }))} />
+          open={liveInvoices.filter((o) => o.balance > 0.004 && payable(o)).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, status: o.status, total: o.total, balance: Math.round(amtOf(o) * 100) / 100, created_at: o.created_at, due_date: o.due_date, pay_due: payDue(o), search: o.search }))} />
           )}
           <div className="aa-paybox">
             <div className="aa-paybox-h">Pay orders</div>
             {sel.length ? <>
               <div className="aa-paybox-sum"><span><b>{sel.length}</b> selected{payAmt !== undefined ? " · oldest first" : ""}</span><b className="num">{money(payAmt ?? selSum)}</b></div>
-              {payAmt === undefined && <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => { setPayAmt(undefined); setPayNow(sel.map(item)); }}>{sel.length > 1 ? `Pay these ${sel.length} together` : "Pay this one"}</button>}
+              {payAmt === undefined && <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => { setPayAmt(undefined); setPayNow(sel.map(itemOf)); }}>{sel.length > 1 ? `Pay these ${sel.length} together` : "Pay this one"}</button>}
               <button type="button" className="btn sm ghost" onClick={() => { setPaySel([]); setPayNow(null); setPayAmt(undefined); }}>Clear selection</button>
             </> : <div className="faint" style={{ fontSize: 13 }}>{open.length || waitingQuotes.length ? "Check the orders or quotes you want to pay, or press Pay on one." : "Nothing due right now."}</div>}
           </div>

@@ -13477,3 +13477,14 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .rq-re-t{display:flex;flex-direction:column;min-width:0}
 .rq-re-t .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rq-re-t b{font-size:13.5px}
+/* when they can pay (Oct 24, Nick) */
+.prd{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r)}
+.prd-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.prd-nf{height:36px;align-items:center}
+.prd-sees{font-size:12.5px}
+.pay-notready{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);font-size:13px}
+.pay-notready span{color:var(--ink-3)}
+.pay-nf,.pp-nf{font-size:12.5px;padding:8px 10px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 12%,var(--surface));color:var(--ink)}
+.aa-nr{color:var(--ink-3)}
+.aa-nf{color:var(--warn)}
+.aa-notready td{color:var(--ink-3)}

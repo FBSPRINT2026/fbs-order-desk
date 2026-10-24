@@ -7,6 +7,7 @@ import { emailLayout, receiptHtml, sendEmail, siteUrl } from "@/lib/email";
 import { calcOrder, mergeSettings, r2, type Order, type Payment } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { allocateOldest } from "@/lib/paySelect";
+import { payState } from "@/lib/payReady";
 
 type Result = { receiptTo?: string; ok: boolean; error?: string; paid?: number; fee?: number };
 const STAX_API = "https://apiprod.fattlabs.com";
@@ -34,11 +35,12 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   const settings = mergeSettings(s?.data);
   const lines = items.map((it) => {
     const o = orders.find((x) => x.id === it.orderId)!;
-    // quotes waiting on approval can be paid too; a successful card/ACH payment approves them
-    if (o.type !== "invoice" && o.status !== "quote_sent") throw new Error(`#${o.number} isn't ready to pay yet.`);
     const c = calcOrder(o, settings, ((pays || []) as Payment[]).filter((p) => p.order_id === o.id));
+    // only what the shop has opened up for paying (lib/payReady.ts): never the whole balance before it's ready
+    const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: settings.depositPct });
+    if (ps.can === "none") throw new Error(`#${o.number} isn't ready to pay yet. ${ps.why}`);
     const deposit = Math.min(c.balance, r2((c.total * settings.depositPct) / 100));
-    const amount = r2(it.kind === "deposit" && c.paid < 0.005 ? deposit : c.balance);
+    const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005) ? deposit : c.balance);
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
     return { o, amount };
   });

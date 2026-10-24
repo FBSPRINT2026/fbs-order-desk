@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { mySavedMethods, payOrders, sentPaymentNotice, type SavedPM } from "@/app/portal/pay-actions";
 
-export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number };
+export type PayItem = { /** the invoice isn't final: charges may still change (lib/payReady.ts) */ notFinal?: boolean; notFinalNote?: string; id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number };
 type Method = "card" | "bank" | "Zelle" | "Venmo";
 type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<string, unknown>) => Promise<{ id: string }> };
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
@@ -236,6 +236,8 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
                 <div className="pp-list tall">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
               )}
               {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
+      {/* the invoice isn't final yet (Oct 24, Nick: "this invoice hasn't been finalized yet, so there may be additional charges") */}
+      {items.some((it) => it.notFinal) && <div className="pp-note pp-nf"><b>This invoice isn&apos;t final yet.</b> {items.filter((it) => it.notFinal).map((it) => it.notFinalNote).filter(Boolean).join(" ") || "There may be more charges (like shipping)."} We&apos;ll send you the final amount.</div>}
               <div className="pp-sum">
                 <div><span>{items.length > 1 ? `${items.length} orders` : single && kind === "deposit" ? "Deposit" : "Balance"}</span><b className="num">{money(sum)}</b></div>
                 {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%)</span><b className="num">{money(fee)}</b></div>}

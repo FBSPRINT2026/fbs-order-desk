@@ -39,6 +39,7 @@ import { Pill, pvStatusOf } from "@/components/bits";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import ChargeOnFile from "@/components/ChargeOnFile";
+import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
@@ -1771,6 +1772,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <button className="btn sm" type="button" onClick={() => setPayAmt(calc.balance.toFixed(2))}>Full balance</button>
                 </div>
               )}
+              {canPay && String(o.status) !== "void" && <PayReadiness order={o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }} paid={calc.paid} depositPct={settings.depositPct} deposit={Math.min(calc.balance, Math.round(calc.total * settings.depositPct) / 100)} />}
               {canPay && calc.balance > 0.004 && <ChargeOnFile orderId={o.id} customerId={o.customer_id} balance={calc.balance} feePct={settings.pay.cardFeePct} onDone={() => window.location.reload()} />}
             </div>
           </section>

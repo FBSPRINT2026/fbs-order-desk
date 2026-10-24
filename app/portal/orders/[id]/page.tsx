@@ -12,6 +12,7 @@ import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type M
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
+import { payState } from "@/lib/payReady";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import { fmtPhone } from "@/lib/phone";
 
@@ -92,7 +93,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
   const pendingProofs = proofs.filter((x) => x.status === "pending");
   const deposit = Math.min(c.balance, Math.round(c.total * ctx.settings.depositPct) / 100);
-  const canPay = o.type === "invoice" && c.balance > 0.004;
+  // what can be paid now (Oct 24, Nick: not always the whole balance; lib/payReady.ts)
+  const ps = payState(o as typeof o & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: ctx.settings.depositPct });
+  const canPay = c.balance > 0.004 && ps.can !== "none" && (o.type === "invoice" || o.status === "quote_sent");
 
   return (
     <>
@@ -262,11 +265,15 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b stack">
                 {(() => { const t = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt"; const d = o.type === "invoice" ? payDueDate(o, t) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[t]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                 {canPay ? (
-                  <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined, quote: o.type === "quote" }}
+                  <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note }}
                     pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : ctx.customers.find((x) => x.id === o.customer_id)?.email || ctx.email} />
+                ) : c.balance > 0.004 && String(o.status) !== "void" ? (
+                  <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
                 ) : o.type === "quote" ? (
                   <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
                 ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}
+                {canPay && ps.can === "deposit" && <div className="faint" style={{ fontSize: 12.5 }}>We&apos;re asking for the deposit now. The balance is due when your order is ready.</div>}
+                {canPay && ps.notFinal && <div className="pay-nf"><b>This invoice isn&apos;t final yet.</b> {ps.note || "There may be more charges (like shipping)."}</div>}
                 {payments.length > 0 && <div>{payments.map((x) => <div key={x.id} className="pay-row"><span>{fmtDate(x.paid_on)} · {x.method}</span><b className="num">{money(x.amount)}</b></div>)}</div>}
               </div>
             </section>
