@@ -3115,7 +3115,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {popOpen && <PopularGarments askHref={portal ? `/portal?area=messages${asId ? `&as=${asId}` : ""}` : undefined} onClose={() => setPopOpen(false)} onPick={(g) => {
                     setPopOpen(false);
                     setLines((ls) => { const blank = ls.find((x) => !x.style.trim()); const ln = { style: g.style, brand: g.brand, color: "", garment: g.garment }; return blank ? ls.map((x) => (x.id === blank.id ? { ...x, ...ln } : x)) : [...ls, { id: uid(), ...ln }]; });
-                    setMsg(`Added ${g.brand} ${g.style}. Pick its color.`);
                   }} />}
                   <div className="row mk-add-row" style={{ gap: 8 }}>
                     <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
