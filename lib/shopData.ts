@@ -21,7 +21,7 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").order("number", { ascending: false }),
+      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).order("number", { ascending: false }),
       sb.from("customers").select("*"),
       sb.from("payments").select("order_id,amount"),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),

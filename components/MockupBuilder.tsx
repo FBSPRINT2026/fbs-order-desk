@@ -2485,6 +2485,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // on an order that's still a quote, a mockup is a draft: on the order, not in the customer's library until the
       // order is sent or approved (Oct 17, Nick; the database makes it real then: migration 166)
       const draft = orderId ? ["quote", "request"].includes(String((await sb.from("orders").select("status").eq("id", orderId).maybeSingle()).data?.status || "")) : false;
+      // a mockup saved to a draft order makes it an order (Oct 24: saving commits; the mockup needs an order to belong to)
+      if (orderId) { const c = await sb.rpc("order_commit", { p_id: orderId }); if (c.error) throw new Error(c.error.message); }
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
       for (const l of lines.filter((z) => z.style || z.color)) {
         const blob = await render(l);

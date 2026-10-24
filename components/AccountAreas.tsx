@@ -69,7 +69,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -121,6 +121,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** portal: the customer's Settings page, on the right of the tab bar (Oct 24) */ settingsHref?: string;
+  /** portal: their unsent drafts (no number yet), to pick up again or throw away (Oct 24) */ drafts?: { id: string; name: string; updated: string; pcs: number }[];
+  onDiscardDraft?: (id: string) => Promise<{ ok: boolean; error?: string }>;
   /** archive / bring back a mockup set (Oct 24) */ onArchiveMockup?: (mockupId: string, on: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** shop: an archived logo deleted for good (its orders keep their mockups) */
@@ -165,6 +167,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [mStars, setMStars] = useState<Record<string, boolean>>({});
   // mockups archived / brought back here (Oct 24): set id → archived
   const [mShelf, setMShelf] = useState<Record<string, boolean>>({});
+  const [goneDrafts, setGoneDrafts] = useState<Record<string, boolean>>({});
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
@@ -506,7 +509,25 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2, ...invoices].sort((x, y) => y.number - x.number);
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(sentQ.length ? [["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number]] : []), ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     body = <>
+      {/* drafts: started, never sent, no number yet (Oct 24, Nick) */}
+      {draftsLive.length > 0 && (
+        <div className="aa-drafts">
+          <b>Your drafts</b><span className="faint">Not sent to us yet</span>
+          {draftsLive.map((d) => (
+            <span key={d.id} className="aa-draft">
+              <Link href={`/portal/request/${d.id}${hrefQuery}`}>{d.name || "Untitled order"}</Link>
+              <small className="faint">{d.pcs ? `${d.pcs} pcs · ` : ""}{when(d.updated)}</small>
+              {onDiscardDraft && <button type="button" className={"linkbtn" + (armedDel === "d" + d.id ? " danger" : "")} disabled={!canAct} onClick={async () => {
+                if (armedDel !== "d" + d.id) { setArmedDel("d" + d.id); setTimeout(() => setArmedDel((x) => (x === "d" + d.id ? "" : x)), 3500); return; }
+                setArmedDel(""); setGoneDrafts((g) => ({ ...g, [d.id]: true }));
+                const r = await onDiscardDraft(d.id); if (!r.ok) setGoneDrafts((g) => ({ ...g, [d.id]: false }));
+              }}>{armedDel === "d" + d.id ? "Discard it?" : "Discard"}</button>}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}

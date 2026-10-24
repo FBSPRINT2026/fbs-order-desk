@@ -80,7 +80,7 @@ export default function Dashboard() {
       const lastYearTo = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 21); return iso(d); })();
       // everything the page needs, asked for at once (each query used to wait for the one before it)
       const [o, a, m, e, ly, recent, sml, bal, sepQ, aoQ] = await Promise.all([
-        sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at, printavo_id, pv_status:printavo_state->>status").not("status", "in", "(completed)").limit(800),
+        sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at, printavo_id, pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).not("status", "in", "(completed)").limit(800),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
         sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, to_email, occurred_at, direction, external_id, thread_id, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - 21 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(500),

@@ -11,6 +11,7 @@ import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
+import DraftRecovery from "@/components/DraftRecovery";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
@@ -154,12 +155,13 @@ export default function OrdersPage() {
         </div>
         {canQuote && <button className="btn primary" type="button" disabled={creating} onClick={async () => {
           setCreating(true);
-          const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote" }).select("id").single();
+          const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote", draft: true }).select("id").single();
           setCreating(false);
           if (!error && data) router.push(`/shop/orders/${data.id}?new=1`); else alert("Couldn't create the quote: " + (error?.message || ""));
         }}>{creating ? "Creating…" : "+ New quote"}</button>}
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}
+      <DraftRecovery />
       <div className="stats">
         <button className="stat money-only" type="button" onClick={() => { setType("quotes"); setStatus(""); }}><span className="v">{money(stats.quotesValue)}</span><span className="k">{stats.quotes.length} open quote{stats.quotes.length === 1 ? "" : "s"}</span></button>
         <button className="stat" type="button" onClick={() => { setType("open"); setStatus(""); }}><span className="v">{stats.active.length}</span><span className="k">Jobs in progress</span></button>

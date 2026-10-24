@@ -65,7 +65,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
             link: async (oid, archived) => { const r = ok((await sb.from(archived ? "archived_orders" : "orders").update({ project_id: id }).eq("id", oid)).error); if (r.ok && !archived) setLinks((l) => ({ ...l, [oid]: id })); return r; },
             unlink: async (oid, archived) => { const r = ok((await sb.from(archived ? "archived_orders" : "orders").update({ project_id: null }).eq("id", oid)).error); if (r.ok && !archived) setLinks((l) => ({ ...l, [oid]: null })); return r; },
             newOrder: async () => {
-              const { data, error } = await sb.from("orders").insert({ customer_id: p.customer_id, tax_exempt: !!cust?.tax_exempt, price_type: cust?.price_type || "retail", project_id: id, nickname: p.name.slice(0, 120), due_date: p.in_hands_date }).select("id").single();
+              const { data, error } = await sb.from("orders").insert({ draft: true, customer_id: p.customer_id, tax_exempt: !!cust?.tax_exempt, price_type: cust?.price_type || "retail", project_id: id, nickname: p.name.slice(0, 120), due_date: p.in_hands_date }).select("id").single();
               if (error) return { ok: false, error: error.message };
               router.push(`/shop/orders/${data.id}?new=1`); return { ok: true };
             },

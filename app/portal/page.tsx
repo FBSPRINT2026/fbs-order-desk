@@ -1,3 +1,4 @@
+import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx } from "@/lib/portal";
 import { oneOfEach } from "@/lib/mockupList";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,6 +35,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const admin = createAdminClient();
 
   let orders: Order[] = [];
+  let drafts: { id: string; name: string; updated: string; pcs: number }[] = [];
   const paid: Record<string, number> = {};
   const pendingProofs: Record<string, number> = {};
   const firstPending: Record<string, string> = {};
@@ -48,8 +50,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   if (ctx.customerIds.length) {
     const { data: ar } = await admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false });
     archived = (ar || []) as never;
-    const { data } = await ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").order("number", { ascending: false });
-    orders = (data || []) as Order[];
+    const { data } = await ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false });
+    // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
+    const all = (data || []) as (Order & { draft?: boolean })[];
+    drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
+    orders = all.filter((o) => !o.draft);
     const ids = orders.map((o) => o.id);
     const num = (id: string | null) => orders.find((o) => o.id === id)?.number ?? null;
     const [p, pr, d, m, msg] = await Promise.all([
@@ -272,7 +277,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
-    <PortalDash
+    <PortalDash draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
@@ -306,7 +311,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} settingsHref={`/portal/settings${qs}`}
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} drafts={drafts} onDiscardDraft={discardRequest} settingsHref={`/portal/settings${qs}`}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}

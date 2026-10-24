@@ -158,7 +158,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [moveOpen, setMoveOpen] = useState<"" | "quote" | "edit">("");
   async function newQuote() {
     if (needsMove(c as unknown as Record<string, unknown>)) { setMoveOpen("quote"); return; }
-    const { data, error } = await createClient().from("orders").insert({ customer_id: id, tax_exempt: !!c?.tax_exempt, price_type: c?.price_type || "retail" }).select("id").single();
+    const { data, error } = await createClient().from("orders").insert({ customer_id: id, tax_exempt: !!c?.tax_exempt, price_type: c?.price_type || "retail", draft: true }).select("id").single();
     if (data) router.push(`/shop/orders/${data.id}?new=1`);
     else if (error) alert(error.message);
   }

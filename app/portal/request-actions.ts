@@ -36,8 +36,9 @@ async function myDraft(id: string) {
 export async function startRequest(): Promise<Result> {
   try {
     const { cust, admin } = await me();
+    // a draft until it's sent (Oct 24, Nick: "only assign a number… once it's either saved, sent")
     const { data, error } = await admin.from("orders").insert({
-      customer_id: cust.id, status: "request", type: "quote", source: "portal",
+      customer_id: cust.id, status: "request", type: "quote", source: "portal", draft: true,
       price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [newGroup()], total: 0,
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
@@ -82,11 +83,15 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
 /** Send the request to the shop for pricing and review. */
 export async function submitRequest(id: string): Promise<Result> {
   try {
-    const { admin, order, cust, email } = await myDraft(id);
-    const groups = orderGroups(order);
+    const { admin, order: o0, cust, email, supabase } = await myDraft(id);
+    const groups = orderGroups(o0);
     const pieces = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
     const missing = requestProblems(groups);
     if (missing.length) return { ok: false, error: `Almost there: ${missing.join("; ")}.` };
+    // sent: the draft becomes an order with its number (Oct 24, Nick)
+    const { data: num, error: ce } = await supabase.rpc("order_commit", { p_id: id });
+    if (ce) return { ok: false, error: ce.message };
+    const order = { ...o0, number: Number(num) || o0.number };
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: id, kind: "request_submitted", detail: `${pieces} pcs`, actor: email });
@@ -120,7 +125,7 @@ export async function reorderRequest(fromId: string): Promise<Result> {
       customerMockups: (g.customerMockups || []).filter((m) => m.path.startsWith(`mockups/${src.customer_id}/`)),
     }));
     const { data, error } = await admin.from("orders").insert({
-      customer_id: src.customer_id, status: "request", type: "quote", source: "portal",
+      customer_id: src.customer_id, status: "request", type: "quote", source: "portal", draft: true,
       price_type: cust?.price_type || src.price_type || "retail", tax_exempt: !!cust?.tax_exempt, groups, total: 0,
       nickname: `${src.nickname || `Order #${src.number}`} (reorder)`.slice(0, 120), notes: `Reorder of #${src.number}.`,
       delivery_method: src.delivery_method || "pickup", ship_to: src.ship_to || "",
@@ -166,8 +171,9 @@ export async function describeMyOrder(id: string, text: string): Promise<Result 
 /** Delete a request the customer hasn't sent in yet. */
 export async function discardRequest(id: string): Promise<Result> {
   try {
+    // set aside, never deleted (a draft never had a number; an older unsent request keeps its number, hidden)
     const { admin } = await myDraft(id);
-    const { error } = await admin.from("orders").delete().eq("id", id);
+    const { error } = await admin.from("orders").update({ discarded_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/portal");
     return { ok: true };
@@ -308,7 +314,7 @@ export async function orderFromMockup(mockupId: string): Promise<Result> {
     const m = await groupFromMockup(supabase, admin, mockupId);
     if (!m) return { ok: false, error: "We couldn't find that mockup." };
     const { data, error } = await admin.from("orders").insert({
-      customer_id: m.customerId, status: "request", type: "quote", source: "portal",
+      customer_id: m.customerId, status: "request", type: "quote", source: "portal", draft: true,
       price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups: [m.g], total: 0,
       nickname: m.name.slice(0, 120), notes: `From mockup ${m.tag}.`,
     }).select("id").single();

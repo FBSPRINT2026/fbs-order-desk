@@ -15,9 +15,10 @@ export type DashPast = { id: string; number: number; nickname: string; when: str
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
+export default function PortalDash({ draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
+  /** an order they started and didn't send (Oct 24, Nick: "I saw you were making this order… bring it back up?") */ draft?: { href: string; name: string; when: string } | null;
   /** their mockups, under the artwork */ mocks?: { id: string; url: string; name: string }[]; mockupHref?: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
   // the dashboard (Oct 24, Nick, first look as a customer: "we don't want payments to be the first thing they see… where it
@@ -27,6 +28,7 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
   void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
+      {draft && <div className="draft-rec pdx-draft" role="status"><b>Pick it back up?</b><span>You started <Link href={draft.href}>{draft.name || "an order"}</Link>{draft.when ? ` (${draft.when})` : ""} and haven&apos;t sent it yet.</span><Link className="btn sm primary" href={draft.href}>Continue</Link></div>}
 
       <div className="pdx-top">
         <section className="pdx-card pdx-asst">

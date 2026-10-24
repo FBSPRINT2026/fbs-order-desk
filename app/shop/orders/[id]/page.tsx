@@ -226,6 +226,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
       setSaveState("Saved");
+      // changes that never reached the server (the connection dropped, the tab closed mid-save): offer them back
+      try {
+        const raw = localStorage.getItem(`fbs:unsaved:${d.id}`);
+        const keep = raw ? (JSON.parse(raw) as { at: number; o: Order }) : null;
+        if (keep?.o && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + keep.o.nickname + JSON.stringify(keep.o.fees) !== JSON.stringify(d.groups) + d.nickname + JSON.stringify(d.fees)) setRecover(keep);
+        else if (raw) localStorage.removeItem(`fbs:unsaved:${d.id}`);
+      } catch { /* storage off */ }
       await side;
       // mark customer messages read
       await sb.from("messages").update({ read_at: new Date().toISOString() }).eq("order_id", id).eq("author_type", "customer").is("read_at", null);
@@ -305,6 +312,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
     }).eq("id", d.id);
     setSaveState(error ? "Save failed: " + error.message : "Saved");
+    if (!error) try { localStorage.removeItem(`fbs:unsaved:${d.id}`); } catch { /* storage off */ }
   }, [sb, settings]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
@@ -517,6 +525,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const n: Order = JSON.parse(JSON.stringify(prev));
       fn(n);
       latest.current = n;
+      // a copy in this browser until the server has it (Oct 24, Nick: "maybe somebody loses their internet connection"):
+      // offered back on the next open if it never got saved
+      try { localStorage.setItem(`fbs:unsaved:${n.id}`, JSON.stringify({ at: Date.now(), o: n })); } catch { /* storage full or off */ }
       return n;
     });
     setSaveState("Editing…");
@@ -783,8 +794,43 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
+  const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
+  // ---- drafts: Save gives it its number; Discard sets it aside (never deleted; it never had a number) ----
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  async function commitDraft() {
+    if (!o) return false;
+    if (timer.current) await save();
+    const { data, error } = await sb.rpc("order_commit", { p_id: o.id });
+    if (error) { say(error.message); return false; }
+    setO((p) => (p ? { ...p, draft: false, number: Number(data) || p.number } : p));
+    say(`Saved as #${data}.`);
+    return true;
+  }
+  async function discardDraft(to = "/shop/orders") {
+    if (!o) return;
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const { error } = await sb.rpc("order_discard", { p_id: o.id });
+    if (error) return say(error.message);
+    router.push(to);
+  }
+  // leaving a draft asks first (links and menus; a refresh keeps it, it's saved as you go)
+  useEffect(() => {
+    if (!o?.draft) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const u = new URL(a.href, location.href);
+      if (u.origin !== location.origin || u.pathname === location.pathname) return;
+      e.preventDefault(); e.stopPropagation();
+      setLeaveTo(u.pathname + u.search);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [o?.draft]);
+
   async function send() {
     if (!o) return;
+    if (o.draft && !(await commitDraft())) return;
     const bad = (o.groups || []).flatMap((g) => g.imprints).find((d) => (d.method === "embroidery" || (d.method === "screen" && d.colors < 11)) && d.inks.trim() && d.inks.split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length !== d.colors);
     if (bad) return say(`${bad.location || "An imprint"}: the inks listed don't match its number of colors. Fix that before sending.`);
     const note = (document.getElementById("send-note") as HTMLTextAreaElement | null)?.value || "";
@@ -1070,9 +1116,40 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         : fromEmail
         ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { if (timer.current) await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
         : <BackLink href="/shop/orders" label="Orders" />}
+      {/* a draft (Oct 24, Nick: "only assign a number… once it's either saved, sent… if they click not, then it exits,
+          nothing happens to it"): every change is kept as you go, but it's not an order until it's saved or sent */}
+      {o.draft && (
+        <div className="draft-bar" role="status">
+          <span><b>Draft.</b> Your changes are kept as you go, but this isn&apos;t an order yet: no number, not in any list.</span>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={() => void discardDraft()}>Discard</button>
+          <button type="button" className="btn primary" onClick={() => void commitDraft()}>Save</button>
+        </div>
+      )}
+      {recover && (
+        <div className="draft-bar" role="alert">
+          <span><b>Unsaved changes found.</b> Changes from {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} didn&apos;t reach the server (the connection may have dropped). Bring them back?</span>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={() => { try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ } setRecover(null); }}>Throw them away</button>
+          <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { Object.assign(d, { ...r.o, id: d.id, number: d.number, draft: d.draft, status: d.status, type: d.type }); }); }}>Bring them back</button>
+        </div>
+      )}
+      {leaveTo && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Save this draft?" onClick={() => setLeaveTo(null)}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h3>Save this draft?</h3>
+            <p className="dla-sub">It isn&apos;t an order yet. Save it to give it a number and put it in your lists, or discard it and nothing is kept.</p>
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" onClick={() => setLeaveTo(null)}>Keep editing</button>
+              <button type="button" className="btn ghost danger" onClick={async () => { const to = leaveTo; setLeaveTo(null); await discardDraft(to); }}>Discard</button>
+              <button type="button" className="btn primary" autoFocus onClick={async () => { const to = leaveTo; setLeaveTo(null); if (await commitDraft()) router.push(to); }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
-          <h1>{o.nickname || "Untitled Job"}<span className="ot-no"> – #{o.number}</span>{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
+          <h1>{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : <span className="ot-no"> – #{o.number}</span>}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className="ed-actions">
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}

@@ -221,6 +221,7 @@ export type Delivery = "pickup" | "ship" | "deliver";
 
 export type Order = {
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
+  /** started, not saved or sent yet: no real number, in no list (Oct 24; migration 209) */ draft?: boolean; discarded_at?: string | null;
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;

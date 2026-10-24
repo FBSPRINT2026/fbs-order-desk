@@ -64,15 +64,31 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     setState("Saving…");
     const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "" });
     setState(r.ok ? "Saved" : "");
+    if (r.ok) try { localStorage.removeItem(`fbs:unsaved:${x.id}`); } catch { /* storage off */ }
     if (!r.ok) setErr(r.error || "Couldn't save.");
   }
   function patch(fn: (d: Order) => void) {
-    setO((prev) => { const n = structuredClone(prev); fn(n); latest.current = n; return n; });
+    setO((prev) => {
+      const n = structuredClone(prev); fn(n); latest.current = n;
+      // a copy in this browser until the server has it (Oct 24, Nick: a dropped connection shouldn't lose their order)
+      try { localStorage.setItem(`fbs:unsaved:${n.id}`, JSON.stringify({ at: Date.now(), o: n })); } catch { /* storage off */ }
+      return n;
+    });
     setState("Editing…");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(flush, 800);
   }
   useEffect(() => () => { if (timer.current) flush(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // changes that never reached us (the connection dropped): offered back on the next open
+  const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`fbs:unsaved:${initial.id}`);
+      const keep = raw ? (JSON.parse(raw) as { at: number; o: Order }) : null;
+      if (keep?.o && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + (keep.o.nickname || "") !== JSON.stringify(initial.groups) + (initial.nickname || "")) setRecover(keep);
+      else if (raw) localStorage.removeItem(`fbs:unsaved:${initial.id}`);
+    } catch { /* storage off */ }
+  }, [initial.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
@@ -168,6 +184,23 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     window.location.reload();
   }
 
+  // leaving a draft asks first (Oct 24, Nick: "if you're in draft mode… do you want to save this or not? And then if they
+  // click not, then it exits, nothing happens to it"); a refresh keeps it, every change is saved as you go
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!o.draft || preview) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const u = new URL(a.href, location.href);
+      if (u.origin !== location.origin || u.pathname === location.pathname || u.pathname.startsWith("/portal/mockup")) return;
+      e.preventDefault(); e.stopPropagation();
+      setLeaveTo(u.pathname + u.search);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [o.draft, preview]);
+
   async function send() {
     setBusy(true); setErr("");
     await flush();
@@ -188,14 +221,27 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
 
   return (
     <main className="p-main rq">
+      {leaveTo && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Keep this draft?" onClick={() => setLeaveTo(null)}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <h3>Keep this as a draft?</h3>
+            <p className="dla-sub">It hasn&apos;t been sent to us. Keep it to finish later (it&apos;s under Orders → Your drafts), or discard it and nothing is kept.</p>
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" onClick={() => setLeaveTo(null)}>Keep editing</button>
+              <button type="button" className="btn ghost danger" onClick={async () => { const to = leaveTo; setLeaveTo(null); const r = await discardRequest(o.id); if (r.ok) router.push(to); else setErr(r.error || ""); }}>Discard</button>
+              <button type="button" className="btn primary" autoFocus onClick={async () => { const to = leaveTo; setLeaveTo(null); await flush(); router.push(to); }}>Keep draft</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <Link href={backHref} className="back">← Dashboard</Link>
-          <div className="eyebrow" style={{ marginTop: 6 }}>Order request #{o.number}</div>
+          <div className="eyebrow" style={{ marginTop: 6 }}>{o.draft ? "Draft · not sent yet" : `Order request #${o.number}`}</div>
           <h1 style={{ margin: 0 }}>Build Your Order</h1>
         </div>
         <div className="row"><span className="save-state">{state}</span>
-          <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? "Delete this order?" : "Delete"}</button>
+          <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? (o.draft ? "Discard this draft?" : "Delete this order?") : o.draft ? "Discard" : "Delete"}</button>
           <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : sendLabel}</button>
         </div>
       </div>
@@ -203,6 +249,14 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         ? <>Add your garments, sizes and where each logo goes. <b>Your wholesale prices are shown.</b> Send it to us to confirm: we&apos;ll check everything and put it through.</>
         : <>Add your garments, sizes and where each logo goes. <b>You won&apos;t see prices yet:</b> we&apos;ll check everything, price it and send it back for your final OK.</>}</div>
       {err && <div className="banner" role="alert">{err}</div>}
+      {recover && !preview && (
+        <div className="draft-bar" role="alert">
+          <span><b>We found changes that didn&apos;t save.</b> From {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}; the connection may have dropped. Bring them back?</span>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={() => { try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ } setRecover(null); }}>Throw them away</button>
+          <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { d.groups = r.o.groups; d.nickname = r.o.nickname; d.due_date = r.o.due_date; d.notes = r.o.notes; d.po_number = r.o.po_number; d.delivery_method = r.o.delivery_method; d.ship_to = r.o.ship_to; }); }}>Bring them back</button>
+        </div>
+      )}
 
       {aiAssist && (
         <section className="ai-box">
