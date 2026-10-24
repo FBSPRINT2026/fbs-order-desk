@@ -162,7 +162,10 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [moreOpen, setMoreOpen] = useState<{ top: number; right: number } | null>(null);
   const [recOpen, setRecOpen] = useState(false);
   const [sub, setSub] = useState<"quotes" | "orders">(rawArea === "quotes" || sp.get("sub") === "quotes" ? "quotes" : "orders");
-  const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); router.replace(`${path}${p.size ? "?" + p : ""}`, { scroll: false }); };
+  const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); const url = `${path}${p.size ? "?" + p : ""}`;
+    // portal: every tab's data is already on the page, so switching is instant (Oct 24, Nick: "the customer portal is
+    // slow… it just kind of spins"); the address changes without asking the server for the whole page again
+    if (mode === "portal") window.history.replaceState(null, "", url); else router.replace(url, { scroll: false }); };
   const [q, setQ] = useState("");
   const [homeTab, setHomeTab] = useState<"quotes" | "orders" | "current" | "past">("orders");
   const [stars, setStars] = useState<Record<string, boolean>>({});
@@ -249,7 +252,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
-    { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Your goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
+    { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     { id: "pricing", label: "Pricing", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01", show: mode === "portal" && !!pricingPanel },
     // staff reach Details from the "Customer details" button in the page header
   ];
@@ -1000,7 +1003,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <nav className="aa-nav" aria-label="Account areas">
         {AREAS.filter((a) => a.show !== false).map((a) => (
           <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
-            <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}
+            <Ico d={a.icon} /><span>{a.label}</span>{a.n && (mode !== "portal" || a.id === "messages") ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}
         {/* the customer's Settings, last on the bar (Oct 24, Nick: "on the toolbar all the way to the right") */}

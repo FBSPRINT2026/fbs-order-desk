@@ -673,9 +673,14 @@ export default function GroupEditor({ finishingAt = "group", neckSets, customerI
               <button className="btn sm ghost" type="button" onClick={() => setAskSkip(false)}>Cancel</button>
             </div>
           )}
-          <div className={"mk-lock" + (locked ? " on" : "")}>
+          <div className={"mk-lock" + (locked ? " on" : "") + (locked && needMockup ? " need" : "")}>
           {locked && (needMockup
-            ? <div className="mk-cover mk-need" role="note"><span>{needMockup}</span></div>
+            // the customer's builder: a small grayed-out outline of the prints, not the whole form under a cover (Oct 24,
+            // Nick: "this grayed out area, it shouldn't even be that big… just a grayed out version of that")
+            ? <div className="mk-need-sum" role="note">
+                {g.imprints.map((d, di) => <div key={d.id} className="mk-need-row"><b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method], d.method === "screen" ? `${d.colors >= 11 ? "Full color" : `${d.colors || 1} color${(d.colors || 1) > 1 ? "s" : ""}`}` : ""].filter(Boolean).join(" · ")}</span><span>Logo</span><span>Size</span></div>)}
+                <small>{needMockup}</small>
+              </div>
             : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>)}
           <div inert={locked || fixed || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more

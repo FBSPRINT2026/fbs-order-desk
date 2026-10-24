@@ -1144,10 +1144,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
       {(o as Order & { simple_order?: unknown }).simple_order != null && o.status === "request" && (() => {
-        const so = (o as Order & { simple_order: { about?: string; qty?: number | null; garments?: string; files?: { name: string }[] } }).simple_order;
+        const so = (o as Order & { simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { name: string }[] } }).simple_order;
         return (
           <div className="draft-bar" role="status">
-            <span><b>Simple order.</b> They sent the details instead of filling in the form{so.qty ? ` (about ${so.qty} pcs)` : ""}{so.files?.length ? `, with ${so.files.length} file${so.files.length === 1 ? "" : "s"}` : ""}.{so.about ? <> &ldquo;{so.about.slice(0, 220)}{so.about.length > 220 ? "…" : ""}&rdquo;</> : null}{so.garments ? <> Garments: {so.garments.slice(0, 120)}</> : null}{simpleBusy ? <> <i>{simpleBusy}</i></> : null}</span>
+            <span><b>Simple order{so.method ? ` (${({ screen: "screen printing", embroidery: "embroidery", transfer: "transfers", mixed: "mixed" } as Record<string, string>)[so.method] || so.method})` : ""}.</b> They sent the details instead of filling in the form{so.qty ? ` (about ${so.qty} pcs)` : ""}{so.files?.length ? `, with ${so.files.length} file${so.files.length === 1 ? "" : "s"}` : ""}.{so.about ? <> &ldquo;{so.about.slice(0, 220)}{so.about.length > 220 ? "…" : ""}&rdquo;</> : null}{so.garments ? <> Garments: {so.garments.slice(0, 120)}</> : null}{simpleBusy ? <> <i>{simpleBusy}</i></> : null}</span>
             <span className="spacer" />
             <button type="button" className="btn primary" disabled={!!simpleBusy && simpleBusy.endsWith("…")} onClick={() => void buildSimple()}>Build it with Create order</button>
           </div>

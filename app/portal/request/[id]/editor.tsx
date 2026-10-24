@@ -207,7 +207,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   // units, upload art, upload PO. If you have it, tell us about the goods")
   const [poBusy, setPoBusy] = useState("");
   const [poRead, setPoRead] = useState<{ read: PoRead; files: RqFile[] } | null>(null);
-  const [simple, setSimple] = useState<{ name: string; about: string; due: string; qty: string; garments: string; files: RqFile[]; note: string } | null>(null);
+  const [simple, setSimple] = useState<{ name: string; about: string; due: string; po: string; method: "" | "screen" | "embroidery" | "transfer" | "mixed"; qty: string; goodsOn: boolean; garments: string; files: RqFile[]; note: string } | null>(null);
   const [simpleBusy, setSimpleBusy] = useState("");
   async function upFiles(list: File[], kind: RqFile["kind"]): Promise<RqFile[]> {
     const out: RqFile[] = [];
@@ -226,7 +226,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     }
     return out;
   }
-  const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", qty: "", garments: "", files, note });
+  const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", po: o.po_number || "", method: "", qty: "", goodsOn: !!goods, garments: "", files, note });
   async function uploadPo(list: File[]) {
     if (preview || !list.length) return;
     setErr(""); setPoBusy("Uploading…");
@@ -262,13 +262,17 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     if (!simple) return;
     setSimpleBusy("Sending…"); setErr("");
     await flush();
-    if (goods) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
-    const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files });
+    if (goods && simple.goodsOn) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
+    const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, po: simple.po, method: simple.method, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files });
     if (!r.ok) { setSimpleBusy(""); return setErr(r.error || "Couldn't send it."); }
     try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ }
     router.push(`/portal/orders/${o.id}?sent=1`);
   }
 
+  // what's missing shows when they try to send (Oct 24, Nick: "get rid of that yellow before you send it in. That can pop
+  // up if they don't do something right")
+  const [missing, setMissing] = useState<string[] | null>(null);
+  function trySend() { if (problems.length) { setMissing(problems); return; } void send(); }
   async function send() {
     setBusy(true); setErr("");
     await flush();
@@ -305,12 +309,13 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <Link href={backHref} className="back">← Dashboard</Link>
-          <div className="eyebrow" style={{ marginTop: 6 }}>{o.draft ? "Draft · not sent yet" : `Order request #${o.number}`}</div>
-          <h1 style={{ margin: 0 }}>Build Your Order</h1>
+          <h1 style={{ margin: "6px 0 0" }}>Build Your Order</h1>
         </div>
         <div className="row"><span className="save-state">{state}</span>
+          {/* Draft beside Discard (Oct 24, Nick: "put the word draft… right next to discard") */}
+          {o.draft ? <span className="pill rq-draft" title="Not sent to us yet">Draft</span> : <span className="faint" style={{ fontSize: 12.5 }}>#{o.number}</span>}
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? (o.draft ? "Discard this draft?" : "Delete this order?") : o.draft ? "Discard" : "Delete"}</button>
-          <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : sendLabel}</button>
+          <button type="button" className="btn primary" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
         </div>
       </div>
       <div className="rq-note">{ws
@@ -374,34 +379,37 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       </fieldset>
       </div>
       <aside className="rq-side stack">
-      <section className="panel rq-fast">
-        <div className="panel-h"><h2>Have a PO, or just want to send the details?</h2><span className="faint" style={{ fontSize: 12 }}>Skip the form. Either way we check everything and send you a confirmation.</span></div>
-        <div className="panel-b stack" style={{ gap: 8 }}>
-          <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")}>
+      {/* the side cards: a short title, one line under it (Oct 24, Nick: "these side panels look really bad… just says have PO or simple order") */}
+      <section className="rq-card">
+        <h3>Have a PO?</h3>
+        <p>Skip the form. We&apos;ll check everything and confirm.</p>
+        <div className="rq-fast">
+          <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")} title="We read your PO and fill in the form; you check it before it's sent">
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg></span>
-            <span><b>{poBusy || "Upload a PO"}</b><small>We read it and fill in the form. You check it before it&apos;s sent.</small></span>
+            <b>{poBusy ? "Reading…" : "Upload PO"}</b>
             <input type="file" hidden multiple disabled={preview || !!poBusy} accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void uploadPo(l); }} />
           </label>
-          <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()}>
+          <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()} title="A few questions and your files; we build it for you">
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
-            <span><b>Send a simple order</b><small>A few questions and your files (a .zip is fine). We build it for you.</small></span>
+            <b>Simple order</b>
           </button>
         </div>
+        {poBusy && <p className="rq-card-busy">{poBusy}</p>}
       </section>
       {goods && (
-        <section className="panel">
-          <div className="panel-h"><h2>Your goods</h2><span className="faint" style={{ fontSize: 12 }}>You&apos;re sending us the garments. Tell us what you know now; tracking and dates can be added later in Customer supplied goods.</span></div>
-          <div className="panel-b"><GoodsInfoFields v={goods} onChange={setGoods} disabled={preview} /></div>
+        <section className="rq-card">
+          <h3>Your goods</h3>
+          <p>Where your garments are coming from. Tracking can be added later.</p>
+          <GoodsInfoFields v={goods} onChange={setGoods} disabled={preview} />
         </section>
       )}
 
-      <section className="panel">
-        <div className="panel-h"><h2>Questions for us</h2><span className="faint" style={{ fontSize: 12 }}>Anything you want us to answer: how soon can you have it, will this art print well, which colors to pick. We reply right here.</span></div>
-        <div className="panel-b stack">
-          {msgs.map((m) => <div key={m.id} className={"aa-msg " + (m.author_type === "staff" ? "shop" : "cust")}><div className="aa-msg-h"><b>{m.author_name}</b><span className="faint">{new Date(m.created_at).toLocaleString()}</span></div><div className="aa-msg-b">{m.body}</div></div>)}
-          <textarea rows={2} placeholder="Type a question…" value={q} disabled={preview} onChange={(e) => setQ(e.target.value)} />
-          <button type="button" className="btn" style={{ alignSelf: "flex-end" }} disabled={preview || !q.trim()} onClick={ask}>Send question</button>
-        </div>
+      <section className="rq-card">
+        <h3>Questions for us</h3>
+        <p>We reply right here.</p>
+        {msgs.map((m) => <div key={m.id} className={"aa-msg " + (m.author_type === "staff" ? "shop" : "cust")}><div className="aa-msg-h"><b>{m.author_name}</b><span className="faint">{new Date(m.created_at).toLocaleString()}</span></div><div className="aa-msg-b">{m.body}</div></div>)}
+        <textarea rows={2} placeholder="How soon can you have it? Will this art print well?" value={q} disabled={preview} onChange={(e) => setQ(e.target.value)} />
+        <button type="button" className="btn sm" style={{ alignSelf: "flex-end" }} disabled={preview || !q.trim()} onClick={ask}>Send question</button>
       </section>
       </aside>
       </div>
@@ -431,29 +439,37 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
           <div className="dla rq-simple" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="dla-x" aria-label="Close" disabled={!!simpleBusy} onClick={() => setSimple(null)}>×</button>
             <h3>Send a simple order</h3>
-            <p className="dla-sub">{simple.note || "Tell us what you need and upload what you have. We'll build the order and send you a confirmation."}</p>
+            <p className="dla-sub">{simple.note || "Tell us the basics and upload what you have. We'll build it and send you a confirmation."}</p>
             {err && <div className="banner" role="alert">{err}</div>}
-            <div className="stack" style={{ gap: 10 }}>
-              <div className="field"><label htmlFor="so-about">What do you need?</label><textarea id="so-about" rows={3} placeholder="e.g. Shirts for our fall 5K: black tees, our logo on the front, sponsors on the back" value={simple.about} onChange={(e) => setSimple({ ...simple, about: e.target.value })} /></div>
+            <div className="stack" style={{ gap: 12 }}>
+              {/* Nick, Oct 24: "order name, need it by, PO… then screen printing, embroidery, transfer, or mixed, and how many
+                  pieces… basic description… toggle… information about your goods… upload PO, upload art, files or a zip" */}
               <div className="grid g3">
-                <div className="field"><label htmlFor="so-name">Order name (optional)</label><input id="so-name" type="text" placeholder="e.g. Fall 5K" value={simple.name} onChange={(e) => setSimple({ ...simple, name: e.target.value })} /></div>
+                <div className="field"><label htmlFor="so-name">Order name</label><input id="so-name" type="text" placeholder="e.g. Fall 5K" value={simple.name} onChange={(e) => setSimple({ ...simple, name: e.target.value })} /></div>
                 <div className="field"><label htmlFor="so-due">Need it by</label><input id="so-due" type="date" value={simple.due} onChange={(e) => setSimple({ ...simple, due: e.target.value })} /></div>
-                <div className="field"><label htmlFor="so-qty">About how many pieces</label><input id="so-qty" type="number" min={1} inputMode="numeric" placeholder="e.g. 150" value={simple.qty} onChange={(e) => setSimple({ ...simple, qty: e.target.value })} /></div>
+                <div className="field"><label htmlFor="so-po">PO # (optional)</label><input id="so-po" type="text" value={simple.po} onChange={(e) => setSimple({ ...simple, po: e.target.value })} /></div>
               </div>
-              <div className="grid g3">
-                <div className="field"><label htmlFor="so-del">How you&apos;ll get it</label>
-                  <select id="so-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Order["delivery_method"]; })}>
-                    <option value="pickup">I&apos;ll pick it up</option><option value="ship">Ship it to me</option><option value="deliver">Local delivery</option>
-                  </select></div>
-                {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="so-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="so-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
+              <div className="so-row2">
+                <div className="field"><label>Decoration</label>
+                  <div className="so-seg" role="radiogroup" aria-label="Decoration">
+                    {([["screen", "Screen printing"], ["embroidery", "Embroidery"], ["transfer", "Transfers"], ["mixed", "Mixed"]] as const).map(([k, t]) => (
+                      <button key={k} type="button" role="radio" aria-checked={simple.method === k} className={simple.method === k ? "on" : ""} onClick={() => setSimple({ ...simple, method: simple.method === k ? "" : k })}>{t}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="field"><label htmlFor="so-qty">How many pieces</label><input id="so-qty" type="number" min={1} inputMode="numeric" placeholder="e.g. 150" value={simple.qty} onChange={(e) => setSimple({ ...simple, qty: e.target.value })} /></div>
               </div>
-              {goods
-                ? <div className="field"><label>Your goods</label><GoodsInfoFields v={goods} onChange={setGoods} /></div>
-                : <div className="field"><label htmlFor="so-g">The garments, if you know</label><input id="so-g" type="text" placeholder="e.g. Gildan 5000 in black, or “help me pick”" value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>}
-              {goods && <div className="field"><label htmlFor="so-g">The garments (style and colors)</label><input id="so-g" type="text" placeholder="e.g. Next Level 6210, Banana Cream" value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>}
-              <div className="field"><label>Your files</label>
+              <div className="field"><label htmlFor="so-about">Description</label><textarea id="so-about" rows={3} placeholder="e.g. Black tees, our logo on the front, sponsors on the back" value={simple.about} onChange={(e) => setSimple({ ...simple, about: e.target.value })} /></div>
+              <label className="so-toggle"><input type="checkbox" checked={simple.goodsOn} onChange={(e) => setSimple({ ...simple, goodsOn: e.target.checked })} /><span className="so-sw" aria-hidden /><span>Tell us about the garments{goods ? " you're sending" : ""}</span></label>
+              {simple.goodsOn && (
+                <div className="so-goods stack" style={{ gap: 10 }}>
+                  <div className="field"><label htmlFor="so-g">Style and colors</label><input id="so-g" type="text" placeholder={goods ? "e.g. Next Level 6210, Banana Cream" : "e.g. Gildan 5000 in black, or “help me pick”"} value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>
+                  {goods && <GoodsInfoFields v={goods} onChange={setGoods} />}
+                </div>
+              )}
+              <div className="field"><label>Files</label>
                 <div className="rq-so-up">
-                  {([["po", "Upload your PO"], ["art", "Upload your art"], ["other", "Other files or a .zip"]] as const).map(([k, label]) => (
+                  {([["po", "Upload PO"], ["art", "Upload art"], ["other", "Files or a .zip"]] as const).map(([k, label]) => (
                     <label key={k} className={"btn sm" + (simpleBusy ? " disabled" : "")} style={{ cursor: "pointer" }}>{label}
                       <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void addSimpleFiles(l, k); }} />
                     </label>
@@ -468,7 +484,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
             <div className="dla-acts">
               <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>{simpleBusy}</span>
               <button type="button" className="btn ghost" disabled={!!simpleBusy} onClick={() => setSimple(null)}>Cancel</button>
-              <button type="button" className="btn primary" disabled={!!simpleBusy || preview || (simple.about.trim().length < 5 && !simple.files.length)} onClick={() => void sendSimple()}>Send to FBS</button>
+              <button type="button" className="btn primary" disabled={!!simpleBusy || preview || (simple.about.trim().length < 5 && !simple.files.length && !simple.name.trim())} onClick={() => void sendSimple()}>Send to FBS</button>
             </div>
           </div>
         </div>
@@ -495,10 +511,15 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       )}
 
 
-      {problems.length > 0 && (
-        <div className="rq-check">
-          <b>Before you send it in:</b>
-          <ul>{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+      {missing && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Almost there" onClick={() => setMissing(null)}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <button type="button" className="dla-x" aria-label="Close" onClick={() => setMissing(null)}>×</button>
+            <h3>Almost there</h3>
+            <p className="dla-sub">Before we can take it:</p>
+            <ul className="rq-missing">{(problems.length ? problems : missing).map((p) => <li key={p}>{p}</li>)}</ul>
+            <div className="dla-acts"><button type="button" className="btn primary" autoFocus onClick={() => setMissing(null)}>OK</button></div>
+          </div>
         </div>
       )}
       {hints.length > 0 && (
@@ -509,7 +530,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       )}
       <div className="rq-foot">
         <span><b>{calc.qty}</b> pieces</span>{ws && calc.qty > 0 && <span>Total <b className="num">{money(calc.total - calc.tax)}</b> <span className="faint">before tax</span></span>}<span className="spacer" />
-        <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : sendLabel}</button>
+        <button type="button" className="btn primary" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
       </div>
     </main>
   );

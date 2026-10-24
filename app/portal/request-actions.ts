@@ -493,7 +493,7 @@ export async function readMyPo(orderId: string, files: RqFile[]): Promise<Result
   } catch (e) { return fail(e); }
 }
 
-export type SimpleOrder = { name?: string; about: string; due?: string | null; qty?: number | null; delivery?: string; ship_to?: string; garments?: string; files: RqFile[] };
+export type SimpleOrder = { name?: string; about: string; due?: string | null; po?: string; method?: string; qty?: number | null; delivery?: string; ship_to?: string; garments?: string; files: RqFile[] };
 
 /** "Send us a simple order": their answers and files, sent in; we build the order from them */
 export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<Result> {
@@ -501,7 +501,8 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     const { admin, order: o0, cust, email, supabase } = await myDraft(orderId);
     const about = String(s.about || "").trim().slice(0, 4000);
     const files = cleanFiles(s.files, cust.id, orderId);
-    if (about.length < 5 && !files.length) return { ok: false, error: "Tell us what you need, or upload a file." };
+    if (about.length < 5 && !files.length && !String(s.name || "").trim()) return { ok: false, error: "Tell us what you need, or upload a file." };
+    const method = ["screen", "embroidery", "transfer", "mixed"].includes(String(s.method)) ? String(s.method) : "";
     const delivery = ["pickup", "ship", "deliver"].includes(String(s.delivery)) ? String(s.delivery) : "pickup";
     const shipTo = String(s.ship_to || "").trim().slice(0, 500);
     if (delivery !== "pickup" && !shipTo) return { ok: false, error: `Add the address to ${delivery === "ship" ? "ship" : "deliver"} to.` };
@@ -511,7 +512,8 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     await keepFiles(admin, orderId, files);
     const { error: ue } = await admin.from("orders").update({
       nickname: (String(s.name || "").trim() || o0.nickname || "").slice(0, 120) || null, due_date: due, delivery_method: delivery, ship_to: shipTo, ...(qty ? { qty } : {}),
-      simple_order: { about, qty, garments, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
+      ...(String(s.po || "").trim() ? { po_number: String(s.po).trim().slice(0, 60) } : {}),
+      simple_order: { about, qty, garments, method, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
     }).eq("id", orderId);
     if (ue) return { ok: false, error: ue.message };
     const { data: num, error: ce } = await supabase.rpc("order_commit", { p_id: orderId });

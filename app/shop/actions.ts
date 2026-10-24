@@ -193,7 +193,7 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     const admin = createAdminClient();
     const { data: o } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, delivery_method, ship_to, po_number, notes, submitted_at, simple_order").eq("id", orderId).maybeSingle();
     if (!o?.simple_order) return { ok: false, error: "This isn't a simple order." };
-    const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; by?: string };
+    const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; method?: string; by?: string };
     const { data: cust } = await admin.from("customers").select("company, name, email").eq("id", o.customer_id).maybeSingle();
     const { data: files } = await admin.from("art_files").select("name, file_path, file_type, category").eq("order_id", orderId).like("file_path", "requests/%");
     const sizes = await Promise.all((files || []).map(async (f) => {
@@ -208,7 +208,9 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
       s.about ? `What they need, in their words:\n${s.about}` : "",
       o.nickname ? `Order name: ${o.nickname}` : "",
       o.due_date ? `Need it by: ${o.due_date}` : "",
-      s.qty ? `About how many pieces: ${s.qty}` : "",
+      s.method ? `Decoration: ${({ screen: "screen printing", embroidery: "embroidery", transfer: "transfers (DTF)", mixed: "mixed (more than one kind)" } as Record<string, string>)[s.method] || s.method}` : "",
+      o.po_number ? `Their PO #: ${o.po_number}` : "",
+      s.qty ? `How many pieces: ${s.qty}` : "",
       s.garments ? `The garments (what they know): ${s.garments}` : "",
       `How they'll get it: ${o.delivery_method === "ship" ? `ship to ${o.ship_to}` : o.delivery_method === "deliver" ? `local delivery to ${o.ship_to}` : "they'll pick it up"}`,
       atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
