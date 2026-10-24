@@ -358,8 +358,14 @@ export async function starMyOrder(orderId: string, starred: boolean): Promise<Re
     const { supabase, user, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff) return { ok: false, error: "This is a preview." };
-    const { data: o } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
+    const { data: o } = await supabase.from("orders").select("id, customer_id").eq("id", orderId).maybeSingle();
     if (!o) return { ok: false, error: "We couldn't find that order." };
+    // up to 9 at a time, so the tracker fits three by three (Oct 24, Nick: "no more than 9 at a time")
+    if (starred) {
+      const { count } = await createAdminClient().from("orders").select("id", { count: "exact", head: true }).eq("customer_id", o.customer_id)
+        .not("customer_starred_at", "is", null).not("status", "in", "(completed,void,canceled)").is("discarded_at", null).neq("id", orderId);
+      if ((count || 0) >= 9) return { ok: false, error: "You can track up to 9 orders at a time. Unstar one first." };
+    }
     const { error } = await createAdminClient().from("orders").update({ customer_starred_at: starred ? new Date().toISOString() : null }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/portal");

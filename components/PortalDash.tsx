@@ -89,7 +89,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
         <section className="pdx-card pdx-track">
           <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
-          {/* more than three: two columns, never a "more" (Oct 24, Nick) */}{tracked.length ? <div className={"pdx-track-list" + (tracked.length > 3 ? " two" : "")}>{tracked.slice(0, 6).map((t) => trackRow(t))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+          {/* more than three: two columns, never a "more" (Oct 24, Nick) */}{tracked.length ? <div className={"pdx-track-list" + (tracked.length > 6 ? " three" : tracked.length > 3 ? " two" : "")}>{tracked.slice(0, 9).map((t) => trackRow(t))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
       <section className="pdx-card pdx-sent">

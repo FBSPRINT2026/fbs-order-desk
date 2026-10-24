@@ -17,6 +17,7 @@ import type { PayFilter } from "@/lib/paySelect";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { Pill } from "@/components/bits";
+import { StarOrder } from "@/components/PortalDashBits";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -24,6 +25,7 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
   /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
   /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean;
+  /** portal: the customer starred it to track it (up to 9) */ starred?: boolean;
   /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean;
   /** portal: what can be paid now (lib/payReady.ts), why not, and whether charges may still change */ payCan?: "none" | "deposit" | "full"; payWhy?: string; notFinal?: boolean; payNote?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
@@ -267,11 +269,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div className="aa-card aa-tblcard">
         {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
         <table className="aa-tbl aa-tbl-cols">
-          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" /></colgroup>
-          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
+          <colgroup>{mode === "portal" && <col className="c-star" />}<col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" /></colgroup>
+          <thead><tr>{mode === "portal" && <th aria-label="Starred" />}<th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
           <tbody>
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
+                {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived ? <StarOrder id={o.id} on={!!o.starred} canAct={canAct} /> : null}</td>}
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
@@ -283,7 +286,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={7}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}
+            {!rows.length && <tr><td colSpan={9}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}
           </tbody>
         </table>
       </div>
@@ -543,7 +546,19 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    // the orders they starred, on top (Oct 24, Nick: "if you star it, there should be a little favorite section… like the
+    // artwork page… maybe a top area"); the same 9 the dashboard tracks
+    const starredList = [...quotes, ...invoices].filter((o) => o.starred && !o.archived && !["completed", "void", "canceled"].includes(o.status)).sort((x, y) => y.number - x.number).slice(0, 9);
     body = <>
+      {starredList.length > 0 && <div className="aa-starred">
+        <div className="aa-sec-h"><h3>Starred</h3><span className="faint">The orders you&apos;re tracking on your dashboard. Up to 9 at a time.</span></div>
+        <div className="aa-starred-g">{starredList.map((o) => (
+          <div key={o.id} className="aa-star-t">
+            <StarOrder id={o.id} on canAct={canAct} />
+            <Link href={orderHref(o.id)} className="aa-star-n"><b>#{o.number}{o.nickname ? ` ${o.nickname}` : ""}</b><small>{o.qty} pcs{o.due_date ? ` · In hands ${when(o.due_date)}` : ""}</small></Link>
+            {pill(o)}
+          </div>))}</div>
+      </div>}
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}

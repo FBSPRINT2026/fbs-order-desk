@@ -78,14 +78,18 @@ function JobSteps({ j }: { j: PortalJob }) {
 export function StarOrder({ id, on, canAct, label = false }: { id: string; on: boolean; canAct: boolean; label?: boolean }) {
   const router = useRouter();
   const [v, setV] = useState(on);
+  const [err, setErr] = useState("");
   const [pending, start] = useTransition();
   return (
+    <span className="ostar-w">
     <button type="button" className={"ostar" + (v ? " on" : "") + (label ? " lbl" : "")} disabled={!canAct || pending} aria-pressed={v}
       title={!canAct ? "Turned off in preview" : v ? "Tracking this order. Click to stop tracking it." : "Track this order on your dashboard"}
-      onClick={() => { const n = !v; setV(n); start(async () => { const r = await starMyOrder(id, n); if (!r.ok) setV(!n); else router.refresh(); }); }}>
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); const n = !v; setV(n); setErr(""); start(async () => { const r = await starMyOrder(id, n); if (!r.ok) { setV(!n); setErr(r.error || "Couldn't save that."); setTimeout(() => setErr(""), 4500); } else router.refresh(); }); }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill={v ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z" /></svg>
       {label && <span>{v ? "Tracking" : "Track this order"}</span>}
     </button>
+    {err && <span className="ostar-err" role="status">{err}</span>}
+    </span>
   );
 }
 
