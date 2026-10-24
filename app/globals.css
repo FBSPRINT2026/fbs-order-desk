@@ -12828,7 +12828,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .nav a.on .badge{background:#fff}
 .nav-g-shoptools a.on .badge,.nav-g-production.side-heat a.on .badge{background:#1a1405}
 /* Customers: favorites in their own section on top (Oct 24) */
-.tbl tr.cu-grp.fav td{background:color-mix(in srgb,var(--warn) 10%,var(--surface));color:var(--ink);border-bottom:1px solid color-mix(in srgb,var(--warn) 30%,var(--line))}
+.tbl tr.cu-grp.fav td{background:color-mix(in srgb,var(--fbs-blue) 12%,var(--surface));color:var(--fbs-blue);border-bottom:1px solid color-mix(in srgb,var(--fbs-blue) 30%,var(--line))}
 .tbl tr.cu-grp.fav .cu-grp-star{color:var(--warn);margin-right:6px;font-size:13px}
-.tbl tr.cu-favrow td{background:color-mix(in srgb,var(--warn) 4%,var(--surface))}
 .tbl tr.cu-grp.rest td{border-top:10px solid var(--bg)}
