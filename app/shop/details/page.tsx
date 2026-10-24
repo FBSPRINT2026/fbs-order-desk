@@ -1,4 +1,5 @@
 "use client";
+import { useProdSide } from "@/lib/prodSide";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -49,7 +50,9 @@ export default function ProductionDetailsPage() {
   const canConfirm = !role || ["owner", "admin", "production", "embroidery"].includes(role);
   // embroidery has its own reorder details (Oct 23, Nick: "a whole different section for reorder details for embroidery…
   // what thread did we use, and what backing"): Maria sees the embroidered prints, screen printing's production the rest
-  const mine = (im: Imprint) => (role === "embroidery" ? im.method === "embroidery" : role === "production" ? im.method !== "embroidery" : true);
+  // and the menu's screen printing / embroidery switch (Oct 24): that side's prints
+  const [side] = useProdSide();
+  const mine = (im: Imprint) => (role === "embroidery" || side === "embroidery" ? im.method === "embroidery" : im.method !== "embroidery");
   const waitingOf = (r: Row) => printSets(r, (im) => needsDetails(im) && mine(im));
   const open0 = useSearchParams().get("order");
   const [tab, setTab] = useState<"waiting" | "done">("waiting");

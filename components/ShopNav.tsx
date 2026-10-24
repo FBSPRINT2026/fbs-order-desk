@@ -13,6 +13,7 @@ import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
+import { useProdSide } from "@/lib/prodSide";
 import { canOpen, ROLES } from "@/lib/roles";
 import { ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
@@ -62,7 +63,7 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
-const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Room": "Threads", "Digitizing": "Digitize" };
+const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
@@ -85,6 +86,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     return () => { document.removeEventListener("click", keep, true); window.removeEventListener("pagehide", keep); };
   }, []);
   const { realRole, role, viewAs, perms } = useRole();
+  // screen printing or embroidery (Oct 24): the switch under Production, and which of its tools show
+  const [side, setSide, sideLocked] = useProdSide();
   const crew = !perms.money;
   const router = useRouter();
   const [unread, setUnread] = useState(0);
@@ -230,7 +233,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Room"], ["/shop/digitizing", "needle", "Digitizing"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"]] },
     { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/clickup", "clickup", "ClickUp Jobs"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
@@ -311,11 +314,22 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
-          <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
+          <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
+            {/* screen printing or embroidery: a quiet switch, the side shows in the menu's color (blue / salmon) */}
+            {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
+              <div className="prod-side" role="radiogroup" aria-label="Screen printing or embroidery">
+                {([["screen", "Screen print"], ["embroidery", "Embroidery"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={side === k} className={side === k ? "on" : ""} onClick={() => setSide(k)}>{l}</button>
+                ))}
+              </div>
+            )}
             {g.title === "Shop Tools"
               ? <div className="nav-tools">{g.items.map(link)}</div>
-              : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details")).map(link)}
+              : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))
+                  // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery
+                  .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks"] : ["/shop/digitizing", "/shop/threads"]).includes(href))
+                  .map(link)}
           </div>
         ))}
       </nav>

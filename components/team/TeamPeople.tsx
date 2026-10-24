@@ -1,4 +1,5 @@
 "use client";
+import { useProdSide } from "@/lib/prodSide";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
@@ -42,8 +43,10 @@ export default function TeamPeople({ d }: { d: TeamData }) {
   const list = d.employees.filter((e) => showOld || e.active);
   // embroidery's manager sees her own team (Oct 23, Nick: Maria "will have her own team… instead of having screen
   // printing teams and employees there, she'll have her staff")
-  const embOnly = useRole().role === "embroidery";
-  const depts = embOnly ? d.settings.departments.filter((x) => /embroider/i.test(x)) : d.settings.departments;
+  // and the menu's screen printing / embroidery switch (Oct 24): each side's own team
+  const [side] = useProdSide();
+  const embOnly = useRole().role === "embroidery" || side === "embroidery";
+  const depts = embOnly ? d.settings.departments.filter((x) => /embroider/i.test(x)) : d.settings.departments.filter((x) => !/embroider/i.test(x));
   const byId = useMemo(() => new Map(d.employees.map((e) => [e.id, e])), [d.employees]);
   const timeData = { me: d.me, role: d.boss ? "owner" : "staff", seesPay: canPay, employees: d.employees, settings: d.settings, reload: d.reload };
 

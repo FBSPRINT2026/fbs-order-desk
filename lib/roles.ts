@@ -12,7 +12,7 @@ export const ROLES: { v: Role; label: string; note: string }[] = [
   { v: "production", label: "Production", note: "production, separations, shop tools; no money" },
   // embroidery's own manager (Oct 23, Nick: Maria Guzman, embroidery@fbsprint.com: "she won't see inks, she'll see the
   // thread room… her own team… her schedule, not the screen printing schedule… her machines")
-  { v: "embroidery", label: "Embroidery", note: "the Thread Room, digitizing, the embroidery schedule and team; no inks, separations or money" },
+  { v: "embroidery", label: "Embroidery", note: "the Thread Wall, digitizing, the embroidery schedule and team; no inks, separations or money" },
   { v: "receiving", label: "Receiving", note: "goods, receiving, shop tools; no money" },
   { v: "shipping", label: "Shipping", note: "shipping, shop tools; no money" },
 ];
@@ -34,7 +34,7 @@ export const PERMS = [
   { k: "pressDefaults", group: "Production", label: "Can change press defaults and equipment status" },
   { k: "inkStock", group: "Production", label: "Can choose which stock inks we carry, and add or edit them (Ink Room)" },
   { k: "inkRoom", group: "Production", label: "Can open the Ink Room (screen printing inks and mixing)" },
-  { k: "threadRoom", group: "Embroidery", label: "Can open the Thread Room (embroidery threads)" },
+  { k: "threadRoom", group: "Embroidery", label: "Can open the Thread Wall (embroidery threads)" },
   { k: "digitizing", group: "Embroidery", label: "Can open Digitizing (embroidery files: requests, DST files, stitch counts)" },
   { k: "employees", group: "Production", label: "Can open Employees" },
   { k: "pay", group: "Production", label: "Runs the time clock: sees and changes employee pay, fixes timecards, adds employees, payroll report (Oct 20, Nick)" },

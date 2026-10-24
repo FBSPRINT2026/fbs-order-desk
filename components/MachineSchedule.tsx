@@ -1,4 +1,5 @@
 "use client";
+import { useProdSide } from "@/lib/prodSide";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
@@ -354,7 +355,12 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   // embroidery's manager sees her own schedule and machines (Oct 23, Nick: Maria "will see her schedule, right? Not
   // the screen printing schedule. She'll see her machines")
   const embOnly = useRole().role === "embroidery";
-  const typeF: "" | "screen" | "embroidery" | "heat" = embOnly ? "embroidery" : typeF0;
+  // the menu's screen printing / embroidery switch (Oct 24): embroidery shows the embroidery machines (like Maria's
+  // view); screen printing shows the screen presses, or the heat presses (heat press goes with screen printing)
+  const [side] = useProdSide();
+  const embSide = embOnly || side === "embroidery";
+  const typeF: "" | "screen" | "embroidery" | "heat" = embSide ? "embroidery" : typeF0 === "heat" ? "heat" : "screen";
+  const typeOpts = TYPE_OPTS.filter(([k]) => k === "screen" || k === "heat");
   // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
   const [mine, setMine] = useSticky("cal.mine", false);
   const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
@@ -1520,8 +1526,8 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       <div className="ms-head-w">
       <div className="ms-head">
         <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
-        {!embOnly && <div className="rv-seg ms-full">{TYPE_OPTS.map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>}
-        {!embOnly && <select className="ms-cmp ms-sel" value={typeF} aria-label="Machines" onChange={(e) => setTypeF(e.target.value as typeof typeF)}>{TYPE_OPTS.map(([k, l]) => <option key={k} value={k}>{k ? l : "All machines"}</option>)}</select>}
+        {!embSide && <div className="rv-seg ms-full">{typeOpts.map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>}
+        {!embSide && <select className="ms-cmp ms-sel" value={typeF} aria-label="Machines" onChange={(e) => setTypeF(e.target.value as typeof typeF)}>{typeOpts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
         <span className="spacer" />
