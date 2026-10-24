@@ -13703,3 +13703,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .portal-sw{align-self:center;display:inline-flex;align-items:center;gap:6px;margin-left:auto;white-space:nowrap}
 .portal-sw.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
 .aa-sec-h:has(> .portal-sw){align-items:center}
+/* order lists: the Archived tag stays on the name's line; a long name shortens instead (Oct 24, Nick) */
+.aa-tbl .aa-t.aa-t1{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap}
+.aa-tbl .aa-t1 .aa-tn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aa-tbl .aa-t1 .aa-arch{flex:none;white-space:nowrap}
