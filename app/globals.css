@@ -13771,3 +13771,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .osp-mchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
 .osp-mchip-ch{font-weight:500;opacity:.8;margin-left:2px}
 .osp-mchip-ch::before{content:"· ";}
+/* Mockup Creator (staff): the print scale nudge for this garment's photos (Oct 24, Nick: P160) */
+.mk-zoom{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12.5px}
+.mk-zoom .btn.icon{width:28px;height:28px;padding:0}
+.mk-zoom-v{min-width:42px;text-align:center;font-weight:600;font-size:13px}

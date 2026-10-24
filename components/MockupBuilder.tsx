@@ -1419,10 +1419,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return sortSizes(kept.length ? kept : list);
   };
   const runSizes = sizesOf(lines[active] || lines[0]);
+  const garZoom = (g: Garment | null | undefined) => { const z = +(((g as (Garment & { mockup_fit?: { scale?: number } | null }) | null | undefined)?.mockup_fit?.scale) || 1); return z >= 0.7 && z <= 1.4 ? z : 1; };
   const bodyFor = (l?: Line): Body => {
     const g = l ? garmentFor(l) : null;
     const own = l ? sizesOf(l) : runSizes;
-    const b = shownSize && own.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, own);
+    const b0 = shownSize && own.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, own);
+    const b = { ...b0, zoom: garZoom(g) };
     if (!l || !isBag(l)) return b;
     // a bag or tote: its max print area is the bag less 1.5" all around (a 13" × 13" tote takes 10" × 10")
     const bw = bagWidth(l), bl = bagLength(l), r2 = (v: number) => Math.max(2, Math.round(v * 2) / 2);
@@ -1430,7 +1432,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { ...b, cap: { maxW: r2(bw - 3), maxH: r2(bl - 3), label: `a ${bw}" × ${bl}" ${what}` } };
   };
   const body = bodyFor(lines[active] || lines[0]);
-  const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
+  // the print scale on this garment's photos, set by staff once for the style (every color, every mockup after)
+  const zoomG = !portal ? garmentFor(lines[active] || lines[0]) : null;
+  const setZoomG = async (z: number) => {
+    if (!zoomG) return;
+    const v = Math.round(Math.max(0.7, Math.min(1.4, z)) * 100) / 100;
+    const cur = ((zoomG as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {}) as Record<string, unknown>;
+    const next = { ...cur, scale: v === 1 ? undefined : v };
+    if (v === 1) delete next.scale;
+    const val = Object.keys(next).length ? next : null;
+    setCatalog((c) => c.map((x) => (x.id === zoomG.id ? ({ ...x, mockup_fit: val } as Garment) : x)));
+    await createClient().from("garments").update({ mockup_fit: val }).eq("id", zoomG.id);
+  };
+  const scaleOf = (b: Body) => (REF_BODY.widthIn / b.widthIn) * (b.zoom || 1);
   // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
   const askedSpecs = useRef(new Set<string>());
   const shownG = lines[active] || lines[0] ? garmentFor((lines[active] || lines[0])!) : undefined;
@@ -3187,6 +3201,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       <div className={"mk mk-" + mode} ref={mkRef}>
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
+          {zoomG && (
+            <div className="mk-zoom" role="group" aria-label="Print scale for this garment" title={`Prints look too big or too small on the ${zoomG.brand} ${zoomG.style}? Set it once: it's kept for every color of this style and every mockup after`}>
+              <span className="faint">Print scale on the {zoomG.style}</span>
+              <button type="button" className="btn sm icon" aria-label="Smaller" onClick={() => void setZoomG(garZoom(zoomG) - 0.02)}>−</button>
+              <b className="mk-zoom-v">{Math.round(garZoom(zoomG) * 100)}%</b>
+              <button type="button" className="btn sm icon" aria-label="Bigger" onClick={() => void setZoomG(garZoom(zoomG) + 0.02)}>+</button>
+              {garZoom(zoomG) !== 1 && <button type="button" className="linkbtn" onClick={() => void setZoomG(1)}>Reset</button>}
+            </div>
+          )}
           {runSizes.length > 1 && (
             <div className="mk-sizes" role="group" aria-label="Show the mockup on">
               <span className="faint">Show on</span>

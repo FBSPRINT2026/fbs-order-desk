@@ -5,7 +5,7 @@
  * Measurements come from the supplier's size chart when we have it (S&S specs, saved on the garment as `specs`),
  * otherwise from typical numbers for that size.
  */
-export type Body = { size: string; widthIn: number; lengthIn: number; kind: "adult" | "youth" | "toddler" | "infant"; from: "supplier" | "typical";
+export type Body = { size: string; widthIn: number; lengthIn: number; kind: "adult" | "youth" | "toddler" | "infant"; from: "supplier" | "typical"; /** staff's print-scale nudge for this garment's photos (garments.mockup_fit.scale; Oct 24, Nick: P160 prints looked small) */ zoom?: number;
   /** a non-shirt (bag, tote): its own max print area (the garment less a margin), which no location can go past */
   cap?: { maxW: number; maxH: number; label: string } };
 export type GarmentSpecs = { sizes: Record<string, { width?: number; length?: number }>; source?: string; at?: string; /** pounds per piece by size (S&S unitWeight), for shipping quotes */ weights?: Record<string, number> };
