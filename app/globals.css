@@ -12816,7 +12816,6 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .nav-g-production.side-screen .prod-side button.on:not(.ps-sw){color:var(--fbs-blue)}
 .nav-g-production.side-embroidery .prod-side button.on:not(.ps-sw){color:var(--fbs-salmon)}
 .nav-g-production.side-screen a.on{background:var(--fbs-blue)}
-.nav-g-production.side-screen .nav-h-production{color:var(--fbs-blue)}
 .side.mini .prod-side{display:none}
 .fee-row.fin-row{grid-template-columns:minmax(0,1fr) 110px auto 32px}
 /* Menu counts are a small calm dot, not a red bubble (Oct 24, Nick: "these little red bubbles are giving me anxiety…
