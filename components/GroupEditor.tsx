@@ -537,10 +537,13 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                       value={sized ? lc?.qty ?? 0 : l.sizes?.OS || ""} placeholder="0"
                       onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); const osOnly = r.sizeRun?.length === 1 && r.sizeRun[0] === ONE_SIZE; r.oneSize = osOnly || v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
                   </div>
+                  {/* no price at all when prices are hidden (the retail builder: Oct 24, Nick saw "× 5.61") */}
+                  {!hidePrices && <>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
                     onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
+                  </>}
                   <div className="a-x">
                     {/* their extras: a stamp at the end of the row, printed or not (Oct 23, Nick: asked when the order is made,
                         "a little stamp next to that row at the end… printed extras or not printed extras"); click to switch */}
