@@ -288,7 +288,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       // no prices shown (retail builder): no room kept for them, so the qty sits at the right end (Oct 24, Nick)
-      const ea = hidePrices ? 0 : widest(".gl .a-ea input", 28, 54, 120);
+      const ea = hidePrices ? 150 : widest(".gl .a-ea input", 28, 54, 120);
       const to = hidePrices ? 0 : Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
       // a size box is never narrower than its number (+6 for the border and room to spare; +8 for a phone's tap button,
       // which has 2px of padding), its size name, or its 2XL+ charge underneath (which may use the gap)
@@ -538,7 +538,9 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                       value={sized ? lc?.qty ?? 0 : l.sizes?.OS || ""} placeholder="0"
                       onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); const osOnly = r.sizeRun?.length === 1 && r.sizeRun[0] === ONE_SIZE; r.oneSize = osOnly || v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
                   </div>
-                  {/* no price at all when prices are hidden (the retail builder: Oct 24, Nick saw "× 5.61") */}
+                  {/* no price when prices are hidden (the retail builder): a "Price" placeholder and who sets it (Oct 24, Nick:
+                      "have a thing that says price… FBS will send quote") */}
+                  {hidePrices && <div className="a-ea r a-quote" title="We price your order and send you a quote to approve"><span className="aq-in"><span className="aq-ph">Price</span><small>FBS will send a quote</small></span></div>}
                   {!hidePrices && <>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
                     onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}
