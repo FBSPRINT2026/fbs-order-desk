@@ -43,10 +43,23 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
       {draft && <div className="draft-rec pdx-draft" role="status"><b>Pick it back up?</b><span>You started <Link href={draft.href}>{draft.name || "an order"}</Link>{draft.when ? ` (${draft.when})` : ""} and haven&apos;t sent it yet.</span><Link className="btn sm primary" href={draft.href}>Continue</Link></div>}
 
       <div className="pdx-top">
+        <div className="pdx-col pdx-left">
         <section className="pdx-card pdx-asst">
           <div className="pdx-h"><h2>✨ Your FBS AI Assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
           {assistant}
         </section>
+        {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
+        <section className="pdx-card pdx-track">
+          <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
+          {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
+            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
+              <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
+              <span className="pdx-trk-h">{t.health.text}</span>
+              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
+            </div>
+          ))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+        </section>
+        </div>
         <div className="pdx-col">
         {/* payments: a small statement, with Pay now */}
         <section className="pdx-card pdx-stmt">
@@ -86,17 +99,6 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         </div>
       </div>
 
-      {/* Order tracking, full width under the top row (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list") */}
-      <section className="pdx-card pdx-track">
-        <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
-        {tracked.length ? <div className="pdx-track-list">{tracked.map((t) => (
-          <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
-            <Link href={t.href} className="pdx-trk-t"><b>#{t.number}{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
-            <span className="pdx-trk-h">{t.health.text}</span>
-            {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
-          </div>
-        ))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
-      </section>
 
 
       {sent.length > 0 && (

@@ -13353,3 +13353,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:4px 0 4px}
 .pl-head h2{margin:0;font-family:var(--display);font-size:20px}
 @media print{.portal .aa-nav,.pl-head .row{display:none!important}}
+/* the left column: the assistant, with Order tracking under it (Oct 24, Nick's mock-up) */
+.pdx-left>.pdx-asst{flex:0 0 auto}
+.pdx-left>.pdx-track{flex:1 1 auto}
+.pdx-left .pdx-track .pdx-track-list{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.pdx-top>.pdx-col:not(.pdx-left)>.pdx-hold{flex:1 1 auto}
