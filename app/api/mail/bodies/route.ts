@@ -25,6 +25,8 @@ export async function GET(req: Request) {
 async function work(admin: ReturnType<typeof createAdminClient>) {
   const deadline = Date.now() + 240000;
   // customer emails that read as orders: worked out in the background so they're ready to approve (Oct 20, Nick)
+  // Inbox email from customers that was never kept as a customer email (Oct 24): kept and linked now
+  try { const { linkCustomerInbox } = await import("@/lib/mail/mirror"); console.info(`inbox customer emails linked ${await linkCustomerInbox(admin, Date.now() + 60000)}`); } catch (e) { console.warn("link customer inbox", e); }
   try { const { sortWaiting } = await import("@/lib/mail/mirror"); console.info(`inbox sorted ${JSON.stringify(await sortWaiting(admin, Date.now() + 60000))}`); } catch (e) { console.warn("sort waiting", e); }
   try { const { prepareOrders } = await import("@/lib/ai/prepareOrders"); console.info(`orders prepared ${JSON.stringify(await prepareOrders(admin, Date.now() + 150000))}`); } catch (e) { console.warn("prepare orders", e); }
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);

@@ -3,6 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { QBO_AUTH_URL, QBO_MINOR_VERSION, QBO_REVOKE_URL, QBO_SCOPE, QBO_TOKEN_URL, qboEnv } from "@/lib/qbo/config";
 
 /**
+ * Never delete or void anything in QuickBooks (Oct 24, Nick, before connecting the real company: "you're not ever
+ * deleting anything in QuickBooks, right? You're just sending something to update… you can update it, but you can't
+ * delete it for right now"). With this on, the sync only adds and updates: a deleted payment or a cancelled order goes to
+ * Needs review ("do it in QuickBooks by hand"), and the client itself refuses delete and void requests. The one
+ * exception is voiding the owner's own TEST-… invoice from Settings → QuickBooks.
+ */
+export const QBO_NO_DELETES = true;
+
+/**
  * QuickBooks Online API client (server only). The sign-in is kept in integration_tokens, name 'quickbooks'
  * (row security on, no policies): realm, access token (1 hour), refresh token (100 days, and a new one comes with
  * every refresh: always saved). Requests are paced well under Intuit's ~500/minute per company, retried on 429 / 5xx
@@ -245,11 +254,14 @@ export class Qbo {
       return (await send(cur.SyncToken))[entity] as T;
     }
   }
-  async voidInvoice(id: string, syncToken: string) {
+  /** voids: off (QBO_NO_DELETES) except the owner's own TEST-… invoice (testOnly) */
+  async voidInvoice(id: string, syncToken: string, testOnly = false) {
+    if (QBO_NO_DELETES && !testOnly) throw new Error("Voiding in QuickBooks is turned off (QBO_NO_DELETES): void it in QuickBooks by hand.");
     const r = await this.with({ qboId: id }).request<Resp>("POST", "invoice", { params: { operation: "void" }, body: { Id: id, SyncToken: syncToken }, label: `void Invoice ${id}` });
     return r.Invoice as Resp;
   }
   async deleteEntity(entity: string, id: string, syncToken: string) {
+    if (QBO_NO_DELETES) throw new Error("Deleting in QuickBooks is turned off (QBO_NO_DELETES): delete it in QuickBooks by hand.");
     return this.with({ qboId: id }).request<Resp>("POST", entity.toLowerCase(), { params: { operation: "delete" }, body: { Id: id, SyncToken: syncToken }, label: `delete ${entity} ${id}` });
   }
   /** Change data capture: what changed since a time (up to 30 days back), by entity. */

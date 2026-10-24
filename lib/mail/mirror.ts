@@ -383,3 +383,51 @@ export async function sortWaiting(admin: SupabaseClient, deadline: number) {
   }
   return out;
 }
+
+/**
+ * Inbox email from someone at a customer that never became a customer email here (Oct 24, Nick: "I've got 10 emails in
+ * there right now from Dear Heart Designs, and all of the employees are in their company file… you're only showing 6":
+ * the Joy Pop thread came in during the Oct 20 mailbox trouble, through the backup reader, which lists email but doesn't
+ * keep it). Kept now like any customer email (attachments, the AI's read, Needs reply) and linked to the Inbox row.
+ * Same matching as new mail (email, contact, Printavo, company domain). A few each run, newest first.
+ */
+export async function linkCustomerInbox(admin: SupabaseClient, deadline: number) {
+  const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
+  const { matchAddress, keepIncoming } = await import("./process");
+  const { ewsReady, ewsMimeByMessageId } = await import("./ewsBox");
+  let n = 0;
+  for (const a of (accts || []) as MailAccount[]) {
+    if (Date.now() > deadline - 10000) break;
+    const { data } = await admin.from("mail_inbox").select("id, uid, uidvalidity, message_id, from_email").eq("account_id", a.id).is("gone_at", null).is("activity_id", null)
+      .order("received_at", { ascending: false, nullsFirst: false }).limit(200);
+    const rows = (data || []) as { id: string; uid: number; uidvalidity: number; message_id: string | null; from_email: string }[];
+    const seen = new Map<string, boolean>();
+    const ews = await ewsReady(admin, a).catch(() => false);
+    for (const r of rows) {
+      if (Date.now() > deadline - 10000 || n >= 25) break;
+      const from = lc(r.from_email);
+      if (!from || from === lc(a.email)) continue;
+      if (!seen.has(from)) { const m = await matchAddress(admin, from).catch(() => null); seen.set(from, !!m?.customerId && !m.ignore); }
+      if (!seen.get(from) || !r.message_id) continue;
+      try {
+        // kept already under this message (another mailbox): just link it
+        const b = r.message_id.replace(/^<|>$/g, "");
+        const { data: hit } = await admin.from("activities").select("id").eq("kind", "email").in("external_id", [b, `<${b}>`]).limit(1).maybeSingle();
+        let id = (hit?.id as string) || "";
+        if (!id) {
+          let raw: Buffer | null = ews ? await ewsMimeByMessageId(a, r.message_id).catch(() => null) : null;
+          if (!raw && Number(r.uidvalidity)) {
+            const { withBox } = await import("./folders");
+            raw = await withBox(a, async (c) => { const lock = await c.getMailboxLock("INBOX"); try { const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true }); return m && m.source ? Buffer.from(m.source) : null; } finally { lock.release(); } }, Date.now() + 30000).catch(() => null);
+          }
+          if (!raw) continue;
+          id = await keepIncoming(admin, toMsg(await simpleParser(raw)), { id: a.id, email: a.email });
+        }
+        // re-sorted as a customer email (its summary is the customer email's)
+        await admin.from("mail_inbox").update({ activity_id: id, sorted_at: null }).eq("id", r.id);
+        n++;
+      } catch (e) { console.warn("linkCustomerInbox", e instanceof Error ? e.message : e); }
+    }
+  }
+  return n;
+}

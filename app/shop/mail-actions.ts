@@ -384,7 +384,9 @@ export async function addEmailToOrderNotes(activityId: string, orderId: string) 
 }
 
 export type InboxItem = { id: string; uid: number; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string; /** a file attached (the list's paperclip) */ has_attachments?: boolean;
-  /** who else it went to (To and Cc, names and addresses), for the list's search (Oct 21, Nick: "when I search Alvin, this email doesn't come up") */ people?: string };
+  /** who else it went to (To and Cc, names and addresses), for the list's search (Oct 21, Nick: "when I search Alvin, this email doesn't come up") */ people?: string;
+  /** from someone at a customer (their email or a contact on file), even before it's linked (Oct 24, Nick: "I've got 10 emails from Dear Heart Designs… you're only showing 6") */ customer?: boolean;
+  /** a calendar invite or an evite (Oct 24, Nick: "events should just be when someone sends us a calendar invite… or an evite") */ invite?: boolean };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
 export async function getOutlookInbox(quick = false) {
@@ -406,12 +408,33 @@ export async function getOutlookInbox(quick = false) {
     const rows = (data || []) as (InboxItem & { message_id?: string })[];
     // To and Cc from our copy of the mailbox (mail_cache), so searching the list finds someone who was only copied
     const ids = [...new Set(rows.map((r) => r.message_id || "").filter(Boolean))];
-    const people = new Map<string, string>();
+    const people = new Map<string, string>(), invites = new Set<string>();
+    const INVITE_FROM = /@(evite\.com|.*\.evite\.com|paperlesspost\.com|punchbowl\.com|greenvelope\.com|joinpaperlesspost\.com)$/i;
     await Promise.race([Promise.all(Array.from({ length: Math.ceil(ids.length / 80) }, async (_, i) => {
-      const { data: c } = await admin.from("mail_cache").select("message_id, to_text, cc_text").eq("account_id", a.id).in("message_id", ids.slice(i * 80, i * 80 + 80));
-      for (const x of (c || []) as { message_id: string; to_text: string; cc_text: string }[]) people.set(x.message_id, `${x.to_text} ${x.cc_text}`.trim());
+      const { data: c } = await admin.from("mail_cache").select("message_id, to_text, cc_text, attachments").eq("account_id", a.id).in("message_id", ids.slice(i * 80, i * 80 + 80));
+      for (const x of (c || []) as { message_id: string; to_text: string; cc_text: string; attachments: { name?: string; type?: string }[] | null }[]) {
+        people.set(x.message_id, `${x.to_text} ${x.cc_text}`.trim());
+        // a calendar invite carries a calendar part (text/calendar, an .ics file)
+        if ((x.attachments || []).some((f) => /calendar|ics/i.test(String(f.type || "")) || /\.ics$/i.test(String(f.name || "")))) invites.add(x.message_id);
+      }
     })).catch(() => null), new Promise((r) => setTimeout(r, 3000))]);
-    const items: InboxItem[] = rows.map(({ message_id, ...r }) => ({ ...r, people: (message_id && people.get(message_id)) || "" }));
+    // who's a customer: their email, a second email or a contact on the customer's file (linking the email to the
+    // customer happens in the background, lib/mail/mirror.ts linkCustomerInbox)
+    const unlinked = [...new Set(rows.filter((r) => !r.activity_id).map((r) => (r.from_email || "").trim().toLowerCase()).filter(Boolean))];
+    const known = new Set<string>();
+    if (unlinked.length) await Promise.race([(async () => {
+      const [{ data: c1 }, { data: c2 }, { data: k }] = await Promise.all([
+        admin.from("customers").select("email").in("email", unlinked),
+        admin.from("customers").select("contact2_email").in("contact2_email", unlinked),
+        admin.from("customer_contacts").select("email").in("email", unlinked),
+      ]);
+      for (const x of [...(c1 || []).map((y) => y.email), ...(c2 || []).map((y) => y.contact2_email), ...(k || []).map((y) => y.email)]) if (x) known.add(String(x).toLowerCase());
+    })().catch(() => null), new Promise((r) => setTimeout(r, 2500))]);
+    const items: InboxItem[] = rows.map(({ message_id, ...r }) => ({
+      ...r, people: (message_id && people.get(message_id)) || "",
+      customer: !!r.activity_id || known.has((r.from_email || "").trim().toLowerCase()),
+      invite: (!!message_id && invites.has(message_id)) || INVITE_FROM.test(r.from_email || "") || /^(invitation|updated invitation|new event|event invitation)\b|you('|’)re invited|\binvited you\b/i.test(r.subject || ""),
+    }));
     return { ok: true as const, items, connected: true, checked: a.last_ok_at };
   } catch (e) { return fail(e); }
 }

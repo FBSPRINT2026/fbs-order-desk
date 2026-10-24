@@ -58,9 +58,12 @@ const plainNew = (b: string) => { const t = String(b || ""); const m = t.search(
 const INTENT: Record<string, string> = { new_order: "New order", reorder: "Reorder", change_to_order: "Order change", artwork: "Artwork", payment: "Payment", question: "Question", other: "Other" };
 
 type Mode = "mail" | "crm";
-type Bk = "all" | "customer" | "todo" | "event" | "fyi";
-const BK: { k: Bk; label: string }[] = [{ k: "all", label: "All" }, { k: "customer", label: "Customers" }, { k: "todo", label: "To-dos" }, { k: "event", label: "Events" }, { k: "fyi", label: "FYI" }];
-const bucketOf = (i: InboxItem): Bk => (i.activity_id ? "customer" : i.bucket === "todo" || i.bucket === "event" || i.bucket === "fyi" ? i.bucket : i.bucket === "ignore" ? "fyi" : "fyi");
+// the Inbox's filters (Oct 24, Nick: "the to-dos and FYIs on that little bar, just turn those off… All, Customers and
+// Events, and events should just be when someone sends us a calendar invite… or an evite"). Customers = anyone on a
+// customer's file (their email or a contact), linked or not yet; Events = a calendar invite (an .ics) or an evite
+type Bk = "all" | "customer" | "event";
+const BK: { k: Bk; label: string }[] = [{ k: "all", label: "All" }, { k: "customer", label: "Customers" }, { k: "event", label: "Events" }];
+const inBk = (i: InboxItem, k: Bk) => k === "all" || (k === "customer" ? !!(i.activity_id || i.customer) : !!i.invite);
 
 /** Conversation grouping is off for now (Oct 20, Nick: "turn off the conversation grouping… just have it read like
  *  normal emails when they came in. I'll rethink it and we'll come back to it"): every email its own row, newest first.
@@ -85,6 +88,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const tab: "outlook" | "reply" | "leads" | "all" = mode === "mail" ? "outlook" : crmTab;
   const setTab = (t: "outlook" | "reply" | "leads" | "all") => { if (t !== "outlook") setCrmTab(t); };
   const [bk, setBk] = useSticky<Bk>("inbox.bucket", "all");
+  // a filter that was taken away (To-dos, FYI: Oct 24) falls back to All
+  useEffect(() => { if (!BK.some((b) => b.k === bk)) setBk("all"); }, [bk]); // eslint-disable-line react-hooks/exhaustive-deps
   // Email: the folder list, another folder's emails, and search as conversations (all live from the mailbox)
   const [view, setView] = useState<MailView>({ kind: "inbox" });
   const [before, setBefore] = useState<MailView>({ kind: "inbox" });
@@ -366,8 +371,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const listed = q.trim() ? shown.filter((r) => `${who(r.x)} ${r.x.from_email} ${r.x.subject} ${r.x.meta?.triage?.summary || ""} ${bodyOf(r.x)}`.toLowerCase().includes(q.trim().toLowerCase())) : shown;
   // the people in the Inbox now, for the search suggestions
   const senders = useMemo(() => { const m = new Map<string, { name: string; email: string }>(); for (const i of ol || []) if (i.from_email && !m.has(i.from_email.toLowerCase())) m.set(i.from_email.toLowerCase(), { name: personName(i.from_name) || "", email: i.from_email }); return [...m.values()]; }, [ol]);
-  const bkN = (k: Bk) => (ol || []).filter((i) => k === "all" || bucketOf(i) === k).length;
-  const olShown = (ol || []).filter((i) => bk === "all" || bucketOf(i) === bk).filter((i) => {
+  const bkN = (k: Bk) => (ol || []).filter((i) => inBk(i, k)).length;
+  const olShown = (ol || []).filter((i) => inBk(i, BK.some((b) => b.k === bk) ? bk : "all")).filter((i) => {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
     return !t || `${i.from_name} ${i.from_email} ${i.people || ""} ${i.subject} ${i.summary || ""} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") + " " + bodyOf(r.x) : ""}`.toLowerCase().includes(t);
   });
@@ -642,7 +647,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
         const main = (folders || []).filter((f) => /\\(Inbox|Sent|Archive|Drafts)/.test(f.special));
         const sane = (folders || []).filter((f) => f.sane), rest = (folders || []).filter((f) => !main.includes(f) && !f.sane && !/\\(Junk|Trash)/.test(f.special));
         const go = (path: string, inbox: boolean) => { setPSheet(false); setPMore(false); setQ(""); if (inbox) { setView({ kind: "inbox" }); } else void openFolder(path); };
-        const sum = [counts.reply ? `${counts.reply} customer${counts.reply === 1 ? "" : "s"} need${counts.reply === 1 ? "s" : ""} a reply${counts.urgent ? ` (${counts.urgent} urgent)` : ""}` : "No customer waiting on a reply", bkN("todo") ? `${bkN("todo")} to-do${bkN("todo") === 1 ? "" : "s"}` : "", bkN("event") ? `${bkN("event")} event${bkN("event") === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+        const sum = [counts.reply ? `${counts.reply} customer${counts.reply === 1 ? "" : "s"} need${counts.reply === 1 ? "s" : ""} a reply${counts.urgent ? ` (${counts.urgent} urgent)` : ""}` : "No customer waiting on a reply", bkN("event") ? `${bkN("event")} event${bkN("event") === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
         return <div className="pit">
           <div className="pit-top">
             {view.kind === "search" && <button type="button" className="pit-back" onClick={backFromSearch} aria-label={`Back to ${beforeName}`}><svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>{beforeName}</button>}
@@ -667,7 +672,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <button type="button" className="pit-ai-h" onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }}><span className="eh-ai-orb" aria-hidden>✦</span>Inbox summary<span className="pit-go" aria-hidden>›</span></button>
             <p>{ol ? sum : "Loading…"}</p>
             <div className="pit-qa" role="tablist">
-              {([["customer", "Customers", TbIcon.reply], ["todo", "To-dos", TbIcon.check], ["event", "Events", <svg key="e" viewBox="0 0 24 24" aria-hidden><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>], ["all", "All", null]] as [Bk, string, React.ReactNode][]).map(([k, label, icon]) => (
+              {([["customer", "Customers", TbIcon.reply], ["event", "Events", <svg key="e" viewBox="0 0 24 24" aria-hidden><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>], ["all", "All", null]] as [Bk, string, React.ReactNode][]).map(([k, label, icon]) => (
                 <button key={k} type="button" role="tab" aria-selected={bk === k} className={bk === k ? "on" : ""} onClick={() => { setBk(k); setOpen(null); }}>{icon}{label}{ol && <b>{bkN(k)}</b>}</button>
               ))}
             </div>
@@ -831,7 +836,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                     <span className="ibx2-item-3">
                       {urgentG && <span className="itag urg">Urgent</span>}
                       {r ? <>{needsG ? <span className="itag rep">Needs reply</span> : r.answered ? <span className="itag fyi">Answered</span> : null}<span className="itag cus">Customer</span></>
-                        : i.bucket === "todo" ? <span className="itag todo">To-do</span> : i.bucket === "event" ? <span className="itag ev">Event</span> : i.bucket ? <span className="itag fyi">FYI</span> : <span className="itag-sorting">Sorting…</span>}
+                        : i.customer ? <span className="itag cus">Customer</span> : i.invite ? <span className="itag ev">Event</span> : null}
                       {i.cc_only && <span className="itag fyi" title="You were copied (Cc), not sent to">CC&apos;d</span>}
                       {ordG && <span className="itag fyi">#{ordG.number}</span>}
                     </span>

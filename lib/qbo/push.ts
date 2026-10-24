@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Settings } from "@/lib/pricing";
-import { Qbo, QboError } from "@/lib/qbo/client";
+import { Qbo, QboError, QBO_NO_DELETES } from "@/lib/qbo/client";
 import {
   customerCreateBody, customerDiff, fromPrintavo, hashOf, invoiceFingerprint, invoicePayload, isInvoiceStatus, matchPayment,
   ownedFromOurs, ownedFromQbo, paymentPayload, type OrderRow, type OurCustomer, type OurPayment, type Owned, type QboSettings,
@@ -291,7 +291,7 @@ export class Pusher {
     const cur = await q.read<Rec & { DocNumber?: string }>("Invoice", qboId);
     if (!cur) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't there.` };
     if (!/^TEST-/.test(String(cur.DocNumber || ""))) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't a test invoice (its number is ${cur.DocNumber}), so it wasn't voided.` };
-    await q.voidInvoice(qboId, cur.SyncToken);
+    await q.voidInvoice(qboId, cur.SyncToken, true);
     return { status: "done", reason: `Voided test invoice ${cur.DocNumber} (QuickBooks #${qboId}).` };
   }
 
@@ -327,6 +327,7 @@ export class Pusher {
     if (!link) return { status: "skipped", reason: "Never in QuickBooks: nothing to void." };
     if (link.source !== "created") return { status: "needs_review", reason: `QuickBooks invoice #${link.qbo_id} was made by Printavo, so it isn't voided automatically. Void it in QuickBooks if the order is cancelled, then Skip.` };
     const preview = { action: "void", qboId: link.qbo_id };
+    if (QBO_NO_DELETES) return { status: "needs_review", reason: `The order was cancelled here, but voiding in QuickBooks is turned off for now. Void QuickBooks invoice #${link.qbo_id} by hand if it should go, then Skip.`, preview };
     if (!this.qbo) return { status: "pending", reason: `Not connected: would void QuickBooks invoice #${link.qbo_id}.`, preview };
     if (!this.live) return { status: "pending", reason: `Preview: would void QuickBooks invoice #${link.qbo_id}.`, preview };
     const q = this.qbo.with({ entity: "invoice", localId: row.local_id, qboId: link.qbo_id });
@@ -432,6 +433,7 @@ export class Pusher {
     if (!link) return { status: "skipped", reason: "Never in QuickBooks: nothing to delete." };
     if (link.source !== "created") return { status: "needs_review", reason: `Deleted here, but QuickBooks payment #${link.qbo_id} was made by Printavo (or in QuickBooks), so it isn't deleted automatically. Delete it there if it should go, then Skip.` };
     const preview = { action: "delete", qboId: link.qbo_id };
+    if (QBO_NO_DELETES) return { status: "needs_review", reason: `The payment was deleted here, but deleting in QuickBooks is turned off for now. Delete QuickBooks payment #${link.qbo_id} by hand if it should go, then Skip.`, preview };
     if (!this.qbo) return { status: "pending", reason: `Not connected: would delete QuickBooks payment #${link.qbo_id}.`, preview };
     if (!this.live) return { status: "pending", reason: `Preview: would delete QuickBooks payment #${link.qbo_id}.`, preview };
     const q = this.qbo.with({ entity: "payment", localId: row.local_id, qboId: link.qbo_id });
