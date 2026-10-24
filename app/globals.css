@@ -13563,3 +13563,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pjs-st.cur i{background:var(--surface);border:2px solid var(--fbs-blue);color:var(--fbs-blue);box-shadow:none}
 .pjs-st.cur b{color:var(--ink);font-weight:700}
 .pjs-st b{font-weight:500}
+/* the jobs toolbar runs the full width of the card, like the secondary toolbar everywhere else (Oct 24, Nick) */
+.portal .pdx-stabs{display:flex;width:100%}
+.portal .pdx-stabs .chips{width:100%;flex:1 1 auto}
+/* order tracking: two columns past three (no "more") */
+.pdx .pdx-left .pdx-track .pdx-track-list.two{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}
+.pdx-track-list.two>.pdx-trk:nth-child(2){border-top:0}
+.pdx-ag>b{font-variant-numeric:tabular-nums}

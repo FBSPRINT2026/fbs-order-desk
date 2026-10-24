@@ -79,7 +79,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
         <section className="pdx-card pdx-track">
           <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
-          {tracked.length ? <div className="pdx-track-list">{tracked.slice(0, 3).map((t) => trackRow(t))}{tracked.length > 3 && <details className="pdx-more-fold"><summary>{tracked.length - 3} more</summary><div className="pdx-track-list">{tracked.slice(3).map((t) => trackRow(t))}</div></details>}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+          {/* more than three: two columns, never a "more" (Oct 24, Nick) */}{tracked.length ? <div className={"pdx-track-list" + (tracked.length > 3 ? " two" : "")}>{tracked.slice(0, 6).map((t) => trackRow(t))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
       <section className="pdx-card pdx-sent">
@@ -137,7 +137,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
               {past.map((p) => (
                 <div className="pdx-ag" key={p.id}>
                   <Link href={p.href} className="pdx-ag-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span>#{p.number}</span>}</Link>
-                  <b>{p.nickname || `Order #${p.number}`}</b>
+                  <b title={p.nickname || undefined}>#{p.number}</b>
                   <small>#{p.number}{p.when ? ` · ${p.when}` : ""}{p.qty ? ` · ${p.qty} pcs` : ""}</small>
                   <DashReorder id={p.id} archived={p.archived} canAct={canAct} />
                 </div>

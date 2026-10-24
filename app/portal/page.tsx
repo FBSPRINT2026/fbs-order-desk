@@ -233,7 +233,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const todayCt = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const tracked = orders.filter((o) => starOf(o) && !["completed", "void"].includes(String(o.status)))
     .sort((a, b) => String((b as Order & { customer_starred_at?: string }).customer_starred_at).localeCompare(String((a as Order & { customer_starred_at?: string }).customer_starred_at)))
-    .slice(0, 4).map((o) => {
+    .slice(0, 6).map((o) => {
       const j = jobs.find((x) => x.id === o.id) || jobOf(o);
       const cs = customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) });
       const late = !!o.due_date && o.due_date < todayCt && !["ready", "completed"].includes(o.status);
