@@ -42,7 +42,10 @@ export async function qboOrderState(orderId: string, deep = false) {
     ]);
     const row = q as { status: string; reason: string; attempts: number } | null;
     const issue = row && (row.status === "needs_review" || (row.status === "error" && row.attempts >= 3)) ? row.reason || "It didn't sync." : "";
-    return { ok: true as const, ...st, issue };
+    // changed since it went to QuickBooks (Oct 24, Nick: "once we make a change… turn it yellow… until it syncs back again
+    // and goes green"): its newest change is still waiting in the queue
+    const pending = !issue && !!row && (row.status === "pending" || row.status === "running" || row.status === "error");
+    return { ok: true as const, ...st, issue, pending };
   } catch (e) {
     return { ok: false as const, error: e instanceof QboError ? explainQboError(e) : e instanceof Error ? e.message : String(e) };
   }

@@ -12894,6 +12894,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 @media (max-width:760px){ .fv-body{grid-template-columns:minmax(0,1fr)} .fv-col+.fv-col{border-left:0;border-top:1px solid var(--line-2)} .fv-top .btn{display:none} }
 /* the order's "in QuickBooks" check beside its status, and the delete question (Oct 24) */
 .qb-mark{width:16px;height:16px;flex:none}
+.qb-tick .qb-mark{width:22px;height:22px}
 .qb-tick{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;color:var(--ok);white-space:nowrap;margin-right:4px;align-self:center;cursor:default}
 .qb-tick.qb-off{color:var(--ink-3);opacity:.45}
 .qb-tick.qb-wait{color:var(--warn)}

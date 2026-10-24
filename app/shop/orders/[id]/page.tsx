@@ -816,12 +816,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // (Oct 22, Nick: Hudson Band was made into an order, deleted, and gone from New)
   // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
   // order in QuickBooks?"); qbVoid = the yes
-  type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string };
+  type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string; pending?: boolean };
   const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
-  useEffect(() => { if (!o?.id) return; qboOrderState(o.id, o.type === "invoice").then((r) => setQbSt(r.ok ? r : null), () => null); }, [o?.id, o?.type]); // eslint-disable-line react-hooks/exhaustive-deps
+  // asked again after each save (a change turns it yellow until it syncs), and every minute while the page is open
+  const qbDeep = useRef("");
+  useEffect(() => {
+    if (!o?.id) return;
+    const ask = () => { const deep = o.type === "invoice" && qbDeep.current !== o.id; if (deep) qbDeep.current = o.id; qboOrderState(o.id, deep).then((r) => setQbSt(r.ok ? r : null), () => null); };
+    const t0 = setTimeout(ask, 1500); // after the save's queue row is written
+    const t = setInterval(ask, 60000);
+    return () => { clearTimeout(t0); clearInterval(t); };
+  }, [o?.id, o?.type, o?.status, saveState]); // eslint-disable-line react-hooks/exhaustive-deps
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
@@ -1043,9 +1051,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               red") */}
           {(() => {
             const inv = o.type === "invoice";
-            const k = qbSt?.issue ? "bad" : qbSt?.voided ? "void" : qbSt?.synced ? "ok" : inv ? "wait" : "off";
-            const tip = k === "bad" ? `QuickBooks problem: ${qbSt!.issue}` : k === "void" ? `Voided in QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}` : k === "ok" ? `In QuickBooks${qbSt!.docNumber ? ` as invoice ${qbSt!.docNumber}` : ""}${qbSt!.source === "test" ? " (test)" : ""}` : k === "wait" ? "Ready for QuickBooks, not sent yet" : "A quote: quotes don't go to QuickBooks";
-            return <span className={"qb-tick qb-" + k} title={tip} aria-label={tip}><QbMark />{k === "ok" ? <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> : k === "bad" ? <b aria-hidden>!</b> : k === "void" ? "Void" : null}</span>;
+            const changed = !!qbSt?.synced && !qbSt.voided && !!qbSt.pending;
+            const k = qbSt?.issue ? "bad" : qbSt?.voided ? "void" : changed ? "wait" : qbSt?.synced ? "ok" : inv ? "wait" : "off";
+            const tip = k === "bad" ? `Didn't sync to QuickBooks: ${qbSt!.issue}` : k === "void" ? `Voided in QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}` : k === "ok" ? `Synced to QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber}${qbSt!.source === "test" ? ", a test" : ""})` : ""}` : k === "wait" ? (changed ? `Changed since it went to QuickBooks${qbSt!.docNumber ? ` (invoice ${qbSt!.docNumber})` : ""}: waiting to sync` : "Not synced to QuickBooks yet") : "A quote: quotes don't sync to QuickBooks";
+            // just the QB mark, in its color (Oct 24, Nick: "remove the check mark… just use the QB logo and the color
+            // coordination… when you hover over it, it should say the status")
+            return <span className={"qb-tick qb-" + k} title={tip} aria-label={tip} role="img"><QbMark /></span>;
           })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
@@ -1642,5 +1653,5 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
 /** QuickBooks' mark, small, in QuickBooks green (the order's "in QuickBooks" check and the delete question) */
 function QbMark() {
-  return <QbLogo className="qb-mark" title="QuickBooks" />;
+  return <QbLogo className="qb-mark" />;
 }
