@@ -538,7 +538,7 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
 }
 
 // ---------- Place a reorder (Oct 24, Nick: "place reorder… search and click… update the quantities… pull it into the form") ----------
-export type Reorderable = { ref: string; number: string; name: string; when: string; qty: number; from: "portal" | "printavo" };
+export type Reorderable = { ref: string; number: string; name: string; when: string; qty: number; from: "portal" | "printavo"; /** a picture of it (the mockup) */ pic?: string; /** where to look at it */ href?: string };
 
 /** their past orders to reorder: ours and their Printavo history, newest first, searched by number or name */
 export async function myReorderables(q = ""): Promise<Reorderable[]> {
@@ -546,15 +546,27 @@ export async function myReorderables(q = ""): Promise<Reorderable[]> {
     const { supabase, admin, cust } = await me();
     const term = q.trim().replace(/[%,()]/g, " ").slice(0, 60);
     const num = term.replace(/^#/, "");
-    let oq = supabase.from("orders").select("id, number, nickname, created_at, qty, status, draft").eq("customer_id", cust.id).not("status", "in", "(request,quote,void)").is("discarded_at", null).order("number", { ascending: false }).limit(25);
+    let oq = supabase.from("orders").select("id, number, nickname, created_at, qty, status, draft, groups").eq("customer_id", cust.id).not("status", "in", "(request,quote,void)").is("discarded_at", null).order("number", { ascending: false }).limit(25);
     if (term) oq = /^\d+$/.test(num) ? oq.eq("number", +num) : oq.ilike("nickname", `%${term}%`);
-    let aq = admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date").eq("customer_id", cust.id).order("order_date", { ascending: false }).limit(25);
+    let aq = admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date, files, data").eq("customer_id", cust.id).order("order_date", { ascending: false }).limit(25);
     if (term) aq = /^\d+$/.test(num) ? aq.eq("visual_id", num) : aq.ilike("nickname", `%${term}%`);
     const [{ data: os }, { data: as }] = await Promise.all([oq, aq]);
+    // a picture of each (Oct 24, Nick: "for Peticolas you might have like 10 Velvet Hammers… the little thumbnail there so they can view it")
+    const picOf = new Map<string, string>();
+    for (const o of (os || []) as { id: string; groups: Group[] | null }[]) { const g = (o.groups || [])[0]; const p = g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; if (p) picOf.set(`o:${o.id}`, p); }
+    type PvFile = { thumb?: string; full?: string; mime?: string; name?: string };
+    for (const r of (as || []) as { id: string; files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: PvFile[] }[]; lines?: { mockups?: PvFile[] }[] }[] } | null }[]) {
+      const f = (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).filter((x) => /^image\//.test(x.mime || "") && !/barcode|label/i.test(x.name || ""));
+      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => p && !["failed", "too-big"].includes(p));
+      if (hit) picOf.set(`a:${r.id}`, hit);
+    }
+    const paths = [...new Set(picOf.values())];
+    const { data: sg } = paths.length ? await admin.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
+    const url = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""]));
     const a: Reorderable[] = ((os || []) as { id: string; number: number; nickname: string | null; created_at: string; qty: number | null; draft?: boolean }[]).filter((o) => !o.draft)
-      .map((o) => ({ ref: `o:${o.id}`, number: String(o.number), name: o.nickname || "", when: String(o.created_at || "").slice(0, 10), qty: o.qty || 0, from: "portal" as const }));
+      .map((o) => ({ ref: `o:${o.id}`, number: String(o.number), name: o.nickname || "", when: String(o.created_at || "").slice(0, 10), qty: o.qty || 0, from: "portal" as const, pic: url.get(picOf.get(`o:${o.id}`) || "") || "", href: `/portal/orders/${o.id}` }));
     const b: Reorderable[] = ((as || []) as { id: string; visual_id: string | number | null; nickname: string | null; qty: number | null; order_date: string | null }[])
-      .map((o) => ({ ref: `a:${o.id}`, number: String(o.visual_id || ""), name: o.nickname || "", when: String(o.order_date || "").slice(0, 10), qty: o.qty || 0, from: "printavo" as const }));
+      .map((o) => ({ ref: `a:${o.id}`, number: String(o.visual_id || ""), name: o.nickname || "", when: String(o.order_date || "").slice(0, 10), qty: o.qty || 0, from: "printavo" as const, pic: url.get(picOf.get(`a:${o.id}`) || "") || "", href: `/portal/archive/${o.id}` }));
     return [...a, ...b].sort((x, y) => y.when.localeCompare(x.when)).slice(0, 30);
   } catch { return []; }
 }

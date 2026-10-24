@@ -243,6 +243,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
   const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", po: o.po_number || "", method: "", qty: "", goodsOn: false, garments: "", files, note });
   // Place a reorder (Oct 24, Nick: "search and click… update the quantities… pull it into the form… or they can just copy
   // and paste like, hey, let's reorder")
+  const asQ = (backHref.match(/[?&]as=([^&]+)/) || [])[1] || "";
   const [re, setRe] = useState<{ q: string; list: Reorderable[] | null; pick: string; busy: string; text: string } | null>(null);
   useEffect(() => {
     if (!re) return;
@@ -423,7 +424,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       {/* the side cards: a short title, one line under it (Oct 24, Nick: "these side panels look really bad… just says have PO or simple order") */}
       <section className="rq-card">
         <h3>Skip the form</h3>
-        <div className="rq-fast">
+        <div className="rq-fast rq-fast3">
           <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")} title="We read your PO and fill in the form; you check it before it's sent">
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg></span>
             <b>{poBusy ? "Reading…" : "Upload PO"}</b>
@@ -433,11 +434,11 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
             <b>Simple order</b>
           </button>
-        </div>
-        <button type="button" className="rq-fast-o rq-fast-wide" disabled={preview || !!poBusy} onClick={() => setRe({ q: "", list: null, pick: "", busy: "", text: "" })} title="Pick a past order; it fills in the form and you change the quantities">
+        <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => setRe({ q: "", list: null, pick: "", busy: "", text: "" })} title="Pick a past order; it fills in the form and you change the quantities">
           <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5" /></svg></span>
           <b>Place a reorder</b>
         </button>
+        </div>
         {poBusy && <p className="rq-card-busy">{poBusy}</p>}
       </section>
       {goods && (
@@ -467,9 +468,11 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
             <input type="search" autoFocus placeholder="Search by order # or name" value={re.q} onChange={(e) => setRe({ ...re, q: e.target.value, pick: "" })} aria-label="Search your past orders" />
             <div className="rq-re-list" role="listbox" aria-label="Your past orders">
               {re.list === null ? <div className="faint">Loading…</div> : re.list.length ? re.list.map((x) => (
-                <button key={x.ref} type="button" role="option" aria-selected={re.pick === x.ref} className={"rq-re-row" + (re.pick === x.ref ? " on" : "")} onClick={() => setRe({ ...re, pick: x.ref })} onDoubleClick={() => { setRe({ ...re, pick: x.ref }); }}>
-                  <b>#{x.number}</b><span className="nm">{x.name || "Order"}</span><span className="faint">{x.when ? new Date(x.when + "T12:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : ""}{x.qty ? ` · ${x.qty} pcs` : ""}</span>
-                </button>
+                <div key={x.ref} role="option" tabIndex={0} aria-selected={re.pick === x.ref} className={"rq-re-row" + (re.pick === x.ref ? " on" : "")} onClick={() => setRe({ ...re, pick: x.ref })} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setRe({ ...re, pick: x.ref }); } }}>
+                  <span className="rq-re-pic">{x.pic ? <img src={x.pic} alt="" loading="lazy" /> : <span>#{x.number}</span>}</span>
+                  <span className="rq-re-t"><b>#{x.number}</b> <span className="nm">{x.name || "Order"}</span><small className="faint">{x.when ? new Date(x.when + "T12:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : ""}{x.qty ? ` · ${x.qty} pcs` : ""}</small></span>
+                  {x.href && <a className="btn sm" href={`${x.href}${asQ ? `?as=${asQ}` : ""}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>View</a>}
+                </div>
               )) : <div className="faint">{re.q ? "No orders match that." : "No past orders yet."}</div>}
             </div>
             <div className="field"><label htmlFor="rq-re-t">Or just tell us</label><textarea id="rq-re-t" rows={2} placeholder="e.g. Reorder #1234, same as last time but 50 more in black" value={re.text} onChange={(e) => setRe({ ...re, text: e.target.value })} /></div>
