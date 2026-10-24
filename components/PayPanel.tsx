@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { payOrders, sentPaymentNotice } from "@/app/portal/pay-actions";
@@ -168,7 +169,9 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     </div>
   ) : null;
 
-  if (modal) return (
+  // drawn on the page's body (Oct 24, Nick: "the pop-up… gets trapped behind the banner… it should be right in the
+  // middle"): inside the portal's panels it sat under the sticky top bar
+  if (modal) return portalTo(
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose?.(); }}>
       <div className="pp-sheet">
         <div className="pp-sheet-h"><b>{done ? "Payment received" : title}</b>{onClose && <button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button>}</div>
@@ -281,4 +284,9 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       {!canAct && <div className="faint" style={{ fontSize: 12 }}>Payments are turned off in the preview.</div>}
     </div>
   );
+}
+
+/** a pop-up on the page's body, above everything (server render: nothing until the page is in the browser) */
+function portalTo(node: ReactNode) {
+  return typeof document === "undefined" ? null : createPortal(node, document.body);
 }
