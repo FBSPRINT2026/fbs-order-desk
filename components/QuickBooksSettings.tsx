@@ -45,6 +45,7 @@ export default function QuickBooksSettings() {
         Customers are linked by QuickBooks&apos; own customer number, so renaming a customer here renames the same customer in QuickBooks and its history stays with it.
         It&apos;s <b>{st.settings.enabled ? (st.settings.mode === "live" ? "on and sending" : "on, preview only") : "off"}</b>.
       </p>
+      <SyncBar st={st} reload={load} openProblems={() => setTab("queue")} />
       <nav className="set-tabs" aria-label="QuickBooks">
         {([["setup", "Setup"], ["matching", "Customer matching"], ["queue", `Queue${st.counts.needs_review ? ` · ${st.counts.needs_review} to review` : open ? ` · ${open}` : ""}`], ["log", "Log"]] as const).map(([k, l]) => (
           <a key={k} href="#" className={tab === k ? "on" : ""} onClick={(e) => { e.preventDefault(); setTab(k); }}>{l}</a>
@@ -55,6 +56,53 @@ export default function QuickBooksSettings() {
       {tab === "queue" && <Queue st={st} reload={load} />}
       {tab === "log" && <Log />}
     </div>
+  );
+}
+
+/* ---------------- sync now + problems ---------------- */
+
+/**
+ * The top of QuickBooks (Oct 24, Nick: "I need a button where I can force the sync, just like check email… if there's an
+ * error with the sync, it makes a list and say, well, why did it error? It even does that in Printavo"): when it last
+ * ran, Sync now, and anything that didn't sync with why, each with Retry / Skip (the full list is the Queue tab).
+ */
+function SyncBar({ st, reload, openProblems }: { st: QboStatus; reload: () => void; openProblems: () => void }) {
+  const [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
+  const [probs, setProbs] = useState<QueueItem[]>([]);
+  const loadProbs = useCallback(() => Promise.all([qboQueue("needs_review", 50), qboQueue("error", 50)]).then(([a, b]) => setProbs([...(a.ok ? a.data! : []), ...(b.ok ? b.data!.filter((x) => x.attempts >= 3) : [])])), []);
+  useEffect(() => { loadProbs(); }, [loadProbs, st]);
+  const sync = async () => {
+    setBusy("sync"); setMsg("");
+    const r = await qboRunNow(false);
+    setBusy(""); setMsg(r.ok ? r.msg || "Done." : r.error); reload(); loadProbs();
+  };
+  const act = async (id: number, a: "retry" | "skip") => { setBusy(String(id)); const r = await qboQueueAction(id, a); setBusy(""); setMsg(r.ok ? r.msg || "" : r.error); reload(); loadProbs(); };
+  const on = st.settings.enabled, live = on && st.settings.mode === "live";
+  return (
+    <section className="panel qb-sync">
+      <div className="panel-h">
+        <h2>Sync</h2>
+        <span className="faint" style={{ fontSize: 12.5 }}>{!st.connected ? "Not connected" : !on ? "Off: Sync now only previews" : live ? "On: sends every minute" : "On, preview only"} · last ran {when(st.lastRunAt)}</span>
+        <span className="spacer" />
+        <button className="btn sm primary" type="button" disabled={!!busy || !st.connected} onClick={() => void sync()}>{busy === "sync" ? "Syncing…" : "Sync now"}</button>
+      </div>
+      <div className="panel-b">
+        {msg && <div className="faint" style={{ fontSize: 13, marginBottom: 6 }}>{msg}</div>}
+        {!probs.length ? <div className="faint" style={{ fontSize: 13 }}>Everything synced. Anything that can&apos;t sync shows up here with the reason.</div> : (
+          <>
+            <div className="qb-prob-h"><b>{probs.length} {probs.length === 1 ? "thing isn't" : "things aren't"} syncing</b><button type="button" className="linkbtn" onClick={openProblems}>Open the queue</button></div>
+            <ul className="qb-probs">{probs.slice(0, 8).map((r) => (
+              <li key={r.id}>
+                <span className="qb-pw">{r.href ? <a href={r.href}>{r.label || r.entity}</a> : r.label || r.entity}<small className="faint"> {r.entity}{r.op !== "upsert" ? ` · ${r.op}` : ""}{r.attempts ? ` · ${r.attempts} tries` : ""}</small></span>
+                <span className="qb-pr">{r.reason || r.last_error || "No reason given."}</span>
+                <span className="qb-pa"><button className="btn sm" type="button" disabled={!!busy} onClick={() => void act(r.id, "retry")}>{busy === String(r.id) ? "…" : "Retry"}</button><button className="btn sm ghost" type="button" disabled={!!busy} onClick={() => void act(r.id, "skip")}>Skip</button></span>
+              </li>
+            ))}</ul>
+            {probs.length > 8 && <button type="button" className="linkbtn" onClick={openProblems}>{probs.length - 8} more in the queue</button>}
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

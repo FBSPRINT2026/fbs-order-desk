@@ -14,6 +14,7 @@ import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } fr
 import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { sideOfMethod, useProdSide } from "@/lib/prodSide";
+import { qboProblemCount } from "@/app/shop/qbo-order-actions";
 import { canOpen, ROLES } from "@/lib/roles";
 import { needsDetails, ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
@@ -28,6 +29,7 @@ const ICONS: Record<string, React.ReactNode> = {
   inbox: <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
   necks: <svg viewBox="0 0 24 24"><path d="M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3" /><path d="M8 3c1 2.5 7 2.5 8 0" /><path d="M8.5 7.5h7" /></svg>,
+  qb: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M10 8v8a1.6 1.6 0 0 1-1.6-1.6v-2.2A2.2 2.2 0 0 1 10 9.7zm4 8V8a1.6 1.6 0 0 1 1.6 1.6v2.2a2.2 2.2 0 0 1-1.6 2.5zM10 8h1.8a2.1 2.1 0 0 1 0 4.2M14 16h-1.8a2.1 2.1 0 0 1 0-4.2" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
@@ -99,6 +101,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     return () => window.removeEventListener("fbs:clickup-count", h);
   }, []);
   const [pvWaiting, setPvWaiting] = useState(0);
+  const [qbProblems, setQbProblems] = useState(0); // QuickBooks sync problems (the owner's QB tool)
   // reorders waiting on production details, counted per side (SP / EMB / HP): the dot is only for the side you're on
   const [detailsBySide, setDetailsBySide] = useState<Record<string, number>>({});
   const details = detailsBySide[side] || 0;
@@ -218,6 +221,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     const later = setTimeout(() => {
     slowAt.current = Date.now();
     getInboxUnread().then((r) => { if (r.ok) setMailNew(r.unread); }, () => null);
+    if (realRole === "owner") qboProblemCount().then((r) => setQbProblems(r.n), () => null);
     // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
     if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
       .then(async ([{ data }, { data: st }]) => {
@@ -258,6 +262,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/clickup" && clickup > 0 && <span className="badge" title={`${clickup} new ClickUp job${clickup === 1 ? "" : "s"} to process`}>{clickup}</span>}
       {href === "/shop/time" && timeCount > 0 && <span className="badge" title={`${timeCount} time clock issue${timeCount === 1 ? "" : "s"} to fix`}>{timeCount}</span>}
+      {href === "/shop/settings/quickbooks" && qbProblems > 0 && <span className="badge" title={`${qbProblems} QuickBooks sync problem${qbProblems === 1 ? "" : "s"}: open to see why`}>{qbProblems}</span>}
       {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
       {href === "/shop/inbox" && mailNew > 0 && <span className="badge soft" title={`${mailNew} unread`}>{mailNew}</span>}
       {href === "/shop/details" && details > 0 && <span className="badge" title={`${details} reorder${details === 1 ? "" : "s"} waiting on production details`}>{details}</span>}
@@ -385,6 +390,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       <div className="nav-h nav-h-admintools nav-h-ver"><span>Admin Tools</span><VersionTag /></div>
       <nav className="nav nav-foot nav-tools">
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
+        {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
+        {role === "owner" && link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
         {role === "owner" && link(["/shop/necklines", "necks", "Necklines"])}

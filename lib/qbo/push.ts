@@ -29,7 +29,7 @@ export type Outcome = {
   /** pending / error: try again after this many minutes */
   retryMin?: number;
 };
-export type Link = { id: number; realm_id: string; entity: string; local_id: string; qbo_id: string; sync_token: string | null; is_primary: boolean; source: string; last_pushed_hash: string | null; last_sent: Record<string, unknown> | null; last_seen_qbo: Record<string, unknown> | null; qbo_owned_fields: string[]; ours_base?: Record<string, unknown> | null };
+export type Link = { id: number; realm_id: string; entity: string; local_id: string; qbo_id: string; sync_token: string | null; is_primary: boolean; source: string; last_pushed_hash: string | null; last_sent: Record<string, unknown> | null; last_seen_qbo: Record<string, unknown> | null; qbo_owned_fields: string[]; ours_base?: Record<string, unknown> | null; note?: string };
 type Rec = Record<string, unknown> & { Id: string; SyncToken: string };
 
 const esc = (v: string) => v.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -74,6 +74,14 @@ export class Pusher {
     if (exist) { delete row.source; delete row.is_primary; }
     const { error } = exist ? await this.admin.from("qbo_links").update(row).eq("id", exist.id) : await this.admin.from("qbo_links").insert(row);
     if (error) throw new Error(`Couldn't save the QuickBooks link: ${error.message}`);
+    // an invoice number that's been in QuickBooks is one and done (Oct 24, Nick): kept even after the order is deleted
+    const doc = String((x.rec as { DocNumber?: string } | null | undefined)?.DocNumber || "");
+    if (x.entity === "invoice" && doc) await this.recordDoc(doc, x.local_id, x.qbo_id, exist?.source || x.source, x.note === "voided");
+  }
+  async recordDoc(doc: string, orderId: string, qboId: string, source: string, voided = false) {
+    const num = Number(doc.replace(/\D/g, "")) || null;
+    const isUuid = /^[0-9a-f-]{36}$/i.test(orderId);
+    await this.admin.from("qbo_doc_numbers").upsert({ doc_number: doc, order_number: num, order_id: isUuid ? orderId : null, qbo_id: qboId, source, ...(voided ? { voided_at: now() } : {}) }, { onConflict: "doc_number" });
   }
   private key(row: QRow, ...parts: string[]) {
     // the same queued change always sends the same request id, so a retried create can't make a second copy;
@@ -277,8 +285,11 @@ export class Pusher {
     if (localProblems.length) return { status: "needs_review", reason: localProblems.join(" "), preview };
     const q = this.qbo.with({ entity: "invoice", localId: o.id });
     const ex = await q.query<Rec & { TotalAmt?: number }>("Invoice", `WHERE DocNumber = '${esc(doc)}'`);
+    if (ex.length) await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: ex[0].Id, source: "test", rec: ex[0] });
     if (ex.length) return { status: "done", reason: `QuickBooks already has the test invoice ${doc} (QuickBooks #${ex[0].Id}, ${r2(+(ex[0].TotalAmt || 0)).toFixed(2)}).`, preview, qboId: ex[0].Id, docNumber: doc, customerQboId: custLink.qbo_id };
     const rec = await q.create<Rec & { TotalAmt?: number }>("Invoice", body, `fbs-test-${hashOf([o.id, doc, Date.now()])}`);
+    // linked to the order, so the order shows it's in QuickBooks and deleting it offers to void it (Oct 24, Nick)
+    await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: rec.Id, source: "test", rec });
     const diff = r2(+(rec.TotalAmt || 0) - build.total);
     return {
       status: Math.abs(diff) >= 0.01 ? "needs_review" : "done",
@@ -295,6 +306,46 @@ export class Pusher {
     if (!/^TEST-/.test(String(cur.DocNumber || ""))) return { status: "error", reason: `QuickBooks invoice #${qboId} isn't a test invoice (its number is ${cur.DocNumber}), so it wasn't voided.` };
     await q.voidInvoice(qboId, cur.SyncToken, true);
     return { status: "done", reason: `Voided test invoice ${cur.DocNumber} (QuickBooks #${qboId}).` };
+  }
+
+  /**
+   * Is this order in QuickBooks? (Oct 24, Nick: "on the order page… some sort of indicator that it's synced with
+   * QuickBooks already"). The link says; with `deep`, QuickBooks is also asked for an invoice numbered like the order
+   * (or its test copy), so one sent before links were kept is found too.
+   */
+  async orderState(orderId: string, number: number, deep = false): Promise<{ synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; total?: number }> {
+    let link = await this.link("invoice", orderId);
+    if (!link && deep && this.qbo) {
+      const docs = [`TEST-${number}`, String(number)];
+      const found = await this.qbo.with({ entity: "invoice", localId: orderId }).query<Rec & { DocNumber?: string; TotalAmt?: number; PrivateNote?: string }>("Invoice", `WHERE DocNumber IN (${docs.map((d) => `'${esc(d)}'`).join(", ")})`);
+      const test = found.find((f) => f.DocNumber === docs[0]);
+      if (test) { await this.saveLink({ entity: "invoice", local_id: orderId, qbo_id: test.Id, source: "test", rec: test }); link = await this.link("invoice", orderId); }
+      else if (found[0]) return { synced: true, voided: /^voided/i.test(String(found[0].PrivateNote || "")), qboId: found[0].Id, docNumber: found[0].DocNumber, source: "unlinked", total: r2(+(found[0].TotalAmt || 0)) };
+    }
+    if (!link) return { synced: false, voided: false };
+    const rec = (link.last_seen_qbo || {}) as { DocNumber?: string; TotalAmt?: number; PrivateNote?: string };
+    return { synced: true, voided: link.note === "voided" || /^voided/i.test(String(rec.PrivateNote || "")), qboId: link.qbo_id, docNumber: rec.DocNumber, source: link.source, total: r2(+(rec.TotalAmt || 0)) };
+  }
+
+  /**
+   * Void an order's invoice in QuickBooks now, when the order is deleted and the person said yes (Oct 24, Nick: "this
+   * order has already been synced… would you like me to void the order in QuickBooks?"). Only invoices the portal made
+   * (real or test); one Printavo made is left for Printavo / QuickBooks. Voiding keeps the invoice and its number in
+   * QuickBooks with $0, and the number is never used again here (qbo_doc_numbers).
+   */
+  async voidOrder(orderId: string, number: number): Promise<Outcome> {
+    if (!this.qbo) return { status: "error", reason: "QuickBooks isn't connected." };
+    const st = await this.orderState(orderId, number, true);
+    if (!st.synced || !st.qboId) return { status: "skipped", reason: "This order was never in QuickBooks." };
+    if (st.voided) return { status: "done", reason: `QuickBooks invoice ${st.docNumber || st.qboId} is already voided.` };
+    if (st.source !== "created" && st.source !== "test") return { status: "needs_review", reason: `QuickBooks invoice ${st.docNumber || st.qboId} was made by Printavo (or by hand in QuickBooks), so it isn't voided from here. Void it in QuickBooks.` };
+    const q = this.qbo.with({ entity: "invoice", localId: orderId, qboId: st.qboId });
+    const cur = await q.read<Rec & { DocNumber?: string }>("Invoice", st.qboId);
+    if (!cur) return { status: "done", reason: "It's no longer in QuickBooks." };
+    const v = await q.voidInvoice(st.qboId, cur.SyncToken, st.source === "test");
+    await this.saveLink({ entity: "invoice", local_id: orderId, qbo_id: st.qboId, source: st.source, rec: v as Rec, note: "voided" });
+    if (cur.DocNumber) await this.recordDoc(String(cur.DocNumber), orderId, st.qboId, st.source, true);
+    return { status: "done", reason: `Voided QuickBooks invoice ${cur.DocNumber || st.qboId}.` };
   }
 
   /** #40000-#49999: Printavo made the QuickBooks invoice; we link to it by its number and never make our own. */

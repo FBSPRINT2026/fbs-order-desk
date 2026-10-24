@@ -12892,3 +12892,22 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .fv-chip:hover{border-color:var(--accent)}
 .fv-none{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--ink-3);font-size:13.5px}
 @media (max-width:760px){ .fv-body{grid-template-columns:minmax(0,1fr)} .fv-col+.fv-col{border-left:0;border-top:1px solid var(--line-2)} .fv-top .btn{display:none} }
+/* the order's "in QuickBooks" check beside its status, and the delete question (Oct 24) */
+.qb-mark{width:15px;height:15px;flex:none}
+.qb-tick{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;color:var(--ok);white-space:nowrap;margin-right:2px}
+.qb-tick svg:not(.qb-mark){width:13px;height:13px;fill:none;stroke:var(--ok);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.qb-tick.void{color:var(--ink-3)}
+.qb-tick.void .qb-mark{filter:grayscale(1);opacity:.6}
+.dla-qb{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0;background:var(--surface-2);font-size:13.5px}
+.dla-qb b{display:flex;align-items:center;gap:6px}
+.dla-qb label{display:flex;align-items:center;gap:8px;font-weight:600}
+.dla-qb small{font-size:12px}
+/* QuickBooks: Sync now and what didn't sync (components/QuickBooksSettings.tsx SyncBar, Oct 24) */
+.qb-sync .panel-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.qb-prob-h{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:14px}
+.qb-probs{list-style:none;margin:0;padding:0}
+.qb-probs li{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,2.2fr) auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line-2);font-size:13px}
+.qb-pw{min-width:0}
+.qb-pr{color:var(--ink-2)}
+.qb-pa{display:flex;gap:6px}
+@media (max-width:760px){ .qb-probs li{grid-template-columns:minmax(0,1fr)} }

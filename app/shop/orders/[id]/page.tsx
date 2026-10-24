@@ -55,6 +55,7 @@ import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
+import { qboOrderState, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 
 const EVENT_LABEL: Record<string, string> = {
@@ -812,18 +813,31 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // and a logo another order uses is never taken. Taken off = archived (kept, can be put back).
   // the ClickUp job it was made from: put back on the New list (ticked), so deleting the order doesn't lose the job
   // (Oct 22, Nick: Hudson Band was made into an order, deleted, and gone from New)
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean }>(null);
+  // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
+  // order in QuickBooks?"); qbVoid = the yes
+  type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string };
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean }>(null);
+  // the small QB ✓ beside the status: is this order's invoice in QuickBooks
+  const [qbSt, setQbSt] = useState<QbState | null>(null);
+  useEffect(() => { if (!o?.id) return; qboOrderState(o.id).then((r) => setQbSt(r.ok ? r : null), () => null); }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
-    const [r, cu] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null)]);
-    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true });
+    const [r, cu, qs] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null), qboOrderState(o.id, true).catch(() => null)]);
+    const qb: QbState | null = qs && qs.ok ? qs : null;
+    const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true, qb, qbVoid });
     const pick = new Set<string>([...r.logos.filter((l) => l.draft && !l.elsewhere).map((l) => l.id), ...r.mockups.map((m) => m.id)]);
-    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true });
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true, qb, qbVoid });
   }
   async function confirmDel() {
     if (!o || !delAsk) return;
     setDelAsk({ ...delAsk, busy: true });
+    // void it in QuickBooks first; if that fails, nothing is deleted
+    if (delAsk.qbVoid) {
+      const v = await voidOrderInQbo(o.id);
+      if (!v.ok) { setDelAsk({ ...delAsk, busy: false, error: `Couldn't void it in QuickBooks: ${v.message} The order wasn't deleted.` }); return; }
+    }
     const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
     // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)
@@ -1022,6 +1036,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="ed-actions">
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
+          {qbSt?.synced && <span className={"qb-tick" + (qbSt.voided ? " void" : "")} title={qbSt.voided ? `Voided in QuickBooks${qbSt.docNumber ? ` (invoice ${qbSt.docNumber})` : ""}` : `In QuickBooks${qbSt.docNumber ? ` as invoice ${qbSt.docNumber}` : ""}${qbSt.source === "test" ? " (test)" : ""}`}><QbMark />{qbSt.voided ? "Void" : <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}</span>}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
@@ -1093,6 +1108,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                 ))}
+                {delAsk.qb?.synced && (
+                  <div className="dla-qb">
+                    <b><QbMark /> This order is already in QuickBooks{delAsk.qb.docNumber ? ` (invoice ${delAsk.qb.docNumber})` : ""}.</b>
+                    {delAsk.qb.voided ? <span className="faint">It&apos;s already voided there.</span>
+                      : delAsk.qb.source === "created" || delAsk.qb.source === "test" ? (
+                        <label><input type="checkbox" checked={!!delAsk.qbVoid} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, qbVoid: e.target.checked } : d))} /> Void it in QuickBooks</label>
+                      ) : <span className="faint">Printavo made that invoice, so void it in QuickBooks yourself.</span>}
+                    <small className="faint">Voided invoices stay in QuickBooks at $0. Number #{o.number} is never used again.</small>
+                  </div>
+                )}
                 {delAsk.cu && (
                   <label className="dla-cu">
                     <input type="checkbox" checked={!!delAsk.cuBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, cuBack: e.target.checked } : d))} />
@@ -1603,4 +1628,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </div>
     </div>
   );
+}
+
+/** QuickBooks' mark, small: a green circle with "qb" (the order's "in QuickBooks" check and the delete question) */
+function QbMark() {
+  return <svg className="qb-mark" viewBox="0 0 24 24" aria-label="QuickBooks" role="img"><circle cx="12" cy="12" r="11" fill="#2CA01C" /><path d="M9.2 7.5v8.2a2 2 0 0 1-2-2v-2.6a2.6 2.6 0 0 1 2-3.6zm5.6 9V8.3a2 2 0 0 1 2 2v2.6a2.6 2.6 0 0 1-2 3.6zM9.2 7.5h2.6a2.6 2.6 0 0 1 0 5.2h-.6M14.8 16.5h-2.6a2.6 2.6 0 0 1 0-5.2h.6" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
