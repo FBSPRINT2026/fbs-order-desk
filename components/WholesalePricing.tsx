@@ -14,7 +14,7 @@ function ExtrasList({ list, onChange, placeholder, more }: { list: Finishing[]; 
   return (
     <div className="stack" style={{ gap: 6 }}>
       {list.map((f, i) => (
-        <div key={f.id} className="fee-row">
+        <div key={f.id} className={"fee-row" + (more ? " fin-row" : "")}>
           <input type="text" aria-label="Name" placeholder={placeholder} value={f.name} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
           <input type="number" step="0.05" aria-label="Price per piece" value={f.price} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, price: n(e.target.value) } : x)))} />
           {more && <label className="check" style={{ fontSize: 12.5, whiteSpace: "nowrap" }} title="Kept under + More on orders instead of shown every time"><input type="checkbox" checked={!!f.more} onChange={(e) => onChange((l) => l.map((x, j) => (j === i ? { ...x, more: e.target.checked || undefined } : x)))} /> Sometimes used</label>}
