@@ -41,6 +41,13 @@ const CSTEPS: { label: string; keys: string[] }[] = [
   { label: "Done", keys: ["completed"] },
 ];
 
+/** "Unisex EcoSmart® Crewneck Sweatshirt - P160" after "P160": the style number once (Oct 24, Nick's phone photo) */
+const garmentName = (g?: string | null, style?: string | null) => {
+  const t = String(g || "").trim(), st = String(style || "").trim().toLowerCase();
+  const head = t.slice(0, t.length - st.length);
+  return st && t.toLowerCase().endsWith(st) && /(\s-|\.)\s*$/.test(head) ? head.replace(/(\s-|\.)\s*$/, "").trim() : t;
+};
+
 export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string }> }) {
   const { id } = await params;
   const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone } = await searchParams;
@@ -63,7 +70,10 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const goodsHere = needsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
   // the mockup they made comes with the order (Oct 24, Nick: "it doesn't show the art, even though they're the ones that
   // created it… it should just come along with it"): its shirts, from their Mockup Creator mockup or their own file
-  const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length);
+  // the mockup FBS made shows too once it's a real order (Oct 24, Nick on the order page: "Can't see the art"); a quote
+  // still waits for its proof
+  const realOrder = o.type === "invoice" && o.status !== "request";
+  const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length || (realOrder && (g.mockupThumbs || []).length));
   const mkPaths = [...new Set(mkGroups.flatMap((g) => (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => !/\.pdf$/i.test(x))))];
   const mkUrls: Record<string, string> = {};
   if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
@@ -177,13 +187,16 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <table className="items">
                   <thead><tr><th>Item</th><th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Amount</th>}</tr></thead>
                   <tbody>
-                    {orderGroups(o).map((g, gi) => g.lines.map((l, li) => {
+                    {orderGroups(o).map((g, gi) => [
+                      // the group's mockup above its garments (Oct 24, Nick: "Can't see the art"; not tied to one garment)
+                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><a className="po-item-pics" href="#proofs">{pics.slice(0, 4).map((x) => <img key={x} src={mkUrls[x]} alt="Mockup" loading="lazy" />)}</a></td></tr>] : []; })(),
+                      ...g.lines.map((l, li) => {
                       const lc = c.groups[gi]?.lines[li];
                       return (
                         <tr key={l.id}>
                           <td>
-                            <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{c.groups[gi]?.wholesale ? " (your garments)" : ""}
-                            {li === 0 && g.imprints.length > 0 && <div className="sub"><ImprintSpecs list={g.imprints} /></div>}
+                            <b>{[l.style, garmentName(l.garment, l.style)].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{c.groups[gi]?.wholesale ? " (your garments)" : ""}
+                            {li === 0 && g.imprints.length > 0 && <div className="sub po-item-prints"><ImprintSpecs list={g.imprints} /></div>}
                             {li === 0 && (c.groups[gi]?.finishing.length || 0) > 0 && <div className="sub">Finishing: {c.groups[gi].finishing.map((f) => f.name).join(", ")}</div>}
                             <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div>
                           </td>
@@ -192,7 +205,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                           {!isReq && <td className="r">{money(lc?.sub)}</td>}
                         </tr>
                       );
-                    }))}
+                    })])}
                     {!isReq && c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
             {!isReq && c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
                     {!isReq && o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{(f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
@@ -208,7 +221,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b stack">
                 {mkGroups.map((g) => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return (
                   <div key={g.id} className="po-mock">
-                    <div className="po-mock-h"><b>{g.fromMockup ? `Your mockup${g.fromMockup.number ? ` M-${g.fromMockup.number}` : ""}` : "Your mockup"}</b><span className="faint">{g.fromMockup ? "made in our Mockup Creator" : "your own file"}{g.name ? ` · ${g.name}` : ""}</span></div>
+                    <div className="po-mock-h"><b>{g.fromMockup ? `Your mockup${g.fromMockup.number ? ` M-${g.fromMockup.number}` : ""}` : (g.customerMockups || []).length ? "Your mockup" : "Mockup"}</b><span className="faint">{g.fromMockup ? "made in our Mockup Creator" : (g.customerMockups || []).length ? "your own file" : "by FBS Print"}{g.name ? ` · ${g.name}` : ""}</span></div>
                     <div className="po-mock-pics">{pics.map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" /></a>)}</div>
                     {!proofs.length && <div className="faint" style={{ fontSize: 12.5 }}>This is the art we print from. If anything needs changing, we&apos;ll send you a proof to approve.</div>}
                   </div>

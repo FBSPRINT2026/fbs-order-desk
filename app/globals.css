@@ -14020,3 +14020,68 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 /* (Oct 24) the dashboard's artwork tiles were a fixed 64px in 56px columns: they ran past the panel's edge */
 @media (max-width:640px){.pdx-art > *{width:auto!important;height:auto!important;aspect-ratio:1;min-width:0}}
 .pdx-ag-t small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Portal on a phone, second pass (Oct 24, Nick: "Orders screen is still cumbersome and secondary toolbar is bad") ── */
+.aa-ocards,.aa-osel{display:none}
+@media (max-width:640px){
+  /* Orders: one row, a dropdown for the five views and the search beside it */
+  .portal .aa-otabs:has(> .aa-osel){flex-wrap:nowrap;gap:8px;align-items:stretch}
+  .portal .aa-otabs:has(> .aa-osel) > .chips,.portal .aa-otabs:has(> .aa-osel) > .spacer{display:none!important}
+  .portal .aa-otabs > .aa-osel{display:block;flex:0 0 auto;width:auto;max-width:46%;height:40px;padding:0 30px 0 12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);background-color:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .portal .aa-otabs:has(> .aa-osel) > .aa-search{flex:1 1 0!important;width:auto!important;min-width:0;height:40px}
+  .portal .aa-otabs:has(> .aa-osel) > .aa-search input{padding:0;height:100%}
+  /* Orders: cards instead of the table */
+  .portal .aa-tblcard:has(> .aa-ocards) > table{display:none}
+  .portal .aa-tblcard:has(> .aa-ocards){overflow:hidden}
+  .portal .aa-ocards{display:block;list-style:none;margin:0;padding:0}
+  .aa-oc{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
+  .aa-oc:first-child{border-top:0}
+  .aa-oc.late{box-shadow:inset 3px 0 0 var(--danger)}
+  .aa-oc-top{display:flex;align-items:center;gap:8px;min-height:28px}
+  .aa-oc-n{flex:1 1 auto;min-width:0;font-size:15px;font-weight:700;color:var(--ink);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .aa-oc-top .aa-arch{margin-left:0;flex:0 0 auto}
+  .aa-oc-top .star-btn,.aa-oc-top button{flex:0 0 auto}
+  .aa-oc-sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .aa-oc-bot{display:flex;align-items:center;gap:6px;margin-top:4px;min-width:0}
+  .aa-oc-bot .aa-pill{min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;padding:3px 9px}
+  .aa-oc-bot .aa-kind{margin:0;flex:0 0 auto}
+  .aa-oc-amt{margin-left:auto;display:flex;align-items:baseline;gap:5px;white-space:nowrap;flex:0 0 auto}
+  .aa-oc-amt b{font-size:15px;color:var(--ink)}
+  .aa-oc-amt b.aa-due{color:var(--danger)}
+  .aa-oc-amt small{font-size:11.5px;color:var(--ink-3)}
+  .aa-ocards .aa-empty{padding:18px 14px}
+  /* Payments: the aging boxes use the full width */
+  .portal .aa-paylay .aa-aging,.portal .aa-aging{width:100%;align-self:stretch}
+}
+/* aging boxes in dark mode: the cream and pink boxes glared on the dark page */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .aa-age.late{background:#2A2210;border-color:#6B5215}
+  :root:not([data-theme="light"]) .aa-age.late b{color:#F3C969}
+  :root:not([data-theme="light"]) .aa-age.bad{background:#2B1412;border-color:#7A2A22}
+  :root:not([data-theme="light"]) .aa-age.bad b{color:#F4A39B}
+  :root:not([data-theme="light"]) .aa-kind.k-sent{color:#F3C969}
+}
+:root[data-theme="dark"] .aa-age.late{background:#2A2210;border-color:#6B5215}
+:root[data-theme="dark"] .aa-age.late b{color:#F3C969}
+:root[data-theme="dark"] .aa-age.bad{background:#2B1412;border-color:#7A2A22}
+:root[data-theme="dark"] .aa-age.bad b{color:#F4A39B}
+:root[data-theme="dark"] .aa-kind.k-sent{color:#F3C969}
+/* an order's items: the group's mockup with its first garment (Oct 24, Nick: "Can't see the art") */
+.po-item-pics{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.po-item-pics img{width:72px;height:72px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+@media (max-width:640px){
+  /* the print specs stay off the garments on a phone (Nick: "don't add the imprint to garments on the mobile view") */
+  .portal table.items .po-item-prints{display:none}
+  .po-item-pics img{width:calc((100% - 18px) / 4);height:auto;aspect-ratio:1;max-width:96px}
+  .po-mock-pics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .po-mock-pics img{width:100%;height:auto;aspect-ratio:1}
+  /* the top of an order: room under the header, the status on its own, the buttons two to a row */
+  .portal .p-main > .back{display:inline-block;margin-top:6px}
+  .portal .p-main > .page-head{flex-direction:column;align-items:stretch;gap:12px}
+  .portal .p-main > .page-head > .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .portal .p-main > .page-head > .row > .pill,.portal .p-main > .page-head > .row > :first-child{grid-column:1 / -1;justify-self:start}
+  .portal .p-main > .page-head > .row > .btn,.portal .p-main > .page-head > .row > * > .btn,.portal .p-main > .page-head > .row > button{width:100%;justify-content:center;min-width:0;white-space:nowrap}
+}
+.po-grp-art td{padding-bottom:0!important;border-bottom:0!important}
+.po-grp-art .po-item-pics{margin:0}
+@media (max-width:640px){.portal table.items tr.po-grp-art{border-bottom:0;padding-bottom:0}}

@@ -295,6 +295,29 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
             {!rows.length && <tr><td colSpan={9}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}
           </tbody>
         </table>
+        {/* on a phone the table becomes these cards (Oct 24, Nick: "Orders screen is still cumbersome"): the job's name
+            and star, one line of number · pieces · in-hands, then its status and the one amount that matters */}
+        {mode === "portal" && <ul className="aa-ocards">
+          {rows.map((o) => {
+            const owes = !o.archived && o.balance > 0.004 && !(all && o.type !== "invoice") && cols !== "quote";
+            const dt = cols === "quote" ? when(o.created_at) : when(o.due_date);
+            return (
+              <li key={o.id} className={"aa-oc" + (owes && payDue(o) && (payDue(o) as string) < today() ? " late" : "")} onClick={() => router.push(orderHref(o.id))}>
+                <div className="aa-oc-top">
+                  <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => e.stopPropagation()}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
+                  {o.archived ? <span className="aa-arch">Archived</span> : mode === "portal" && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}
+                </div>
+                <div className="aa-oc-sub">#{o.number}{o.qty ? ` · ${o.qty.toLocaleString("en-US")} pcs` : ""}{dt ? ` · ${cols === "quote" ? "Created" : "In hands"} ${dt}` : ""}</div>
+                <div className="aa-oc-bot">
+                  {pill(o)}
+                  {all && kindOf(o) !== "Order" && <span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span>}
+                  <span className="aa-oc-amt">{owes ? <><b className="aa-due">{money(o.balance)}</b><small>due</small></> : <><b>{money(o.total)}</b><small>{cols === "quote" || o.type !== "invoice" ? "total" : o.balance <= 0.004 ? "paid" : "total"}</small></>}</span>
+                </div>
+              </li>
+            );
+          })}
+          {!rows.length && <li className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</li>}
+        </ul>}
       </div>
     );
   };
@@ -574,6 +597,11 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
         </div>
+        {/* on a phone the five buttons don't fit one row: a dropdown beside the search instead (Oct 24, Nick: "secondary
+            toolbar is bad") */}
+        <select className="aa-osel" aria-label="Show" value={tab} onChange={(e) => setOTab(e.target.value as typeof oTab)}>
+          {tabs.map(([k, t, n]) => <option key={k} value={k}>{t}{n ? ` (${n})` : ""}</option>)}
+        </select>
         <span className="spacer" />
         <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
