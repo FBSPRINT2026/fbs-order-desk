@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { brandHitFor, brandSizeFor } from "@/lib/pricing";
+import { brandHitFor, brandSizeFor, colorChanges } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -263,6 +263,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [askUploaded, setAskUploaded] = useState(false);
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
+  // a color change: the art painted in another ink on one garment color (`${imprint id}|${color key}`)
+  const [paintedBy, setPaintedBy] = useState<Record<string, string>>({});
   // embroidered prints drawn stitched on the mockup (off shows the flat logo)
   const [stitchOn, setStitchOn] = useSticky<boolean>("mockup.stitchLook", true);
   const stitchRun = useRef(0);
@@ -832,6 +834,28 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     setPainted(next);
     setPaintBox(boxes);
+    // color changes (Imprint.inkBy): the same art in the other ink(s), for that garment color only
+    const by: Record<string, string> = {};
+    for (const im of imprints) {
+      const pt = paints[im.id];
+      if (!pt || !im.inkBy) continue;
+      const img = imgCache.current.get(pt.design + (pt.off ? ":clean" : ""));
+      if (!img) continue;
+      for (const [ck, swap] of Object.entries(im.inkBy)) {
+        const ch = Object.entries(swap || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase());
+        if (!ch.length) continue;
+        const targets: Record<string, string> = {};
+        // the art's colors as picked; each picked ink that changes on this color takes the new ink's color
+        const srcs = Object.keys(pt.map).length ? pt.map : Object.fromEntries(pt.sources.map((x) => [x.hex, { name: (im.inks || "").split(",")[0]?.trim() || "", hex: x.hex }]));
+        Object.entries(srcs).forEach(([src, v]) => {
+          if (v.name === "none") { targets[src] = "none"; return; }
+          const to = ch.find(([a]) => a.trim().toLowerCase() === (v.name || "").trim().toLowerCase())?.[1];
+          targets[src] = (to && colorHex(to)) || v.hex;
+        });
+        by[`${im.id}|${ck}`] = recolorTrim(img, pt.sources.map((x) => x.hex), targets).url;
+      }
+    }
+    setPaintedBy(by);
     // embroidery looks stitched (Oct 23, Nick: "make our mock-ups look like they're embroidered… this FedEx logo… it
     // should look like it's stitched"): thread rows, raised edges, a shadow on the fabric. Drawn after the flat one shows
     const run = ++stitchRun.current;
@@ -977,7 +1001,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
+  const artUrl = (im: Imprint, on?: Line) => { const k = on && im.inkBy ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
   /** "Need help picking garments?": our most popular garments to pick from (Oct 24, Nick) */
@@ -1672,7 +1696,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
-                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
@@ -1932,8 +1956,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (crop) x.translate(-crop.x * k, -crop.y * k);
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
         const p = place(im, v, fit, l);
-        if (!p.d || !artUrl(im)) continue;
-        const art = await loadImg(artUrl(im)).catch(() => null);
+        if (!p.d || !artUrl(im, l)) continue;
+        const art = await loadImg(artUrl(im, l)).catch(() => null);
         if (art) {
           x.save();
           x.translate(ox + (nm.tx + nm.z * (p.x + p.w / 2)) * k, oy + (nm.ty + nm.z * (p.y + p.h / 2)) * k);
@@ -3289,7 +3313,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {zoomG && <div className="mk-corner tr">{zoomCtl(v)}</div>}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
-                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
+                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
                   const p = im && place(im, v);
@@ -3606,6 +3630,43 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           </label>
                         );
                       })()}
+                      {/* Color change (Oct 24, Nick: "when you click on… the second garment… another one right there that says color
+                          change… confirm you're changing the color on this garment only… select the color"): this garment's ink(s) */}
+                      {designOf(im) && im.method !== "embroidery" && line && (() => {
+                        const first = lines.find((l) => (l.color || "").trim()) || lines[0];
+                        if (!first || colorKey(first.color) === colorKey(line.color) || !(line.color || "").trim()) return null;
+                        const ck = colorKey(line.color), cur = im.inkBy?.[ck];
+                        const names = [...new Set([...Object.values(paints[im.id]?.map || {}).map((v) => v.name).filter((n) => n && n !== "none"), ...(im.inks || "").split(",").map((x) => x.trim()).filter(Boolean)])].slice(0, 8);
+                        const put = (next: Record<string, string> | null) => setImprints((xs) => xs.map((x) => {
+                          if (x.id !== im.id) return x;
+                          const inkBy = { ...(x.inkBy || {}) };
+                          if (next) inkBy[ck] = next; else delete inkBy[ck];
+                          const y = { ...x, inkBy: Object.keys(inkBy).length ? inkBy : undefined };
+                          return { ...y, inkChanges: colorChanges(y) };
+                        }));
+                        const n = colorChanges({ inkBy: cur ? { [ck]: cur } : {} });
+                        return (
+                          <>
+                            <label className="mk-ctr" title={`Print this location in another ink on the ${line.color} only`}>
+                              <input type="checkbox" checked={!!cur} disabled={!names.length} onChange={(e) => put(e.target.checked ? Object.fromEntries(names.map((nm) => [nm, ""])) : null)} />
+                              Color change
+                            </label>
+                            {cur && (
+                              <div className="mk-cchg">
+                                <span className="mk-cchg-n">On the {[line.style, line.color].filter(Boolean).join(" ")} only. {first.color ? `The ${first.color} stays as it is.` : ""}</span>
+                                {names.map((nm) => (
+                                  <div key={nm} className="mk-cchg-r">
+                                    <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
+                                    <input type="text" list="mk-ink-names" aria-label={`${nm} on the ${line.color}`} placeholder="the ink on this color" value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
+                                    {cur[nm] && colorHex(cur[nm]) ? <i style={{ background: colorHex(cur[nm])! }} /> : null}
+                                  </div>
+                                ))}
+                                <span className="faint">{n ? `${n} color change${n === 1 ? "" : "s"}: charged as ${n === 1 ? "an ink change" : "ink changes"} on the order (per screen)` : "Type the ink it prints in on this color"}</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
@@ -3699,6 +3760,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
                   <span className="faint mk-help-d">or drop the PDF / AI file here</span>
                 </>}
+                <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
                 {helper && <>
                   <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>

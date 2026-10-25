@@ -422,10 +422,14 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     const fee = n * (+(wpl.pmsFee || 0));
     // shown like the screens line's "remake" tag: the second location isn't charged for the same PMS
     const firstOn = (name: string) => g.imprints.slice(0, di).find((o) => pmsInks(o).some((x) => x.charge && pmsKey(x.name) === pmsKey(name)))?.location;
+    // color changes (Imprint.inkBy, set in the Mockup Creator): "Color change on F260 Mauve: Burgundy"
+    const ck = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cc = Object.entries(d.inkBy || {}).flatMap(([k, m]) => { const ch = Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()); const l = g.lines.find((x) => ck(x.color) === k); return ch.length ? [`${l ? [l.style, l.color].filter(Boolean).join(" ") : k}: ${ch.map(([, b]) => b).join(", ")}`] : []; });
+    const ccNote = cc.length ? <span className="pr-scr-tag" title="A color change: this print in another ink on that garment color (an ink change per screen)">Color change on {cc.join("; ")}</span> : null;
     const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
     return (
       <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
-        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
+        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}{ccNote}</span> : ccNote ? <span className="pr-pms">{ccNote}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
           : pms.map((x) => <label key={x.name} className="check" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />{x.name}: standard, no charge</label>)}

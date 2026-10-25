@@ -108,6 +108,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a logo with a distress layer printed clean, without it (Oct 16: the distress is a layer, on unless turned off) */ distress?: "off";
   /** soft hand additive mixed into the inks */ softHand?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
+  /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
+   *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
+   *  Each changed ink is a screen's ink change (inkChanges, the Ink change fee) */ inkBy?: Record<string, Record<string, string>>;
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
   /** changes made to the customer's art for this print (Oct 23, Nick: "here's your proof, here are the two changes we
    *  made: we flattened the black and we removed the thin stroke"): shown on the proof and the work order */
@@ -598,6 +601,8 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
 }
 /** PMS matching fees on a print: the named inks charged as matches, or the count typed when no inks are named */
 /** the same PMS however it's written: "PMS 230 C", "230C", "Pantone 230" → "230" */
+/** how many screens change ink across the garment colors (Imprint.inkBy): the color changes charged as ink changes */
+export const colorChanges = (d: Pick<Imprint, "inkBy">) => Object.values(d.inkBy || {}).reduce((n, m) => n + Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length, 0);
 export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m ? m[1] : n.trim().toLowerCase().replace(/\s+/g, " "); };
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
   return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);

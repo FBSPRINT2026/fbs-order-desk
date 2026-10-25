@@ -151,6 +151,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                         <div className="t disp">{(d.location || "Print").toUpperCase()}</div>
                         <div className="s">{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b></div>
                         {!d.visualOnly && inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
+                        {!d.visualOnly && Object.entries(d.inkBy || {}).map(([k, m]) => { const ch = Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()); return ch.length ? <div key={k} className="s inks"><b>COLOR CHANGE on {k}:</b>{ch.map(([a, b]) => <span key={a} className="ink"><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> (not {a})</span>)}</div> : null; })}
                         <div className="s">{d.visualOnly ? <b>Inks, size and placement: set on press (reorder)</b> : <>{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</>}</div>
                         {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {d.printStyle === "fashion" ? <b>FASHION HIT: no underbase</b> : sc.under ? "underbase" : "no underbase"}</div>}
                         {(d.printStyle === "fashion" || d.softHand) && <div className="s hitf">{d.printStyle === "fashion" && <span className="flag">FASHION HIT</span>}{d.softHand && <span className="flag">SOFT HAND</span>}</div>}
@@ -272,6 +273,10 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       ) : null}
       {/* a fashion hit / soft hand: what the press does differently (Oct 16, Nick) */}
       {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
+      {/* a color change (Oct 24): this print in another ink on a garment color */}
+      {!d.visualOnly && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())) && (
+        <div className="n2"><b>COLOR CHANGE:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `on ${k}, ${b} instead of ${a}`)).join("; ")}</div>
+      )}
       {/* prints differently by shirt color (Oct 21, Nick): the screens left off on some colors */}
       {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="n2 warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c} shirts: skip ${n.join(" + ")} (pull the screen or don't flood it)`).join(". ")}</div>}
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
