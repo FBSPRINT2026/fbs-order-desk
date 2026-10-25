@@ -13,7 +13,7 @@ import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/component
 import { rememberOrderNote } from "@/app/shop/ai-actions";
 import { cleanPrintNotes, LOCATIONS, inkNames } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
-import { uid } from "@/lib/pricing";
+import { newImprint, uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
 import { looksLikeSheet, measureDrop, splitSheet } from "@/lib/setupSheet";
 import { mockupNamed, pagePicture, pdfLike, pieceFor, pullOffMockup, type Pulled } from "@/lib/mockupPull";
@@ -49,7 +49,7 @@ type Made = { id: string; number: number; label: string; pcs: number; url: strin
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string; /** art the Helper pulled off a mockup: its size and drop */ pc?: ArtPiece; from?: string; how?: Pulled["kind"]; /** what our mockup sheet says about this print (size, inks) */ sheet?: SheetSpec } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
+type HelpAns = { /** art for a spot the old job didn't print (Oct 24, Nick: "tell me what it is: full front, full back, left chest"): a new print on every group */ adds?: { location: string; pick: HelpPick }[]; picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -353,6 +353,14 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           setIm({ design_id: id }, picked.kind === "upload" ? "Art uploaded when the reorder was made" : `Art from ${picked.name}`);
           did.push(`${im.location}: art ${picked.kind === "upload" ? "uploaded by you" : `from ${picked.name}`}`);
         } catch (e) { if (e instanceof Cancelled) throw e; did.push(`${im.location}: the art couldn't be saved (${e instanceof Error ? e.message : String(e)}): add it on the order`); }
+      }
+      // art for a spot the old job didn't print: a new print on each group, with that art (Oct 24, Nick)
+      for (const ad of ans.adds || []) {
+        const nim = { ...newImprint(ad.location), colors: 1 };
+        let id: string | null = null;
+        try { id = await designFor(ad.pick, nim as never); } catch (e) { if (e instanceof Cancelled) throw e; }
+        d = { ...d!, groups: d!.groups.map((x) => (x.imprints.some((y) => y.location === ad.location) ? x : { ...x, imprints: [...x.imprints, { ...nim, id: uid(), ...(id ? { design_id: id } : {}) }] })) };
+        did.push(`${ad.location}: a new print${id ? " with the art you picked" : " (the art couldn't be saved: add it on the order)"}`);
       }
       // art for only some of a group's items (Oct 20, Nick: "ask me if this is the front on all items or a specific
       // item"): those lines become their own group with that art (the new groups go at the end, so the numbers above hold)
@@ -1075,6 +1083,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // one file per print: giving a print to a file takes it off the one that had it
   // one file at a time, 1 of N, back and forth (Oct 20, Nick: "we may reorder something and I don't remember
   // everything about this job… click through all the different arts")
+  /** files from "Not here?" brought up into the files above, to be told what they are there (Oct 24, Nick: "just click it and say, bring it in. And then it'll ask you above") */
+  const [brought, setBrought] = useState<string[]>([]);
   const [at, setAt] = useState(0);
   // two steps (Oct 20, Nick: "ask at the end once you know everything… then click to the next screen"): what the files
   // are, then how it printed and the mockup
@@ -1112,7 +1122,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // "Full Front, all styles" (Oct 20, Nick: "if you have just one artwork and multiple lines and products in Printavo,
   // that's going to be the same art for all the products… unless you had individual arts for each line"): one answer
   // gives a file to every print at that location ("loc:<location>"); a style's own answer still wins for that style
-  const isPrintVal = (v: string) => v.startsWith("loc:") || help.prints.some((p) => p.key === v);
+  const isPrintVal = (v: string) => v.startsWith("loc:") || v.startsWith("new:") || help.prints.some((p) => p.key === v);
   const printsOf = (v: string) => (v.startsWith("loc:") ? help.prints.filter((p) => p.location === v.slice(4)) : help.prints.filter((p) => p.key === v));
   const locs = [...new Set(help.prints.filter((p) => !p.design).map((p) => p.location))];
   const assign = (key: string, v: string) => {
@@ -1247,7 +1257,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
       return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? (aiKind(x.path) || guessProdKind(x.name)), note: (noteOf[x.key] || "").trim() };
     });
-    help.resolve({ picks: out, splits, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
+    // art for a spot the old job didn't print: a new print with it
+    const adds = items.filter((it) => (as[it.key] || "").startsWith("new:")).map((it) => ({ location: as[it.key].slice(4), pick: pickOf(it) })).filter((a): a is { location: string; pick: HelpPick } => !!a.pick);
+    help.resolve({ adds, picks: out, splits, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -1280,6 +1292,14 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         <div className="arc-chips" role="radiogroup" aria-label={`What ${it.name} is`}>
           {!it.only && locs.map((l) => { const n = help.prints.filter((p) => p.location === l && !p.design).length; return <button key={l} type="button" role="radio" aria-checked={v === `loc:${l}`} className={"chip" + (v === `loc:${l}` ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, `loc:${l}`)}>{n > 1 ? `${l}, all styles` : `${l} art`}</button>; })}
           {help.prints.filter((p) => (it.only ? p.key === it.only : perStyle && help.prints.filter((q) => q.location === p.location && !q.design).length > 1)).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `Only ${p.label}`}</button>)}
+          {!it.only && (() => {
+            const other = LOCATIONS.filter((l) => !locs.includes(l) && !help.prints.some((p) => p.location === l));
+            const nv = v.startsWith("new:") ? v.slice(4) : "";
+            return <select className={"chip arc-spot" + (nv ? " on" : "")} aria-label="Art for another spot" value={nv} disabled={!it.ready} onChange={(e) => { if (e.target.value) answer(it.key, `new:${e.target.value}`); else if (nv) answer(it.key, v); }}>
+              <option value="">{nv ? "" : "Art for another spot…"}</option>
+              {other.map((l) => <option key={l} value={l}>{l} art</option>)}
+            </select>;
+          })()}
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>Mockup</button>}
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
@@ -1313,7 +1333,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       </div>
     );
   };
-  const olds = items.filter((x) => x.where === "old" || x.where === "kept" || x.where === "pulled"), elses = items.filter((x) => x.where === "else");
+  const olds = [...items.filter((x) => x.where === "old" || x.where === "kept" || x.where === "pulled"), ...brought.map((k) => items.find((x) => x.key === k)).filter((x): x is Item => !!x)], elses = items.filter((x) => x.where === "else" && !brought.includes(x.key));
   const opening = old === null || (old || []).some((f) => f.d === undefined);
   // our sheet has it all: this screen is only that, one button to go on (Oct 23, Nick: "an account manager is not going to
   // know what to do… do I click good to go or do I click next?"); the file-by-file screen only when they ask for it
@@ -1447,7 +1467,13 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           {films?.list.map((f) => <button key={f.id} type="button" className="ap-link" disabled={films.busy} onClick={() => void openFilm(f)}>{f.name}</button>)}
         </div>
         <div className="arc-grid sm">
-          {elses.map(Card)}
+          {elses.map((it) => (
+            <div key={it.key} className="arc-card arc-bring">
+              <span className="arc-pic">{it.asIsUrl || it.cutUrl ? <img src={it.asIsUrl || it.cutUrl} alt="" /> : <span className="faint">{it.ready ? (it.name.split(".").pop() || "file").toUpperCase() : "Opening…"}</span>}</span>
+              <span className="arc-name" title={it.title || it.name}>{it.tag}</span>
+              <button type="button" className="btn sm" disabled={!it.ready} onClick={() => { setBrought((b) => [...b, it.key]); setAt(olds.length); window.setTimeout(() => document.querySelector(".arc-step")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50); }}>Bring it in</button>
+            </div>
+          ))}
           {found === null && <span className="ap-wait">Searching their emails and logos…</span>}
           {found !== null && !elses.length && <span className="ap-wait">Nothing in their emails or logos.</span>}
         </div>

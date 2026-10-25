@@ -13775,3 +13775,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-zoom{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12.5px}
 .mk-zoom .btn.icon{width:28px;height:28px;padding:0}
 .mk-zoom-v{min-width:42px;text-align:center;font-weight:600;font-size:13px}
+/* reorder files: "Not here?" files are brought in with one button, then answered above (Oct 24, Nick) */
+.arc-bring{display:flex;flex-direction:column;gap:6px}
+.arc-bring .btn{align-self:flex-start}
+select.chip.arc-spot{height:auto;min-height:30px;padding:4px 8px;font:inherit;font-size:12.5px;max-width:100%;cursor:pointer}
+select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
