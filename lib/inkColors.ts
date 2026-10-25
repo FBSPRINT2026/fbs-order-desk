@@ -208,8 +208,24 @@ export function paintPrint(img: HTMLImageElement, map: Record<string, string>, o
     if (Object.keys(m).length) m["#FFFFFF"] = "none";
   }
   const src = Object.keys(m);
-  if (!src.length) return cl;
-  return recolorInPlace(cl, src, m);
+  return trimClear(src.length ? recolorInPlace(cl, src, m) : cl);
+}
+
+/** cut to what prints: art saved on a big empty (see-through) canvas showed as a speck in the middle of its tile (Oct 24,
+ *  Nick on #40166's Center Chest: "it's almost like it's a full front… you can barely see the image") */
+function trimClear(c: HTMLCanvasElement): HTMLCanvasElement {
+  const W = c.width, H = c.height;
+  if (!W || !H) return c;
+  const d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return c;
+  const pad = Math.max(2, Math.round(Math.max(x1 - x0, y1 - y0) * 0.02));
+  const ax = Math.max(0, x0 - pad), ay = Math.max(0, y0 - pad), w = Math.min(W, x1 + pad + 1) - ax, h = Math.min(H, y1 + pad + 1) - ay;
+  if (w >= W * 0.98 && h >= H * 0.98) return c;
+  const o = document.createElement("canvas"); o.width = w; o.height = h;
+  o.getContext("2d")!.drawImage(c, ax, ay, w, h, 0, 0, w, h);
+  return o;
 }
 
 function recolorInPlace(c: HTMLCanvasElement, sources: string[], targets: Record<string, string>): HTMLCanvasElement {
