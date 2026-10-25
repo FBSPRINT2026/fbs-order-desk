@@ -2960,7 +2960,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const want = autoWant.current[im.id], pt = paints[im.id];
       if (im.method !== "screen" || !want || want.colors !== 1 || !want.inks || !pt) continue;
       const name = want.inks.split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
-      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, { name, hex }])));
+      // a mockup made by hand before keeps its picks: a color left out ("none", e.g. the white around the art) stays out
+      // (Oct 24, #40170: the Order chat's remake turned the Left Chest's white into PMS 230 C)
+      const prev = im.inkMap && im.inkMap.design === im.design_id ? im.inkMap.map : null;
+      const keep = (h: string) => { const e = prev?.[h] || prev?.[h.toUpperCase()]; return e && (!e.hex || /^none$/i.test(e.name)) ? e : null; };
+      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, keep(x.hex) || { name, hex }])));
     }
   }, [ready, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2981,7 +2985,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const want = autoWant.current[im.id], pt = paints[im.id];
       if (im.method !== "screen" || !want || want.colors !== 1 || !pt) continue;
       const name = (want.inks || "").split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
-      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, { name, hex }])));
+      // a mockup made by hand before keeps its picks: a color left out ("none", e.g. the white around the art) stays out
+      // (Oct 24, #40170: the Order chat's remake turned the Left Chest's white into PMS 230 C)
+      const prev = im.inkMap && im.inkMap.design === im.design_id ? im.inkMap.map : null;
+      const keep = (h: string) => { const e = prev?.[h] || prev?.[h.toUpperCase()]; return e && (!e.hex || /^none$/i.test(e.name)) ? e : null; };
+      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, keep(x.hex) || { name, hex }])));
     }
     // a moment for the art to repaint, then save (not cancelled by the re-renders in between)
     const o = order;

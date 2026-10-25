@@ -170,7 +170,10 @@ export default function OrderReview({ orderId, onClose, did, next, from }: { ord
     const ids = new Set<string>();
     for (const c of cs) {
       const g = c.what === "print" ? o.groups.find((x) => x.imprints.some((im) => im.id === c.id)) : c.what === "line" && c.field === "color" ? o.groups.find((x) => x.lines.some((l) => l.id === c.id)) : null;
-      if (g && (g.mockupThumbs || []).length && c.field !== "underbase" && c.field !== "colors") ids.add(g.id);
+      // only what the picture shows: the inks, size and spot of a print, a garment's color. "Production confirms on the run"
+      // (confirm), underbase, colors don't change the mockup and never remake it (Oct 24, #40170: Nick's mockup was redone)
+      const shows = c.what === "line" ? c.field === "color" : ["inks", "size", "location", "drop"].includes(c.field);
+      if (g && shows && (g.mockupThumbs || []).length) ids.add(g.id);
     }
     await remakeMockups([...ids]);
   }
