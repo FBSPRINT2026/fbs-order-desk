@@ -14115,3 +14115,10 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
   .ord .pr .pr-scr-v > span:not(:first-child){padding-left:7px;padding-right:7px}
   .ord .pr .pr-scr > .pr-scr-ed{flex:0 0 auto}
 }
+/* the phone menu: SP / EMB / HP and ADM / SHOP show even when the desktop menu was folded to icons, big enough to tap
+   (Oct 24, Nick: "On the mobile phone… I can't see the little embroidery shop or admin things") */
+@media (max-width:820px){
+  .side .side-drawer .prod-side{display:inline-flex!important;align-items:center;gap:4px;margin-left:auto}
+  .side .side-drawer .prod-side button{font-size:12px;padding:6px 8px;border-radius:6px}
+  .side .side-drawer .prod-side button.on{background:rgba(255,255,255,.08)}
+}
