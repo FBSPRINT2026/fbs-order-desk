@@ -1419,12 +1419,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return sortSizes(kept.length ? kept : list);
   };
   const runSizes = sizesOf(lines[active] || lines[0]);
-  const garZoom = (g: Garment | null | undefined) => { const z = +(((g as (Garment & { mockup_fit?: { scale?: number } | null }) | null | undefined)?.mockup_fit?.scale) || 1); return z >= 0.7 && z <= 1.4 ? z : 1; };
+  const garZoom = (g: Garment | null | undefined, v: View) => { const f = (g as (Garment & { mockup_fit?: Record<string, unknown> | null }) | null | undefined)?.mockup_fit || {}; const z = +((f[`scale_${v}`] as number) || (f.scale as number) || 1); return z >= 0.7 && z <= 1.4 ? z : 1; };
   const bodyFor = (l?: Line): Body => {
     const g = l ? garmentFor(l) : null;
     const own = l ? sizesOf(l) : runSizes;
-    const b0 = shownSize && own.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, own);
-    const b = { ...b0, zoom: garZoom(g) };
+    const b = shownSize && own.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, own);
     if (!l || !isBag(l)) return b;
     // a bag or tote: its max print area is the bag less 1.5" all around (a 13" × 13" tote takes 10" × 10")
     const bw = bagWidth(l), bl = bagLength(l), r2 = (v: number) => Math.max(2, Math.round(v * 2) / 2);
@@ -1432,19 +1431,32 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { ...b, cap: { maxW: r2(bw - 3), maxH: r2(bl - 3), label: `a ${bw}" × ${bl}" ${what}` } };
   };
   const body = bodyFor(lines[active] || lines[0]);
-  // the print scale on this garment's photos, set by staff once for the style (every color, every mockup after)
+  // the print scale on this garment's photos, by side, set by staff once for the style (every color, every mockup after)
   const zoomG = !portal ? garmentFor(lines[active] || lines[0]) : null;
-  const setZoomG = async (z: number) => {
+  const setZoomG = async (v: View, z: number) => {
     if (!zoomG) return;
-    const v = Math.round(Math.max(0.7, Math.min(1.4, z)) * 100) / 100;
-    const cur = ((zoomG as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {}) as Record<string, unknown>;
-    const next = { ...cur, scale: v === 1 ? undefined : v };
-    if (v === 1) delete next.scale;
-    const val = Object.keys(next).length ? next : null;
+    const val0 = Math.round(Math.max(0.7, Math.min(1.4, z)) * 100) / 100;
+    const cur = { ...(((zoomG as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {}) as Record<string, unknown>) };
+    // the old one-for-both setting becomes the two sides' starting point
+    if (cur.scale != null) { cur.scale_front ??= cur.scale; cur.scale_back ??= cur.scale; delete cur.scale; }
+    if (val0 === 1) delete cur[`scale_${v}`]; else cur[`scale_${v}`] = val0;
+    const val = Object.keys(cur).length ? cur : null;
     setCatalog((c) => c.map((x) => (x.id === zoomG.id ? ({ ...x, mockup_fit: val } as Garment) : x)));
     await createClient().from("garments").update({ mockup_fit: val }).eq("id", zoomG.id);
   };
-  const scaleOf = (b: Body) => (REF_BODY.widthIn / b.widthIn) * (b.zoom || 1);
+  const zoomCtl = (v: View) => zoomG && (
+    <span className="mk-pill mk-zoom" title={`Prints look too big or too small on this side of the ${zoomG.brand} ${zoomG.style}? Set it once: kept for every color and every mockup after`}>
+      Scale {v}
+      <button type="button" aria-label={`Smaller on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) - 0.02)}>−</button>
+      <b>{Math.round(garZoom(zoomG, v) * 100)}%</b>
+      <button type="button" aria-label={`Bigger on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) + 0.02)}>+</button>
+      {garZoom(zoomG, v) !== 1 && <button type="button" className="mk-zoom-r" onClick={() => void setZoomG(v, 1)} title="Back to 100%">↺</button>}
+    </span>
+  );
+  const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
+  /** the photo's scale with staff's nudge for this garment and side (garments.mockup_fit.scale_front / scale_back; Oct 24,
+   *  Nick: "scale front, scale back… it needs to work independently") */
+  const zScale = (b: Body, l: Line | undefined, v: View) => scaleOf(b) * garZoom(l ? garmentFor(l) : null, v);
   // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
   const askedSpecs = useRef(new Set<string>());
   const shownG = lines[active] || lines[0] ? garmentFor((lines[active] || lines[0])!) : undefined;
@@ -1550,7 +1562,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const wIn = printWidth(im, im.location, ratioIm(im), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const vv = view || viewsFor(im.location)[0];
-    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, settingsLine(on || line, vv), vv), bd);
+    const b = basePlacement(im.location, wIn, r, drop, zScale(bd, on || line, vv), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, settingsLine(on || line, vv), vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
     // a hand drag lines the logo up on the shirt picture only (Oct 22, Nick: "locks in the close-up… then we just drag
     // to visually align it on the mockup… that shouldn't matter for our proofing"): close-ups and the print spec stay put
@@ -1583,7 +1595,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    */
   const measured = (v: View) => {
     const fit = fitFor(line, v), f = fit?.flat;
-    const sc = scaleOf(body);
+    const sc = zScale(body, line, v);
     const ppi = f ? f.ppi : PX_PER_IN * sc * (fit?.s || 1);
     const gw = f && body.cap && line ? bagWidth(line) : body.widthIn, gh = f && body.cap && line ? bagLength(line) : body.lengthIn;
     const gx = (f ? f.cx : fit?.cx ?? CENTER_X) - (gw * ppi) / 2, gy = f ? f.top : fit?.top ?? COLLAR_Y[v];
@@ -2807,7 +2819,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       { const cr = containRect(bg); g.drawImage(bg, (nm.tx + nm.z * cr.x) * BD_K, (nm.ty + nm.z * cr.y) * BD_K, cr.w * nm.z * BD_K, cr.h * nm.z * BD_K); }
       // the print area, dashed, with its name and size (light lines on a dark shirt, dark on a light one)
       const bd = bodyFor(l), sp = spotFor(loc, bd);
-      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, adjusted(fit, settingsLine(l, v), v), bd);
+      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, zScale(bd, l, v), v, adjusted(fit, settingsLine(l, v), v), bd);
       const ax = (nm.tx + nm.z * b.area.x) * BD_K, ay = (nm.ty + nm.z * b.area.y) * BD_K, aw = b.area.w * nm.z * BD_K, ah = b.area.h * nm.z * BD_K;
       const hx = shirtHex(l).replace("#", ""), lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
       const ink = lum < 0.55 ? "rgba(255,255,255,0.85)" : "rgba(40,48,60,0.7)";
@@ -2852,7 +2864,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const toPhoto = (X: number, Y: number) => ({ x: (X / B.k - B.tx) / B.z, y: (Y / B.k - B.ty) / B.z });
     const tl = toPhoto(x0 * f, y0 * f), br = toPhoto((x1 + 1) * f, (y1 + 1) * f);
     const pw = br.x - tl.x, ph = br.y - tl.y, rr = ph / (pw || 1);
-    const fit = adjusted(fitFor(l, v), settingsLine(l, v), v), sc = scaleOf(bdy);
+    const fit = adjusted(fitFor(l, v), settingsLine(l, v), v), sc = zScale(bdy, l, v);
     const start = imprints.find((x) => x.id === imId)?.location || (v === "back" ? "Full Back" : "Full Front");
     const ppiPhoto = basePlacement(start, 1, rr, null, sc, v, fit, bdy).w || PX_PER_IN * sc;
     let wIn = Math.round((pw / ppiPhoto) * 100) / 100;
@@ -3201,15 +3213,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       <div className={"mk mk-" + mode} ref={mkRef}>
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
-          {zoomG && (
-            <div className="mk-zoom" role="group" aria-label="Print scale for this garment" title={`Prints look too big or too small on the ${zoomG.brand} ${zoomG.style}? Set it once: it's kept for every color of this style and every mockup after`}>
-              <span className="faint">Print scale on the {zoomG.style}</span>
-              <button type="button" className="btn sm icon" aria-label="Smaller" onClick={() => void setZoomG(garZoom(zoomG) - 0.02)}>−</button>
-              <b className="mk-zoom-v">{Math.round(garZoom(zoomG) * 100)}%</b>
-              <button type="button" className="btn sm icon" aria-label="Bigger" onClick={() => void setZoomG(garZoom(zoomG) + 0.02)}>+</button>
-              {garZoom(zoomG) !== 1 && <button type="button" className="linkbtn" onClick={() => void setZoomG(1)}>Reset</button>}
-            </div>
-          )}
           {runSizes.length > 1 && (
             <div className="mk-sizes" role="group" aria-label="Show the mockup on">
               <span className="faint">Show on</span>
@@ -3241,6 +3244,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {isHoodie(line) && <label className="mk-pill" title="On the back: drag roughly along the bottom edge of the hood; it snaps to the edge and prints go behind the hood (remembered for this hoodie and color)"><input type="checkbox" checked={hoodDraw} onChange={(e) => setHoodDraw(e.target.checked)} /> Hoodie tool{hoodOf(line) ? " ✓" : ""}</label>}
                     </div>
                   )}
+                  {/* scale, each side on its own, top right of its photo (Oct 24, Nick: "scale front, scale back") */}
+                  {zoomG && <div className="mk-corner tr">{zoomCtl(v)}</div>}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im), locked: !!im.visualOnly && !im.confirmed && !adjust }))}

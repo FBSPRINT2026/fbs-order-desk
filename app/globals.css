@@ -13780,3 +13780,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .arc-bring .btn{align-self:flex-start}
 select.chip.arc-spot{height:auto;min-height:30px;padding:4px 8px;font:inherit;font-size:12.5px;max-width:100%;cursor:pointer}
 select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+/* Mockup Creator (staff): Scale front / Scale back, top right of each photo (Oct 24, Nick) */
+.mk-corner.tr{top:1.8cqw;bottom:auto;right:2.2cqw}
+.mk-corner.tr .mk-pill.mk-zoom{cursor:default;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.mk-pill.mk-zoom button{all:unset;cursor:pointer;width:18px;height:18px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:5px;background:var(--surface);font-weight:700;line-height:1}
+.mk-pill.mk-zoom button:hover{border-color:var(--accent);color:var(--accent)}
+.mk-pill.mk-zoom b{min-width:34px;text-align:center;font-weight:600}
+.mk-pill.mk-zoom .mk-zoom-r{border:0;background:none;color:var(--ink-3)}
