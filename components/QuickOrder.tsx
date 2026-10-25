@@ -1244,7 +1244,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     setAutoFinish(true);
   };
   useEffect(() => { if (autoFinish) finish("skip"); }, [autoFinish]); // eslint-disable-line react-hooks/exhaustive-deps
-  const finish = (rest: "skip" | "production") => {
+  const finish = async (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>(), splits: NonNullable<HelpAns["splits"]> = [];
     const pickOf = (it: Item) => { if (!once.has(it.key)) once.set(it.key, it.pick(!!bgOff[it.key])); return once.get(it.key) || null; };
     for (const p of help.prints) {
@@ -1265,6 +1265,15 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     });
     // art for a spot the old job didn't print: a new print with it
     const adds = items.filter((it) => (as[it.key] || "").startsWith("new:")).map((it) => ({ location: as[it.key].slice(4), pick: pickOf(it) })).filter((a): a is { location: string; pick: HelpPick } => !!a.pick);
+    // files brought in from "Not here?" marked Customer mockup or Production file: saved with the order's files too
+    // (Oct 24, Nick: "I want to like set this as a customer mockup")
+    if (files) for (const it of items.filter((x) => brought.includes(x.key) && (as[x.key] === "mockup" || as[x.key] === "production"))) {
+      const pk = pickOf(it), f = pk && "file" in pk ? (pk as { file: File }).file : null;
+      if (!f) continue;
+      const path = `reorder-files/${uid()}/${(f.name || it.name).replace(/[^\w.\-]+/g, "_").slice(-100)}`;
+      const up = await createClient().storage.from("proofs").upload(path, f, { contentType: f.type || undefined }).catch(() => ({ error: true }));
+      if (up && !("error" in up && up.error)) files.push({ path, name: it.name, role: as[it.key] as "mockup" | "production", kind: as[it.key] === "mockup" ? "customer_mockup" : kindOf[it.key] ?? guessProdKind(it.name), note: (noteOf[it.key] || "").trim() });
+    }
     help.resolve({ adds, picks: out, splits, know, mode: help.archivedId ? mode : undefined, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
@@ -1306,8 +1315,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
               {other.map((l) => <option key={l} value={l}>{l} art</option>)}
             </select>;
           })()}
-          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>Mockup</button>}
-          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
+          {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>{brought.includes(it.key) ? "Customer mockup" : "Mockup"}</button>}
+          {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
         {v.startsWith("loc:") && linesAt(v.slice(4)).length > 1 && (() => {
