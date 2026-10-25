@@ -6,6 +6,8 @@ import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
+import { supplierConfirms } from "@/lib/supplierConfirm";
+import { pdfTextServer } from "@/lib/pdfTextServer";
 import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
@@ -250,7 +252,7 @@ export const isPaperwork = (name: string) => PAPERWORK.has(kindByName(name)?.kin
 export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
-  const listing: string[] = [];
+  const listing: string[] = [], confirms: string[] = [];
   let budget = 18 * 1024 * 1024;
   for (const [i, a] of atts.slice(0, 12).entries()) {
     const fromLink = (a as { from_link?: string; source?: string }).from_link, prev = (a as { source?: string }).source === "canva-preview";
@@ -271,13 +273,19 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       listing.push(`${tag} (picture, shown above)`);
     } else if (pdf) {
       documents.push({ data: buf.toString("base64"), label: `${tag} (PDF):` });
-      listing.push(`${tag} (PDF, shown above)`);
+      // a supplier's order confirmation (S&S, SanMar): its rows read by code, exactly (Oct 24, Dear Heart's In Every Season)
+      const tx = await pdfTextServer(buf);
+      const cf = tx ? supplierConfirms([tx]) : null;
+      if (cf?.rows) {
+        confirms.push(tx);
+        listing.push(`${tag} (PDF, shown above). Read by code, exactly: a supplier order confirmation, ${cf.pieces} pieces: ${cf.lines.map((l) => `${l.product.split(" - ").pop()} ${l.color} ${Object.entries(l.sizes).map(([z, q]) => `${z} ${q}`).join(", ")}`).join("; ")}. Use these quantities as they are.`);
+      } else listing.push(`${tag} (PDF, shown above)`);
     } else {
       const t = officeText(a.name, a.type, buf);
       listing.push(t ? `${tag} contents:\n"""\n${t}\n"""` : `${tag} (couldn't be read${/\.(xls|doc)$/i.test(a.name) ? "; old Excel/Word format" : ""})`);
     }
   }
-  return { images, documents, listing };
+  return { images, documents, listing, confirms };
 }
 
 // ---------- the AI ----------
@@ -390,7 +398,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-24e";
+export const READER_REV = "2026-10-24f";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -470,7 +478,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n");
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts, convo.map((e) => e.id as string)).catch(() => new Set<string>());
-  const { images, documents, listing } = await readFiles(admin, atts, sigs);
+  const { images, documents, listing, confirms } = await readFiles(admin, atts, sigs);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
   const fin = (settings.finishing || []).map((f) => `${f.id} = ${f.name}`).join("; ");
@@ -583,6 +591,17 @@ ${staffSays}` : ""}`;
         if (drop.size) for (const g of p.groups || []) g.garments = (g.garments || []).filter((gm) => !drop.has(gm));
         if (miss.length) countNote = `On the size sheets but not matched to a garment line: ${miss.join(", ")}.`;
       } else countNote = `The size sheets don't add up as read: ${off.join("; ")}.`;
+    }
+  }
+  // supplier order confirmations read by code (lib/supplierConfirm.ts): their quantities, added up across every
+  // confirmation in the order, go on the garments exactly; this wins over the AI's reading of them
+  if (confirms.length) {
+    const cf = supplierConfirms(confirms), all = (p.groups || []).flatMap((g) => g.garments || []);
+    if (cf.lines.length && all.length) {
+      const { unmatched, extra } = applySheetSizes(all, cf.lines);
+      for (const g of p.groups || []) g.garments = (g.garments || []).filter((x) => !extra.has(x));
+      if (unmatched.length && p.groups?.[0]) for (const u of unmatched) p.groups[0].garments = [...(p.groups[0].garments || []), { style: u.product.split(" - ").pop() || "", description: u.product, color: u.color, sizes: { ...u.sizes } } as (typeof all)[number]];
+      countNote = "";
     }
   }
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
