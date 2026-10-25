@@ -77,6 +77,9 @@ class Cancelled extends Error {}
 const LIGHTISH = /white|natural|cream|ivory|ash\b|light|pink|mauve|stone|sand|silver|yellow|bone|oatmeal|heather gr[ae]y|athletic heather|sport gr[ae]y|columbia blue|baby|pastel|mint|lavender|peach/i;
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
 
+/** a supplier's order confirmation or invoice for blanks (S&S Activewear, SanMar, alphabroder), by its own words */
+const supplierPaper = (t: string) => /order\s*confirmation|sales\s*order|invoice/i.test(t) && /s\s*&\s*s\s*activewear|ssactivewear|\bS&S\b|sanmar|alphabroder|\bwarehouse:/i.test(t);
+
 export default function QuickOrder({ activityId, start, onClose, onCreated, onReview, dock }: { activityId: string; start: OrderStart; onClose: () => void;
   /** a panel on the right, the email and its attachments still there to look at (Oct 23, Nick) */ dock?: boolean;
   /** each order made (for the email's notes) */ onCreated: (id: string, number: number, label: string) => void;
@@ -988,7 +991,7 @@ const png = (b: Blob, name: string) => new File([b], `${name.replace(/\.[^.]+$/,
 
 function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   type Old = { name: string; path: string; url: string; type: string };
-  type Found = { source: "library" | "email"; name: string; label: string; date: string; type: string; url?: string; design_id?: string };
+  type Found = { source: "library" | "email"; name: string; label: string; date: string; type: string; url?: string; design_id?: string; /** a supplier's paperwork: not shown */ hide?: boolean };
   const [old, setOld] = useState<null | (Old & { d?: Drawn | null })[]>(null);
   const [found, setFound] = useState<null | (Found & { d?: Drawn | null })[]>(null);
   const [pieces, setPieces] = useState<{ name: string; file: File; url: string; size: string }[]>([]);
@@ -1054,6 +1057,13 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       }
       for (const [k, f] of (j.found || []).entries()) {
         if (!f.url || f.source === "library") continue;
+        // a supplier's order confirmation (S&S, SanMar) in their emails: never art, so it isn't offered here either
+        // (Oct 24, Nick: "teach it to not look for these also in this section")
+        if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+          const t = await fetch(f.url).then((r) => r.arrayBuffer()).then((b) => pdfText(b, 2)).catch(() => "");
+          if (!live) return;
+          if (supplierPaper(t)) { setFound((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, hide: true } : y)) : x)); continue; }
+        }
         const d = await drawFile(f.url, f.name, f.type).catch(() => null);
         if (!live) return;
         setFound((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, d } : y)) : x));
@@ -1077,7 +1087,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       pick: () => ({ kind: "file" as const, file: x.pc.file, name: `the art pulled off ${pu.from}`, pc: x.pc, from: pu.from, how: pu.how, ...(pu.sheet?.[x.pc.side] ? { sheet: pu.sheet[x.pc.side] } : {}) }) }))),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
     ...pieces.map((p, i) => ({ key: `M${i}`, where: "else" as const, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => ({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
-    ...(found || []).map((f, i) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
+    ...(found || []).map((f, i) => ({ f, i })).filter(({ f, i }) => !f.hide && !(found || []).some((g, gi) => gi < i && !g.hide && g.name === f.name && g.source === f.source)).map(({ f, i }) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
       cutUrl: f.source === "library" ? f.url || "" : f.d?.cutUrl || "", asIsUrl: f.source === "library" ? f.url || "" : f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.source === "library" || f.d !== undefined,
       pick: (bg: boolean) => (f.source === "library" && f.design_id ? { kind: "design" as const, id: f.design_id, name: f.name } : fromDrawn(f.d, f.name, bg, `${f.name} (${f.label}, ${f.date})`)) })),
   ];
@@ -1204,7 +1214,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       // a supplier's blank order (S&S / SanMar order confirmation), read from the PDF's own words: left out, never asked
       // (Oct 24, Nick: "it's still asking me… I told it to ignore these in reorders")
       void f.d.raw.arrayBuffer().then((b) => pdfText(b, 2)).then((t) => {
-        if (/order\s*confirmation|sales\s*order|invoice/i.test(t) && /s\s*&\s*s\s*activewear|ssactivewear|\bS&S\b|sanmar|alphabroder|\bwarehouse:/i.test(t)) { autoNone.current.add(k); setAs((a) => (a[k] && a[k] !== "none" ? a : { ...a, [k]: "none" })); }
+        if (supplierPaper(t)) { autoNone.current.add(k); setAs((a) => (a[k] && a[k] !== "none" ? a : { ...a, [k]: "none" })); }
       }).catch(() => null);
       setSheets((x) => ({ ...x, [k]: "reading" }));
       void f.d.raw.arrayBuffer().then((b) => sizesOnSheet(b)).then((r) => { const has = Object.keys(r).length > 0; setSheets((x) => ({ ...x, [k]: has ? r : null })); if (has) setAs((a) => (a[k] ? a : { ...a, [k]: "mockup" })); }).catch(() => setSheets((x) => ({ ...x, [k]: null })));
@@ -1474,7 +1484,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       })()}
       {stage === "files" && opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
       {stage === "files" && <details className="arc-else" open={elseOpen} onToggle={(e) => setElseOpen((e.target as HTMLDetailsElement).open)}>
-        <summary>Not here? Their emails and logos{found ? ` (${found.length})` : ""}, the film folder, or upload it</summary>
+        <summary>Not here? Their emails and logos{found ? ` (${elses.filter((x) => x.key.startsWith("E")).length})` : ""}, the film folder, or upload it</summary>
         <div className="arc-tools">
           <label className="ap-link">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const k = `U${ups.length}`; setUps((x) => [...x, { file: f, url: /^image\//.test(f.type) ? URL.createObjectURL(f) : "" }]); const p = help.prints.find((q) => !artOf(q.key)); if (p) assign(k, p.key); e.target.value = ""; }} /></label>
           <button type="button" className="ap-link" disabled={films?.busy} onClick={() => void searchFilm(help.job.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, ""))}>Search the film folder</button>
