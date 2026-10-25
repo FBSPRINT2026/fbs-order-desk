@@ -1194,7 +1194,7 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
     if (hit) { setOut(hit); return; }
     let live = true;
     const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => { try { const u = repaintLogo(img, want, 600, { dropWhite }); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
+    img.onload = () => { try { const u = repaintLogo(img, want, dropWhite ? 1400 : 600, { dropWhite, oneInk: imp.colors === 1 }); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
     img.src = url;
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

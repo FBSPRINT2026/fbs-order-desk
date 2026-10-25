@@ -292,7 +292,7 @@ export function suggestInk(hex: string): { standard: InkMatch; pms: InkMatch; re
  * logo's colors move, shifted by that color's change (soft edges keep their blend). For thumbnails of the raw upload.
  * `map`: logo color hex → new hex, or "none" (removed: the pixel goes see-through).
  */
-export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, maxSide = 600, opts: { /** no white ink in this print: white in the art is the shirt showing through */ dropWhite?: boolean } = {}): string {
+export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, maxSide = 600, opts: { /** no white ink in this print: white in the art is the shirt showing through */ dropWhite?: boolean; /** a one-ink print: every pixel is that ink at some strength */ oneInk?: boolean } = {}): string {
   const k = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
   const w = Math.max(1, Math.round((img.naturalWidth || 1) * k)), h = Math.max(1, Math.round((img.naturalHeight || 1) * k));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -303,9 +303,32 @@ export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, 
   const pairs = Object.entries(map).map(([s, t]) => ({ s: rgbOf(s), t: t === "none" ? null : rgbOf(t) }));
   // a print with no white ink (a 1-color maroon): the white in the art is no ink at all, so the shirt shows through
   // (Oct 24, Nick on D-10213 He Makes a Way: "why this little mock-up has the white still")
-  if (opts.dropWhite) {
+  // Smooth edges (Oct 24, Nick on #40170: "these little blowups… don't look smooth"): the art is ink over white paper, so
+  // each pixel is read as how much ink it has (an anti-aliased edge is part ink, part paper) and drawn as the ink at
+  // that strength, rather than cut off at a hard line.
+  if (opts.dropWhite && !(opts.oneInk && pairs.length === 1)) {
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i] > 228 && d[i + 1] > 228 && d[i + 2] > 228) d[i + 3] = 0;
     if (!pairs.length) { x.putImageData(data, 0, 0); return clearPage(c).toDataURL("image/png"); }
+  } else if (opts.dropWhite) {
+    const lum = (r: number, g: number, b: number) => (r + g + b) / 3;
+    const src = pairs.map((p) => ({ ...p, l: lum(p.s[0], p.s[1], p.s[2]) }));
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      const L = lum(d[i], d[i + 1], d[i + 2]);
+      if (!src.length) { const a0 = Math.max(0, Math.min(1, (250 - Math.min(d[i], d[i + 1], d[i + 2])) / 60)); d[i + 3] = Math.round(d[i + 3] * a0); continue; }
+      // the ink this pixel is a lighter mix of: the one whose mix with white comes closest
+      let best = 0, be = Infinity, ba = 0;
+      for (let j = 0; j < src.length; j++) {
+        const q = src[j], a0 = q.l >= 250 ? 0 : Math.max(0, Math.min(1, (255 - L) / (255 - q.l)));
+        const e = [0, 1, 2].reduce((t, k) => t + (d[i + k] - (q.s[k] * a0 + 255 * (1 - a0))) ** 2, 0);
+        if (e < be) { be = e; best = j; ba = a0; }
+      }
+      const q = src[best], to = q.t;
+      if (!to || ba < 0.02) { d[i + 3] = 0; continue; }
+      d[i] = to[0]; d[i + 1] = to[1]; d[i + 2] = to[2]; d[i + 3] = Math.round(d[i + 3] * ba);
+    }
+    x.putImageData(data, 0, 0);
+    return clearPage(c).toDataURL("image/png");
   }
   if (!pairs.length) return clearPage(c).toDataURL("image/png");
   const cache = new Map<number, number[] | null | undefined>();
