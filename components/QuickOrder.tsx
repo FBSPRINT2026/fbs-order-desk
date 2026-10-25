@@ -1,6 +1,7 @@
 "use client";
 import { sizeRank } from "@/lib/sizeOrder";
 import { clearPageFile } from "@/lib/inkColors";
+import { pdfText } from "@/lib/printavoArt";
 import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
@@ -1200,6 +1201,11 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       // (Oct 24, Nick: "learn to ignore these on previous orders… those are manufactured")
       if (/order[\s_-]*confirm|ss[\s_-]*activewear|s&s[\s_-]*(order|invoice)|sanmar[\s_-]*(order|invoice)/i.test(f.name)) { autoNone.current.add(k); setAs((a) => (a[k] ? a : { ...a, [k]: "none" })); }
       if (!f.d?.raw || !pdfLike({ name: f.name, type: f.d.raw.type })) { setSheets((x) => ({ ...x, [k]: null })); continue; }
+      // a supplier's blank order (S&S / SanMar order confirmation), read from the PDF's own words: left out, never asked
+      // (Oct 24, Nick: "it's still asking me… I told it to ignore these in reorders")
+      void f.d.raw.arrayBuffer().then((b) => pdfText(b, 2)).then((t) => {
+        if (/order\s*confirmation|sales\s*order|invoice/i.test(t) && /s\s*&\s*s\s*activewear|ssactivewear|\bS&S\b|sanmar|alphabroder|\bwarehouse:/i.test(t)) { autoNone.current.add(k); setAs((a) => (a[k] && a[k] !== "none" ? a : { ...a, [k]: "none" })); }
+      }).catch(() => null);
       setSheets((x) => ({ ...x, [k]: "reading" }));
       void f.d.raw.arrayBuffer().then((b) => sizesOnSheet(b)).then((r) => { const has = Object.keys(r).length > 0; setSheets((x) => ({ ...x, [k]: has ? r : null })); if (has) setAs((a) => (a[k] ? a : { ...a, [k]: "mockup" })); }).catch(() => setSheets((x) => ({ ...x, [k]: null })));
     }
