@@ -1176,14 +1176,17 @@ function ScreensLine({ summary, children }: { summary: React.ReactNode; children
  */
 /** The logo picture in the inks picked for it in the Mockup Creator (imprint.inkMap), else as uploaded. */
 const paintedCache = new Map<string, string>();
-function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["inkMap"] }): string {
+function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["inkMap"]; inks?: string; colors?: number; method?: string }): string {
   const im = imp.inkMap && imp.inkMap.design === imp.design_id ? imp.inkMap.map : null;
   const want: Record<string, string> = {};
   if (im) for (const [src, v] of Object.entries(im)) if (v.name === "none" || (v.hex && v.hex.toLowerCase() !== src.toLowerCase())) want[src] = v.name === "none" ? "none" : v.hex;
   // keyed by the picture itself too: a fixed logo (the order check's art fixes) is a new file and must repaint (Oct 23:
   // the blown-up logo still showed the gray outline after the blacks were made one)
   // every logo picture goes through it (not only repainted ones): a white PDF page around the art is taken off
-  const key = url ? `${url.split("?")[0]}|${JSON.stringify(want)}` : "";
+  // spot colors with no white ink: white in the art is the shirt (full color and DTF keep their white)
+  const targets = Object.values(want).filter((v) => v !== "none").map((v) => v.toLowerCase());
+  const dropWhite = imp.method !== "dtf" && (imp.colors || 0) > 0 && (imp.colors || 0) < 11 && !/white/i.test(imp.inks || "") && !targets.some((h) => /^#?f[a-f0-9]f[a-f0-9]f[a-f0-9]$/i.test(h));
+  const key = url ? `${url.split("?")[0]}|${JSON.stringify(want)}|${dropWhite ? "w" : ""}` : "";
   const [out, setOut] = useState(key ? paintedCache.get(key) || "" : "");
   useEffect(() => {
     if (!key) { setOut(""); return; }
@@ -1191,7 +1194,7 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
     if (hit) { setOut(hit); return; }
     let live = true;
     const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => { try { const u = repaintLogo(img, want); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
+    img.onload = () => { try { const u = repaintLogo(img, want, 600, { dropWhite }); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
     img.src = url;
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

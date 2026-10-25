@@ -292,7 +292,7 @@ export function suggestInk(hex: string): { standard: InkMatch; pms: InkMatch; re
  * logo's colors move, shifted by that color's change (soft edges keep their blend). For thumbnails of the raw upload.
  * `map`: logo color hex → new hex, or "none" (removed: the pixel goes see-through).
  */
-export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, maxSide = 600): string {
+export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, maxSide = 600, opts: { /** no white ink in this print: white in the art is the shirt showing through */ dropWhite?: boolean } = {}): string {
   const k = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
   const w = Math.max(1, Math.round((img.naturalWidth || 1) * k)), h = Math.max(1, Math.round((img.naturalHeight || 1) * k));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -301,6 +301,12 @@ export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, 
   const data = x.getImageData(0, 0, w, h), d = data.data;
   const rgbOf = (hx: string) => { const v = hx.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
   const pairs = Object.entries(map).map(([s, t]) => ({ s: rgbOf(s), t: t === "none" ? null : rgbOf(t) }));
+  // a print with no white ink (a 1-color maroon): the white in the art is no ink at all, so the shirt shows through
+  // (Oct 24, Nick on D-10213 He Makes a Way: "why this little mock-up has the white still")
+  if (opts.dropWhite) {
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i] > 228 && d[i + 1] > 228 && d[i + 2] > 228) d[i + 3] = 0;
+    if (!pairs.length) { x.putImageData(data, 0, 0); return clearPage(c).toDataURL("image/png"); }
+  }
   if (!pairs.length) return clearPage(c).toDataURL("image/png");
   const cache = new Map<number, number[] | null | undefined>();
   for (let i = 0; i < d.length; i += 4) {
