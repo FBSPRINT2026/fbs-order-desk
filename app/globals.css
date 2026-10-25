@@ -13787,3 +13787,8 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .mk-pill.mk-zoom button:hover{border-color:var(--accent);color:var(--accent)}
 .mk-pill.mk-zoom b{min-width:34px;text-align:center;font-weight:600}
 .mk-pill.mk-zoom .mk-zoom-r{border:0;background:none;color:var(--ink-3)}
+/* Order type row (Oct 24): New order / Reorder / Reorder with changes, production confirms, what the customer sees */
+.ord .pt-row.ot-row .ot-sel{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.ord .pt-row.ot-row .ot-conf{font-size:13px}
+.ord .pt-row.ot-row .ot-prints{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px}
+.ord .pt-row.ot-row .ot-prints .faint{font-size:12px}
