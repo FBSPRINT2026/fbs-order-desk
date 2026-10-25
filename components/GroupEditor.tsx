@@ -1,6 +1,6 @@
 "use client";
 import { threadByName } from "@/lib/embroidery";
-import { cleanPrintNotes, inkNames, shopNotes, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { cleanPrintNotes, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
 import { colorHex, repaintLogo } from "@/lib/inkColors";
@@ -419,10 +419,12 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     const shared = (gc.imprints[di] as { pmsShared?: string[] } | undefined)?.pmsShared || [];
     const n = typed ? num0(d.pms) : pms.filter((x) => x.charge).length - shared.length;
     const fee = n * (+(wpl.pmsFee || 0));
-    const sharedNote = shared.length ? <span className="faint" title="The same PMS on another print of this order: one matching fee">{n ? " · " : ""}{shared.join(", ")}: already matched on another print, no second fee</span> : null;
+    // shown like the screens line's "remake" tag: the second location isn't charged for the same PMS
+    const firstOn = (name: string) => g.imprints.slice(0, di).find((o) => pmsInks(o).some((x) => x.charge && pmsKey(x.name) === pmsKey(name)))?.location;
+    const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
     return (
       <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
-        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
+        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
           : pms.map((x) => <label key={x.name} className="check" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />{x.name}: standard, no charge</label>)}
