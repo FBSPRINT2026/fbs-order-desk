@@ -3,7 +3,7 @@ import { threadByName } from "@/lib/embroidery";
 import { cleanPrintNotes, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
-import { colorHex, repaintLogo } from "@/lib/inkColors";
+import { colorHex, paintPrint } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
@@ -1184,7 +1184,8 @@ const paintedCache = new Map<string, string>();
 function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["inkMap"]; inks?: string; colors?: number; method?: string }): string {
   const im = imp.inkMap && imp.inkMap.design === imp.design_id ? imp.inkMap.map : null;
   const want: Record<string, string> = {};
-  if (im) for (const [src, v] of Object.entries(im)) if (v.name === "none" || (v.hex && v.hex.toLowerCase() !== src.toLowerCase())) want[src] = v.name === "none" ? "none" : v.hex;
+  // every art color with its ink as picked in the Mockup Creator (the same picks the mockup was painted with)
+  if (im) for (const [src, v] of Object.entries(im)) want[src] = v.name === "none" || !v.hex ? "none" : v.hex;
   // keyed by the picture itself too: a fixed logo (the order check's art fixes) is a new file and must repaint (Oct 23:
   // the blown-up logo still showed the gray outline after the blacks were made one)
   // every logo picture goes through it (not only repainted ones): a white PDF page around the art is taken off
@@ -1199,7 +1200,8 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
     if (hit) { setOut(hit); return; }
     let live = true;
     const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => { try { const u = repaintLogo(img, want, dropWhite ? 1400 : 600, { dropWhite, oneInk: imp.colors === 1 }); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
+    // the one print painter (lib/inkColors paintPrint), the same as the production mockup and the Mockup Creator
+    img.onload = () => { try { const u = paintPrint(img, want, { paper: dropWhite, maxSide: 1400 }).toDataURL("image/png"); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
     img.src = url;
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

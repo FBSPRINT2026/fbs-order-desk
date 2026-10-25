@@ -176,8 +176,45 @@ function recolorCanvas(img: HTMLImageElement, sources: string[], targets: Record
   const w = img.naturalWidth, h = img.naturalHeight;
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
+  c.getContext("2d", { willReadFrequently: true })!.drawImage(img, 0, 0);
+  return recolorInPlace(c, sources, targets);
+}
+
+const isPaper = (hx: string) => { const v = rgb(hx); return v.every((n) => n > 236); };
+
+/**
+ * THE print picture: one painter for every place a print's art is shown on its own (the order's print tiles and their
+ * blow-ups, the production mockup), the same one the Mockup Creator paints the mockup with (Oct 24, Nick: "the little
+ * blow-ups… look not like the actual art… start from scratch there and remap them all"). The art is drawn (small art up
+ * to 3x so the edges stay smooth when blown up), the white page around it comes off, and each art color is repainted in
+ * its ink (`map`: art hex → ink hex, or "none" for the shirt showing through). A pixel between two colors (an
+ * anti-aliased edge, a distressed speck) is painted between their inks, so edges stay soft and distressing stays.
+ * `paper`: no white ink in this print, so white in the art is the shirt showing through (added as "none" when the map
+ * doesn't name a white).
+ */
+export function paintPrint(img: HTMLImageElement, map: Record<string, string>, opts: { paper?: boolean; maxSide?: number } = {}): HTMLCanvasElement {
+  const W0 = img.naturalWidth || img.width || 1, H0 = img.naturalHeight || img.height || 1;
+  const k = Math.min(3, (opts.maxSide || 1800) / Math.max(W0, H0));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(W0 * k)); c.height = Math.max(1, Math.round(H0 * k));
   const x = c.getContext("2d", { willReadFrequently: true })!;
-  x.drawImage(img, 0, 0);
+  x.imageSmoothingQuality = "high"; x.drawImage(img, 0, 0, c.width, c.height);
+  const cl = clearPage(c);
+  const m: Record<string, string> = {};
+  for (const [s0, t] of Object.entries(map)) if (/^#[0-9a-f]{6}$/i.test(s0)) m[s0.toUpperCase()] = t === "none" || !t ? "none" : t;
+  if (opts.paper && !Object.keys(m).some(isPaper)) {
+    // no picks yet: the art's own colors stay as they are, only its white becomes the shirt
+    if (!Object.keys(m).length) for (const q of detectColors(img)) if (!isPaper(q.hex)) m[q.hex.toUpperCase()] = q.hex;
+    if (Object.keys(m).length) m["#FFFFFF"] = "none";
+  }
+  const src = Object.keys(m);
+  if (!src.length) return cl;
+  return recolorInPlace(cl, src, m);
+}
+
+function recolorInPlace(c: HTMLCanvasElement, sources: string[], targets: Record<string, string>): HTMLCanvasElement {
+  const w = c.width, h = c.height;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
   const data = x.getImageData(0, 0, w, h);
   const d = data.data;
   const src = sources.map(rgb);

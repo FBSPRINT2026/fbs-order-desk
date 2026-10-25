@@ -1,5 +1,5 @@
 "use client";
-import { clearPage } from "@/lib/inkColors";
+import { paintPrint } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { colorHex } from "@/lib/inkColors";
@@ -267,29 +267,16 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
   }, [p.art]);
   useEffect(() => {
     const c = cv.current, i = img.current; if (!c || !i || !ready) return;
-    // full detail (Oct 21, Nick: "on the photoshop files in preview… they are extremely grainy"): it was drawn at 420px
-    // and stretched, so halftone dots turned to noise; now up to 1800px, shown smaller (sharp on a retina screen too)
-    const k = Math.min(1, 1800 / Math.max(i.naturalWidth, i.naturalHeight));
-    c.width = Math.max(1, Math.round(i.naturalWidth * k)); c.height = Math.max(1, Math.round(i.naturalHeight * k));
-    const x = c.getContext("2d", { willReadFrequently: true })!; x.imageSmoothingQuality = "high"; x.clearRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height);
-    // art on a whole white page (a film PNG): the page comes off and it's cropped to the art, so the page isn't painted as
-    // ink (Oct 24, Nick on #40166: the Center Chest showed as one big sand box)
-    const cl = clearPage(c);
-    if (cl !== c) { c.width = cl.width; c.height = cl.height; x.clearRect(0, 0, c.width, c.height); x.drawImage(cl, 0, 0); }
-    if (!p.plan.length) return;
-    const rgb = (h: string) => [1, 3, 5].map((n) => parseInt(h.slice(n, n + 2), 16) || 0);
+    // full detail, up to 1800px shown smaller (Oct 21: "extremely grainy"); the one print painter (lib/inkColors paintPrint), the same as the order's print tiles and the Mockup Creator
+    // (Oct 24, Nick on #40166 / #40170: "the production mock-up blow-ups… look not like the actual art… start from
+    // scratch"): the white page comes off, each art color is painted in its screen's ink, the white in the art is the
+    // shirt showing through, and edges / distressing stay as drawn
     const off = new Set((shirt && byColor ? skip[shirt] || [] : []).map((n) => n.toLowerCase()));
-    const plan = p.plan.map((q) => ({ c: rgb(q.hex), to: assign[q.hex] === -1 || off.has((screens[assign[q.hex]]?.name || "").toLowerCase()) ? [-1, -1, -1] : rgb(screens[assign[q.hex]]?.hex || q.hex) }));
-    const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map<number, number[]>();
-    for (let o = 0; o < a.length; o += 4) {
-      if (a[o + 3] < 8) continue;
-      const key = (a[o] >> 3 << 10) | (a[o + 1] >> 3 << 5) | (a[o + 2] >> 3);
-      let to = memo.get(key);
-      if (!to) { let best = 1e9; for (const q of plan) { const dd = (q.c[0] - a[o]) ** 2 + (q.c[1] - a[o + 1]) ** 2 + (q.c[2] - a[o + 2]) ** 2; if (dd < best) { best = dd; to = q.to; } } memo.set(key, to!); }
-      if (to![0] < 0) { a[o + 3] = 0; continue; }
-      a[o] = to![0]; a[o + 1] = to![1]; a[o + 2] = to![2];
-    }
-    x.putImageData(d, 0, 0);
+    const map: Record<string, string> = {};
+    for (const q of p.plan) { const sc = assign[q.hex], s0 = sc == null || sc < 0 ? null : screens[sc]; map[q.hex] = sc === -1 || (s0 && off.has((s0.name || "").toLowerCase())) ? "none" : s0?.hex || q.hex; }
+    const out = paintPrint(i, map, { paper: true, maxSide: 1800 });
+    c.width = out.width; c.height = out.height;
+    const x = c.getContext("2d")!; x.clearRect(0, 0, c.width, c.height); x.drawImage(out, 0, 0);
   }, [ready, screens, assign, p.plan, shirt, skip, byColor]);
 
   // one sitting (a reorder): the film, the press setup as it ran, notes; then Save everything
@@ -385,9 +372,12 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
   // the art on the shirt color, like the Mockup Creator's close-ups (Oct 21, Nick): the picked shirt, else the first
   const viewShirt = shirt || shirts[0]?.color || "";
   const shirtBgCss = useShirtBg(viewShirt || "White");
+  // the supplier's swatch for the shirt (Sandstone is sand, not the gray a name we don't know gets); heathers keep their texture
+  const shHex = shirts.find((sh) => sh.color === viewShirt)?.hex;
+  const viewBg = shHex && shHex !== "#9aa1ab" && !/heather|tri-?blend|marbled/i.test(viewShirt) ? shHex : shirtBgCss;
   const viewer = (
     <div className="jv-cc-art">
-      <div className={"jv-view" + (view < 0 && viewShirt ? " on-shirt" : "")} style={view < 0 && viewShirt ? { background: shirtBgCss } : undefined}>
+      <div className={"jv-view" + (view < 0 && viewShirt ? " on-shirt" : "")} style={view < 0 && viewShirt ? { background: viewBg } : undefined}>
         {p.art ? <canvas ref={cv} aria-label="The art as it will print" style={{ display: view < 0 ? undefined : "none" }} /> : view < 0 && <span className="faint">No art picture on this print.</span>}
         {view >= 0 && mockups[view] && <a href={mockups[view].full} target="_blank" rel="noreferrer" title="Open full size"><img src={mockups[view].full || mockups[view].thumb} alt={mockups[view].title} /></a>}
       </div>

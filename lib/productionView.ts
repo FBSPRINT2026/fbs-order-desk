@@ -5,6 +5,7 @@ import { oldJobText } from "@/lib/ai/oldJobNotes";
 import { defaultLayout, mergeProduction, validLayout, withIssue, type EquipRow, type Machine } from "@/lib/production";
 import { autoSetup, type SetupPlate } from "@/lib/pressSetup";
 import { colorHex } from "@/lib/inkColors";
+import { garmentHex } from "@/lib/mockup";
 
 /**
  * The production view of one order (Oct 21, Nick: "one big view of the job… the mockup, the color selections, the
@@ -37,7 +38,7 @@ export type PvPrint = {
 };
 export type ProductionView = {
   order: { id: string; number: number; nickname: string; status: string; due: string | null; customer: string; customerId: string; qty: number; reorderOf: string; /** the order's own notes */ notes: string };
-  groups: { id: string; name: string; lines: string[]; /** the shirt colors on it (one per color, the styles in it) */ shirts: { color: string; styles: string }[]; mockups: { title: string; thumb: string; full: string }[] }[];
+  groups: { id: string; name: string; lines: string[]; /** the shirt colors on it (one per color, the styles in it) */ shirts: { color: string; styles: string; /** the supplier's swatch color */ hex?: string }[]; mockups: { title: string; thumb: string; full: string }[] }[];
   prints: PvPrint[];
   step: number; done: boolean[]; why: string[];
   films: { name: string; url: string; path: string }[];
@@ -87,6 +88,20 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
   }
 
   const { data: stRow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  // each shirt color's real color (the supplier's swatch), for the art "as it will print on" it (Oct 24, Nick on #40166:
+  // "it doesn't even have the background color right": Sandstone showed as gray)
+  const pvStyles = [...new Set(groups.flatMap((g) => g.lines.map((l) => (l.style || "").trim()).filter(Boolean)))];
+  const { data: pvGar } = pvStyles.length ? await admin.from("garments").select("style, color_images").in("style", pvStyles) : { data: [] as { style: string; color_images: Record<string, { hex?: string }> | null }[] };
+  const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const shirtHexOf = (color: string, styles: string[]) => {
+    for (const st of styles) {
+      const g = (pvGar || []).find((x) => x.style.toLowerCase() === st.toLowerCase());
+      const ci = Object.entries((g?.color_images || {}) as Record<string, { hex?: string }>).find(([k]) => ckey(k) === ckey(color))?.[1];
+      const hx = garmentHex(ci?.hex, color);
+      if (hx && hx !== "#9aa1ab") return hx;
+    }
+    return garmentHex(undefined, color) || "";
+  };
   const machines = mergeProduction((stRow?.data as { production?: unknown } | null)?.production).machines.filter((x) => x.type === "screen" && x.active !== false);
   const nHeads = (x: (typeof machines)[number]) => x.colors || x.heads || 0;
   const slotMachine = ((slots || []) as { machine?: string }[]).map((x) => String(x.machine || "")).find(Boolean) || "";
@@ -201,7 +216,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       qty: groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, b) => a + (+b || 0), 0), 0), 0), reorderOf: pv ? `Printavo #${pv[1]}` : "", notes: String(order.notes || "") },
     groups: groups.map((g) => ({
       id: g.id, name: g.name || "",
-      shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", ") })),
+      shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", "), hex: shirtHexOf(c, [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => (l.style || "").trim()).filter(Boolean))]) })),
       lines: g.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ") + ` · ${Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => `${z} ${q}`).join(" ")}`),
       mockups: (mks || []).filter((m) => m.group_id === g.id || (!m.group_id && groups.length === 1)).map((m) => ({ title: String(m.title || ""), full: signed.get(m.file_path) || "", thumb: signed.get(String(m.file_path).replace(/\.png$/, "-thumb.png")) || signed.get(m.file_path) || "" })),
     })),
