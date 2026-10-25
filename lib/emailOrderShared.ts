@@ -90,6 +90,8 @@ export type EOPart = {
   /** its files (storage paths) and their names (the same file sent again in a reply) */ files: string[]; names?: string[];
   /** the pieces the sheets' names add up to ("…-400PCS.pdf"), to check the order against */ pieces?: number;
   /** already made from this email (added by /api/inbox/order/plan, never saved in the plan) */ made?: { id: string; number: number };
+  /** picked on Create order's card (never saved in the plan): what to tell the reader (decoration, new vs reorder) and
+   *  the order type the order gets */ told?: string; orderType?: "new" | "reorder" | "reorder_changes";
 };
 export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };
 /**

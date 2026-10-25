@@ -132,7 +132,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const ticker = (lines: string[], ms = 3500) => { let i = 0; note(lines[0]); const t = setInterval(() => { i = Math.min(i + 1, lines.length - 1); note(lines[i]); }, ms); return () => clearInterval(t); };
   const finishSteps = (state: "done" | "error" = "done") => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state } : x)));
 
-  async function one(part: EOPart | null, of: string, again: string[] = []): Promise<Made | null> {
+  async function one(part: EOPart | null, of: string, again: string[] = [], fix = ""): Promise<Made | null> {
     // every PMS in the Ink Room, for the inks read off the paperwork and our sheets (PMS 2178 C)
     void loadInkFormulas(createClient()).catch(() => 0);
     const qs = `activity=${encodeURIComponent(activityId)}${part ? `&part=${encodeURIComponent(part.key)}` : ""}`;
@@ -140,7 +140,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const g = await fetch(`/api/inbox/order?${qs}`).then((r) => r.json()).catch(() => null) as Loaded & { error?: string } | null;
     guard();
     if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
-    let d = !start.told && !start.job && !again.length ? g.draft : null;
+    // a choice made on the card (Create order, Oct 24): order type, past job, decoration: read fresh with it
+    let d = !start.told && !start.job && !part?.told && !again.length && !fix ? g.draft : null;
     if (d) note("Already read in the background: using that");
     if (!d) {
       const files = (g.files || []).filter((f) => f.role !== "signature");
@@ -157,14 +158,26 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? "" : start.told || "", ...again].filter(Boolean).join("\n"), job: part ? part.job : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? part.told || "" : start.told || "", ...again, fix].filter(Boolean).join("\n"), job: part ? (part.job ?? null) : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
       d = j.draft as EODraft; g.past = j.past || g.past;
     }
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
+    // the sheets' own total checked in code, not left to the AI (Oct 24, Nick: In Every Season is 550 + 400 = 950 pcs and
+    // came in as 1,025 every time): off, it's read once more told exactly what's off; still off, it's said plainly
+    const sheetsSay = part?.pieces || 0, got = pcsOf(d.groups);
+    let countOff = "";
+    if (sheetsSay && got !== sheetsSay) {
+      if (!fix) {
+        note(`The lines add to ${got.toLocaleString("en-US")} pcs but the sheets say ${sheetsSay.toLocaleString("en-US")}: reading the sheets again`);
+        return one(part, of, again, `COUNT CHECK: the size sheets for this order total ${sheetsSay} pieces (their file names: ${(part?.names || []).join(", ") || "see the files"}), but your garment lines added to ${got}. Read each size sheet again on its own, sheet by sheet, check each against its own total, then add them. Don't count any size twice.`);
+      }
+      countOff = `Check the quantities: the size sheets say ${sheetsSay.toLocaleString("en-US")} pcs, the order has ${got.toLocaleString("en-US")} (read twice)`;
+    }
     const did: string[] = [];
+    if (countOff) did.push(countOff);
     /** each print's color count before our sheet's inks replaced it (the old job's or the paperwork's: "3 colors") */
     const saidColors = new Map<string, number>();
     if (again.length) did.push(...again.map((x) => `You said: ${x}`));
@@ -817,6 +830,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote" }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setCommitting(false); throw new Error(j.error || "Couldn't create the order."); }
+    // the order type picked on Create order's card (New order / Reorder / Reorder with changes): the order's Job details → Order type
+    { const ot = part?.orderType || start.orderType; if (ot) await createClient().from("orders").update({ order_type: ot }).eq("id", j.id).then(() => null, () => null); }
     // its logos are the order's now; art you replaced in the Resolution Center is taken off (if on no order)
     made0.current = new Set();
     if (replaced.length) void discardDraftArt(replaced).catch(() => null);

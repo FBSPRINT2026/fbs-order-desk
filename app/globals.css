@@ -13794,3 +13794,27 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ord .pt-row.ot-row .ot-prints .faint{font-size:12px}
 .ord .pt-row.ot-row.ot-bare{border-top:0;margin-top:0;padding-top:0}
 .ord .jd-tabs{margin:-2px 0 2px}
+/* Create order: one card per order (Oct 24): the emails as one line, each order's type, past job and decoration on its card */
+.osp-mline{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);margin:2px 0 12px}
+.osp-mline .linkbtn{font-size:12.5px}
+.osp-cards{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.osp-card{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font-size:13px}
+.osp-card .faint{font-size:12px}
+.osp-card.made{opacity:.75}
+.osp-card.open{flex-direction:column;align-items:stretch;border:2px solid var(--accent);gap:8px}
+.osp-card-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.osp-card-t b{font-size:14px}
+.osp-card-t .faint{white-space:nowrap}
+.osp-card-n{font-size:12px;margin-top:-4px}
+.osp-cb{display:flex;flex-direction:column;gap:8px}
+.osp-cb-f{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}
+.osp-cb-f .field{margin:0}
+.osp-jobf{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:14px;color:var(--ink);cursor:pointer;text-align:left}
+.osp-jobf span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.osp-jobf .faint{font-size:12px;color:var(--accent)}
+.osp-cb-how{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.osp-cb-how > .faint{font-size:12px}
+.osp-card-jobs{border-top:1px solid var(--line-2);padding-top:8px}
+.osp-card-go{display:flex;justify-content:flex-end}
+.osp-card-all{display:flex;justify-content:flex-start}
+@media (max-width:560px){.osp-cb-f{grid-template-columns:1fr}}
