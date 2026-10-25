@@ -723,7 +723,11 @@ export async function searchMyOldJobs(q: string, as?: string): Promise<{ ok: tru
     const base = admin.from("archived_orders").select("id, visual_id, nickname, order_date, files").eq("customer_id", cust.id).eq("kind", "invoice");
     const { data } = await (num ? base.eq("visual_id", num) : base.ilike("nickname", like)).order("order_date", { ascending: false, nullsFirst: false }).limit(10);
     const rows = (data || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; files: Record<string, string> | null }[];
-    const all = rows.flatMap((r) => Object.entries(r.files || {}).filter(([, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp)$/i.test(p)).slice(0, 8).map(([n, p]) => ({ r: r.id, n, p })));
+    // their paperwork (order confirmations, POs) left out: only mockups and art (Oct 24)
+    const { fpHandle, isPaperworkPdf } = await import("@/lib/paperworkFile");
+    const paper = new Set<string>();
+    await Promise.all(rows.map(async (r) => { for (const [n, p] of Object.entries(r.files || {}).filter(([, p]) => typeof p === "string" && /\.pdf$/i.test(p)).slice(0, 4)) if (await isPaperworkPdf(admin, p)) { paper.add(p); if (fpHandle(n)) paper.add(`h:${fpHandle(n)}`); } }));
+    const all = rows.flatMap((r) => Object.entries(r.files || {}).filter(([n, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp)$/i.test(p) && !paper.has(p) && !(fpHandle(n) && paper.has(`h:${fpHandle(n)}`))).slice(0, 8).map(([n, p]) => ({ r: r.id, n, p })));
     const { data: sg } = all.length ? await admin.storage.from("proofs").createSignedUrls(all.map((x) => x.p), 3600) : { data: [] };
     const url = new Map(all.map((x, i) => [x.p, (sg as { signedUrl: string | null }[] | null)?.[i]?.signedUrl || ""]));
     return { ok: true, list: rows.map((r) => ({ id: r.id, number: r.visual_id, name: r.nickname || "", when: r.order_date || "",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fpHandle, isPaperworkPdf } from "@/lib/paperworkFile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +25,16 @@ export async function POST(req: Request) {
     oIds.length ? admin.from("mockups").select("order_id, file_path, created_at").in("order_id", oIds).is("archived_at", null).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
   const pick: Record<string, { thumb: string; full: string }> = {};
+  // a Printavo job's paperwork (supplier order confirmations, POs, invoices) is never its picture or one of its files
+  // to bring in (Oct 24, Nick: "just remember to ignore these still"): its PDFs read, and the pictures made of them dropped
+  const paper = new Set<string>();
+  await Promise.all(((as || []) as { id: string; files: Record<string, string> | null }[]).map(async (a) => {
+    const pdfs = Object.entries(a.files || {}).filter(([, p]) => typeof p === "string" && /\.pdf$/i.test(p)).slice(0, 4);
+    for (const [n, p] of pdfs) if (await isPaperworkPdf(admin, p)) { paper.add(p); const h = fpHandle(n); if (h) paper.add(`h:${h}`); }
+  }));
+  const keep = (n: string, p: string) => !paper.has(p) && !(fpHandle(n) && paper.has(`h:${fpHandle(n)}`));
   for (const a of (as || []) as { id: string; files: Record<string, string> | null }[]) {
-    const paths = Object.values(a.files || {}).filter((p) => typeof p === "string");
+    const paths = Object.entries(a.files || {}).filter(([n, p]) => typeof p === "string" && keep(n, p)).map(([, p]) => p);
     const pic = paths.find((p) => /\.(png|jpe?g|webp|gif)$/i.test(p)), pdf = paths.find((p) => /\.pdf$/i.test(p));
     if (pic || pdf) pick[`a:${a.id}`] = { thumb: pic || "", full: pdf || pic || "" };
   }
@@ -44,7 +53,7 @@ export async function POST(req: Request) {
   if (withFiles) {
     const list: { name: string; path: string; url: string; pdf: boolean }[] = [];
     const one = ((as || []) as { id: string; files: Record<string, string> | null }[]).filter((a) => want.includes(`a:${a.id}`)).slice(0, 1)[0];
-    const fs = Object.entries(one?.files || {}).filter(([, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp|gif)$/i.test(p)).slice(0, 12);
+    const fs = Object.entries(one?.files || {}).filter(([n, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp|gif)$/i.test(p) && keep(n, p)).slice(0, 12);
     const { data: sg } = fs.length ? await admin.storage.from("proofs").createSignedUrls(fs.map(([, p]) => p), 3600) : { data: [] };
     fs.forEach(([n, p], i) => list.push({ name: n, path: p, url: (sg as { signedUrl: string | null }[] | null)?.[i]?.signedUrl || "", pdf: /\.pdf$/i.test(p) }));
     return NextResponse.json({ pics, files: list });
