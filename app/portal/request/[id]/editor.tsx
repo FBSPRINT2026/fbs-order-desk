@@ -7,7 +7,7 @@ import type { NeckLabelSet } from "@/lib/neckLabels";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
+import { bringOrderArtwork, myOrderArtwork, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
 import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
@@ -191,7 +191,8 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
         {g.fromMockup
           ? <button type="button" className="btn sm" onClick={() => goMock(`mockup=${g.fromMockup!.id}&request=${o.id}&group=${g.id}`)}>Edit mockup</button>
           : <button type="button" className={"btn sm" + (own ? "" : " primary")} onClick={() => goMock(`request=${o.id}&group=${g.id}`)}>Create mockup</button>}
-        {!g.fromMockup && !own && pickMockups.length > 0 && <button type="button" className="btn sm" onClick={() => setPickFor(g.id)}>Choose a saved mockup</button>}
+        {/* My files (Oct 24): their saved mockups and the mockups on their past orders, to bring onto this group */}
+        {!g.fromMockup && <button type="button" className="btn sm" onClick={() => openMyFiles(g.id)}>My files</button>}
         {!g.fromMockup && (
           <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === g.id ? "Uploading…" : "Upload your own mockup"}
             <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
@@ -204,6 +205,23 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
 
   // Choose a saved mockup: it goes into the group like one made for it (garments, colors, prints)
   const [pickFor, setPickFor] = useState("");
+  // My files: the saved ones, or a past order's mockup (its prints, then the picture as it is or remade on these garments)
+  const [filesTab, setFilesTab] = useState<"saved" | "orders">("saved");
+  const [orderArt, setOrderArt] = useState<MyOrderArt[] | null>(null), [artPick, setArtPick] = useState<MyOrderArt | null>(null);
+  const openMyFiles = (gid: string) => {
+    setPickFor(gid); setArtPick(null); setFilesTab(pickMockups.length ? "saved" : "orders");
+    if (orderArt === null) void myOrderArtwork().then((r) => setOrderArt(r.ok ? r.list : []));
+  };
+  const artDiff = (a: MyOrderArt) => { const g = o.groups.find((x) => x.id === pickFor); const here = (g?.lines || []).filter((l) => (l.style || "").trim()).map((l) => [l.style, l.color].filter(Boolean).join(" ").toLowerCase()); return here.length > 0 && here.some((h) => !a.garments.map((x) => x.toLowerCase()).includes(h)); };
+  async function bringArt(a: MyOrderArt, keep: boolean) {
+    if (preview || !pickFor) return;
+    setPicking(a.key); setErr("");
+    await flush();
+    const gid = pickFor;
+    const r = await bringOrderArtwork(o.id, gid, a.orderId, a.groupId, keep);
+    if (!r.ok) { setPicking(""); return setErr(r.error || "Couldn't bring it in."); }
+    if (keep) window.location.reload(); else window.location.href = mkLink(`request=${o.id}&group=${gid}`);
+  }
   const [picking, setPicking] = useState("");
   async function pickMockup(id: string) {
     if (preview || !pickFor) return;
@@ -577,10 +595,36 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       )}
 
       {pickFor && (
-        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Choose a saved mockup" onClick={() => !picking && setPickFor("")}>
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="My files" onClick={() => !picking && setPickFor("")}>
           <div className="dla rq-pick" onClick={(e) => e.stopPropagation()}>
-            <h3>Choose a saved mockup</h3>
-            <p className="dla-sub">Its shirts, colors and prints go into this group. Then add your sizes.</p>
+            <h3>My files</h3>
+            <p className="dla-sub">Bring a mockup you&apos;ve made, or one from a past order, into this group. Then add your sizes.</p>
+            <div className="toolbar"><div className="chips">
+              <button type="button" className={"chip" + (filesTab === "saved" ? " on" : "")} onClick={() => setFilesTab("saved")}>Saved mockups</button>
+              <button type="button" className={"chip" + (filesTab === "orders" ? " on" : "")} onClick={() => setFilesTab("orders")}>From past orders</button>
+            </div></div>
+            {filesTab === "orders" ? (orderArt === null ? <p className="faint">Loading your past orders&apos; mockups…</p> : !orderArt.length ? <p className="faint">No mockups on your past orders yet.</p> : <>
+              <div className="rq-pick-grid">
+                {orderArt.map((a) => (
+                  <button key={a.key} type="button" className={"rq-pick-c" + (artPick?.key === a.key ? " on" : "")} disabled={!!picking || preview} onClick={() => setArtPick(a)}>
+                    <span className="rq-pick-img">{a.thumb ? <img src={a.thumb} alt="" /> : null}</span>
+                    <b>{a.name}</b>
+                    <small>#{a.number}{a.garments.length ? ` · ${a.garments.slice(0, 2).join(", ")}` : ""}</small>
+                  </button>
+                ))}
+              </div>
+              {artPick && (
+                <div className="ca-use">
+                  <b>Bring in {artPick.name} from #{artPick.number}</b>
+                  <span className="faint">{artPick.prints.join("  |  ") || "Its prints"}. They replace this group&apos;s prints.</span>
+                  {artDiff(artPick) && <span className="ca-warn">That mockup is on {artPick.garments.join(", ")}. Remake it on the garments in this order.</span>}
+                  <div className="ca-acts">
+                    {!artDiff(artPick) && <button type="button" className="btn primary" disabled={!!picking || preview} onClick={() => void bringArt(artPick, true)}>{picking === artPick.key ? "Bringing it in…" : "Use this mockup"}</button>}
+                    <button type="button" className={"btn" + (artDiff(artPick) ? " primary" : "")} disabled={!!picking || preview} onClick={() => void bringArt(artPick, false)}>{artDiff(artPick) ? (picking === artPick.key ? "Bringing it in…" : "Remake on these garments") : "Change it in the Mockup Creator"}</button>
+                  </div>
+                </div>
+              )}
+            </>) : !pickMockups.length ? <p className="faint">No saved mockups yet.</p> : (
             <div className="rq-pick-grid">
               {pickMockups.map((m) => (
                 <button key={m.id} type="button" className="rq-pick-c" disabled={!!picking || preview} onClick={() => pickMockup(m.id)}>
@@ -590,7 +634,8 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                   {picking === m.id && <small>Adding…</small>}
                 </button>
               ))}
-            </div>
+            </div>)}
+            {err && pickFor && <p className="err">{err}</p>}
             <div className="dla-acts"><button type="button" className="btn ghost" disabled={!!picking} onClick={() => setPickFor("")}>Cancel</button></div>
           </div>
         </div>

@@ -651,3 +651,61 @@ export async function reorderInto(id: string, ref: string): Promise<Result & { g
     return { ok: true, groups: all, nickname: (row.nickname as string) || undefined, label };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * My files (Oct 24, Nick: "build that same logic onto the customer's order builder… a thing that says my files… so that
+ * they can like, oh, update a mock-up, update the quantity, good to go"): the mockups on their past orders, one per
+ * garment group, to bring onto the order they're building. Their own saved mockups are listed by the page already.
+ */
+export type MyOrderArt = { key: string; orderId: string; groupId: string; number: number; name: string; garments: string[]; prints: string[]; thumb: string; when: string };
+export async function myOrderArtwork(as?: string): Promise<{ ok: true; list: MyOrderArt[] } | { ok: false; error: string }> {
+  try {
+    const { admin, cust } = await readMe(as);
+    const { data: rows } = await admin.from("mockups").select("order_id, group_id, file_path, snapshot, created_at").eq("customer_id", cust.id).not("order_id", "is", null).not("group_id", "is", null).is("archived_at", null).order("created_at", { ascending: false }).limit(300);
+    const by = new Map<string, { order_id: string; group_id: string; file_path: string; snapshot: { lines?: { style?: string; color?: string }[]; imprints?: Group["imprints"] } | null; created_at: string }>();
+    for (const r of (rows || []) as { order_id: string; group_id: string; file_path: string; snapshot: { lines?: { style?: string; color?: string }[]; imprints?: Group["imprints"] } | null; created_at: string }[]) {
+      const k = `${r.order_id}:${r.group_id}`; if (!by.has(k)) by.set(k, r);
+    }
+    const oids = [...new Set([...by.values()].map((r) => r.order_id))];
+    const { data: os } = oids.length ? await admin.from("orders").select("id, number, nickname, status, draft, discarded_at").in("id", oids).eq("customer_id", cust.id) : { data: [] };
+    type OR = { id: string; number: number; nickname: string; status: string; draft: boolean; discarded_at: string | null };
+    const ok = new Map(((os || []) as OR[]).filter((o) => !o.draft && !o.discarded_at && o.status !== "request").map((o) => [o.id, o]));
+    const list0 = [...by.entries()].filter(([, r]) => ok.has(r.order_id) && (r.snapshot?.imprints || []).some((im) => im.design_id)).slice(0, 60);
+    const thumbs = list0.map(([, r]) => r.file_path.replace(/\.png$/, "-thumb.png"));
+    const { data: sg } = thumbs.length ? await admin.storage.from("proofs").createSignedUrls(thumbs, 3600) : { data: [] };
+    const list = list0.map(([key, r], i) => {
+      const o = ok.get(r.order_id)!;
+      return { key, orderId: r.order_id, groupId: r.group_id, number: o.number, name: o.nickname || "Order", when: r.created_at, thumb: sg?.[i]?.signedUrl || "",
+        garments: [...new Set((r.snapshot?.lines || []).map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))],
+        prints: (r.snapshot?.imprints || []).map((im) => [im.location, im.size].filter(Boolean).join(" · ")) };
+    });
+    return { ok: true, list };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't load your files." }; }
+}
+
+/** Bring a past order's mockup onto a group of the order they're building: its prints (art, location, size, inks,
+ *  placement) replace the group's; the picture comes too when it's the same garments, else they remake it on these. */
+export async function bringOrderArtwork(requestId: string, groupId: string, srcOrderId: string, srcGroupId: string, keepPicture: boolean): Promise<Result> {
+  try {
+    const { admin, order } = await myDraft(requestId);
+    const { data: so } = await admin.from("orders").select("id, customer_id, groups").eq("id", srcOrderId).maybeSingle();
+    if (!so || so.customer_id !== order.customer_id) return { ok: false, error: "We couldn't find that order." };
+    const sg = ((so.groups || []) as Group[]).find((x) => x.id === srcGroupId);
+    if (!sg) return { ok: false, error: "We couldn't find those prints." };
+    const groups = orderGroups(order);
+    const i = groups.findIndex((x) => x.id === groupId);
+    if (i < 0) return { ok: false, error: "We couldn't find that group." };
+    const g = groups[i], ids = new Map<string, string>();
+    g.imprints = sg.imprints.map((im) => { const id = uid(); ids.set(im.id, id); const { confirmed: _c, confirm: _f, ...rest } = im as typeof im & { confirmed?: unknown; confirm?: unknown }; return { ...JSON.parse(JSON.stringify(rest)), id }; });
+    g.mockupOffsets = Object.fromEntries(Object.entries(sg.mockupOffsets || {}).flatMap(([k, v]) => (ids.get(k) ? [[ids.get(k)!, v]] : [])));
+    // no garments yet: the past order's styles and colors, their quantities to fill in
+    if (!g.lines.some((l) => (l.style || "").trim())) g.lines = sg.lines.map((l) => ({ ...newGLine(), style: l.style, brand: l.brand || "", garment: l.garment || "", color: l.color }));
+    delete g.fromMockup; g.customerMockups = [];
+    if (keepPicture && (sg.mockupThumbs || []).length) { g.mockupThumbs = [...sg.mockupThumbs!]; g.mockupAt = new Date().toISOString(); }
+    else { delete g.mockupThumbs; delete g.mockupAt; }
+    const { error } = await admin.from("orders").update({ groups }).eq("id", requestId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/portal/request/${requestId}`);
+    return { ok: true, id: requestId };
+  } catch (e) { return fail(e); }
+}

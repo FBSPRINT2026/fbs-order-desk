@@ -13853,3 +13853,5 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ca-warn{font-size:12.5px;color:var(--warn)}
 .ca-acts{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;flex-wrap:wrap}
 .ca-acts .field{margin:0;min-width:180px}
+.rq-pick .toolbar{margin:4px 0 10px}
+.rq-pick-c.on{outline:2px solid var(--accent);outline-offset:-2px}
