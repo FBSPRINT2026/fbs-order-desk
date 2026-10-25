@@ -697,7 +697,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} d={d} inksLine={inkCtl(d)} extra={screenCtl(d)} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} inksLine={inkCtl(d)} extra={screenCtl(d)} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1202,7 +1202,7 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
   return out || url;
 }
 
-function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed }: { d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed }: { /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
@@ -1213,7 +1213,10 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
   // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
   const [zoom, setZoom] = useState(false);
   // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
-  const pic = usePainted(cur ? urls[cur.id] || "" : "", d);
+  const painted = usePainted(shown ? "" : cur ? urls[cur.id] || "" : "", d);
+  // the art as the Mockup Creator showed it when the mockup was saved: the same picture as the blow-up (falls back to
+  // the logo painted here for prints saved before, or with no mockup yet)
+  const pic = shown || painted;
   // a visual-only reorder print (Oct 20, Nick): the whole row greyed under a stamp; clicking it asks before anyone goes
   // in to set the details (that's what production confirms and locks in)
   const vis = !!d.visualOnly && !d.confirmed;

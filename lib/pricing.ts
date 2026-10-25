@@ -65,7 +65,7 @@ export const PAY_METHODS = ["Credit card", "ACH", "Zelle", "Venmo", "Cash", "Che
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
-export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
+export type Imprint = { /** the art exactly as the Mockup Creator shows it on this print (inks painted, background off), saved with the mockup: the order's little print tile is this, so it always matches the blow-up (Oct 24, Nick: "we keep having problems with those little boxes… they're just supposed to be little versions of the blow-ups") */ shownArt?: string; id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
   /** where the logo is centered, as a share of its picture, when its box's middle isn't its middle (a round badge with a

@@ -2426,6 +2426,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const offs = Object.fromEntries(Object.entries(offsets).filter(([k, v]) => ids.has(k.split(":").pop() || "") && (Math.abs(v.dx) > 0.5 || Math.abs(v.dy) > 0.5)).map(([k, v]) => [k, { dx: Math.round(v.dx * 10) / 10, dy: Math.round(v.dy * 10) / 10 }]));
     g.mockupOffsets = Object.keys(offs).length ? offs : undefined;
     if (thumbs.length) g.mockupThumbs = thumbs;
+    // each print's art as shown here, saved for the order's little print tiles (staff saves; the art the blow-up uses)
+    if (!portal) await Promise.all(g.imprints.map(async (im) => {
+      const u = artUrl(im);
+      if (!u || !im.design_id) return;
+      try {
+        const b = await fetch(u).then((r) => r.blob());
+        if (!b.size || !/^image\//.test(b.type || "image/png")) return;
+        const path = `shown/${order.id}/${im.id}-${Date.now().toString(36)}.png`;
+        const up = await sb.storage.from("proofs").upload(path, b, { contentType: b.type || "image/png" });
+        if (!up.error) im.shownArt = path;
+      } catch { /* the tile falls back to the logo itself */ }
+    }));
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
     loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));

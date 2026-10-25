@@ -46,7 +46,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const pickSets = savedList.filter((m, i, all) => !m.order_id && !m.shelved_at && (!m.number || all.findIndex((x) => x.number === m.number && !x.order_id) === i)).slice(0, 24);
   const { data: pickSg } = pickSets.length ? await admin.storage.from("proofs").createSignedUrls(pickSets.map((m) => m.file_path.replace(/\.png$/, "-thumb.png")), 3600) : { data: [] };
   const pickMockups = pickSets.map((m, i) => ({ id: m.id, number: m.number, name: m.title.split(" — ")[0], colors: savedList.filter((x) => m.number && x.number === m.number && !x.order_id).length || 1, when: m.created_at, thumb: pickSg?.[i]?.signedUrl || "" }));
-  const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || []), ...(g.tagArt ? [g.tagArt.path] : [])]), ...savedList.map((m) => m.file_path)])];
+  const paths = [...new Set([...order.groups.flatMap((g) => [...(g.customerMockups || []).map((m) => m.path), ...(g.mockupThumbs || []), ...(g.tagArt ? [g.tagArt.path] : []), ...g.imprints.map((d) => d.shownArt || "").filter(Boolean)]), ...savedList.map((m) => m.file_path)])];
   const mockupUrls: Record<string, string> = {};
   if (paths.length) {
     const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
