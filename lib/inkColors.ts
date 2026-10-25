@@ -306,6 +306,12 @@ export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, 
   // Smooth edges (Oct 24, Nick on #40170: "these little blowups… don't look smooth"): the art is ink over white paper, so
   // each pixel is read as how much ink it has (an anti-aliased edge is part ink, part paper) and drawn as the ink at
   // that strength, rather than cut off at a hard line.
+  // a one-ink print with no ink change: its ink is read off the art (the solid color of its strokes)
+  if (opts.dropWhite && opts.oneInk && !pairs.length) {
+    let n = 0; const sum = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && (d[i] + d[i + 1] + d[i + 2]) / 3 < 170) { sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2]; n++; }
+    if (n > 50) { const ink = sum.map((v) => Math.round(v / n)); pairs.push({ s: ink, t: ink }); }
+  }
   if (opts.dropWhite && !(opts.oneInk && pairs.length === 1)) {
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i] > 228 && d[i + 1] > 228 && d[i + 2] > 228) d[i + 3] = 0;
     if (!pairs.length) { x.putImageData(data, 0, 0); return clearPage(c).toDataURL("image/png"); }
