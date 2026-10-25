@@ -14085,3 +14085,5 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .po-grp-art td{padding-bottom:0!important;border-bottom:0!important}
 .po-grp-art .po-item-pics{margin:0}
 @media (max-width:640px){.portal table.items tr.po-grp-art{border-bottom:0;padding-bottom:0}}
+/* Payments on a phone: status, balance and the Pay button on one line (the total is on the order) */
+@media (max-width:640px){.portal .aa-paylay .aa-tbl td[data-l="Total"]{display:none}.portal .aa-paylay .aa-tbl td.pay{margin-left:auto}.portal .aa-paylay .aa-tbl tr{align-items:center}}
