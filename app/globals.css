@@ -14087,3 +14087,31 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 @media (max-width:640px){.portal table.items tr.po-grp-art{border-bottom:0;padding-bottom:0}}
 /* Payments on a phone: status, balance and the Pay button on one line (the total is on the order) */
 @media (max-width:640px){.portal .aa-paylay .aa-tbl td[data-l="Total"]{display:none}.portal .aa-paylay .aa-tbl td.pay{margin-left:auto}.portal .aa-paylay .aa-tbl tr{align-items:center}}
+
+/* ── Shop order on a phone (Oct 24, Nick: "Try to make this better on the mobile phone") ── */
+@media (max-width:760px){
+  /* every size on one row (4XL and 5XL were left alone on a second row) */
+  .ord .szrow{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(0,1fr));grid-auto-flow:column;gap:3px}
+  .ord .szrow > .szc{width:auto!important;min-width:0}
+  .ord .szrow .sz{width:100%!important;min-width:0;height:34px!important;padding:0 1px;font-size:13px;text-align:center}
+  /* the mockups two to a row, the same size; Edit mockup and Customer artwork side by side; Remove and Saved under them */
+  .ord .imp-mock{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:center}
+  .ord .imp-mock > .mk-big{grid-column:1 / -1;width:100%!important}
+  .ord .imp-mock:has(> .mk-more > :nth-child(odd):last-child) > .mk-big{grid-column:auto}
+  .ord .imp-mock > .mk-big img{width:100%;height:auto;max-height:none;object-fit:contain}
+  .ord .imp-mock > .mk-more{display:contents}
+  .ord .imp-mock > .mk-more > button{aspect-ratio:auto;width:100%;border-radius:12px}
+  .ord .imp-mock > .mk-more > button img{width:100%;height:auto}
+  .ord .imp-mock > .btn{width:100%;height:36px!important;margin:0}
+  .ord .imp-mock > .btn:only-of-type{grid-column:1 / -1}
+  .ord .imp-mock > .btn.mk-cust{border:1px solid var(--line)}
+  .ord .imp-mock > .btn.danger{justify-self:start;width:auto;padding:0 2px;height:auto!important;font-size:12.5px}
+  .ord .imp-mock > .mk-when{justify-self:end;text-align:right}
+  .ord .imp-mock > .mk-none,.ord .imp-mock > .ink-warn{grid-column:1 / -1}
+  /* a print's Inks and Screens: the label beside its value, the pencil at the end of the row */
+  .ord .pr .pr-scr{flex-wrap:nowrap;align-items:center;gap:6px}
+  .ord .pr .pr-scr > .pr-scr-l{flex:0 0 52px;margin:0}
+  .ord .pr .pr-scr > .pr-scr-v{flex:1 1 0!important;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .ord .pr .pr-scr-v > span:not(:first-child){padding-left:7px;padding-right:7px}
+  .ord .pr .pr-scr > .pr-scr-ed{flex:0 0 auto}
+}
