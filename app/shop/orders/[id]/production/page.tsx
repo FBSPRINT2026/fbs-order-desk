@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { colorHex } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
+import { isPmsInk, pmsKey } from "@/lib/pricing";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
 import { useShirtBg } from "@/lib/fabricTile";
@@ -468,6 +469,9 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
               <div className="jv-cc-hint">The screens, in print order: the ink on each, and a custom mix if it was mixed.</div>
               {screens.map((x, i) => {
                 const on = colorsOn(i);
+                // the same PMS on another print of this order: one PMS matching fee for both (Oct 24 rule, as on the order)
+                const twins = isPmsInk(x.name) ? v.prints.filter((o) => o.id !== p.id && inkList(o.inks || "").some((n) => isPmsInk(n) && pmsKey(n) === pmsKey(x.name))) : [];
+                const firstTwin = twins.find((o) => v.prints.indexOf(o) < v.prints.indexOf(p));
                 return (
                   <div key={i} className="jv-scr">
                     <span className="jv-n">{i + 1}</span>
@@ -475,6 +479,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
                     <div className="jv-scr-b">
                       <input value={x.name} list="jv-pms" onChange={(e) => { const name = e.target.value; const h = colorHex(name); setScreen(i, { name, ...(h ? { hex: h.toUpperCase() } : {}) }); }} aria-label={`Screen ${i + 1} ink`} placeholder="PMS 475 C, White, or a custom name" />
                       <input value={x.mix} onChange={(e) => setScreen(i, { mix: e.target.value })} placeholder="Custom mix (optional)" aria-label={`Screen ${i + 1} mix`} />
+                      {twins.length > 0 && <span className="faint"><span className="jv-join" title="The same PMS on another print of this order: matched once, one PMS fee">⇄ {firstTwin ? `Same PMS as ${firstTwin.location}: no second PMS fee` : `Also on ${twins.map((o) => o.location).join(", ")}: one PMS fee for both`}</span></span>}
                       {on.length > 1 && <span className="faint">Prints {on.map((k) => k.name).join(" + ")}{!x.mix && <> · <button type="button" className="linkbtn" onClick={() => setScreen(i, { name: `Custom ${on.map((k) => k.name.replace(/^PMS /, "").replace(/ C$/, "")).join("/")}`, hex: on.slice(1).reduce((h, k) => avgHex(h, k.hex), on[0].hex), mix: `half ${on[0].name}, half ${on[1].name}${on.length > 2 ? `, plus ${on.slice(2).map((k) => k.name).join(", ")}` : ""}` })}>Mix them half and half</button></>}</span>}
                     </div>
                     {!p.plan.length && <button type="button" className="jv-x" aria-label={`Remove screen ${i + 1}`} onClick={() => setScreens((a) => a.filter((_, j) => j !== i))}>×</button>}
