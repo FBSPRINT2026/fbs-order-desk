@@ -340,6 +340,12 @@ function tool(finishingIds: string[]) {
           reorder_of: { type: ["integer", "null"], description: "A reorder of several past jobs in one order (one per design): the J number of the past job THIS group repeats" },
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
         } } },
+        sheet_counts: { type: "array", description: "Rule 3b: EVERY size sheet on its own, exactly what that one sheet lists (nothing added across sheets). Code adds the sheets together and checks each against its total.", items: { type: "object", properties: {
+          file: { type: "integer", description: "The sheet's File number" },
+          file_name: { type: "string", description: "The sheet's exact file name" },
+          sheet_total: { type: ["integer", "null"], description: "The total the sheet itself states (a Total line, or the number in its name like 550PCS); null if none" },
+          garments: { type: "array", items: { type: "object", properties: { style: { type: "string" }, color: { type: "string" }, sizes: { type: "object", additionalProperties: { type: "integer" } } }, required: ["style", "color", "sizes"] } },
+        }, required: ["file", "garments"] } },
         questions: { type: "array", items: { type: "string" }, description: "What we still need to ask the customer, in plain words" },
         check_with_staff: { type: "array", description: "What staff must answer BEFORE the order is made (rule 11): contradictions, things you couldn't find or place. Empty when it all adds up. Never ask about a color count one more than the inks named on a shirt that isn't white: that extra color is the white underbase.", items: { type: "object", properties: {
           question: { type: "string", description: "ONE short question, 15 words at most, no explaining or background (Oct 23, Nick: the questions are \"very long-winded… it's not succinct\"). e.g. '\"Best fit for onesie\" on the work order: no onesies here. Ignore it?' or 'Neon Blue for \"NeonBlue\"?'" },
@@ -384,7 +390,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-24d";
+export const READER_REV = "2026-10-24e";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -475,7 +481,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 0. Before taking any numbers, read the email like a person: how is it laid out, and why? Look at the headings and at what repeats. When the same designs come again under headings such as store or location names (e.g. ****Frisco**** then ****McKinney****, "see break out by location"), departments, people or ship-to places, that's ONE order broken out by those headings, not separate garments and never to be added together: make ONE group per design (name the group with the design, e.g. "T10A Autumn Tee"), and in it one garment line per heading, with the heading as that line's description (e.g. "Frisco"). The same style and color under two headings is two lines. When you can't tell what a heading or split means, keep the parts apart anyway and ask in questions what it is. Check your totals against any the customer gives ("T10A total tees 348").
 1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm. A design code or name in the email (T10A, "the Bottles") that matches a past job's name means that job. When one email reorders several designs that were separate past jobs, it's still one order: one group per design, each group's reorder_of = its own job's J number (top-level reorder_of = the first). If the customer attached the art on a reorder, still set art_file on each print: staff choose between their files and the old job's. NEW WITH A REFERENCE (Oct 23, Logotology PO 92785: "NOT A REPEAT ORDER - NEW LEFT CHEST LOGO. Screen print process same as order 85254"): it's NEW (kind new), set reference_job to that past job's J number (a number they give can be their PO on it: "PO 85254" is Printavo #32303), and on every print that matches one of that job's prints (same location, or the same side), set same_as_job to it: those prints print the same way (colors, inks, size); the art still comes from the files they attached. A new print (the new left chest) is set up as usual.
 2. Say what every attached file is: art (the print file: just the design, nothing else on the page), mockup (the design shown on a garment), setup_sheet (the customer's own mockup sheet: the art shown big, usually on a flat background panel with a note like "BACKGROUND DOES NOT PRINT", a spec box with the location, the size and the inks (Pantone / PMS), and the design on the garment, often on a second page; give art_page and mockup_page), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files). A file's NAME says what it is, the way staff read it: "Purchase_Order_91537" is their purchase order, "Work_Order_91537" their work order, "SS-logo" the logo. The paperwork (purchase order, work order, invoice, quote, packing slip) is read for the garments, sizes, locations, inks and notes, and is never the art: a purchase order is size_breakdown, a work order other (even when it shows the design on a shirt); set art_file to the art files, and take a number in a paperwork name (91537) as their PO number.
-3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color. A size sheet lists only the sizes they want: a size it leaves out (no XL, no XS, no 3XL) just isn't ordered, so never ask about it; and when the sizes you read add up to the sheet's own total ("375PCS" in its name, a Total line), they're right: don't ask about them (Oct 24, Nick: Dear Heart's sheet had the L and it still asked "no L size listed… skips L?"). Several size sheets for one order (Oct 24, Nick: Dear Heart's In Every Season, 550 + 400 = 950 pcs, read as 1,025 every time): read each sheet on its own first and check it adds up to that sheet's own total (its "550PCS" name or Total line) before adding sheets together; add a style + color + size from two sheets only when both sheets really list it, and never count one sheet's column twice. The order's total must equal the sheets' totals added together.
+3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color. A size sheet lists only the sizes they want: a size it leaves out (no XL, no XS, no 3XL) just isn't ordered, so never ask about it; and when the sizes you read add up to the sheet's own total ("375PCS" in its name, a Total line), they're right: don't ask about them (Oct 24, Nick: Dear Heart's sheet had the L and it still asked "no L size listed… skips L?"). Several size sheets for one order (Oct 24, Nick: Dear Heart's In Every Season, 550 + 400 = 950 pcs, read as 1,025 every time): read each sheet on its own first and check it adds up to that sheet's own total (its "550PCS" name or Total line) before adding sheets together; add a style + color + size from two sheets only when both sheets really list it, and never count one sheet's column twice. The order's total must equal the sheets' totals added together. 3b. Whenever quantities come from size sheets (PDFs or spreadsheets), also fill sheet_counts with one entry per sheet: that sheet's garments and sizes exactly as printed on it, and its own stated total. Don't add sheets together there; code does that and checks each sheet.
 4. Prints: one per location. Set art_file to the file whose art prints there and write its name in art_file_name; when several art files are close (two colorways of one logo), match each to its print by what the files show (the work order's or mockup's picture of each variation: blue art on Variation 1, black on Variation 2), not by the order the files came in.  Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
 4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front, or Center Chest only for a small logo (under about 5" wide on an adult, about a quarter of the chest width or less). On toddler, infant and youth garments judge by the share of the chest, not inches: a print across half or more of a toddler's chest is Full Front. Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
 4c. A setup_sheet (a customer's mockup sheet) often has two pages: the art page (the art shown big, often on a black or colored background with a note like "BLACK DOES NOT PRINT", and a spec box naming the location such as "Front screenprint", the size like 11.75"w x 6.25"t and the ink colors) and a mockup page (the design on the garment, with the style and color). Take the location, size and inks from the spec box (that size is the customer's own), use the PDF as the print's art_file AND as the group's mockup_files (staff cut the art off the art page). Give the size as written (11.5"w x 10.4"t → size "11.5\" wide", width_in 11.5) and each ink by its Pantone name (inks "Pantone 7499, Pantone 7597", colors 2). Take the garment's style and color from the mockup page when the email doesn't say. The background color isn't an ink. On a reorder, what the customer's own files show (the spec box, their mockup) wins over the old job's location, size and inks: use theirs, and say in notes what the old job had.
@@ -538,6 +544,45 @@ ${staffSays}` : ""}`;
         const like = all.find((x) => String(x.style || "").trim() === style);
         for (const u of unmatched) p.groups[0].garments = [...(p.groups[0].garments || []), { ...(like ? { brand: like.brand, description: like.description } : {}), style, color: u.color, sizes: { ...u.sizes } } as (typeof all)[number]];
       }
+    }
+  }
+  // the size sheets read one by one and added up HERE, not by the AI (Oct 24, Nick: Dear Heart's In Every Season,
+  // 550 + 400 = 950 pcs, read as 1,025 every time). Each sheet is checked against its own total (its "550PCS" name or
+  // Total line); when every sheet adds up, the garments get the sheets' sums; when one doesn't, it's said exactly
+  let countNote = "";
+  {
+    type SC = { file?: number; file_name?: string; sheet_total?: number | null; garments?: { style?: string; color?: string; sizes?: Record<string, number> }[] };
+    const sc = (((p as { sheet_counts?: SC[] }).sheet_counts) || []).filter((x) => x && Array.isArray(x.garments) && x.garments.length);
+    const all = (p.groups || []).flatMap((g) => g.garments || []);
+    if (sc.length && all.length) {
+      const qty = (v: unknown) => Math.max(0, Math.min(100000, Math.floor(+(v as number) || 0)));
+      const sumOf = (sz?: Record<string, number>) => Object.values(sz || {}).reduce((a, v) => a + qty(v), 0);
+      const off: string[] = [];
+      for (const x of sc) {
+        const nm = String(x.file_name || atts[(x.file || 0) - 1]?.name || "a sheet");
+        const named = +((nm.match(/(\d[\d,]*)\s*PCS/i)?.[1] || "").replace(/,/g, "")) || 0;
+        const want = named || qty(x.sheet_total), got = (x.garments || []).reduce((a, gm) => a + sumOf(gm.sizes), 0);
+        if (want && got !== want) off.push(`${nm} adds to ${got.toLocaleString("en-US")}, it says ${want.toLocaleString("en-US")}`);
+      }
+      const ns = (t?: string) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const same = (a?: string, b?: string) => { const x = ns(a), y = ns(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
+      if (!off.length) {
+        const tot: { style: string; color: string; sizes: Record<string, number> }[] = [];
+        for (const x of sc) for (const gm of x.garments || []) {
+          let t = tot.find((q) => same(q.style, gm.style) && ns(q.color) === ns(gm.color));
+          if (!t) { t = { style: String(gm.style || ""), color: String(gm.color || ""), sizes: {} }; tot.push(t); }
+          for (const [z, q] of Object.entries(gm.sizes || {})) { const n = qty(q); if (n) t.sizes[z] = (t.sizes[z] || 0) + n; }
+        }
+        const drop = new Set<object>(), used = new Set<object>(), miss: string[] = [];
+        for (const t of tot) {
+          const hits = all.filter((gm) => same(gm.style, t.style) && ns(gm.color) === ns(t.color));
+          if (!hits.length) { miss.push(`${t.style} ${t.color}`); continue; }
+          hits[0].sizes = { ...t.sizes }; used.add(hits[0]);
+          for (const h of hits.slice(1)) if (!used.has(h)) drop.add(h);
+        }
+        if (drop.size) for (const g of p.groups || []) g.garments = (g.garments || []).filter((gm) => !drop.has(gm));
+        if (miss.length) countNote = `On the size sheets but not matched to a garment line: ${miss.join(", ")}.`;
+      } else countNote = `The size sheets don't add up as read: ${off.join("; ")}.`;
     }
   }
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
@@ -810,7 +855,7 @@ ${staffSays}` : ""}`;
     notes: [...refNotes, p.notes || ""].filter(Boolean).join("\n").slice(0, 2000),
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null, ...(reorderJobs.length > 1 ? { reorderJobs } : {}), ...(readingLeads && emailArt ? { emailArt: true } : {}),
-    questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
+    questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files, ...(countNote ? { countNote } : {}),
     check: ((p as { check_with_staff?: { question?: string; guess?: string; about?: string; choices?: { label?: string; file?: number | null }[] }[] }).check_with_staff || []).map((c) => {
       const choices = (c.choices || []).map((x) => { const f = x.file ? files[x.file - 1] : undefined; return { label: String(x.label || f?.name || "").slice(0, 60), ...(f && f.role !== "signature" ? { path: f.path, name: f.name } : {}) }; }).filter((x) => x.label).slice(0, 4);
       return { q: String(c.question || "").slice(0, 300), guess: String(c.guess || "").slice(0, 200), ...(c.about ? { about: String(c.about).slice(0, 80) } : {}), ...(choices.length >= 2 ? { choices } : {}) };

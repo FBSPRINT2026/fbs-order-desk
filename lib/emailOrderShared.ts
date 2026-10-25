@@ -52,6 +52,8 @@ export type EODraft = {
   /** a reorder where the customer attached the art: staff choose their files or the old jobs' (QuickOrder asks) */
   emailArt?: boolean;
   questions: string[];
+  /** the size sheets, added up in code, didn't add up as read (or a sheet's line matched no garment): said to staff */
+  countNote?: string;
   /** what doesn't add up, asked of staff BEFORE the order is made (Oct 22, Nick: "when there's a clear contradiction, or I
    *  can't find this product… you need to just ask… then remember it moving forward"): the question and the AI's guess */
   check?: { q: string; guess: string; /** the group it's about (its name) */ about?: string; /** answers to click, the first the guess; a file's are picked by its picture */ choices?: { label: string; path?: string; name?: string }[]; /** asked by Create order itself (not the reader), answered without reading it again */ local?: string }[];

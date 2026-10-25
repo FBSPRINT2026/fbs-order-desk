@@ -49,8 +49,8 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
         if ((mode === "sizes" || mode === "mockup") && part?.pieces && pcsOf(d.groups) !== part.pieces) {
           const got = pcsOf(d.groups);
           step(`The lines add to ${got.toLocaleString("en-US")} pcs but the sheets say ${part.pieces.toLocaleString("en-US")}: reading the sheets again…`);
-          d = await read(`COUNT CHECK: the size sheets for this order total ${part.pieces} pieces (${(part.names || []).join(", ")}), but your garment lines added to ${got}. Read each size sheet again on its own, check each against its own total, then add them. Don't count any size twice.`);
-          if (pcsOf(d.groups) !== part.pieces) note = `Check the quantities: the size sheets say ${part.pieces.toLocaleString("en-US")} pcs, the order has ${pcsOf(d.groups).toLocaleString("en-US")}.`;
+          d = await read(`COUNT CHECK: ${d.countNote ? d.countNote + " " : ""}the size sheets for this order total ${part.pieces} pieces (${(part.names || []).join(", ")}), but your garment lines added to ${got}. Read each size sheet again on its own, check each against its own total, then add them. Don't count any size twice.`);
+          if (pcsOf(d.groups) !== part.pieces) note = `Check the quantities: the size sheets say ${part.pieces.toLocaleString("en-US")} pcs, the order has ${pcsOf(d.groups).toLocaleString("en-US")}.${d.countNote ? ` ${d.countNote}` : ""}`;
         }
         if (mode === "sizes") d = { ...d, groups: d.groups.map((g) => ({ ...g, imprints: [] })), art: {} };
         if (mode === "art") d = { ...d, groups: d.groups.map((g) => ({ ...g, lines: [] })) };

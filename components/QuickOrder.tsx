@@ -172,12 +172,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (sheetsSay && got !== sheetsSay) {
       if (!fix) {
         note(`The lines add to ${got.toLocaleString("en-US")} pcs but the sheets say ${sheetsSay.toLocaleString("en-US")}: reading the sheets again`);
-        return one(part, of, again, `COUNT CHECK: the size sheets for this order total ${sheetsSay} pieces (their file names: ${(part?.names || []).join(", ") || "see the files"}), but your garment lines added to ${got}. Read each size sheet again on its own, sheet by sheet, check each against its own total, then add them. Don't count any size twice.`);
+        return one(part, of, again, `COUNT CHECK: ${d.countNote ? d.countNote + " " : ""}the size sheets for this order total ${sheetsSay} pieces (their file names: ${(part?.names || []).join(", ") || "see the files"}), but your garment lines added to ${got}. Read each size sheet again on its own, sheet by sheet, check each against its own total, then add them. Don't count any size twice.`);
       }
       countOff = `Check the quantities: the size sheets say ${sheetsSay.toLocaleString("en-US")} pcs, the order has ${got.toLocaleString("en-US")} (read twice)`;
     }
     const did: string[] = [];
     if (countOff) did.push(countOff);
+    if (d.countNote) did.push(d.countNote);
     /** each print's color count before our sheet's inks replaced it (the old job's or the paperwork's: "3 colors") */
     const saidColors = new Map<string, number>();
     if (again.length) did.push(...again.map((x) => `You said: ${x}`));
