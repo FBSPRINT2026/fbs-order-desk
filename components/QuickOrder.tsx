@@ -141,7 +141,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     guard();
     if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
     // a choice made on the card (Create order, Oct 24): order type, past job, decoration: read fresh with it
-    let d = !start.told && !start.job && !part?.told && !again.length && !fix ? g.draft : null;
+    let d = !start.told && !start.job && !part?.told && !start.note && !again.length && !fix ? g.draft : null;
     if (d) note("Already read in the background: using that");
     if (!d) {
       const files = (g.files || []).filter((f) => f.role !== "signature");
@@ -158,7 +158,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? part.told || "" : start.told || "", ...again, fix].filter(Boolean).join("\n"), job: part ? (part.job ?? null) : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? part.told || "" : start.told || "", start.note || "", ...again, fix].filter(Boolean).join("\n"), job: part ? (part.job ?? null) : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");

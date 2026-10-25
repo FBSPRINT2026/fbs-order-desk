@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
+import { PARTIAL, type PartKind } from "@/components/tools/PartialOrder";
 
 /**
  * Create order from an email: first ask what it is (Oct 20, Nick: "it pops up and says, okay, is this an order or
@@ -13,7 +14,9 @@ import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 export type OrderStart = { told?: string; job?: string; /** several past jobs reordered together in one order (a group per design) */ jobs?: string[]; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[];
   /** open the full form to check every detail before it's made (otherwise it's made in one go, QuickOrder) */ review?: boolean;
   /** which emails make up the order (Oct 24, Nick): other emails brought in, and conversation emails left out */ include?: string[]; exclude?: string[];
-  /** New order / Reorder / Reorder with changes, picked on the card: the order's Order type */ orderType?: "new" | "reorder" | "reorder_changes" };
+  /** New order / Reorder / Reorder with changes, picked on the card: the order's Order type */ orderType?: "new" | "reorder" | "reorder_changes";
+  /** "Other options": only part of the order, made with no questions (components/tools/PartialOrder.tsx) */ partial?: PartKind;
+  /** "Anything to tell the AI?" with an Other option */ note?: string };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -145,6 +148,17 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   const [over, setOver] = useState<Record<string, Partial<Card>>>({});
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [jobFor, setJobFor] = useState<string | null>(null); // the card whose past job is being picked from the list
+  // "Other options" under a card (Oct 24, Nick: "bring in the sizes only, or add the art to a blank order, or just make
+  // the mock-up"): only part of the order, no questions
+  const [otherFor, setOtherFor] = useState<string | null>(null), [aiNote, setAiNote] = useState("");
+  const otherMenu = (go: (k: PartKind) => void) => (
+    <div className="osp-other">
+      {(Object.keys(PARTIAL) as PartKind[]).map((k) => (
+        <button key={k} type="button" className="osp-other-it" onClick={() => go(k)}><b>{PARTIAL[k].label}</b><span className="faint">{PARTIAL[k].sub}</span></button>
+      ))}
+      <div className="field osp-other-ai"><label htmlFor="osp-ai">Anything to tell the AI? (optional, goes with the option you pick)</label><input id="osp-ai" type="text" value={aiNote} placeholder="Only the tees · use the 400 sheet only" onChange={(e) => setAiNote(e.target.value)} /></div>
+    </div>
+  );
   const multi = !!plan && plan.parts.length > 1;
   const lookHit = look && look !== "wait" && look.ref ? look : null;
   const baseOf = (p: EOPart | null): Card => p
@@ -169,7 +183,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
     const c = cardOf(SOLO, null);
     // nothing changed and it was already read in the background: use that reading
     if (ready && !over[SOLO]) return onPick({ orderType: c.type });
-    onPick({ told: toldOf(c), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type });
+    onPick({ told: [toldOf(c), aiNote.trim()].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type });
   };
   const pickJob = (p: PastJob) => {
     if (!jobFor) return;
@@ -294,10 +308,11 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                   {p.changes && <div className="faint osp-card-n">New: {p.changes}</div>}
                   {cardBody(p.key, p)}
                   {jobFor === p.key && <div className="osp-card-jobs">{jobList}</div>}
-                  <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ parts: [partFor(p)] })} title="Makes this one; you check it in the Order chat, then come back for the next">Make this one</button></div>
+                  <div className="osp-card-go"><button type="button" className={"btn" + (otherFor === p.key ? " on" : "")} aria-expanded={otherFor === p.key} onClick={() => setOtherFor(otherFor === p.key ? null : p.key)}>Other options</button><button type="button" className="btn primary" onClick={() => onPick({ parts: [partFor(p)], ...(aiNote.trim() ? { note: aiNote.trim() } : {}) })} title="Makes this one; you check it in the Order chat, then come back for the next">Make this one</button></div>
+                  {otherFor === p.key && otherMenu((k) => onPick({ parts: [partFor(p)], partial: k, orderType: cardOf(p.key, p).type, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }))}
                 </div>
               ) : (
-                <div key={p.key} className="osp-card"><span><b>{i + 1}. {p.label}</b><br /><span className="faint">{summary(p)}</span></span><button type="button" className="linkbtn" onClick={() => { setOpenKey(p.key); setJobFor(null); }}>edit</button></div>
+                <button key={p.key} type="button" className="osp-card osp-card-btn" title="Open this one" onClick={() => { setOpenKey(p.key); setJobFor(null); setOtherFor(null); }}><span><b>{i + 1}. {p.label}</b><br /><span className="faint">{summary(p)}</span></span><span className="osp-card-car" aria-hidden>›</span></button>
               ))}
               {left.length > 1 && <div className="osp-card-all"><button type="button" className="btn" onClick={() => onPick({ parts: left.map(partFor) })} title="Each one stops when it's made; you open it and go on to the next">Make all {left.length} at once</button></div>}
             </div>
@@ -314,7 +329,8 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               {look === "wait" ? <div className="faint osp-card-n">Comparing the picture in the email with their past jobs&apos; mockups…</div> : lookHit && cardOf(SOLO, null).job === lookHit.ref ? <div className="faint osp-card-n">{lookHit.why}{lookHit.sure === "low" ? " (not sure: check it)" : ""}</div> : null}
               {cardBody(SOLO, null)}
               {jobFor === SOLO && <div className="osp-card-jobs">{jobList}</div>}
-              <div className="osp-card-go"><button type="button" className="btn primary" onClick={makeSolo}>Make the order</button></div>
+              <div className="osp-card-go"><button type="button" className={"btn" + (otherFor === SOLO ? " on" : "")} aria-expanded={otherFor === SOLO} onClick={() => setOtherFor(otherFor === SOLO ? null : SOLO)}>Other options</button><button type="button" className="btn primary" onClick={makeSolo}>Make the order</button></div>
+              {otherFor === SOLO && otherMenu((k) => { const c = cardOf(SOLO, null); onPick({ told: toldOf(c), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type, partial: k, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }); })}
             </div>
           </div>
         )}

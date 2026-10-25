@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
+import PartialOrder from "@/components/tools/PartialOrder";
 
 /**
  * THE Create order / Create reorder tool (Oct 23, Nick: "think of each of these as an individual tool that just gets
@@ -29,6 +30,8 @@ export default function CreateOrderTool({ activityId, text, guess = "", suggeste
     window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));
     return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); };
   }, []);
+  // "Other options": only part of the order, no questions (components/tools/PartialOrder.tsx)
+  if (quick?.partial) return <PartialOrder key={quick.n} activityId={activityId} start={{ ...quick, partial: quick.partial }} onClose={() => { setQuick(null); onClose(); }} onCreated={(id, n, label) => onCreated?.(id, n, label)} />;
   if (quick) return (
     <QuickOrder key={quick.n} dock activityId={activityId} start={quick} onClose={() => { setQuick(null); onClose(); }}
       onReview={() => { const st = quick; setQuick(null); if (onReview) onReview(st); else onClose(); }}
