@@ -14017,3 +14017,6 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 /* status pills in dark mode: Printavo's own colors (dark green, navy…) were unreadable on the dark page */
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .aa-pill{color:color-mix(in srgb,var(--sc) 50%,#fff);background:color-mix(in srgb,var(--sc) 28%,transparent)}}
 :root[data-theme="dark"] .aa-pill{color:color-mix(in srgb,var(--sc) 50%,#fff);background:color-mix(in srgb,var(--sc) 28%,transparent)}
+/* (Oct 24) the dashboard's artwork tiles were a fixed 64px in 56px columns: they ran past the panel's edge */
+@media (max-width:640px){.pdx-art > *{width:auto!important;height:auto!important;aspect-ratio:1;min-width:0}}
+.pdx-ag-t small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
