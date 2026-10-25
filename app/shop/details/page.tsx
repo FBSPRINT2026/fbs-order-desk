@@ -222,16 +222,18 @@ export default function ProductionDetailsPage() {
         <div className="pdd-list">
           {waiting.map((r) => {
             const prints = waitingOf(r);
-            const isOpen = open === r.id;
+            // with the production mockup on, the list only opens it: no confirm form here (Oct 24, Nick: "I accidentally
+            // clicked confirm details… get rid of that whole first section… they can just click the open production mockup")
+            const isOpen = !prodView && open === r.id;
             return (
               <section key={r.id} id={"pd-" + r.id} className={"panel pdd-card" + (isOpen ? " open" : "")}>
-                <button type="button" className="pdd-head" aria-expanded={isOpen} onClick={() => openRow(r)}>
+                <button type="button" className="pdd-head" aria-expanded={prodView ? undefined : isOpen} onClick={() => (prodView ? location.assign(`/shop/orders/${r.id}/production`) : openRow(r))}>
                   <span className="pdd-num">#{r.number}</span>
                   <span className="pdd-main"><b>{custs[r.customer_id || ""] || "—"}</b><span className="faint">{r.nickname || "Untitled Job"}</span></span>
                   <span className="pdd-tag">{DETAILS_LABEL}</span>
                   <span className="pdd-side faint">{prints.length} print{prints.length === 1 ? "" : "s"} · due {day(r.due_date)}</span>
                 </button>
-                {prodView && <div className="pdd-pv"><Link href={`/shop/orders/${r.id}/production`} className="btn primary sm">Open production mockup</Link><span className="faint">confirm the real size, placement, inks and screens, and see what we did last time</span></div>}
+                {prodView && <div className="pdd-pv"><Link href={`/shop/orders/${r.id}/production`} className="btn primary sm">Open production mockup</Link><span className="faint">confirm the real size, placement, inks and screens, and see what we did last time</span><span className="spacer" /><Link href={`/shop/orders/${r.id}?view=admin`} className="linkbtn">Open the order</Link></div>}
                 {isOpen && (
                   <div className="pdd-body">
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
