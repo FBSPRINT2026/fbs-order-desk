@@ -14,7 +14,8 @@ type Snap = { lines?: { brand?: string; style?: string; color?: string }[]; impr
 type Row = { id: string; order_id: string | null; group_id: string | null; title: string; file_path: string; snapshot: Snap | null; created_at: string; design_ids: string[] | null; customer_id: string };
 type Save = { key: string; rows: Row[]; snap: Snap; order?: { id: string; number: number; nickname: string; offsets?: Record<string, { dx: number; dy: number }> }; when: string };
 export type ArtPick = { imprints: Imprint[]; offsets: Record<string, { dx: number; dy: number }>; thumbs: string[] | null; remake: boolean; label: string;
-  /** an old job's mockup PDF to open in the Mockup Creator's Helper (storage path) */ helperFile?: string };
+  /** an old job's mockup PDF to open in the Mockup Creator's Helper (storage path) */ helperFile?: string;
+  /** open the Mockup Creator on the group after (to place art brought in) */ open?: boolean };
 type Job = { ref: string; label: string; date: string };
 type JobFile = { name: string; path: string; url: string; pdf: boolean };
 
@@ -35,7 +36,37 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   // Don't see it? Search old orders (Oct 24, Nick: "key in a name or key in an invoice number… oh, 31782, this has this
   // mockup on it. You want me to pull in that file?… open this in the mockup creator using the helper?")
   const [jq, setJq] = useState(""), [jobs, setJobs] = useState<Job[] | null>(null), [jobPics, setJobPics] = useState<Record<string, string>>({});
-  const [job, setJob] = useState<Job | null>(null), [jobFiles, setJobFiles] = useState<JobFile[] | null>(null), [file, setFile] = useState<JobFile | null>(null);
+  const [job, setJob] = useState<Job | null>(null), [jobFiles, setJobFiles] = useState<JobFile[] | null>(null);
+  // several of the old job's files picked together (Oct 24, Nick: "the left one is the front and the middle one is the
+  // back… I need to be able to bring those in together"), each told what it is: a print location, or a mockup
+  const [chosen, setChosen] = useState<string[]>([]), [what, setWhat] = useState<Record<string, string>>({});
+  const [pdfPics, setPdfPics] = useState<Record<string, string>>({});
+  // pick, then "Bring it in" → "Tell me what these are" (Oct 24, Nick: "whatever you click on… just say, bring it in. And
+  // then… a screen that says, tell me what these are. This is a full front. This is a back… then we'll open it up in the
+  // mockup creator")
+  const [whatStep, setWhatStep] = useState(false);
+  const MOCKUP = "mockup";
+  const toggle = (f: JobFile) => setChosen((c) => {
+    if (c.includes(f.path)) return c.filter((x) => x !== f.path);
+    // a first guess: a PDF on its own is the job's mockup; pictures are the front, then the back
+    const n = c.filter((x) => what[x] && what[x] !== MOCKUP).length;
+    setWhat((w) => (w[f.path] ? w : { ...w, [f.path]: n === 0 ? "Full Front" : n === 1 ? "Full Back" : "Left Chest" }));
+    return [...c, f.path];
+  });
+  // a PDF shown as its first page (Oct 24: "some of the files you can't even see, they just look like PDF")
+  useEffect(() => {
+    let live = true;
+    const todo = (jobFiles || []).filter((f) => f.pdf && f.url && !(f.path in pdfPics));
+    if (!todo.length) return;
+    void (async () => {
+      const { pdfPicture } = await import("@/lib/printavoArt");
+      for (const f of todo) {
+        try { const c = await pdfPicture(await (await fetch(f.url)).arrayBuffer(), 360); if (live) setPdfPics((x) => ({ ...x, [f.path]: c.toDataURL("image/png") })); }
+        catch { if (live) setPdfPics((x) => ({ ...x, [f.path]: "" })); }
+      }
+    })();
+    return () => { live = false; };
+  }, [jobFiles]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t0 = jq.trim();
     if (t0.length < 2) { setJobs(null); return; }
@@ -52,11 +83,37 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
     return () => { live = false; clearTimeout(h); };
   }, [jq, customerId, orderId]);
   async function openJob(j: Job) {
-    setJob(j); setFile(null); setJobFiles(null); setPick(null);
+    setJob(j); setChosen([]); setWhat({}); setWhatStep(false); setJobFiles(null); setPick(null);
     // one of our orders: its mockups are the cards above
     if (j.ref.startsWith("o:")) { const s0 = (saves || []).find((x) => x.order?.id === j.ref.slice(2)); if (s0) { setPick(s0); setJob(null); } else setJobFiles([]); return; }
     const r = await fetch("/api/jobs/pics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refs: [j.ref], withFiles: true }) }).then((x) => x.json()).catch(() => ({}));
     setJobFiles((r.files || []) as JobFile[]);
+  }
+  /** the old job's files told what they are: each print file becomes art on this group at its spot, then the Mockup
+   *  Creator opens to place them (Oct 24, Nick: "bring into the mockup builder. Tell me what it is, am I front, am I back") */
+  async function bringFiles() {
+    const fs = (jobFiles || []).filter((f) => chosen.includes(f.path) && what[f.path] && what[f.path] !== MOCKUP);
+    const mock = (jobFiles || []).find((f) => chosen.includes(f.path) && what[f.path] === MOCKUP);
+    // only a mockup: a PDF goes to the Helper (it pulls the art off), a picture goes on as the mockup (a visual only)
+    if (!fs.length) { if (mock) await useFile(mock, mock.pdf); return; }
+    setBusy(true); setErr("");
+    try {
+      const { uploadDesign } = await import("@/lib/designs");
+      const { data: u } = await sb.auth.getUser();
+      const num = (job?.label || "").match(/^#\d+/)?.[0] || "";
+      const locs = fs.map((f) => what[f.path]);
+      const add: Imprint[] = [];
+      for (const f of fs) {
+        const blob = await (await fetch(f.url)).blob();
+        const ext = (f.path.match(/\.(pdf|png|jpe?g|webp|gif)$/i)?.[1] || (f.pdf ? "pdf" : "png")).toLowerCase();
+        const file = new File([blob], `${(num || "old job").replace("#", "")} ${what[f.path]}.${ext}`, { type: blob.type || (f.pdf ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`) });
+        const d = await uploadDesign(sb, { draft: true, file, customer_id: customerId, by: u.user?.email || "", name: `${num ? `${num} ` : ""}${what[f.path]}`.trim() });
+        add.push({ ...newImprint(what[f.path]), design_id: d.id });
+        await sb.from("art_files").insert({ order_id: orderId, name: `From the old job ${job?.label.replace(/\s*\(Printavo\)$/, "") || ""}: ${what[f.path]}`.slice(0, 200), file_path: f.path, file_type: file.type }).then(() => null, () => null);
+      }
+      const keep = group.imprints.filter((x) => !locs.includes(x.location));
+      await onPick({ imprints: [...keep, ...add], offsets: {}, thumbs: null, remake: false, label: job?.label.replace(/\s*\(Printavo\)$/, "") || "an old job", open: true, ...(mock?.pdf ? { helperFile: mock.path } : {}) });
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't bring them in."); setBusy(false); }
   }
   /** the old job's file: in the order's Production files, then the Helper (a PDF) or the picture as the mockup */
   async function useFile(f: JobFile, helper: boolean) {
@@ -181,7 +238,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
           <div className="ca-old">
             <b>Don&apos;t see it? Search old orders</b>
             <span className="faint">Their orders here and in Printavo, by name or order / invoice number.</span>
-            <input type="search" className="ca-q" placeholder="31782, or Velvet Hammer" value={jq} onChange={(e) => { setJq(e.target.value); setJob(null); setFile(null); }} aria-label="Search their old orders" />
+            <input type="search" className="ca-q" placeholder="31782, or Velvet Hammer" value={jq} onChange={(e) => { setJq(e.target.value); setJob(null); setChosen([]); }} aria-label="Search their old orders" />
             {jobs && !jobs.length && <span className="faint">No order matches.</span>}
             {jobs && jobs.length > 0 && !job && (
               <div className="ca-jobs">{jobs.map((j) => (
@@ -193,27 +250,50 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
             )}
             {job && (
               <div className="ca-jobfiles">
-                <div className="ca-jf-h"><b>{job.label.replace(/\s*\(Printavo\)$/, "")}</b><button type="button" className="linkbtn" onClick={() => { setJob(null); setFile(null); }}>back to the results</button></div>
+                <div className="ca-jf-h"><b>{job.label.replace(/\s*\(Printavo\)$/, "")}</b><button type="button" className="linkbtn" onClick={() => { setJob(null); setChosen([]); }}>back to the results</button></div>
                 {jobFiles === null ? <span className="faint">Opening its files…</span> : !jobFiles.length ? <span className="faint">No mockup or pictures on that order.</span> : (
-                  <div className="ca-jobs">{jobFiles.map((f) => (
-                    <button key={f.path} type="button" className={"ca-job" + (file?.path === f.path ? " on" : "")} onClick={() => setFile(f)}>
-                      <span className="ca-jpic">{!f.pdf && f.url ? <img src={f.url} alt="" /> : <span className="faint">PDF</span>}</span>
-                      <span><b>{f.name}</b>{f.url && <><br /><a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Look at it</a></>}</span>
-                    </button>
-                  ))}</div>
+                  <div className="ca-files">{jobFiles.map((f) => {
+                    const on = chosen.includes(f.path), pic = f.pdf ? pdfPics[f.path] : f.url;
+                    return (
+                      <div key={f.path} className={"ca-file" + (on ? " on" : "")}>
+                        <button type="button" className="ca-file-pic" title={on ? "Picked: click to leave it out" : "Pick this one (pick several to bring them in together)"} onClick={() => toggle(f)}>
+                          {pic ? <img src={pic} alt="" /> : <span className="faint">{f.pdf && !(f.path in pdfPics) ? "Opening the PDF…" : "No preview"}</span>}
+                          <span className={"ca-tick" + (on ? " on" : "")} aria-hidden>{on ? "✓" : ""}</span>
+                          {f.pdf && <span className="ca-pdf" aria-hidden>PDF</span>}
+                        </button>
+                        {f.url && <a className="ca-look" href={f.url} target="_blank" rel="noreferrer">Look at it</a>}
+                      </div>
+                    );
+                  })}</div>
                 )}
-                {file && (
-                  <div className="ca-use">
-                    {file.pdf
-                      ? <><b>This looks like a mockup from {job.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")}.</b><span className="faint">Open it in the Mockup Creator with the Helper? It pulls the art off the mockup, asks which print is which, and puts it on this order&apos;s garments.</span></>
-                      : <><b>This is a picture from {job.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")}.</b><span className="faint">It can go on this group as the mockup picture (a visual only). The Helper reads PDFs, so for the art use the old job&apos;s PDF if it has one.</span></>}
-                    {err && <span className="err">{err}</span>}
-                    <div className="ca-acts">
-                      <button type="button" className={"btn" + (file.pdf ? "" : " primary")} disabled={busy} onClick={() => void useFile(file, false)}>Use it as a visual only</button>
-                      {file.pdf && <button type="button" className="btn primary" disabled={busy} onClick={() => void useFile(file, true)}>{busy ? "Opening…" : "Yes, open with the Helper"}</button>}
+                {chosen.length > 0 && !whatStep && (
+                  <div className="ca-bar"><span>{chosen.length} picked</span><span className="spacer" /><button type="button" className="btn primary" onClick={() => setWhatStep(true)}>Bring {chosen.length === 1 ? "it" : "them"} in</button></div>
+                )}
+                {chosen.length > 0 && whatStep && (() => {
+                  const fs = (jobFiles || []).filter((f) => chosen.includes(f.path));
+                  const prints = fs.filter((f) => what[f.path] && what[f.path] !== MOCKUP), mocks = fs.filter((f) => what[f.path] === MOCKUP);
+                  return (
+                    <div className="ca-use">
+                      <b>Tell me what {fs.length === 1 ? "this is" : "these are"}</b>
+                      <div className="ca-what">{fs.map((f) => (
+                        <div key={f.path} className="ca-what-r">
+                          <span className="ca-wpic">{(f.pdf ? pdfPics[f.path] : f.url) ? <img src={(f.pdf ? pdfPics[f.path] : f.url) || ""} alt="" /> : null}</span>
+                          <select aria-label="What this file is" value={what[f.path] || "Full Front"} onChange={(e) => setWhat((w) => ({ ...w, [f.path]: e.target.value }))}>
+                            {LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+                            <option value={MOCKUP}>A mockup (the art on a shirt)</option>
+                          </select>
+                        </div>
+                      ))}</div>
+                      {mocks.some((f) => f.pdf) && <span className="faint">The mockup goes to the Helper in the Mockup Creator: it pulls the art off and asks which print is which.</span>}
+                      {err && <span className="err">{err}</span>}
+                      <div className="ca-acts">
+                        <button type="button" className="btn ghost" disabled={busy} onClick={() => setWhatStep(false)}>Back</button>
+                        {fs.length === 1 && mocks.length === 1 && <button type="button" className="btn" disabled={busy} onClick={() => void useFile(mocks[0], false)}>Use it as a visual only</button>}
+                        <button type="button" className="btn primary" disabled={busy || (!prints.length && !mocks.length)} onClick={() => void bringFiles()}>{busy ? "Bringing it in…" : "Open in the Mockup Creator"}</button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>

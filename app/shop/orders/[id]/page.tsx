@@ -1530,7 +1530,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} onClose={() => setCustArt(null)}
               onPick={async (p) => {
                 const gi = custArt, gid = o.groups[gi].id;
-                if (!p.helperFile) setGroup(gi, (x) => {
+                if (!p.helperFile || p.open) setGroup(gi, (x) => {
                   x.imprints = p.imprints; x.mockupOffsets = p.offsets; delete x.mockupSkipped;
                   if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; }
                 });
@@ -1541,6 +1541,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 // made again on this group's garments: the Mockup Creator builds it and saves, then comes back here
                 if (p.remake) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&auto=1`);
                 // an old job's mockup PDF: the Mockup Creator opens with the Helper reading it
+                else if (p.open) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}${p.helperFile ? `&helper=1&helperFile=${encodeURIComponent(p.helperFile)}` : ""}`);
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}

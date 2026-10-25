@@ -13869,3 +13869,21 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ca-jobfiles{display:flex;flex-direction:column;gap:8px}
 .ca-jf-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ca-oldjob{display:flex;flex-direction:column;gap:6px}
+/* an old job's files as pictures, picked several at once, then "tell me what these are" (Oct 24) */
+.ca-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ca-file{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ca-file-pic{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);overflow:hidden;cursor:pointer;padding:6px;font:inherit}
+.ca-file-pic:hover{border-color:var(--accent)}
+.ca-file.on .ca-file-pic{border:2px solid var(--accent);padding:5px}
+.ca-file-pic img{width:100%;height:100%;object-fit:contain}
+.ca-file-pic .faint{font-size:12px}
+.ca-tick{position:absolute;top:6px;left:6px;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.ca-tick.on{background:var(--accent);border-color:var(--accent)}
+.ca-pdf{position:absolute;bottom:6px;right:6px;font-size:11px;font-weight:700;color:var(--ink-3);background:var(--surface);border-radius:4px;padding:0 4px}
+.ca-look{font-size:12px;align-self:center}
+.ca-bar{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
+.ca-what{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.ca-what-r{display:flex;flex-direction:column;gap:6px}
+.ca-wpic{display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.ca-wpic img{width:100%;height:100%;object-fit:contain}
+.ca-what-r select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}

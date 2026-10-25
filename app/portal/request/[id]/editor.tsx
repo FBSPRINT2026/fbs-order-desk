@@ -653,7 +653,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                       <div className="ca-jobs">{j.files.map((f) => (
                         <button key={f.path} type="button" className="ca-job" disabled={!!picking || preview} onClick={() => void bringOld(j, f)} title="Use this as the mockup for this group">
                           <span className="ca-jpic">{!f.pdf && f.url ? <img src={f.url} alt="" /> : <span className="faint">PDF</span>}</span>
-                          <span><b>{picking === f.path ? "Bringing it in…" : f.name}</b>{f.url && <><br /><a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Look at it</a></>}</span>
+                          <span><b>{picking === f.path ? "Bringing it in…" : f.pdf ? "PDF" : "Picture"}</b>{f.url && <><br /><a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Look at it</a></>}</span>
                         </button>
                       ))}</div>
                     )}
