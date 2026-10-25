@@ -22,6 +22,10 @@
   into a page. Fix or change it in the tool, and add a new place to its `places` list.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
+- **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the
+  back, like the same PMS… you only have one PMS matching fee"). The same PMS (matched by its number: "PMS 230 C" = "230C")
+  on several prints or groups of one order is charged once, on its first print. `calcGroup` / `calcOrder` in
+  `lib/pricing.ts` do this through the shared `seen` set; any new pricing path must go through them.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

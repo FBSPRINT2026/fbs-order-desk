@@ -596,6 +596,8 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
   });
 }
 /** PMS matching fees on a print: the named inks charged as matches, or the count typed when no inks are named */
+/** the same PMS however it's written: "PMS 230 C", "230C", "Pantone 230" → "230" */
+export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m ? m[1] : n.trim().toLowerCase().replace(/\s+/g, " "); };
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
   return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);
 }
@@ -659,7 +661,18 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // embroidery has its own quantity breaks on contract pricing
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
-  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, false, false, ix) }));
+  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[] })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, false, false, ix) }));
+  // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
+  // another group of the same order) is matched once, so only its first print pays. `seen` is shared by calcOrder.
+  // A typed count (inks not named) can't be compared and is charged as typed.
+  const pmsSeen = seen || new Set<string>();
+  const pmsFresh = (g.imprints || []).map((d, i) => {
+    if (d.method !== "screen" || !inkNames(d.inks).length) return null;
+    const charged = pmsInks(d).filter((x) => x.charge).map((x) => x.name);
+    const dup = charged.filter((n) => { const k = "pms:" + pmsKey(n); if (pmsSeen.has(k)) return true; pmsSeen.add(k); return false; });
+    if (dup.length) imprints[i] = { ...imprints[i], inkFee: r2(imprints[i].inkFee - dup.length * num(pl.pmsFee)), pmsShared: dup };
+    return charged.length - dup.length;
+  });
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
   const printFor = (light: boolean, dtgLight: boolean) => {
@@ -738,7 +751,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   });
   imprints.forEach((_, i) => {
     const im = (g.imprints || [])[i]; if (!im) return;
-    const pms = im.method === "screen" ? pmsCount(im) : num(im.pms), ic = num(im.inkChanges);
+    const pms = pmsFresh[i] ?? (im.method === "screen" ? pmsCount(im) : num(im.pms)), ic = num(im.inkChanges);
     if (pms && num(pl.pmsFee)) setupItems.push({ kind: "pms", qty: pms, unit: num(pl.pmsFee), amount: r2(pms * num(pl.pmsFee)) });
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)) });
   });
