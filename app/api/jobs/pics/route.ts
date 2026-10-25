@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   const v = await getViewer(); if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const { refs } = await req.json().catch(() => ({ refs: [] })) as { refs?: string[] };
+  const { refs, withFiles } = await req.json().catch(() => ({ refs: [] })) as { refs?: string[]; withFiles?: boolean };
   const want = [...new Set((refs || []).filter((r) => /^[ao]:[0-9a-f-]{36}$/i.test(String(r))))].slice(0, 40);
   if (!want.length) return NextResponse.json({ pics: {} });
   const admin = createAdminClient();
@@ -39,5 +39,15 @@ export async function POST(req: Request) {
   const url = new Map<string, string>(((signed || []) as { signedUrl: string | null }[]).map((s, i) => [paths[i], s.signedUrl || ""]));
   const pics: Record<string, { thumb: string; full: string; pdf: boolean }> = {};
   for (const [ref, x] of Object.entries(pick)) pics[ref] = { thumb: url.get(x.thumb) || "", full: url.get(x.full) || "", pdf: /\.pdf$/i.test(x.full) };
+  // withFiles: a Printavo job's every picture and PDF (Customer artwork → Search old orders: "this job has this mockup on
+  // it, want me to pull in that file?"), each with its storage path and a link to look at it
+  if (withFiles) {
+    const list: { name: string; path: string; url: string; pdf: boolean }[] = [];
+    const one = ((as || []) as { id: string; files: Record<string, string> | null }[]).filter((a) => want.includes(`a:${a.id}`)).slice(0, 1)[0];
+    const fs = Object.entries(one?.files || {}).filter(([, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp|gif)$/i.test(p)).slice(0, 12);
+    const { data: sg } = fs.length ? await admin.storage.from("proofs").createSignedUrls(fs.map(([, p]) => p), 3600) : { data: [] };
+    fs.forEach(([n, p], i) => list.push({ name: n, path: p, url: (sg as { signedUrl: string | null }[] | null)?.[i]?.signedUrl || "", pdf: /\.pdf$/i.test(p) }));
+    return NextResponse.json({ pics, files: list });
+  }
   return NextResponse.json({ pics });
 }

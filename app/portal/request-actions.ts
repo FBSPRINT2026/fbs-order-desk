@@ -709,3 +709,45 @@ export async function bringOrderArtwork(requestId: string, groupId: string, srcO
     return { ok: true, id: requestId };
   } catch (e) { return fail(e); }
 }
+
+/** My files → search: their old orders from before (Printavo) by name or invoice number, each with its pictures and
+ *  PDFs, to use one as the mockup of a reorder (Oct 24, Nick: "search old orders… oh, 31782, this is it, bring it in") */
+export type MyOldJob = { id: string; number: string; name: string; when: string; files: { name: string; path: string; url: string; pdf: boolean }[] };
+export async function searchMyOldJobs(q: string, as?: string): Promise<{ ok: true; list: MyOldJob[] } | { ok: false; error: string }> {
+  try {
+    const { admin, cust } = await readMe(as);
+    const t = String(q || "").trim().slice(0, 60);
+    if (t.length < 2) return { ok: true, list: [] };
+    const num = /^#?\d{4,6}$/.test(t) ? t.replace("#", "") : "";
+    const like = `%${t.replace(/[%_,()]/g, " ").trim().split(/\s+/).join("%")}%`;
+    const base = admin.from("archived_orders").select("id, visual_id, nickname, order_date, files").eq("customer_id", cust.id).eq("kind", "invoice");
+    const { data } = await (num ? base.eq("visual_id", num) : base.ilike("nickname", like)).order("order_date", { ascending: false, nullsFirst: false }).limit(10);
+    const rows = (data || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; files: Record<string, string> | null }[];
+    const all = rows.flatMap((r) => Object.entries(r.files || {}).filter(([, p]) => typeof p === "string" && /\.(pdf|png|jpe?g|webp)$/i.test(p)).slice(0, 8).map(([n, p]) => ({ r: r.id, n, p })));
+    const { data: sg } = all.length ? await admin.storage.from("proofs").createSignedUrls(all.map((x) => x.p), 3600) : { data: [] };
+    const url = new Map(all.map((x, i) => [x.p, (sg as { signedUrl: string | null }[] | null)?.[i]?.signedUrl || ""]));
+    return { ok: true, list: rows.map((r) => ({ id: r.id, number: r.visual_id, name: r.nickname || "", when: r.order_date || "",
+      files: all.filter((x) => x.r === r.id).map((x) => ({ name: x.n, path: x.p, url: url.get(x.p) || "", pdf: /\.pdf$/i.test(x.p) })) })) };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't search your orders." }; }
+}
+
+/** An old order's file as this group's mockup: a reorder of it ("Same prints as #31782"); the shop makes it into ours */
+export async function bringOldJobFile(requestId: string, groupId: string, archivedId: string, path: string): Promise<Result> {
+  try {
+    const { admin, order } = await myDraft(requestId);
+    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, customer_id, files").eq("id", archivedId).maybeSingle();
+    if (!a || a.customer_id !== order.customer_id) return { ok: false, error: "We couldn't find that order." };
+    const name = Object.entries((a.files || {}) as Record<string, string>).find(([, p]) => p === path)?.[0];
+    if (!name) return { ok: false, error: "We couldn't find that file." };
+    const groups = orderGroups(order);
+    const g = groups.find((x) => x.id === groupId);
+    if (!g) return { ok: false, error: "We couldn't find that group." };
+    g.customerMockups = [{ path, name }];
+    g.reprintOf = `#${a.visual_id}${a.nickname ? ` ${a.nickname}` : ""}`;
+    delete g.fromMockup;
+    const { error } = await admin.from("orders").update({ groups }).eq("id", requestId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/portal/request/${requestId}`);
+    return { ok: true, id: requestId };
+  } catch (e) { return fail(e); }
+}

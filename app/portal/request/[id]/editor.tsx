@@ -7,7 +7,7 @@ import type { NeckLabelSet } from "@/lib/neckLabels";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { bringOrderArtwork, myOrderArtwork, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
+import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, type MyOldJob, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
 import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
@@ -213,6 +213,23 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     if (orderArt === null) void myOrderArtwork().then((r) => setOrderArt(r.ok ? r.list : []));
   };
   const artDiff = (a: MyOrderArt) => { const g = o.groups.find((x) => x.id === pickFor); const here = (g?.lines || []).filter((l) => (l.style || "").trim()).map((l) => [l.style, l.color].filter(Boolean).join(" ").toLowerCase()); return here.length > 0 && here.some((h) => !a.garments.map((x) => x.toLowerCase()).includes(h)); };
+  // My files → search older orders (Printavo) by name or invoice number: a file from one as this group's mockup
+  const [oq, setOq] = useState(""), [oldJobs, setOldJobs] = useState<MyOldJob[] | null>(null);
+  useEffect(() => {
+    const t = oq.trim();
+    if (t.length < 2) { setOldJobs(null); return; }
+    let live = true;
+    const h = setTimeout(() => { void searchMyOldJobs(t).then((r) => { if (live) setOldJobs(r.ok ? r.list : []); }); }, 400);
+    return () => { live = false; clearTimeout(h); };
+  }, [oq]);
+  async function bringOld(j: MyOldJob, f: MyOldJob["files"][number]) {
+    if (preview || !pickFor) return;
+    setPicking(f.path); setErr("");
+    await flush();
+    const r = await bringOldJobFile(o.id, pickFor, j.id, f.path);
+    if (!r.ok) { setPicking(""); return setErr(r.error || "Couldn't bring it in."); }
+    window.location.reload();
+  }
   async function bringArt(a: MyOrderArt, keep: boolean) {
     if (preview || !pickFor) return;
     setPicking(a.key); setErr("");
@@ -624,6 +641,25 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                   </div>
                 </div>
               )}
+              <div className="ca-old">
+                <b>Don&apos;t see it? Search older orders</b>
+                <span className="faint">By name or invoice number.</span>
+                <input type="search" className="ca-q" placeholder="31782, or the design's name" value={oq} onChange={(e) => setOq(e.target.value)} aria-label="Search your older orders" />
+                {oldJobs && !oldJobs.length && <span className="faint">No order matches.</span>}
+                {(oldJobs || []).map((j) => (
+                  <div key={j.id} className="ca-oldjob">
+                    <b>#{j.number}{j.name ? ` ${j.name}` : ""}</b>
+                    {!j.files.length ? <span className="faint">No mockup on that order.</span> : (
+                      <div className="ca-jobs">{j.files.map((f) => (
+                        <button key={f.path} type="button" className="ca-job" disabled={!!picking || preview} onClick={() => void bringOld(j, f)} title="Use this as the mockup for this group">
+                          <span className="ca-jpic">{!f.pdf && f.url ? <img src={f.url} alt="" /> : <span className="faint">PDF</span>}</span>
+                          <span><b>{picking === f.path ? "Bringing it in…" : f.name}</b>{f.url && <><br /><a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Look at it</a></>}</span>
+                        </button>
+                      ))}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </>) : !pickMockups.length ? <p className="faint">No saved mockups yet.</p> : (
             <div className="rq-pick-grid">
               {pickMockups.map((m) => (

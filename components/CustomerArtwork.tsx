@@ -13,7 +13,10 @@ import { designLabel, LOCATIONS, newImprint, uid, type Group, type Imprint } fro
 type Snap = { lines?: { brand?: string; style?: string; color?: string }[]; imprints?: Imprint[]; mockupThumbs?: string[] };
 type Row = { id: string; order_id: string | null; group_id: string | null; title: string; file_path: string; snapshot: Snap | null; created_at: string; design_ids: string[] | null; customer_id: string };
 type Save = { key: string; rows: Row[]; snap: Snap; order?: { id: string; number: number; nickname: string; offsets?: Record<string, { dx: number; dy: number }> }; when: string };
-export type ArtPick = { imprints: Imprint[]; offsets: Record<string, { dx: number; dy: number }>; thumbs: string[] | null; remake: boolean; label: string };
+export type ArtPick = { imprints: Imprint[]; offsets: Record<string, { dx: number; dy: number }>; thumbs: string[] | null; remake: boolean; label: string;
+  /** an old job's mockup PDF to open in the Mockup Creator's Helper (storage path) */ helperFile?: string };
+type Job = { ref: string; label: string; date: string };
+type JobFile = { name: string; path: string; url: string; pdf: boolean };
 
 const thumbOf = (p: string) => p.replace(/(\.[a-z]+)$/i, "-thumb.png");
 const garments = (s?: Snap) => [...new Set((s?.lines || []).map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))];
@@ -29,6 +32,53 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   const [pick, setPick] = useState<Save | null>(null);
   const [logo, setLogo] = useState<{ id: string; label: string } | null>(null), [loc, setLoc] = useState("Full Front");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  // Don't see it? Search old orders (Oct 24, Nick: "key in a name or key in an invoice number… oh, 31782, this has this
+  // mockup on it. You want me to pull in that file?… open this in the mockup creator using the helper?")
+  const [jq, setJq] = useState(""), [jobs, setJobs] = useState<Job[] | null>(null), [jobPics, setJobPics] = useState<Record<string, string>>({});
+  const [job, setJob] = useState<Job | null>(null), [jobFiles, setJobFiles] = useState<JobFile[] | null>(null), [file, setFile] = useState<JobFile | null>(null);
+  useEffect(() => {
+    const t0 = jq.trim();
+    if (t0.length < 2) { setJobs(null); return; }
+    let live = true;
+    const h = setTimeout(() => {
+      void fetch(`/api/inbox/order/jobs?${new URLSearchParams({ customer: customerId, q: t0 })}`).then((r) => r.json()).then(async (j: { jobs?: Job[] }) => {
+        if (!live) return;
+        const js = (j.jobs || []).filter((x) => x.ref !== `o:${orderId}`).slice(0, 12);
+        setJobs(js);
+        const pr = await fetch("/api/jobs/pics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refs: js.map((x) => x.ref) }) }).then((r) => r.json()).catch(() => ({}));
+        if (live) setJobPics(Object.fromEntries(Object.entries((pr.pics || {}) as Record<string, { thumb: string }>).map(([k, v]) => [k, v.thumb])));
+      }).catch(() => { if (live) setJobs([]); });
+    }, 350);
+    return () => { live = false; clearTimeout(h); };
+  }, [jq, customerId, orderId]);
+  async function openJob(j: Job) {
+    setJob(j); setFile(null); setJobFiles(null); setPick(null);
+    // one of our orders: its mockups are the cards above
+    if (j.ref.startsWith("o:")) { const s0 = (saves || []).find((x) => x.order?.id === j.ref.slice(2)); if (s0) { setPick(s0); setJob(null); } else setJobFiles([]); return; }
+    const r = await fetch("/api/jobs/pics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refs: [j.ref], withFiles: true }) }).then((x) => x.json()).catch(() => ({}));
+    setJobFiles((r.files || []) as JobFile[]);
+  }
+  /** the old job's file: in the order's Production files, then the Helper (a PDF) or the picture as the mockup */
+  async function useFile(f: JobFile, helper: boolean) {
+    setBusy(true); setErr("");
+    try {
+      await sb.from("art_files").insert({ order_id: orderId, name: `From the old job ${job?.label.replace(/\s*\(Printavo\)$/, "") || ""}: ${f.name}`.slice(0, 200), file_path: f.path, file_type: f.pdf ? "application/pdf" : "image/png" }).then(() => null, () => null);
+      const label = job?.label.replace(/\s*\(Printavo\)$/, "") || f.name;
+      if (helper) return void (await onPick({ imprints: group.imprints, offsets: group.mockupOffsets || {}, thumbs: null, remake: false, label, helperFile: f.path }));
+      // a visual only: the picture is the group's mockup (a PDF's first page made into a picture)
+      let path = f.path;
+      if (f.pdf) {
+        const { pdfPicture } = await import("@/lib/printavoArt");
+        const c = await pdfPicture(await (await fetch(f.url)).arrayBuffer(), 1600);
+        const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
+        if (!blob) throw new Error("Couldn't make a picture of that PDF.");
+        path = `art/${orderId}/${uid()}-old-mockup.png`;
+        const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png", upsert: false });
+        if (up.error) throw new Error(up.error.message);
+      }
+      await onPick({ imprints: group.imprints, offsets: group.mockupOffsets || {}, thumbs: [path], remake: false, label });
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't bring it in."); setBusy(false); }
+  }
 
   useEffect(() => {
     let live = true;
@@ -127,6 +177,47 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
             ))}
           </div>
         ))}
+        {tab === "mockups" && (
+          <div className="ca-old">
+            <b>Don&apos;t see it? Search old orders</b>
+            <span className="faint">Their orders here and in Printavo, by name or order / invoice number.</span>
+            <input type="search" className="ca-q" placeholder="31782, or Velvet Hammer" value={jq} onChange={(e) => { setJq(e.target.value); setJob(null); setFile(null); }} aria-label="Search their old orders" />
+            {jobs && !jobs.length && <span className="faint">No order matches.</span>}
+            {jobs && jobs.length > 0 && !job && (
+              <div className="ca-jobs">{jobs.map((j) => (
+                <button key={j.ref} type="button" className="ca-job" onClick={() => void openJob(j)}>
+                  <span className="ca-jpic">{jobPics[j.ref] ? <img src={jobPics[j.ref]} alt="" /> : null}</span>
+                  <span><b>{j.label.replace(/\s*\(Printavo\)$/, "")}</b><br /><span className="faint">{j.date ? new Date(j.date).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : ""}{j.ref.startsWith("a:") ? " · Printavo" : ""}</span></span>
+                </button>
+              ))}</div>
+            )}
+            {job && (
+              <div className="ca-jobfiles">
+                <div className="ca-jf-h"><b>{job.label.replace(/\s*\(Printavo\)$/, "")}</b><button type="button" className="linkbtn" onClick={() => { setJob(null); setFile(null); }}>back to the results</button></div>
+                {jobFiles === null ? <span className="faint">Opening its files…</span> : !jobFiles.length ? <span className="faint">No mockup or pictures on that order.</span> : (
+                  <div className="ca-jobs">{jobFiles.map((f) => (
+                    <button key={f.path} type="button" className={"ca-job" + (file?.path === f.path ? " on" : "")} onClick={() => setFile(f)}>
+                      <span className="ca-jpic">{!f.pdf && f.url ? <img src={f.url} alt="" /> : <span className="faint">PDF</span>}</span>
+                      <span><b>{f.name}</b>{f.url && <><br /><a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Look at it</a></>}</span>
+                    </button>
+                  ))}</div>
+                )}
+                {file && (
+                  <div className="ca-use">
+                    {file.pdf
+                      ? <><b>This looks like a mockup from {job.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")}.</b><span className="faint">Open it in the Mockup Creator with the Helper? It pulls the art off the mockup, asks which print is which, and puts it on this order&apos;s garments.</span></>
+                      : <><b>This is a picture from {job.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")}.</b><span className="faint">It can go on this group as the mockup picture (a visual only). The Helper reads PDFs, so for the art use the old job&apos;s PDF if it has one.</span></>}
+                    {err && <span className="err">{err}</span>}
+                    <div className="ca-acts">
+                      <button type="button" className={"btn" + (file.pdf ? "" : " primary")} disabled={busy} onClick={() => void useFile(file, false)}>Use it as a visual only</button>
+                      {file.pdf && <button type="button" className="btn primary" disabled={busy} onClick={() => void useFile(file, true)}>{busy ? "Opening…" : "Yes, open with the Helper"}</button>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {pick && tab === "mockups" && (
           <div className="ca-use">
             <b>Bring in {pick.order?.nickname || "this mockup"}{pick.order ? ` from #${pick.order.number}` : ""}</b>

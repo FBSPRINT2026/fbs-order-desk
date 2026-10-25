@@ -13855,3 +13855,17 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ca-acts .field{margin:0;min-width:180px}
 .rq-pick .toolbar{margin:4px 0 10px}
 .rq-pick-c.on{outline:2px solid var(--accent);outline-offset:-2px}
+/* Customer artwork / My files → search old orders (Oct 24) */
+.ca-old{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line-2);margin-top:12px;padding-top:10px;font-size:13px}
+.ca-old > .faint{font-size:12.5px}
+.ca-jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.ca-job{display:flex;gap:10px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font:inherit;font-size:13px;color:var(--ink);text-align:left;cursor:pointer;min-width:0}
+.ca-job:hover{border-color:var(--accent)}
+.ca-job.on{border:2px solid var(--accent);padding:5px 7px}
+.ca-job .faint{font-size:12px}
+.ca-job b{word-break:break-word}
+.ca-jpic{width:56px;height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.ca-jpic img{width:100%;height:100%;object-fit:contain}
+.ca-jobfiles{display:flex;flex-direction:column;gap:8px}
+.ca-jf-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ca-oldjob{display:flex;flex-direction:column;gap:6px}

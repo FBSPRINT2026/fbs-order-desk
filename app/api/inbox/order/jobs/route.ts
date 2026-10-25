@@ -17,7 +17,9 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const q = (sp.get("q") || "").trim().slice(0, 60);
   const admin = createAdminClient();
-  const { data: a } = await admin.from("activities").select("customer_id").eq("id", sp.get("activity") || "").maybeSingle();
+  // or by customer (Customer artwork on an order, Oct 24: "search old orders… key in a name or an invoice number")
+  const byCust = /^[0-9a-f-]{36}$/i.test(sp.get("customer") || "") ? sp.get("customer")! : "";
+  const { data: a } = byCust ? { data: { customer_id: byCust } } : await admin.from("activities").select("customer_id").eq("id", sp.get("activity") || "").maybeSingle();
   const cid = (a?.customer_id as string) || "";
   if (!cid) return NextResponse.json({ jobs: [] });
   const like = `%${q.replace(/[%_,()]/g, " ").trim().split(/\s+/).join("%")}%`;

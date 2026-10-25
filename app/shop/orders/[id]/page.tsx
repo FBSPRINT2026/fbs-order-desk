@@ -1530,16 +1530,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} onClose={() => setCustArt(null)}
               onPick={async (p) => {
                 const gi = custArt, gid = o.groups[gi].id;
-                setGroup(gi, (x) => {
+                if (!p.helperFile) setGroup(gi, (x) => {
                   x.imprints = p.imprints; x.mockupOffsets = p.offsets; delete x.mockupSkipped;
                   if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; }
                 });
                 setCustArt(null);
                 await new Promise((r) => setTimeout(r, 80)); // the change lands in latest.current before saving
                 await save();
-                void sb.from("order_events").insert({ order_id: o.id, kind: "note", detail: `Brought in the mockup and prints from ${p.label} (Customer artwork)${p.remake ? ", made again on this order's garments" : ", the same picture"}.` });
+                void sb.from("order_events").insert({ order_id: o.id, kind: "note", detail: p.helperFile ? `Opened ${p.label}'s old mockup in the Mockup Creator's Helper (Customer artwork).` : `Brought in the mockup${p.imprints.length ? " and prints" : ""} from ${p.label} (Customer artwork)${p.remake ? ", made again on this order's garments" : ", the same picture"}.` });
                 // made again on this group's garments: the Mockup Creator builds it and saves, then comes back here
                 if (p.remake) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&auto=1`);
+                // an old job's mockup PDF: the Mockup Creator opens with the Helper reading it
+                else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
           {o.groups.map((g, gi) => (

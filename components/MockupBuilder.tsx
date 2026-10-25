@@ -407,6 +407,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const helpIn = useRef<HTMLInputElement>(null);
+  // an old job's mockup to read (Customer artwork → Search old orders → "open with the Helper", Oct 24): handed to the
+  // Helper once the order and its customer are loaded
+  const helperFile = useRef(portal ? "" : sp.get("helperFile") || "");
+  useEffect(() => {
+    const path = helperFile.current;
+    if (!path || !customerId || (orderId && !order)) return;
+    helperFile.current = "";
+    void (async () => {
+      const { data } = await sb.storage.from("proofs").download(path);
+      if (!data) { setHelper({ name: path.split("/").pop() || "the old mockup", busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't open the old job's file." }); return; }
+      const name = path.split("/").pop() || "old-mockup.pdf";
+      await helperRead(new File([data], name, { type: data.type || "application/pdf" }));
+      setTimeout(() => document.querySelector(".mk-help")?.scrollIntoView({ block: "start", behavior: "smooth" }), 300);
+    })();
+  }, [customerId, order]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sheetShop, setSheetShop] = useState<{ name: string; line: string; logoUrl: string }>({ name: "FBS Print", line: "", logoUrl: "/brand/fbs-logo.svg" });
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
