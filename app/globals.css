@@ -13894,3 +13894,126 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .mk-cchg-r i{width:14px;height:14px;border-radius:3px;border:1px solid var(--line);flex-shrink:0}
 .mk-cchg-r input{height:32px;width:170px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13px}
 .mk-cchg .faint{font-size:12px}
+
+/* ── Portal on a phone (Oct 24, Nick: "clean up the mobile view… a lot of things that spill out other lines like
+   settings in the main toolbar is in its own line… a lot of hanging stuff all by itself"). Last in the file so it wins
+   over the denser desktop rules above (the job rows' 4-column grid squeezed the text to a sliver on a phone). ── */
+@media (max-width:640px){
+  /* dashboard: the two start buttons the same size, side by side */
+  .pdx-hello{gap:12px}
+  .pdx-hello .pdx-sub{font-size:13px}
+  .pdx-acts{display:grid!important;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .pdx-acts .pd-act{width:100%;min-width:0;min-height:56px;padding:8px 10px;gap:8px}
+  .pdx-acts .pd-act small{display:none}
+  .pdx-acts .pd-act b{font-size:13.5px;white-space:normal;line-height:1.2}
+  /* the main tabs: 3 × 3, icon beside the word (Settings no longer alone on a row) */
+  .portal .aa-nav{grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:5px}
+  .portal .aa-tab{flex-direction:row;justify-content:flex-start;gap:7px;padding:9px 8px;font-size:12.5px;letter-spacing:0}
+  .portal .aa-tab svg{width:17px;height:17px;flex:0 0 auto}
+  .portal .aa-tab-end{margin-left:0!important;justify-content:flex-start!important}
+  /* your jobs: picture + text, the buttons under them */
+  .pjr{grid-template-columns:52px minmax(0,1fr);gap:8px 12px;padding:12px 2px}
+  .pjr-pic,.pjr-picw{width:52px;height:52px}
+  .pjr-mid,.pjr-act{grid-column:1 / -1}
+  /* headings with a note: the note on its own line */
+  .pdx-asst .pdx-h{flex-direction:column;align-items:flex-start;gap:2px}
+  .pdx-h{flex-wrap:wrap;row-gap:2px}
+  .pdx-h > .faint{flex-basis:100%;order:3;margin:2px 0 0}
+  /* payments aging: "Not due" across the top, then 2 × 2 (no "Over 90" alone) */
+  .pdx-aging{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .pdx-aging>div:first-child{grid-column:1 / -1}
+  .pdx-aging>div{border-right:0!important}
+  .pdx-aging span{font-size:11.5px}.pdx-aging b{font-size:14px}
+  .portal .aa-aging{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+  .portal .aa-aging > .aa-age:first-child{grid-column:1 / -1}
+  .portal .aa-aging > .aa-age{min-width:0;padding:10px 12px}
+  /* filter chips fill the row; 5 chips go 3 + 2 (no "Completed" alone) */
+  .portal .toolbar{flex-wrap:wrap;gap:8px}
+  .portal .toolbar > .chips{display:flex;flex-wrap:wrap;width:100%;flex:1 1 100%}
+  .portal .toolbar > .chips > .chip{flex:1 1 auto;justify-content:center;padding:8px 8px;font-size:13px;min-width:0;white-space:normal;line-height:1.2;text-align:center;gap:5px}
+  .portal .toolbar > .chips > .chip .chip-n{flex:0 0 auto}
+  .portal .toolbar > .chips:has(> .chip:nth-child(5)){display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .portal .toolbar > .chips:has(> .chip:nth-child(5):last-child){grid-template-columns:repeat(6,minmax(0,1fr))}
+  .portal .toolbar > .chips:has(> .chip:nth-child(5):last-child) > .chip:nth-child(-n+3){grid-column:span 2}
+  .portal .toolbar > .chips:has(> .chip:nth-child(5):last-child) > .chip:nth-child(n+4){grid-column:span 3}
+  /* search and sort get their own full-width row */
+  .portal .toolbar > .aa-search{flex:1 1 100%;width:100%;max-width:none;margin:0}
+  .portal .toolbar > .aa-search .sx{width:100%}
+  .portal .toolbar > .aa-search input{width:100%;min-width:0}
+  .portal .toolbar > select,.portal .toolbar > .pdc-sort{flex:1 1 100%;width:100%;margin-left:0}
+  /* design catalog: All across the top, the categories 2 × 2; designs two to a row */
+  .portal .pdc .toolbar > .chips{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .portal .pdc .toolbar > .chips > .chip{grid-column:auto!important;white-space:nowrap}
+  .portal .pdc .toolbar > .chips > .chip:first-child:nth-last-child(odd){grid-column:1 / -1!important}
+  .portal .pdc-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+  .portal .pdc-grid .dc-card{padding:6px;min-width:0}
+  .portal .pdc-grid .dc-card b,.portal .pdc-grid .dc-card strong{font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .portal .pdc-grid .dc-card small,.portal .pdc-grid .dc-card .faint{font-size:11.5px}
+  /* dashboard art strips */
+  .pdx-hold-ok svg,.pdx-caught svg{width:36px;height:36px}
+  .pdx-art{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:6px}
+  .pdx-art > :nth-child(n+6){display:none}
+  .pdx-thumbs{grid-template-columns:minmax(0,1fr)!important;gap:14px}
+  /* orders and payments lists as cards: number, name, star on top; status and money under */
+  .portal .aa-tbl tr{gap:6px 10px;padding:12px}
+  .portal .aa-tbl td{padding:0!important}
+  .portal .aa-tbl td.ck{order:0;align-self:flex-start}
+  .portal .aa-tbl td.num:not([data-l]){order:1;align-self:flex-start}
+  .portal .aa-tbl td.m{order:2;flex:1 1 0}
+  .portal .aa-tbl td.aa-starc{order:3;margin-left:auto;align-self:flex-start}
+  .portal .aa-tbl tr::after{order:4}
+  .portal .aa-tbl td:has(> .aa-pill),.portal .aa-tbl td:has(> .aa-kind){order:5}
+  .portal .aa-tbl td[data-l="Type"]::before{display:none}
+  .portal .aa-tbl .aa-pill{min-width:0!important;width:auto!important;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .portal .aa-tbl td.paid,.portal .aa-tbl td[data-l="Paid"]{display:none}
+  .portal .aa-tbl td[data-l]{order:6;font-size:12.5px}
+  .portal .aa-tbl td.pay{order:7;margin-left:auto}
+  /* projects: the two tabs fill the row */
+  .portal .pj-bar{flex-wrap:wrap}
+  .portal .pj-bar > .aa-sub{display:flex;width:100%;flex:1 1 100%}
+  .portal .pj-bar > .aa-sub > button{flex:1 1 0;justify-content:center;min-width:0;white-space:nowrap;font-size:13px;padding-left:6px;padding-right:6px;gap:6px}
+  /* settings → people: name, email under it, then phone and the buttons */
+  .portal .ps-people tr{row-gap:2px;column-gap:8px;align-items:center}
+  .portal .ps-people td{padding:0!important}
+  .portal .ps-people td:nth-child(1),.portal .ps-people td:nth-child(2){flex:1 1 100%!important;min-width:0;overflow-wrap:anywhere}
+  .portal .ps-people td:nth-child(2){color:var(--ink-2);font-size:13px}
+  .portal .ps-people td.nw{flex:1 1 auto!important;margin-top:4px;font-size:13px}
+  .portal .ps-people td.ps-acts{flex:0 0 auto!important;margin-left:auto;margin-top:4px;display:flex;gap:4px}
+  /* an order: the progress as dots with only the current step named (it scrolled sideways) */
+  .portal .stepper{overflow:visible;padding:2px 10px 0}
+  .portal .step{min-width:0;font-size:0;gap:8px}
+  .portal .step .dot{font-size:10px;flex:0 0 auto}
+  .portal .step.cur{font-size:12.5px;white-space:nowrap}
+  .portal .step.cur:first-child{align-items:flex-start}
+  .portal .step.cur:last-child{align-items:flex-end}
+  /* an order's items: each line a block, Qty / Each / Amount under it (the columns were one digit wide) */
+  .portal table.items,.portal table.items tbody{display:block;width:100%}
+  .portal table.items thead{display:none}
+  .portal table.items tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:10px;row-gap:6px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .portal table.items td{display:block;padding:0!important;border:0!important;min-width:0}
+  .portal table.items td:first-child{grid-column:1 / -1}
+  .portal table.items td:not(:first-child){text-align:left;white-space:nowrap;font-size:13.5px}
+  .portal table.items td:not(:first-child):empty{display:none}
+  .portal table.items td:not(:first-child):not(:empty)::before{display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;margin-bottom:1px}
+  .portal table.items td:nth-child(2):not(:empty)::before{content:"Qty"}
+  .portal table.items td:nth-child(3):not(:empty)::before{content:"Each"}
+  .portal table.items td:nth-child(4):not(:empty)::before{content:"Amount"}
+  .portal table.items td:nth-child(4){grid-column:3}
+  .portal table.items tr:has(> td:nth-child(2):empty){grid-template-columns:minmax(0,1fr) auto}
+  .portal table.items tr:has(> td:nth-child(2):empty) > td:first-child{grid-column:1}
+  .portal table.items tr:has(> td:nth-child(2):empty) > td:nth-child(4){grid-column:2;text-align:right}
+  .portal table.items tr:has(> td:nth-child(2):empty) > td:nth-child(4)::before{display:none}
+  /* mockup creator: the fields full width */
+  .mk-portal .mk-setup .mk-f > input,.mk-portal .mk-setup .style-pick input{max-width:none;width:100%}
+  .mk-portal .mk-setup .mk-style,.mk-portal .mk-setup .style-pick{flex:1 1 100%;width:100%;min-width:0}
+}
+/* starred designs panel: its color edge stayed on the screen's left side when the panel isn't sticky */
+@media (max-width:700px){.portal .aa-attn.aa-favs{position:relative;top:auto}}
+/* order again: the job's name over its number */
+.pdx-ag-t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.pdx-ag-t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.pdx-ag-t small{color:var(--ink-3);font-size:11.5px}
+.pdx-ag-none{position:absolute;inset:0;display:grid;place-items:center;color:var(--ink-3)}
+/* status pills in dark mode: Printavo's own colors (dark green, navy…) were unreadable on the dark page */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .aa-pill{color:color-mix(in srgb,var(--sc) 50%,#fff);background:color-mix(in srgb,var(--sc) 28%,transparent)}}
+:root[data-theme="dark"] .aa-pill{color:color-mix(in srgb,var(--sc) 50%,#fff);background:color-mix(in srgb,var(--sc) 28%,transparent)}

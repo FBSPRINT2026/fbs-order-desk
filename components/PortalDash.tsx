@@ -151,9 +151,9 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
             <div className="pdx-again">
               {past.map((p) => (
                 <div className="pdx-ag" key={p.id}>
-                  <Link href={p.href} className="pdx-ag-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span>#{p.number}</span>}</Link>
-                  <b title={p.nickname || undefined}>#{p.number}</b>
-                  <small>#{p.number}{p.when ? ` · ${p.when}` : ""}{p.qty ? ` · ${p.qty} pcs` : ""}</small>
+                  <Link href={p.href} className="pdx-ag-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span className="pdx-ag-none" aria-hidden><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3a4 4 0 0 1-8 0z" /></svg></span>}</Link>
+                  {/* the job's name, its number and when under it (Oct 24: it said "#34501" twice) */}
+                  <span className="pdx-ag-t"><b title={p.nickname || undefined}>{p.nickname || `#${p.number}`}</b><small>#{p.number}{p.when ? ` · ${p.when}` : ""}{p.qty ? ` · ${p.qty} pcs` : ""}</small></span>
                   <DashReorder id={p.id} archived={p.archived} canAct={canAct} />
                 </div>
               ))}
