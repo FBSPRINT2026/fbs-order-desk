@@ -16,8 +16,9 @@ type T = NonNullable<Order["order_type"]>;
 const WHY = "Reorder: production confirms on the run";
 
 export const orderTypeOf = (o: O): T => o.order_type || (isReorder(o) ? "reorder" : "new");
+export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" };
 
-export default function OrderTypeRow({ o, patch }: { o: O; patch: (fn: (d: Order) => void) => void }) {
+export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d: Order) => void) => void; /** inside Job details' Order type tab */ bare?: boolean }) {
   const t = orderTypeOf(o);
   const prints = o.groups.flatMap((g) => g.imprints);
   const open = prints.filter((im) => !im.confirmed);
@@ -36,7 +37,7 @@ export default function OrderTypeRow({ o, patch }: { o: O; patch: (fn: (d: Order
   });
   const label = (im: Imprint) => im.location || "Print";
   return (
-    <div className="pt-row ot-row">
+    <div className={"pt-row ot-row" + (bare ? " ot-bare" : "")}>
       <span className="pt-l">Order type</span>
       <select className="ot-sel" aria-label="Order type" value={t} onChange={(e) => pick(e.target.value as T)}>
         <option value="new">New order</option>

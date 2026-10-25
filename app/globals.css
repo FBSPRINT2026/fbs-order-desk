@@ -13792,3 +13792,5 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ord .pt-row.ot-row .ot-conf{font-size:13px}
 .ord .pt-row.ot-row .ot-prints{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px}
 .ord .pt-row.ot-row .ot-prints .faint{font-size:12px}
+.ord .pt-row.ot-row.ot-bare{border-top:0;margin-top:0;padding-top:0}
+.ord .jd-tabs{margin:-2px 0 2px}

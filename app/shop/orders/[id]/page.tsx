@@ -32,7 +32,7 @@ import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
 import { isReorder } from "@/components/ReorderPanel";
-import OrderTypeRow from "@/components/OrderTypeRow";
+import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
 import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
@@ -147,6 +147,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
+  const [jdTab, setJdTab] = useState<"details" | "type">("details");
   // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
   const [progOpen, setProgOpen] = useSticky("order.programOpen", false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
@@ -1445,8 +1446,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                         <span className="pt-dot" aria-hidden />Program pricing applied<span className="pt-car" aria-hidden>{progOpen ? "▴" : "▾"}</span>
                       </button>}
                     </div>
-                    {/* New order / Reorder / Reorder with changes, and on a reorder: production confirms + what the customer sees (Oct 24) */}
-                    <OrderTypeRow o={o} patch={patch} />
                     {!o.use_program && progAll && progAll.applyMode === "ask" && progAll.cards.length > 0 && ["quote", "request"].includes(o.status) && (
                       <div className="prg-ask"><span><b>{cust ? custLabel(cust) : "This customer"}</b> has program pricing.</span><button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Apply program pricing</button></div>
                     )}
@@ -1475,6 +1474,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </span>
               </div>
               <div className="panel-b stack">
+                {/* two tabs (Oct 24, Nick: "under job details… job details information, and then the next one says order
+                    type… by default, you'll always be on new order"): opens on Job details every time */}
+                <div className="toolbar jd-tabs"><div className="chips">
+                  <button type="button" className={"chip" + (jdTab === "details" ? " on" : "")} onClick={() => setJdTab("details")}>Job details</button>
+                  <button type="button" className={"chip" + (jdTab === "type" ? " on" : "")} onClick={() => setJdTab("type")}>Order type <span className="faint">· {ORDER_TYPE_LABEL[orderTypeOf(o)]}</span></button>
+                </div></div>
+                {jdTab === "type" ? <OrderTypeRow o={o} patch={patch} bare /> : (<>
                 <div className="grid jd-grid">
                   <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
@@ -1512,6 +1518,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
+                </>)}
               </div>
             </section>
           </div>
