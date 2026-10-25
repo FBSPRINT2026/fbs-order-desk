@@ -74,6 +74,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   // still waits for its proof
   const realOrder = o.type === "invoice" && o.status !== "request";
   const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length || (realOrder && (g.mockupThumbs || []).length));
+  // the mockups show once, on the items; the Artwork panel is for proofs (Oct 24, Nick: "We don't need the artwork twice")
+  const ownMk: typeof mkGroups = [];
   const mkPaths = [...new Set(mkGroups.flatMap((g) => (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => !/\.pdf$/i.test(x))))];
   const mkUrls: Record<string, string> = {};
   if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
@@ -189,7 +191,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                   <tbody>
                     {orderGroups(o).map((g, gi) => [
                       // the group's mockup above its garments (Oct 24, Nick: "Can't see the art"; not tied to one garment)
-                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><a className="po-item-pics" href="#proofs">{pics.slice(0, 4).map((x) => <img key={x} src={mkUrls[x]} alt="Mockup" loading="lazy" />)}</a></td></tr>] : []; })(),
+                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><div className="po-item-pics">{pics.slice(0, 4).map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" loading="lazy" /></a>)}</div></td></tr>] : []; })(),
                       ...g.lines.map((l, li) => {
                       const lc = c.groups[gi]?.lines[li];
                       return (
@@ -216,10 +218,10 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               {o.notes && <div className="panel-b" style={{ borderTop: "1px solid var(--line-2)", whiteSpace: "pre-wrap" }}><div className="lbl">Notes</div>{o.notes}</div>}
             </section>
 
-            <section className="panel" id="proofs">
-              <div className="panel-h"><h2>{mkGroups.length && !proofs.length ? "Artwork" : "Artwork proofs"}</h2></div>
+            {(proofs.length > 0 || mkGroups.length === 0) && <section className="panel" id="proofs">
+              <div className="panel-h"><h2>{ownMk.length && !proofs.length ? "Artwork" : "Artwork proofs"}</h2></div>
               <div className="panel-b stack">
-                {mkGroups.map((g) => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return (
+                {ownMk.map((g) => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return (
                   <div key={g.id} className="po-mock">
                     <div className="po-mock-h"><b>{g.fromMockup ? `Your mockup${g.fromMockup.number ? ` M-${g.fromMockup.number}` : ""}` : (g.customerMockups || []).length ? "Your mockup" : "Mockup"}</b><span className="faint">{g.fromMockup ? "made in our Mockup Creator" : (g.customerMockups || []).length ? "your own file" : "by FBS Print"}{g.name ? ` · ${g.name}` : ""}</span></div>
                     <div className="po-mock-pics">{pics.map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" /></a>)}</div>
@@ -228,9 +230,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 ); })}
                 {proofs.length ? (
                   <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} />)}</div>
-                ) : mkGroups.length ? null : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
+                ) : ownMk.length ? null : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
-            </section>
+            </section>}
 
             {sewouts.length > 0 && (
               <section className="panel" id="sewouts">
