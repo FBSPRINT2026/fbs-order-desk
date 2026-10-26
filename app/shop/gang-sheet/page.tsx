@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
+import CustomerPick from "@/components/CustomerPick";
 
 /**
  * Gang sheet builder (Heat press; Oct 26, Nick).
@@ -516,104 +517,157 @@ export default function GangSheet() {
   const owners = [...new Set([me, ...sheets.map((x) => x.owner)])].filter((o) => sheets.some((x) => x.owner === o));
   const recent = sheets.slice(0, 3);
   const pcsOf = (x: SheetRow) => (x.data?.logos || []).reduce((a, l) => a + l.vers.reduce((b, v) => b + (+v.qty || 0), 0), 0);
+  // ---------- a customer's artwork (Oct 26, Nick: "select from customers files… go into a customer's artwork… this is
+  // MEI, this logo, I need to just put it in there") ----------
+  const [cust, setCust] = useState<{ id: string; label: string } | null>(null);
+  const [custArt, setCustArt] = useState<{ id: string; number: number; name: string; file_path: string | null; file_type: string | null; preview_path: string | null; pv?: string }[] | null>(null);
+  const [custQ, setCustQ] = useState("");
+  useEffect(() => {
+    if (!cust) { setCustArt(null); return; }
+    let live = true;
+    void (async () => {
+      setCustArt(null);
+      const { data } = await sb.from("designs").select("id, number, name, file_path, file_type, preview_path").eq("customer_id", cust.id).is("archived_at", null).order("created_at", { ascending: false }).limit(60);
+      const list = (data || []) as NonNullable<typeof custArt>;
+      const pvs = list.filter((d) => d.preview_path).map((d) => d.preview_path!);
+      const signed = pvs.length ? (await sb.storage.from("proofs").createSignedUrls(pvs, 3600)).data || [] : [];
+      const m = new Map(signed.map((x) => [x.path, x.signedUrl]));
+      if (live) setCustArt(list.map((d) => ({ ...d, pv: d.preview_path ? m.get(d.preview_path) || "" : "" })));
+    })();
+    return () => { live = false; };
+  }, [cust?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function addDesign(d: NonNullable<typeof custArt>[number]) {
+    setBusy(`Getting D-${d.number}…`); setErr("");
+    try {
+      // the print file when it's one we can read (PDF, AI, PNG, JPG, SVG), else its picture
+      const usable = d.file_path && /\.(pdf|ai|png|jpe?g|webp|svg)$/i.test(d.file_path) ? d.file_path : d.preview_path;
+      if (!usable) throw new Error("no file");
+      const { data: blob, error } = await sb.storage.from("proofs").download(usable);
+      if (error || !blob) throw new Error("no file");
+      const ext = (usable.match(/\.([a-z0-9]+)$/i)?.[1] || "png").toLowerCase();
+      const type = blob.type || (ext === "pdf" || ext === "ai" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`);
+      await add([new File([blob], `D-${d.number}${d.name ? ` ${d.name}` : ""}.${ext}`, { type })]);
+    } catch { setErr(`D-${d.number} couldn't be read. Download it from Artwork and drop it here.`); setBusy(""); }
+  }
+
   return (
     <>
       <div className="page-head">
         <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: art laid out on a {DTF_DALLAS.name} sheet, priced, and filed with its jobs</div></div>
-      </div>
-      {/* the bar: the sheet's settings and the actions */}
-      <div className="toolbar gang-bar" data-toolbar>
-        <span className="spacer" />
-        <div className="gang-pop">
-          <button type="button" className={"btn" + (settingsOpen ? " on" : "")} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Sheet settings</button>
-          {settingsOpen && (
-            <div className="gang-pop-b" role="dialog" aria-label="Sheet settings">
-              <div className="gang-row2">
-                <div className="field"><label htmlFor="g-g">Trim gap (in)</label><input id="g-g" type="number" min="0" step="0.05" value={gap} onChange={(e) => setGap(e.target.value)} /></div>
-                <div className="field"><label htmlFor="g-sw">Sheet width (in)</label><input id="g-sw" type="number" min="4" max={DTF_DALLAS.width} step="0.5" value={sheetW} onChange={(e) => setSheetW(String(Math.min(DTF_DALLAS.width, +e.target.value || DTF_DALLAS.width)))} /></div>
-                <div className="field"><label htmlFor="g-ml">Longest file (in)</label><input id="g-ml" type="number" min="10" max={DTF_DALLAS.maxFileLength} step="10" value={maxLen} onChange={(e) => setMaxLen(e.target.value)} /></div>
-                <div className="field"><label htmlFor="g-mb">Largest file (MB)</label><input id="g-mb" type="number" min="5" step="1" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></div>
+        <div className="row gang-acts">
+          <div className="gang-pop">
+            <button type="button" className={"btn" + (settingsOpen ? " on" : "")} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Sheet settings</button>
+            {settingsOpen && (
+              <div className="gang-pop-b" role="dialog" aria-label="Sheet settings">
+                <div className="gang-row2">
+                  <div className="field"><label htmlFor="g-g">Trim gap (in)</label><input id="g-g" type="number" min="0" step="0.05" value={gap} onChange={(e) => setGap(e.target.value)} /></div>
+                  <div className="field"><label htmlFor="g-sw">Sheet width (in)</label><input id="g-sw" type="number" min="4" max={DTF_DALLAS.width} step="0.5" value={sheetW} onChange={(e) => setSheetW(String(Math.min(DTF_DALLAS.width, +e.target.value || DTF_DALLAS.width)))} /></div>
+                  <div className="field"><label htmlFor="g-ml">Longest file (in)</label><input id="g-ml" type="number" min="10" max={DTF_DALLAS.maxFileLength} step="10" value={maxLen} onChange={(e) => setMaxLen(e.target.value)} /></div>
+                  <div className="field"><label htmlFor="g-mb">Largest file (MB)</label><input id="g-mb" type="number" min="5" step="1" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></div>
+                </div>
+                {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>{DTF_DALLAS.name}: {DTF_DALLAS.width}&quot; wide, up to {DTF_DALLAS.maxFileLength}&quot; a file, {DTF_DALLAS.dpi} dpi. Prices as of {DTF_DALLAS.checked}.</p>
               </div>
-              {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
-              <p className="faint" style={{ fontSize: 12, margin: 0 }}>{DTF_DALLAS.name}: {DTF_DALLAS.width}&quot; wide, up to {DTF_DALLAS.maxFileLength}&quot; a file, {DTF_DALLAS.dpi} dpi. Prices as of {DTF_DALLAS.checked}.</p>
-            </div>
-          )}
+            )}
+          </div>
+          <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
+          {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
+          <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
         </div>
-        <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
-        {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
-        <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {done && <div className="pv-err sow-msg" role="status">{done}</div>}
       <div className="gang2">
-        {/* the art, then the order it's for */}
-        <div className={"gang-left" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
-          {/* the saved sheets: a small box, the most recent few, the rest under each person's name (Oct 26, Nick: "we don't
-              want that to take up too much space… most recent or more") */}
-          <section className="panel gang-sheets">
-            <div className="gang-sheets-h"><b>Gang sheets</b><span className="spacer" /><button type="button" className="btn sm" onClick={() => void openSheet("")}>+ New sheet</button></div>
-            {recent.map((x) => (
-              <button key={x.id} type="button" className={"gang-sr" + (x.id === sheetId ? " on" : "")} onClick={() => void openSheet(x.id)}>
-                <span className="gang-sr-n" data-notranslate>{x.name}</span>
-                <span className="gang-sr-m">{who(x.owner)}&apos;s · {pcsOf(x)} pcs{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</span>
-              </button>
-            ))}
-            {sheets.length > recent.length && (
-              <select className="gang-more" aria-label="More gang sheets" value="" onChange={(e) => void openSheet(e.target.value)}>
-                <option value="">More sheets…</option>
-                {owners.map((o) => (
-                  <optgroup key={o} label={`${who(o)}'s sheets`}>
-                    {sheets.filter((x) => x.owner === o).map((x) => <option key={x.id} value={x.id}>{x.name} · {pcsOf(x)} pcs · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? " · ordered" : ""}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            )}
-            <div className="gang-sheets-cur">
-              <input type="text" aria-label="This sheet's name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
-              <span className="faint">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState || (sheetId ? "Saved" : "Saves when you add art")}</span>
-            </div>
-            {sheets.some((x) => x.id !== sheetId && (x.data?.logos || []).length) && (
-              <select className="gang-more" aria-label="Add the art from another sheet" value="" onChange={(e) => void pullFrom(e.target.value)}>
-                <option value="">Add the art from another sheet…</option>
-                {owners.map((o) => <optgroup key={o} label={`${who(o)}'s sheets`}>{sheets.filter((x) => x.owner === o && x.id !== sheetId && (x.data?.logos || []).length).map((x) => <option key={x.id} value={x.id}>{x.name} · {(x.data?.logos || []).length} art</option>)}</optgroup>)}
-              </select>
-            )}
-          </section>
-          {logos.map((lg) => (
-            <section key={lg.id} className="panel gang-card">
-              <div className="gang-card-h">
-                <div className="gang-pic">{lg.src ? <img src={lg.src} alt="" /> : <span>no art</span>}</div>
-                <div className="gang-card-t">
-                  {lg.src ? <b data-notranslate title={lg.name}>{shortName(lg.name)}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
-                  <span className="faint">{lg.src ? `${lg.colors.length} color${lg.colors.length === 1 ? "" : "s"}${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 ? ` · about ${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at its biggest: may print soft` : ""}` : "a size with no art yet, for pricing"}</span>
-                </div>
-                <button type="button" className="btn icon ghost" aria-label="Remove this art" title="Remove this art" onClick={() => { setLogos((xs) => xs.filter((x) => x.id !== lg.id)); setJobs((js) => js.map((j) => ({ ...j, logos: j.logos.filter((x) => x !== lg.id) }))); }}>×</button>
+        <div className="gang-left">
+          {/* 1. the saved sheets: a small box, the most recent few, the rest under each person's name */}
+          <section className="panel">
+            <div className="panel-h"><h2>Gang sheets</h2><span className="spacer" /><button type="button" className="btn sm" onClick={() => void openSheet("")}>+ New</button></div>
+            <div className="panel-b gang-sheets">
+              {!sheets.length && <p className="faint" style={{ fontSize: 12.5, margin: 0 }}>Your sheet saves as soon as you add art.</p>}
+              {recent.map((x) => (
+                <button key={x.id} type="button" className={"gang-sr" + (x.id === sheetId ? " on" : "")} onClick={() => void openSheet(x.id)}>
+                  <span className="gang-sr-n" data-notranslate>{x.name}</span>
+                  <span className="gang-sr-m">{who(x.owner)}&apos;s · {pcsOf(x)} pcs{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</span>
+                </button>
+              ))}
+              {sheets.length > recent.length && (
+                <select className="gang-more" aria-label="More gang sheets" value="" onChange={(e) => void openSheet(e.target.value)}>
+                  <option value="">More sheets…</option>
+                  {owners.map((o) => <optgroup key={o} label={`${who(o)}'s sheets`}>{sheets.filter((x) => x.owner === o).map((x) => <option key={x.id} value={x.id}>{x.name} · {pcsOf(x)} pcs · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? " · ordered" : ""}</option>)}</optgroup>)}
+                </select>
+              )}
+              <div className="gang-sheets-cur">
+                <input type="text" aria-label="This sheet's name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
+                <span className="faint">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState || (sheetId ? "Saved" : "")}</span>
               </div>
-              <table className="gang-vt">
-                <thead><tr><th>Size (W × H in)</th><th>Qty</th><th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
-                <tbody>{lg.vers.map((v) => (
-                  <tr key={v.id}>
-                    <td><span className="gang-wh">
-                      <input type="number" min="0.25" step="0.05" value={v.wIn} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
-                      <span className="faint">×</span>
-                      {lg.src ? <span className="gang-h num" title="Follows the art's shape">{heightOf(lg, v)}</span> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
-                    </span></td>
-                    <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>
-                    <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
-                    <td>{lg.src && lg.colors.length > 0 && <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>}</td>
-                    <td>{lg.vers.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button>}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              <button type="button" className="lc-link gang-add" onClick={() => addVer(lg)}>+ Add a size</button>
-            </section>
-          ))}
-          <label className="gang-drop">
-            <span><b>Drop art here</b> or <u>upload</u> · PNG, JPG, PDF, AI</span>
-            <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
-          </label>
-          <button type="button" className="lc-link" onClick={addSize} style={{ alignSelf: "flex-start" }}>+ Add a size with no art yet (to price it)</button>
-          {/* the order it's for */}
+              {sheets.some((x) => x.id !== sheetId && (x.data?.logos || []).length) && (
+                <select className="gang-more" aria-label="Add the art from another sheet" value="" onChange={(e) => void pullFrom(e.target.value)}>
+                  <option value="">Add the art from another sheet…</option>
+                  {owners.map((o) => <optgroup key={o} label={`${who(o)}'s sheets`}>{sheets.filter((x) => x.owner === o && x.id !== sheetId && (x.data?.logos || []).length).map((x) => <option key={x.id} value={x.id}>{x.name} · {(x.data?.logos || []).length} art</option>)}</optgroup>)}
+                </select>
+              )}
+            </div>
+          </section>
+          {/* 2. the art: always here; drop or upload, or a customer's artwork */}
+          <section className={"panel gang-art" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
+            <div className="panel-h"><h2>Art</h2><span className="faint">sizes, how many, colors to knock out</span><span className="spacer" />
+              <label className="btn sm">Upload<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
+            </div>
+            <div className="panel-b stack" style={{ gap: 10 }}>
+              {logos.map((lg) => (
+                <div key={lg.id} className="gang-card">
+                  <div className="gang-card-h">
+                    <div className="gang-pic">{lg.src ? <img src={lg.src} alt="" /> : <span>no art</span>}</div>
+                    <div className="gang-card-t">
+                      {lg.src ? <b data-notranslate title={lg.name}>{shortName(lg.name)}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
+                      <span className="faint">{lg.src ? `${lg.colors.length} color${lg.colors.length === 1 ? "" : "s"}${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 ? ` · about ${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at its biggest: may print soft` : ""}` : "a size with no art yet, to price it"}</span>
+                    </div>
+                    <button type="button" className="btn icon ghost" aria-label="Remove this art" title="Remove this art" onClick={() => { setLogos((xs) => xs.filter((x) => x.id !== lg.id)); setJobs((js) => js.map((j) => ({ ...j, logos: j.logos.filter((x) => x !== lg.id) }))); }}>×</button>
+                  </div>
+                  <table className="gang-vt">
+                    <thead><tr><th>Size (W × H in)</th><th>Qty</th><th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
+                    <tbody>{lg.vers.map((v) => (
+                      <tr key={v.id}>
+                        <td><span className="gang-wh">
+                          <input type="number" min="0.25" step="0.05" value={v.wIn} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
+                          <span className="faint">×</span>
+                          {lg.src ? <span className="gang-h num" title="Follows the art's shape">{heightOf(lg, v)}</span> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
+                        </span></td>
+                        <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>
+                        <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
+                        <td>{lg.src && lg.colors.length > 0 && <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>}</td>
+                        <td>{lg.vers.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button>}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                  <button type="button" className="lc-link gang-add" onClick={() => addVer(lg)}>+ Add a size</button>
+                </div>
+              ))}
+              <label className={"gang-drop" + (logos.length ? "" : " big")}>
+                <span><b>Drop or upload art here</b><br /><span className="faint">PNG, JPG, PDF, AI</span></span>
+                <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+              </label>
+              <div className="gang-cust">
+                <span className="faint">or pick from a customer&apos;s artwork</span>
+                <CustomerPick value={cust?.id || null} label={cust?.label} field ariaLabel="Customer whose artwork to use" onPick={(id, label) => { setCust(id ? { id, label } : null); setCustQ(""); }} />
+                {cust && (custArt === null ? <p className="faint" style={{ fontSize: 12.5 }}>Loading their artwork…</p> : !custArt.length ? <p className="faint" style={{ fontSize: 12.5 }}>No artwork saved for {cust.label}.</p> : (
+                  <>
+                    {custArt.length > 8 && <input type="search" className="gang-cust-q" placeholder="Find a logo" value={custQ} onChange={(e) => setCustQ(e.target.value)} aria-label="Find a logo" />}
+                    <div className="gang-cust-grid">
+                      {custArt.filter((d) => !custQ.trim() || `D-${d.number} ${d.name}`.toLowerCase().includes(custQ.trim().toLowerCase())).slice(0, 24).map((d) => (
+                        <button key={d.id} type="button" className="gang-cust-d" disabled={!!busy} onClick={() => void addDesign(d)} title={`Add D-${d.number}${d.name ? ` ${d.name}` : ""}`}>
+                          {d.pv ? <img src={d.pv} alt="" /> : <span className="faint">D-{d.number}</span>}
+                          <span>D-{d.number}{d.name ? ` · ${d.name}` : ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ))}
+              </div>
+              <button type="button" className="lc-link" onClick={addSize} style={{ alignSelf: "flex-start" }}>+ Add a size with no art yet (to price it)</button>
+            </div>
+          </section>
+          {/* 3. the order it's for */}
           <section className="panel">
             <div className="panel-h"><h2>Order</h2><span className="faint">the job this is for: the sheet goes in its production files</span></div>
             <div className="panel-b stack" style={{ gap: 10 }}>
@@ -637,50 +691,56 @@ export default function GangSheet() {
                   </div>
                 );
               })}
-              <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setJobs((js) => [...js, { id: uid(), job: "", logos: [], note: "" }])}>{jobs.length ? "Add another job" : "Add the job it's for"}</button>
+              <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setJobs((js) => [...js, { id: uid(), job: "", logos: [], note: "" }])}>{jobs.length ? "+ Another job" : "+ Add the job it's for"}</button>
             </div>
           </section>
         </div>
         {/* the cost, then the sheet */}
         <div className="gang-right">
-          <div className="stats gang-sum">
-            <button type="button" className="stat"><span className="v">{money(cost)}</span><span className="k">{DTF_DALLAS.name} cost</span></button>
-            <button type="button" className="stat"><span className="v">{r2(film)}&quot; of {bought}&quot;</span><span className="k">Film used of what you buy</span></button>
-            <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
-            <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
-          </div>
-          <div className="toolbar gang-tabs" data-toolbar>
-            <div className="chips">
-              <button type="button" className={"chip" + (tab === "sheet" ? " on" : "")} onClick={() => setTab("sheet")}>Sheet</button>
-              <button type="button" className={"chip" + (tab === "pieces" ? " on" : "")} onClick={() => setTab("pieces")}>Pieces <span className="pill-n">{pieces.length}</span></button>
-              <button type="button" className={"chip" + (tab === "files" ? " on" : "")} onClick={() => setTab("files")}>Files <span className="pill-n">{parts.length}</span></button>
+          <section className="panel gang-sum-p">
+            <div className="stats gang-sum">
+              <button type="button" className="stat"><span className="v">{money(cost)}</span><span className="k">{DTF_DALLAS.name} cost</span></button>
+              <button type="button" className="stat"><span className="v">{r2(film)}&quot; / {bought}&quot;</span><span className="k">Film used / bought</span></button>
+              <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
+              <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
             </div>
-            <span className="spacer" />
-            <button type="button" className="btn primary sm" disabled={!pieces.length} onClick={optimize} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
-            {tab === "sheet" && <span className="gang-zoom">
-              <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, r2(z / 1.5)))}>−</button>
-              <button type="button" className="btn sm ghost" onClick={() => setZoom(1)} title="Fit the width">{zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}</button>
-              <button type="button" className="btn sm" aria-label="Zoom in" disabled={zoom >= 6} onClick={() => setZoom((z) => Math.min(6, r2(z * 1.5)))}>+</button>
-            </span>}
-          </div>
-          {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: already as tight as it gets.</p>)}
-          {!pieces.length ? <div className="gang-empty">Drop art on the left, or add a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
-            <>
-              {parts.length > 1 && <div className="chips" style={{ marginBottom: 8 }}>{parts.map((p, i) => <button key={i} type="button" className={"chip" + (i === Math.min(shown, parts.length - 1) ? " on" : "")} onClick={() => setShown(i)}>File {i + 1} · {W}&quot;×{p.buy.length}&quot;</button>)}</div>}
-              <div ref={box} className="gang-view">{cur && <canvas ref={pv} />}</div>
-              <p className="faint" style={{ fontSize: 12, marginTop: 6 }}>Rows across the sheet with the trim gap between (the dashed lines, on screen only): cut the rows apart, then each piece. Shaded: film you buy past the layout.</p>
-            </>
-          ) : tab === "pieces" ? (
-            <div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>Piece</th><th className="r">Size</th><th className="r">How many</th><th className="r">Each</th><th className="r">Total</th></tr></thead>
-              <tbody>{pieces.map((pc) => <tr key={pc.key}><td data-notranslate>{pc.name}{pc.ver.knock.length ? <span className="faint"> · {pc.ver.knock.length} knocked out</span> : null}</td><td className="r num">{pc.wIn}&quot; × {pc.hIn}&quot;</td><td className="r num">{pc.qty}</td><td className="r num">{money(each(pc))}</td><td className="r num">{money(each(pc) * pc.qty)}</td></tr>)}</tbody>
-            </table></div>
-          ) : (
-            <div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>File</th><th>Layout</th><th>Buy</th><th className="r">Price</th></tr></thead>
-              <tbody>{parts.map((p, i) => <tr key={i}><td>{i + 1}</td><td className="num">{r2(p.length)}&quot; long · {p.rects.length} pcs</td><td className="num">{W}&quot; × {p.buy.length}&quot;</td><td className="r num">{money(p.buy.price)}</td></tr>)}</tbody>
-            </table></div>
-          )}
+          </section>
+          <section className="panel gang-sheet-p">
+            <div className="panel-h gang-tabs">
+              <div className="chips">
+                <button type="button" className={"chip" + (tab === "sheet" ? " on" : "")} onClick={() => setTab("sheet")}>Sheet</button>
+                <button type="button" className={"chip" + (tab === "pieces" ? " on" : "")} onClick={() => setTab("pieces")}>Pieces <span className="pill-n">{pieces.length}</span></button>
+                <button type="button" className={"chip" + (tab === "files" ? " on" : "")} onClick={() => setTab("files")}>Files <span className="pill-n">{parts.length}</span></button>
+              </div>
+              <span className="spacer" />
+              <button type="button" className="btn primary sm" disabled={!pieces.length} onClick={optimize} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
+              {tab === "sheet" && <span className="gang-zoom">
+                <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, r2(z / 1.5)))}>−</button>
+                <button type="button" className="btn sm ghost" onClick={() => setZoom(1)} title="Fit the width">{zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}</button>
+                <button type="button" className="btn sm" aria-label="Zoom in" disabled={zoom >= 6} onClick={() => setZoom((z) => Math.min(6, r2(z * 1.5)))}>+</button>
+              </span>}
+            </div>
+            <div className="panel-b">
+              {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: already as tight as it gets.</p>)}
+              {!pieces.length ? <div className="gang-empty">Add art on the left (drop it, upload it, or pick a customer&apos;s), or a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
+                <>
+                  {parts.length > 1 && <div className="chips" style={{ marginBottom: 8 }}>{parts.map((p, i) => <button key={i} type="button" className={"chip" + (i === Math.min(shown, parts.length - 1) ? " on" : "")} onClick={() => setShown(i)}>File {i + 1} · {W}&quot;×{p.buy.length}&quot;</button>)}</div>}
+                  <div ref={box} className="gang-view">{cur && <canvas ref={pv} />}</div>
+                  <p className="faint" style={{ fontSize: 12, margin: "6px 0 0" }}>Dashed lines: where to cut (on screen only). Shaded: film you buy past the layout.</p>
+                </>
+              ) : tab === "pieces" ? (
+                <div className="tbl-wrap"><table className="tbl">
+                  <thead><tr><th>Piece</th><th className="r">Size</th><th className="r">How many</th><th className="r">Each</th><th className="r">Total</th></tr></thead>
+                  <tbody>{pieces.map((pc) => <tr key={pc.key}><td data-notranslate>{pc.name}{pc.ver.knock.length ? <span className="faint"> · {pc.ver.knock.length} knocked out</span> : null}</td><td className="r num">{pc.wIn}&quot; × {pc.hIn}&quot;</td><td className="r num">{pc.qty}</td><td className="r num">{money(each(pc))}</td><td className="r num">{money(each(pc) * pc.qty)}</td></tr>)}</tbody>
+                </table></div>
+              ) : (
+                <div className="tbl-wrap"><table className="tbl">
+                  <thead><tr><th>File</th><th>Layout</th><th>Buy</th><th className="r">Price</th></tr></thead>
+                  <tbody>{parts.map((p, i) => <tr key={i}><td>{i + 1}</td><td className="num">{r2(p.length)}&quot; long · {p.rects.length} pcs</td><td className="num">{W}&quot; × {p.buy.length}&quot;</td><td className="r num">{money(p.buy.price)}</td></tr>)}</tbody>
+                </table></div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </>

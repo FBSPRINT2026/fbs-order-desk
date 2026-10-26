@@ -14274,3 +14274,23 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-sheets-cur{display:flex;align-items:center;gap:8px;margin-top:4px}
 .gang-sheets-cur input{flex:1;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:14px;min-width:0}
 .gang-sheets-cur .faint{font-size:12px;color:var(--ink-3);white-space:nowrap}
+/* Gang sheet builder v3 (Oct 26): actions by the title, boxed sheets / art / order on the left */
+.gang-acts{gap:8px;flex-wrap:wrap;align-items:center}
+.gang-sheets{display:flex;flex-direction:column;gap:4px;padding-top:6px}
+.gang-art.over{outline:2px dashed var(--accent);outline-offset:3px}
+.gang-art .gang-card{padding:10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
+.gang-drop.big{min-height:120px;font-size:14px}
+.gang-drop .faint{font-size:12px}
+.gang-cust{display:flex;flex-direction:column;gap:8px}
+.gang-cust > .faint{font-size:12.5px;color:var(--ink-3)}
+.gang-cust-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:14px}
+.gang-cust-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:320px;overflow:auto}
+.gang-cust-d{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:11.5px;color:var(--ink-2);cursor:pointer;min-width:0}
+.gang-cust-d:hover{border-color:var(--accent)}
+.gang-cust-d img{width:100%;aspect-ratio:1;object-fit:contain;background:repeating-conic-gradient(var(--surface-2) 0 25%,var(--surface) 0 50%) 0 0/8px 8px;border-radius:4px}
+.gang-cust-d span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.gang-sum-p{overflow:hidden}
+.gang-sum-p .gang-sum{margin:0}
+.gang-sheet-p{margin-top:12px}
+.gang-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gang-sheet-p .gang-view{max-height:calc(100vh - 300px)}
