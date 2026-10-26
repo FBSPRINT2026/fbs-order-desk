@@ -48,14 +48,14 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
   <tr><td align="center" style="padding:0 16px">
 <table role="presentation" align="center" width="680" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;margin:0 auto">
   <tr><td align="center" style="padding:24px 40px 0;${F};font-size:15px;line-height:1.55;color:#3A4558">${hi}e're excited to share it with you: your orders, art, payments and messages, all in one place. <b style="color:#141D2B">Your login is already set up.</b></td></tr>
-  <tr><td align="center" style="padding:26px 28px 0;${F};font-size:12px;font-weight:bold;letter-spacing:1px;color:#5B6678">SIGN IN IN THREE STEPS</td></tr>
+  <tr><td align="center" style="padding:26px 28px 0;${F};font-size:12px;font-weight:bold;letter-spacing:1px;color:#5B6678">EASY SIGN IN</td></tr>
   <tr><td style="padding:12px 28px 0">
     <a href="${o.portalUrl}" style="text-decoration:none"><img src="${img("steps.png")}" width="624" alt="1. Open the portal at portal.fbsprint.com. 2. Enter your email, the one this came to. 3. Type the code we email you." style="display:block;width:100%;max-width:624px;height:auto;border:0"></a>
     <div style="${F};font-size:12.5px;color:#7A8599;text-align:center;padding-top:10px">No password to remember. The code comes to this email address. <a href="${o.portalUrl}" style="color:#0e9bd8">portal.fbsprint.com</a></div>
   </td></tr>
   <tr><td align="center" style="padding:30px 28px 0">
     <img src="${img("fade-short.png")}" width="64" height="4" alt="" style="display:block;width:64px;height:4px;border:0;margin:0 auto">
-    <div style="${F};font-size:20px;font-weight:bold;color:#141D2B;padding-top:12px">What you can do in it</div>
+    <div style="${F};font-size:20px;font-weight:bold;color:#141D2B;padding-top:12px">New features</div>
   </td></tr>
   <tr><td style="padding:16px 22px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
