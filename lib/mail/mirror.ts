@@ -119,7 +119,12 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   // out of time and every email said "Sorting…" for hours)
   const sortAnyway = () => sortPending(admin, client, acct, Math.max(deadline, Date.now() + 30000)).catch((e) => { console.error("sortPending", e instanceof Error ? e.message : e); return 0; });
   if (partial) { console.warn("mirrorInbox: ran out of time, nothing taken off this run", acct.email, { inbox: envs.length, checked: keep.size }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: await sortAnyway() }; }
-  if (gone.length && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: await sortAnyway() }; }
+  // …unless the read was complete: the server's own count of the Inbox matches what we read (Oct 26: Amanda keeps her
+  // Inbox nearly empty, so archiving a batch always looked like "most of the Inbox vanishing" and was skipped every run;
+  // 82 emails she'd archived in Outlook stayed on her Email page for hours)
+  const exists = client.mailbox && typeof client.mailbox === "object" ? Number((client.mailbox as { exists?: number }).exists) : NaN;
+  const complete = !truncated && Number.isFinite(exists) && exists > 0 && all.length === exists && envs.length === uids.length;
+  if (gone.length && !complete && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: await sortAnyway() }; }
   if (gone.length) {
     await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id));
     await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);
