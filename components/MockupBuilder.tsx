@@ -1139,6 +1139,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (isShortSleeveTee(desc) || !/sweat|crew|fleece|hood|pullover/i.test(desc)) continue;
       const ci = g.color_images?.[l.color] || Object.entries(g.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
       if (!ci?.front || !ci.back) continue;
+      // a back picked from another kind of photo (on a model, the side, an upload) isn't lined up to the flat front
+      if (ci.back_from && ci.back_from !== "sanmar") continue;
       const fu = ssImg(ci.front), bu = ssImg(ci.back);
       if (leveling.current.has(bu)) continue;
       leveling.current.add(bu);
@@ -1178,6 +1180,51 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }).catch(() => null);
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a color with a front photo but no back (Oct 26, Nick: S&S has no back of the Next Level 6221): SanMar's back of the
+  // same style and color, saved on the garment; none there either, the back box asks which photo to use (noBack)
+  const [noBack, setNoBack] = useState<Record<string, { garmentId: string; name: string; others: { label: string; path: string }[] }>>({});
+  const backAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (portal) return;
+    for (const l of lines) {
+      if (l.own || !l.color.trim() || isBag(l)) continue;
+      const g = garmentFor(l); if (!g) continue;
+      const ent = Object.entries(g.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color));
+      if (!ent || !ent[1]?.front || ent[1].back || ent[1].back_from) continue;
+      const k0 = `${g.id}|${colorKey(l.color)}`;
+      if (backAsked.current.has(k0)) continue;
+      backAsked.current.add(k0);
+      const color = l.color;
+      photoQ.current = photoQ.current.then(async () => {
+        const r = await fetch("/api/garments/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId: g.id, color, want: "back" }) }).then((x) => x.json()).catch(() => null) as { name?: string; front?: string; back?: string; side?: string; hex?: string; back_from?: string; none?: boolean; others?: { label: string; path: string }[] } | null;
+        if (!r?.name) return;
+        if (r.back) { const { name, none: _n, others: _o, ...entry } = r; setCatalog((c) => c.map((x) => (x.id === g.id ? { ...x, color_images: { ...(x.color_images || {}), [name]: { ...(x.color_images?.[name] || { front: "", back: "", side: "", hex: "" }), ...entry, back: r.back! } } } : x))); return; }
+        if (r.none) setNoBack((m) => ({ ...m, [k0]: { garmentId: g.id, name: r.name!, others: r.others || [] } }));
+      }).catch(() => null);
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const backAsk = (l?: Line) => { if (!l || portal) return null; const g = garmentFor(l); return g ? noBack[`${g.id}|${colorKey(l.color)}`] || null : null; };
+  const [backBusy, setBackBusy] = useState(""), [backErr, setBackErr] = useState("");
+  const pickBack = async (l: Line, path: string, from: string) => {
+    const q = backAsk(l); if (!q) return;
+    setBackBusy(path); setBackErr("");
+    const r = await fetch("/api/garments/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId: q.garmentId, color: q.name, setBack: { path, from } }) }).then((x) => x.json()).catch(() => null) as { name?: string; back?: string; back_from?: string; error?: string } | null;
+    setBackBusy("");
+    if (!r?.name) { setBackErr(r?.error || "Couldn't save that back photo."); return; }
+    setCatalog((c) => c.map((x) => (x.id === q.garmentId ? { ...x, color_images: { ...(x.color_images || {}), [r.name!]: { ...(x.color_images?.[r.name!] || { front: "", back: "", side: "", hex: "" }), back: r.back || "", back_from: r.back_from } } } : x)));
+    setNoBack((m) => { const n = { ...m }; delete n[`${q.garmentId}|${colorKey(l.color)}`]; return n; });
+  };
+  const uploadBack = async (l: Line, f: File) => {
+    const q = backAsk(l); if (!q) return;
+    const ext = (f.name.match(/\.(jpe?g|png|webp)$/i)?.[1] || "jpg").toLowerCase();
+    const path = `garment-backs/${q.garmentId}/${colorKey(l.color) || "color"}-${Date.now().toString(36)}.${ext}`;
+    setBackBusy("upload");
+    const up = await createClient().storage.from("proofs").upload(path, f, { contentType: f.type || undefined });
+    setBackBusy("");
+    if (up.error) { setBackErr("Couldn't upload that photo."); return; }
+    await pickBack(l, `store:${path}`, "upload");
+  };
 
   // bags and totes: flat, no collar; measured as a bag and printed centered on the body at real size (Oct 9: totes)
   const isBag = (l?: Line) => { if (!l) return false; const g = garmentFor(l); return /\b(tote|bag|backpack|duffel|cinch|sack|pouch)\b/i.test(`${g?.description || ""} ${l.garment || ""} ${g?.style || ""}`); };
@@ -3311,6 +3358,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   )}
                   {/* scale, each side on its own, top right of its photo (Oct 24, Nick: "scale front, scale back") */}
                   {zoomG && <div className="mk-corner tr">{zoomCtl(v)}</div>}
+                  {/* no flat back photo at S&S or SanMar: pick one (Oct 26) */}
+                  {v === "back" && line && backAsk(line) && (() => { const q = backAsk(line)!; return (
+                    <div className="mk-noback" role="group" aria-label="Pick a back photo">
+                      <b>No flat back photo of {garmentFor(line)?.style} {q.name}</b>
+                      <span className="faint">S&amp;S and SanMar don&apos;t have one. Pick what to use for the back:</span>
+                      <div className="mk-noback-pics">
+                        {q.others.map((o) => <button key={o.path} type="button" disabled={!!backBusy} onClick={() => void pickBack(line, o.path, /model/i.test(o.label) ? "model" : /side/i.test(o.label) ? "side" : "picked")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={ssImg(o.path)} alt="" /><span>{o.label}</span></button>)}
+                        <button type="button" disabled={!!backBusy} onClick={() => void pickBack(line, "drawn", "drawn")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={teeSvg(guessHex(line.color), "back", isHeather(line.color))} alt="" /><span>Drawn back</span></button>
+                      </div>
+                      <label className={"btn sm" + (backBusy ? " off" : "")}>{backBusy === "upload" ? "Uploading…" : "Upload a back photo"}<input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={!!backBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void uploadBack(line, f); }} /></label>
+                      {backErr && <span className="err">{backErr}</span>}
+                      <span className="faint">Saved on the garment, so every mockup of this color uses it.</span>
+                    </div>
+                  ); })()}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust }))}

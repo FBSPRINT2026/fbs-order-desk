@@ -57,7 +57,7 @@ const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUppe
 const ORDER = ["NB", "6M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0; };
 
-export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; swatch: string; brand: string; title: string; description: string; status: string };
+export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; /** the flat back and the back on a model, apart (Oct 26) */ backFlat: string; backModel: string; swatch: string; brand: string; title: string; description: string; status: string };
 
 /** Every SKU block SanMar has for a style (product info only, no pricing call). */
 async function sanmarInfoRows(style: string): Promise<string[]> {
@@ -86,7 +86,7 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
       // without it a color fell back to the list price (Oct 20: PC55RS White/ Royal at $5.47 / $9.89 instead of ours)
       piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(pkey(color, raw)) || mine.get(pkey(tag(basic, "catalogColor"), raw)) || 0,
       image: tag(img, "productImage"), // flat product shots first (like S&S), photos on a model only when there's no flat
-      front: tag(img, "frontFlat") || tag(img, "colorProductImage") || tag(img, "frontModel"), back: tag(img, "backFlat") || tag(img, "backModel"), swatch: tag(img, "colorSwatchImage"),
+      front: tag(img, "frontFlat") || tag(img, "colorProductImage") || tag(img, "frontModel"), back: tag(img, "backFlat") || tag(img, "backModel"), backFlat: tag(img, "backFlat"), backModel: tag(img, "backModel"), swatch: tag(img, "colorSwatchImage"),
       brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
     };
   });

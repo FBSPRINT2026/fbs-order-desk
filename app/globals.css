@@ -14145,3 +14145,14 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ink-tw{display:inline-flex;align-items:center;gap:5px}
 .ink-on{font-size:11.5px;color:var(--ink-3)}
 .pr-cc-line .pr-scr-v{white-space:nowrap}
+/* Mockup Creator: no flat back photo at S&S or SanMar, pick one (Oct 26) */
+.mk-noback{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;width:min(92%,380px);display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 30px rgba(20,29,43,.14);font-size:14px;color:var(--ink)}
+.mk-noback > .faint{font-size:12.5px;color:var(--ink-3)}
+.mk-noback-pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.mk-noback-pics button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:12px;color:var(--ink-2);cursor:pointer}
+.mk-noback-pics button:hover{border-color:var(--accent)}
+.mk-noback-pics button:disabled{opacity:.6;cursor:wait}
+.mk-noback-pics img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff}
+.mk-noback .btn{align-self:flex-start;cursor:pointer}
+.mk-noback .btn.off{opacity:.6;pointer-events:none}
+.mk-noback .err{font-size:12.5px;color:var(--danger)}

@@ -356,3 +356,19 @@ export async function ssPlaceOrder(o: {
   const list = (Array.isArray(j) ? j : [j]) as { orderNumber?: string; warehouseAbbr?: string; expectedDeliveryDate?: string; total?: number; orderStatus?: string }[];
   return list.filter(Boolean).map((x) => ({ orderNumber: String(x.orderNumber || ""), warehouseAbbr: x.warehouseAbbr || "", expectedDeliveryDate: x.expectedDeliveryDate || null, total: +(x.total || 0), orderStatus: x.orderStatus || "" }));
 }
+
+/**
+ * A color's other photos at S&S, for a garment with no flat back photo (Oct 26, Nick on the Next Level 6221: "there is
+ * images on people… would you like me to bring in the other mockups that are available"): the shirt on a model (front,
+ * back, side) and its flat side shot. Paths, large versions; empty when S&S has none.
+ */
+export async function ssOtherPhotos(styleID: number, color: string): Promise<{ label: string; path: string }[]> {
+  type P = { colorName: string; colorOnModelFrontImage?: string; colorOnModelBackImage?: string; colorOnModelSideImage?: string; colorSideImage?: string; colorDirectSideImage?: string };
+  const prods = await ssGet<P[]>(`/products/?styleid=${styleID}&fields=colorName,colorOnModelFrontImage,colorOnModelBackImage,colorOnModelSideImage,colorSideImage,colorDirectSideImage`);
+  const key = (s: string) => (s || "").toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, "");
+  const p = (Array.isArray(prods) ? prods : []).find((x) => key(x.colorName) === key(color) && (x.colorOnModelBackImage || x.colorOnModelSideImage || x.colorOnModelFrontImage || x.colorSideImage || x.colorDirectSideImage));
+  if (!p) return [];
+  const big = (s?: string) => (s ? s.replace(/_f[ms]\.jpg$/i, "_fl.jpg") : "");
+  return ([["On a model, back", p.colorOnModelBackImage], ["On a model, side", p.colorOnModelSideImage], ["On a model, front", p.colorOnModelFrontImage], ["Side", p.colorSideImage || p.colorDirectSideImage]] as [string, string | undefined][])
+    .filter(([, s]) => !!s).map(([label, s]) => ({ label, path: big(s) }));
+}
