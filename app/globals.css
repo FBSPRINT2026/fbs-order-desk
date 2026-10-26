@@ -14380,3 +14380,14 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .aa-card.aa-gang{margin-top:0}
 .mk-ko{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
 td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
+/* Create DTF gang sheet from a screen printed order: which art */
+.gang-ask-n{display:block;font-size:14px;color:var(--ink)}
+.gang-ask-s{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+.gang-ask-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.gang-ask-o{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:8px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface);cursor:pointer;font:inherit}
+.gang-ask-o.on{border-color:var(--accent);background:var(--accent-soft)}
+.gang-ask-o:disabled{opacity:.5;cursor:default}
+.gang-ask-o b{font-size:13px;color:var(--ink)}
+.gang-ask-o .faint{font-size:12px;color:var(--ink-3)}
+.gang-ask-pic{width:100%;height:96px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:repeating-conic-gradient(var(--surface-2,#f4f6f9) 0 25%,var(--surface) 0 50%) 0 0/12px 12px;overflow:hidden}
+.gang-ask-pic img{max-width:100%;max-height:100%;object-fit:contain}

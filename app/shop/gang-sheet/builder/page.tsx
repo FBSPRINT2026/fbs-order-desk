@@ -6,6 +6,7 @@ import { useRole } from "@/components/RoleContext";
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 import CustomerPick from "@/components/CustomerPick";
+import BackLink from "@/components/BackLink";
 import { packFill, type PackItem } from "@/lib/gangPack";
 import { lineQty, orderGroups, type Order } from "@/lib/pricing";
 
@@ -56,6 +57,11 @@ type Part = { rects: Rect[]; length: number; buy: { length: number; price: numbe
  */
 type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added" | "width"; algo?: "rows" | "fill" | "grouped"; seq?: string[]; modes?: Record<string, "a" | "b" | "any"> };
 const uid = () => Math.random().toString(36).slice(2, 9);
+/** a print to put on the sheet from an order */
+type Want = { src: string; name: string; size: string; qty: number; where: string };
+type OrderLite = { id: string; number: number; customer_id: string | null };
+/** a screen print asked about: its art as uploaded (orig) or as the Mockup Creator shows it (mock) */
+type AskRow = { key: string; want: Want; orig: string; mock: string; origPic: string; pick: "orig" | "mock"; changed: boolean; label: string; inks: string };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (v: number) => `$${v.toFixed(2)}`;
 const newVer = (wIn = 3, qty = 10, hIn?: number): Ver => ({ id: uid(), wIn, qty, knock: [], label: "", ...(hIn ? { hIn } : {}) });
@@ -477,6 +483,46 @@ export default function GangSheet() {
     else if (sp.get("new")) void openSheet("");
     else if (q || sheetId) void openSheet(q || sheetId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** a new sheet from an order's prints: one logo per art, one size per width, the pieces added up; filed with the job */
+  async function makeFrom(o: OrderLite, want: Want[]) {
+    // one logo per art; one size per width, the pieces added up
+    const byArt = new Map<string, Want[]>();
+    for (const w of want) { const k = w.src; byArt.set(k, [...(byArt.get(k) || []), w]); }
+    const lgs: Logo[] = [], imgs: Record<string, HTMLImageElement> = {};
+    for (const [src, ws] of byArt) {
+      setBusy(`Getting ${ws[0].name}…`);
+      const { data: blob } = await sb.storage.from("proofs").download(src);
+      if (!blob) continue;
+      const ext = (src.match(/\.([a-z0-9]+)$/i)?.[1] || "png").toLowerCase();
+      const c = await readLogo(new File([blob], `${ws[0].name}.${ext}`, { type: blob.type || (ext === "pdf" || ext === "ai" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`) }));
+      const url = c.toDataURL("image/png"), colors = colorsOf(c);
+      // a white box around the art (no background taken off): knock the white out
+      const x = c.getContext("2d", { willReadFrequently: true })!, px = (a: number, b: number) => x.getImageData(a, b, 1, 1).data;
+      const corners = [px(0, 0), px(c.width - 1, 0), px(0, c.height - 1), px(c.width - 1, c.height - 1)];
+      const whiteBox = corners.every((q) => q[3] > 200 && q[0] > 235 && q[1] > 235 && q[2] > 235);
+      const white = whiteBox ? colors.find((h) => parseInt(h.slice(1, 3), 16) > 225 && parseInt(h.slice(3, 5), 16) > 225 && parseInt(h.slice(5, 7), 16) > 225) : undefined;
+      const ratio = c.height / Math.max(1, c.width);
+      const vers: Ver[] = [];
+      for (const w of ws) {
+        const n = parseFloat((w.size.match(/[\d.]+/) || [])[0] || "");
+        const wIn = n > 0 ? r2(/tall|high/i.test(w.size) ? n / Math.max(0.01, ratio) : n) : 3;
+        const same = vers.find((v) => Math.abs(v.wIn - wIn) < 0.01);
+        if (same) { same.qty += w.qty; same.label = [...new Set([...same.label.split("; "), w.where])].filter(Boolean).join("; ").slice(0, 80); }
+        else vers.push({ ...newVer(wIn, w.qty), label: w.where.slice(0, 80), knock: white ? [white] : [] });
+      }
+      const lg: Logo = { id: uid(), name: ws[0].name, src: url, srcW: c.width, srcH: c.height, colors, vers };
+      lgs.push(lg);
+      imgs[lg.id] = await loadImg(url);
+    }
+    if (!lgs.length) throw new Error("The order's art couldn't be read.");
+    if (o.customer_id) { const { data: cu } = await sb.from("customers").select("id, company, name").eq("id", o.customer_id).maybeSingle(); if (cu) setCustFor({ id: cu.id as string, label: String(cu.company || cu.name || "Customer") }); }
+    setSheetName(`Order #${o.number} transfers`);
+    setArts(imgs); setLogos(lgs);
+    setJobs([{ id: uid(), job: String(o.number), logos: lgs.map((l) => l.id), note: "" }]);
+    setDone(`Brought in ${lgs.length} logo${lgs.length === 1 ? "" : "s"} and ${lgs.reduce((a, l) => a + l.vers.reduce((b, v) => b + v.qty, 0), 0)} transfers from order #${o.number}. Check the sizes and the white knocked out, then Optimize sheet.`);
+    window.history.replaceState(null, "", "/shop/gang-sheet/builder");
+  }
+  const [artAsk, setArtAsk] = useState<{ o: OrderLite; rows: (AskRow & { mockUrl: string; origUrl: string })[] } | null>(null);
   /**
    * Create DTF gang sheet, on an order's Ask AI (Oct 26, Nick: "you've made an order, it's going to be heat [press]… we need 10 of these and 12
    * of these shirts, and then you click it, brings in the art for both, drops them in here, knows whether the background
@@ -486,7 +532,7 @@ export default function GangSheet() {
    */
   async function fromOrder(orderId: string) {
     await openSheet("");
-    setBusy("Bringing in the order's heat press prints…"); setErr("");
+    setBusy("Bringing in the order's prints…"); setErr("");
     try {
       const { data: o } = await sb.from("orders").select("id, number, customer_id, groups, lines").eq("id", orderId).maybeSingle();
       if (!o) throw new Error("That order wasn't found.");
@@ -494,60 +540,41 @@ export default function GangSheet() {
       const { data: had } = await sb.from("gang_sheets").select("id").is("archived_at", null).contains("data", { jobs: [{ job: String(o.number) }] }).order("updated_at", { ascending: false }).limit(1);
       if (had?.[0]) { setBusy(""); await openSheet(had[0].id as string); setDone(`Order #${o.number}'s gang sheet. Add to it here, or make another from the Gang sheets page.`); window.history.replaceState(null, "", `/shop/gang-sheet/builder?sheet=${had[0].id}`); return; }
       const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
-      type Want = { src: string; name: string; size: string; qty: number; where: string };
-      const want: Want[] = [];
-      const designIds = [...new Set(groups.flatMap((g) => g.imprints.filter((im) => im.method === "dtf" && im.design_id).map((im) => im.design_id!)))];
+      const want: Want[] = [], asks: AskRow[] = [];
+      const designIds = [...new Set(groups.flatMap((g) => g.imprints.filter((im) => (im.method === "dtf" || im.method === "screen") && im.design_id).map((im) => im.design_id!)))];
       const { data: ds } = designIds.length ? await sb.from("designs").select("id, number, name, file_path, preview_path").in("id", designIds) : { data: [] };
       const dById = new Map((ds || []).map((d) => [d.id as string, d as { id: string; number: number; name: string; file_path: string; preview_path: string }]));
       for (const g of groups) {
         const qty = g.lines.reduce((a, l) => a + lineQty(l), 0);
         if (!qty) continue;
         for (const im of g.imprints) {
-          if (im.method !== "dtf") continue;
+          if (im.method !== "dtf" && im.method !== "screen") continue;
           const d = im.design_id ? dById.get(im.design_id) : undefined;
-          const src = im.shownArt || (d && /\.(png|jpe?g|webp|pdf|ai)$/i.test(d.file_path || "") ? d.file_path : d?.preview_path) || "";
-          if (!src) continue;
+          const orig = (d && /\.(png|jpe?g|webp|pdf|ai)$/i.test(d.file_path || "") ? d.file_path : d?.preview_path) || "";
           const garment = [g.lines[0]?.color, g.lines[0]?.garment || g.lines[0]?.style].filter(Boolean).join(" ");
-          want.push({ src, name: d ? `D-${d.number}${d.name ? ` ${d.name}` : ""}` : im.location, size: im.size || "", qty, where: [im.location, garment].filter(Boolean).join(", ") });
+          const base = { name: d ? `D-${d.number}${d.name ? ` ${d.name}` : ""}` : im.location, size: im.size || "", qty, where: [im.location, garment].filter(Boolean).join(", ") };
+          if (im.method === "dtf") { const src = im.shownArt || orig; if (src) want.push({ ...base, src }); continue; }
+          // a screen print: the art as uploaded, or as the Mockup Creator shows it (its inks, knock-outs)
+          if (!orig && !im.shownArt) continue;
+          const m = im.inkMap?.design === im.design_id ? im.inkMap?.map || {} : {};
+          const near = (a: string, b: string) => { const q = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); const x = q(a), y = q(b); return Math.abs(x[0] - y[0]) + Math.abs(x[1] - y[1]) + Math.abs(x[2] - y[2]) < 40; };
+          const changed = Object.entries(m).some(([k, v]) => v && (v.name === "none" || !near(k, v.hex || k)));
+          asks.push({ key: `${g.id}|${im.id}`, want: { ...base, src: orig || im.shownArt! }, orig: orig || "", mock: im.shownArt || "", origPic: d?.preview_path || orig, pick: im.shownArt && (changed || !orig) ? "mock" : "orig", changed, label: `${im.location}${d ? ` · D-${d.number}${d.name ? ` ${d.name}` : ""}` : ""}`, inks: im.inks || "" });
         }
       }
-      if (!want.length) { setErr(`Order #${o.number} has no heat press prints with art yet. Set a print to Heat press (DTF) in the Mockup Creator, then try again.`); setBusy(""); return; }
-      // one logo per art; one size per width, the pieces added up
-      const byArt = new Map<string, Want[]>();
-      for (const w of want) { const k = w.src; byArt.set(k, [...(byArt.get(k) || []), w]); }
-      const lgs: Logo[] = [], imgs: Record<string, HTMLImageElement> = {};
-      for (const [src, ws] of byArt) {
-        setBusy(`Getting ${ws[0].name}…`);
-        const { data: blob } = await sb.storage.from("proofs").download(src);
-        if (!blob) continue;
-        const ext = (src.match(/\.([a-z0-9]+)$/i)?.[1] || "png").toLowerCase();
-        const c = await readLogo(new File([blob], `${ws[0].name}.${ext}`, { type: blob.type || (ext === "pdf" || ext === "ai" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`) }));
-        const url = c.toDataURL("image/png"), colors = colorsOf(c);
-        // a white box around the art (no background taken off): knock the white out
-        const x = c.getContext("2d", { willReadFrequently: true })!, px = (a: number, b: number) => x.getImageData(a, b, 1, 1).data;
-        const corners = [px(0, 0), px(c.width - 1, 0), px(0, c.height - 1), px(c.width - 1, c.height - 1)];
-        const whiteBox = corners.every((q) => q[3] > 200 && q[0] > 235 && q[1] > 235 && q[2] > 235);
-        const white = whiteBox ? colors.find((h) => parseInt(h.slice(1, 3), 16) > 225 && parseInt(h.slice(3, 5), 16) > 225 && parseInt(h.slice(5, 7), 16) > 225) : undefined;
-        const ratio = c.height / Math.max(1, c.width);
-        const vers: Ver[] = [];
-        for (const w of ws) {
-          const n = parseFloat((w.size.match(/[\d.]+/) || [])[0] || "");
-          const wIn = n > 0 ? r2(/tall|high/i.test(w.size) ? n / Math.max(0.01, ratio) : n) : 3;
-          const same = vers.find((v) => Math.abs(v.wIn - wIn) < 0.01);
-          if (same) { same.qty += w.qty; same.label = [...new Set([...same.label.split("; "), w.where])].filter(Boolean).join("; ").slice(0, 80); }
-          else vers.push({ ...newVer(wIn, w.qty), label: w.where.slice(0, 80), knock: white ? [white] : [] });
-        }
-        const lg: Logo = { id: uid(), name: ws[0].name, src: url, srcW: c.width, srcH: c.height, colors, vers };
-        lgs.push(lg);
-        imgs[lg.id] = await loadImg(url);
-      }
-      if (!lgs.length) throw new Error("The order's art couldn't be read.");
-      if (o.customer_id) { const { data: cu } = await sb.from("customers").select("id, company, name").eq("id", o.customer_id).maybeSingle(); if (cu) setCustFor({ id: cu.id as string, label: String(cu.company || cu.name || "Customer") }); }
-      setSheetName(`Order #${o.number} transfers`);
-      setArts(imgs); setLogos(lgs);
-      setJobs([{ id: uid(), job: String(o.number), logos: lgs.map((l) => l.id), note: "" }]);
-      setDone(`Brought in ${lgs.length} logo${lgs.length === 1 ? "" : "s"} and ${lgs.reduce((a, l) => a + l.vers.reduce((b, v) => b + v.qty, 0), 0)} transfers from order #${o.number}. Check the sizes and the white knocked out, then Optimize sheet.`);
-      window.history.replaceState(null, "", "/shop/gang-sheet/builder");
+      // heat press prints: their art as the Mockup Creator shows it, straight in
+      if (want.length) { await makeFrom(o as OrderLite, want); setBusy(""); return; }
+      // a screen printed order (Oct 26, Nick: "do you want to use the art as originally it was brought in, or… as you
+      // have it on the mock-up now?… if you uploaded like a full color image and we told it the 9 colors"): both
+      // pictures for each print, pick one
+      if (!asks.length) { setErr(`Order #${o.number} has no prints with art to make transfers from.`); setBusy(""); return; }
+      if (!asks.some((a) => a.mock && a.orig)) { await makeFrom(o as OrderLite, asks.map((a) => ({ ...a.want, src: a.orig || a.mock }))); setBusy(""); return; }
+      const pics = [...new Set(asks.flatMap((a) => [a.mock, a.origPic]).filter(Boolean))];
+      const { data: su } = await sb.storage.from("proofs").createSignedUrls(pics, 3600);
+      const url = new Map((su || []).map((x) => [x.path, x.signedUrl]));
+      setArtAsk({ o: o as OrderLite, rows: asks.map((a) => ({ ...a, mockUrl: url.get(a.mock) || "", origUrl: url.get(a.origPic) || "" })) });
+      setBusy(""); return;
+      await makeFrom(o as OrderLite, want);
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't bring in the order."); }
     setBusy("");
   }
@@ -748,10 +775,11 @@ export default function GangSheet() {
 
   return (
     <>
+      {/* back to where you came from (the order, the customer, the Gang sheets page): the usual breadcrumb (Oct 26, Nick) */}
+      <BackLink href="/shop/gang-sheet" label="Gang sheets" />
       <div className="page-head">
         <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: art laid out on a {DTF_DALLAS.name} sheet, priced, and filed with its jobs</div></div>
         <div className="row gang-acts">
-          <a className="btn" href="/shop/gang-sheet">All gang sheets</a>
           <div className="gang-pop">
             <button type="button" className={"btn" + (settingsOpen ? " on" : "")} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Sheet settings</button>
             {settingsOpen && (
@@ -959,6 +987,49 @@ export default function GangSheet() {
           </section>
         </div>
       </div>
+      {artAsk && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Which art goes on the transfers" onClick={() => setArtAsk(null)}>
+          <div className="dla grd" onClick={(e) => e.stopPropagation()}>
+            <div className="panel-h gang-ph">
+              <div className="gang-pt"><h2>Create DTF gang sheet</h2><span className="faint">Order #{artAsk.o.number} is screen printed. Which art goes on the transfers?</span></div>
+              <span className="spacer" />
+              <button type="button" className="btn icon ghost" aria-label="Close" onClick={() => setArtAsk(null)}>×</button>
+            </div>
+            <div className="grd-b">
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn sm" onClick={() => setArtAsk((a) => a && { ...a, rows: a.rows.map((r) => ({ ...r, pick: r.orig ? "orig" : "mock" })) })}>All: art as uploaded</button>
+                <button type="button" className="btn sm" onClick={() => setArtAsk((a) => a && { ...a, rows: a.rows.map((r) => ({ ...r, pick: r.mock ? "mock" : "orig" })) })}>All: as on the mockup</button>
+              </div>
+              {artAsk.rows.map((r) => (
+                <div key={r.key} className="grd-card">
+                  <b className="gang-ask-n" data-notranslate>{r.label}</b>
+                  <span className="faint gang-ask-s">{r.inks ? `Inks: ${r.inks}` : "No inks set"}{!r.changed ? " · both look the same" : ""}</span>
+                  <div className="gang-ask-two">
+                    {(["orig", "mock"] as const).map((k) => {
+                      const has = k === "orig" ? !!r.orig : !!r.mock, u = k === "orig" ? r.origUrl : r.mockUrl;
+                      return (
+                        <button key={k} type="button" className={"gang-ask-o" + (r.pick === k ? " on" : "")} disabled={!has} aria-pressed={r.pick === k} onClick={() => setArtAsk((a) => a && { ...a, rows: a.rows.map((x) => (x.key === r.key ? { ...x, pick: k } : x)) })}>
+                          <span className="gang-ask-pic">{u ? <img src={u} alt="" /> : <span className="faint">{has ? "No picture" : "Not saved from the Mockup Creator"}</span>}</span>
+                          <b>{k === "orig" ? "Art as uploaded" : "As on the mockup"}</b>
+                          <span className="faint">{k === "orig" ? "Full color, every shade" : "The inks picked, knock-outs"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grd-f">
+              <span className="faint" style={{ flex: 1, whiteSpace: "normal" }}>Sizes and counts come from the order either way.</span>
+              <button type="button" className="btn primary" disabled={!!busy} onClick={async () => {
+                const a = artAsk; setArtAsk(null); setBusy("Bringing in the art…");
+                try { await makeFrom(a.o, a.rows.map((r) => ({ ...r.want, src: r.pick === "mock" && r.mock ? r.mock : r.orig || r.mock }))); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't bring in the order."); }
+                setBusy("");
+              }}>Make the sheet</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
