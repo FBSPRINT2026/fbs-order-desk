@@ -12,7 +12,7 @@ import { useEffect, useState, type ReactNode } from "react";
 type Group = { k: string; label: string; icon: ReactNode; subs: [string, string][] };
 const I = (d: string) => <svg viewBox="0 0 24 24" aria-hidden className="ot-ic"><path d={d} /></svg>;
 export const SETTINGS_GROUPS: Group[] = [
-  { k: "shop", label: "Shop", icon: I("M3 10l9-6 9 6v10H3z"), subs: [["/shop/settings/shop", "Shop info"]] },
+  { k: "shop", label: "Shop", icon: I("M3 10l9-6 9 6v10H3z"), subs: [["/shop/settings/shop", "Shop info"], ["/shop/settings/launch-email", "Portal launch email"]] },
   { k: "pricing", label: "Pricing", icon: I("M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"), subs: [["/shop/settings/pricing/retail", "Retail"], ["/shop/settings/pricing/wholesale", "Wholesale"], ["/shop/settings/pricing/addons", "Add-ons"], ["/shop/settings/pricing/payments", "Tax & payments"]] },
   { k: "garments", label: "Garments", icon: I("M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z"), subs: [["/shop/catalog", "Garment catalog"], ["/shop/settings/garments/popular", "Popular garments"]] },
   { k: "production", label: "Production", icon: I("M3 7h18v10H3zM7 7V4h10v3"), subs: [["/shop/settings/production", "Machines & crews"], ["/shop/settings/production/times", "Run times"], ["/shop/settings/production/speed", "Real speed"]] },
