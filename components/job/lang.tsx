@@ -159,6 +159,7 @@ const ES: Record<string, string> = {
   "Screen print": "Serigrafía",
   "Embroidery": "Bordado",
   "DTF transfer": "Transfer DTF",
+  "Heat press (DTF)": "Planchado (DTF)",
   "Left Chest": "Pecho izquierdo",
   "Right Chest": "Pecho derecho",
   "Full Front": "Frente completo",

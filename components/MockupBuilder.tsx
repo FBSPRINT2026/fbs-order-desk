@@ -772,9 +772,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             // black shirt, you should always think I'm removing it… yellow on a yellow shirt"; not on a heathered shirt)
             const shirtOwn = ownOf(k.hex);
             const close = !!near && dist(k.hex, colorHex(near)!) < 90 ** 2;
-            const name = was ? was.name : shirtOwn ? "none" : close ? near : useAsked && spare.length ? spare.shift()! : onShirt || snap(k.hex, k.name);
+            // heat press: full color, every color as it is (only a knock-out changes it)
+            const dtf = im.method === "dtf";
+            const name = was ? was.name : shirtOwn ? "none" : dtf ? "Full color" : close ? near : useAsked && spare.length ? spare.shift()! : onShirt || snap(k.hex, k.name);
             chosen.push(name);
-            for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
+            for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : dtf && name !== "none" ? { name, hex } : { name, hex: colorHex(name) || k.hex };
           }
           // the picks saved on the imprint win (a color set to Removed isn't an ink and isn't counted: Oct 20, the proof
           // read "3 colors · Kelly Green, Light Royal, none")
@@ -3628,7 +3630,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <div key={im.id} className="mk-imp" data-imp={im.id}>
                     <div className="mk-imp-top">
                       <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
-                      <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                      <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x)));
+                        // heat press: the art back to its own colors (knock-outs stay)
+                        if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
                     <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
@@ -3675,8 +3679,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <label className="check emb-look"><input type="checkbox" checked={stitchOn} onChange={(e) => setStitchOn(e.target.checked)} /> Show it stitched on the mockup</label>
                       </>
                     )}
+                    {/* heat press: a full color transfer, only its size matters (Oct 26, Nick: "with heat press… all the options go
+                        away. It's all just a full color image and you're figuring by size") */}
+                    {p.d && im.method === "dtf" && (
+                      <div className="mk-full">
+                        <b>Heat press (DTF)</b> <span className="faint">Full color, as it shows here: no inks or screens, just the size below.</span>
+                        {/* knock a color out (Oct 26, Nick: "you don't need the color identifier… but you should be able to knock out colors") */}
+                        {paints[im.id] && paints[im.id].sources.length > 0 && (
+                          <div className="mk-ko">
+                            <span className="faint">Knock out:</span>
+                            {paints[im.id].sources.map((x) => {
+                              const off = paints[im.id].map[x.hex]?.name === "none";
+                              return <button key={x.hex} type="button" className={"gang-dot" + (off ? " off" : "")} style={{ background: x.hex }} aria-pressed={off} title={off ? `${x.hex} knocked out: click to print it` : `Knock out ${x.hex} (the shirt shows through)`} onClick={() => setInks(im.id, { [x.hex]: off ? { name: "Full color", hex: x.hex } : { name: "none", hex: x.hex } })} />;
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {/* full color art: how it prints (Oct 26) */}
-                    {p.d && !portal && im.method !== "embroidery" && (() => {
+                    {p.d && !portal && im.method !== "embroidery" && im.method !== "dtf" && (() => {
                       if (paints[im.id]?.plan?.method === "sim" || im.fullColor) fullSeen.current.add(im.id);
                       if (!fullSeen.current.has(im.id)) return null;
                       const how = im.method === "dtf" ? "dtf" : im.fullColor ? "full" : paints[im.id]?.plan?.method === "spot" ? "spot" : "";
@@ -3684,7 +3705,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <div className={"mk-full" + (how ? "" : " ask")}>
                           <b>Full color art</b> <span className="faint">a photo or shading, not flat colors. How will it print?</span>
                           <div className="chips">
-                            <button type="button" className={"chip" + (how === "dtf" ? " on" : "")} onClick={() => void printAs(im, "dtf")}>DTF transfer</button>
+                            <button type="button" className={"chip" + (how === "dtf" ? " on" : "")} onClick={() => void printAs(im, "dtf")}>Heat press (DTF)</button>
                             <button type="button" className={"chip" + (how === "full" ? " on" : "")} onClick={() => void printAs(im, "full")}>Screen print, full color</button>
                             <button type="button" className={"chip" + (how === "spot" ? " on" : "")} onClick={() => void printAs(im, "spot")}>Spot colors</button>
                           </div>
@@ -3694,8 +3715,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                       );
                     })()}
-                    {p.d && im.method !== "embroidery" && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
-                    {p.d && im.method !== "embroidery" && paints[im.id] && paints[im.id].sources.length > 0 && (
+                    {p.d && im.method !== "embroidery" && im.method !== "dtf" && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
+                    {p.d && im.method !== "embroidery" && im.method !== "dtf" && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
@@ -3738,7 +3759,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       })()}
                       {/* Color change (Oct 24, Nick: "when you click on… the second garment… another one right there that says color
                           change… confirm you're changing the color on this garment only… select the color"): this garment's ink(s) */}
-                      {designOf(im) && im.method !== "embroidery" && line && (() => {
+                      {designOf(im) && im.method !== "embroidery" && im.method !== "dtf" && line && (() => {
                         const first = lines.find((l) => (l.color || "").trim()) || lines[0];
                         if (!first || colorKey(first.color) === colorKey(line.color) || !(line.color || "").trim()) return null;
                         const ck = colorKey(line.color), cur = im.inkBy?.[ck];

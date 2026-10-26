@@ -105,6 +105,8 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat }: 
             {/* Order goods (Oct 23, Nick: "on the order screen where it says Ask AI, you need to add the order goods tool… it's
                 all detailed out perfectly in the order itself"): the one Order Goods tool, filled from this order's garments */}
             <a href={`/shop/order-goods?order=${orderId}`} title="Buy this order's garments from S&S: styles, colors and sizes filled in from the order and checked with S&S; you place it">Order goods</a>
+            {/* Order DTF transfers (Oct 26, Nick): the one Gang sheet builder, filled from this order's heat press prints */}
+            <a href={`/shop/gang-sheet/builder?order=${orderId}`} title="A gang sheet with this order's heat press prints: their art (background off), sizes and how many, filed with the job; you order it from DTF Dallas">Order DTF transfers</a>
           </div>
         </details>
       ) : <button type="button" className="btn oh-btn" onClick={() => setOpen(true)} title="Tell the AI what to do with this order, or paste a snip of the customer's email">✦ Ask AI</button>}

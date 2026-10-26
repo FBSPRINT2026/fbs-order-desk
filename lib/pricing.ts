@@ -34,7 +34,7 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
 ];
 export const ST: Record<string, (typeof STATUSES)[number]> = Object.fromEntries(STATUSES.map((s) => [s.k, s]));
 
-export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "DTF transfer" };
+export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat press (DTF)" };
 /** House ink: Wilflex Epic Rio RFU standard colors. */
 export const INK_COLORS = ["White", "Lemon Yellow", "Yellow", "Light Gold", "Gold", "Dolphin Orange", "Bright Orange", "Electric Orange", "National Red", "Drake Red", "Dallas Scarlet", "Scarlet", "Electric Red", "Maroon", "Brandywine", "Russell Purple", "Electric Purple", "Russell Gray", "Dark Gray", "Tan", "Aqua", "Contact Blue", "Royal", "Light Royal", "Bears Navy", "Navy", "Electric Blue", "Kelly Green", "Light Green", "Dark Green", "Electric Green", "Electric Yellow", "Electric Pink", "Black Diamond", "Black"];
 /** Embroidery thread colors (standard list for now). */
