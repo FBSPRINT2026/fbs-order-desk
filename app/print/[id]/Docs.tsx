@@ -57,14 +57,9 @@ const Swatch = ({ c }: { c: string }) => <span className="sw" style={{ backgroun
 function ArtPic({ d, des, pic, style, hires }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string }) {
   const b = des?.art_box;
   const alt = des ? `D-${des.number}` : "";
-  if (!b || !b.w || !b.h || !b.of?.w || !b.of?.h || (b.w >= b.of.w * 0.98 && b.h >= b.of.h * 0.98))
-    return <PaintedArt className="pic" src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} hires={hires} hiresName={des?.file_name} />;
-  return (
-    <div className="pic" style={{ ...style, overflow: "hidden" }}>
-      <PaintedArt src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt} hires={hires} hiresName={des?.file_name}
-        style={{ position: "absolute", maxWidth: "none", left: `${(-b.x / b.w) * 100}%`, top: `${(-b.y / b.h) * 100}%`, width: `${(b.of.w / b.w) * 100}%`, height: `${(b.of.h / b.h) * 100}%` }} />
-    </div>
-  );
+  // the painted picture comes back already cut to the art; the file's art box only cuts it until then (Oct 26)
+  const crop = b && b.w && b.h && b.of?.w && b.of?.h && !(b.w >= b.of.w * 0.98 && b.h >= b.of.h * 0.98) ? { x: b.x, y: b.y, w: b.w, h: b.h, of: { w: b.of.w, h: b.of.h } } : null;
+  return <PaintedArt className="pic" src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} hires={hires} hiresName={des?.file_name} crop={crop} />;
 }
 
 /**

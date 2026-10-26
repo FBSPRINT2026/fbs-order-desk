@@ -58,6 +58,16 @@ async function cropAtFullSize(src: string, shown: HTMLImageElement, r: NonNullab
   const hi = shown.dataset.hires ? await hiresArt(shown.dataset.hires, shown.dataset.hiresName || "", shown.dataset.inkmap || "", shown) : null;
   // a raster logo shown repainted in its inks: repainted again from the original at its full size
   let img: HTMLImageElement | null = hi;
+  // a raster logo shown through the print painter (PaintedArt): painted again from its file, bigger (Oct 26)
+  if (!img && shown.dataset.paint && shown.dataset.src) {
+    try {
+      const o = await loadImage(shown.dataset.src);
+      const p = JSON.parse(shown.dataset.paint) as { want: Record<string, string>; paper: boolean };
+      const { paintPrint } = await import("@/lib/inkColors");
+      const { tight } = await import("./PaintedArt");
+      img = await loadImage(tight(paintPrint(o, p.want, { paper: p.paper, maxSide: 5000 })).toDataURL("image/png"), false);
+    } catch { img = null; }
+  }
   if (!img && shown.dataset.orig && shown.dataset.inkmap) {
     try {
       let o = await loadImage(shown.dataset.orig);
