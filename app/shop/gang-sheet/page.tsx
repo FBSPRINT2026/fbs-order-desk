@@ -20,7 +20,7 @@ import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
  * Each logo has its versions: a width, how many, the colors knocked out for that shirt, and what it's for (youth, the
  * blue shirts). A size with no art yet prices a job before the art is in. The pieces are laid out in rows across the
  * 22" sheet with the trim gap between, so the sheet cuts apart in straight lines: rows first, then each piece (a small
- * one can stack under another in its column). "Lay it out tightest" tries each piece turned and not, and ways of ordering
+ * one can stack under another in its column). "Optimize sheet" tries each piece turned and not, and ways of ordering
  * the rows, and keeps the cheapest, then the least film. The PDF has each version once at 300 dpi of its print size
  * (DTF's resolution), placed as many times as it prints, so files stay small; a layout longer than one file allows (250"
  * at DTF Dallas) or bigger than the size limit is split. The cost is DTF Dallas's price for the sheet length you'd buy.
@@ -204,20 +204,23 @@ export default function GangSheet() {
   const usedSqIn = pieces.reduce((a, p) => a + p.wIn * p.hIn * p.qty, 0);
   const filmSqIn = parts.reduce((a, p) => a + p.buy.length * W, 0);
   useEffect(() => { setOptimized(null); }, [pieces.length, W, g]);
-  // each version drawn with its knocked-out colors, for the preview
-  const [verArt, setVerArt] = useState<Record<string, string>>({});
+  // each version drawn with its knocked-out colors, for the preview (Oct 26, Nick: "when you're knocking out the color,
+  // you can't see the update on the visual")
+  const [verImg, setVerImg] = useState<Record<string, { want: string; img: HTMLImageElement }>>({});
   useEffect(() => {
+    let live = true;
     for (const pc of pieces) {
       const img = arts[pc.logo.id]; if (!img) continue;
       const want = `${pc.logo.id}|${pc.ver.knock.join(",")}`;
-      if (verArt[pc.key]?.startsWith(want + "#")) continue;
-      const k = Math.min(1, 900 / Math.max(img.naturalWidth, img.naturalHeight));
+      if (verImg[pc.key]?.want === want) continue;
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
       const url = knocked(img, pc.ver.knock, Math.max(1, Math.round(img.naturalWidth * k)), Math.max(1, Math.round(img.naturalHeight * k))).toDataURL("image/png");
-      setVerArt((m) => ({ ...m, [pc.key]: `${want}#${url}` }));
+      void loadImg(url).then((im) => { if (live) setVerImg((m) => ({ ...m, [pc.key]: { want, img: im } })); });
     }
+    return () => { live = false; };
   }, [pieces, arts]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [verImg, setVerImg] = useState<Record<string, HTMLImageElement>>({});
-  useEffect(() => { for (const [k, v] of Object.entries(verArt)) { const url = v.slice(v.indexOf("#") + 1); if (verImg[k]?.src !== url) void loadImg(url).then((im) => setVerImg((m) => ({ ...m, [k]: im }))); } }, [verArt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // zoom on the preview (Oct 26, Nick: "there's got to be some sort of zoom function")
+  const [zoom, setZoom] = useState(1);
 
   async function add(files: FileList | null) {
     if (!files?.length) return;
@@ -239,7 +242,7 @@ export default function GangSheet() {
   const patchLogo = (id: string, p: Partial<Logo>) => setLogos((xs) => xs.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const patchVer = (lid: string, vid: string, p: Partial<Ver>) => setLogos((xs) => xs.map((x) => (x.id !== lid ? x : { ...x, vers: x.vers.map((v) => (v.id === vid ? { ...v, ...p } : v)) })));
 
-  // "Lay it out tightest": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
+  // "Optimize sheet": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
   function tightest() {
     if (!pieces.length) return;
     const before = lay ? partsOf(lay, L) : [];
@@ -256,12 +259,12 @@ export default function GangSheet() {
   const pv = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = pv.current, p = parts[Math.min(shown, parts.length - 1)]; if (!c || !p) return;
-    const k = Math.min(30, 620 / W);
+    const k = Math.min(Math.min(30, 620 / W) * zoom, 30000 / Math.max(1, p.buy.length));
     c.width = Math.round(W * k); c.height = Math.round(p.buy.length * k);
     const x = c.getContext("2d")!; x.clearRect(0, 0, c.width, c.height);
     x.fillStyle = "rgba(24,95,165,.07)"; x.fillRect(0, p.length * k, c.width, (p.buy.length - p.length) * k);
     for (const r of p.rects) {
-      const pc = pieces[r.piece], im = verImg[pc.key];
+      const pc = pieces[r.piece], im = verImg[pc.key]?.img;
       const bx = (r.x + g / 2) * k, by = (r.y + g / 2) * k;
       x.save();
       // turned the same way as in the PDF (its top to the left)
@@ -271,7 +274,7 @@ export default function GangSheet() {
       x.restore();
       if (g > 0) { x.save(); x.strokeStyle = "rgba(200,40,40,.75)"; x.setLineDash([4, 3]); x.lineWidth = 1; x.strokeRect(r.x * k + 0.5, r.y * k + 0.5, r.w * k - 1, r.h * k - 1); x.restore(); }
     }
-  }, [parts, shown, pieces, verImg, W, g]);
+  }, [parts, shown, pieces, verImg, W, g, zoom]);
 
   async function download() {
     if (!parts.length) return;
@@ -356,6 +359,7 @@ export default function GangSheet() {
                           <div className="gang-knock">
                             <button type="button" className="lc-link" onClick={() => setKnockFor(knockFor === v.id ? null : v.id)}>{v.knock.length ? `Knocked out: ${v.knock.length} color${v.knock.length === 1 ? "" : "s"}` : "Knock out a color"}</button>
                             {v.knock.map((h) => <i key={h} className="gang-sw sm on" style={{ background: h }} title={`${h} knocked out`} />)}
+                            {v.knock.length > 0 && verImg[v.id] && <img className="gang-vthumb" src={verImg[v.id].img.src} alt="With the colors knocked out" />}
                             {knockFor === v.id && (
                               <div className="gang-knock-row">
                                 <span className="faint">Click a color that doesn&apos;t print on this shirt:</span>
@@ -399,7 +403,7 @@ export default function GangSheet() {
         </div>
         <section className="panel">
           <div className="panel-h"><h2>Layout and cost</h2>
-            <button type="button" className="btn sm" disabled={!pieces.length} onClick={tightest} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Lay it out tightest</button>
+            <button type="button" className="btn sm" disabled={!pieces.length} onClick={tightest} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
           </div>
           <div className="panel-b">
             {!pieces.length ? <p className="faint">Upload a logo, or add a size to price a job before the art is in.</p> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : (
@@ -410,7 +414,7 @@ export default function GangSheet() {
                   <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
                   <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
                 </div>
-                {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok">Laid out tightest: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5 }}>Already as tight as it gets.</p>)}
+                {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok">Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5 }}>Optimized: already as tight as it gets.</p>)}
                 <div className="tbl-wrap" style={{ margin: "10px 0" }}><table className="tbl">
                   <thead><tr><th>Piece</th><th className="r">Size</th><th className="r">How many</th><th className="r">Each</th></tr></thead>
                   <tbody>{pieces.map((pc) => <tr key={pc.key}><td data-notranslate>{pc.name}</td><td className="r num">{pc.wIn}&quot; × {pc.hIn}&quot;</td><td className="r num">{pc.qty}</td><td className="r num">{money(each(pc))}</td></tr>)}</tbody>
@@ -419,7 +423,17 @@ export default function GangSheet() {
                   <thead><tr><th>File</th><th>Layout</th><th>Buy</th><th className="r">Price</th></tr></thead>
                   <tbody>{parts.map((p, i) => <tr key={i} onClick={() => setShown(i)} style={{ cursor: "pointer", fontWeight: i === Math.min(shown, parts.length - 1) && parts.length > 1 ? 700 : undefined }}><td>{i + 1}</td><td className="num">{r2(p.length)}&quot; long · {p.rects.length} pcs</td><td className="num">{W}&quot; × {p.buy.length}&quot;</td><td className="r num">{money(p.buy.price)}</td></tr>)}</tbody>
                 </table></div>
-                {cur && <div className="gang-sheet"><canvas ref={pv} /></div>}
+                {cur && (
+                  <>
+                    <div className="gang-zoom" role="group" aria-label="Zoom">
+                      <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>−</button>
+                      <span className="num">{Math.round(zoom * 100)}%</span>
+                      <button type="button" className="btn sm" aria-label="Zoom in" disabled={zoom >= 8} onClick={() => setZoom((z) => Math.min(8, z * 1.5))}>+</button>
+                      {zoom > 1 && <button type="button" className="btn sm ghost" onClick={() => setZoom(1)}>Fit</button>}
+                    </div>
+                    <div className={"gang-sheet" + (zoom > 1 ? " zoomed" : "")}><canvas ref={pv} /></div>
+                  </>
+                )}
                 <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>Rows across the sheet with the trim gap between: cut the rows apart, then each piece. The PDF has each version once at {DPI} dpi of its print size, so files stay small. Prices: {DTF_DALLAS.name}&apos;s gang sheets, {DTF_DALLAS.checked}. Ordering is on their site: download, then upload it there.</p>
               </>
             )}

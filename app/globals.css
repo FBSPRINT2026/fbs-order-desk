@@ -14208,3 +14208,8 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .gang-row3 .field input{height:36px;border-radius:6px;border:1px solid var(--line);font-size:14px;padding:0 10px;width:100%}
 .gang-sum{margin-bottom:10px}
+.gang-zoom{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:13px}
+.gang-zoom .num{min-width:44px;text-align:center}
+.gang-sheet.zoomed{max-height:75vh}
+.gang-sheet.zoomed canvas{max-width:none}
+.gang-vthumb{height:28px;max-width:80px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:repeating-conic-gradient(var(--surface-2) 0 25%,var(--surface) 0 50%) 0 0/8px 8px}
