@@ -192,7 +192,7 @@ export async function shopDates(fromDay: string, toDay: string) {
   try {
     const { admin } = await me();
     const { data } = await admin.from("orders").select("id, number, nickname, due_date, status, customer_id, customers(company, name)")
-      .gte("due_date", fromDay).lte("due_date", toDay).not("status", "in", "(quote,quote_sent,request,completed)").order("due_date").limit(300);
+      .gte("due_date", fromDay).lte("due_date", toDay).eq("draft", false).is("discarded_at", null).not("status", "in", "(quote,quote_sent,request,completed)").order("due_date").limit(300);
     return { ok: true as const, orders: ((data || []) as unknown as { id: string; number: number; nickname: string; due_date: string; status: string; customers: { company: string | null; name: string | null } | null }[]).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, day: o.due_date, status: o.status, customer: o.customers?.company || o.customers?.name || "" })) };
   } catch (e) { return fail(e); }
 }

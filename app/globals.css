@@ -6331,6 +6331,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .md-ev-t{flex:none;width:62px;font-size:12px;font-weight:700;color:var(--ink-2)}
 .md-ev.due .md-ev-t{color:var(--accent)}
 .md-ev a{color:var(--ink);text-decoration:none}.md-ev a:hover{text-decoration:underline}
+/* a long job name wraps instead of pushing the calendar sideways (Oct 26, Nick) */
+.md-ev>a,.md-ev>div{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere}
+.md-cal .md-scroll{overflow-x:hidden}
 .md-ev-n{font-size:12px;margin-top:2px}
 .md-sugg .md-grp-h{color:#B07A00}
 .md-sg{border:1px solid color-mix(in srgb,var(--fbs-orange,#FCB122) 45%,var(--line));background:color-mix(in srgb,var(--fbs-orange,#FCB122) 7%,var(--surface));border-radius:10px;padding:9px 11px;margin-bottom:8px}
