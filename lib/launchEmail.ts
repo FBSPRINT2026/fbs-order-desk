@@ -57,14 +57,10 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>${tile("orders.png", "Track every job", "Every job, from proof to pickup.")}${tile("artwork.png", "Approve your art", "See the proof, approve it in a tap.")}</tr>
       <tr>${tile("reorder.png", "Reorder in a click", "Same art, same specs, saved.")}${tile("payments.png", "Pay online", "Card or bank, any time. Statements too.")}</tr>
-      <tr>${tile("devices.png", "Phone or computer: FBS On the go", "Mobile and full browser versions.")}${tile("messages.png", "Message us", "Talk to us right on the order.")}</tr>
+      <tr>${tile("devices.png", "Phone or computer: FBS On the go", "Mobile and full browser versions.")}${tile("open-portal.png", "Check it out! Open your portal. Questions? Call us at (972) 487-7858 or reply, and we'll walk you through it.", "&nbsp;")}</tr>
     </table>
   </td></tr>
-  <tr><td align="center" style="padding:14px 28px 8px">
-    <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${o.portalUrl}" style="height:52px;v-text-anchor:middle;width:260px;" arcsize="16%" stroke="f" fillcolor="#0e9bd8"><w:anchorlock/><center style="color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:17px;font-weight:bold;">Open your portal</center></v:roundrect><![endif]-->
-    <!--[if !mso]><!--><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="#0e9bd8" style="background:#0e9bd8;border-radius:10px;box-shadow:0 4px 12px rgba(14,155,216,.35)"><a href="${o.portalUrl}" style="display:block;min-width:200px;padding:16px 40px;border:1px solid #0b86bc;border-radius:10px;${F};font-size:17px;line-height:20px;font-weight:bold;color:#ffffff;text-decoration:none;text-align:center">Open your portal</a></td></tr></table><!--<![endif]-->
-  </td></tr>
-  <tr><td align="center" style="padding:10px 30px 28px;${F};font-size:13px;line-height:1.5;color:#5B6678">Questions? Reply to this email or call us at (972) 487-7858, and we'll walk you through it.</td></tr>
+  <tr><td style="padding:0 0 26px;font-size:0;line-height:0">&nbsp;</td></tr>
 </table>
   </td></tr>
   <tr><td style="padding:0;line-height:0;font-size:0"><img src="${img("fade-wide.png")}" width="1200" height="4" alt="" style="display:block;width:100%;height:4px;border:0"></td></tr>
