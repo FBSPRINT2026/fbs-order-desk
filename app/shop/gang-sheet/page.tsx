@@ -588,7 +588,7 @@ export default function GangSheet() {
         <div className="gang-left">
           {/* 1. the saved sheets: a small box, the most recent few, the rest under each person's name */}
           <section className="panel">
-            <div className="panel-h"><h2>Gang sheets</h2><span className="spacer" /><button type="button" className="btn sm" onClick={() => void openSheet("")}>+ New</button></div>
+            <div className="panel-h gang-ph"><div className="gang-pt"><h2>Gang sheets</h2><span className="faint">saved as you go, anyone&apos;s can be opened</span></div><span className="spacer" /><button type="button" className="btn sm" onClick={() => void openSheet("")}>+ New</button></div>
             <div className="panel-b gang-sheets">
               {!sheets.length && <p className="faint" style={{ fontSize: 12.5, margin: 0 }}>Your sheet saves as soon as you add art.</p>}
               {recent.map((x) => (
@@ -617,7 +617,7 @@ export default function GangSheet() {
           </section>
           {/* 2. the art: always here; drop or upload, or a customer's artwork */}
           <section className={"panel gang-art" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
-            <div className="panel-h"><h2>Art</h2><span className="faint">sizes, how many, colors to knock out</span><span className="spacer" />
+            <div className="panel-h gang-ph"><div className="gang-pt"><h2>Art</h2><span className="faint">sizes, how many, colors to knock out</span></div><span className="spacer" />
               <label className="btn sm">Upload<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
             </div>
             <div className="panel-b stack" style={{ gap: 10 }}>
@@ -676,7 +676,7 @@ export default function GangSheet() {
           </section>
           {/* 3. the order it's for */}
           <section className="panel">
-            <div className="panel-h"><h2>Order</h2><span className="faint">who and which job it&apos;s for</span></div>
+            <div className="panel-h gang-ph"><div className="gang-pt"><h2>Order</h2><span className="faint">who and which job it&apos;s for: the sheet goes in its production files</span></div></div>
             <div className="panel-b stack" style={{ gap: 10 }}>
               <div className="field"><label>Customer</label><CustomerPick value={custFor?.id || null} label={custFor?.label} field ariaLabel="The customer this sheet is for" onPick={(cid, label) => setCustFor(cid ? { id: cid, label } : null)} />
                 <span className="faint" style={{ fontSize: 12 }}>{custFor ? `On ${custFor.label}'s page under Artwork (staff only).` : "Saved under the customer's Artwork (staff only)."}</span></div>
