@@ -131,34 +131,47 @@ async function backfillHtml(admin: SupabaseClient, client: ImapFlow, accountId: 
  * (before Oct 7 spreadsheets and documents weren't kept). Files already on file are not saved twice. Done once
  * per email (meta.att_checked); returns the email's attachment list.
  */
+/** a mailbox that just failed isn't tried again for a while (per server instance) */
+const mailboxDown = new Map<string, number>();
 export async function refetchAttachments(admin: SupabaseClient, activityId: string) {
   const { data: a } = await admin.from("activities").select("id, customer_id, external_id, meta").eq("id", activityId).maybeSingle();
   const meta = ((a?.meta || {}) as { account_id?: string; mailbox?: string; attachments?: { name: string; path: string; type: string; size: number }[]; att_checked?: boolean });
   const have = meta.attachments || [];
   if (!a || meta.att_checked || !a.external_id || !meta.account_id) return have;
+  // Oct 26, Nick: "Bring in the sizes only… it's taking forever": Nick's mailbox had been refusing connections, and
+  // every read sat ~50s on the socket timeout before going on with the files already on file. Now it's a few seconds at
+  // most, and a mailbox that just failed is skipped for 10 minutes.
+  if ((mailboxDown.get(meta.account_id) || 0) > Date.now()) return have;
   const acct = await accountById(admin, meta.account_id);
   if (!acct || !acct.enabled) return have;
-  const client = imapClient(cfgOf(acct));
-  let got = have;
+  const client = imapClient(cfgOf(acct), 8000);
+  let got = have, timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = have.length ? 6000 : 15000;
+  // the slow attempt keeps going after the race is lost: its later failure is caught so it can't crash the server
+  const work = (async () => {
+        await client.connect();
+        const folder = meta.mailbox === "sent" ? acct.sent_folder || (await sentFolder(client)) : "INBOX";
+        const lock = await client.getMailboxLock(folder);
+        try {
+          const found = await client.search({ header: { "message-id": String(a.external_id) } }, { uid: true });
+          const uid = Array.isArray(found) ? found[0] : undefined;
+          if (uid) {
+            const msg = await client.fetchOne(String(uid), { source: true, size: true }, { uid: true });
+            if (msg && msg.source && (msg.size || 0) <= MAX_BYTES) {
+              const m = toMsg(await simpleParser(msg.source));
+              const names = new Set(have.map((x) => x.name));
+              const fresh = await saveAttachments(admin, { ...m, attachments: m.attachments.filter((x) => !names.has(x.filename)) }, (a.customer_id as string) || "leads");
+              got = [...have, ...fresh];
+            }
+          }
+        } finally { lock.release(); }
+      })();
+  work.catch(() => null);
   try {
-    await client.connect();
-    const folder = meta.mailbox === "sent" ? acct.sent_folder || (await sentFolder(client)) : "INBOX";
-    const lock = await client.getMailboxLock(folder);
-    try {
-      const found = await client.search({ header: { "message-id": String(a.external_id) } }, { uid: true });
-      const uid = Array.isArray(found) ? found[0] : undefined;
-      if (uid) {
-        const msg = await client.fetchOne(String(uid), { source: true, size: true }, { uid: true });
-        if (msg && msg.source && (msg.size || 0) <= MAX_BYTES) {
-          const m = toMsg(await simpleParser(msg.source));
-          const names = new Set(have.map((x) => x.name));
-          const fresh = await saveAttachments(admin, { ...m, attachments: m.attachments.filter((x) => !names.has(x.filename)) }, (a.customer_id as string) || "leads");
-          got = [...have, ...fresh];
-        }
-      }
-    } finally { lock.release(); }
-  } catch { /* mailbox unreachable: keep what's on file, try again next time */ return have; }
-  finally { await client.logout().catch(() => null); }
+    await Promise.race([work, new Promise<never>((_, no) => { timer = setTimeout(() => no(new Error("mailbox too slow")), limit); })]);
+  } catch { /* mailbox unreachable or slow: keep what's on file, try again later */ mailboxDown.set(meta.account_id, Date.now() + 10 * 60_000); clearTimeout(timer); client.close(); return have; }
+  clearTimeout(timer);
+  await Promise.race([client.logout().catch(() => null), new Promise((ok) => setTimeout(ok, 2000))]); client.close();
   await admin.from("activities").update({ meta: { ...meta, attachments: got, att_checked: true } }).eq("id", a.id);
   return got;
 }
