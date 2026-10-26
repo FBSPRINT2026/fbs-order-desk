@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { cheerWin, setCheerOn } from "@/components/Cheer";
-import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type Task } from "@/app/shop/myday-actions";
+import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, jobDates, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type CalJob, type Task } from "@/app/shop/myday-actions";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * My Day (the dashboard's top, Oct 12): one place for the day. Three columns: replies owed (customers: email and portal
@@ -209,20 +210,32 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
 function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | null) => Day | null) => void; shop: { id: string; number: number; nickname: string; day: string; status: string; customer: string }[] }) {
   const today = d?.today || todayStr();
   const [sel, setSel] = useState(today), [adding, setAdding] = useState(false), [phone, setPhone] = useState(false);
+  // Appointments or Jobs, the same switch as the Calendar page (Oct 26, Nick: "add the toggle for appointments and jobs
+  // to the My Day view"): appointments are yours (and go to your phone), jobs are what's due by day, ours and Printavo's
+  const [mode, setMode] = useSticky<"appts" | "jobs">("calendar.tab", "appts");
+  const [jobs, setJobs] = useState<CalJob[] | null>(null);
+  useEffect(() => { if (mode === "jobs" && !jobs) jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) setJobs(r.jobs); }); }, [mode, jobs, today]);
+  void shop;
+  const jobsOn = (day: string) => (jobs || []).filter((j) => j.day === day);
+  const late = (jobs || []).filter((j) => j.day < today);
   const evs = (d?.events || []);
   const added = evs.filter((e) => e.status === "added");
   const sugg = evs.filter((e) => e.status === "suggested" && (e.day || "") >= today);
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const on = (day: string) => added.filter((e) => e.day === day);
-  const dueOn = (day: string) => shop.filter((o) => o.day === day);
+  const dueOn = (day: string) => (mode === "jobs" ? jobsOn(day) : []);
   const upcoming = added.filter((e) => (e.day || "") > sel && (e.day || "") <= addDays(today, 30)).slice(0, 8);
   const setStatus = async (e: CalEvent, status: "added" | "dismissed") => { setD((x) => (x ? { ...x, events: x.events.map((y) => (y.id === e.id ? { ...y, status } : y)) } : x)); await setEventStatus(e.id, status); };
 
   return (
     <>
-      <div className="md-col-h"><h2>Calendar</h2><span className="spacer" /><button type="button" className="md-link" onClick={() => setAdding(!adding)}>+ Event</button></div>
+      <div className="md-col-h"><h2>Calendar</h2><span className="spacer" />{mode === "appts" && <button type="button" className="md-link" onClick={() => setAdding(!adding)}>+ Event</button>}</div>
+      <div className="md-seg md-calsw" role="tablist" aria-label="Calendars">
+        <button type="button" role="tab" aria-selected={mode === "appts"} className={mode === "appts" ? "on" : ""} onClick={() => setMode("appts")}>Appointments</button>
+        <button type="button" role="tab" aria-selected={mode === "jobs"} className={mode === "jobs" ? "on" : ""} onClick={() => { setMode("jobs"); setAdding(false); }}>Jobs{jobs ? <small>{jobsOn(today).length}</small> : null}</button>
+      </div>
       <div className="md-week" role="group" aria-label="This week">{days.map((day) => {
-        const n = on(day).length, o = dueOn(day).length;
+        const n = mode === "appts" ? on(day).length : 0, o = dueOn(day).length;
         return (
           <button key={day} type="button" className={(sel === day ? "on" : "") + (day === today ? " today" : "")} onClick={() => setSel(day)} aria-label={`${dayName(day, today)}: ${n} events, ${o} orders due`}>
             <span>{new Date(day + "T12:00:00").toLocaleDateString([], { weekday: "narrow" })}</span><b>{Number(day.slice(8))}</b>
@@ -230,15 +243,19 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
           </button>
         );
       })}</div>
-      {adding && <NewEvent day={sel} onDone={(e) => { setAdding(false); if (e) setD((x) => (x ? { ...x, events: [...x.events, e] } : x)); }} />}
+      {adding && mode === "appts" && <NewEvent day={sel} onDone={(e) => { setAdding(false); if (e) setD((x) => (x ? { ...x, events: [...x.events, e] } : x)); }} />}
       <div className="md-scroll">
-        <div className="md-grp"><div className="md-grp-h">{dayName(sel, today)}</div>
-          {!on(sel).length && !dueOn(sel).length ? <div className="md-quiet">Nothing on the calendar.</div> : <ul className="md-evs">
-            {on(sel).map((e) => <EventRow key={e.id} e={e} />)}
-            {dueOn(sel).map((o) => <li key={o.id} className="md-ev due"><span className="md-ev-t">Due</span><Link href={`/shop/orders/${o.id}`}><b>#{o.number} {o.customer}</b>{o.nickname && <span> · {o.nickname}</span>}</Link></li>)}
-          </ul>}
+        {mode === "jobs" && sel === today && late.length > 0 && <div className="md-grp"><div className="md-grp-h">Late<span>{late.length}</span></div><ul className="md-evs">
+          {late.map((o) => <li key={o.id} className="md-ev due"><span className="md-ev-t">{new Date(o.day + "T12:00:00").toLocaleDateString([], { month: "numeric", day: "numeric" })}</span><Link href={o.href}><b>#{o.number} {o.customer}</b>{o.nickname && <span> · {o.nickname}</span>}</Link></li>)}
+        </ul></div>}
+        <div className="md-grp"><div className="md-grp-h">{dayName(sel, today)}{mode === "jobs" && jobs ? <span>{dueOn(sel).length} due</span> : null}</div>
+          {mode === "jobs" && !jobs ? <div className="md-quiet">Loading jobs…</div>
+            : mode === "jobs" ? (!dueOn(sel).length ? <div className="md-quiet">Nothing due.</div> : <ul className="md-evs">
+              {dueOn(sel).map((o) => <li key={o.id} className="md-ev due"><span className="md-ev-t">{o.qty ? `${o.qty.toLocaleString()} pcs` : "Due"}</span><Link href={o.href}><b>#{o.number} {o.customer}</b>{o.nickname && <span> · {o.nickname}</span>}</Link></li>)}
+            </ul>)
+            : !on(sel).length ? <div className="md-quiet">Nothing on the calendar.</div> : <ul className="md-evs">{on(sel).map((e) => <EventRow key={e.id} e={e} />)}</ul>}
         </div>
-        {sugg.length > 0 && <div className="md-grp md-sugg"><div className="md-grp-h">From your email<span>{sugg.length}</span></div>
+        {mode === "appts" && sugg.length > 0 && <div className="md-grp md-sugg"><div className="md-grp-h">From your email<span>{sugg.length}</span></div>
           {sugg.map((e) => (
             <div key={e.id} className="md-sg">
               <div className="md-sg-t"><b>{e.title}</b><span>{dayName(e.day || today, today)}{e.starts_at ? ` · ${timeOf(e.starts_at)}` : ""}{e.place ? ` · ${e.place}` : ""}</span>{e.from && <span className="faint">from {e.from}</span>}</div>
@@ -246,10 +263,10 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
             </div>
           ))}
         </div>}
-        {upcoming.length > 0 && <div className="md-grp"><div className="md-grp-h">Coming up</div><ul className="md-evs">{upcoming.map((e) => <EventRow key={e.id} e={e} showDay today={today} />)}</ul></div>}
+        {mode === "appts" && upcoming.length > 0 && <div className="md-grp"><div className="md-grp-h">Coming up</div><ul className="md-evs">{upcoming.map((e) => <EventRow key={e.id} e={e} showDay today={today} />)}</ul></div>}
       </div>
       <div className="md-cal-foot">
-        <Link href="/shop/my-calendar" className="md-link">Month view</Link>
+        <Link href="/shop/my-calendar" className="md-link">Open the calendar</Link>
         <button type="button" className="md-link" onClick={() => setPhone(true)}>{d?.hasFeed ? "Calendar on your phone" : "Put it on your phone"}</button>
       </div>
       {phone && <PhoneLink onClose={() => setPhone(false)} />}

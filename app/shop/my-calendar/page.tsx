@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { NewEvent, PhoneLink } from "@/components/MyDay";
 import { Pill } from "@/components/bits";
 import { useSticky } from "@/lib/useSticky";
@@ -50,17 +51,18 @@ export default function CalendarPage() {
           {tab === "appts" && <button type="button" className="btn primary" onClick={() => setAdding({ day: today })}>+ Appointment</button>}
         </div>
       </div>
-      <div className="aa-sub" data-toolbar role="tablist" aria-label="Calendars">
+      {(() => { const tabs = (<div className="aa-sub apc-tabs" data-toolbar role="tablist" aria-label="Calendars">
         <button type="button" role="tab" aria-selected={tab === "appts"} className={tab === "appts" ? "on" : ""} onClick={() => setTab("appts")}>
-          <svg className="cal-ic" viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>Appointments{apptsToday ? <span>{apptsToday} today</span> : null}
+          <svg className="apc-ic" viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>Appointments{apptsToday ? <span>{apptsToday} today</span> : null}
         </button>
         <button type="button" role="tab" aria-selected={tab === "jobs"} className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>
-          <svg className="cal-ic" viewBox="0 0 24 24" aria-hidden><path d="M4 7h16v13H4zM9 7V4h6v3M4 12h16" /></svg>Jobs{jobsToday ? <span>{jobsToday} due today</span> : null}
+          <svg className="apc-ic" viewBox="0 0 24 24" aria-hidden><path d="M4 7h16v13H4zM9 7V4h6v3M4 12h16" /></svg>Jobs{jobsToday ? <span>{jobsToday} due today</span> : null}
         </button>
-      </div>
-      {tab === "appts"
-        ? <Appointments today={today} adding={adding} setAdding={setAdding} onToday={setApptsToday} />
-        : <Jobs today={today} onToday={setJobsToday} />}
+      </div>);
+      // the switch sits right on top of the calendar itself (Oct 26, Nick)
+      return tab === "appts"
+        ? <Appointments tabs={tabs} today={today} adding={adding} setAdding={setAdding} onToday={setApptsToday} />
+        : <Jobs tabs={tabs} today={today} onToday={setJobsToday} />; })()}
       <TodayCounts today={today} tab={tab} setAppts={setApptsToday} setJobs={setJobsToday} />
       {phone && <PhoneLink onClose={() => setPhone(false)} />}
     </>
@@ -78,7 +80,7 @@ function TodayCounts({ today, tab, setAppts, setJobs }: { today: string; tab: Ta
 
 /* ───────────────────────── Appointments ───────────────────────── */
 
-function Appointments({ today, adding, setAdding, onToday }: { today: string; adding: { day: string; start?: string; end?: string } | null; setAdding: (a: { day: string; start?: string; end?: string } | null) => void; onToday: (n: number) => void }) {
+function Appointments({ tabs, today, adding, setAdding, onToday }: { tabs: React.ReactNode; today: string; adding: { day: string; start?: string; end?: string } | null; setAdding: (a: { day: string; start?: string; end?: string } | null) => void; onToday: (n: number) => void }) {
   const [view, setView] = useSticky<View>("calendar.view", "work");
   const [anchor, setAnchor] = useState(today);
   const [evs, setEvs] = useState<CalEvent[]>([]), [sel, setSel] = useState<string | null>(null), [err, setErr] = useState("");
@@ -97,7 +99,7 @@ function Appointments({ today, adding, setAdding, onToday }: { today: string; ad
   const step = (n: number) => setAnchor((a) => (view === "day" ? addDays(a, n) : view === "month" ? (() => { const x = new Date(a.slice(0, 8) + "15T12:00:00Z"); x.setUTCMonth(x.getUTCMonth() + n); return x.toISOString().slice(0, 10); })() : addDays(a, 7 * n)));
   const title = view === "month" ? fmt(anchor.slice(0, 8) + "15", { month: "long", year: "numeric" })
     : view === "day" ? fmt(anchor, { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-    : `${fmt(days[0], { month: "short", day: "numeric" })} – ${fmt(days[days.length - 1], days[0].slice(5, 7) === days[days.length - 1].slice(5, 7) ? { day: "numeric", year: "numeric" } : { month: "short", day: "numeric", year: "numeric" })}`;
+    : (() => { const a = days[0], b = days[days.length - 1]; return `${fmt(a, { month: "short", day: "numeric" })} – ${a.slice(5, 7) === b.slice(5, 7) ? Number(b.slice(8)) : fmt(b, { month: "short", day: "numeric" })}, ${b.slice(0, 4)}`; })();
   const picked = evs.find((e) => e.id === sel) || null;
   const sugg = evs.filter((e) => e.status === "suggested");
   const save = async (e: CalEvent, p: Parameters<typeof updateEvent>[1]) => {
@@ -112,33 +114,33 @@ function Appointments({ today, adding, setAdding, onToday }: { today: string; ad
   };
 
   return (
-    <>
+    <div className="apc-wrap">
+      {tabs}
       <div className="toolbar" data-toolbar>
         <div className="chips" role="radiogroup" aria-label="View">
           {([["day", "Day"], ["work", "Work week"], ["week", "Week"], ["month", "Month"]] as [View, string][]).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={view === k} className={"chip" + (view === k ? " on" : "")} onClick={() => setView(k)}>{l}</button>)}
         </div>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn sm" onClick={() => step(-1)} aria-label="Back">‹</button>
-        <b className="cal-title">{title}</b>
+        <b className="apc-title">{title}</b>
         <button type="button" className="btn sm" onClick={() => step(1)} aria-label="Forward">›</button>
         <button type="button" className="btn sm" onClick={() => setAnchor(today)}>Today</button>
       </div>
-      {err && <div className="pv-err" style={{ marginBottom: 8 }}>{err}</div>}
-      <div className="cal-wrap">
-        <section className="panel cal-main">
+        <section className="panel apc-main">
           {view === "month"
             ? <Month days={days} month={anchor.slice(0, 7)} today={today} evs={evs} onDay={(d) => { setAnchor(d); setView("day"); }} onPick={setSel} />
             : <TimeGrid days={days} today={today} evs={evs} onPick={setSel} sel={sel} onAdd={(day, mins) => setAdding({ day, start: hm(mins), end: hm(Math.min(mins + 60, 23 * 60 + 45)) })} onMove={(e, day, s, en) => save(e, { day, starts_at: at(day, s), ends_at: at(day, en), all_day: false })} />}
         </section>
-        <aside className="panel cal-side">
+        <aside className="panel apc-side">
           <div className="panel-b">
+            {err && <div className="pv-err" style={{ marginBottom: 8 }}>{err}</div>}
             {adding ? <>
-              <h2 className="cal-h">New appointment</h2>
+              <h2 className="apc-h">New appointment</h2>
               <NewEvent key={`${adding.day}-${adding.start}`} day={adding.day} start={adding.start} end={adding.end} onDone={(e) => { setAdding(null); if (e) { setEvs((xs) => [...xs, e]); setSel(e.id); } }} />
             </> : picked ? <EventCard e={picked} onClose={() => setSel(null)} onSave={(p) => save(picked, p)} onStatus={(s) => status(picked, s)} />
               : <p className="faint" style={{ margin: 0 }}>Click a time to add an appointment, or click one to see it. Drag to move it; drag its bottom edge to change the length.</p>}
             {sugg.length > 0 && <>
-              <h2 className="cal-h" style={{ marginTop: 16 }}>From your email</h2>
+              <h2 className="apc-h" style={{ marginTop: 16 }}>From your email</h2>
               {sugg.map((e) => (
                 <div key={e.id} className="md-sg">
                   <div className="md-sg-t"><b>{e.title}</b><span>{e.day ? fmt(e.day, { weekday: "short", month: "short", day: "numeric" }) : ""}{e.starts_at ? ` · ${clock(minsOf(e.starts_at))}` : ""}{e.place ? ` · ${e.place}` : ""}</span></div>
@@ -148,8 +150,7 @@ function Appointments({ today, adding, setAdding, onToday }: { today: string; ad
             </>}
           </div>
         </aside>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -160,7 +161,7 @@ function EventCard({ e, onClose, onSave, onStatus }: { e: CalEvent; onClose: () 
   const dirty = t !== e.title || pl !== (e.place || "") || nt !== (e.notes || "");
   return (
     <div className="stack" style={{ gap: 10 }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}><h2 className="cal-h">{e.status === "suggested" ? "Suggested from email" : "Appointment"}</h2><button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}><h2 className="apc-h">{e.status === "suggested" ? "Suggested from email" : "Appointment"}</h2><button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
       <div className="faint" style={{ fontSize: 12.5 }}>{when}{e.from ? ` · from ${e.from}` : ""}</div>
       <div className="field"><label htmlFor="ce-t">What</label><input id="ce-t" value={t} onChange={(x) => setT(x.target.value)} /></div>
       <div className="field"><label htmlFor="ce-p">Where</label><input id="ce-p" value={pl} onChange={(x) => setPl(x.target.value)} placeholder="Optional" /></div>
@@ -181,7 +182,7 @@ function TimeGrid({ days, today, evs, sel, onPick, onAdd, onMove }: { days: stri
   const [now, setNow] = useState(() => minsOf(new Date().toISOString()));
   useEffect(() => { const t = setInterval(() => setNow(minsOf(new Date().toISOString())), 60000); return () => clearInterval(t); }, []);
   // opens at 7am
-  useEffect(() => { if (scroller.current) scroller.current.scrollTop = (7 - FIRST) * HOUR; }, []);
+  useEffect(() => { if (scroller.current) scroller.current.scrollTop = (7 - FIRST) * HOUR - 10; }, []);
   const hours = Array.from({ length: LAST - FIRST + 1 }, (_, i) => FIRST + i);
   const timed = (d: string) => evs.filter((e) => e.day === d && e.starts_at).map((e) => {
     const s = minsOf(e.starts_at!), en = e.ends_at ? Math.max(minsOf(e.ends_at), s + 15) : s + 60;
@@ -222,33 +223,35 @@ function TimeGrid({ days, today, evs, sel, onPick, onAdd, onMove }: { days: stri
   const L = new Map<string, { i: number; n: number }>();
   for (const d of days) for (const [k, v] of lanes(placed.filter((x) => x.day === d))) L.set(k, v);
   return (
-    <div className="cal-tg" style={{ ["--n" as string]: days.length }}>
-      <div className="cal-hd">
+    <div className="apc-tg" style={{ ["--n" as string]: days.length }}>
+      <div className="apc-sc" ref={scroller}>
+      <div className="apc-stick">
+      <div className="apc-hd">
         <div />
-        {days.map((d) => <div key={d} className={"cal-dh" + (d === today ? " today" : "")}><span>{fmt(d, { weekday: "short" })}</span><b>{Number(d.slice(8))}</b></div>)}
+        {days.map((d) => <div key={d} className={"apc-dh" + (d === today ? " today" : "")}><span>{fmt(d, { weekday: "short" })}</span><b>{Number(d.slice(8))}</b></div>)}
       </div>
-      {days.some((d) => allDay(d).length) && <div className="cal-ad">
-        <div className="cal-adl">All day</div>
-        {days.map((d) => <div key={d}>{allDay(d).map((e) => <button key={e.id} type="button" className={"cal-ev ad" + (e.status === "suggested" ? " sg" : "") + (sel === e.id ? " on" : "")} onClick={() => onPick(e.id)}><b>{e.title}</b></button>)}</div>)}
+      {days.some((d) => allDay(d).length) && <div className="apc-ad">
+        <div className="apc-adl">All day</div>
+        {days.map((d) => <div key={d}>{allDay(d).map((e) => <button key={e.id} type="button" className={"apc-ev ad" + (e.status === "suggested" ? " sg" : "") + (sel === e.id ? " on" : "")} onClick={() => onPick(e.id)}><b>{e.title}</b></button>)}</div>)}
       </div>}
-      <div className="cal-sc" ref={scroller}>
-        <div className="cal-body" style={{ height: (LAST - FIRST + 1) * HOUR }}>
-          <div className="cal-hrs">{hours.map((h) => <div key={h} style={{ height: HOUR }}><span>{clock(h * 60).replace("m", "").replace("a", " AM").replace("p", " PM")}</span></div>)}</div>
-          <div className="cal-cols" ref={cols}>
+      </div>
+        <div className="apc-body" style={{ height: (LAST - FIRST + 1) * HOUR }}>
+          <div className="apc-hrs">{hours.map((h) => <div key={h} style={{ height: HOUR }}><span>{clock(h * 60).replace("m", "").replace("a", " AM").replace("p", " PM")}</span></div>)}</div>
+          <div className="apc-cols" ref={cols}>
             {days.map((d) => (
-              <div key={d} className={"cal-col" + (d === today ? " today" : "")} onClick={(ev) => { if (drag || Date.now() - dragEnd.current < 400) return; const r = (ev.currentTarget as HTMLDivElement).getBoundingClientRect(); onAdd(d, yToMins(ev.clientY - r.top)); }} role="presentation">
-                {hours.map((h) => <div key={h} className="cal-slot" style={{ height: HOUR }} />)}
-                {d === today && now >= FIRST * 60 && now <= (LAST + 1) * 60 && <div className="cal-now" style={{ top: ((now - FIRST * 60) / 60) * HOUR }} />}
+              <div key={d} className={"apc-col" + (d === today ? " today" : "")} onClick={(ev) => { if (drag || Date.now() - dragEnd.current < 400) return; const r = (ev.currentTarget as HTMLDivElement).getBoundingClientRect(); onAdd(d, yToMins(ev.clientY - r.top)); }} role="presentation">
+                {hours.map((h) => <div key={h} className="apc-slot" style={{ height: HOUR }} />)}
+                {d === today && now >= FIRST * 60 && now <= (LAST + 1) * 60 && <div className="apc-now" style={{ top: ((now - FIRST * 60) / 60) * HOUR }} />}
                 {placed.filter((x) => x.day === d).map(({ e, s, en }) => {
                   const ln = L.get(e.id) || { i: 0, n: 1 };
                   const top = ((Math.max(s, FIRST * 60) - FIRST * 60) / 60) * HOUR, h = Math.max(20, ((Math.min(en, (LAST + 1) * 60) - Math.max(s, FIRST * 60)) / 60) * HOUR - 2);
                   return (
-                    <div key={e.id} className={"cal-ev" + (e.status === "suggested" ? " sg" : "") + (sel === e.id ? " on" : "") + (drag?.id === e.id ? " drag" : "")}
+                    <div key={e.id} className={"apc-ev" + (e.status === "suggested" ? " sg" : "") + (sel === e.id ? " on" : "") + (drag?.id === e.id ? " drag" : "")}
                       style={{ top, height: h, left: `calc(${(ln.i / ln.n) * 100}% + 2px)`, width: `calc(${100 / ln.n}% - 4px)` }}
                       onPointerDown={(ev) => startDrag(ev, e, s, en, "move")} onClick={(ev) => ev.stopPropagation()} role="button" tabIndex={0} aria-label={`${e.title}, ${clock(s)} to ${clock(en)}`}
                       onKeyDown={(ev) => { if (ev.key === "Enter") onPick(e.id); }}>
                       <b>{e.title}</b><span>{clock(s)} – {clock(en)}{e.place ? ` · ${e.place}` : ""}</span>
-                      {e.status !== "suggested" && <i className="cal-rs" onPointerDown={(ev) => startDrag(ev, e, s, en, "size")} aria-hidden />}
+                      {e.status !== "suggested" && <i className="apc-rs" onPointerDown={(ev) => startDrag(ev, e, s, en, "size")} aria-hidden />}
                     </div>
                   );
                 })}
@@ -263,7 +266,7 @@ function TimeGrid({ days, today, evs, sel, onPick, onAdd, onMove }: { days: stri
 
 function Month({ days, month, today, evs, onDay, onPick }: { days: string[]; month: string; today: string; evs: CalEvent[]; onDay: (d: string) => void; onPick: (id: string) => void }) {
   return (
-    <div className="mc-grid cal-month">
+    <div className="mc-grid apc-month">
       {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((w) => <div key={w} className="mc-wd">{w}</div>)}
       {days.map((d) => {
         const e = evs.filter((x) => x.day === d).sort((a, b) => (a.starts_at || "").localeCompare(b.starts_at || ""));
@@ -281,7 +284,7 @@ function Month({ days, month, today, evs, onDay, onPick }: { days: string[]; mon
 
 /* ───────────────────────── Jobs ───────────────────────── */
 
-function Jobs({ today, onToday }: { today: string; onToday: (n: number) => void }) {
+function Jobs({ tabs, today, onToday }: { tabs: React.ReactNode; today: string; onToday: (n: number) => void }) {
   const [method, setMethod] = useSticky<"all" | "screen" | "embroidery" | "dtf">("calendar.jobs.method", "all");
   const [by, setBy] = useSticky<"due" | "print">("calendar.jobs.by", "due");
   const [wk, setWk] = useState(0);
@@ -303,6 +306,7 @@ function Jobs({ today, onToday }: { today: string; onToday: (n: number) => void 
   const label = wk === 0 ? "This week" : wk === 1 ? "Next week" : wk === -1 ? "Last week" : `Week of ${fmt(days[0], { month: "short", day: "numeric" })}`;
   return (
     <>
+      {tabs}
       <div className="toolbar" data-toolbar>
         <div className="chips" role="radiogroup" aria-label="Kind of job">
           {(["all", "screen", "embroidery", "dtf"] as const).map((m) => <button key={m} type="button" role="radio" aria-checked={method === m} className={"chip" + (method === m ? " on" : "")} onClick={() => setMethod(m)}>{m === "all" ? "All" : METHOD[m]}{jobs ? <span className="chip-n">{count(m)}</span> : null}</button>)}
@@ -313,27 +317,27 @@ function Jobs({ today, onToday }: { today: string; onToday: (n: number) => void 
         </div>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn sm" onClick={() => setWk((w) => w - 1)} aria-label="Week before">‹</button>
-        <b className="cal-title">{label}</b>
+        <b className="apc-title">{label}</b>
         <button type="button" className="btn sm" onClick={() => setWk((w) => w + 1)} aria-label="Week after">›</button>
         {wk !== 0 && <button type="button" className="btn sm" onClick={() => setWk(0)}>This week</button>}
       </div>
       {err && <div className="pv-err" style={{ marginBottom: 8 }}>{err}</div>}
       {by === "print" && <p className="faint" style={{ margin: "0 0 8px", fontSize: 12.5 }}>Print dates are set on orders made here; jobs still run in Printavo show under Due date.</p>}
-      <div className="cal-jobs">
+      <div className="apc-jobs">
         {cols.map((c) => {
           const pcs = c.list.reduce((a, j) => a + (j.qty || 0), 0), more = c.list.length - 8;
           return (
-            <section key={c.key} className={"panel cal-day" + (c.late ? " late" : "") + (c.key === today ? " today" : "")}>
-              <div className="cal-dayh"><b>{c.label}</b><span>{jobs ? `${c.list.length} job${c.list.length === 1 ? "" : "s"}${pcs ? ` · ${pcs.toLocaleString()} pcs` : ""}` : "…"}</span></div>
-              {jobs && !c.list.length ? <div className="faint cal-none">Nothing due</div> : null}
+            <section key={c.key} className={"panel apc-day" + (c.late ? " late" : "") + (c.key === today ? " today" : "")}>
+              <div className="apc-dayh"><b>{c.label}</b><span>{jobs ? `${c.list.length} job${c.list.length === 1 ? "" : "s"}${pcs ? ` · ${pcs.toLocaleString()} pcs` : ""}` : "…"}</span></div>
+              {jobs && !c.list.length ? <div className="faint apc-none">Nothing due</div> : null}
               {(open[c.key] ? c.list : c.list.slice(0, 8)).map((j) => (
-                <Link key={j.id} href={j.href} className="cal-job">
-                  <span className="cal-jt"><span className="ordno">#{j.number}</span><Pill status={j.printavo ? "production" : j.status} pv={j.printavo ? j.statusLabel : null} /></span>
-                  <span className="cal-jc">{j.customer || "Customer"}</span>
+                <Link key={j.id} href={j.href} className="apc-job">
+                  <span className="apc-jt"><span className="ordno">#{j.number}</span><Pill status={j.printavo ? "production" : j.status} pv={j.printavo ? j.statusLabel : null} /></span>
+                  <span className="apc-jc">{j.customer || "Customer"}</span>
                   <span className="sub">{[j.nickname, j.qty ? `${j.qty.toLocaleString()} pcs` : "", c.late ? `due ${fmt(j.day, { weekday: "short", month: "numeric", day: "numeric" })}` : ""].filter(Boolean).join(" · ")}</span>
                 </Link>
               ))}
-              {more > 0 && <button type="button" className="linkbtn cal-more" onClick={() => setOpen((o) => ({ ...o, [c.key]: !o[c.key] }))}>{open[c.key] ? "Show fewer" : `+ ${more} more`}</button>}
+              {more > 0 && <button type="button" className="linkbtn apc-more" onClick={() => setOpen((o) => ({ ...o, [c.key]: !o[c.key] }))}>{open[c.key] ? "Show fewer" : `+ ${more} more`}</button>}
             </section>
           );
         })}
