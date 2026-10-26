@@ -127,11 +127,15 @@ export default function Dashboard() {
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
         const cids = [...new Set([...mr.filter((r) => r.needs).map((r) => r.x.customer_id), ...((m.data || []) as Msg[]).map((x) => x.customer_id)].filter(Boolean))] as string[];
         const cut = new Date(Date.now() - 30 * 864e5).toISOString();
-        const [{ data: ao }, { data: oo }] = cids.length ? await Promise.all([
-          sb.from("archived_orders").select("customer_id").in("customer_id", cids).lt("order_date", cut.slice(0, 10)).limit(2000),
-          sb.from("orders").select("customer_id").in("customer_id", cids).eq("draft", false).lt("created_at", cut).limit(2000),
-        ]) : [{ data: [] }, { data: [] }];
-        setOldCust(new Set([...(ao || []), ...(oo || [])].map((r) => (r as { customer_id: string }).customer_id)));
+        // one tiny look per customer (a single query for all of them hit the row cap on Nine18's 10,000 old orders and
+        // called everyone new)
+        const old = await Promise.all(cids.slice(0, 60).map(async (cid) => {
+          const { data: a1 } = await sb.from("archived_orders").select("id").eq("customer_id", cid).lt("order_date", cut.slice(0, 10)).limit(1);
+          if (a1?.length) return cid;
+          const { data: o1 } = await sb.from("orders").select("id").eq("customer_id", cid).eq("draft", false).lt("created_at", cut).limit(1);
+          return o1?.length ? cid : null;
+        }));
+        setOldCust(new Set(old.filter(Boolean) as string[]));
       })().catch(() => null).finally(() => setMailIn(true));
       getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); setMyBoxEmail(b?.enabled ? b.email : null); }).catch(() => null).finally(() => setBoxIn(true));
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
