@@ -49,7 +49,7 @@ export async function middleware(request: NextRequest) {
   const hasCookie = request.cookies.getAll().some((c) => /^sb-.*-auth-token/.test(c.name));
 
   const path = request.nextUrl.pathname;
-  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || path.startsWith("/print");
+  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || path.startsWith("/print") || path.startsWith("/call");
   if (slow && hasCookie) return response;
   if (!user && needsLogin) {
     const url = request.nextUrl.clone();

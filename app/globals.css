@@ -14584,3 +14584,21 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .an-svg-wrap.an-fill{flex:1;min-height:200px;position:relative}
 .an-svg-wrap.an-fill svg{position:absolute;inset:0;width:100%;height:100%}
 .an-board-chart .an-tbl{font-size:13px}
+
+/* the support call's own window (Oct 26) */
+.ss-page{position:fixed;inset:0}
+.ss-host{max-width:420px;margin:0 auto;padding:22px 20px;display:flex;flex-direction:column;gap:12px;font-size:14px;color:var(--ink)}
+.ss-host-h{display:flex;align-items:center;gap:10px}
+.ss-host-h h1{font-family:var(--display);font-size:20px;margin:0}
+.ss-host p{margin:0}
+.ss-big{height:44px;font-size:15px}
+.ss-status{font-size:15px}
+
+/* Add to customer, from any email (Oct 26) */
+.atc-back{position:fixed;inset:0;z-index:1250;background:rgba(13,19,28,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.atc-box{position:relative;background:var(--surface);border-radius:14px;box-shadow:0 18px 50px rgba(13,19,28,.25);width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px;color:var(--ink)}
+.atc-box h3{margin:0;font-family:var(--display);font-size:18px}
+.atc-new{font-size:12.5px;margin-top:4px;align-self:flex-start}
+.atc-box .field{display:flex;flex-direction:column}
+.atc-g{gap:10px}
+.atc-ok{margin:0;font-size:14px}

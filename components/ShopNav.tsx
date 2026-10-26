@@ -22,6 +22,7 @@ import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
 import ScreenShareDock from "@/components/ScreenShare";
+import { AddToCustomerHost } from "@/components/AddToCustomer";
 import PasswordButton from "@/components/PasswordButton";
 import TimeBubble from "@/components/time/TimeBubble";
 import { useSticky } from "@/lib/useSticky";
@@ -432,6 +433,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           <SupportButton email={email} />
           {/* screen sharing for Support (Oct 26): the share bar, Nick's "Join" cards and the viewer */}
           <ScreenShareDock email={email} name={staffName || ""} owner={realRole === "owner"} />
+          {/* the Add to customer box, opened from any email (Oct 26) */}
+          <AddToCustomerHost />
           {/* set your own password for signing in (Oct 22, Nick) */}
           <PasswordButton />
           {/* sign out: a door with an arrow going out (Oct 16, Nick) */}

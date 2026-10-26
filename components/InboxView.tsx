@@ -1,5 +1,6 @@
 "use client";
 import CcField from "@/components/CcField";
+import { openAddToCustomer } from "@/components/AddToCustomer";
 import Link from "next/link";
 import HistoryLink from "@/components/HistoryLink";
 import MailSuggest from "@/components/MailSuggest";
@@ -1054,7 +1055,7 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
             more: onKeep ? (close) => <PSec label="Actions">
               <PTile icon={TbIcon.order} label="Create order" kind="primary" disabled={!!busy} onClick={() => { close(); onKeep("order"); }} />
               <PTile icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => { close(); onKeep("goods"); }} />
-              <PTile icon={TbIcon.person} label="Match to customer" disabled={!!busy} onClick={() => { close(); onKeep("match"); }} />
+              <PTile icon={TbIcon.person} label="Add to customer" disabled={!!busy} onClick={() => { close(); openAddToCustomer({ email: i.from_email, name: i.from_name }); }} />
             </PSec> : undefined }}
           // the order buttons only on an email that could be one: a customer's, or one the AI sorted as a to-do (Oct 15: not
           // on a marketing email)
@@ -1078,7 +1079,7 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
             {onKeep && <TbRow line={2}><TbGroup label="Actions">
               <TbBtn icon={TbIcon.order} label={busy === "keep" ? "Opening…" : "Create order"} disabled={!!busy} title="Bring this email into the portal and make an order from it" onClick={() => onKeep("order")} />
               <TbBtn icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => onKeep("goods")} />
-              <TbBtn icon={TbIcon.person} label="Match to customer" disabled={!!busy} title="Make them a customer, or add them as a contact at one" onClick={() => onKeep("match")} />
+              <TbBtn icon={TbIcon.person} label="Add to customer" disabled={!!busy} title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer({ email: i.from_email, name: i.from_name })} />
             </TbGroup></TbRow>}
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
@@ -1328,7 +1329,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                   : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); if (ordering) startOrder(); else setPickOpen(true); }} />}
                 <PTile icon={TbIcon.goods} label="Order goods" href={orderGoodsHref(x.id)} onClick={close} />
                 {x.customer_id ? <PTile icon={TbIcon.person} label="Customer" href={`/shop/customers/${x.customer_id}`} onClick={close} />
-                  : <PTile icon={TbIcon.person} label="Match to customer" onClick={() => { close(); setMatchKey((k) => k + 1); }} />}
+                  : <PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer({ email: x.direction === "in" ? x.from_email : (x.to_email || "").split(",")[0].trim(), name: x.direction === "in" ? x.meta?.from_name : "" }); }} />}
                 {x.direction === "in" && !x.customer_id && <PTile icon={TbIcon.ban} label="Not a customer" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }} />}
               </PSec>
               {x.customer_id && <PSec label="Messages">
@@ -1389,7 +1390,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
               {x.customer_id
                 ? <TbBtn icon={TbIcon.person} label="Customer" title="Customer profile: open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
-                : <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}
+                : <TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer({ email: x.direction === "in" ? x.from_email : (x.to_email || "").split(",")[0].trim(), name: x.direction === "in" ? x.meta?.from_name : "" })} />}
               <TbMenu icon={TbIcon.more} label="More">{(close) => <>
                 {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>No reply needed</button>}
                 {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>Needs a reply after all</button>}

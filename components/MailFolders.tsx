@@ -1,5 +1,6 @@
 "use client";
 import { useSticky } from "@/lib/useSticky";
+import { openAddToCustomer } from "@/components/AddToCustomer";
 import { mzCss } from "@/components/MailZoom";
 import CcField from "@/components/CcField";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -850,14 +851,18 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
           phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy, files: m ? msgFiles(m) : undefined,
             ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, cc: d.cc || [], n: (x?.n || 0) + 1 })); setRep("one"); } },
-            more: m ? (close) => <PSec label="Email"><PTile icon={TbIcon.replyAll} label="Reply all" onClick={() => { close(); setRep("all"); }} /></PSec> : undefined }}
+            more: (close) => <>{m && <PSec label="Email"><PTile icon={TbIcon.replyAll} label="Reply all" onClick={() => { close(); setRep("all"); }} /></PSec>}<PSec label="Actions"><PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer(row.sent ? { email: row.to[0] || "", name: row.toNames?.[0] || "" } : { email: row.from, name: row.fromName }); }} /></PSec></> }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
             <TbGroup label="Email">
               <TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setRep("one")} />
               <TbBtn icon={TbIcon.replyAll} label="Reply all" disabled={!m} onClick={() => setRep("all")} />
             </TbGroup>
-            {!row.sent && <TbGroup label="Actions"><TbBtn icon={TbIcon.order} label={ordering ? "Opening…" : "Create order"} disabled={ordering} title="Make an order from this email, the same way as from the Inbox" onClick={() => void orderFrom(row)} /></TbGroup>}
+            <TbGroup label="Actions">
+              {!row.sent && <TbBtn icon={TbIcon.order} label={ordering ? "Opening…" : "Create order"} disabled={ordering} title="Make an order from this email, the same way as from the Inbox" onClick={() => void orderFrom(row)} />}
+              {/* every email, any folder (Oct 26, Nick): put this person on a customer's contacts */}
+              <TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer(row.sent ? { email: row.to[0] || "", name: row.toNames?.[0] || "" } : { email: row.from, name: row.fromName })} />
+            </TbGroup>
             <MoveBar folders={folders} busy={busy} onMove={move} here={row.folder} />
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
@@ -1017,11 +1022,11 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
           tags={orderAct ? <a className="eh-tag order" href={orderHref}>＋ {orderLabel}</a> : undefined}
           phone={{ reply: replyLast, more: (close) => <>
-            {orderAct && <PSec label="Actions"><PTile icon={TbIcon.order} label={orderLabel} kind="primary" href={orderHref} onClick={close} /></PSec>}
+            <PSec label="Actions">{orderAct && <PTile icon={TbIcon.order} label={orderLabel} kind="primary" href={orderHref} onClick={close} />}<PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer(lastIn.sent ? { email: lastIn.to[0] || "", name: lastIn.toNames?.[0] || "" } : { email: lastIn.from, name: lastIn.fromName }); }} /></PSec>
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
-            {!lastIn.sent && <TbGroup label="Actions"><TbBtn icon={TbIcon.order} label={cOrdering ? "Opening…" : orderLabel} disabled={cOrdering} title="Make an order from their latest email here, the same way as from the Inbox" onClick={async () => { if (orderHref) { window.location.href = orderHref; return; } setCOrdering(true); const k = await keepFolderEmail({ folder: lastIn.folder, uid: lastIn.uid, messageId: lastIn.messageId }); if (!k.ok) { setCOrdering(false); alertErr(k.error); return; } window.location.href = `/shop/conversations?open=${k.activityId}&order=1`; }} /></TbGroup>}
+            <TbGroup label="Actions">{!lastIn.sent && <TbBtn icon={TbIcon.order} label={cOrdering ? "Opening…" : orderLabel} disabled={cOrdering} title="Make an order from their latest email here, the same way as from the Inbox" onClick={async () => { if (orderHref) { window.location.href = orderHref; return; } setCOrdering(true); const k = await keepFolderEmail({ folder: lastIn.folder, uid: lastIn.uid, messageId: lastIn.messageId }); if (!k.ok) { setCOrdering(false); alertErr(k.error); return; } window.location.href = `/shop/conversations?open=${k.activityId}&order=1`; }} />}<TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer(lastIn.sent ? { email: lastIn.to[0] || "", name: lastIn.toNames?.[0] || "" } : { email: lastIn.from, name: lastIn.fromName })} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top, newest at the bottom. Click an email to open or fold it.</span>
           </Toolbar>} />
         {cErr && <div className="pv-err eh-err">{cErr}</div>}

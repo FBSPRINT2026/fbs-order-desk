@@ -607,3 +607,50 @@ export async function ccTeam() {
     return { ok: true as const, team: [...out.values()].filter((x) => !/^(no-?reply|notifications?|info|orders?|sales)@/.test(x.email)).sort((a, b) => a.name.localeCompare(b.name)) };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Add to customer (Oct 26, Nick: "for everybody's email… there should be a button… add customer… it's basically add a
+ * contact automatically to a customer. It pulls up the customer. You enter the name or number if you got it"). Works
+ * from any email in any folder (it doesn't have to be in the portal yet): the person goes on the customer's contacts
+ * (or a new customer is made for them), and their email is matched to that customer from now on.
+ */
+export async function addSenderToCustomer(input: { email: string; name?: string; phone?: string; title?: string; customerId?: string | null; newCompany?: string }) {
+  try {
+    const { admin, email: me } = await staff();
+    const e = String(input.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return { ok: false as const, error: "That email address doesn't look right." };
+    const name = String(input.name || "").trim().slice(0, 120), phone = String(input.phone || "").trim().slice(0, 40), title = String(input.title || "").trim().slice(0, 80);
+    let customerId = input.customerId || null, label = "";
+    if (!customerId) {
+      const company = String(input.newCompany || "").trim();
+      if (!company && !name) return { ok: false as const, error: "Pick a customer, or type the new customer's company." };
+      const { data: c, error } = await admin.from("customers").insert({ company: company || name, name, email: e, phone }).select("id, company, name").single();
+      if (error || !c) return { ok: false as const, error: error?.message || "Couldn't make the customer." };
+      customerId = c.id as string; label = String(c.company || c.name || "");
+    } else {
+      const { data: c } = await admin.from("customers").select("id, company, name, email").eq("id", customerId).maybeSingle();
+      if (!c) return { ok: false as const, error: "That customer isn't on file." };
+      label = String(c.company || c.name || "");
+      if (String(c.email || "").toLowerCase() !== e) {
+        const { data: have } = await admin.from("customer_contacts").select("id, name, phone, title").eq("customer_id", customerId).ilike("email", e).is("removed_at", null).limit(1).maybeSingle();
+        if (have) {
+          // already a contact: fill in what we didn't have
+          const patch: Record<string, string> = {};
+          if (name && !have.name) patch.name = name;
+          if (phone && !have.phone) patch.phone = phone;
+          if (title && !have.title) patch.title = title;
+          if (Object.keys(patch).length) await admin.from("customer_contacts").update(patch).eq("id", have.id);
+        } else {
+          const { error } = await admin.from("customer_contacts").insert({ customer_id: customerId, email: e, name, phone: phone || null, title: title || null, portal_access: false });
+          if (error) return { ok: false as const, error: error.message };
+        }
+      }
+    }
+    // their email is this customer's from now on, and what's already in the portal from them moves onto it
+    await admin.from("mail_senders").upsert({ email: e, kind: "customer", customer_id: customerId, decided_by: me || "staff", decided_at: new Date().toISOString() });
+    const { data: acts } = await admin.from("activities").select("id, meta").eq("from_email", e).is("customer_id", null).limit(500);
+    for (const a of (acts || []) as { id: string; meta: Record<string, unknown> | null }[]) await admin.from("activities").update({ customer_id: customerId, meta: { ...(a.meta || {}), lead: false, match: "override" } }).eq("id", a.id);
+    await admin.from("ai_suggestions").update({ customer_id: customerId }).in("activity_id", ((acts || []) as { id: string }[]).map((a) => a.id));
+    return { ok: true as const, customerId: customerId as string, customer: label };
+  } catch (e) { return fail(e); }
+}
