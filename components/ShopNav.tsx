@@ -361,7 +361,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
               {g.title === "Shop Tools" && role === "owner" && (
                 <span className="prod-side" role="radiogroup" aria-label="Admin tools or shop tools" data-notranslate>
                   {([["adm", "ADM", "Admin tools"], ["shop", "SHOP", "Shop tools"]] as const).map(([k, l, t]) => (
-                    <button key={k} type="button" role="radio" aria-checked={toolSide === k} className={(toolSide === k ? "on" : "") + (k === "adm" && toolSide !== "adm" && (qbProblems + pvWaiting + support) > 0 ? " dot" : "")} title={t} onClick={() => setToolSide(k)}>{l}</button>
+                    <button key={k} type="button" role="radio" aria-checked={toolSide === k} className={toolSide === k ? "on" : ""} title={t} onClick={() => setToolSide(k)}>{l}</button>
                   ))}
                 </span>
               )}

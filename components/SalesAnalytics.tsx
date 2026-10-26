@@ -10,7 +10,8 @@ import { useSticky } from "@/lib/useSticky";
  * last 30 days).
  * Sales = invoices by order date (Printavo) and by approval date (orders here); closed quotes, quotes, holders,
  * cancelled and sample jobs never count (the database's sales_lines). Charts: sales by month, year-to-date pace
- * against last year, the last 13 weeks, and sales by account owner this year.
+ * against last year, sales by department by month (Oct 26, Nick: "remove weekly sales… sales by department, whether it's
+ * screen printing, embroidery, a heat press"), and sales by account owner this year.
  */
 
 type M = { month: string; sales: number; orders: number };
@@ -28,7 +29,8 @@ function Delta({ now, then, label }: { now: number; then: number; label: string 
 
 type Day = { day: string; sales: number; orders: number };
 type Rep = { owner: string; sales: number; orders: number };
-type Sales = { rows: M[]; days: Day[]; topYear: Top[]; top30: Top[]; reps: Rep[] };
+type DeptRow = { month: string; dept: string; sales: number };
+type Sales = { rows: M[]; days: Day[]; topYear: Top[]; top30: Top[]; reps: Rep[]; depts: DeptRow[]; fresh: { customers: number; sales: number } };
 const ymd = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 const plusDays = (x: Date, n: number) => { const d = new Date(x); d.setDate(d.getDate() + n); return d; };
 
@@ -44,11 +46,15 @@ function loadSales(y: number) {
     sb.rpc("shop_top_customers", { p_from: `${y}-01-01`, p_to: tomorrow, p_limit: 10 }),
     sb.rpc("shop_top_customers", { p_from: ymd(plusDays(today, -29)), p_to: tomorrow, p_limit: 10 }),
     sb.rpc("shop_sales_by_owner", { p_from: `${y}-01-01`, p_to: tomorrow }),
-  ]).then(([a, d, ty, t30, rp]) => ({
+    sb.rpc("shop_sales_by_department", { p_from: `${y}-01-01`, p_to: tomorrow }),
+    sb.rpc("shop_new_customers", { p_from: `${y}-01-01`, p_to: tomorrow }),
+  ]).then(([a, d, ty, t30, rp, dp, nc]) => ({
     rows: ((a.data || []) as { month: string; sales: number; orders: number }[]).map((r) => ({ month: r.month.slice(0, 7), sales: +r.sales || 0, orders: +r.orders || 0 })),
     days: ((d.data || []) as Day[]).map((r) => ({ day: r.day.slice(0, 10), sales: +r.sales || 0, orders: +r.orders || 0 })),
     topYear: tops(ty), top30: tops(t30),
     reps: ((rp.data || []) as Rep[]).map((r) => ({ owner: r.owner || "Unassigned", sales: +r.sales || 0, orders: +r.orders || 0 })),
+    depts: ((dp.data || []) as DeptRow[]).map((r) => ({ month: String(r.month).slice(0, 7), dept: r.dept, sales: +r.sales || 0 })),
+    fresh: (() => { const r = ((nc.data || []) as { customers: number; sales: number }[])[0]; return { customers: +(r?.customers || 0), sales: +(r?.sales || 0) }; })(),
   }));
   cache = { at: Date.now(), p };
   return p;
@@ -179,6 +185,11 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
     <div className="an-side">
       <div className="an-side-k"><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
       <div className="an-side-k"><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+      {/* average order and new customers (Oct 26, Nick: "any other metrics you want to add") */}
+      <div className="an-side-2">
+        <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>
+        <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
+      </div>
       <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact />
     </div>
   );
@@ -186,7 +197,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
     <div className="an-charts">
       <div className="an-card">{C}</div>
       <div className="an-card"><Pace days={data!.days} y={y} /></div>
-      <div className="an-card"><Weeks days={data!.days} /></div>
+      <div className="an-card"><Depts rows={data!.depts} y={y} /></div>
       <div className="an-card"><Reps reps={data!.reps} y={y} /></div>
     </div>
   );
@@ -247,48 +258,6 @@ function Pace({ days, y }: { days: Day[]; y: number }) {
   );
 }
 
-/** The last 13 weeks (Monday to Sunday), and the last 30 days against the 30 before. */
-function Weeks({ days }: { days: Day[] }) {
-  const [hov, setHov] = useState<number | null>(null);
-  const now = new Date(), mon = plusDays(now, -((now.getDay() + 6) % 7));
-  const weeks = Array.from({ length: 13 }, (_, i) => { const a = plusDays(mon, -7 * (12 - i)), b = plusDays(a, 7), from = ymd(a), to = ymd(b); const ds = days.filter((d) => d.day >= from && d.day < to); return { from, a, sales: ds.reduce((t, d) => t + d.sales, 0), orders: ds.reduce((t, d) => t + d.orders, 0), current: i === 12 }; });
-  const sum = (from: Date, to: Date) => { const f = ymd(from), t = ymd(to); return days.filter((d) => d.day >= f && d.day < t).reduce((s2, d) => s2 + d.sales, 0); };
-  const tomorrow = plusDays(now, 1), last30 = sum(plusDays(tomorrow, -30), tomorrow), prev30 = sum(plusDays(tomorrow, -60), plusDays(tomorrow, -30)), p = pct(last30, prev30);
-  const avg = weeks.slice(0, 12).reduce((t, w) => t + w.sales, 0) / 12;
-  const max = Math.max(1, ...weeks.map((w) => w.sales));
-  const W = 560, H = 220, padL = 46, padB = 24, padT = 10, cw = (W - padL) / 13, bw = Math.min(26, cw - 8);
-  const yv = (n: number) => padT + (H - padT - padB) * (1 - n / max);
-  const wk = (d: Date) => d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
-  return (
-    <div className="an-chart">
-      <div className="an-ch-h"><b>Weekly sales</b><span className="faint">last 13 weeks</span></div>
-      <div className="an-sub">Last 30 days: <b>{money0(last30)}</b>{p !== null ? <> · <span className={p >= 0 ? "up" : "down"}>{p >= 0 ? "▲" : "▼"} {Math.abs(p)}%</span> vs the 30 days before</> : null} · <span className="an-avg-k" /> 12-week average {short(avg)}</div>
-      <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Sales by week for the last 13 weeks">
-          {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W} y1={yv(max * f)} y2={yv(max * f)} className="an-grid-l" /><text x={padL - 8} y={yv(max * f) + 4} className="an-ax" textAnchor="end">{short(max * f)}</text></g>)}
-          {weeks.map((w, i) => {
-            const x = padL + i * cw + (cw - bw) / 2;
-            return (
-              <g key={w.from} onMouseEnter={() => setHov(i)}>
-                <rect x={padL + i * cw} y={padT} width={cw} height={H - padT - padB} className={"an-hit" + (hov === i ? " on" : "")} />
-                {w.sales > 0 && <path className={"an-b1" + (w.current ? " an-part" : "")} d={`M${x},${H - padB} V${yv(w.sales) + 4} q0,-4 4,-4 h${bw - 8} q4,0 4,4 V${H - padB} Z`} />}
-                {i % 2 === 0 && <text x={padL + i * cw + cw / 2} y={H - 7} className={"an-ax" + (w.current ? " now" : "")} textAnchor="middle">{wk(w.a)}</text>}
-              </g>
-            );
-          })}
-          <line x1={padL} x2={W} y1={yv(avg)} y2={yv(avg)} className="an-avg" />
-        </svg>
-        {hov !== null && (
-          <div className="an-tip" style={{ left: `${((padL + hov * cw + cw / 2) / W) * 100}%` }}>
-            <b>Week of {weeks[hov].a.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{weeks[hov].current ? " (so far)" : ""}</b>
-            <div>{money0(weeks[hov].sales)} · {weeks[hov].orders} order{weeks[hov].orders === 1 ? "" : "s"}</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /** Sales by account owner this year (the customer's owner here, else the owner on the Printavo order). */
 function Reps({ reps, y }: { reps: Rep[]; y: number }) {
   const total = reps.reduce((t, r) => t + r.sales, 0), max = Math.max(1, ...reps.map((r) => r.sales));
@@ -304,6 +273,51 @@ function Reps({ reps, y }: { reps: Rep[]; y: number }) {
           </li>
         ))}</ol>
       )}
+    </div>
+  );
+}
+
+/** Sales by department, month by month (stacked) with the year's split (the database's shop_sales_by_department: each
+ * invoice's whole total, fees included, split by its lines' dollar share). */
+const DEPTS = [
+  { k: "Screen printing", c: "dp-sp" }, { k: "Embroidery", c: "dp-emb" }, { k: "Heat press", c: "dp-hp" }, { k: "Other", c: "dp-ot" },
+];
+function Depts({ rows, y }: { rows: DeptRow[]; y: number }) {
+  const [hov, setHov] = useState<number | null>(null);
+  const m = new Date().getMonth();
+  const val = (i: number, k: string) => rows.filter((r) => r.month === `${y}-${String(i + 1).padStart(2, "0")}` && r.dept === k).reduce((t, r) => t + r.sales, 0);
+  const months = MONTHS.slice(0, m + 1).map((_, i) => DEPTS.map((d) => val(i, d.k)));
+  const tot = DEPTS.map((_, j) => months.reduce((t, mm) => t + mm[j], 0)), all = tot.reduce((a, b) => a + b, 0);
+  const max = Math.max(1, ...months.map((mm) => mm.reduce((a, b) => a + b, 0)));
+  const W = 560, H = 180, padL = 46, padB = 22, padT = 8, cw = (W - padL) / 12, bw = Math.min(22, cw - 10);
+  const yv = (n: number) => padT + (H - padT - padB) * (1 - n / max);
+  return (
+    <div className="an-chart">
+      <div className="an-ch-h"><b>Sales by department</b><span className="faint">{y} so far</span></div>
+      <div className="dp-legend">{DEPTS.map((d, j) => (
+        <span key={d.k} className="dp-k"><i className={d.c} />{d.k}<b>{short(tot[j])}</b><span className="faint">{all ? Math.round((tot[j] / all) * 100) : 0}%</span></span>
+      ))}</div>
+      <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales by department by month, ${y}`}>
+          {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W} y1={yv(max * f)} y2={yv(max * f)} className="an-grid-l" /><text x={padL - 8} y={yv(max * f) + 4} className="an-ax" textAnchor="end">{short(max * f)}</text></g>)}
+          {MONTHS.map((mm, i) => {
+            const x = padL + i * cw + (cw - bw) / 2; let base = 0;
+            return (
+              <g key={mm} onMouseEnter={() => setHov(i <= m ? i : null)}>
+                <rect x={padL + i * cw} y={padT} width={cw} height={H - padT - padB} className={"an-hit" + (hov === i ? " on" : "")} />
+                {i <= m && months[i].map((v, j) => { if (v <= 0) return null; const y0 = yv(base), y1 = yv(base + v); base += v; return <rect key={j} x={x} y={y1} width={bw} height={Math.max(0, y0 - y1)} className={DEPTS[j].c} />; })}
+                <text x={padL + i * cw + cw / 2} y={H - 6} className={"an-ax" + (i === m ? " now" : "")} textAnchor="middle">{mm}</text>
+              </g>
+            );
+          })}
+        </svg>
+        {hov !== null && (
+          <div className="an-tip" style={{ left: `${((padL + hov * cw + cw / 2) / W) * 100}%` }}>
+            <b>{MONTHS[hov]} {y}</b>
+            {DEPTS.map((d, j) => months[hov][j] > 0 && <div key={d.k}><i className={"dp-sw " + d.c} /> {d.k}: {money0(months[hov][j])}</div>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

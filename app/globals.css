@@ -14507,3 +14507,32 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .ss-stage video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;background:#0d131c}
 .ss-wait{position:absolute;color:#cfd6df;font-size:15px}
 @media (max-width:640px){ .ss-pill,.ss-invite{left:12px;right:12px;bottom:12px;flex-wrap:wrap} .ss-invite{bottom:76px} }
+
+/* Sales by department (Oct 26): soft department colors, the year's split above the chart */
+.dp-sp{fill:color-mix(in srgb,var(--fbs-blue) 72%,var(--surface));background:color-mix(in srgb,var(--fbs-blue) 72%,var(--surface))}
+.dp-emb{fill:color-mix(in srgb,var(--fbs-salmon) 62%,var(--surface));background:color-mix(in srgb,var(--fbs-salmon) 62%,var(--surface))}
+.dp-hp{fill:color-mix(in srgb,var(--fbs-orange) 66%,var(--surface));background:color-mix(in srgb,var(--fbs-orange) 66%,var(--surface))}
+.dp-ot{fill:var(--line);background:var(--line)}
+.dp-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:2px 0 6px;font-size:12.5px;color:var(--ink-2)}
+.dp-k{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap}
+.dp-k i{width:9px;height:9px;border-radius:2px;display:inline-block;transform:translateY(1px)}
+.dp-k b{color:var(--ink);font-weight:700}
+.dp-k .faint{font-size:11.5px}
+.dp-sw{display:inline-block;width:8px;height:8px;border-radius:2px}
+.an-side-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.an-side-2 .an-side-k b{font-size:18px}
+
+/* My Day, one calm look (Oct 26, Nick: "a lot of information… all look cohesive… one nice calming way to view your
+   day"): every section the same white card with a thin border, a small colored dot by each title instead of thick
+   colored bars, softer chart colors, a quiet Cheer mode */
+.md2 .db-card{border-top:1px solid var(--line);box-shadow:0 1px 2px rgba(20,29,43,.04)}
+.md2 .db-card-h h2::before,.md2 .md-col-h h2::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:2px;background:var(--c,var(--mc,var(--fbs-blue)))}
+.md2 .md-col::before{display:none}
+.md2 .md-col{box-shadow:0 1px 2px rgba(20,29,43,.04)}
+.md2 .an-card{border-color:var(--line-2)}
+.md2 .an-b1,.md2 .an-l1{--soft:color-mix(in srgb,var(--fbs-blue) 72%,var(--surface))}
+.md2 .an-b1{fill:var(--soft)}
+.md2 .an-l1{stroke:var(--soft)}
+.md2 .an-bar span{background:color-mix(in srgb,var(--fbs-blue) 60%,var(--surface))}
+.md2 .fv-card{box-shadow:0 1px 2px rgba(20,29,43,.04)}
+.md-cheer.on{background:var(--surface-2);color:var(--ink);border-color:var(--line)}
