@@ -8,12 +8,16 @@
  * is 680 wide in the middle and shrinks on a phone; the fade bars and steps are pictures because Outlook
  * can't draw a fade. The pictures live in public/email/launch/.
  */
+import { APP_VERSION } from "@/lib/version";
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export const LAUNCH_SUBJECT = "It's here: your new FBS Print customer portal";
 
 export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?: string; replyTo?: string }) {
-  const img = (f: string) => `${o.site.replace(/\/$/, "")}/email/launch/${f}`;
+  // the version on each picture's address: phones and mail services keep pictures by address, so a picture that changed
+  // under the same name (the proof tile) showed the old one on a phone (Oct 26, Nick)
+  const img = (f: string) => `${o.site.replace(/\/$/, "")}/email/launch/${f}?v=${APP_VERSION}`;
   const F = "font-family:Helvetica,Arial,sans-serif";
   const hi = o.firstName ? `Hi ${esc(o.firstName)}, w` : "W";
   const tile = (f: string, alt: string, sub: string) => `<td width="50%" valign="top" style="padding:0 6px 14px">
