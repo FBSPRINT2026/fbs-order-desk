@@ -54,12 +54,26 @@ const Swatch = ({ c }: { c: string }) => <span className="sw" style={{ backgroun
  * The art in its measured box. A logo with empty margins (art_box: where the art really sits in the file) is cropped to
  * them, so the drawn width × height lines meet the art's edges (Oct 20: the back art sat small inside its 11" × 14.67").
  */
-function ArtPic({ d, des, pic, style, hires }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string }) {
+/** the garment colors (other than the first) a print changes ink on, with the swap for each (Imprint.inkBy, Oct 26) */
+const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export type Variant = { color: string; swap: Record<string, string> };
+function variantsOf(d: Imprint, colors: string[]): Variant[] {
+  if (d.visualOnly) return [];
+  return colors.slice(1).map((color) => {
+    const m = Object.entries(d.inkBy || {}).find(([k]) => ckey(k) === ckey(color))?.[1] || {};
+    const swap: Record<string, string> = {};
+    for (const [a, b] of Object.entries(m)) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) swap[a.trim().toLowerCase()] = b.trim();
+    return { color, swap };
+  }).filter((v) => Object.keys(v.swap).length);
+}
+const swapInk = (k: string, sw?: Record<string, string> | null) => (sw && sw[k.trim().toLowerCase()]) || k;
+
+function ArtPic({ d, des, pic, style, hires, swap }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string; swap?: Record<string, string> | null }) {
   const b = des?.art_box;
   const alt = des ? `D-${des.number}` : "";
   // the painted picture comes back already cut to the art; the file's art box only cuts it until then (Oct 26)
   const crop = b && b.w && b.h && b.of?.w && b.of?.h && !(b.w >= b.of.w * 0.98 && b.h >= b.of.h * 0.98) ? { x: b.x, y: b.y, w: b.w, h: b.h, of: { w: b.of.w, h: b.of.h } } : null;
-  return <PaintedArt className="pic" src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} hires={hires} hiresName={des?.file_name} crop={crop} />;
+  return <PaintedArt className="pic" src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} hires={hires} hiresName={des?.file_name} crop={crop} swap={swap} />;
 }
 
 /**
@@ -105,7 +119,10 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     for (let i = 4; i < lines.length; i += 8) more.push(lines.slice(i, i + 8));
     const mk = (p.mockups[gi] || []).slice(0, 8);
     const notesPage = longNotes && !mk.length;
-    return { lines, noteParts, longNotes, more, mk, notesPage, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + g.imprints.length };
+    const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
+    const vars = g.imprints.map((d) => variantsOf(d, colorList));
+    const printPages = g.imprints.length + vars.reduce((a, v) => a + v.length, 0);
+    return { lines, noteParts, longNotes, more, mk, notesPage, vars, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -119,7 +136,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     <>
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, notesPage } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, notesPage, vars } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -131,6 +148,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         const mkHex = (i: number) => (mkColor(i) && colorHex(mkColor(i))) || hex;
         const pg = starts[gi];
         const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
+        // each print's press sheet, then one more for each color change
+        const printPg: number[] = [];
+        g.imprints.reduce((a, _d, di) => { printPg[di] = a; return a + 1 + vars[di].length; }, pgPrint);
         const notesBlock = (
           <>
             {noteParts.join("\n\n")}
@@ -180,8 +200,8 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               <div className="lbl wo-pl">Prints</div>
               {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
               {g.imprints.length > 4
-                ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {pgPrint + di}</i></span>)}</div>
-                : <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={pgPrint + di} />)}</div>}
+                ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
+                : <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} />)}</div>}
               <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {countTable(lines.slice(0, 4))}
               {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
@@ -201,7 +221,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             ))}
             {/* 3. each mockup big, its prints blown up under it */}
             {mk.map((u, i) => {
-              const col = mkColor(i), bg = mkHex(i);
+              const col = mkColor(i), bg = col ? guessHex(col) || mkHex(i) : mkHex(i);
               const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0;
               return (
                 <section className="sheet wo1" key={"mk" + i}>
@@ -211,20 +231,20 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                     <div className={"wo-cubes n" + Math.min(3, g.imprints.length)}>
                       {g.imprints.map((d, di) => {
                         const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "", sz = printSize(d, des);
-                        const ch = col ? Object.entries(d.inkBy || {}).find(([k]) => k.trim().toLowerCase() === col.trim().toLowerCase())?.[1] : null;
-                        const chg = ch ? Object.entries(ch).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `${b} (not ${a})`) : [];
+                        const v = col ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
+                        const chg = v ? Object.entries(v.swap).map(([a, b]) => `${b} (not ${a})`) : [];
                         return (
                           <div className="wo-cube" key={d.id}>
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
-                              {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
+                              {v && <span className="cc">Color change</span>}{pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={pgPrint + di} />)}</div>}
+                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} />)}</div>}
                   {i === 0 && longNotes && <><h2>Notes</h2><div className="notes">{notesBlock}</div></>}
                   <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
                 </section>
@@ -240,7 +260,12 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             )}
             {/* 4. each print's press sheet */}
             {g.imprints.map((d, di) => (
-              <CloseUp key={d.id} d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={pgPrint + di} total={total} footL={footL} />
+              <div key={d.id} style={{ display: "contents" }}>
+                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={vars[di].length ? colorList[0] || colors : colors} qty={vars[di].length ? lines.filter((l) => ckey(l.color) === ckey(colorList[0] || "")).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0} page={printPg[di]} total={total} footL={footL} />
+                {vars[di].map((v, vi) => (
+                  <CloseUp key={v.color} d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={v.color} qty={lines.filter((l) => ckey(l.color) === ckey(v.color)).reduce((a, l) => a + lineQty(l), 0)} page={printPg[di] + 1 + vi} total={total} footL={footL} variant={v} />
+                ))}
+              </div>
             ))}
           </div>
         );
@@ -300,17 +325,17 @@ function LineRows({ l, sizes, hex, single }: { l: Group["lines"][number]; sizes:
   );
 }
 
-function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }: { d: Imprint; di: number; n: number; p: DocData; gi: number; allLight: boolean; colors: string; qty: number; page: number; total: number; footL: string }) {
+function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, variant }: { d: Imprint; di: number; n: number; p: DocData; gi: number; allLight: boolean; colors: string; qty: number; page: number; total: number; footL: string; /** this print's color change on another garment color (Oct 26) */ variant?: Variant }) {
   const { o, groups } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
   const sz0 = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
   // visual only: no guessed size or inks on the press sheet; the press writes what ran
   const sz = d.visualOnly ? { ...sz0, label: "" } : sz0;
-  const hex = p.hexes[gi] || "#9aa1ab";
+  const hex = variant ? guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
-  const inks = d.visualOnly ? [] : inkNames(d.inks);
+  const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
   // embroidery's own facts from the Mockup Creator (Oct 23): backing, topping, the digitized file
   const emb = d.method === "embroidery" ? d.emb || {} : null;
   const fills = d.method === "embroidery" ? ["Machine", "Hoop", ...(emb?.backing ? [] : ["Backing"]), "Trims"] : d.method === "dtf" ? ["Press temp", "Time", "Pressure", "Peel"] : ["Press", "Platen", "Flash / cure", "Off-contact"];
@@ -326,10 +351,10 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
   return (
     <section className="sheet">
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
-      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div></div>
+      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{variant && <div className="cc-tag">COLOR CHANGE · {variant.color.toUpperCase()}</div>}</div>
       <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
-        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
+        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>
@@ -401,7 +426,9 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     const key = (i: number) => { const l = shown0[i]; return l ? `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}` : `#${i}`; };
     const seen = new Set([key(0)]), idx: number[] = [];
     for (let i = 1; i < mk.length; i++) { const k = key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
-    return { mk, extra, idx, prints: g.imprints.length };
+    const pcols = [...new Set(g.lines.filter((l) => lineQty(l) > 0).map((l) => l.color).filter(Boolean))] as string[];
+    const pvars = g.imprints.map((d) => variantsOf(d, pcols));
+    return { mk, extra, idx, prints: g.imprints.length + pvars.reduce((a, v) => a + v.length, 0), pvars };
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
@@ -479,7 +506,12 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 {foot()}
               </section>
             ))}
-            {g.imprints.map((d, di) => <ProofPrint key={d.id} d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} />)}
+            {g.imprints.map((d, di) => (
+              <div key={d.id} style={{ display: "contents" }}>
+                <ProofPrint d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} />
+                {plan[gi].pvars[di].map((v) => <ProofPrint key={v.color} d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} variant={v} />)}
+              </div>
+            ))}
           </div>
         );
       })}
@@ -487,17 +519,17 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   );
 }
 
-function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; n: number; p: DocData; gi: number; gname: string; foot: ReactNode }) {
+function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di: number; n: number; p: DocData; gi: number; gname: string; foot: ReactNode; /** the same print in its changed ink on another garment color */ variant?: Variant }) {
   const { o } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
   const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
-  const hex = p.hexes[gi] || "#9aa1ab";
+  const hex = variant ? guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art as big as the panel takes, with room left for its measurements drawn beside and under it (Oct 23, Nick: "the
   // measurements are spilling out over the red box")
   const PW = 5.9, PH = 5.4;
   const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
-  const inks = d.visualOnly ? [] : inkNames(d.inks);
+  const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
   const specs: [string, string][] = d.visualOnly ? [["Location", d.location || "—"], ["Print", MATCH_PREV]] : [
     ["Location", d.location || "—"], ["Print size", sz.label || "—"], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
@@ -505,10 +537,10 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
   ];
   return (
     <section className="sheet pf">
-      <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
+      <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">{variant ? <><b className="cc-tag">COLOR CHANGE · {variant.color.toUpperCase()}</b> · </> : null}Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
       <div className={"art pf-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
-        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
+        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>

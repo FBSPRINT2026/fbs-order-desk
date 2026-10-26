@@ -317,6 +317,10 @@ export const DOC_CSS = `
 .pdoc .wo-plist{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;margin-top:8px;font-size:10pt}
 .pdoc .wo-plist i{font-style:normal;color:var(--ink3);font-size:8.5pt}
 .pdoc .wo-none{font-size:10pt;color:var(--ink3);margin-top:6px}
+/* a color change (Oct 26): the same print in its changed ink on another garment color */
+.pdoc .cc-tag{display:inline-block;font-size:9.5pt;font-weight:800;letter-spacing:.04em;color:#b3261e;background:#fdecea;border-radius:999px;padding:2px 10px;margin-top:4px}
+.pdoc .wo-cube .a{position:relative}
+.pdoc .wo-cube .a .cc{position:absolute;top:6px;left:6px;font-size:8.5pt;font-weight:800;color:#b3261e;background:#fdecea;border-radius:999px;padding:1px 8px}
 @page{size:letter;margin:.4in .45in}
 @media print{
   html,body{background:#fff!important}

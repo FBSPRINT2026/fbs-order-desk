@@ -458,3 +458,24 @@ export async function clearPageFile(f: File): Promise<File | null> {
     return blob ? new File([blob], f.name.replace(/\.(jpe?g|webp)$/i, ".png"), { type: "image/png" }) : null;
   } catch { return null; }
 }
+
+/**
+ * A color change (Imprint.inkBy for one garment color, Oct 24/26): the paint picks for the art in the changed inks.
+ * With the Mockup Creator's picks (inkMap) each art color keeps its pick unless that ink changes; without them each of
+ * the art's colors goes to the nearest of the print's inks, then to what that ink changes to.
+ */
+export function colorChangeWant(img: HTMLImageElement | null, im: Record<string, { name: string; hex: string }> | null, inks: string[], swap: Record<string, string>): Record<string, string> {
+  const w: Record<string, string> = {};
+  const to = (name: string) => { const t = swap[(name || "").trim().toLowerCase()]; return t ? colorHex(t) : ""; };
+  if (im) { for (const [src, v] of Object.entries(im)) w[src] = v.name === "none" || !v.hex ? "none" : to(v.name) || v.hex; return w; }
+  if (!img) return w;
+  const pal = inks.map((n) => ({ n, hex: colorHex(n) })).filter((x) => x.hex) as { n: string; hex: string }[];
+  const d2 = (a: string, b: string) => { const p = rgb(a), q = rgb(b); return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2; };
+  for (const q of detectColors(img)) {
+    if (q.share < 0.004 || isPaper(q.hex)) continue;
+    const near = pal.length === 1 ? pal[0] : pal.slice().sort((a, b) => d2(a.hex, q.hex) - d2(b.hex, q.hex))[0];
+    const t = near ? to(near.n) : "";
+    if (t) w[q.hex.toUpperCase()] = t;
+  }
+  return w;
+}
