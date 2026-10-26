@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type React from "react";
 import { useSticky } from "@/lib/useSticky";
@@ -49,7 +50,10 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
     setD((x) => (x ? { ...x, tasks: x.tasks.map((y) => (y.id === t.id ? { ...y, status: "open", done_at: null } : y)) } : x));
     await setTaskDone(t.id, false);
   };
-  const go = (t: Tab, mode?: "appts" | "jobs") => { if (mode) setCalMode(mode); setTab(t); };
+  // Email opens the shop's real Email (the menu's Email), not a summary (Oct 26, Nick: "bring up the email screen so it
+  // acts like you've entered the email function… like you selected email from the toolbar")
+  const router = useRouter();
+  const go = (t: Tab, mode?: "appts" | "jobs") => { if (t === "email") { router.push("/shop/inbox"); return; } if (mode) setCalMode(mode); setTab(t); };
 
   return (
     <div className="mdp">
@@ -58,6 +62,7 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
         reply={groups ? [...groups.back, ...groups.fresh, ...groups.web].slice(0, 2) : []} go={go} finish={finish} />}
       {tab === "cal" && <CalTab d={d} setD={setD} today={today} mode={calMode} setMode={setCalMode} jobs={jobs} />}
       {tab === "email" && <EmailTab groups={groups} loading={emailsLoading} />}
+      {/* (a remembered "email" tab from before still shows the list; the tab bar's Email goes to the inbox) */}
       {tab === "todo" && <TodoTab d={d} setD={setD} today={today} finish={finish} reopen={reopen} />}
       {tab === "biz" && <div className="mdp-pad"><h1 className="mdp-h">Business</h1>{business}</div>}
 
@@ -69,7 +74,7 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
           ["todo", "To-do", <path key="a" d="M4 7h16M4 12h16M4 17h10" />, dueTasks.length],
           ["biz", "Business", <path key="a" d="M4 20V10M10 20V4M16 20v-7M22 20H2" />, 0],
         ] as [Tab, string, ReactNode, number][]).map(([k, l, ic, n]) => (
-          <button key={k} type="button" className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}>
+          <button key={k} type="button" className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}>
             <svg viewBox="0 0 24 24" aria-hidden>{ic}</svg>{l}{n > 0 && <em>{n > 99 ? "99+" : n}</em>}
           </button>
         ))}
