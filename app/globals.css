@@ -14561,3 +14561,15 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .an-split-o .faint{font-size:12px}
 .an-more{font-size:12.5px;margin-top:6px;align-self:flex-start}
 @media (max-width:1100px){ .an-board{grid-template-columns:minmax(0,1fr)} }
+
+/* Report an issue → share my screen, first and spelled out (Oct 26, Nick) */
+.sup-live{border:1px solid color-mix(in srgb,var(--fbs-blue) 35%,var(--line));background:color-mix(in srgb,var(--fbs-blue) 6%,var(--surface));border-radius:12px;padding:12px 14px;margin:2px 0 4px}
+.sup-live-h{display:flex;align-items:center;gap:12px}
+.sup-live-h svg{width:28px;height:28px;flex:none;fill:none;stroke:var(--fbs-blue);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sup-live-h>div{flex:1;min-width:0;display:flex;flex-direction:column;font-size:14px;color:var(--ink)}
+.sup-live-h>div span{font-size:12.5px;color:var(--ink-3)}
+.sup-steps{margin:10px 0 0;padding-left:20px;font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:3px}
+.sup-steps b{color:var(--ink)}
+.sup-or{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-3);margin:6px 0 2px}
+.sup-or::before,.sup-or::after{content:"";flex:1;height:1px;background:var(--line-2)}
+@media (max-width:560px){ .sup-live-h{flex-wrap:wrap} .sup-live-h .btn{width:100%} }

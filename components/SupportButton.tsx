@@ -157,6 +157,23 @@ export default function SupportButton({ email, portal = false }: { email: string
             <h3>{portal ? "Need help?" : "Report an issue"}</h3>
             {portal && !done && <p className="faint" style={{ fontSize: 13, margin: "0 0 4px" }}>Having trouble with the portal, or a question about an order? Tell us what&apos;s going on. A screenshot helps us see what you see.</p>}
             {done ? <p className="sep-ok">{portal ? "Sent. We'll take a look and get back to you in Messages. Thanks!" : "Sent. Nick will see it on the Support page. Thanks!"}</p> : <>
+              {/* talk it through live instead (Oct 26, Nick: "make this clearer… next step, once she says report an issue,
+                  share screen, do the thing"): the choice first, with the steps spelled out. Shown when the owner views
+                  as someone too, so he can see what they see. */}
+              {!portal && (realRole !== "owner" || !!viewAs) && <div className="sup-live">
+                <div className="sup-live-h">
+                  <svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
+                  <div><b>Easier to show Nick?</b><span>Share your screen and talk it through together, live.</span></div>
+                  <button type="button" className="btn primary" disabled={!!busy} onClick={() => { setOpen(false); shareMyScreen(text.trim()); }}>Share my screen</button>
+                </div>
+                <ol className="sup-steps">
+                  <li>Click <b>Share my screen</b>.</li>
+                  <li>Your browser asks what to share: pick <b>Entire screen</b> (or just this window), then click <b>Share</b>.</li>
+                  <li>Click <b>Allow</b> for the microphone so you can talk.</li>
+                  <li>Nick gets a <b>Join</b> button. A bar at the bottom of your screen says when he&apos;s watching; <b>Stop sharing</b> ends it.</li>
+                </ol>
+              </div>}
+              {!portal && (realRole !== "owner" || !!viewAs) && <div className="sup-or"><span>or send a report</span></div>}
               {portal && !url && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button type="button" className="btn sm" onClick={() => void snap()}>Take a screenshot</button>
                 <label className="btn sm" style={{ cursor: "pointer" }}>Attach a picture<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>
@@ -172,7 +189,6 @@ export default function SupportButton({ email, portal = false }: { email: string
               {err && <div className="pv-err">{err}</div>}
               <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                 {/* talk it through live instead (Oct 26, Nick): Nick sees this screen and you can both talk */}
-                {!portal && realRole !== "owner" && <button type="button" className="btn" style={{ marginRight: "auto" }} disabled={!!busy} onClick={() => { setOpen(false); shareMyScreen(text.trim()); }} title="Nick gets a Join button and sees your screen live; you can talk with your mics">Share my screen with Nick</button>}
                 <button type="button" className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>
                 <button type="button" className="btn primary" disabled={!!busy || (!text.trim() && !shot)} onClick={send}>{busy || "Send"}</button>
               </div>
