@@ -61,6 +61,8 @@ export type EODraft = {
   specs?: Record<string, { size?: number; sizeWhy?: string; inks?: string; inksWhy?: string; last?: string; lastW?: number; lastH?: number; flag?: { text: string; size: number } }>;
   /** the file and page that pictures each group's print (by group name), shown beside the art at the check */
   shown?: { about: string; path: string; name: string; page: number }[];
+  /** a product sheet (rule 4d): where each group's product photo and logo are on the page, cut out at Create order (Oct 26) */
+  cuts?: { about: string; /** the group's place in the reading */ gi?: number; path: string; name: string; page: number; photo?: number[]; logo?: number[] }[];
   /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */
   artNotes?: string[];
   /** a reorder of a Printavo job: what its notes say about the prints, for production to confirm (lib/ai/oldJobNotes.ts) */

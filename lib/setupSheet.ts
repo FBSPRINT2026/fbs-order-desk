@@ -10,7 +10,7 @@
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
 import { PHOTO_H, PHOTO_W, measureGarment } from "@/lib/mockup";
 
-type PdfPage = { getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> }; getTextContent: () => Promise<{ items: { str?: string }[] }> };
+type PdfPage = { getViewport: (o: { scale: number; offsetX?: number; offsetY?: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> }; getTextContent: () => Promise<{ items: { str?: string; transform?: number[]; width?: number; height?: number }[] }> };
 type PdfDoc = { numPages: number; getPage: (n: number) => Promise<PdfPage> };
 
 async function openPdf(data: ArrayBuffer): Promise<PdfDoc> {
@@ -208,4 +208,125 @@ export async function measureDrop(mockup: File, widthIn: number): Promise<{ drop
     void artBot;
     return { dropIn: Math.round(drop * 4) / 4 };
   } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+
+/**
+ * A distributor's product sheet (Oct 26, Nick on Cedar Promo's Embark sheets: "it has a size breakdown… a visual
+ * mock-up… it gives you the logo. It even says the dimensions… he is expecting us to pull sizing, make a mock-up, and
+ * then use that to create the art also… that is your production file"). One page, several products: a product photo
+ * (their mockup) with the logo drawn beside it over a width line ("3” W") and the specs. The reader says roughly where each
+ * product's photo and logo are (fractions of the page); here they're cut exactly: the logo on a clear background at
+ * about 300 dpi of its print width (the width line, the spec text and the white page left out), the photo as a picture.
+ */
+export type Box = [number, number, number, number];
+export async function cutProduct(data: ArrayBuffer, o: { page?: number; logo?: Box | null; photo?: Box | null; widthIn?: number; name?: string }): Promise<{ art: File | null; mockup: File | null }> {
+  const base = (o.name || "product").replace(/\.[^.]+$/, "");
+  try {
+    const doc = await openPdf(data.slice(0));
+    const page = await doc.getPage(Math.min(Math.max(1, o.page || 1), doc.numPages));
+    const v1 = page.getViewport({ scale: 1 });
+    const ok = (b?: Box | null): b is Box => !!b && b.length === 4 && b.every((n) => Number.isFinite(n)) && b[2] > b[0] && b[3] > b[1];
+    let art: File | null = null, mockup: File | null = null;
+    if (ok(o.logo)) {
+      const [lx0, ly0, lx1, ly1] = o.logo.map((n) => Math.min(1, Math.max(0, n)));
+      const bw = lx1 - lx0, bh = ly1 - ly0;
+      const rx0 = Math.max(0, lx0 - bw * 0.2), ry0 = Math.max(0, ly0 - bh * 0.35), rx1 = Math.min(1, lx1 + bw * 0.2), ry1 = Math.min(1, ly1 + bh * 0.35);
+      // about 300 dpi across the print width, at most ~6000 px across the cut
+      const scale = Math.min(40, Math.max(2, Math.min(((o.widthIn || 3) * 360) / (bw * v1.width), 6000 / ((rx1 - rx0) * v1.width))));
+      const W = Math.round((rx1 - rx0) * v1.width * scale), H = Math.round((ry1 - ry0) * v1.height * scale);
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const x = c.getContext("2d", { willReadFrequently: true })!;
+      const vp = page.getViewport({ scale, offsetX: -rx0 * v1.width * scale, offsetY: -ry0 * v1.height * scale });
+      await page.render({ canvasContext: x, viewport: vp, background: "rgba(0,0,0,0)" }).promise;
+      // the spec text around the logo (its width, "SCREEN PRINT ON LEFT ARM", the sizes) comes out
+      const tc = await page.getTextContent().catch(() => ({ items: [] as { str?: string; transform?: number[]; width?: number; height?: number }[] }));
+      for (const it of tc.items) {
+        const t = it.transform; if (!t || !(it.str || "").trim()) continue;
+        const fh = it.height || Math.abs(t[3]) || 8, fw = it.width || 0;
+        const px0 = t[4] / v1.width, px1 = (t[4] + fw) / v1.width, pyTop = 1 - (t[5] + fh) / v1.height, pyBot = 1 - (t[5] - fh * 0.25) / v1.height;
+        const cx = (px0 + px1) / 2, cy = (pyTop + pyBot) / 2;
+        if (cx > lx0 + bw * 0.1 && cx < lx1 - bw * 0.1 && cy > ly0 + bh * 0.1 && cy < ly1 - bh * 0.1) continue; // text in the logo itself stays
+        x.clearRect((px0 - rx0) * v1.width * scale - 3, (pyTop - ry0) * v1.height * scale - 3, (px1 - px0) * v1.width * scale + 6, (pyBot - pyTop) * v1.height * scale + 6);
+      }
+      const img = x.getImageData(0, 0, W, H), d = img.data;
+      // the white page doesn't print
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) d[i + 3] = 0;
+      // pieces: connected inked pixels
+      const lab = new Int32Array(W * H).fill(-1), comps: { n: number; x0: number; y0: number; x1: number; y1: number; red: number }[] = [], st: number[] = [];
+      for (let p = 0; p < W * H; p++) {
+        if (d[p * 4 + 3] < 40 || lab[p] >= 0) continue;
+        const id = comps.length, cm = { n: 0, x0: W, y0: H, x1: 0, y1: 0, red: 0 };
+        lab[p] = id; st.push(p);
+        while (st.length) {
+          const q = st.pop()!, qx = q % W, qy = (q / W) | 0; cm.n++;
+          if (qx < cm.x0) cm.x0 = qx; if (qx > cm.x1) cm.x1 = qx; if (qy < cm.y0) cm.y0 = qy; if (qy > cm.y1) cm.y1 = qy;
+          if (d[q * 4] > 170 && d[q * 4 + 1] < 90 && d[q * 4 + 2] < 90) cm.red++;
+          for (const r of [qx > 0 ? q - 1 : -1, qx < W - 1 ? q + 1 : -1, qy > 0 ? q - W : -1, qy < H - 1 ? q + W : -1]) if (r >= 0 && lab[r] < 0 && d[r * 4 + 3] >= 40) { lab[r] = id; st.push(r); }
+        }
+        comps.push(cm);
+      }
+      // the width line and its end dots (thin, or small and red) never print
+      const drop = comps.map((cm) => {
+        const cw = cm.x1 - cm.x0 + 1, ch = cm.y1 - cm.y0 + 1;
+        const line = ch <= Math.max(3, W * 0.012) && cw > W * 0.2;
+        const redBit = cm.red > cm.n * 0.6 && (ch < H * 0.08 || cm.n < W * H * 0.004);
+        return line || redBit || cm.n < 6;
+      });
+      // the logo: the biggest piece and the pieces close to it inside the logo's box
+      const keep = new Set<number>();
+      const inBox = (cm: (typeof comps)[number]) => { const cx = ((cm.x0 + cm.x1) / 2) / W * (rx1 - rx0) + rx0, cy = ((cm.y0 + cm.y1) / 2) / H * (ry1 - ry0) + ry0; return cx > lx0 - bw * 0.05 && cx < lx1 + bw * 0.05 && cy > ly0 - bh * 0.1 && cy < ly1 + bh * 0.1; };
+      // the photo next to it reaches into the cut: a piece touching the cut's edge isn't the logo
+      const edge = (cm: (typeof comps)[number]) => cm.x0 <= 1 || cm.y0 <= 1 || cm.x1 >= W - 2 || cm.y1 >= H - 2;
+      const order = comps.map((_, i) => i).filter((i) => !drop[i] && !edge(comps[i])).sort((a, b) => comps[b].n - comps[a].n);
+      const seed = order.find((i) => inBox(comps[i]));
+      if (seed != null) {
+        keep.add(seed);
+        let u = { ...comps[seed] };
+        for (let more = true; more;) {
+          more = false;
+          // letters of a word sit close: near the logo, measured against the logo's whole box
+          const gap = Math.max(0.08 * Math.max(u.x1 - u.x0, u.y1 - u.y0, 20), 0.07 * (bw / (rx1 - rx0)) * W);
+          for (const i of order) {
+            if (keep.has(i)) continue;
+            const cm = comps[i];
+            if (cm.x0 > u.x1 + gap || cm.x1 < u.x0 - gap || cm.y0 > u.y1 + gap || cm.y1 < u.y0 - gap || !inBox(cm)) continue;
+            keep.add(i); u = { ...u, x0: Math.min(u.x0, cm.x0), y0: Math.min(u.y0, cm.y0), x1: Math.max(u.x1, cm.x1), y1: Math.max(u.y1, cm.y1) }; more = true;
+          }
+        }
+        // everything else goes, the soft edges of what went too (pixels too faint to be a piece)
+        for (let p = 0; p < W * H; p++) {
+          const px = p % W, py = (p / W) | 0;
+          if ((lab[p] >= 0 && !keep.has(lab[p])) || px < u.x0 - 2 || px > u.x1 + 2 || py < u.y0 - 2 || py > u.y1 + 2) d[p * 4 + 3] = 0;
+        }
+        x.putImageData(img, 0, 0);
+        art = await toFile(trim(c, 2), `${base} logo.png`);
+      }
+    }
+    if (ok(o.photo)) {
+      const [px0, py0, px1, py1] = o.photo.map((n) => Math.min(1, Math.max(0, n)));
+      const ex = (px1 - px0) * 0.06, ey = (py1 - py0) * 0.06;
+      const rx0 = Math.max(0, px0 - ex), ry0 = Math.max(0, py0 - ey), rx1 = Math.min(1, px1 + ex), ry1 = Math.min(1, py1 + ey);
+      const scale = Math.min(12, 1800 / ((ry1 - ry0) * v1.height));
+      const W = Math.round((rx1 - rx0) * v1.width * scale), H = Math.round((ry1 - ry0) * v1.height * scale);
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const x = c.getContext("2d", { willReadFrequently: true })!;
+      x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+      await page.render({ canvasContext: x, viewport: page.getViewport({ scale, offsetX: -rx0 * v1.width * scale, offsetY: -ry0 * v1.height * scale }) }).promise;
+      // snap to the photo: the rows and columns it fills
+      const d = x.getImageData(0, 0, W, H).data, ink = (i: number) => Math.min(d[i], d[i + 1], d[i + 2]) < 238;
+      const rows: number[] = [], cols = new Array(W).fill(0);
+      for (let y = 0; y < H; y++) { let n = 0; for (let xx = 0; xx < W; xx++) if (ink((y * W + xx) * 4)) { n++; cols[xx]++; } rows.push(n); }
+      // the longest run of rows (then columns) the photo fills: a title above or below it is only partly filled
+      const run = (a: number[], min: number): [number, number] => { let best: [number, number] = [-1, -2], s0 = -1; for (let i = 0; i <= a.length; i++) { if (i < a.length && a[i] > min) { if (s0 < 0) s0 = i; } else if (s0 >= 0) { if (i - 1 - s0 > best[1] - best[0]) best = [s0, i - 1]; s0 = -1; } } return best; };
+      let [y0, y1] = run(rows, W * 0.8);
+      const cols2 = new Array(W).fill(0);
+      if (y1 > y0) for (let y = y0; y <= y1; y++) for (let xx = 0; xx < W; xx++) if (ink((y * W + xx) * 4)) cols2[xx]++;
+      let [x0, x1] = run(cols2, (y1 - y0 + 1) * 0.8);
+      if (y0 < 0 || x0 < 0 || y1 <= y0 || x1 <= x0 || (x1 - x0) * (y1 - y0) < W * H * 0.3) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; }
+      const o2 = document.createElement("canvas"); o2.width = x1 - x0 + 1; o2.height = y1 - y0 + 1;
+      o2.getContext("2d")!.drawImage(c, x0, y0, o2.width, o2.height, 0, 0, o2.width, o2.height);
+      mockup = await toFile(o2, `${base} mockup.png`);
+    }
+    return { art, mockup };
+  } catch { return { art: null, mockup: null }; }
 }

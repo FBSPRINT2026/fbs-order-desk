@@ -16,7 +16,7 @@ import { cleanPrintNotes, LOCATIONS, inkNames } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { newImprint, uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
-import { looksLikeSheet, measureDrop, splitSheet } from "@/lib/setupSheet";
+import { cutProduct, looksLikeSheet, measureDrop, splitSheet, type Box } from "@/lib/setupSheet";
 import { mockupNamed, pagePicture, pdfLike, pieceFor, pullOffMockup, type Pulled } from "@/lib/mockupPull";
 import type { ArtPiece } from "@/lib/printavoArt";
 import { handOffArt } from "@/app/shop/ai-actions";
@@ -436,6 +436,51 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // A customer's mockup sheet (the art big with a spec box, then the shirt): confirm, then the art is cut off its art
     // page with the background panel taken out, the shirt page is their mockup (stamped, in Production files like any
     // customer mockup) and the PDF itself goes in Production files as the customer mockup
+    // A distributor's product sheet (Cedar Promo's Embark sheets, rule 4d; Oct 26, Nick: "he is expecting us to pull
+    // sizing, make a mock-up, and then use that to create the art also… that is your production file"): each product's
+    // logo cut off the page as its print's art, its photo as the group's mockup, each confirmed like a mockup sheet
+    if ((d.cuts || []).length) {
+      const sbc = createClient(), bufs = new Map<string, ArrayBuffer>(), cutFiles = new Set<string>();
+      for (const c of d.cuts!) {
+        guard();
+        const gi = c.gi != null && d.groups[c.gi] ? c.gi : d.groups.findIndex((x) => x.name === c.about);
+        const grp = d.groups[gi]; if (!grp) continue;
+        if (!bufs.has(c.path)) { const { data: blob } = await sbc.storage.from("proofs").download(c.path); if (blob) bufs.set(c.path, await blob.arrayBuffer()); }
+        const buf = bufs.get(c.path); if (!buf) continue;
+        step(`${of}Cutting ${grp.name || "the product"} off ${c.name}…`);
+        const ims = grp.imprints.filter((im) => !d!.art?.[im.id] || d!.art[im.id] === c.path);
+        const widthIn = ims.map((im) => parseFloat(String(im.size || ""))).find((n) => n > 0);
+        const parts = await cutProduct(buf, { page: c.page, logo: (c.logo as Box) || null, photo: (c.photo as Box) || null, widthIn, name: `${c.name.replace(/\.[^.]+$/, "")} ${grp.name || ""}`.trim() });
+        guard();
+        if (!parts.art && !parts.mockup) { did.push(`${grp.name || "A product"}: couldn't cut its logo or photo off ${c.name}; the PDF is used as sent`); continue; }
+        const specs = [
+          ...ims.map((im) => [im.location, im.size, im.colors && im.method === "screen" ? `${im.colors} color${+im.colors === 1 ? "" : "s"}${im.inks ? `: ${im.inks}` : ""}` : im.inks].filter(Boolean).join(" · ")),
+          ...[...new Set(grp.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ")))].filter(Boolean),
+        ];
+        const artUrl = parts.art ? URL.createObjectURL(parts.art) : "", mockUrl = parts.mockup ? URL.createObjectURL(parts.mockup) : "";
+        note(`Cut ${grp.name || "a product"} off their product sheet: checking with you`);
+        const ans = await askOnce<"sheet" | "art">(`cut:${c.path}:${gi}`, (resolve) => setSheetAsk({ name: `${grp.name || "Product"} · ${c.name}`, art: artUrl, mockup: mockUrl, background: null, specs, resolve }));
+        setSheetAsk(null);
+        if (ans === "art") { did.push(`${grp.name || "A product"}: ${c.name} used as sent (you said not to cut it)`); continue; }
+        const key = `designs/sheet-${crypto.randomUUID().slice(0, 8)}`, base = `${c.name.replace(/\.[^.]+$/, "")}-${grp.name || gi + 1}`.replace(/[^\w.-]+/g, "-").slice(0, 60);
+        const artPath = `${key}/${base}-art.png`, mockPath = `${key}/${base}-mockup.png`;
+        const upA = parts.art ? await sbc.storage.from("proofs").upload(artPath, parts.art, { contentType: "image/png" }) : { error: { message: "no logo" } };
+        const upM = parts.mockup ? await sbc.storage.from("proofs").upload(mockPath, parts.mockup, { contentType: "image/png" }) : { error: { message: "no photo" } };
+        const art2 = { ...(d.art || {}) };
+        if (!upA.error) for (const im of ims) art2[im.id] = artPath;
+        const mock2 = { ...(d.mockups || {}) };
+        if (!upM.error) mock2[grp.id] = [mockPath, ...(mock2[grp.id] || []).filter((p0) => p0 !== c.path)];
+        cutFiles.add(c.path);
+        d = { ...d, art: art2, mockups: mock2, files: [
+          ...d.files,
+          ...(upA.error ? [] : [{ path: artPath, name: `${base} logo.png`, type: "image/png", size: parts.art!.size, role: "art" as const, what: `logo cut off ${c.name}` }]),
+          ...(upM.error ? [] : [{ path: mockPath, name: `${base} mockup.png`, type: "image/png", size: parts.mockup!.size, role: "mockup" as const, what: `their product photo from ${c.name}` }]),
+        ] };
+        did.push(`${grp.name || "A product"}: logo${upA.error ? " (couldn't save)" : ""} and their photo${upM.error ? " (couldn't save)" : ""} cut off ${c.name}`);
+      }
+      // the sheet itself goes in Production files as their mockup
+      if (cutFiles.size) d = { ...d, files: d.files.map((x) => (cutFiles.has(x.path) ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)) };
+    }
     if (d.kind !== "reorder" || theirs.size || !sentArt.length) {
       const used = new Set([...Object.values(d.art || {}), ...Object.values(d.mockups || {}).flat()]);
       const sb0 = createClient();
