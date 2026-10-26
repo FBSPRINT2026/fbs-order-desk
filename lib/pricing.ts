@@ -111,6 +111,7 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
    *  Each changed ink is a screen's ink change (inkChanges, the Ink change fee) */ inkBy?: Record<string, Record<string, string>>;
+  /** full color art, printed as simulated process (seps made in Separo); set in the Mockup Creator (Oct 26) */ fullColor?: boolean;
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
   /** changes made to the customer's art for this print (Oct 23, Nick: "here's your proof, here are the two changes we
    *  made: we flattened the black and we removed the thin stroke"): shown on the proof and the work order */

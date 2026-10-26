@@ -20,7 +20,9 @@ type O = Pick<Order, "order_type" | "notes" | "groups">;
 type T = NonNullable<Order["order_type"]>;
 export const CONFIRM_WHY: Record<T, string> = { new: "New order: production confirms the details before printing", reorder: "Reorder: production confirms on the run", reorder_changes: "Reorder: production confirms on the run" };
 /** a print waiting on production from a new order (not a reorder): its banner and links say so */
-export const isNewOrderConfirm = (why?: string | null) => /^new order\b/i.test(why || "");
+export const isNewOrderConfirm = (why?: string | null) => /^(new order|full color art)\b/i.test(why || "");
+/** the banner on a print waiting on production: a reorder's details, a new order's details, or full color art's colors */
+export const confirmTitle = (why?: string | null) => (/^full color art\b/i.test(why || "") ? "Production to confirm colors" : /^new order\b/i.test(why || "") ? "Production to confirm details" : "Reorder details needed");
 
 export const orderTypeOf = (o: O): T => o.order_type || (isReorder(o) ? "reorder" : "new");
 export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" };

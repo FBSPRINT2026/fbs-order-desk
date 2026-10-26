@@ -1,7 +1,8 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cleanPrintNotes, shopNotes, type Group, type Imprint } from "@/lib/pricing";
+import { calcOrder, cleanPrintNotes, mergeSettings, shopNotes, type Group, type Imprint, type Order } from "@/lib/pricing";
+import { fullColorWaiting } from "@/lib/fullColor";
 import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { addSpec, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 import { rememberEmbroidery } from "@/lib/embroideryLast";
@@ -22,9 +23,15 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
     if (!CAN.includes(v.role)) throw new Error("Production confirms these (production, embroidery, owner or admin).");
     const by = String(v.staff?.name || "") || v.email.split("@")[0];
     const admin = createAdminClient();
-    const { data: o } = await admin.from("orders").select("id, number, groups, customer_id, notes").eq("id", orderId).maybeSingle();
+    const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
     if (!o) throw new Error("Order not found.");
     const groups = (o.groups || []) as Group[];
+    // full color prints waiting on production (Oct 26): their colors set the price, and the quote waits for them
+    const fullIds = new Set(groups.flatMap((g) => g.imprints).filter(fullColorWaiting).map((im) => im.id));
+    const { data: st0 } = fullIds.size ? await admin.from("settings").select("data").eq("id", 1).maybeSingle() : { data: null };
+    const total = () => { try { return calcOrder({ ...(o as Order), groups } as Order, mergeSettings(st0?.data)).total; } catch { return 0; } };
+    const before = fullIds.size ? total() : 0;
+    const fullDone: string[] = [];
     const at = new Date().toISOString(), pressNotes: string[] = [], lines: string[] = [], designs = new Map<string, string[]>(), entries: { design: string; e: SpecEntry }[] = [];
     // the old job this order repeats, so the next reorder of it takes what's confirmed here
     const { data: rev } = await admin.from("order_events").select("detail").eq("order_id", o.id).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
@@ -59,6 +66,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       // notes in the production document, it should save to the production notes"), not squeezed onto the print
       if (note) pressNotes.push(`${im.location}: ${note}`);
       im.notes = cleanPrintNotes(shopNotes(im.notes));
+      if (fullIds.has(im.id)) fullDone.push(`${im.location}: ${im.colors} color${im.colors === 1 ? "" : "s"}${im.underbase ? " + underbase" : ""}${im.inks ? ` (${im.inks})` : ""}`);
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || (emb ? "threads left blank" : "inks left blank"), emb && im.stitches ? `${im.stitches.toLocaleString()} stitches` : "", emb && im.emb?.backing ? im.emb.backing : "", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
@@ -109,6 +117,22 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
         notes: [String(d.notes || ""), add].filter(Boolean).join("\n").slice(-8000),
         ...(im?.inks ? { inks: im.inks, colors: im.colors } : {}),
       }).eq("id", id);
+    }
+    // full color confirmed: back to whoever's selling it, with the price as it is now (Oct 26, Nick: "production's got to
+    // confirm how many colors it's going to be, and then it comes back")
+    if (fullDone.length) {
+      const after = total(), money = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const priced = Math.abs(after - before) >= 0.01 ? `The price changed: ${money(before)} → ${money(after)}.` : `The price stays ${money(after)}.`;
+      const stillWaiting = groups.some((g) => g.imprints.some(fullColorWaiting));
+      const detail = `Full color confirmed by ${by}: ${fullDone.join("; ")}. ${priced}${stillWaiting ? " Another full color print is still waiting." : " Send the quote."}`;
+      await admin.from("order_events").insert({ order_id: o.id, kind: "full_color", detail: detail.slice(0, 500), actor: v.email || by });
+      // the person working the order: the last one on it who isn't production, else an owner
+      const { data: evs } = await admin.from("order_events").select("actor").eq("order_id", o.id).order("created_at", { ascending: false }).limit(40);
+      const { data: crew } = await admin.from("staff").select("email, role");
+      const roleOf = new Map(((crew || []) as { email: string; role: string }[]).map((x) => [String(x.email).toLowerCase(), x.role]));
+      const owner = (((evs || []) as { actor: string }[]).map((e) => String(e.actor || "").toLowerCase()).find((a) => a.includes("@") && a !== String(v.email || "").toLowerCase() && !["production", "embroidery"].includes(roleOf.get(a) || "")))
+        || ((crew || []) as { email: string; role: string }[]).find((x) => x.role === "owner")?.email || "";
+      if (owner && !stillWaiting) await admin.from("tasks").insert({ owner: owner.toLowerCase(), title: `#${o.number}: full color confirmed, send the quote`.slice(0, 200), notes: detail.slice(0, 1000), area: "shop", status: "open", source: "order", order_id: o.id, url: `/shop/orders/${o.id}`, created_by: v.email || "production" });
     }
     const left = groups.reduce((n, g) => n + g.imprints.filter(needsDetails).length, 0);
     return { ok: true, left };

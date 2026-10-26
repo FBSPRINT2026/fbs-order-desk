@@ -187,7 +187,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
       imprints: g.imprints.map((d, ii) => {
         const t = towFor(d.method);
         // production runs from Printavo during the move: an unconfirmed size / ink says so on the print
-        const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** ${/^new order\b/i.test(d.confirm.why || "") ? "PRODUCTION TO CONFIRM DETAILS" : "REORDER DETAILS NEEDED"}: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why}). Confirm in the portal: link in the production note.`
+        const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** ${/^full color art\b/i.test(d.confirm.why || "") ? "PRODUCTION TO CONFIRM COLORS" : /^new order\b/i.test(d.confirm.why || "") ? "PRODUCTION TO CONFIRM DETAILS" : "REORDER DETAILS NEEDED"}: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why}). Confirm in the portal: link in the production note.`
           : d.confirmed ? `Specs confirmed by production (${d.confirmed.by}, ${new Date(d.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${d.confirmed.from ? `, from ${d.confirmed.from}` : ""}).` : "";
         const details = [imprintLabel(d), unconf, shopNotes(d.notes)].filter(Boolean).join("\n").slice(0, 1000);
         return { details, ...(t ? { typeOfWork: { id: t.id } } : {}) };

@@ -108,6 +108,10 @@ export async function requestSeparations(admin: SupabaseClient, orderId: string,
     if (!p) return { ...base, settings: { garments: x.garments, ...(x.widthIn ? { widthIn: x.widthIn } : {}) } };
     return { ...base, method: p.method, channels: p.channels, files: p.files, preview_path: p.preview_path, notes: `Started from S-${p.number}, as it was printed. Same films: check the size and inks, then Print Films only if anything changed.`, settings: { ...(p.settings || {}), garments: x.garments, ...(x.widthIn ? { widthIn: x.widthIn } : {}), from: p.id } };
   });
+  // full color prints: simulated process, separated in Separo for now (Oct 26, Nick: "we're still going to probably use
+  // Separo for that to start in the simulations")
+  const full = new Set(orderGroups(order).flatMap((g) => g.imprints).filter((im) => im.fullColor).map((im) => im.id));
+  for (const r of rows as { imprint_id?: string; notes?: string }[]) if (r.imprint_id && full.has(r.imprint_id)) r.notes = [r.notes, "Full color (simulated process): seps made in Separo. Upload the films here when they're done."].filter(Boolean).join(" ");
   const { error } = await admin.from("separations").insert(rows);
   if (error) return { ok: false as const, error: error.message, gate };
   await admin.from("order_events").insert({ order_id: order.id, kind: "seps_requested", detail: go.map((x) => x.location).join(", "), actor: by });

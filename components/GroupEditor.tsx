@@ -7,7 +7,7 @@ import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
-import { isNewOrderConfirm } from "@/components/OrderTypeRow";
+import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import FinishingPicker from "@/components/FinishingPicker";
@@ -785,7 +785,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                   </div>
                 )}
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
-                    <span><b>{isNewOrderConfirm(d.confirm.why) ? "Production to confirm details" : "Reorder Details Needed"}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
+                    <span><b>{confirmTitle(d.confirm.why)}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks">{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}
                 </div>}
                 <div className="imp-art">
@@ -1348,7 +1348,7 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
         {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
         {printNotes(d.notes) && <div className="pr-notes">{printNotes(d.notes)}</div>}
-        {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>{isNewOrderConfirm(d.confirm.why) ? "Production to confirm details" : "Reorder details needed"}</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}</div>}
+        {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>{confirmTitle(d.confirm.why)}</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}</div>}
       </div>
     </div>
   );

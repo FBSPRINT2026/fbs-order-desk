@@ -39,6 +39,7 @@ import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { levelBack } from "@/lib/levelBack";
 import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
+import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { closestThread, isThreadName, threadLabel } from "@/lib/embroidery";
@@ -1224,6 +1225,31 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setBackBusy("");
     if (up.error) { setBackErr("Couldn't upload that photo."); return; }
     await pickBack(l, `store:${path}`, "upload");
+  };
+
+  // full color art (Oct 26, Nick): how it prints. DTF; screen print full color (the picture as is, production confirms
+  // the colors and price before the quote, the customer's proof is picture only, seps in Separo); or spot colors (the
+  // logo planned again as spot inks)
+  const fullSeen = useRef(new Set<string>());
+  const printAs = async (im: Imprint, how: "dtf" | "full" | "spot") => {
+    const clearWait = (x: Imprint) => (isFullColorWhy(x.confirm?.why) ? { confirm: undefined, visualOnly: undefined } : {});
+    if (how === "dtf") { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: "dtf", colors: 1, fullColor: undefined, ...clearWait(x) } : x))); return; }
+    if (how === "full") {
+      const n = paints[im.id]?.plan?.method === "sim" ? paints[im.id]!.plan!.colors : 0;
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: "screen", fullColor: true, colors: n || x.colors || 6, inks: `Simulated process (${n || x.colors || 6})`, confirm: { size: false, ink: true, why: FULL_WHY }, visualOnly: true } : x)));
+      return;
+    }
+    const d = designs.find((x) => x.id === im.design_id); if (!d) return;
+    try {
+      const img = await logoImg(d, im.distress === "off" && !!urls[d.id + ":clean"]);
+      const l = lines[active] || lines[0];
+      const plan = planPrint(pxOfImage(img, 1600), { garment: l ? shirtHex(l) : undefined, method: "spot" });
+      const names = [...new Set(plan.inks.map((k) => k.name))];
+      if (!portal) void sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: names.join(", ") }).eq("id", d.id).then(() => null);
+      setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: plan } : x)));
+      setPaints((p) => { const n = { ...p }; delete n[im.id]; return n; });
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: "screen", fullColor: undefined, inks: "", ...clearWait(x) } : x)));
+    } catch { /* the logo couldn't be read */ }
   };
 
   // bags and totes: flat, no collar; measured as a bag and printed centered on the body at real size (Oct 9: totes)
@@ -3649,6 +3675,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <label className="check emb-look"><input type="checkbox" checked={stitchOn} onChange={(e) => setStitchOn(e.target.checked)} /> Show it stitched on the mockup</label>
                       </>
                     )}
+                    {/* full color art: how it prints (Oct 26) */}
+                    {p.d && !portal && im.method !== "embroidery" && (() => {
+                      if (paints[im.id]?.plan?.method === "sim" || im.fullColor) fullSeen.current.add(im.id);
+                      if (!fullSeen.current.has(im.id)) return null;
+                      const how = im.method === "dtf" ? "dtf" : im.fullColor ? "full" : paints[im.id]?.plan?.method === "spot" ? "spot" : "";
+                      return (
+                        <div className={"mk-full" + (how ? "" : " ask")}>
+                          <b>Full color art</b> <span className="faint">a photo or shading, not flat colors. How will it print?</span>
+                          <div className="chips">
+                            <button type="button" className={"chip" + (how === "dtf" ? " on" : "")} onClick={() => void printAs(im, "dtf")}>DTF transfer</button>
+                            <button type="button" className={"chip" + (how === "full" ? " on" : "")} onClick={() => void printAs(im, "full")}>Screen print, full color</button>
+                            <button type="button" className={"chip" + (how === "spot" ? " on" : "")} onClick={() => void printAs(im, "spot")}>Spot colors</button>
+                          </div>
+                          {how === "full" && <span className="faint">The picture goes on the mockup as is, about {im.colors} colors for now. Production confirms the colors and the price on Production details before the quote goes out; the customer&apos;s proof is picture only. Seps: made in Separo.</span>}
+                          {how === "dtf" && <span className="faint">A full color transfer: no screens, nothing for production to confirm.</span>}
+                          {how === "spot" && <span className="faint">Planned as spot colors: pick the inks below.</span>}
+                        </div>
+                      );
+                    })()}
                     {p.d && im.method !== "embroidery" && paints[im.id]?.plan && !(im.visualOnly && !im.confirmed) && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
                     {p.d && im.method !== "embroidery" && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}

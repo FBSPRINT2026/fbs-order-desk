@@ -3,7 +3,8 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { mergeSettings, ST } from "@/lib/pricing";
+import { mergeSettings, orderGroups, ST, type Order } from "@/lib/pricing";
+import { fullColorWaiting } from "@/lib/fullColor";
 import { attachNote, cleanAttachments, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
 
 async function requireStaff() {
@@ -14,7 +15,7 @@ async function requireStaff() {
 
 async function loadOrderAndCustomer(orderId: string) {
   const admin = createAdminClient();
-  const { data: order } = await admin.from("orders").select("id,number,nickname,status,customer_id").eq("id", orderId).single();
+  const { data: order } = await admin.from("orders").select("id,number,nickname,status,customer_id,groups,lines").eq("id", orderId).single();
   if (!order) throw new Error("Order not found.");
   const { data: customer } = order.customer_id
     ? await admin.from("customers").select("id,name,company,email,message_email").eq("id", order.customer_id).single()
@@ -29,6 +30,10 @@ export async function sendToCustomer(orderId: string, note: string) {
   const { admin, order, customer, settings } = await loadOrderAndCustomer(orderId);
   if (!customer) return { ok: false, error: "Pick a customer for this order first." };
   if (!customer.email) return { ok: false, error: "This customer has no email address. Add one on their customer page." };
+  // a full color print waits for production's colors (and so the price) before the quote goes out (Oct 26, Nick); the
+  // customer can already have a picture-only proof
+  if ((order.status === "quote" || order.status === "request") && orderGroups(order as Order).some((g) => g.imprints.some(fullColorWaiting)))
+    return { ok: false, error: "Production hasn't confirmed the full color print yet (its colors set the price). The quote goes out after that; the picture-only proof can go now." };
   const patch: Record<string, unknown> = { sent_at: new Date().toISOString() };
   // a customer's order request becomes a normal quote waiting on their final OK
   if (order.status === "quote" || order.status === "request") patch.status = "quote_sent";
