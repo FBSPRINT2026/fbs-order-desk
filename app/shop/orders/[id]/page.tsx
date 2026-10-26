@@ -143,7 +143,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [art, o?.groups]);
   const guessed = useRef(false);
-  const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType }>(null);
+  const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType; /** staff only: saved to customer_private */ account_owner?: string }>(null);
   const [saveState, setSaveState] = useState("");
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
@@ -749,8 +749,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   async function addCustomer() {
     if (!newCust) return;
     if (!newCust.company.trim() && !newCust.name.trim()) return say("Enter a company or contact name.");
-    const { data, error } = await sb.from("customers").insert({ ...newCust, email: newCust.email.trim().toLowerCase() }).select("*").single();
+    const { account_owner: owner, ...pub } = newCust;
+    const { data, error } = await sb.from("customers").insert({ ...pub, email: pub.email.trim().toLowerCase() }).select("*").single();
     if (error || !data) return say("Couldn't add customer: " + error?.message);
+    // who owns the account, asked when the customer is made (Oct 26, Nick: "something in our customer intake")
+    if (owner) await sb.from("customer_private").upsert({ customer_id: data.id, account_owner: owner });
     setCustomers((cs) => [...cs, data as Customer].sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
     patch((d) => { d.customer_id = data.id; d.price_type = (data.price_type as PriceType) || "retail"; });
     setNewCust(null);
@@ -1399,6 +1402,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       <div className="field"><label htmlFor="nc-em">Email</label><input id="nc-em" type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} /></div>
                       <div className="field"><label htmlFor="nc-ph">Phone</label><input id="nc-ph" type="tel" value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} /></div>
                       <div className="field"><label htmlFor="nc-pt">Customer type</label><select id="nc-pt" value={newCust.price_type} onChange={(e) => setNewCust({ ...newCust, price_type: e.target.value as PriceType })}><option value="retail">Retail (we supply garments)</option><option value="wholesale">Wholesale (they supply garments)</option></select></div>
+                      {(settings.accountOwners || []).length > 0 && <div className="field"><label htmlFor="nc-own">Account owner</label><select id="nc-own" value={newCust.account_owner || ""} onChange={(e) => setNewCust({ ...newCust, account_owner: e.target.value })}><option value="">No one yet</option>{(settings.accountOwners || []).map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}</select></div>}
                     </div>
                     <div className="row"><button className="btn primary sm" type="button" onClick={addCustomer}>Add and use</button><button className="btn ghost sm" type="button" onClick={() => setNewCust(null)}>Cancel</button></div>
                   </div>

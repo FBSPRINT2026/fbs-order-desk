@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type React from "react";
 import { getFavoritesRecap, type FavCustomer, type FavEmail, type FavSales, type FavText } from "@/app/shop/favorites-actions";
 import { ST } from "@/lib/pricing";
 
@@ -11,9 +10,10 @@ import { ST } from "@/lib/pricing";
  * that a little bit"). One card per starred customer (Customers → ☆):
  * - their open jobs, each with how far along it is (Quote → Art → Goods → Print → Ship) and its real status;
  * - what's waiting on you: portal messages, emails waiting on a reply (your mailbox only), a text with no answer yet;
- * - what happened lately (the last few emails and texts either way);
+ * Oct 26 (Nick: "way too worded… your eyes just kind of gloss over it"; he picked option A): one line per job (number,
+ * name, one-word stage, due day), the two newest things waiting, and one footer line. No progress bars, no "Lately".
  * - this year's sales, orders and their last order.
- * Favorites with nothing open and nothing new fold into one line at the bottom.
+ * Favorites with no open jobs and nothing waiting fold into one line at the bottom.
  */
 export type FavJob = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean };
 export type FavMsg = { id: string; customer_id: string | null; order_id: string | null; body: string; created_at: string };
@@ -29,6 +29,11 @@ function stepOf(j: FavJob): number {
   if (/goods|blank|garment|receiv|order(ed)? |s&s|sanmar/.test(s)) return 2;
   return 1; // art, proofs, mockups, approved, waiting on details
 }
+/** one word for where a job is (Oct 26, Nick picked option A: one line per job) */
+const SHORT = ["Quote", "Art", "Goods", "Printing", "Ready"];
+const shortDue = (d: string, today: string) => { const x = d.slice(0, 10); const days = Math.round((Date.parse(x + "T12:00") - Date.parse(today + "T12:00")) / 864e5); return days >= 0 && days < 7 ? (days === 0 ? "Today" : new Date(x + "T12:00").toLocaleDateString([], { weekday: "short" })) : new Date(x + "T12:00").toLocaleDateString([], { month: "short", day: "numeric" }); };
+/** an email's summary without the customer's name in front ("Peticolas Brewing wants…" → "Wants…") */
+const trimWho = (t: string, who: string) => { const w = who.trim(); let x = t.trim(); if (w && x.toLowerCase().startsWith(w.toLowerCase())) x = x.slice(w.length).replace(/^[\s,:-]+/, ""); else x = x.replace(/^(the )?customer\s+(is\s+)?/i, ""); return x ? x[0].toUpperCase() + x.slice(1) : t; };
 const label = (j: FavJob) => (j.printavo ? j.statusLabel : ST[j.status]?.label || j.status);
 const tz = "America/Chicago";
 const dayOf = (s: string) => new Date(s).toLocaleDateString("en-CA", { timeZone: tz });
@@ -71,17 +76,12 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
       const textWaiting = tx.filter((t) => !t.from_me && (!lastMine || t.sent_at > lastMine.sent_at));
       const waiting: Item[] = [
         ...msgs.filter((m) => m.customer_id === c.id).map((m) => ({ k: "p" + m.id, kind: "portal" as const, text: m.body.replace(/\s+/g, " ").slice(0, 160), at: m.created_at, href: m.order_id ? `/shop/orders/${m.order_id}` : `/shop/customers/${c.id}?area=messages` })),
-        ...em.filter((e) => needIds.has(e.id)).map((e) => ({ k: "e" + e.id, kind: "email" as const, text: e.summary || e.subject || "(no subject)", at: e.occurred_at, href: `/shop/conversations?open=${e.id}` })),
+        ...em.filter((e) => needIds.has(e.id)).map((e) => ({ k: "e" + e.id, kind: "email" as const, text: trimWho(e.summary || e.subject || "(no subject)", c.name), at: e.occurred_at, href: `/shop/conversations?open=${e.id}` })),
         ...(textWaiting.length ? [{ k: "t" + textWaiting[0].sent_at, kind: "text" as const, text: textWaiting[0].body ? `"${textWaiting[0].body}"` : textWaiting[0].pics ? "Sent a picture" : "New text", at: textWaiting[0].sent_at, href: `/shop/customers/${c.id}?area=messages` }] : []),
       ].sort((a, b) => b.at.localeCompare(a.at));
-      const shown = new Set(waiting.map((w) => w.k));
-      const lately: Item[] = [
-        ...em.filter((e) => !needIds.has(e.id)).map((e) => ({ k: "e" + e.id, kind: "email" as const, text: e.summary || e.subject || "(no subject)", at: e.occurred_at, href: `/shop/conversations?open=${e.id}`, out: e.direction === "out" })),
-        ...tx.filter((t) => !textWaiting.includes(t) && (t.body || t.pics)).slice(0, 3).map((t) => ({ k: "t" + t.sent_at, kind: "text" as const, text: t.body ? `"${t.body}"` : "A picture", at: t.sent_at, href: `/shop/customers/${c.id}?area=messages`, out: t.from_me })),
-      ].filter((x) => !shown.has(x.k)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3);
       const last = [...em.map((e) => e.occurred_at), ...tx.map((t) => t.sent_at), ...msgs.filter((m) => m.customer_id === c.id).map((m) => m.created_at)].sort().pop() || null;
       const s = d.sales.find((x) => x.customer_id === c.id) || null;
-      return { c, js, waiting, lately, last, s, quiet: !js.length && !waiting.length && !lately.length };
+      return { c, js, waiting, last, s, quiet: !js.length && !waiting.length };
     }).sort((a, b) => Number(a.quiet) - Number(b.quiet) || b.waiting.length - a.waiting.length || b.js.length - a.js.length || a.c.name.localeCompare(b.c.name));
   }, [d, jobs, msgs, needIds, mailMine]);
 
@@ -91,14 +91,6 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
     : k === "text"
       ? <svg viewBox="0 0 24 24" aria-hidden><path d="M4 5h16v11H9l-5 4z" /></svg>
       : <svg viewBox="0 0 24 24" aria-hidden><path d="M4 4h16v12H8l-4 4z" /><path d="M8 9h8M8 12h5" /></svg>;
-  const row = (x: Item, live: boolean) => (
-    <Link key={x.k} href={x.href || "#"} className="fv-it">
-      <span className={"fv-dot" + (live ? "" : " o")} aria-hidden />
-      <span className="fv-ic" title={x.kind === "portal" ? "Portal message" : x.kind === "text" ? "Text" : "Email"}>{icon(x.kind)}</span>
-      <span className="fv-tx">{x.out ? <span className="faint">You: </span> : null}{x.text}</span>
-      <span className="fv-when">{when(x.at)}</span>
-    </Link>
-  );
 
   return (
     <section className="fv" aria-label="Favorites">
@@ -107,40 +99,39 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
         <div className="fv-none">Star a customer on the Customers page (☆ next to their name) and they show up here with their jobs, emails and texts.</div>
       ) : (
         <>
-          {busy.map(({ c, js, waiting, lately, last, s }) => (
-            <article key={c.id} className="fv-card">
+          {busy.map(({ c, js, waiting, last, s }) => {
+            const jl = js.slice(0, 3), wl = waiting.slice(0, 2), moreJ = js.length - jl.length, moreW = waiting.length - wl.length;
+            const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+            return (
+            <article key={c.id} className="fv-card fv-a">
               <header className="fv-top">
                 <span className="fv-av" aria-hidden>{initials(c.name)}</span>
-                <div className="fv-who"><Link href={`/shop/customers/${c.id}`} className="fv-n">{c.name}</Link><span className="faint">{[c.contact, last ? `last talked ${when(last).toLowerCase() === "yesterday" ? "yesterday" : when(last)}` : ""].filter(Boolean).join(" · ")}</span></div>
+                <div className="fv-who"><Link href={`/shop/customers/${c.id}`} className="fv-n" data-notranslate>{c.name}</Link><span className="faint">{[c.contact, last ? when(last) : ""].filter(Boolean).join(" · ")}</span></div>
                 <span className="spacer" />
-                <Link href={`/shop/customers/${c.id}?area=messages`} className="btn sm">Messages</Link>
-                <Link href={`/shop/customers/${c.id}`} className="btn sm">Open</Link>
+                {waiting.length > 0 && <Link href={`/shop/customers/${c.id}?area=messages`} className="fv-wait">{waiting.length} waiting</Link>}
               </header>
-              <div className="fv-body">
-                <div className="fv-col">
-                  <div className="fv-l">Jobs{js.length ? ` (${js.length})` : ""}</div>
-                  {!js.length ? <div className="fv-q">No open jobs.</div> : js.slice(0, 4).map((j) => { const st = stepOf(j); return (
-                    <Link key={(j.printavo ? "p" : "o") + j.id} href={j.href} className="fv-job">
-                      <span className="fv-jn"><b>#{j.number}</b> {j.nickname || "Untitled job"}{j.due && <span className="fv-due">Due {due(j.due)}</span>}</span>
-                      <span className="fv-trk" role="img" aria-label={`${STEPS[st]} of ${STEPS.join(", ")}`}>{STEPS.map((x, i) => <i key={x} className={i < st ? "d" : i === st ? "c" : ""} />)}</span>
-                      <span className="fv-st">{STEPS.map((x, i) => i === st ? <b key={x}>{x}: {label(j)}</b> : <span key={x}>{x}</span>).reduce<React.ReactNode[]>((a, n, i) => (i ? [...a, " → ", n] : [n]), [])}</span>
-                    </Link>
-                  ); })}
-                  {js.length > 4 && <Link href={`/shop/customers/${c.id}`} className="fv-more">{js.length - 4} more</Link>}
-                </div>
-                <div className="fv-col">
-                  <div className="fv-l">Waiting on you</div>
-                  {waiting.length ? waiting.slice(0, 4).map((x) => row(x, true)) : <div className="fv-q">Nothing. You&apos;re caught up with them.</div>}
-                  {lately.length > 0 && <><div className="fv-l fv-l2">Lately</div>{lately.map((x) => row(x, false))}</>}
-                </div>
-              </div>
+              {jl.map((j) => { const st = stepOf(j); const late = !!j.due && j.due.slice(0, 10) < today; return (
+                <Link key={(j.printavo ? "p" : "o") + j.id} href={j.href} className="fv-row">
+                  <b className="ordno">#{j.number}</b><span className="fv-x" data-notranslate>{j.nickname || "Untitled job"}</span>
+                  <span className={"fv-pl s" + st} title={label(j)}>{SHORT[st]}</span>
+                  <span className={"fv-d" + (late ? " late" : "")}>{j.due ? shortDue(j.due, today) : ""}</span>
+                </Link>
+              ); })}
+              {wl.map((x) => (
+                <Link key={x.k} href={x.href || "#"} className="fv-row">
+                  <span className="fv-ic" title={x.kind === "portal" ? "Portal message" : x.kind === "text" ? "Text" : "Email"}>{icon(x.kind)}</span>
+                  <span className="fv-x">{x.text}</span>
+                  <span className="fv-d">{when(x.at)}</span>
+                </Link>
+              ))}
+              {!jl.length && !wl.length && <div className="fv-row fv-q">Nothing open, nothing waiting.</div>}
               <footer className="fv-foot">
-                <span>This year <b>{money0(s?.sales || 0)}</b></span>
-                <span>Orders <b>{s?.orders || 0}</b></span>
-                {s?.last_order && <span>Last order <b>{due(s.last_order)}</b></span>}
+                {[moreJ > 0 ? `+${moreJ} more job${moreJ === 1 ? "" : "s"}` : "", moreW > 0 ? `${moreW} more waiting` : ""].filter(Boolean).join(", ")}
+                {(moreJ > 0 || moreW > 0) && " · "}
+                <b>{money0(s?.sales || 0)}</b> this year
               </footer>
             </article>
-          ))}
+          ); })}
           {quiet.length > 0 && <>
             <div className="fv-ql">Quiet: no open jobs, nothing new</div>
             <div className="fv-quiet">{quiet.map(({ c, s }) => (

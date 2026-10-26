@@ -57,7 +57,7 @@ export default function CustomersPage() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">{Object.values(customers).filter((c) => !c.is_test).length} on file</div><h1>Customers</h1></div>
-        <div className="row"><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
+        <div className="row"><Link className="btn" href="/shop/customers/owners">Account owners</Link><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
         <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></div>
       </div>
       <div className="toolbar">
