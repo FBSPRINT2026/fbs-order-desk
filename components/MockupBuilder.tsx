@@ -1483,13 +1483,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setCatalog((c) => c.map((x) => (x.id === zoomG.id ? ({ ...x, mockup_fit: val } as Garment) : x)));
     await createClient().from("garments").update({ mockup_fit: val }).eq("id", zoomG.id);
   };
+  // just − and + (Oct 26, Nick: "just make it a plus or minus… I don't need the percent"); the ↺ back to normal shows on
+  // the left once it's changed, in a spot kept for it so − and + never move under the mouse
   const zoomCtl = (v: View) => zoomG && (
-    <span className="mk-pill mk-zoom" title={`Prints look too big or too small on this side of the ${zoomG.brand} ${zoomG.style}? Set it once: kept for every color and every mockup after`}>
-      Scale {v}
-      <button type="button" aria-label={`Smaller on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) - 0.02)}>−</button>
-      <b>{Math.round(garZoom(zoomG, v) * 100)}%</b>
-      <button type="button" aria-label={`Bigger on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) + 0.02)}>+</button>
-      {garZoom(zoomG, v) !== 1 && <button type="button" className="mk-zoom-r" onClick={() => void setZoomG(v, 1)} title="Back to 100%">↺</button>}
+    <span className="mk-pill mk-zoom" title={`Prints look too big or too small on the ${v} of the ${zoomG.brand} ${zoomG.style}? Set it once: kept for every color and every mockup after (now ${Math.round(garZoom(zoomG, v) * 100)}%)`}>
+      <button type="button" className={"mk-zoom-r" + (garZoom(zoomG, v) !== 1 ? "" : " off")} onClick={() => void setZoomG(v, 1)} title="Back to normal" aria-label={`Back to normal on the ${v}`} tabIndex={garZoom(zoomG, v) !== 1 ? 0 : -1}>↺</button>
+      <button type="button" aria-label={`Prints smaller on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) - 0.02)}>−</button>
+      <button type="button" aria-label={`Prints bigger on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) + 0.02)}>+</button>
     </span>
   );
   const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
