@@ -73,10 +73,7 @@ export default function SupportButton({ email, portal = false }: { email: string
   async function snap() {
     setOpen(false); setBusy("Taking a screenshot…");
     await new Promise((r) => setTimeout(r, 250));
-    const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: unknown };
-    let b: Blob | null = null;
-    if (md?.getDisplayMedia && !window.matchMedia("(pointer: coarse)").matches) b = await grabTab();
-    if (!b) b = await drawPage();
+    const b = await drawPage();
     if (b) setShot(b); else setErr("We couldn't take a screenshot. You can attach one from your Photos instead.");
     setBusy(""); setOpen(true);
   }
@@ -91,10 +88,10 @@ export default function SupportButton({ email, portal = false }: { email: string
     setErr(""); setDone(false); setText(""); setShot(null); setBusy("Taking a screenshot…");
     // the screenshot first (the box isn't open yet, so it shows the page as it is). Phones: the menu closes first,
     // then the page is drawn into a picture
-    const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: unknown };
-    let b: Blob | null = null;
-    if (md?.getDisplayMedia && !window.matchMedia("(pointer: coarse)").matches) b = await grabTab();
-    else { window.dispatchEvent(new Event("fbs:close-menu")); await new Promise((r) => setTimeout(r, 450)); b = await drawPage(); }
+    // no "Share this tab" question any more (Oct 26, Nick: "get rid of the share tab"): the page is drawn into a picture
+    // right here; the menu closes first on a phone
+    if (window.matchMedia("(pointer: coarse)").matches) { window.dispatchEvent(new Event("fbs:close-menu")); await new Promise((r) => setTimeout(r, 450)); }
+    const b = await drawPage();
     setShot(b); setBusy(""); setOpen(true);
   }
   // a picture pasted in (Win+Shift+S, then Ctrl+V) instead
@@ -168,7 +165,7 @@ export default function SupportButton({ email, portal = false }: { email: string
                 </div>
                 <ol className="sup-steps">
                   <li>Click <b>Share my screen</b>.</li>
-                  <li>Your browser asks what to share: pick <b>Entire screen</b> (or just this window), then click <b>Share</b>.</li>
+                  <li>Your browser asks what to share: click your screen under <b>Entire screen</b>, then <b>Share</b>.</li>
                   <li>Click <b>Allow</b> for the microphone so you can talk.</li>
                   <li>Nick gets a <b>Join</b> button. A bar at the bottom of your screen says when he&apos;s watching; <b>Stop sharing</b> ends it.</li>
                 </ol>

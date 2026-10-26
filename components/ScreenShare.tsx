@@ -94,7 +94,11 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
     const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (o: object) => Promise<MediaStream> };
     if (!md?.getDisplayMedia) { setErr("This browser can't share its screen. Use Chrome or Edge on a computer."); return; }
     let s: MediaStream;
-    try { s = await md.getDisplayMedia({ video: { frameRate: 15 }, audio: false }); } catch { setErr("Sharing didn't start. Click Share my screen and pick a screen, then Share."); return; }
+    // the whole screen only (Oct 26, Nick: "the only option be to share full screen"): the browser opens on Entire screen,
+    // and a tab or a window picked anyway is turned down
+    try { s = await md.getDisplayMedia({ video: { frameRate: 15, displaySurface: "monitor" }, audio: false, monitorTypeSurfaces: "include", selfBrowserSurface: "exclude", surfaceSwitching: "exclude" }); } catch { setErr("Sharing didn't start. Click Share my screen, click your screen under Entire screen, then Share."); return; }
+    const surface = (s.getVideoTracks()[0]?.getSettings() as MediaTrackSettings & { displaySurface?: string }).displaySurface;
+    if (surface && surface !== "monitor") { s.getTracks().forEach((t) => t.stop()); setErr("Share the whole screen: click Share my screen again, pick your screen under Entire screen, then Share."); return; }
     screen.current = s;
     s.getVideoTracks()[0]?.addEventListener("ended", () => void stop());
     await getMic();
@@ -208,7 +212,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
         <button type="button" className="btn primary ss-big" onClick={() => void share()}>{id ? "Resume sharing" : "Share my screen"}</button>
         <ol className="sup-steps">
           <li>Click <b>{id ? "Resume sharing" : "Share my screen"}</b>.</li>
-          <li>Pick <b>Entire screen</b> (or the window you want Nick to see), then click <b>Share</b>.</li>
+          <li>Click your screen under <b>Entire screen</b>, then click <b>Share</b>.</li>
           <li>Click <b>Allow</b> for the microphone so you can talk.</li>
         </ol>
       </>}
