@@ -14207,7 +14207,7 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-sw.sm{width:14px;height:14px;border-radius:4px;display:inline-block;cursor:default}
 .gang-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .gang-row3 .field input{height:36px;border-radius:6px;border:1px solid var(--line);font-size:14px;padding:0 10px;width:100%}
-.gang-sum{margin-bottom:10px}
+.gang-sum{margin:0}
 .gang-zoom{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:13px}
 .gang-zoom .num{min-width:44px;text-align:center}
 .gang-sheet.zoomed{max-height:75vh}

@@ -706,14 +706,12 @@ export default function GangSheet() {
         </div>
         {/* the cost, then the sheet */}
         <div className="gang-right">
-          <section className="panel gang-sum-p">
-            <div className="stats gang-sum">
+          <div className="stats gang-sum">
               <button type="button" className="stat"><span className="v">{money(cost)}</span><span className="k">{DTF_DALLAS.name} cost</span></button>
               <button type="button" className="stat"><span className="v">{r2(film)}&quot; / {bought}&quot;</span><span className="k">Film used / bought</span></button>
               <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
               <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
-            </div>
-          </section>
+          </div>
           <section className="panel gang-sheet-p">
             <div className="panel-h gang-tabs">
               <div className="chips">
