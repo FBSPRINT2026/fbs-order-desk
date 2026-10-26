@@ -10,13 +10,12 @@ import { Pill, pvStatusOf } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
-import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
 import MyDay, { CrewTodos } from "@/components/MyDay";
 import FavoritesRecap from "@/components/FavoritesRecap";
-import { emailIsMine, senderLabel } from "@/lib/mail/sender";
-import { orderGoodsHref, pieceCount } from "@/lib/pieces";
+import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
+import EmailSummary, { type EmailGroups, type EmailItem } from "@/components/EmailSummary";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
 
@@ -40,7 +39,6 @@ type Reorder = { customer_id: string; number: string; nickname: string; date: st
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "—");
-const ago = (t: string) => { const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 const PV_DONE = /job completed|quote - closed|cancel/i;
 const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test(s) ? "quote" : /ready for production|scheduling|pre production|holder|waiting on details/i.test(s) ? "queue" : /issue/i.test(s) ? "issue" : "production";
 
@@ -51,7 +49,6 @@ export default function Dashboard() {
   const myEmail = viewing ? role.viewAs : role.email || "", staffName = viewing ? role.viewName || "" : role.staffName || "";
   // who "Mine" means: the signed-in person's first name (from the layout, no extra round trip before the data loads)
   const me = myEmail ? (staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].toLowerCase() : "";
-  const router = useRouter();
   const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
   const [seps, setSeps] = useState<SepLite[]>([]);
@@ -66,6 +63,8 @@ export default function Dashboard() {
   // Replies wait for both the email and whose mailbox is mine (Oct 12: "You're all caught up" showed for a few
   // seconds before the emails came in)
   const [mailIn, setMailIn] = useState(false), [boxIn, setBoxIn] = useState(false);
+  // customers who'd ordered before the last 30 days (anyone else writing in is a new customer, for the Email summary)
+  const [oldCust, setOldCust] = useState<Set<string> | null>(null);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
   // reorders of old Printavo jobs waiting on production (Jose) to confirm the print details
@@ -126,6 +125,13 @@ export default function Dashboard() {
         const mr = mailRows(allMail, (sg || []) as MailSug[]);
         setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
+        const cids = [...new Set([...mr.filter((r) => r.needs).map((r) => r.x.customer_id), ...((m.data || []) as Msg[]).map((x) => x.customer_id)].filter(Boolean))] as string[];
+        const cut = new Date(Date.now() - 30 * 864e5).toISOString();
+        const [{ data: ao }, { data: oo }] = cids.length ? await Promise.all([
+          sb.from("archived_orders").select("customer_id").in("customer_id", cids).lt("order_date", cut.slice(0, 10)).limit(2000),
+          sb.from("orders").select("customer_id").in("customer_id", cids).eq("draft", false).lt("created_at", cut).limit(2000),
+        ]) : [{ data: [] }, { data: [] }];
+        setOldCust(new Set([...(ao || []), ...(oo || [])].map((r) => (r as { customer_id: string }).customer_id)));
       })().catch(() => null).finally(() => setMailIn(true));
       getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); setMyBoxEmail(b?.enabled ? b.email : null); }).catch(() => null).finally(() => setBoxIn(true));
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
@@ -189,9 +195,36 @@ export default function Dashboard() {
   // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
   const urgentIds = new Set(myUrgent.map((x) => x.id));
   const needIds = useMemo(() => new Set(myNeeds.map((x) => x.id)), [myNeeds.map((x) => x.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))]
-    .sort((a, b) => Number(!!b.mail && urgentIds.has(b.mail.id)) - Number(!!a.mail && urgentIds.has(a.mail.id)) || (a.mail && b.mail && urgentIds.has(a.mail.id) && urgentIds.has(b.mail.id) ? a.at.localeCompare(b.at) : b.at.localeCompare(a.at)));
-  const openMail = (id: string) => router.push(`/shop/conversations?open=${id}`);
+  // the Email summary (Oct 26, Nick): customers to get back to, new customers, quotes from the website. Not customers
+  // (vendors, newsletters) never show.
+  const emailGroups = useMemo((): EmailGroups => {
+    const g: EmailGroups = { back: [], fresh: [], web: [] };
+    const ini = (t: string) => t.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+    const short = (t: string, co: string) => { let x = t.replace(/\s+/g, " ").trim(); const c = co.trim().toLowerCase(); if (c && x.toLowerCase().startsWith(c)) x = x.slice(c.length).replace(/^[\s,:-]+/, ""); else x = x.replace(/^(the )?customer\s+(is\s+)?/i, ""); return x ? x[0].toUpperCase() + x.slice(1) : t; };
+    const isNew = (cid: string | null) => !cid || (!!oldCust && !oldCust.has(cid));
+    for (const x of myMsgs) {
+      const co = who(x.customer_id) || x.author_name || x.author_email;
+      const it: EmailItem = { k: "p" + x.id, who: personName(x.author_name).split(/\s+/)[0] ? `${personName(x.author_name).split(/\s+/)[0]}${who(x.customer_id) ? ` from ${who(x.customer_id)}` : ""}` : co, initials: ini(co), text: x.body.replace(/\s+/g, " ").slice(0, 140), at: x.created_at, href: x.order_id ? `/shop/orders/${x.order_id}` : x.customer_id ? `/shop/customers/${x.customer_id}?area=messages` : "/shop/conversations" };
+      (isNew(x.customer_id) ? g.fresh : g.back).push(it);
+    }
+    for (const e of myNeeds) {
+      if (e.meta?.triage?.intent === "not_customer") continue;
+      const c = e.customer_id ? custs[e.customer_id] : null;
+      const co = (c && (c.company || c.name)) || personName(e.meta?.from_name) || e.from_email;
+      const it: EmailItem = { k: "e" + e.id, who: senderLabel(e.meta?.from_name, e.from_email, c), initials: ini(co), text: short(e.meta?.triage?.summary || e.subject || "(no subject)", co), at: e.occurred_at, href: `/shop/conversations?open=${e.id}`, rush: urgentIds.has(e.id) };
+      // no mailbox: it came in through the website's form
+      (!e.meta?.account_id ? g.web : isNew(e.customer_id) ? g.fresh : g.back).push(it);
+    }
+    // orders customers built and sent in from the portal, waiting on us to price them
+    for (const j of jobs || []) if (!j.printavo && j.status === "request" && isMine(j.customer_id, j.owner)) {
+      const co = who(j.customer_id) || "A customer";
+      g.web.push({ k: "o" + j.id, who: co, initials: ini(co), text: `Quote request #${j.number}${j.nickname ? ` · ${j.nickname}` : ""}`, at: new Date().toISOString(), href: j.href });
+    }
+    // rush ones first, then the longest waiting
+    g.back.sort((a, b) => Number(!!b.rush) - Number(!!a.rush) || a.at.localeCompare(b.at));
+    g.fresh.sort((a, b) => b.at.localeCompare(a.at));
+    return g;
+  }, [myMsgs, myNeeds, custs, oldCust, jobs, urgentIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const myReorders = reorders.filter((x) => isMine(x.customer_id, x.owner));
 
   const jobRow = (j: Job) => (
@@ -351,23 +384,8 @@ export default function Dashboard() {
   // their own pages.
   return (
     <>
-      <MyDay side name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
-              <div className="md-scroll">
-                {!v || !mailIn || !boxIn ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
-                  <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
-                    <li key={x.id} className="db-row db-reply">
-                      <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-one">{x.body.replace(/\s+/g, " ").slice(0, 160)}</span></span>
-                      <span className="db-side"><span className="faint">portal · {ago(x.created_at)}</span>{x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm">Reply</Link> : x.customer_id ? <Link href={`/shop/customers/${x.customer_id}?area=messages`} className="btn sm">Reply</Link> : null}</span>
-                    </li>
-                  ) : e ? (
-                    <li key={e.id} className={"db-row db-reply db-click" + (urgentIds.has(e.id) ? " hot" : "")} onClick={() => openMail(e.id)} title="Open it in the Inbox, ready to answer">
-                      <span className="db-main"><b>{senderLabel(e.meta?.from_name, e.from_email, e.customer_id ? custs[e.customer_id] : null)}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
-                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span>{pieceCount(e.meta?.triage?.summary, e.subject) > 0 && <Link href={orderGoodsHref(e.id)} className="btn sm ghost db-goods" onClick={(ev) => ev.stopPropagation()} title={`Order the goods for this (${pieceCount(e.meta?.triage?.summary, e.subject)} pcs), or email our S&S rep for a custom quote`}>Order goods</Link>}<Link href={`/shop/conversations?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
-                    </li>
-                  ) : null)}</ul>
-                ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}
-              </div>
-      }>
+      <MyDay side name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={emailGroups.back.length + emailGroups.fresh.length + emailGroups.web.length} urgentCount={0} replies={<EmailSummary groups={emailGroups} loading={!v || !mailIn || !boxIn} />}
+>
         {/* "Needs you today" taken off My Day; Sales moves up (Oct 24, Nick) */}
         {boss && <section className="db-card db-orange db-sales md2-sales">
           <div className="db-card-h"><h2>Sales</h2><span className="faint db-h-note">invoices by order date · quotes and holders don&apos;t count</span></div>

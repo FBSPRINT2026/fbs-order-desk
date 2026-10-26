@@ -43,7 +43,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount, side, ch
   const due = open.filter((t) => t.due && t.due <= today).length;
   const evToday = (d?.events || []).filter((e) => e.status === "added" && e.day === today).length;
   const hello = (() => { const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: tz })); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; })();
-  const line = [replyCount ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"} to send` : "", due ? `${due} to-do${due === 1 ? "" : "s"} due` : "", evToday ? `${evToday} on the calendar` : ""].filter(Boolean);
+  const line = [replyCount ? (side ? `${replyCount} ${replyCount === 1 ? "email" : "emails"} from customers` : `${replyCount} ${replyCount === 1 ? "reply" : "replies"} to send`) : "", due ? `${due} to-do${due === 1 ? "" : "s"} due` : "", evToday ? `${evToday} on the calendar` : ""].filter(Boolean);
 
   return (
     <section className="md" aria-label="My Day">
@@ -60,8 +60,9 @@ export default function MyDay({ name, replies, replyCount, urgentCount, side, ch
           <aside className="md2-side" aria-label="Calendar and to-dos">
             <div className="md-col md-cal"><CalendarPanel d={d} setD={setD} shop={shop} /></div>
             <div className="md-col md-todo"><Todos d={d} setD={setD} load={load} err={err} /></div>
-            <div className="md-col md-replies">
-              <div className="md-col-h"><h2>Replies</h2>{replyCount > 0 && <span className="md-n">{replyCount}</span>}{urgentCount > 0 && <span className="md-hot">{urgentCount} urgent</span>}<span className="spacer" /><Link href="/shop/conversations" className="md-link">Conversations</Link></div>
+            {/* an Email summary now, not a red Replies list (Oct 26, Nick: "anxiety in a box") */}
+            <div className="md-col md-replies md-email">
+              <div className="md-col-h"><h2>Email</h2><span className="spacer" /><Link href="/shop/conversations" className="md-link">Conversations</Link></div>
               {replies}
             </div>
           </aside>
@@ -98,6 +99,9 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
   const [text, setText] = useState(""), [newDue, setNewDue] = useState<string>(""), [newArea, setNewArea] = useState("shop");
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const [menu, setMenu] = useState<string | null>(null), [editing, setEditing] = useState<string | null>(null), [showDone, setShowDone] = useState(false);
+  // just the list (Oct 26, Nick picked option A: "way too complicated"): the first few, the rest one click away; a
+  // to-do's details (who it's from, its link, notes) open when you click it
+  const [all, setAll] = useState(false), [open1, setOpen1] = useState<string | null>(null);
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const say = (t: string, undo?: () => void) => { setToast({ text: t, undo }); if (toastT.current) clearTimeout(toastT.current); toastT.current = setTimeout(() => setToast(null), 6000); };
   const patchTask = (id: string, p: Partial<Task>) => setD((x) => (x ? { ...x, tasks: x.tasks.map((t) => (t.id === id ? { ...t, ...p } : t)) } : x));
@@ -107,15 +111,9 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
   const done = (d?.tasks || []).filter((t) => t.status === "done");
   const counts = useMemo(() => { const c: Record<string, number> = { all: open.length }; for (const t of open) c[t.area] = (c[t.area] || 0) + 1; return c; }, [open]);
   const shown = open.filter((t) => area === "all" || t.area === area);
-  const wk = addDays(today, 7);
-  const groups: { k: string; label: string; items: Task[]; tone?: string }[] = [
-    { k: "late", label: "Overdue", tone: "late", items: shown.filter((t) => t.due && t.due < today) },
-    { k: "today", label: "Today", items: shown.filter((t) => t.due === today) },
-    { k: "tmrw", label: "Tomorrow", items: shown.filter((t) => t.due === addDays(today, 1)) },
-    { k: "week", label: "This week", items: shown.filter((t) => t.due && t.due > addDays(today, 1) && t.due <= wk) },
-    { k: "later", label: "Later", items: shown.filter((t) => t.due && t.due > wk) },
-    { k: "none", label: "Anytime", items: shown.filter((t) => !t.due) },
-  ].filter((g) => g.items.length);
+  const sorted = [...shown].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || (b.created_at || "").localeCompare(a.created_at || ""));
+  const FIRST = 6, list = all ? sorted : sorted.slice(0, FIRST);
+  const dueShort = (dd: string) => dd === today ? "Today" : dd === addDays(today, 1) ? "Tmrw" : dd > today && dd <= addDays(today, 6) ? new Date(dd + "T12:00:00").toLocaleDateString([], { weekday: "short" }) : new Date(dd + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
 
   async function add(e?: React.FormEvent) {
     e?.preventDefault();
@@ -151,53 +149,46 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
           <button type="submit" className="btn sm primary">Add</button>
         </div>}
       </form>
-      {!compact && open.length > 0 && <div className="md-areas" role="group" aria-label="Show">
-        {["all", "personal", "money", "shop", "customer"].filter((k) => k === "all" || counts[k]).map((k) => (
-          <button key={k} type="button" className={area === k ? "on" : ""} onClick={() => setArea(k)} style={k !== "all" ? { ["--ac" as string]: AREAS[k].c } : undefined}>
-            {k !== "all" && <i />}{k === "all" ? "All" : AREAS[k].label}<span>{counts[k] || 0}</span>
-          </button>
-        ))}
-      </div>}
       <div className="md-scroll">
         {!d ? <div className="md-empty">{err ? <><b>Couldn&apos;t load your to-dos</b><span>{err}</span></> : "Loading…"}</div> : !shown.length ? (
           <div className="md-empty"><b>{area === "all" ? "All clear" : `Nothing for ${AREAS[area]?.label || area}`}</b><span>To-dos from your email show up here on their own. Add your own above.</span></div>
-        ) : groups.map((g) => (
-          <div key={g.k} className={"md-grp" + (g.tone ? " " + g.tone : "")}>
-            <div className="md-grp-h">{g.label}<span>{g.items.length}</span></div>
-            <ul className="md-list">{g.items.map((t) => (
-              <li key={t.id} className="md-task" style={{ ["--ac" as string]: AREAS[t.area]?.c || AREAS.shop.c }}>
-                <button type="button" className="md-check" aria-label={`Done: ${t.title}`} title="Done" onClick={() => finish(t)}><svg viewBox="0 0 16 16" aria-hidden><path d="M3.5 8.5l3 3 6-7" /></svg></button>
-                <div className="md-task-b">
-                  {editing === t.id
-                    ? <input className="md-edit" autoFocus defaultValue={t.title} aria-label="To-do" onBlur={async (e) => { setEditing(null); const v = e.target.value.trim(); if (v && v !== t.title) { patchTask(t.id, { title: v }); await updateTask(t.id, { title: v }); } }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditing(null); }} />
-                    : <div className="md-task-t" onDoubleClick={() => setEditing(t.id)}>{t.title}</div>}
+        ) : <>
+          <ul className="md-list md-flat">{list.map((t) => (
+            <li key={t.id} className={"md-task md-task-a" + (open1 === t.id ? " open" : "")} style={{ ["--ac" as string]: AREAS[t.area]?.c || AREAS.shop.c }}>
+              <button type="button" className="md-check" aria-label={`Done: ${t.title}`} title="Done" onClick={() => finish(t)}><svg viewBox="0 0 16 16" aria-hidden><path d="M3.5 8.5l3 3 6-7" /></svg></button>
+              <div className="md-task-b">
+                {editing === t.id
+                  ? <input className="md-edit" autoFocus defaultValue={t.title} aria-label="To-do" onBlur={async (e) => { setEditing(null); const v = e.target.value.trim(); if (v && v !== t.title) { patchTask(t.id, { title: v }); await updateTask(t.id, { title: v }); } }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditing(null); }} />
+                  : <button type="button" className="md-task-t" onClick={() => setOpen1(open1 === t.id ? null : t.id)} onDoubleClick={() => setEditing(t.id)} title={t.title}>{t.title}</button>}
+                {open1 === t.id && <>
                   <div className="md-task-m">
                     <span className="md-area"><i />{AREAS[t.area]?.label || t.area}</span>
-                    {t.due && <span className={t.due < today ? "late" : ""}>{dayName(t.due, today)}</span>}
                     {t.from && <Link href={t.mail_inbox_id ? `/shop/inbox?item=${t.mail_inbox_id}` : "/shop/inbox"} className="md-from" title={t.subject || ""}>✉ {t.from}</Link>}
                     {t.url && <Link href={t.url} className="md-from md-job">{t.source === "jobs" ? (/order-goods/.test(t.url) ? "Order goods ›" : /receiving/.test(t.url) ? "Receiving ›" : "Open the job ›") : "Open ›"}</Link>}
                     {t.handed_by && <span className="md-handed">from {t.handed_by}</span>}
                   </div>
-                  {t.notes && <div className="md-task-n" title="Click to see all" onClick={(e) => (e.currentTarget as HTMLElement).classList.toggle("open")}>{t.notes}</div>}
-                </div>
-                <button type="button" className="md-more" aria-label="More" aria-expanded={menu === t.id} onClick={(e) => { e.stopPropagation(); setMenu(menu === t.id ? null : t.id); }}>⋯</button>
-                {menu === t.id && <div className="md-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={() => setDue(t, today)}>Today</button>
-                  <button type="button" role="menuitem" onClick={() => setDue(t, addDays(today, 1))}>Tomorrow</button>
-                  <button type="button" role="menuitem" onClick={() => setDue(t, addDays(today, 7))}>Next week</button>
-                  <label className="md-menu-date">Pick a day<input type="date" defaultValue={t.due || ""} onChange={(e) => setDue(t, e.target.value || null)} /></label>
-                  {t.due && <button type="button" role="menuitem" onClick={() => setDue(t, null)}>No date</button>}
-                  <hr />
-                  <button type="button" role="menuitem" onClick={() => { setMenu(null); setEditing(t.id); }}>Rename</button>
-                  {(d?.others || []).map((o) => <button key={o.email} type="button" role="menuitem" onClick={() => hand(t, o)}>Hand to {o.name}</button>)}
-                  <div className="md-menu-areas">{Object.entries(AREAS).map(([k, a]) => <button key={k} type="button" title={a.label} className={t.area === k ? "on" : ""} style={{ ["--ac" as string]: a.c }} onClick={async () => { setMenu(null); patchTask(t.id, { area: k }); await updateTask(t.id, { area: k }); }}>{a.label}</button>)}</div>
-                  <hr />
-                  <button type="button" role="menuitem" className="danger" onClick={() => drop(t)}>Not a to-do</button>
-                </div>}
-              </li>
-            ))}</ul>
-          </div>
-        ))}
+                  {t.notes && <div className="md-task-n open">{t.notes}</div>}
+                </>}
+              </div>
+              {t.due && <span className={"md-due" + (t.due < today ? " late" : "")}>{dueShort(t.due)}</span>}
+              <button type="button" className="md-more" aria-label="More" aria-expanded={menu === t.id} onClick={(e) => { e.stopPropagation(); setMenu(menu === t.id ? null : t.id); }}>⋯</button>
+              {menu === t.id && <div className="md-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => setDue(t, today)}>Today</button>
+                <button type="button" role="menuitem" onClick={() => setDue(t, addDays(today, 1))}>Tomorrow</button>
+                <button type="button" role="menuitem" onClick={() => setDue(t, addDays(today, 7))}>Next week</button>
+                <label className="md-menu-date">Pick a day<input type="date" defaultValue={t.due || ""} onChange={(e) => setDue(t, e.target.value || null)} /></label>
+                {t.due && <button type="button" role="menuitem" onClick={() => setDue(t, null)}>No date</button>}
+                <hr />
+                <button type="button" role="menuitem" onClick={() => { setMenu(null); setEditing(t.id); }}>Rename</button>
+                {(d?.others || []).map((o) => <button key={o.email} type="button" role="menuitem" onClick={() => hand(t, o)}>Hand to {o.name}</button>)}
+                <div className="md-menu-areas">{Object.entries(AREAS).map(([k, a]) => <button key={k} type="button" title={a.label} className={t.area === k ? "on" : ""} style={{ ["--ac" as string]: a.c }} onClick={async () => { setMenu(null); patchTask(t.id, { area: k }); await updateTask(t.id, { area: k }); }}>{a.label}</button>)}</div>
+                <hr />
+                <button type="button" role="menuitem" className="danger" onClick={() => drop(t)}>Not a to-do</button>
+              </div>}
+            </li>
+          ))}</ul>
+          {sorted.length > FIRST && <button type="button" className="md-link md-all" onClick={() => setAll(!all)}>{all ? "Show fewer" : `${sorted.length - FIRST} more`}</button>}
+        </>}
         {done.length > 0 && <div className="md-done">
           <button type="button" className="md-done-h" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>Done today · {done.length}</button>
           {showDone && <ul className="md-list">{done.map((t) => (
