@@ -5,6 +5,7 @@ import { useRole } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
 import GangReorder from "@/components/GangReorder";
+import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 
 /**
  * Gang sheets: every DTF gang sheet made, like the Artwork page (Oct 26, Nick: "when you click gang sheets, it opens to
@@ -13,8 +14,8 @@ import GangReorder from "@/components/GangReorder";
  * (/shop/gang-sheet/builder). Each card opens its sheet, reorders it, or puts it away (two clicks; archived, never erased).
  */
 type Row = {
-  id: string; name: string; owner: string; status: string; updated_at: string; supplier_order: string | null; expected: string | null; customer_id: string | null;
-  data: { logos?: { name: string; path?: string; src?: string; vers: { qty: number }[] }[]; jobs?: { job: string }[]; files?: { length: number }[] };
+  id: string; name: string; owner: string; status: string; updated_at: string; ordered_at: string | null; supplier_order: string | null; expected: string | null; customer_id: string | null;
+  data: { logos?: { name: string; path?: string; src?: string; vers: { qty: number }[] }[]; jobs?: { job: string }[]; files?: { length: number; at?: string }[] };
 };
 type Show = "all" | "mine" | "open" | "ordered";
 
@@ -35,7 +36,7 @@ export default function GangSheets() {
     const old = new URLSearchParams(window.location.search).get("sheet");
     if (old) { window.location.replace(`/shop/gang-sheet/builder?sheet=${old}`); return; }
     void (async () => {
-      const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, supplier_order, expected, customer_id, data").is("archived_at", null).order("updated_at", { ascending: false }).limit(300);
+      const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, customer_id, data").is("archived_at", null).order("updated_at", { ascending: false }).limit(300);
       const rs = (data || []) as Row[];
       setRows(rs);
       const ids = [...new Set(rs.map((r) => r.customer_id).filter(Boolean) as string[])];
@@ -65,6 +66,19 @@ export default function GangSheets() {
   });
   const n = (k: Show) => (rows || []).filter((r) => (k === "all" ? true : k === "mine" ? r.owner === me : k === "open" ? r.status !== "ordered" : r.status === "ordered")).length;
 
+  // this month's numbers (Oct 26, Nick: "total spend this month, total film used, average cost per transfer"): the sheets
+  // ordered this month, each priced by its last download (the film sizes bought)
+  const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
+  const ordered = (rows || []).filter((r) => r.status === "ordered" && new Date(r.ordered_at || r.updated_at) >= month);
+  const lastFiles = (r: Row) => { const fs = r.data?.files || []; if (!fs.length) return []; const t = Math.max(...fs.map((f) => new Date(f.at || 0).getTime())); return fs.filter((f) => t - new Date(f.at || 0).getTime() < 120000); };
+  const spend = ordered.reduce((a, r) => a + lastFiles(r).reduce((b, f) => b + sheetFor(f.length).price, 0), 0);
+  const filmIn = ordered.reduce((a, r) => a + lastFiles(r).reduce((b, f) => b + sheetFor(f.length).length, 0), 0);
+  const priced = ordered.filter((r) => lastFiles(r).length);
+  const transfers = priced.reduce((a, r) => a + pcs(r), 0);
+  const openN = (rows || []).filter((r) => r.status !== "ordered").length;
+  const money = (v: number) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const monthName = month.toLocaleDateString("en-US", { month: "long" });
+
   async function del(id: string) {
     if (armed !== id) { setArmed(id); return; }
     setArmed("");
@@ -77,6 +91,13 @@ export default function GangSheets() {
       <div className="page-head">
         <div><h1>Gang sheets</h1><div className="eyebrow">Heat press: every DTF gang sheet made, for any customer or job</div></div>
         <div className="row"><a className="btn primary" href="/shop/gang-sheet/builder?new=1">+ New gang sheet</a></div>
+      </div>
+      <div className="stats">
+        <button type="button" className="stat" onClick={() => setShow("ordered")} title={`${DTF_DALLAS.name} sheets ordered in ${monthName}, at their price before tax`}><span className="v">{money(spend)}</span><span className="k">Spent in {monthName}</span></button>
+        <button type="button" className="stat" onClick={() => setShow("ordered")} title="22-inch film bought this month"><span className="v">{filmIn ? `${filmIn.toLocaleString("en-US")}"` : "—"}</span><span className="k">Film bought ({(filmIn / 12).toFixed(1)} ft)</span></button>
+        <button type="button" className="stat" onClick={() => setShow("ordered")}><span className="v">{transfers.toLocaleString("en-US")}</span><span className="k">Transfers ordered</span></button>
+        <button type="button" className="stat" onClick={() => setShow("ordered")}><span className="v">{transfers ? money(spend / transfers) : "—"}</span><span className="k">Per transfer, average</span></button>
+        <button type="button" className="stat" onClick={() => setShow("open")} title="Sheets not ordered yet"><span className="v">{openN}</span><span className="k">Open sheets</span></button>
       </div>
       <div className="toolbar art-tools">
         <label className="aa-search"><SearchInput placeholder="Search sheets, customers, jobs, logos" value={q} onChange={(e) => setQ(e.target.value)} /></label>
