@@ -14345,3 +14345,10 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .grd-f{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line)}
 .grd-f .field input{width:120px}
 .grd-f > .faint{margin-bottom:9px;white-space:nowrap}
+/* phones: Sheet settings opens under the buttons, full width, not off the left edge */
+@media (max-width:700px){
+  .gang-acts{position:relative}
+  .gang-acts .gang-pop{position:static}
+  .gang-pop-b{left:0;right:0;width:auto}
+  .gang-row2{grid-template-columns:1fr}
+}
