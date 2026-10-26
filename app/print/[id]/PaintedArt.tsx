@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type CSSProperties } from "react";
-import { paintPrint } from "@/lib/inkColors";
-import type { Imprint } from "@/lib/pricing";
+import { colorHex, detectColors, paintPrint } from "@/lib/inkColors";
+import { inkNames, type Imprint } from "@/lib/pricing";
 
 /** cut exactly to the art (the painter leaves a small clear margin), so the measured width × height lines meet its edges */
 export function tight(c: HTMLCanvasElement): HTMLCanvasElement {
@@ -26,30 +26,54 @@ type Box = { x: number; y: number; w: number; h: number; of: { w: number; h: num
  * edges stay smooth, the white page comes off, white in the art is the shirt for spot colors with no white ink, and the
  * result is cut to the art.
  */
-export default function PaintedArt({ src, imp, inkMap, designId, className, style, alt, hires, hiresName, crop }: {
-  src: string; imp?: Pick<Imprint, "inks" | "colors" | "method">; inkMap?: Imprint["inkMap"]; designId?: string; className?: string; style?: CSSProperties; alt?: string;
+const rgbOf = (h: string) => { const x = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) || 0); };
+const dist = (a: string, b: string) => { const p = rgbOf(a), q = rgbOf(b); return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2; };
+
+export default function PaintedArt({ src, imp, inkMap, designId, className, style, alt, hires, hiresName, crop, swap }: {
+  src: string; imp?: Pick<Imprint, "inks" | "colors" | "method">;
+  /** a color change (Imprint.inkBy for one garment color): ink name (lower case) → the ink printed instead (Oct 26) */ swap?: Record<string, string> | null; inkMap?: Imprint["inkMap"]; designId?: string; className?: string; style?: CSSProperties; alt?: string;
   /** the original vector file (signed link): the saved PDF draws the art from it at full resolution */ hires?: string; hiresName?: string;
   /** where the art sits in the file: shown cut to it until the painted (already cut) picture is ready */ crop?: Box | null;
 }) {
   const im = inkMap && inkMap.design === designId ? inkMap.map : null;
   const want: Record<string, string> = {};
-  if (im) for (const [s, v] of Object.entries(im)) want[s] = v.name === "none" || !v.hex ? "none" : v.hex;
+  const sw = swap && Object.keys(swap).length ? swap : null;
+  if (im) for (const [s, v] of Object.entries(im)) {
+    const to = sw && v.name ? sw[v.name.trim().toLowerCase()] : "";
+    want[s] = v.name === "none" || !v.hex ? "none" : (to && colorHex(to)) || v.hex;
+  }
   const targets = Object.values(want).filter((v) => v !== "none").map((v) => v.toLowerCase());
   const dropWhite = imp?.method !== "dtf" && (imp?.colors || 0) > 0 && (imp?.colors || 0) < 11 && !/white/i.test(imp?.inks || "") && !targets.some((h) => /^#?f[a-f0-9]f[a-f0-9]f[a-f0-9]$/i.test(h));
   const changed = Object.entries(want).some(([s, v]) => v === "none" || v.toLowerCase() !== s.toLowerCase());
-  const key = `${JSON.stringify(want)}|${dropWhite ? "w" : ""}`;
+  const key = `${JSON.stringify(want)}|${dropWhite ? "w" : ""}|${sw && !im ? JSON.stringify(sw) : ""}`;
   const [out, setOut] = useState("");
   useEffect(() => {
     let live = true;
     setOut("");
     const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => { try { const u = tight(paintPrint(img, want, { paper: dropWhite, maxSide: 1800 })).toDataURL("image/png"); if (live) setOut(u); } catch { /* can't read the picture: as uploaded */ } };
+    img.onload = () => {
+      try {
+        let w = want;
+        // a color change on art with no ink picks: each of its colors goes to the nearest of the print's inks, then swapped
+        if (sw && !im) {
+          const inks = inkNames(imp?.inks || "").map((n) => ({ n, hex: colorHex(n) })).filter((x) => x.hex) as { n: string; hex: string }[];
+          w = {};
+          for (const q of detectColors(img)) {
+            if (q.share < 0.004) continue;
+            const near = inks.length === 1 ? inks[0] : inks.slice().sort((a, b) => dist(a.hex, q.hex) - dist(b.hex, q.hex))[0];
+            const to = near ? sw[near.n.toLowerCase()] : "";
+            if (to && colorHex(to)) w[q.hex.toUpperCase()] = colorHex(to)!;
+          }
+        }
+        const u = tight(paintPrint(img, w, { paper: dropWhite, maxSide: 1800 })).toDataURL("image/png"); if (live) setOut(u);
+      } catch { /* can't read the picture: as uploaded */ }
+    };
     img.src = src;
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, key]);
   // the saved PDF paints it again from the same file, bigger (PrintButton cropAtFullSize)
-  const data = { "data-hires": hires || undefined, "data-hires-name": hiresName || undefined, "data-inkmap": changed ? JSON.stringify(want) : undefined, "data-src": out ? src : undefined, "data-paint": out ? JSON.stringify({ want, paper: dropWhite }) : undefined };
+  const data = { "data-hires": hires || undefined, "data-hires-name": hiresName || undefined, "data-inkmap": changed ? JSON.stringify(want) : undefined, "data-src": out ? src : undefined, "data-paint": out && !(sw && !im) ? JSON.stringify({ want, paper: dropWhite }) : undefined };
   // eslint-disable-next-line @next/next/no-img-element
   if (out || !crop) return <img className={className} style={style} src={out || src} alt={alt || ""} {...data} />;
   // not painted yet (or can't be): the file as uploaded, cut to where the art sits
