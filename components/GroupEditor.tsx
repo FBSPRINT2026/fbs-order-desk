@@ -567,7 +567,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                   </div>
                   <div className="a-sz">
                     {l.oneSize ? (
-                      <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
+                      <div className="os-note" title={l.sizeRun?.length === 1 ? undefined : "Clear the Qty to switch back to sizes"}>One-size item</div>
                     ) : (
                       <SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(s) => !colsFor(l).includes(s)} sizes={l.sizes || {}} onSet={setQty}
                         up={(s) => (l.sizeUpSet?.[s as Size] != null ? +l.sizeUpSet[s as Size]! : !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])}
