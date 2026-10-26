@@ -559,13 +559,24 @@ export function lineQty(l: { sizes?: Partial<Record<Size, number>> }) {
   return SIZES.reduce((a, sz) => a + num(l.sizes?.[sz]), 0);
 }
 
-/** The order's garment groups; converts older one-garment lines on the fly. */
+/** front prints first, then the back, then sleeves, then anything else (tags); same side keeps its order */
+export const printSideRank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder|nape/.test(l) ? 2 : /front|chest|pocket|vertical|bottom/.test(l) ? 1 : 4; };
+/** put a group's prints front first (in place, stable). Oct 26, Nick: "We always want to do the front print listed first and then the back print listed second." */
+export function frontFirst<T extends { location: string }>(list: T[]): T[] {
+  if (list.some((x, i) => i > 0 && printSideRank(list[i - 1].location) > printSideRank(x.location))) {
+    const s = list.map((x, i) => ({ x, i })).sort((a, b) => printSideRank(a.x.location) - printSideRank(b.x.location) || a.i - b.i);
+    s.forEach((e, i) => { list[i] = e.x; });
+  }
+  return list;
+}
+
+/** The order's garment groups, each one's prints front first; converts older one-garment lines on the fly. */
 export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
-  if (o.groups && o.groups.length) return o.groups;
+  if (o.groups && o.groups.length) { for (const g of o.groups) if (Array.isArray(g.imprints)) frontFirst(g.imprints); return o.groups; }
   return (o.lines || []).map((l) => ({
     id: l.id,
     lines: [{ id: l.id + "-g", style: l.style || "", brand: "", garment: l.garment || "", color: l.color || "", cost: l.cost, sizes: l.sizes || {}, priceOverride: l.priceOverride ?? null }],
-    imprints: (l.decorations || []).map((d) => ({ id: d.id, method: d.method, location: d.location, colors: d.colors, inks: "", size: "", notes: "" })),
+    imprints: frontFirst((l.decorations || []).map((d) => ({ id: d.id, method: d.method, location: d.location, colors: d.colors, inks: "", size: "", notes: "" }))),
   }));
 }
 
