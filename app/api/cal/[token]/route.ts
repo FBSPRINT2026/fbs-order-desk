@@ -3,8 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 /**
- * A person's private calendar (My Day → Calendar → Add to your phone): the events they added, plus the shop's
- * in-hands dates when that's on. Phones and Outlook subscribe to this link and check it for changes every so often.
+ * A person's private calendar (My Day → Calendar → Add to your phone): their appointments only. Jobs stay in the
+ * portal (Oct 26, Nick: "I have… thousands of jobs due every year. I don't need a reminder on my phone for that"). Phones and Outlook subscribe to this link and check it for changes every so often.
  * The token in the link is the only key, so it's long and random; a new one can be made if it's ever shared.
  */
 const esc = (s: string) => (s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const [{ data: evs }, { data: who }, shop] = await Promise.all([
     admin.from("events").select("id, title, notes, place, starts_at, ends_at, day, all_day, created_at").eq("owner", f.owner).eq("status", "added").gte("day", since).limit(2000),
     admin.from("staff").select("name").eq("email", f.owner).maybeSingle(),
-    f.shop ? admin.from("orders").select("id, number, nickname, due_date, status, customers(company, name)").gte("due_date", since).not("status", "in", "(quote,quote_sent,request)").limit(2000) : Promise.resolve({ data: [] }),
+    false ? admin.from("orders").select("id, number, nickname, due_date, status, customers(company, name)").gte("due_date", since).not("status", "in", "(quote,quote_sent,request)").limit(2000) : Promise.resolve({ data: [] }),
   ]);
   const stamp = utc(new Date().toISOString());
   const site = (process.env.NEXT_PUBLIC_SITE_URL || "https://portal.fbsprint.com").replace(/\/$/, "");

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { cheerWin, setCheerOn } from "@/components/Cheer";
-import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, setCalendarShop, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type Task } from "@/app/shop/myday-actions";
+import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type Task } from "@/app/shop/myday-actions";
 
 /**
  * My Day (the dashboard's top, Oct 12): one place for the day. Three columns: replies owed (customers: email and portal
@@ -266,8 +266,8 @@ export function EventRow({ e, showDay, today }: { e: CalEvent; showDay?: boolean
   );
 }
 
-export function NewEvent({ day, onDone }: { day: string; onDone: (e: CalEvent | null) => void }) {
-  const [t, setT] = useState(""), [dd, setDd] = useState(day), [s, setS] = useState(""), [en, setEn] = useState(""), [pl, setPl] = useState(""), [err, setErr] = useState("");
+export function NewEvent({ day, start = "", end = "", onDone }: { day: string; /** "HH:MM" when a time was clicked on the Calendar */ start?: string; end?: string; onDone: (e: CalEvent | null) => void }) {
+  const [t, setT] = useState(""), [dd, setDd] = useState(day), [s, setS] = useState(start), [en, setEn] = useState(end), [pl, setPl] = useState(""), [err, setErr] = useState("");
   return (
     <form className="md-newev" onSubmit={async (ev) => { ev.preventDefault(); const r = await addEvent({ title: t, day: dd, start: s || null, end: en || null, place: pl }); if (r.ok) onDone(r.event); else setErr(r.error); }}>
       <input autoFocus value={t} onChange={(e) => setT(e.target.value)} placeholder="What's happening?" aria-label="Event" />
@@ -290,7 +290,7 @@ export function PhoneLink({ onClose }: { onClose: () => void }) {
     <div className="md-modal" role="dialog" aria-modal="true" aria-label="Your calendar on your phone" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="md-modal-b">
         <h3>Your calendar on your phone</h3>
-        <p>Events you add here show up in your phone&apos;s calendar, with a reminder an hour before. Set it up once.</p>
+        <p>Your appointments show up in your phone&apos;s calendar, with a reminder an hour before. Set it up once. (Jobs stay here in the portal.)</p>
         {err && <div className="err">{err}</div>}
         {!l ? !err && <p className="faint">Making your link…</p> : <>
           <a className="btn primary md-modal-go" href={l.webcal}>Tap to add it to this phone</a>
@@ -300,7 +300,6 @@ export function PhoneLink({ onClose }: { onClose: () => void }) {
             <li>In Outlook: Add Calendar → From Internet, and paste the link.</li>
           </ol>
           <div className="md-copy"><code>{l.https}</code><button type="button" className="btn sm" onClick={async () => { await navigator.clipboard.writeText(l.https).catch(() => null); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>{copied ? "Copied" : "Copy link"}</button></div>
-          <label className="check"><input type="checkbox" defaultChecked={l.shop} onChange={(e) => setCalendarShop(e.target.checked)} />Include the shop&apos;s in-hands dates</label>
           <p className="faint md-small">This link is private to you. Anyone who has it can see your calendar, so don&apos;t share it.</p>
         </>}
         <div className="md-modal-x"><button type="button" className="btn sm ghost" onClick={onClose}>Close</button></div>

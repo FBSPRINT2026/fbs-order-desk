@@ -197,6 +197,81 @@ export async function shopDates(fromDay: string, toDay: string) {
   } catch (e) { return fail(e); }
 }
 
+/** the appointments in a window (the Calendar's day / week / month), added and suggested */
+export async function eventsBetween(fromDay: string, toDay: string) {
+  try {
+    const { admin, owner } = await me();
+    const f = ymd(fromDay), t = ymd(toDay);
+    if (!f || !t) return { ok: false as const, error: "Those days don't look right." };
+    const { data, error } = await admin.from("events").select("*").eq("owner", owner).in("status", ["added", "suggested"]).gte("day", f).lte("day", t).order("day").order("starts_at", { ascending: true, nullsFirst: true }).limit(1000);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, events: (data || []) as CalEvent[] };
+  } catch (e) { return fail(e); }
+}
+
+/** move or resize an appointment (the Calendar's week view: drag it, or drag its bottom edge), or change its words */
+export async function updateEvent(id: string, p: { title?: string; place?: string; notes?: string; starts_at?: string | null; ends_at?: string | null; day?: string; all_day?: boolean }) {
+  try {
+    const { admin, owner } = await me();
+    const patch: Record<string, unknown> = {};
+    if (p.title != null) { if (!p.title.trim()) return { ok: false as const, error: "Give it a name." }; patch.title = p.title.trim().slice(0, 200); }
+    if (p.place != null) patch.place = p.place.slice(0, 200);
+    if (p.notes != null) patch.notes = p.notes.slice(0, 1000);
+    const iso = (v: unknown) => (typeof v === "string" && !isNaN(Date.parse(v)) ? new Date(v).toISOString() : null);
+    if (p.starts_at !== undefined) patch.starts_at = iso(p.starts_at);
+    if (p.ends_at !== undefined) patch.ends_at = iso(p.ends_at);
+    if (p.day != null) { const d = ymd(p.day); if (!d) return { ok: false as const, error: "That day doesn't look right." }; patch.day = d; }
+    if (p.all_day != null) patch.all_day = p.all_day;
+    const { data, error } = await admin.from("events").update(patch).eq("id", id).eq("owner", owner).select("*").single();
+    if (error) throw new Error(error.message);
+    return { ok: true as const, event: data as CalEvent };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * The Jobs calendar (Oct 26, Nick: "you look at your jobs calendar. It's like, here's what's due today. Here's what's due
+ * tomorrow"): every open job due in the window, ours and the ones still in Printavo, plus the late ones (due before
+ * today and not done). by = "due" (the in-hands date) or "print" (the production date).
+ */
+export type CalJob = { id: string; href: string; number: string; customer: string; nickname: string; day: string; qty: number; status: string; statusLabel: string; methods: string[]; printavo: boolean };
+export async function jobDates(fromDay: string, toDay: string, today: string, by: "due" | "print" = "due") {
+  try {
+    const { admin } = await me();
+    const f = ymd(fromDay), t = ymd(toDay), td = ymd(today);
+    if (!f || !t || !td) return { ok: false as const, error: "Those days don't look right." };
+    const col = by === "print" ? "production_date" : "due_date";
+    const lateFrom = new Date(Date.parse(td + "T12:00:00Z") - 60 * 864e5).toISOString().slice(0, 10);
+    const lo = f < td ? f : lateFrom;
+    const OPEN_PV = '("Job Completed","Quote - Closed","Quote")';
+    const [{ data: ours }, { data: pv }] = await Promise.all([
+      admin.from("orders").select(`id, number, nickname, ${col}, qty, status, groups, customers(company, name)`).gte(col, lo).lte(col, t).eq("draft", false).is("discarded_at", null)
+        .not("status", "in", "(quote,quote_sent,request,completed)").order(col).limit(1000),
+      by === "print" ? Promise.resolve({ data: [] }) : admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, kind, customer_id, imps:data->groups").eq("kind", "invoice").gte("due_date", lo).lte("due_date", t)
+        .not("status_name", "in", OPEN_PV).order("due_date").limit(1000),
+    ]);
+    const kindOf = (w: string) => (/emb/i.test(w) ? "embroidery" : /dtf|transfer|heat/i.test(w) ? "dtf" : /screen/i.test(w) ? "screen" : "");
+    const custIds = [...new Set(((pv || []) as { customer_id: string | null }[]).map((r) => r.customer_id).filter(Boolean))] as string[];
+    const names = new Map<string, string>();
+    for (let i = 0; i < custIds.length; i += 200) {
+      const { data: cs } = await admin.from("customers").select("id, company, name").in("id", custIds.slice(i, i + 200));
+      for (const c of (cs || []) as { id: string; company: string | null; name: string | null }[]) names.set(c.id, c.company || c.name || "");
+    }
+    const { STATUSES } = await import("@/lib/pricing");
+    const label = (k: string) => STATUSES.find((x) => x.k === k)?.label || k;
+    const jobs: CalJob[] = [
+      ...((ours || []) as unknown as { id: string; number: number; nickname: string | null; qty: number | null; status: string; groups: { imprints?: { method?: string }[] }[] | null; customers: { company: string | null; name: string | null } | null; [k: string]: unknown }[]).map((o) => ({
+        id: o.id, href: `/shop/orders/${o.id}`, number: String(o.number), customer: o.customers?.company || o.customers?.name || "", nickname: o.nickname || "", day: String(o[col] || ""), qty: o.qty || 0,
+        status: o.status, statusLabel: label(o.status), methods: [...new Set((o.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.method || "")).filter(Boolean))], printavo: false,
+      })),
+      ...((pv || []) as { id: string; visual_id: string; nickname: string | null; due_date: string; qty: number | null; status_name: string; customer_id: string | null; imps: { imprints?: { typeOfWork?: string }[] }[] | null }[]).map((o) => ({
+        id: o.id, href: `/shop/archive/${o.id}`, number: o.visual_id, customer: (o.customer_id && names.get(o.customer_id)) || "", nickname: o.nickname || "", day: o.due_date, qty: o.qty || 0,
+        status: "printavo", statusLabel: o.status_name, methods: [...new Set((o.imps || []).flatMap((g) => (g.imprints || []).map((i) => kindOf(i.typeOfWork || ""))).filter(Boolean))], printavo: true,
+      })),
+    ].filter((j) => j.day);
+    return { ok: true as const, jobs };
+  } catch (e) { return fail(e); }
+}
+
 /** the to-dos and suggested events the AI made from one email in the Inbox */
 export async function inboxItemExtras(mailInboxId: string) {
   try {
