@@ -25,7 +25,6 @@ export default async function Page() {
               <li><b>Fill in the From name and addresses</b>, Save, and Send a test to me.</li>
               <li><b>Sign-in codes</b> are sent by Supabase: set the same sender in Supabase → Authentication → Emails (SMTP settings).</li>
             </ol>
-            <p className="faint" style={{ fontSize: 12.5, margin: "8px 0 0" }}>The launch email&apos;s test still sends from your own mailbox for now.</p>
           </div>
         </section>
       </div>

@@ -1,15 +1,13 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail, siteUrl } from "@/lib/email";
-import { accountForUser, cfgOf } from "@/lib/mail/config";
-import { sendFromMailbox } from "@/lib/mail/send";
+import { sendEmail, sendEmailWhy, siteUrl } from "@/lib/email";
 import { LAUNCH_SUBJECT, launchEmailHtml } from "@/lib/launchEmail";
 import { siteFrom } from "@/lib/siteEmail";
 
 /**
- * The portal launch email: a test copy to the signed-in owner only, from their own mailbox (the one connected in the
- * Inbox), else the site's email service. Sending to customers is its own step below (sendLaunchBatch), owner only,
+ * The portal launch email: a test copy (to the owner or one address they type), from the site's address like every
+ * site email. Sending to customers is its own step below (sendLaunchBatch), owner only,
  * picked customer by customer.
  */
 /** a test copy: to you, or to any one address you type (Oct 26, Nick: "send it to Amanda just to see how it shows on her phone") */
@@ -22,14 +20,10 @@ export async function sendLaunchTest(company = "", toAddr = ""): Promise<{ ok: b
   const first = String(v.user.user_metadata?.full_name || v.user.user_metadata?.name || "").split(/\s+/)[0] || "";
   const subject = `[Test] ${LAUNCH_SUBJECT}`;
   const html = launchEmailHtml({ site, portalUrl: `${site}/portal`, firstName: first, company: company.trim().slice(0, 42) || undefined });
-  const text = `It's here: your new FBS Print customer portal.\n\nYour login is already set up.\n1. Go to ${site}/portal\n2. Enter your email\n3. Type the 6-digit code we email you\n`;
-  let why = "";
-  try {
-    const own = await accountForUser(createAdminClient(), v.user.id);
-    if (own?.enabled) { await sendFromMailbox(cfgOf(own), { to, subject, text, html }); return { ok: true, to }; }
-  } catch (e) { why = e instanceof Error ? e.message : String(e); }
-  if (await sendEmail({ to, subject, html })) return { ok: true, to };
-  return { ok: false, error: why || "Couldn't send it: connect your email in the Inbox, or check the email service in Settings → Connections." };
+  // from the site's address like every site email (Oct 26, Nick: "all emails come from portal… the test email is still
+  // coming from my address"): the portal mailbox when it's connected
+  const r = await sendEmailWhy({ to, subject, html });
+  return r.ok ? { ok: true, to } : { ok: false, error: `Not sent from ${r.from}. ${r.why || ""}`.trim() };
 }
 
 export type LaunchRecipient = { id: string; company: string; name: string; email: string; moved: boolean; sentAt: string | null };
