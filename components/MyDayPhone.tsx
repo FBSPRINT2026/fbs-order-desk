@@ -17,7 +17,7 @@ import { addTask, jobDates, setEventStatus, setTaskDone, type CalEvent, type Cal
  * Business (two numbers, one chart, favorites as one-line cards). The computer keeps its own layout.
  */
 type Day = { today: string; tasks: Task[]; events: CalEvent[]; others: { email: string; name: string }[]; hasFeed: boolean };
-type Tab = "today" | "cal" | "email" | "todo" | "biz";
+export type Tab = "today" | "cal" | "email" | "todo" | "biz";
 const TZ = "America/Chicago";
 const addDays = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const fmt = (d: string, o: Intl.DateTimeFormatOptions) => new Date(d + "T12:00:00Z").toLocaleDateString([], { ...o, timeZone: "UTC" });
@@ -66,19 +66,45 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
       {tab === "todo" && <TodoTab d={d} setD={setD} today={today} finish={finish} reopen={reopen} />}
       {tab === "biz" && <div className="mdp-pad"><h1 className="mdp-h">Business</h1>{business}</div>}
 
-      <nav className="mdp-bar" aria-label="My Day">
-        {([
-          ["today", "Today", <><circle key="a" cx="12" cy="12" r="8" /><path key="b" d="M12 8v4l3 2" /></>, 0],
-          ["cal", "Calendar", <><rect key="a" x="3" y="5" width="18" height="16" rx="2" /><path key="b" d="M3 10h18M8 3v4M16 3v4" /></>, 0],
-          ["email", "Email", <><rect key="a" x="3" y="5" width="18" height="14" rx="2" /><path key="b" d="M3 7l9 6 9-6" /></>, mails],
-          ["todo", "To-do", <path key="a" d="M4 7h16M4 12h16M4 17h10" />, dueTasks.length],
-          ["biz", "Business", <path key="a" d="M4 20V10M10 20V4M16 20v-7M22 20H2" />, 0],
-        ] as [Tab, string, ReactNode, number][]).map(([k, l, ic, n]) => (
-          <button key={k} type="button" className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}>
-            <svg viewBox="0 0 24 24" aria-hidden>{ic}</svg>{l}{n > 0 && <em>{n > 99 ? "99+" : n}</em>}
-          </button>
-        ))}
-      </nav>
+      <PhoneDayBar active={tab} mails={mails} todos={dueTasks.length} onPick={(k) => go(k)} />
+    </div>
+  );
+}
+
+/**
+ * The five tabs along the bottom. On My Day they switch its tabs; on the Email page (Oct 26, Nick: "keep the my day
+ * toolbar down at the bottom when you click… it would just show the normal screen… if you start going into email…
+ * you would just hide it") Email is lit and the others go back to My Day on that tab. Hidden once you go into an
+ * email (the page marks <html data-phone-deep>).
+ */
+export function PhoneDayBar({ active, mails = 0, todos = 0, onPick }: { active: Tab; mails?: number; todos?: number; onPick: (k: Tab) => void }) {
+  return (
+    <nav className="mdp-bar" aria-label="My Day">
+      {([
+        ["today", "Today", <><circle key="a" cx="12" cy="12" r="8" /><path key="b" d="M12 8v4l3 2" /></>, 0],
+        ["cal", "Calendar", <><rect key="a" x="3" y="5" width="18" height="16" rx="2" /><path key="b" d="M3 10h18M8 3v4M16 3v4" /></>, 0],
+        ["email", "Email", <><rect key="a" x="3" y="5" width="18" height="14" rx="2" /><path key="b" d="M3 7l9 6 9-6" /></>, mails],
+        ["todo", "To-do", <path key="a" d="M4 7h16M4 12h16M4 17h10" />, todos],
+        ["biz", "Business", <path key="a" d="M4 20V10M10 20V4M16 20v-7M22 20H2" />, 0],
+      ] as [Tab, string, ReactNode, number][]).map(([k, l, ic, n]) => (
+        <button key={k} type="button" className={active === k ? "on" : ""} aria-current={active === k ? "page" : undefined} onClick={() => onPick(k)}>
+          <svg viewBox="0 0 24 24" aria-hidden>{ic}</svg>{l}{n > 0 && <em>{n > 99 ? "99+" : n}</em>}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** the bar on the Email page (owners' phones): the other tabs go back to My Day, opened on that tab */
+export function InboxDayBar() {
+  const router = useRouter();
+  return (
+    <div className="mdp-only">
+      <PhoneDayBar active="email" onPick={(k) => {
+        if (k === "email") { window.scrollTo({ top: 0 }); return; }
+        try { localStorage.setItem("fbs:myday.phone", JSON.stringify(k)); localStorage.setItem("fbs:@t:myday.phone", String(Date.now())); } catch { /* blocked */ }
+        router.push("/shop");
+      }} />
     </div>
   );
 }

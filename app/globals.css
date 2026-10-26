@@ -14758,3 +14758,9 @@ main.main .md-calsw > button.on small{background:var(--fbs-blue);color:#fff}
 .an-phone .an-split{background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px}
 .fv-ph .fv-tk{margin-top:5px;max-width:180px}
 .fv-ph-row{align-items:flex-start}
+
+/* My Day's bottom bar on the Email page: phones only, and gone once an email is open (Oct 26) */
+.mdp-only{display:none}
+@media (max-width:760px){ .mdp-only{display:block;height:74px} }
+html[data-phone-deep] .mdp-only{display:none}
+@media (max-width:760px){ body:has(.mdp-only .mdp-bar) .ibx2-ffab{bottom:calc(80px + env(safe-area-inset-bottom))} html[data-phone-deep] body .ibx2-ffab{bottom:calc(18px + env(safe-area-inset-bottom))} }

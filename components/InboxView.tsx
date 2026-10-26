@@ -411,6 +411,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
   useEffect(() => { if (picked) { setDrop(null); setSugOpen(false); } }, [picked]);
+  // phones: inside an email, My Day's bottom bar steps aside (Oct 26, Nick: "if you start going into email… just hide it")
+  useEffect(() => { document.documentElement.toggleAttribute("data-phone-deep", picked); return () => document.documentElement.removeAttribute("data-phone-deep"); }, [picked]);
   // the email showing goes in the address (see the link handler above), so a reload comes back to it
   useEffect(() => {
     if (!urlDone.current) return;
