@@ -123,7 +123,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     const notesPage = longNotes && !mk.length;
     const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
-    const printPages = g.imprints.length + vars.reduce((a, v) => a + v.length, 0);
+    // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
+    // doesn't change, you just need one close-up")
+    const printPages = g.imprints.length;
     return { lines, noteParts, longNotes, more, mk, notesPage, vars, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
@@ -153,7 +155,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
         // each print's press sheet, then one more for each color change
         const printPg: number[] = [];
-        g.imprints.reduce((a, _d, di) => { printPg[di] = a; return a + 1 + vars[di].length; }, pgPrint);
+        g.imprints.reduce((a, _d, di) => { printPg[di] = a; return a + 1; }, pgPrint);
         const notesBlock = (
           <>
             {noteParts.join("\n\n")}
@@ -263,10 +265,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             {/* 4. each print's press sheet */}
             {g.imprints.map((d, di) => (
               <div key={d.id} style={{ display: "contents" }}>
-                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={vars[di].length ? colorList[0] || colors : colors} qty={vars[di].length ? lines.filter((l) => ckey(l.color) === ckey(colorList[0] || "")).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0} page={printPg[di]} total={total} footL={footL} />
-                {vars[di].map((v, vi) => (
-                  <CloseUp key={v.color} d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={v.color} qty={lines.filter((l) => ckey(l.color) === ckey(v.color)).reduce((a, l) => a + lineQty(l), 0)} page={printPg[di] + 1 + vi} total={total} footL={footL} variant={v} />
-                ))}
+                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={printPg[di]} total={total} footL={footL} />
               </div>
             ))}
           </div>
@@ -430,7 +429,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     for (let i = 1; i < mk.length; i++) { const k = key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
     const pcols = [...new Set(g.lines.filter((l) => lineQty(l) > 0).map((l) => l.color).filter(Boolean))] as string[];
     const pvars = g.imprints.map((d) => variantsOf(d, pcols));
-    return { mk, extra, idx, prints: g.imprints.length + pvars.reduce((a, v) => a + v.length, 0), pvars };
+    return { mk, extra, idx, prints: g.imprints.length, pvars };
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
@@ -511,7 +510,6 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
             {g.imprints.map((d, di) => (
               <div key={d.id} style={{ display: "contents" }}>
                 <ProofPrint d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} />
-                {plan[gi].pvars[di].map((v) => <ProofPrint key={v.color} d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} variant={v} />)}
               </div>
             ))}
           </div>
@@ -552,6 +550,10 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
           <div className="lbl">{d.method === "embroidery" ? "Thread colors" : "Ink colors"}</div>
           <div className="pf-inklist">{inks.map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b></span>)}</div>
         </div>
+      )}
+      {/* a color change is noted on the one proof page, not a second page (Oct 26) */}
+      {!variant && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase())) && (
+        <div className="n2"><b>Color change:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase()).map(([x, y]) => `on ${k.charAt(0).toUpperCase() + k.slice(1)}, ${y} instead of ${x}`)).join("; ")}</div>
       )}
       {/* our own notes aren't the customer's (Oct 23, Nick: "on the PDF proof, we don't need… the notes"); what we changed
           in their art is, as a list */}
