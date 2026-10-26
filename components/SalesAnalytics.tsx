@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type MouseEvent as RMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 
@@ -33,6 +33,24 @@ type DeptRow = { month: string; dept: string; sales: number };
 type Sales = { rows: M[]; days: Day[]; topYear: Top[]; top30: Top[]; reps: Rep[]; depts: DeptRow[]; fresh: { customers: number; sales: number } };
 const ymd = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 const plusDays = (x: Date, n: number) => { const d = new Date(x); d.setDate(d.getDate() + n); return d; };
+
+/**
+ * The size of a chart's box, so a chart that fills its space (the board) is drawn at its real size: its words stay their
+ * real size and nothing gets cut off at the edges (Oct 26, Nick: "the chart on the left needs to fill the vertical space…
+ * it's spilling over and cutting off").
+ */
+function useBox(on: boolean, fallback: { w: number; h: number }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!on || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => { const r = e.contentRect; if (r.width > 40 && r.height > 40) { const w = Math.round(r.width), h = Math.round(r.height); setBox((b) => (b.w === w && b.h === h ? b : { w, h })); } });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return [ref, on ? box : fallback] as const;
+}
 
 /** One load shared by every sales widget on the page. */
 let cache: { at: number; p: Promise<Sales> } | null = null;
@@ -92,6 +110,8 @@ function TopCustomers({ topYear, top30, y, compact, few }: { topYear: Top[]; top
 export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" | "charts" | "board" }) {
   // the board's one big chart, flipped between three views (Oct 26, Nick picked option B: "make it more readable")
   const [view, setView] = useSticky<"year" | "dept" | "pace">("sales.board.view", "year");
+  const fill = part === "board";
+  const [boxRef, box] = useBox(fill, { w: 560, h: 220 });
   const [data, setData] = useState<Sales | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [table, setTable] = useSticky("sales.table", false);
@@ -121,8 +141,8 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
 
   if (!v) return <div className="db-empty">Loading sales…</div>;
   // chart geometry
-  const W = 560, H = 220, padL = 46, padB = 24, padT = 8;
-  const cw = (W - padL) / 12, bw = Math.min(16, (cw - 10) / 2);
+  const W = box.w, H = box.h, padL = fill ? 58 : 46, padB = 24, padT = 8;
+  const cw = (W - padL) / 12, bw = Math.min(fill ? 22 : 16, (cw - 10) / 2);
   const yv = (n: number) => padT + (H - padT - padB) * (1 - n / v.max);
   const ticks = [0, 0.5, 1].map((f) => v.max * f);
 
@@ -151,8 +171,8 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
               ); })}</tbody>
             </table></div>
           ) : (
-            <div className="an-svg-wrap" onMouseLeave={() => setHover(null)}>
-              <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales by month, ${y} compared with ${y - 1}`}>
+            <div className={"an-svg-wrap" + (fill ? " an-fill" : "")} ref={boxRef} onMouseLeave={() => setHover(null)}>
+              <svg viewBox={`0 0 ${W} ${H}`} width={fill ? W : undefined} height={fill ? H : undefined} role="img" aria-label={`Sales by month, ${y} compared with ${y - 1}`}>
                 {ticks.map((t, i) => (
                   <g key={i}><line x1={padL} x2={W} y1={yv(t)} y2={yv(t)} className="an-grid-l" /><text x={padL - 8} y={yv(t) + 4} className="an-ax" textAnchor="end">{short(t)}</text></g>
                 ))}
@@ -206,7 +226,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
             {([["year", `vs ${y - 1}`], ["dept", "By department"], ["pace", "Pace"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} aria-pressed={view === k} onClick={() => setView(k)}>{l}</button>)}
           </span>
         </div>
-        {view === "year" ? C : view === "dept" ? <Depts rows={data!.depts} y={y} bare /> : <Pace days={data!.days} y={y} bare />}
+        <div className="an-board-chart">{view === "year" ? C : view === "dept" ? <Depts rows={data!.depts} y={y} bare fill /> : <Pace days={data!.days} y={y} bare fill />}</div>
         <DeptBar rows={data!.depts} y={y} />
       </div>
       <div className="an-board-r">
@@ -247,13 +267,14 @@ const doy = (d: string) => { const [yy, mm, dd] = d.split("-").map(Number); retu
 const dayName = (y: number, i: number) => new Date(y, 0, 1 + i).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 /** Year-to-date pace: sales added up day by day, this year against last year on the same calendar day. */
-function Pace({ days, y, bare }: { days: Day[]; y: number; bare?: boolean }) {
+function Pace({ days, y, bare, fill }: { days: Day[]; y: number; bare?: boolean; /** fill its box (the board) */ fill?: boolean }) {
+  const [boxRef, box] = useBox(!!fill, { w: 560, h: 220 });
   const [hov, setHov] = useState<number | null>(null);
   const today = doy(ymd(new Date()));
   const cum = (yy: number) => { const a = new Array(366).fill(0); for (const d of days) if (d.day.startsWith(yy + "-")) a[Math.min(365, doy(d.day))] += d.sales; for (let i = 1; i < 366; i++) a[i] += a[i - 1]; return a; };
   const ty = cum(y), ly = cum(y - 1);
   const max = Math.max(1, ly[365], ty[today]);
-  const W = 560, H = 220, padL = 46, padR = 44, padB = 22, padT = 10;
+  const W = box.w, H = box.h, padL = fill ? 58 : 46, padR = 44, padB = 22, padT = 10;
   const xv = (i: number) => padL + ((W - padL - padR) * i) / 365, yv = (n: number) => padT + (H - padT - padB) * (1 - n / max);
   const path = (a: number[], to: number) => a.slice(0, to + 1).map((n, i) => `${i ? "L" : "M"}${xv(i).toFixed(1)},${yv(n).toFixed(1)}`).join("");
   const diff = pct(ty[today], ly[today]);
@@ -263,8 +284,8 @@ function Pace({ days, y, bare }: { days: Day[]; y: number; bare?: boolean }) {
     <div className="an-chart">
       <div className="an-ch-h">{!bare && <b>Year-to-date pace</b>}<span className="an-legend"><i className="k1" /> {y} <i className="k2" /> {y - 1}</span></div>
       <div className="an-sub">{short(ty[today])} so far{diff !== null ? <> · <span className={diff >= 0 ? "up" : "down"}>{diff >= 0 ? "▲" : "▼"} {Math.abs(diff)}%</span> vs {y - 1} on {dayName(y, today)}</> : null}</div>
-      <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales added up through the year, ${y} against ${y - 1}`} onMouseMove={onMove}>
+      <div className={"an-svg-wrap" + (fill ? " an-fill" : "")} ref={boxRef} onMouseLeave={() => setHov(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={fill ? W : undefined} height={fill ? H : undefined} role="img" aria-label={`Sales added up through the year, ${y} against ${y - 1}`} onMouseMove={onMove}>
           {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W - padR} y1={yv(max * f)} y2={yv(max * f)} className="an-grid-l" /><text x={padL - 8} y={yv(max * f) + 4} className="an-ax" textAnchor="end">{short(max * f)}</text></g>)}
           {MONTHS.map((mm, i) => <text key={mm} x={xv(doy(`${y}-${String(i + 1).padStart(2, "0")}-15`))} y={H - 5} className="an-ax" textAnchor="middle">{i % 2 ? "" : mm}</text>)}
           <path d={path(ly, 365)} className="an-l2" />
@@ -310,14 +331,15 @@ function Reps({ reps, y }: { reps: Rep[]; y: number }) {
 const DEPTS = [
   { k: "Screen printing", c: "dp-sp" }, { k: "Embroidery", c: "dp-emb" }, { k: "Heat press", c: "dp-hp" }, { k: "Other", c: "dp-ot" },
 ];
-function Depts({ rows, y, bare }: { rows: DeptRow[]; y: number; bare?: boolean }) {
+function Depts({ rows, y, bare, fill }: { rows: DeptRow[]; y: number; bare?: boolean; fill?: boolean }) {
+  const [boxRef, box] = useBox(!!fill, { w: 560, h: 180 });
   const [hov, setHov] = useState<number | null>(null);
   const m = new Date().getMonth();
   const val = (i: number, k: string) => rows.filter((r) => r.month === `${y}-${String(i + 1).padStart(2, "0")}` && r.dept === k).reduce((t, r) => t + r.sales, 0);
   const months = MONTHS.slice(0, m + 1).map((_, i) => DEPTS.map((d) => val(i, d.k)));
   const tot = DEPTS.map((_, j) => months.reduce((t, mm) => t + mm[j], 0)), all = tot.reduce((a, b) => a + b, 0);
   const max = Math.max(1, ...months.map((mm) => mm.reduce((a, b) => a + b, 0)));
-  const W = 560, H = 180, padL = 46, padB = 22, padT = 8, cw = (W - padL) / 12, bw = Math.min(22, cw - 10);
+  const W = box.w, H = box.h, padL = fill ? 58 : 46, padB = 22, padT = 8, cw = (W - padL) / 12, bw = Math.min(fill ? 30 : 22, cw - 10);
   const yv = (n: number) => padT + (H - padT - padB) * (1 - n / max);
   return (
     <div className="an-chart">
@@ -325,8 +347,8 @@ function Depts({ rows, y, bare }: { rows: DeptRow[]; y: number; bare?: boolean }
       {!bare && <div className="dp-legend">{DEPTS.map((d, j) => (
         <span key={d.k} className="dp-k"><i className={d.c} />{d.k}<b>{short(tot[j])}</b><span className="faint">{all ? Math.round((tot[j] / all) * 100) : 0}%</span></span>
       ))}</div>}
-      <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales by department by month, ${y}`}>
+      <div className={"an-svg-wrap" + (fill ? " an-fill" : "")} ref={boxRef} onMouseLeave={() => setHov(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={fill ? W : undefined} height={fill ? H : undefined} role="img" aria-label={`Sales by department by month, ${y}`}>
           {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W} y1={yv(max * f)} y2={yv(max * f)} className="an-grid-l" /><text x={padL - 8} y={yv(max * f) + 4} className="an-ax" textAnchor="end">{short(max * f)}</text></g>)}
           {MONTHS.map((mm, i) => {
             const x = padL + i * cw + (cw - bw) / 2; let base = 0;
