@@ -37,7 +37,7 @@ export default function CustomerGangSheets({ customerId }: { customerId: string 
         <thead><tr><th>Sheet</th><th>Jobs</th><th className="r">Pieces</th><th>By</th><th>Updated</th><th>Status</th><th /></tr></thead>
         <tbody>{rows.map((r) => (
           <tr key={r.id}>
-            <td><a href={`/shop/gang-sheet?sheet=${r.id}`} data-notranslate>{r.name || "Gang sheet"}</a></td>
+            <td><a href={`/shop/gang-sheet/builder?sheet=${r.id}`} data-notranslate>{r.name || "Gang sheet"}</a></td>
             <td className="num">{[...new Set((r.data?.jobs || []).map((j) => j.job).filter(Boolean))].map((j) => `#${j}`).join(", ") || <span className="faint">—</span>}</td>
             <td className="r num">{pcs(r)}</td>
             <td>{who(r.owner)}</td>

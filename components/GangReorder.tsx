@@ -28,7 +28,7 @@ const heightOf = (lg: Logo, v: Ver, wIn: number, knock: string[]) => {
 };
 const same = (a: string[], b: string[]) => [...a].sort().join() === [...b].sort().join();
 
-export default function GangReorder({ sheetId, customerId, onClose }: { sheetId: string; customerId: string; onClose: () => void }) {
+export default function GangReorder({ sheetId, customerId, onClose }: { sheetId: string; /** none: only this sheet's logos (no other sheets to pull from) */ customerId: string | null; onClose: () => void }) {
   const sb = useMemo(() => createClient(), []);
   const { email, staffName } = useRole();
   const me = (email || "").toLowerCase();
@@ -47,7 +47,8 @@ export default function GangReorder({ sheetId, customerId, onClose }: { sheetId:
   };
   useEffect(() => {
     void (async () => {
-      const { data } = await sb.from("gang_sheets").select("id, name, customer_id, data").eq("customer_id", customerId).is("archived_at", null).order("updated_at", { ascending: false }).limit(40);
+      const base = sb.from("gang_sheets").select("id, name, customer_id, data").is("archived_at", null);
+      const { data } = await (customerId ? base.eq("customer_id", customerId) : base.eq("id", sheetId)).order("updated_at", { ascending: false }).limit(40);
       const ss = (data || []) as Sheet[];
       setSheets(ss);
       const s0 = ss.find((s) => s.id === sheetId);
@@ -82,9 +83,9 @@ export default function GangReorder({ sheetId, customerId, onClose }: { sheetId:
     const d = src?.data || {};
     const data = { logos, jobs: j ? [{ id: uid(), job: j, logos: logos.map((x) => x.id), note: "" }] : [], gap: d.gap, sheetW: d.sheetW, maxLen: d.maxLen, plan: d.plan, reorderOf: [...new Set(picked.map((l) => l.sheet.id))] };
     const name = `${first ? first[0].toUpperCase() + first.slice(1) + "'s" : "A"} reorder · ${day}`;
-    const { data: row, error } = await sb.from("gang_sheets").insert({ name, owner: me, data, customer_id: customerId }).select("id").single();
+    const { data: row, error } = await sb.from("gang_sheets").insert({ name, owner: me, data, customer_id: customerId || null }).select("id").single();
     if (error || !row) { setBusy(false); setErr(error?.message || "Couldn't make the sheet."); return; }
-    window.location.href = `/shop/gang-sheet?sheet=${row.id}`;
+    window.location.href = `/shop/gang-sheet/builder?sheet=${row.id}`;
   }
 
   const card = (l: Line) => {

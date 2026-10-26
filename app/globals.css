@@ -14365,3 +14365,14 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-del.armed{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700}
 .gang-size{font-size:13px;color:var(--ink-3);white-space:nowrap}
 .gang-size b{color:var(--ink);font-weight:700}
+/* Gang sheets page: a card per sheet, like Artwork */
+.gang-gc-img{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:repeating-conic-gradient(var(--surface-2,#f4f6f9) 0 25%,var(--surface) 0 50%) 0 0/14px 14px;text-decoration:none}
+.gang-gc-img:has(.gang-gc-t:only-child){grid-template-columns:1fr}
+.gang-gc-t{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden;font-size:12px}
+.gang-gc-t img{max-width:100%;max-height:100%;object-fit:contain}
+.gang-gc-n{font-weight:700;color:var(--ink);text-decoration:none;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gang-gc-n:hover{color:var(--accent)}
+.gang-gc .faint{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gang-gc-s{font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
+.gang-gc-s.ord{color:var(--ok)}
+.gang-gc-acts{display:flex;align-items:center;gap:6px;margin-top:6px}
