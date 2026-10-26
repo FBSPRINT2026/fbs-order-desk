@@ -7,33 +7,48 @@ import { siteEmail, siteFrom } from "@/lib/siteEmail";
  * Returns false when email is off or the send fails.
  */
 export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string }) {
+  return (await sendEmailWhy(opts)).ok;
+}
+
+/**
+ * The same send, with why it didn't go (Oct 26: the site email test failed with no reason). The service's own answer is
+ * kept (and logged), so Settings can say "sender not verified" instead of guessing.
+ */
+export async function sendEmailWhy(opts: { to: string; subject: string; html: string; replyTo?: string }): Promise<{ ok: boolean; service: string; from: string; why?: string }> {
   // the site's own address from Settings → Connections → Site email when it's set (Oct 26), else EMAIL_FROM
   const from = (await siteFrom()) || EMAIL_FROM || "";
   if (!opts.replyTo) { const r = (await siteEmail()).replyTo; if (r && /@/.test(r)) opts = { ...opts, replyTo: r.trim() }; }
-  if (!opts.to || !from) return false;
+  const service = process.env.BREVO_API_KEY ? "Brevo" : process.env.RESEND_API_KEY ? "Resend" : "";
+  if (!opts.to || !from) return { ok: false, service, from, why: !from ? "No sending address is set." : "No one to send to." };
+  if (!service) return { ok: false, service, from, why: "No email service is connected (the Brevo or Resend key isn't in Vercel)." };
   try {
-    if (process.env.BREVO_API_KEY) {
+    let res: Response;
+    if (service === "Brevo") {
       // EMAIL_FROM looks like: FBS Print <orders@fbsprint.com>
       const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
       const sender = m ? { name: m[1] || undefined, email: m[2] } : { email: from.trim() };
-      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      res = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
-        headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
+        headers: { "api-key": process.env.BREVO_API_KEY!, "Content-Type": "application/json", accept: "application/json" },
         body: JSON.stringify({ sender, to: [{ email: opts.to }], subject: opts.subject, htmlContent: opts.html, replyTo: opts.replyTo ? { email: opts.replyTo } : undefined }),
       });
-      return res.ok;
-    }
-    if (process.env.RESEND_API_KEY) {
-      const res = await fetch("https://api.resend.com/emails", {
+    } else {
+      res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ from, to: [opts.to], subject: opts.subject, html: opts.html, reply_to: opts.replyTo }),
       });
-      return res.ok;
     }
-    return false;
-  } catch {
-    return false;
+    if (res.ok) return { ok: true, service, from };
+    const body = (await res.text().catch(() => "")).slice(0, 400);
+    let why = body;
+    try { const j = JSON.parse(body) as { message?: string; error?: string }; why = j.message || j.error || body; } catch { /* plain text */ }
+    console.error(`[email] ${service} refused (${res.status}) from ${from}: ${why}`);
+    return { ok: false, service, from, why: `${service} said: ${why || res.status}` };
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    console.error(`[email] ${service} failed: ${why}`);
+    return { ok: false, service, from, why };
   }
 }
 

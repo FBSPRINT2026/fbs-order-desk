@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail } from "@/lib/email";
+import { sendEmailWhy } from "@/lib/email";
 import { forgetSiteEmail, siteFrom, type SiteEmail } from "@/lib/siteEmail";
 
 const ok = (e: string) => !e || /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
@@ -24,7 +24,6 @@ export async function saveSiteEmail(v: SiteEmail): Promise<{ ok: boolean; error?
 export async function testSiteEmail(): Promise<{ ok: boolean; to?: string; from?: string; error?: string }> {
   const me = await getViewer();
   if (me.role !== "owner" || !me.email) return { ok: false, error: "Only the owner can send this." };
-  const from = await siteFrom();
-  const sent = await sendEmail({ to: me.email, subject: "[Test] FBS Print site email", html: `<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#141D2B;padding:16px">This came from <b>${from.replace(/</g, "&lt;")}</b>, the address the portal sends from. Reply to it to check where replies go.</div>` });
-  return sent ? { ok: true, to: me.email, from } : { ok: false, from, error: "The email service didn't send it. Check that the address's domain is verified with the email service (Brevo or Resend)." };
+  const r = await sendEmailWhy({ to: me.email, subject: "[Test] FBS Print site email", html: `<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#141D2B;padding:16px">This came from <b>${(await siteFrom()).replace(/</g, "&lt;")}</b>, the address the portal sends from. Reply to it to check where replies go.</div>` });
+  return r.ok ? { ok: true, to: me.email, from: r.from } : { ok: false, from: r.from, error: `Not sent from ${r.from}. ${r.why || ""}`.trim() };
 }
