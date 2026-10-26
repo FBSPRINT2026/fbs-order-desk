@@ -1,7 +1,7 @@
 /**
  * The "It's here" email that tells customers about the new portal (Oct 25 2026, Nick picked the dark banner with the big
- * dashboard picture, the three-step login strip and four captioned screens; Oct 26 redone: a full-width fade band under the dark title
- * band, the dashboard on light gray below it, the steps as three cards with their numbers on a fade line (no sample code), and four tiles drawn
+ * dashboard picture, the three-step login strip and four captioned screens; Oct 26 redone: the dashboard set into the dark band with a
+ * full-width fade running behind it where the dark meets the white, the steps as three cards with their numbers on a fade line (no sample code), and four tiles drawn
  * like the portal: jobs, a real proof to approve (no little t-shirts), reorders and payments). Plain tables and inline
  * styles so it looks the same in Gmail, Outlook and Apple Mail; the fade bars and steps are pictures because Outlook
  * can't draw a fade. The pictures live in public/email/launch/.
@@ -22,14 +22,13 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">Track orders, approve art, reorder and pay, all in one place. Your login is already set up.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EEF1F5"><tr><td align="center" style="padding:24px 10px">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden">
-  <tr><td align="center" style="background:#141D2B;padding:36px 28px 34px;${F};color:#ffffff">
+  <tr><td align="center" style="background:#141D2B;padding:36px 28px 26px;${F};color:#ffffff">
     <img src="${img("logo-white.png")}" width="64" height="64" alt="FBS Print" style="display:block;border:0;margin:0 auto">
     <div style="font-size:42px;line-height:1.05;font-weight:bold;padding-top:24px;letter-spacing:-0.5px">It's here.</div>
     <div style="font-size:18px;line-height:1.3;color:#DDE3EA;padding-top:10px">Your new FBS Print customer portal</div>
   </td></tr>
-  <tr><td style="padding:0;line-height:0;font-size:0;background:#141D2B"><img src="${img("fade-band.png")}" width="600" height="10" alt="" style="display:block;width:100%;max-width:600px;height:10px;border:0"></td></tr>
-  <tr><td align="center" style="background:#EEF1F5;padding:22px 34px 0;line-height:0;font-size:0">
-    <a href="${o.portalUrl}"><img src="${img("hero-frame.png")}" width="532" alt="The FBS Print customer portal dashboard" style="display:block;width:100%;max-width:532px;height:auto;border:0"></a>
+  <tr><td style="padding:0;line-height:0;font-size:0">
+    <a href="${o.portalUrl}"><img src="${img("hero-band.png")}" width="600" alt="The FBS Print customer portal dashboard" style="display:block;width:100%;max-width:600px;height:auto;border:0"></a>
   </td></tr>
   <tr><td align="center" style="padding:24px 40px 0;${F};font-size:15px;line-height:1.55;color:#3A4558">${hi}e're excited to share it with you: your orders, art, payments and messages, all in one place. <b style="color:#141D2B">Your login is already set up.</b></td></tr>
   <tr><td align="center" style="padding:26px 28px 0;${F};font-size:12px;font-weight:bold;letter-spacing:1px;color:#5B6678">SIGN IN IN THREE STEPS</td></tr>
