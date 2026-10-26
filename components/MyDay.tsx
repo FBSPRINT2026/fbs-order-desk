@@ -5,6 +5,8 @@ import type React from "react";
 import { cheerWin, setCheerOn } from "@/components/Cheer";
 import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, jobDates, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type CalJob, type Task } from "@/app/shop/myday-actions";
 import { useSticky } from "@/lib/useSticky";
+import MyDayPhone from "@/components/MyDayPhone";
+import type { EmailGroups } from "@/components/EmailSummary";
 
 /**
  * My Day (the dashboard's top, Oct 12): one place for the day. Three columns: replies owed (customers: email and portal
@@ -32,7 +34,20 @@ export function useMyDay() {
   return { d, setD, load, err };
 }
 
-export default function MyDay({ name, replies, replyCount, urgentCount, side, children }: { name: string; replies: React.ReactNode; replyCount: number; urgentCount: number;
+/** a phone (the narrow layout): My Day becomes the five tabs along the bottom (Oct 26) */
+function usePhone() {
+  const [p, setP] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 760px)");
+    const on = () => setP(m.matches);
+    on(); m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return p;
+}
+
+export default function MyDay({ name, replies, replyCount, urgentCount, side, children, groups, emailsLoading, business }: { name: string; replies: React.ReactNode; replyCount: number; urgentCount: number;
+  /** on a phone: the Email tab's lists, and what the Business tab shows (sales, favorites) */ groups?: EmailGroups; emailsLoading?: boolean; business?: React.ReactNode;
   /** the owners' My Day (Oct 24, Nick: "the calendar, the to-dos, can you make that a side panel… and then go right into the
    * favorites"): calendar, to-dos and replies stacked on the right, the page's own sections (children) on the left */ side?: boolean; children?: React.ReactNode }) {
   const { d, setD, load, err } = useMyDay();
@@ -44,8 +59,14 @@ export default function MyDay({ name, replies, replyCount, urgentCount, side, ch
   const due = open.filter((t) => t.due && t.due <= today).length;
   const evToday = (d?.events || []).filter((e) => e.status === "added" && e.day === today).length;
   const hello = (() => { const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: tz })); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; })();
+  const phone = usePhone();
   const line = [replyCount ? (side ? `${replyCount} ${replyCount === 1 ? "email" : "emails"} from customers` : `${replyCount} ${replyCount === 1 ? "reply" : "replies"} to send`) : "", due ? `${due} to-do${due === 1 ? "" : "s"} due` : "", evToday ? `${evToday} on the calendar` : ""].filter(Boolean);
 
+  if (side && phone) return (
+    <section className="md md-phone" aria-label="My Day">
+      <MyDayPhone d={d} setD={setD} err={err} hello={hello} name={name} groups={groups || null} emailsLoading={!!emailsLoading} business={business ?? children} cheer={<CheerSwitch />} />
+    </section>
+  );
   return (
     <section className="md" aria-label="My Day">
       <header className="md-head">

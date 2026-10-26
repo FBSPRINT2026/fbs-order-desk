@@ -49,7 +49,8 @@ const initials = (n: string) => n.replace(/[^A-Za-z0-9 ]/g, "").split(/\s+/).fil
 
 type Item = { k: string; kind: "email" | "text" | "portal"; text: string; at: string; href?: string; out?: boolean };
 
-export default function FavoritesRecap({ jobs, msgs, needIds, mailMine, as }: {
+export default function FavoritesRecap({ jobs, msgs, needIds, mailMine, as, compact }: {
+  /** My Day on a phone (Oct 26): one line per favorite */ compact?: boolean;
   /** an owner viewing as someone: their favorites */ as?: string;
   jobs: FavJob[] | null; msgs: FavMsg[];
   /** emails waiting on a reply (the page's rule) */ needIds: Set<string>;
@@ -91,6 +92,31 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine, as }: {
       ? <svg viewBox="0 0 24 24" aria-hidden><path d="M4 5h16v11H9l-5 4z" /></svg>
       : <svg viewBox="0 0 24 24" aria-hidden><path d="M4 4h16v12H8l-4 4z" /><path d="M8 9h8M8 12h5" /></svg>;
 
+  if (compact) {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+    return (
+      <section className="fv fv-ph" aria-label="Favorites">
+        <div className="mdp-sec"><span>Favorites</span><span>{d ? cards.length : ""}</span></div>
+        {err ? <div className="db-empty">{err}</div> : !d || !jobs ? <div className="mdp-quiet">Loading your favorites…</div> : !cards.length ? <div className="mdp-quiet">Star a customer on the Customers page and they show up here.</div> : (
+          <div className="mdp-card">{cards.map(({ c, js, waiting }) => {
+            const j = js[0], st = j ? stepOf(j) : -1, late = js.filter((x) => x.due && x.due.slice(0, 10) < today).length;
+            const nE = waiting.filter((w) => w.kind === "email").length, nT = waiting.filter((w) => w.kind === "text").length, nP = waiting.filter((w) => w.kind === "portal").length;
+            const right = late ? `${late} late` : nE ? `${nE} email${nE === 1 ? "" : "s"}` : nT ? `${nT} text${nT === 1 ? "" : "s"}` : nP ? `${nP} portal` : "";
+            return (
+              <Link key={c.id} href={`/shop/customers/${c.id}`} className="mdp-row fv-ph-row">
+                <span className="mdp-av" aria-hidden>{initials(c.name)}</span>
+                <span className="mdp-m"><b data-notranslate>{c.name}</b>
+                  <small>{j ? (js.length > 1 ? `${js.length} open jobs · next #${j.number} ${label(j)}` : `#${j.number} ${j.nickname || "Untitled job"} · ${label(j)}`) : "No open jobs"}</small>
+                  {j && <span className="fv-tk" aria-hidden>{STEPS.map((x, i) => <i key={x} className={i < st ? "d" : i === st ? "c" : ""} />)}</span>}
+                </span>
+                {right && <span className={"mdp-ago" + (late ? " w" : "")}>{right}</span>}
+              </Link>
+            );
+          })}</div>
+        )}
+      </section>
+    );
+  }
   return (
     <section className="fv" aria-label="Favorites">
       <div className="fv-h"><h2><span className="fv-star" aria-hidden>★</span>Favorites</h2><span className="faint">the customers you starred: their jobs, and what&apos;s new</span><span className="spacer" /><Link href="/shop/customers" className="linkbtn">Customers</Link></div>

@@ -389,6 +389,11 @@ export default function Dashboard() {
   return (
     <>
       <MyDay side name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={emailGroups.back.length + emailGroups.fresh.length + emailGroups.web.length} urgentCount={0} replies={<EmailSummary groups={emailGroups} loading={!v || !mailIn || !boxIn} />}
+        groups={emailGroups} emailsLoading={!v || !mailIn || !boxIn}
+        business={<>
+          {boss && <SalesAnalytics part="phone" />}
+          <FavoritesRecap compact as={viewing ? myEmail : undefined} jobs={jobs} msgs={myMsgs} needIds={needIds} mailMine={(e) => emailIsMine(e, myBox, myBoxEmail)} />
+        </>}
 >
         {/* "Needs you today" taken off My Day; Sales moves up (Oct 24, Nick) */}
         {boss && <section className="db-card db-orange db-sales md2-sales">

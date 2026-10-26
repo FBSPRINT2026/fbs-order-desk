@@ -107,10 +107,10 @@ function TopCustomers({ topYear, top30, y, compact, few }: { topYear: Top[]; top
 }
 
 /** part: the numbers, the month chart, the top customers, or all three together. */
-export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" | "charts" | "board" }) {
+export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" | "charts" | "board" | "phone" }) {
   // the board's one big chart, flipped between three views (Oct 26, Nick picked option B: "make it more readable")
   const [view, setView] = useSticky<"year" | "dept" | "pace">("sales.board.view", "year");
-  const fill = part === "board";
+  const fill = part === "board" || part === "phone";
   const [boxRef, box] = useBox(fill, { w: 560, h: 220 });
   const [data, setData] = useState<Sales | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -239,6 +239,17 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
         <OwnerBar reps={data!.reps} y={y} />
         <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact few />
       </div>
+    </div>
+  );
+  // My Day on a phone → Business (Oct 26): two numbers, one chart, you and Amanda
+  if (part === "phone") return (
+    <div className="an-phone">
+      <div className="an-k4 an-k2">
+        <div className="an-side-k"><span>Sales this month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
+        <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+      </div>
+      <div className="an-phone-chart"><div className="an-ch-h"><b>Sales by month</b></div>{C}</div>
+      <OwnerBar reps={data!.reps} y={y} />
     </div>
   );
   if (part === "charts") return (
