@@ -298,6 +298,25 @@ export const DOC_CSS = `
 .pdoc .wo-cube .a .none{color:#fff;font-size:11pt}
 .pdoc .wo-cube .s{font-size:10pt;margin-top:5px;color:var(--ink2)}
 .pdoc .wo-cube .s b{color:var(--ink)}
+/* print cards (Oct 26): every card the same rows; a half inch kept clear at the bottom so the printer never cuts it off */
+.pdoc .sheet.wo1{padding-bottom:.55in}
+.pdoc .wo-mks{min-height:2.1in}
+.pdoc .wo-pl{margin-top:10px;margin-bottom:-4px}
+.pdoc .wo-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;margin-top:8px}
+.pdoc .wo-pc{border:2px solid var(--ink);border-radius:9px;overflow:hidden}
+.pdoc .wo-pc .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--ink);color:#fff;padding:4px 10px}
+.pdoc .wo-pc .h b{font-size:13pt;letter-spacing:.02em}
+.pdoc .wo-pc .h span{font-size:8.5pt;opacity:.8;white-space:nowrap}
+.pdoc .wo-pc .kv{display:grid;grid-template-columns:.72in 1fr;gap:2px 8px;padding:6px 10px;font-size:10pt;color:var(--ink2)}
+.pdoc .wo-pc .kv>i{font-style:normal;font-size:8pt;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.pdoc .wo-pc .kv b{color:var(--ink)}
+.pdoc .wo-pc .inks.two{display:grid;grid-template-columns:1fr 1fr;gap:1px 10px}
+.pdoc .wo-pc .inks span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdoc .wo-pc .sw{width:10px;height:10px;margin-right:4px;vertical-align:-1px}
+.pdoc .wo-pc .warn{padding:0 10px 6px;font-size:8.5pt}
+.pdoc .wo-plist{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;margin-top:8px;font-size:10pt}
+.pdoc .wo-plist i{font-style:normal;color:var(--ink3);font-size:8.5pt}
+.pdoc .wo-none{font-size:10pt;color:var(--ink3);margin-top:6px}
 @page{size:letter;margin:.4in .45in}
 @media print{
   html,body{background:#fff!important}
@@ -306,6 +325,6 @@ export const DOC_CSS = `
   .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page;zoom:1!important}
   .pdoc .sheet:last-child{break-after:auto}
   .pdoc .sheet.pf{height:10.1in;min-height:0}
-  .pdoc .sheet.wo1{height:10.1in;min-height:0}
+  .pdoc .sheet.wo1{height:10.1in;min-height:0;padding-bottom:.2in}
 }
 `;

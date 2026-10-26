@@ -5,7 +5,7 @@ import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPm
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
@@ -175,32 +175,13 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                   </div>
                 )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
               </div>
-              <div className="wo-prints">
-                <div className="lbl">Prints</div>
-                {g.imprints.length === 0 && <div className="wo-p">No prints on this group.</div>}
-                {g.imprints.map((d, di) => {
-                  const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), sc = screensOf(d, allLight);
-                  const changes = Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([, b]) => `${k}: ${b}`));
-                  return (
-                    <div className="wo-p" key={d.id}>
-                      <b className="disp">{(d.location || "Print").toUpperCase()}</b>
-                      <span>{METHODS[d.method] || d.method} · {colorsLabel(d)}</span>
-                      {d.visualOnly ? <span><b>Run it like last time</b></span> : <>
-                        {inkNames(d.inks).length > 0 && <span className="inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</span>}
-                        {changes.length > 0 && <span><b>Color change</b> {changes.join(", ")}</span>}
-                        {sz.label && <span><b>{sz.label}</b></span>}
-                        <span>{dropLabel(d)}</span>
-                      </>}
-                      {sc && <span>{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "screens: see seps"} · {d.printStyle === "fashion" ? "fashion hit" : sc.under ? "UB" : "no UB"}</span>}
-                      {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
-                      {d.visualOnly && <span className="warn">VISUAL MOCKUP ONLY: CONFIRM THE SPECS</span>}
-                      {Object.keys(d.byColor?.skip || {}).length > 0 && <span className="warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}</span>}
-                      {!d.visualOnly && (d.confirm?.size || d.confirm?.ink) && <span className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")}</span>}
-                      <span className="f">p. {pgPrint + di}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* the prints: one card each, the same rows in the same order (Oct 26, Nick: "the print cards… aren't consistent…
+                  it should just say front and back and sleeve"); a long list stays short here, the full cards on the mockup page */}
+              <div className="lbl wo-pl">Prints</div>
+              {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
+              {g.imprints.length > 4
+                ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {pgPrint + di}</i></span>)}</div>
+                : <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={pgPrint + di} />)}</div>}
               <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {countTable(lines.slice(0, 4))}
               {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
@@ -237,12 +218,13 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
                               {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{(d.location || "Print").toUpperCase()}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
                           </div>
                         );
                       })}
                     </div>
                   )}
+                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={pgPrint + di} />)}</div>}
                   {i === 0 && longNotes && <><h2>Notes</h2><div className="notes">{notesBlock}</div></>}
                   <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
                 </section>
@@ -264,6 +246,39 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         );
       })}
     </>
+  );
+}
+
+/** which side of the garment a print is on: FRONT, BACK or SLEEVE (the location's own name only when two share a side) */
+function sideOf(d: Imprint, all: Imprint[]): string {
+  const side = (x: Imprint) => (/sleeve/i.test(x.location || "") ? "SLEEVE" : spotFor(x.location || "").view === "back" ? "BACK" : "FRONT");
+  const me = side(d);
+  return all.filter((x) => side(x) === me).length > 1 && d.location ? `${me} · ${d.location}` : me;
+}
+
+/** a print on the work order's first page: the same rows in the same order on every card */
+function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | null; all: Imprint[]; allLight: boolean; page: number }) {
+  const sz = printSize(d, des), sc = screensOf(d, allLight), inks = d.visualOnly ? [] : inkNames(d.inks);
+  const changes = d.visualOnly ? [] : Object.entries(d.inkBy || {}).map(([k, m]) => [k, Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())] as const).filter(([, ch]) => ch.length);
+  const warns = [
+    d.visualOnly ? "VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS" : "",
+    Object.keys(d.byColor?.skip || {}).length ? `BY SHIRT COLOR: ${Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}` : "",
+    !d.visualOnly && (d.confirm?.size || d.confirm?.ink) ? `CONFIRM ${[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING` : "",
+  ].filter(Boolean);
+  return (
+    <div className="wo-pc">
+      <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
+      <div className="kv">
+        <i>Method</i><span>{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
+        {inks.length > 0 && <><i>{inks.length === 1 ? "Ink" : "Inks"}</i>
+          <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && <b>{n + 1} </b>}<b>{k}</b></span>)}</div></>}
+        {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> (color change, not {a}) </span>)}</span></span>)}
+        <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
+        {d.method === "embroidery" ? (d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null)
+          : sc ? <><i>Screens</i><span>{sc.n ? sc.n : "see separations"} · {d.printStyle === "fashion" ? "no underbase" : sc.under ? "underbase" : "no underbase"}</span></> : null}
+      </div>
+      {warns.map((w) => <div className="warn" key={w}>{w}</div>)}
+    </div>
   );
 }
 
