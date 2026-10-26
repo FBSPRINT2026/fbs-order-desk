@@ -242,7 +242,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
                               {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="cc">Color change</span> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">Color change</span> : null}</div>
                           </div>
                         );
                       })}

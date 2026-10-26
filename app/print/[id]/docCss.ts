@@ -320,7 +320,7 @@ export const DOC_CSS = `
 /* a color change (Oct 26): the same print in its changed ink on another garment color */
 .pdoc .cc-tag{display:inline-block;font-size:9.5pt;font-weight:800;letter-spacing:.04em;color:#b3261e;background:#fdecea;border-radius:999px;padding:2px 10px;margin-top:4px}
 .pdoc .wo-cube .a{position:relative}
-.pdoc .wo-cube .s .cc{display:inline-block;font-size:8pt;font-weight:800;color:#b3261e;background:#fdecea;border-radius:999px;padding:0 7px;margin-left:4px;vertical-align:1px}
+.pdoc .wo-cube .s .wo-cc{display:inline-block;font-size:8pt;font-weight:800;color:#b3261e;background:#fdecea;border-radius:999px;padding:0 7px;margin-left:4px;vertical-align:1px}
 /* the first page's fit steps (WoFit.tsx) */
 .pdoc .sheet.wo1{padding-bottom:.6in}
 .pdoc .wo-first.f1 .cnt td{padding:3px 6px}
