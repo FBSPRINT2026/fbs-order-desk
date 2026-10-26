@@ -19,7 +19,7 @@ import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
  *    high enough… on a DTF"; "we use DTF Dallas… their gang sheet sizes… make a pricing tool"
  *  - "save a gang sheet and come back to it and add to it… Claudia viewed her gang sheets… they could view each other's"
  *  - the layout, rethought (Oct 26: "now that we have put on all the functionality… it just needs to just all be
- *    rethought"): one bar on top (whose sheets, the sheet, its settings, the actions); art cards with a size table
+ *    rethought"): a small box of the saved sheets first (the most recent, the rest under each person's name), the actions on top; art cards with a size table
  *    (W × H, how many, what for, the colors to knock out as dots); the order panel under them (the job it's for, which
  *    art, a production note: "bust that out from the logo selection itself"); the cost, then Sheet / Pieces / Files with
  *    the preview filling the space, fitted to its width as the window changes.
@@ -325,7 +325,6 @@ export default function GangSheet() {
   const [sheetName, setSheetName] = useState("");
   const [row, setRow] = useState<SheetRow | null>(null);
   const [sheets, setSheets] = useState<SheetRow[]>([]);
-  const [whose, setWhose] = useSticky<"mine" | "all">("gang.whose", "mine");
   const [saveState, setSaveState] = useState("");
   const loading = useRef(false), saving = useRef<Promise<string> | null>(null);
   const listSheets = async () => {
@@ -512,24 +511,18 @@ export default function GangSheet() {
 
   const cur = parts[Math.min(shown, Math.max(0, parts.length - 1))];
   const each = (pc: Piece) => (usedSqIn ? (cost * pc.wIn * pc.hIn) / usedSqIn : 0);
-  const mineN = sheets.filter((x) => x.owner === me).length;
+  // whose sheet: "Claudia's" (Oct 26, Nick: "just have it say your name… Claudia, Nick's, Amanda's sheet")
+  const who = (email: string) => { const n = (email || "").split("@")[0]; return n ? n[0].toUpperCase() + n.slice(1) : "Someone"; };
+  const owners = [...new Set([me, ...sheets.map((x) => x.owner)])].filter((o) => sheets.some((x) => x.owner === o));
+  const recent = sheets.slice(0, 3);
+  const pcsOf = (x: SheetRow) => (x.data?.logos || []).reduce((a, l) => a + l.vers.reduce((b, v) => b + (+v.qty || 0), 0), 0);
   return (
     <>
       <div className="page-head">
         <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: art laid out on a {DTF_DALLAS.name} sheet, priced, and filed with its jobs</div></div>
       </div>
-      {/* the bar: whose sheets, the sheet, its settings and the actions */}
+      {/* the bar: the sheet's settings and the actions */}
       <div className="toolbar gang-bar" data-toolbar>
-        <div className="chips">
-          <button type="button" className={"chip" + (whose === "mine" ? " on" : "")} onClick={() => setWhose("mine")}>My sheets <span className="pill-n">{mineN}</span></button>
-          <button type="button" className={"chip" + (whose === "all" ? " on" : "")} onClick={() => setWhose("all")}>Everyone&apos;s <span className="pill-n">{sheets.length}</span></button>
-        </div>
-        <select aria-label="Open a saved sheet" value={sheetId && sheets.some((x) => x.id === sheetId) ? sheetId : ""} onChange={(e) => void openSheet(e.target.value)}>
-          <option value="">{sheetId ? "This sheet" : "Open a saved sheet…"}</option>
-          {sheets.filter((x) => whose === "all" || x.owner === me).map((x) => <option key={x.id} value={x.id}>{x.name}{x.owner !== me ? ` · ${x.owner.split("@")[0]}` : ""} · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</option>)}
-        </select>
-        <input type="text" aria-label="Sheet name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
-        <span className="faint gang-save">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` · ${DTF_DALLAS.name} #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState}</span>
         <span className="spacer" />
         <div className="gang-pop">
           <button type="button" className={"btn" + (settingsOpen ? " on" : "")} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Sheet settings</button>
@@ -546,7 +539,6 @@ export default function GangSheet() {
             </div>
           )}
         </div>
-        <button type="button" className="btn" onClick={() => void openSheet("")}>New sheet</button>
         <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
         {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
         <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
@@ -556,6 +548,37 @@ export default function GangSheet() {
       <div className="gang2">
         {/* the art, then the order it's for */}
         <div className={"gang-left" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
+          {/* the saved sheets: a small box, the most recent few, the rest under each person's name (Oct 26, Nick: "we don't
+              want that to take up too much space… most recent or more") */}
+          <section className="panel gang-sheets">
+            <div className="gang-sheets-h"><b>Gang sheets</b><span className="spacer" /><button type="button" className="btn sm" onClick={() => void openSheet("")}>+ New sheet</button></div>
+            {recent.map((x) => (
+              <button key={x.id} type="button" className={"gang-sr" + (x.id === sheetId ? " on" : "")} onClick={() => void openSheet(x.id)}>
+                <span className="gang-sr-n" data-notranslate>{x.name}</span>
+                <span className="gang-sr-m">{who(x.owner)}&apos;s · {pcsOf(x)} pcs{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</span>
+              </button>
+            ))}
+            {sheets.length > recent.length && (
+              <select className="gang-more" aria-label="More gang sheets" value="" onChange={(e) => void openSheet(e.target.value)}>
+                <option value="">More sheets…</option>
+                {owners.map((o) => (
+                  <optgroup key={o} label={`${who(o)}'s sheets`}>
+                    {sheets.filter((x) => x.owner === o).map((x) => <option key={x.id} value={x.id}>{x.name} · {pcsOf(x)} pcs · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? " · ordered" : ""}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+            <div className="gang-sheets-cur">
+              <input type="text" aria-label="This sheet's name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
+              <span className="faint">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState || (sheetId ? "Saved" : "Saves when you add art")}</span>
+            </div>
+            {sheets.some((x) => x.id !== sheetId && (x.data?.logos || []).length) && (
+              <select className="gang-more" aria-label="Add the art from another sheet" value="" onChange={(e) => void pullFrom(e.target.value)}>
+                <option value="">Add the art from another sheet…</option>
+                {owners.map((o) => <optgroup key={o} label={`${who(o)}'s sheets`}>{sheets.filter((x) => x.owner === o && x.id !== sheetId && (x.data?.logos || []).length).map((x) => <option key={x.id} value={x.id}>{x.name} · {(x.data?.logos || []).length} art</option>)}</optgroup>)}
+              </select>
+            )}
+          </section>
           {logos.map((lg) => (
             <section key={lg.id} className="panel gang-card">
               <div className="gang-card-h">
