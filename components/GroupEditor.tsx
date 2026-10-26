@@ -1,6 +1,6 @@
 "use client";
 import { threadByName } from "@/lib/embroidery";
-import { cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -83,6 +83,11 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+  // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
+  const locs = locationsFor(g.lines);
+  // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
+  const badLoc = locs !== LOCATIONS && !fixed && !printsFixed && g.imprints.some((d) => d.location && !locs.includes(d.location) && LOCATIONS.includes(d.location));
+  useEffect(() => { if (badLoc) update((x) => { for (const d of x.imprints) if (d.location && LOCATIONS.includes(d.location)) d.location = fitLocation(d.location, x.lines); }); }, [badLoc]); // eslint-disable-line react-hooks/exhaustive-deps
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
@@ -752,8 +757,8 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                 {(
                 <div className="imp-grid">
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                  <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
-                      ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; frontFirst(x.imprints); })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
+                  <div className="f-loc"><span className="imp-l">Location</span>{(locs.includes(d.location) || (!d.location && locs !== LOCATIONS))
+                      ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; frontFirst(x.imprints); })}>{!d.location && <option value="">Pick a spot…</option>}{locs.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
                       : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</div>
                   <div className="f-col"><span className="imp-l">Colors</span>{d.method === "screen" || d.method === "embroidery"
                       ? <select aria-label="Number of colors" value={d.method === "embroidery" ? Math.min(d.colors, 15) : d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{(d.method === "embroidery" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => <option key={n} value={n}>{n}</option>)}{d.method === "screen" && <option value={FULL_COLOR}>Full color</option>}</select>
@@ -828,7 +833,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
           </div>
           {priceLine}
           <div className="row" style={{ gap: 8 }}>
-          {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); frontFirst(x.imprints); })}>+ Add imprint</button>}
+          {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint((locs === LOCATIONS ? ["Full Back", ...LOCATIONS] : locs).find((z) => !used.includes(z)) || locs[0] || "Full Front")); frontFirst(x.imprints); })}>+ Add imprint</button>}
           </div>
           </div>
           </div>

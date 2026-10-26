@@ -14602,3 +14602,6 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .atc-box .field{display:flex;flex-direction:column}
 .atc-g{gap:10px}
 .atc-ok{margin:0;font-size:14px}
+
+/* My Day's right column scrolls with the page, not on its own (Oct 26, Nick: "a middle scroll that needs to be removed") */
+.md2-side{position:static;max-height:none;overflow:visible}

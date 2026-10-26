@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
-import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
+import { ALL_LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
 import CarryNotes from "@/components/CarryNotes";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
@@ -426,7 +426,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
             </div>}
           </div>
         ))}
-        <datalist id="eo-locs">{LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
+        <datalist id="eo-locs">{ALL_LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
         <button type="button" className="eo-link" onClick={() => patch((x) => { x.groups.push({ id: uidish(), lines: [newGLine()], imprints: [newImprint()] }); })}>+ Add a group (garments with different prints)</button>
 
         <label className="eo-notes">Notes for the shop (internal, not on the quote)<textarea rows={2} value={d.notes} onChange={(e) => patch((x) => { x.notes = e.target.value; })} /></label>

@@ -44,6 +44,43 @@ export const ROLES = { owner: "Owner", admin: "Admin (orders, customers, payment
 export type Role = keyof typeof ROLES;
 /** Print locations (match the fbsprint.com order form). */
 export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Medium Front", "Center Chest", "Across Chest", "Full Back", "Medium Back", "Upper Back (Yoke)", "Across Shoulders", "Left Sleeve", "Right Sleeve", "Left Vertical", "Right Vertical", "Front Bottom Left", "Front Bottom Right", "Pocket"];
+/**
+ * Headwear prints in its own spots (Oct 26, Nick: "when you pull in a hat, the locations for the hat will actually change…
+ * full front, back, and side… hats, truckers, snapbacks, those are all hats. Beanies and visors are different. Beanies…
+ * just that cuff spot. The visor… just the front"). A group whose garments are all one kind of headwear gets that list.
+ */
+export const HAT_LOCATIONS = ["Full Front", "Left Side", "Right Side", "Back"];
+export const VISOR_LOCATIONS = ["Front"];
+export const BEANIE_LOCATIONS = ["Cuff"];
+export type Headwear = "hat" | "visor" | "beanie";
+export function headwearOf(x: { style?: string; brand?: string; garment?: string; description?: string } | null | undefined): Headwear | null {
+  const t = `${x?.garment || ""} ${x?.description || ""} ${x?.style || ""}`.toLowerCase();
+  if (/\bbeanie|\bknit (cap|hat)|\btoque|\bpom\b|cuffed knit/.test(t)) return "beanie";
+  if (/\bvisor/.test(t)) return "visor";
+  if (/\b(cap|caps|hat|hats|trucker|snapback|snap ?back|dad hat|flexfit|fitted|5-panel|6-panel|bucket)\b/.test(t) || /^richardson$/i.test(String(x?.brand || "").trim())) return "hat";
+  return null;
+}
+/** the print locations for a group's garments: headwear's own spots when they're all one kind of headwear, else the usual list */
+export function locationsFor(lines: { style?: string; brand?: string; garment?: string; description?: string }[] | null | undefined): string[] {
+  const kinds = new Set((lines || []).filter((l) => l && (l.style || l.garment || l.description)).map((l) => headwearOf(l)));
+  if (kinds.size === 1) { const k = [...kinds][0]; if (k === "hat") return HAT_LOCATIONS; if (k === "visor") return VISOR_LOCATIONS; if (k === "beanie") return BEANIE_LOCATIONS; }
+  return LOCATIONS;
+}
+/** a location read for a shirt, moved to the headwear spot it means on a hat, visor or beanie (front stays front, a back
+ *  stays back, a left / right goes to that side) */
+export function fitLocation(loc: string, lines: { style?: string; brand?: string; garment?: string; description?: string }[] | null | undefined): string {
+  const list = locationsFor(lines);
+  if (list === LOCATIONS || list.includes(loc)) return loc;
+  if (list === VISOR_LOCATIONS) return "Front";
+  if (list === BEANIE_LOCATIONS) return "Cuff";
+  const k = (loc || "").toLowerCase();
+  if (/back|yoke|nape|shoulder/.test(k)) return "Back";
+  if (/left/.test(k) && !/chest/.test(k)) return "Left Side";
+  if (/right/.test(k) && !/chest/.test(k)) return "Right Side";
+  return "Full Front";
+}
+/** every location name there is (shirts and headwear), for checking a location typed or read in */
+export const ALL_LOCATIONS = [...new Set([...LOCATIONS, ...HAT_LOCATIONS, ...VISOR_LOCATIONS, ...BEANIE_LOCATIONS])];
 export const SHIP_METHODS = [
   "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS 2nd Day Air A.M.", "UPS Next Day Air Saver", "UPS Next Day Air", "UPS Next Day Air Early A.M.",
   "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx 2Day A.M.", "FedEx Standard Overnight", "FedEx Priority Overnight", "FedEx First Overnight",

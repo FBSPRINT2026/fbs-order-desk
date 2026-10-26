@@ -73,7 +73,9 @@ export async function askClaude<T>(opts: {
         // time it gives me a different result… it's hard to get you to problem solve"): readers and checkers run at 0;
         // only the writing tasks (reply and message drafts) keep some variety
         ...(temp ? { temperature: opts.temperature ?? (WRITING.has(opts.task) ? 0.7 : 0) } : {}),
-        system: opts.system,
+        // the long, unchanging instructions (and the answer format before them) are cached for 5 minutes, so a second read
+        // starts faster (Oct 26, Nick: the order reader "is very slow"); short ones aren't worth it
+        system: opts.system.length > 6000 ? [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }] : opts.system,
         messages: [{ role: "user", content: opts.images?.length || opts.documents?.length
           ? [
             ...(opts.documents || []).flatMap((d) => [...(d.label ? [{ type: "text", text: d.label }] : []), { type: "document", source: { type: "base64", media_type: "application/pdf", data: d.data } }]),

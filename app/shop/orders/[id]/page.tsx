@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -1529,7 +1529,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
           </div>
-          <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
+          <datalist id="locs">{ALL_LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {custArt !== null && o.customer_id && o.groups[custArt] && (
             <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} onClose={() => setCustArt(null)}
               onPick={async (p) => {

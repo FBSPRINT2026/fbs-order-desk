@@ -141,7 +141,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     guard();
     if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
     // a choice made on the card (Create order, Oct 24): order type, past job, decoration: read fresh with it
-    let d = !start.told && !start.job && !part?.told && !start.note && !again.length && !fix ? g.draft : null;
+    // the reading made in the background is used when the card's choice is the one it was read with (the same past job,
+    // or a new order on both), with nothing else typed (Oct 26, Nick: "the create order tool is very slow"): only a
+    // different choice reads the email again
+    const rw = (g as { readWith?: { job?: string | null; jobs?: string[]; emails?: boolean } | null }).readWith;
+    const sameChoice = !!rw && !rw.emails && (rw.job || "") === (part ? part.job || "" : start.job || "") && (part || (rw.jobs || []).join() === (start.jobs || []).join())
+      && !(start.include?.length || start.exclude?.length) && (!start.orderType || (start.orderType === "new") === !rw.job);
+    let d = !start.note && !again.length && !fix && ((!start.told && !start.job && !part?.told) || sameChoice) ? g.draft : null;
     if (d) note("Already read in the background: using that");
     if (!d) {
       const files = (g.files || []).filter((f) => f.role !== "signature");

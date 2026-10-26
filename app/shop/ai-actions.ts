@@ -10,7 +10,7 @@ import { emailContext, orderFacts, writeReplyOptions } from "@/lib/ai/replies";
 import { describeGroups, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { processEmailActivity } from "@/lib/ai/email";
 import { storeInboundEmail } from "@/lib/crm/inbound";
-import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
+import { ALL_LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
 import { chatThread, orderChat } from "@/lib/ai/orderChat";
 import { applyChanges, keepCorrection, orderFix, type OrderChange } from "@/lib/ai/orderFix";
@@ -274,7 +274,7 @@ export async function applyReorderFix(orderId: string, fix: ReorderFix) {
     if (hit.confirmed && !hit.confirm) return { ok: false as const, error: `Production confirmed this print${hit.confirmed.at ? ` on ${new Date(hit.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}. Change it on the order by hand if it's really different.` };
     const v = String(fix.value || "").trim().slice(0, 120);
     if (fix.field === "size") hit.size = /^\d/.test(v) && !/wide|tall/i.test(v) ? `${parseFloat(v)}" wide` : v;
-    else if (fix.field === "location") { if (!(LOCATIONS as readonly string[]).includes(v)) return { ok: false as const, error: `"${v}" isn't one of the locations.` }; hit.location = v; }
+    else if (fix.field === "location") { if (!(ALL_LOCATIONS as readonly string[]).includes(v)) return { ok: false as const, error: `"${v}" isn't one of the locations.` }; hit.location = v; }
     else if (fix.field === "inks") hit.inks = v;
     else if (fix.field === "colors") { const n = parseInt(v, 10); if (!(n > 0 && n < 13)) return { ok: false as const, error: "Not a number of colors." }; hit.colors = n; }
     else if (fix.field === "drop") hit.drop = String(parseFloat(v) || "");

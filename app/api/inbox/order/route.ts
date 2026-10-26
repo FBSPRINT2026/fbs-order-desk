@@ -77,6 +77,8 @@ export async function GET(req: Request) {
   const files = await signed(admin, draft?.files || atts);
   return NextResponse.json({
     draft: draft ? { ...draft, files } : null, files, past, emails: cv?.convo.length || 1, created: sg?.status === "done" ? sg.order_id : null,
+    // what the saved reading was made with (the past job), so a matching choice on the card uses it instead of reading again
+    readWith: draft ? ((pl as { with?: { job?: string | null; jobs?: string[]; emails?: boolean } } | null)?.with || null) : null,
     finishing: st.settings.finishing || [], ai: st.ready, aiReason: st.reason, customer: cust,
     // wholesale screen fees: a reorder offers the reprint (remake) fee instead of new screens (Oct 20, Nick)
     fees: { screen: st.settings.wholesale?.screenFee ?? null, remake: st.settings.wholesale?.remakeFee ?? null },
