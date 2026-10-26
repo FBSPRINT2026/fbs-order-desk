@@ -1162,7 +1162,8 @@ function InkLine({ inks, charged, summary, editable, children, thread, changes }
 }
 
 /**
- * The group's mockups: the first big, the rest small under it (Oct 20); any of them opens big in a pop-up where the
+ * The group's mockups: the first big, the rest small under it (Oct 20; two are both big, three split the next row in half,
+ * more go three to a row, Oct 26); any of them opens big in a pop-up where the
  * arrows, the arrow keys or the strip of colors flip between them (Oct 21, Nick: "when you click on them, they should
  * blow up… it should toggle to them").
  */
@@ -1177,8 +1178,10 @@ function MockGallery({ urls }: { urls: string[] }) {
     return () => window.removeEventListener("keydown", k);
   }); // eslint-disable-line react-hooks/exhaustive-deps
   return <>
-    <button type="button" className="mk-big" title="See it bigger" onClick={() => setAt(0)}><img src={urls[0]} alt="Mockup" /></button>
-    {n > 1 && <div className="mk-more">{urls.slice(1).map((u, i) => <button type="button" key={u} title="See it bigger" onClick={() => setAt(i + 1)}><img src={u} alt="Mockup" /></button>)}</div>}
+    {/* Oct 26, Nick: two garments are the same size, full width; three split the second row in half; four or more go
+        three little ones to a row, the first always big on top */}
+    {(n === 2 ? urls : urls.slice(0, 1)).map((u, i) => <button type="button" key={u} className="mk-big" title="See it bigger" onClick={() => setAt(i)}><img src={u} alt="Mockup" /></button>)}
+    {n > 2 && <div className={"mk-more" + (n === 3 ? " half" : "")}>{urls.slice(1).map((u, i) => <button type="button" key={u} title="See it bigger" onClick={() => setAt(i + 1)}><img src={u} alt="Mockup" /></button>)}</div>}
     {at != null && (
       <div className="mkz" role="dialog" aria-modal="true" aria-label="Mockup" onClick={() => setAt(null)}>
         <div className="mkz-in" onClick={(e) => e.stopPropagation()}>
