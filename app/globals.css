@@ -14306,3 +14306,9 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-pt h2::after{content:"";display:block;height:3px;border-radius:3px;margin-top:5px;width:calc(100% + 16px);min-width:44px;background:var(--fbs-fade,linear-gradient(90deg,var(--fbs-blue),var(--fbs-salmon),var(--fbs-orange)))}
 .gang-pt .faint{font-size:12.5px;color:var(--ink-3);margin-top:2px}
 .gang-ph .btn{margin-top:2px}
+/* the space between pieces, over the sheet preview */
+.gang-gap{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:13px;color:var(--ink-3)}
+.gang-gap label{font-size:13px;color:var(--ink-2,var(--ink-3));white-space:nowrap}
+.gang-gap input[type=range]{flex:1;min-width:120px;max-width:260px;accent-color:var(--accent)}
+.gang-gap b{color:var(--ink);font-weight:700;min-width:44px;white-space:nowrap}
+.gang-gap .faint{white-space:nowrap;font-size:12.5px}

@@ -33,7 +33,7 @@ import CustomerPick from "@/components/CustomerPick";
  * screen only (they'd print on the film). The cost is DTF Dallas's price for the sheet length you'd buy.
  */
 const DPI = DTF_DALLAS.dpi;
-type Ver = { id: string; wIn: number; qty: number; knock: string[]; label: string; /** a size with no art: its height */ hIn?: number };
+type Ver = { id: string; wIn: number; qty: number; knock: string[]; label: string; /** the part of the art left after the knock-out (0–1 of its width/height): the piece is cut to it */ box?: [number, number, number, number]; /** a size with no art: its height */ hIn?: number };
 type Logo = { id: string; name: string; /** the art (a data URL or a signed link), "" for a size with no art yet */ src: string; srcW: number; srcH: number; colors: string[]; vers: Ver[];
   /** older sheets: a size with no art's height */ hIn?: number;
   /** where the art is kept once the sheet is saved (storage proofs/gang/…) */ path?: string;
@@ -82,6 +82,17 @@ function trim(c: HTMLCanvasElement): HTMLCanvasElement {
   o.getContext("2d")!.drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
   return o;
 }
+/** where the art is once its knocked-out colors are gone (Oct 26, Nick: "it needs to shrink to fit the art… automatically
+ * clip it to fit the art, and then we set the spacing between"): a white background knocked out leaves empty corners */
+function boxOf(c: HTMLCanvasElement): [number, number, number, number] {
+  const { width: w, height: h } = c, d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return [0, 0, 1, 1];
+  const q = (v: number) => Math.round(v * 10000) / 10000;
+  return [q(x0 / w), q(y0 / h), q((x1 + 1) / w), q((y1 + 1) / h)];
+}
+const boxFor = (v: Ver): [number, number, number, number] => (v.knock.length && v.box ? v.box : [0, 0, 1, 1]);
 const hex2 = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
 /** the logo's main colors (to knock one out) */
 function colorsOf(c: HTMLCanvasElement): string[] {
@@ -166,7 +177,7 @@ function partsOf(l: Layout, maxLen: number): Part[] {
 const costOf = (ps: Part[]) => ps.reduce((a, p) => a + p.buy.price, 0);
 
 // ---------- the PDF ----------
-// cut lines show on screen only, never in the file: they'd print on the film (Oct 26, Nick)
+// no cut lines: they'd print on the film (Oct 26, Nick). Each piece is its art cut to what's left after the knock-out.
 async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, p: Part, W: number, g: number): Promise<Uint8Array> {
   const { PDFDocument, degrees } = await import("pdf-lib");
   const doc = await PDFDocument.create();
@@ -176,7 +187,11 @@ async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, 
   for (const i of new Set(p.rects.map((r) => r.piece))) {
     const pc = pieces[i];
     // the version at 300 dpi of its print size, its knocked-out colors taken out
-    const c = knocked(arts[pc.logo.id], pc.ver.knock, Math.max(1, Math.round(pc.wIn * DPI)), Math.max(1, Math.round(pc.hIn * DPI)));
+    const img = arts[pc.logo.id], b = boxFor(pc.ver), ow = Math.max(1, Math.round(pc.wIn * DPI)), oh = Math.max(1, Math.round(pc.hIn * DPI));
+    const fw = Math.max(1, Math.round(ow / Math.max(0.01, b[2] - b[0]))), fh = Math.max(1, Math.round(oh / Math.max(0.01, b[3] - b[1])));
+    const full = knocked(img, pc.ver.knock, fw, fh);
+    const c = document.createElement("canvas"); c.width = ow; c.height = oh;
+    c.getContext("2d")!.drawImage(full, Math.round(b[0] * fw), Math.round(b[1] * fh), ow, oh, 0, 0, ow, oh);
     const b = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
     if (!b) throw new Error("A logo couldn't be prepared.");
     emb.set(i, await doc.embedPng(new Uint8Array(await b.arrayBuffer())));
@@ -192,7 +207,7 @@ async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, 
 }
 
 
-const heightOf = (lg: Logo, v: Ver) => (lg.src ? r2((v.wIn * lg.srcH) / Math.max(1, lg.srcW)) : v.hIn || lg.hIn || 3);
+const heightOf = (lg: Logo, v: Ver) => { if (!lg.src) return v.hIn || lg.hIn || 3; const b = boxFor(v); return r2((v.wIn * (b[3] - b[1]) * lg.srcH) / Math.max(1, (b[2] - b[0]) * lg.srcW)); };
 const shortName = (n: string) => n.replace(/\.[^.]+$/, "");
 
 export default function GangSheet() {
@@ -239,7 +254,13 @@ export default function GangSheet() {
       const want = `${pc.logo.id}|${pc.ver.knock.join(",")}`;
       if (verImg[pc.key]?.want === want) continue;
       const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-      const url = knocked(img, pc.ver.knock, Math.max(1, Math.round(img.naturalWidth * k)), Math.max(1, Math.round(img.naturalHeight * k))).toDataURL("image/png");
+      const kc = knocked(img, pc.ver.knock, Math.max(1, Math.round(img.naturalWidth * k)), Math.max(1, Math.round(img.naturalHeight * k)));
+      // the piece cut to what's left (a knocked-out background leaves empty corners)
+      if (pc.ver.knock.length) {
+        const bx = boxOf(kc), old = pc.ver.box;
+        if (!old || old.some((v, i) => Math.abs(v - bx[i]) > 0.0005)) patchVer(pc.logo.id, pc.ver.id, { box: bx });
+      }
+      const url = kc.toDataURL("image/png");
       void loadImg(url).then((im) => { if (live) setVerImg((m) => ({ ...m, [pc.key]: { want, img: im } })); });
     }
     return () => { live = false; };
@@ -314,9 +335,10 @@ export default function GangSheet() {
       x.save();
       // turned the same way as in the PDF (its top to the left)
       if (r.rot) { x.translate(bx, by + pc.wIn * k); x.rotate(-Math.PI / 2); } else x.translate(bx, by);
-      if (pc.logo.src && im) x.drawImage(im, 0, 0, pc.wIn * k, pc.hIn * k);
+      if (pc.logo.src && im) { const b = boxFor(pc.ver), iw = im.naturalWidth, ih = im.naturalHeight; x.drawImage(im, b[0] * iw, b[1] * ih, (b[2] - b[0]) * iw, (b[3] - b[1]) * ih, 0, 0, pc.wIn * k, pc.hIn * k); }
       else { x.fillStyle = "#d7dee7"; x.fillRect(0, 0, pc.wIn * k, pc.hIn * k); x.fillStyle = "#52637a"; x.font = `${Math.max(10, Math.min(15, pc.hIn * k * 0.22))}px sans-serif`; x.fillText(`${pc.name} ${pc.wIn}×${pc.hIn}`, 6, Math.min(pc.hIn * k - 6, 18)); }
       x.restore();
+      // where it gets cut apart (on screen only, never in the PDF)
       if (g > 0) { x.save(); x.strokeStyle = "rgba(200,40,40,.7)"; x.setLineDash([5, 4]); x.lineWidth = 1; x.strokeRect(r.x * k + 0.5, r.y * k + 0.5, r.w * k - 1, r.h * k - 1); x.restore(); }
     }
   }, [parts, shown, pieces, verImg, W, g, zoom, boxW, tab]);
@@ -567,12 +589,10 @@ export default function GangSheet() {
             {settingsOpen && (
               <div className="gang-pop-b" role="dialog" aria-label="Sheet settings">
                 <div className="gang-row2">
-                  <div className="field"><label htmlFor="g-g">Trim gap (in)</label><input id="g-g" type="number" min="0" step="0.05" value={gap} onChange={(e) => setGap(e.target.value)} /></div>
                   <div className="field"><label htmlFor="g-sw">Sheet width (in)</label><input id="g-sw" type="number" min="4" max={DTF_DALLAS.width} step="0.5" value={sheetW} onChange={(e) => setSheetW(String(Math.min(DTF_DALLAS.width, +e.target.value || DTF_DALLAS.width)))} /></div>
                   <div className="field"><label htmlFor="g-ml">Longest file (in)</label><input id="g-ml" type="number" min="10" max={DTF_DALLAS.maxFileLength} step="10" value={maxLen} onChange={(e) => setMaxLen(e.target.value)} /></div>
                   <div className="field"><label htmlFor="g-mb">Largest file (MB)</label><input id="g-mb" type="number" min="5" step="1" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></div>
                 </div>
-                {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
                 <p className="faint" style={{ fontSize: 12, margin: 0 }}>{DTF_DALLAS.name}: {DTF_DALLAS.width}&quot; wide, up to {DTF_DALLAS.maxFileLength}&quot; a file, {DTF_DALLAS.dpi} dpi. Prices as of {DTF_DALLAS.checked}.</p>
               </div>
             )}
@@ -728,6 +748,16 @@ export default function GangSheet() {
               </span>}
             </div>
             <div className="panel-b">
+              {/* the space between pieces, right over the sheet (Oct 26, Nick: "put that above the image preview so that you can slide that") */}
+              <div className="gang-gap">
+                <label htmlFor="g-gap">Space between</label>
+                <input id="g-gap" type="range" min="0" max="1" step="0.0625" value={g} onChange={(e) => setGap(e.target.value)} />
+                <b className="num">{+g.toFixed(3)}&quot;</b>
+                <div className="chips">{([[0.125, "1/8"], [0.25, "1/4"], [0.5, "1/2"]] as const).map(([v, t]) => <button key={v} type="button" className={"chip" + (Math.abs(g - v) < 0.001 ? " on" : "")} onClick={() => setGap(String(v))}>{t}&quot;</button>)}</div>
+                <span className="spacer" />
+                {pieces.length > 0 && <span className="faint num">{r2(film)}&quot; of film</span>}
+              </div>
+              {g < 0.25 && pieces.length > 0 && <p className="gang-warn" style={{ margin: "0 0 8px" }}>Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
               {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: already as tight as it gets.</p>)}
               {!pieces.length ? <div className="gang-empty">Add art on the left (drop it, upload it, or pick a customer&apos;s), or a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
                 <>
