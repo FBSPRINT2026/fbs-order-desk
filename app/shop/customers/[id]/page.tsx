@@ -226,6 +226,22 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 <div className="field"><label htmlFor="cu-address">Billing address</label><textarea id="cu-address" rows={3} value={c.address} onChange={(e) => set("address", e.target.value)} /></div>
                 <div className="field"><label htmlFor="cu-ship">Ship-to address (if different)</label><textarea id="cu-ship" rows={3} value={c.ship_address || ""} onChange={(e) => set("ship_address", e.target.value)} /></div>
               </div>
+              {/* other addresses (Oct 26, Nick: "sometimes clients may need different addresses other than just billing and ship
+                  to… a shipping address and then a delivery address… other addresses… I can just click and add") */}
+              <div className="cu-oa">
+                <div className="lbl">Other addresses</div>
+                {(c.other_addresses || []).map((a, i) => {
+                  const put = (p: Partial<typeof a>) => set("other_addresses", (c.other_addresses || []).map((x) => (x.id === a.id ? { ...x, ...p } : x)));
+                  return (
+                    <div key={a.id} className="cu-oa-r">
+                      <div className="field"><label htmlFor={`cu-oa-l${i}`}>What it&apos;s for</label><input id={`cu-oa-l${i}`} type="text" placeholder="Delivery, warehouse, second location…" value={a.label} onChange={(e) => put({ label: e.target.value })} /></div>
+                      <div className="field"><label htmlFor={`cu-oa-a${i}`}>Address</label><textarea id={`cu-oa-a${i}`} rows={3} value={a.address} onChange={(e) => put({ address: e.target.value })} /></div>
+                      <button type="button" className="btn icon ghost" aria-label={`Remove ${a.label || "this address"}`} title="Remove this address" onClick={() => set("other_addresses", (c.other_addresses || []).filter((x) => x.id !== a.id))}>×</button>
+                    </div>
+                  );
+                })}
+                <button type="button" className="lc-link" onClick={() => set("other_addresses", [...(c.other_addresses || []), { id: Math.random().toString(36).slice(2, 9), label: "", address: "" }])}>+ Add an address</button>
+              </div>
               <div className="lbl" style={{ marginTop: 4 }}>Second contact (optional)</div>
               <div className="grid g3">
                 <div className="field"><label htmlFor="cu-c2n">Name</label><input id="cu-c2n" type="text" value={c.contact2_name || ""} onChange={(e) => set("contact2_name", e.target.value)} /></div>

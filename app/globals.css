@@ -14391,3 +14391,8 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .gang-ask-o .faint{font-size:12px;color:var(--ink-3)}
 .gang-ask-pic{width:100%;height:96px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:repeating-conic-gradient(var(--surface-2,#f4f6f9) 0 25%,var(--surface) 0 50%) 0 0/12px 12px;overflow:hidden}
 .gang-ask-pic img{max-width:100%;max-height:100%;object-fit:contain}
+/* customer: other addresses besides billing and ship-to */
+.cu-oa{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.cu-oa-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) 32px;gap:10px;align-items:start;width:100%}
+.cu-oa-r .btn{margin-top:22px}
+@media (max-width:640px){.cu-oa-r{grid-template-columns:minmax(0,1fr) 32px}.cu-oa-r .field:nth-child(2){grid-column:1}}
