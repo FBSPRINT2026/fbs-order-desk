@@ -13,28 +13,34 @@ import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
  *    efficiently lay out… a button… optimize the sheet"; "you'd need to rotate for efficiency… we pay by square inch…
  *    but we also can't make it too hard to trim… we're doing it with stupid scissors"
  *  - "knock out a color… I want to knock out the white, this doesn't print"
- *  - "multiple sizes for a logo… we need 10 at 4 inches wide, and then we need 22 at 8 inches wide, and then these are
- *    going on a blue shirt, so we're going to knock out the white, and then these are going on a red shirt, so we're
- *    going to knock out the navy"
+ *  - "multiple sizes for a logo… we need 10 at 4 inches wide, and then we need 22 at 8 inches wide… blue shirt, so
+ *    we're going to knock out the white… red shirt, so we're going to knock out the navy"
  *  - "we can't have a file be over 80 megabytes… split into multiple"; "we download in PDF… make sure the resolution is
  *    high enough… on a DTF"; "we use DTF Dallas… their gang sheet sizes… make a pricing tool"
+ *  - "save a gang sheet and come back to it and add to it… Claudia viewed her gang sheets… they could view each other's"
+ *  - the layout, rethought (Oct 26: "now that we have put on all the functionality… it just needs to just all be
+ *    rethought"): one bar on top (whose sheets, the sheet, its settings, the actions); art cards with a size table
+ *    (W × H, how many, what for, the colors to knock out as dots); the order panel under them (the job it's for, which
+ *    art, a production note: "bust that out from the logo selection itself"); the cost, then Sheet / Pieces / Files with
+ *    the preview filling the space, fitted to its width as the window changes.
  *
- * Each logo has its versions: a width, how many, the colors knocked out for that shirt, and what it's for (youth, the
- * blue shirts). A size with no art yet prices a job before the art is in. The pieces are laid out in rows across the
- * 22" sheet with the trim gap between, so the sheet cuts apart in straight lines: rows first, then each piece (a small
- * one can stack under another in its column). "Optimize sheet" tries each piece turned and not, and ways of ordering
- * the rows, and keeps the cheapest, then the least film. The PDF has each version once at 300 dpi of its print size
- * (DTF's resolution), placed as many times as it prints, so files stay small; a layout longer than one file allows (250"
- * at DTF Dallas) or bigger than the size limit is split. The cost is DTF Dallas's price for the sheet length you'd buy.
+ * The pieces are laid out in rows across the 22" sheet with the trim gap between, so the sheet cuts apart in straight
+ * lines: rows first, then each piece (a small one can stack under another in its column). "Optimize sheet" tries each
+ * piece turned and not, and ways of ordering the rows, and keeps the cheapest, then the least film. The PDF has each
+ * version once at 300 dpi of its print size (DTF's resolution), placed as many times as it prints, so files stay small;
+ * a layout longer than one file allows (250" at DTF Dallas) or bigger than the size limit is split. Cut lines are on
+ * screen only (they'd print on the film). The cost is DTF Dallas's price for the sheet length you'd buy.
  */
 const DPI = DTF_DALLAS.dpi;
-type Ver = { id: string; wIn: number; qty: number; knock: string[]; label: string };
-type Logo = { id: string; name: string; /** the art as uploaded (a data URL), "" for a size with no art yet */ src: string; srcW: number; srcH: number; colors: string[]; vers: Ver[];
-  /** a size with no art: its own height */ hIn?: number;
+type Ver = { id: string; wIn: number; qty: number; knock: string[]; label: string; /** a size with no art: its height */ hIn?: number };
+type Logo = { id: string; name: string; /** the art (a data URL or a signed link), "" for a size with no art yet */ src: string; srcW: number; srcH: number; colors: string[]; vers: Ver[];
+  /** older sheets: a size with no art's height */ hIn?: number;
   /** where the art is kept once the sheet is saved (storage proofs/gang/…) */ path?: string;
-  /** the job it's for (Oct 26, Nick: "plug in a job number so that we can save the gang sheet to the production file") */ job?: string };
+  /** older sheets: the job on the logo (now in jobs) */ job?: string };
+/** the job a sheet is for: its number, which art goes to it (all when none picked) and a note for its production notes */
+type Job = { id: string; job: string; logos: string[]; note: string };
 type SheetRow = { id: string; name: string; owner: string; status: string; updated_at: string; ordered_at: string | null; supplier_order: string | null; expected: string | null; data: SheetData };
-type SheetData = { logos?: Logo[]; gap?: string; sheetW?: string; maxLen?: string; plan?: Plan; files?: { path: string; name: string; length: number; at: string }[] };
+type SheetData = { logos?: Logo[]; jobs?: Job[]; gap?: string; sheetW?: string; maxLen?: string; plan?: Plan; files?: { path: string; name: string; length: number; at: string }[]; noted?: string[] };
 /** one version, ready to lay out */
 type Piece = { key: string; logo: Logo; ver: Ver; name: string; wIn: number; hIn: number; qty: number };
 type Rect = { piece: number; x: number; y: number; w: number; h: number; rot: boolean };
@@ -44,7 +50,7 @@ type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added
 const uid = () => Math.random().toString(36).slice(2, 9);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (v: number) => `$${v.toFixed(2)}`;
-const newVer = (wIn = 3, qty = 10): Ver => ({ id: uid(), wIn, qty, knock: [], label: "" });
+const newVer = (wIn = 3, qty = 10, hIn?: number): Ver => ({ id: uid(), wIn, qty, knock: [], label: "", ...(hIn ? { hIn } : {}) });
 
 // ---------- reading a logo ----------
 async function readLogo(f: File): Promise<HTMLCanvasElement> {
@@ -184,8 +190,16 @@ async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, 
   return doc.save();
 }
 
+
+const heightOf = (lg: Logo, v: Ver) => (lg.src ? r2((v.wIn * lg.srcH) / Math.max(1, lg.srcW)) : v.hIn || lg.hIn || 3);
+const shortName = (n: string) => n.replace(/\.[^.]+$/, "");
+
 export default function GangSheet() {
+  const sb = useMemo(() => createClient(), []);
+  const { email: me0, staffName } = useRole();
+  const me = (me0 || "").toLowerCase();
   const [logos, setLogos] = useState<Logo[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [arts, setArts] = useState<Record<string, HTMLImageElement>>({});
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [done, setDone] = useState("");
   const [gap, setGap] = useSticky("gang.gap", "0.25");
@@ -195,22 +209,27 @@ export default function GangSheet() {
   const [plan, setPlan] = useState<Plan>({ turn: "as is", order: "added" });
   const [optimized, setOptimized] = useState<{ before: number; beforeCost: number } | null>(null);
   const [shown, setShown] = useState(0);
-  const [knockFor, setKnockFor] = useState<string | null>(null);
+  const [tab, setTab] = useSticky<"sheet" | "pieces" | "files">("gang.tab", "sheet");
+  const [zoom, setZoom] = useState(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const g = Math.max(0, +gap || 0), W = Math.min(DTF_DALLAS.width, Math.max(4, +sheetW || DTF_DALLAS.width));
   const L = Math.max(10, Math.min(DTF_DALLAS.maxFileLength, +maxLen || DTF_DALLAS.maxFileLength));
   const pieces: Piece[] = useMemo(() => logos.flatMap((lg) => lg.vers.map((v) => ({
-    key: v.id, logo: lg, ver: v, name: `${lg.name.replace(/\.[^.]+$/, "")}${v.label ? ` (${v.label})` : lg.vers.length > 1 ? ` ${v.wIn}"` : ""}`,
-    wIn: v.wIn, hIn: lg.src ? r2((v.wIn * lg.srcH) / lg.srcW) : (lg.hIn || 3), qty: v.qty,
+    key: v.id, logo: lg, ver: v, name: `${shortName(lg.name)}${v.label ? ` (${v.label})` : lg.vers.length > 1 ? ` ${v.wIn}"` : ""}`,
+    wIn: v.wIn, hIn: heightOf(lg, v), qty: v.qty,
   }))), [logos]);
   const lay = useMemo(() => (pieces.length ? layOut(pieces, W, g, plan) : null), [pieces, W, g, plan]);
   const parts = useMemo(() => (lay ? partsOf(lay, L) : []), [lay, L]);
   const cost = costOf(parts);
   const usedSqIn = pieces.reduce((a, p) => a + p.wIn * p.hIn * p.qty, 0);
   const filmSqIn = parts.reduce((a, p) => a + p.buy.length * W, 0);
+  const film = parts.reduce((a, p) => a + p.length, 0), bought = parts.reduce((a, p) => a + p.buy.length, 0);
+  const n = pieces.reduce((a, p) => a + p.qty, 0);
   useEffect(() => { setOptimized(null); }, [pieces.length, W, g]);
-  // each version drawn with its knocked-out colors, for the preview (Oct 26, Nick: "when you're knocking out the color,
-  // you can't see the update on the visual")
+
+  // each version with its knocked-out colors, for the preview
   const [verImg, setVerImg] = useState<Record<string, { want: string; img: HTMLImageElement }>>({});
   useEffect(() => {
     let live = true;
@@ -224,14 +243,84 @@ export default function GangSheet() {
     }
     return () => { live = false; };
   }, [pieces, arts]); // eslint-disable-line react-hooks/exhaustive-deps
-  // zoom on the preview (Oct 26, Nick: "there's got to be some sort of zoom function")
-  const [zoom, setZoom] = useState(1);
 
-  // ---------- saved sheets (Oct 26, Nick: "be able to save a gang sheet and come back to it and add to it… Claudia viewed
-  // her gang sheets and Amanda viewed her gang sheets. Or they could view each other's") ----------
-  const sb = useMemo(() => createClient(), []);
-  const { email: me0, staffName } = useRole();
-  const me = (me0 || "").toLowerCase();
+  // ---------- art ----------
+  async function add(files: FileList | File[] | null) {
+    const list = files ? [...files] : [];
+    if (!list.length) return;
+    setErr(""); setDone("");
+    for (const f of list) {
+      setBusy(`Reading ${f.name}…`);
+      try {
+        const c = await readLogo(f);
+        const src = c.toDataURL("image/png");
+        const lg: Logo = { id: uid(), name: f.name, src, srcW: c.width, srcH: c.height, colors: colorsOf(c), vers: [newVer()] };
+        const img = await loadImg(src);
+        setArts((m) => ({ ...m, [lg.id]: img }));
+        setLogos((xs) => [...xs, lg]);
+      } catch { setErr(`${f.name} couldn't be read. Use a PNG, JPG, PDF or AI file.`); }
+    }
+    setBusy("");
+  }
+  const addSize = () => setLogos((xs) => [...xs, { id: uid(), name: `Size ${xs.filter((x) => !x.src).length + 1}`, src: "", srcW: 0, srcH: 0, colors: [], vers: [newVer(3, 10, 3)] }]);
+  const patchLogo = (id: string, p: Partial<Logo>) => setLogos((xs) => xs.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  const patchVer = (lid: string, vid: string, p: Partial<Ver>) => setLogos((xs) => xs.map((x) => (x.id !== lid ? x : { ...x, vers: x.vers.map((v) => (v.id === vid ? { ...v, ...p } : v)) })));
+  // a new size keeps the shape of the first one: 3 × 3 at 4" wide is 4 × 4, not 4 × 3 (Oct 26, Nick)
+  const addVer = (lg: Logo) => {
+    const last = lg.vers[lg.vers.length - 1], w = last?.wIn || 3;
+    const h = lg.src ? undefined : r2((w * heightOf(lg, lg.vers[0] || last)) / Math.max(0.01, lg.vers[0]?.wIn || w));
+    patchLogo(lg.id, { vers: [...lg.vers, newVer(w, 10, h)] });
+  };
+  /** a size with no art: the width changed, the height keeps its shape */
+  const setW = (lg: Logo, v: Ver, w: number) => patchVer(lg.id, v.id, lg.src ? { wIn: w } : { wIn: w, hIn: r2((w * heightOf(lg, v)) / Math.max(0.01, v.wIn)) });
+  const toggleKnock = (lg: Logo, v: Ver, h: string) => patchVer(lg.id, v.id, { knock: v.knock.includes(h) ? v.knock.filter((x) => x !== h) : [...v.knock, h] });
+
+  // "Optimize sheet": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
+  function optimize() {
+    if (!pieces.length) return;
+    const before = lay ? partsOf(lay, L) : [];
+    let best: { p: Plan; parts: Part[]; len: number } | null = null;
+    for (const turn of ["as is", "flat", "tall"] as const) for (const order of ["height", "area", "added"] as const) {
+      const l = layOut(pieces, W, g, { turn, order }); if (!l) continue;
+      const ps = partsOf(l, L), len = ps.reduce((a, p) => a + p.length, 0), c = costOf(ps);
+      if (!best || c < costOf(best.parts) - 0.005 || (Math.abs(c - costOf(best.parts)) < 0.005 && len < best.len - 0.01)) best = { p: { turn, order }, parts: ps, len };
+    }
+    if (best) { setPlan(best.p); setOptimized({ before: before.reduce((a, p) => a + p.length, 0), beforeCost: costOf(before) }); setShown(0); setTab("sheet"); }
+  }
+
+  // ---------- the preview: fits its box's width, and follows the window ----------
+  const box = useRef<HTMLDivElement>(null), pv = useRef<HTMLCanvasElement>(null);
+  const [boxW, setBoxW] = useState(800);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    const ro = new ResizeObserver(() => setBoxW(el.clientWidth));
+    ro.observe(el); setBoxW(el.clientWidth);
+    return () => ro.disconnect();
+  }, [tab, pieces.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const c = pv.current, p = parts[Math.min(shown, parts.length - 1)]; if (!c || !p) return;
+    const fit = Math.max(4, (boxW - 18) / W);
+    const k = Math.min(fit * zoom, 30000 / Math.max(1, p.buy.length) / (window.devicePixelRatio || 1));
+    const dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(W * k * dpr); c.height = Math.round(p.buy.length * k * dpr);
+    c.style.width = `${Math.round(W * k)}px`; c.style.height = `${Math.round(p.buy.length * k)}px`;
+    const x = c.getContext("2d")!; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W * k, p.buy.length * k);
+    // the film you buy past the layout
+    x.fillStyle = "rgba(24,95,165,.07)"; x.fillRect(0, p.length * k, W * k, (p.buy.length - p.length) * k);
+    for (const r of p.rects) {
+      const pc = pieces[r.piece], im = verImg[pc.key]?.img;
+      const bx = (r.x + g / 2) * k, by = (r.y + g / 2) * k;
+      x.save();
+      // turned the same way as in the PDF (its top to the left)
+      if (r.rot) { x.translate(bx, by + pc.wIn * k); x.rotate(-Math.PI / 2); } else x.translate(bx, by);
+      if (pc.logo.src && im) x.drawImage(im, 0, 0, pc.wIn * k, pc.hIn * k);
+      else { x.fillStyle = "#d7dee7"; x.fillRect(0, 0, pc.wIn * k, pc.hIn * k); x.fillStyle = "#52637a"; x.font = `${Math.max(10, Math.min(15, pc.hIn * k * 0.22))}px sans-serif`; x.fillText(`${pc.name} ${pc.wIn}×${pc.hIn}`, 6, Math.min(pc.hIn * k - 6, 18)); }
+      x.restore();
+      if (g > 0) { x.save(); x.strokeStyle = "rgba(200,40,40,.7)"; x.setLineDash([5, 4]); x.lineWidth = 1; x.strokeRect(r.x * k + 0.5, r.y * k + 0.5, r.w * k - 1, r.h * k - 1); x.restore(); }
+    }
+  }, [parts, shown, pieces, verImg, W, g, zoom, boxW, tab]);
+
+  // ---------- saved sheets ----------
   const [sheetId, setSheetId] = useSticky("gang.sheet", "");
   const [sheetName, setSheetName] = useState("");
   const [row, setRow] = useState<SheetRow | null>(null);
@@ -245,29 +334,31 @@ export default function GangSheet() {
   };
   useEffect(() => { void listSheets(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function openSheet(id: string) {
-    if (!id) { loading.current = true; setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 0); return; }
-    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").eq("id", id).maybeSingle();
-    if (!data) { setSheetId(""); return; }
     loading.current = true;
+    if (!id) { setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setJobs([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 50); return; }
+    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").eq("id", id).maybeSingle();
+    if (!data) { setSheetId(""); loading.current = false; return; }
     const r = data as SheetRow, d = r.data || {};
-    const lgs = (d.logos || []).map((x) => ({ ...x, src: x.path ? "" : x.src }));
-    const signed = lgs.filter((x) => x.path).length ? (await sb.storage.from("proofs").createSignedUrls(lgs.filter((x) => x.path).map((x) => x.path!), 3600 * 8)).data || [] : [];
+    const lgs = d.logos || [];
+    const paths = lgs.filter((x) => x.path).map((x) => x.path!);
+    const signed = paths.length ? (await sb.storage.from("proofs").createSignedUrls(paths, 3600 * 8)).data || [] : [];
     const url = new Map(signed.map((x) => [x.path, x.signedUrl]));
-    const withSrc = lgs.map((x) => (x.path ? { ...x, src: url.get(x.path) || "" } : x));
+    // older sheets: a size with no art kept its height on the logo; the job on each logo
+    const withSrc = lgs.map((x) => ({ ...x, src: x.path ? url.get(x.path) || "" : x.src || "", vers: x.vers.map((v) => (!x.path && !x.src && !v.hIn ? { ...v, hIn: x.hIn || 3 } : v)) }));
+    const oldJobs: Job[] = [...new Set(lgs.map((x) => x.job).filter(Boolean) as string[])].map((j) => ({ id: uid(), job: j, logos: lgs.filter((x) => x.job === j).map((x) => x.id), note: "" }));
     const imgs: Record<string, HTMLImageElement> = {};
     await Promise.all(withSrc.filter((x) => x.src).map(async (x) => { try { imgs[x.id] = await loadImg(x.src); } catch { /* art gone */ } }));
     setRow(r); setSheetId(r.id); setSheetName(r.name);
-    setArts(imgs); setLogos(withSrc);
+    setArts(imgs); setLogos(withSrc); setJobs(d.jobs || oldJobs);
     if (d.gap) setGap(d.gap); if (d.sheetW) setSheetW(d.sheetW); if (d.maxLen) setMaxLen(d.maxLen); if (d.plan) setPlan(d.plan);
     setOptimized(null); setShown(0); setDone(""); setErr("");
-    setTimeout(() => { loading.current = false; }, 0);
+    setTimeout(() => { loading.current = false; }, 50);
   }
-  // the sheet in the link (from a job's production files), else the one open last time
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("sheet");
     if (q || sheetId) void openSheet(q || sheetId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  /** save now: makes the sheet the first time, keeps the art in storage, then the logos and settings */
+  /** save now: makes the sheet the first time, keeps the art in storage, then the logos, jobs and settings */
   async function save(extra: Partial<SheetData> = {}): Promise<string> {
     if (saving.current) await saving.current.catch(() => "");
     const run = (async () => {
@@ -280,7 +371,6 @@ export default function GangSheet() {
         if (error || !data) { setSaveState("Not saved"); throw new Error(error?.message || "Couldn't save the sheet."); }
         id = data.id as string; setSheetId(id); setSheetName(name0);
       }
-      // the art goes to storage once (a data URL in the browser until then)
       const stored: Logo[] = [];
       for (const lg of logos) {
         if (lg.src && !lg.path && lg.src.startsWith("data:")) {
@@ -290,10 +380,11 @@ export default function GangSheet() {
         } else stored.push(lg);
       }
       if (stored.some((x, i) => x.path !== logos[i].path)) setLogos((xs) => xs.map((x) => { const s2 = stored.find((y) => y.id === x.id); return s2?.path && !x.path ? { ...x, path: s2.path } : x; }));
-      const data: SheetData = { ...(row?.data || {}), logos: stored.map(({ src, ...x }) => (x.path ? x : { ...x, src })), gap, sheetW, maxLen, plan, ...extra };
-      const { error } = await sb.from("gang_sheets").update({ name: sheetName.trim() || name0, data, updated_at: new Date().toISOString() }).eq("id", id);
+      const data: SheetData = { ...(row?.data || {}), logos: stored.map(({ src, job: _j, ...x }) => (x.path ? x : { ...x, src })), jobs, gap, sheetW, maxLen, plan, ...extra };
+      const nm = sheetName.trim() || name0;
+      const { error } = await sb.from("gang_sheets").update({ name: nm, data, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) { setSaveState("Not saved"); throw new Error(error.message); }
-      setRow((r) => (r && r.id === id ? { ...r, data, name: sheetName.trim() || name0 } : { id, name: sheetName.trim() || name0, owner: me, status: "open", updated_at: new Date().toISOString(), ordered_at: null, supplier_order: null, expected: null, data }));
+      setRow((r) => (r && r.id === id ? { ...r, data, name: nm } : { id, name: nm, owner: me, status: "open", updated_at: new Date().toISOString(), ordered_at: null, supplier_order: null, expected: null, data }));
       setSaveState("Saved");
       void listSheets();
       return id;
@@ -301,12 +392,11 @@ export default function GangSheet() {
     saving.current = run;
     return run;
   }
-  // saves as you go: a sheet with a logo on it is never lost
   useEffect(() => {
     if (loading.current || (!logos.length && !sheetId)) return;
     const t = setTimeout(() => { void save().catch((e) => setErr(e instanceof Error ? e.message : "Couldn't save the sheet.")); }, 1200);
     return () => clearTimeout(t);
-  }, [logos, gap, sheetW, maxLen, plan, sheetName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [logos, jobs, gap, sheetW, maxLen, plan, sheetName]); // eslint-disable-line react-hooks/exhaustive-deps
   async function markOrdered() {
     const id = await save();
     await sb.from("gang_sheets").update({ status: "ordered", ordered_at: new Date().toISOString(), ordered_by: me }).eq("id", id);
@@ -317,19 +407,40 @@ export default function GangSheet() {
   async function pullFrom(id: string) {
     if (!id) return;
     const { data } = await sb.from("gang_sheets").select("name, data").eq("id", id).maybeSingle();
-    const lg = ((data?.data as SheetData | null)?.logos || []);
+    const d = (data?.data as SheetData | null) || {}, lg = d.logos || [];
     if (!lg.length) return;
     const paths = lg.filter((x) => x.path).map((x) => x.path!);
     const signed = paths.length ? (await sb.storage.from("proofs").createSignedUrls(paths, 3600 * 8)).data || [] : [];
     const url = new Map(signed.map((x) => [x.path, x.signedUrl]));
-    const copies = lg.map((x) => ({ ...x, id: uid(), vers: x.vers.map((v) => ({ ...v, id: uid() })), src: x.path ? url.get(x.path) || "" : x.src }));
+    const ids = new Map<string, string>();
+    const copies = lg.map((x) => { const nid = uid(); ids.set(x.id, nid); return { ...x, id: nid, vers: x.vers.map((v) => ({ ...v, id: uid() })), src: x.path ? url.get(x.path) || "" : x.src }; });
     const imgs: Record<string, HTMLImageElement> = {};
     await Promise.all(copies.filter((x) => x.src).map(async (x) => { try { imgs[x.id] = await loadImg(x.src); } catch { /* gone */ } }));
     setArts((m) => ({ ...m, ...imgs }));
     setLogos((xs) => [...xs, ...copies]);
+    // their jobs come too, pointing at the copies
+    const theirJobs = (d.jobs || []).map((j) => ({ ...j, id: uid(), logos: j.logos.map((x) => ids.get(x) || "").filter(Boolean) }));
+    if (theirJobs.length) setJobs((js) => [...js, ...theirJobs]);
     setDone(`Added ${copies.length} logo${copies.length === 1 ? "" : "s"} from "${data?.name || "that sheet"}".`);
   }
-  /** the downloaded files in each job's production files, with a link back to the sheet */
+
+  // ---------- the order it's for (Oct 26, Nick: "at the bottom, put the order information… this is for this invoice.
+  // Here's the production notes… bust that out from the logo selection itself") ----------
+  const jobArt = (j: Job) => (j.logos.length ? logos.filter((x) => j.logos.includes(x.id)) : logos);
+  const [orderOf, setOrderOf] = useState<Record<string, { id: string; label: string } | null>>({});
+  useEffect(() => {
+    const want = [...new Set(jobs.map((j) => j.job).filter((x) => /^\d{3,8}$/.test(x)))].filter((x) => !(x in orderOf));
+    if (!want.length) return;
+    void (async () => {
+      const { data } = await sb.from("orders").select("id, number, nickname, customer_id").in("number", want.map(Number));
+      const got: Record<string, { id: string; label: string } | null> = {};
+      for (const j of want) { const o = (data || []).find((x) => String(x.number) === j); got[j] = o ? { id: o.id as string, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}` } : null; }
+      setOrderOf((m) => ({ ...m, ...got }));
+    })();
+  }, [jobs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const patchJob = (id: string, p: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...p } : j)));
+
+  /** the downloaded files in each job's production files, its note in its production notes, a link back to the sheet */
   async function fileToJobs(id: string, files: { bytes: Uint8Array; name: string; length: number }[]): Promise<string[]> {
     const at = new Date().toISOString(), stored: { path: string; name: string; length: number; at: string }[] = [];
     for (const f of files) {
@@ -337,72 +448,27 @@ export default function GangSheet() {
       const up = await sb.storage.from("proofs").upload(path, new Blob([f.bytes as BlobPart], { type: "application/pdf" }), { contentType: "application/pdf" });
       if (!up.error) stored.push({ path, name: f.name, length: f.length, at });
     }
-    await save({ files: [...(row?.data?.files || []), ...stored] }).catch(() => "");
-    const jobs = [...new Set(logos.map((x) => (x.job || "").replace(/[^\d]/g, "")).filter(Boolean))];
+    const noted = new Set(row?.data?.noted || []);
     const notes: string[] = [];
-    for (const j of jobs) {
-      const { data: o } = await sb.from("orders").select("id, number").eq("number", +j).maybeSingle();
-      if (!o) { notes.push(`#${j} isn't an order in the portal: not filed`); continue; }
-      const mine = pieces.filter((pc) => (pc.logo.job || "").replace(/[^\d]/g, "") === j).map((pc) => `${pc.qty} × ${pc.name} ${pc.wIn}"`).join(", ");
+    for (const j of jobs.filter((x) => /^\d{3,8}$/.test(x.job))) {
+      const { data: o } = await sb.from("orders").select("id, number").eq("number", +j.job).maybeSingle();
+      if (!o) { notes.push(`#${j.job} isn't an order in the portal: not filed`); continue; }
+      const art = new Set(jobArt(j).map((x) => x.id));
+      const mine = pieces.filter((pc) => art.has(pc.logo.id)).map((pc) => `${pc.qty} × ${pc.name} ${pc.wIn}"`).join(", ");
       for (const f of stored) await sb.from("art_files").insert({ order_id: o.id, name: f.name, file_path: f.path, file_type: "application/pdf", category: "gang_sheet", note: `DTF gang sheet "${sheetName || "gang sheet"}": ${mine}. Open the sheet: /shop/gang-sheet?sheet=${id}`.slice(0, 500) });
-      notes.push(`filed under #${j}`);
+      // the note for production, once per job and note
+      const nk = `${j.job}|${j.note.trim()}`;
+      if (j.note.trim() && !noted.has(nk)) {
+        const { data: inn } = await sb.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();
+        const pn = String(inn?.production_notes || "").trim();
+        await sb.from("order_internal").upsert({ order_id: o.id, production_notes: [pn, `Gang sheet "${sheetName || "gang sheet"}": ${j.note.trim()}`].filter(Boolean).join("\n").slice(-8000) });
+        noted.add(nk);
+      }
+      notes.push(`filed under #${j.job}`);
     }
+    await save({ files: [...(row?.data?.files || []), ...stored], noted: [...noted] }).catch(() => "");
     return notes;
   }
-
-  async function add(files: FileList | null) {
-    if (!files?.length) return;
-    setErr(""); setDone("");
-    for (const f of [...files]) {
-      setBusy(`Reading ${f.name}…`);
-      try {
-        const c = await readLogo(f);
-        const src = c.toDataURL("image/png");
-        const lg: Logo = { id: uid(), name: f.name, src, srcW: c.width, srcH: c.height, colors: colorsOf(c), vers: [newVer()] };
-        const img = await loadImg(src);
-        setArts((m) => ({ ...m, [lg.id]: img }));
-        setLogos((xs) => [...xs, lg]);
-      } catch { setErr(`${f.name} couldn't be read. Use a PNG, JPG, PDF or AI file.`); }
-    }
-    setBusy("");
-  }
-  const addSize = () => setLogos((xs) => [...xs, { id: uid(), name: `Size ${xs.filter((x) => !x.src).length + 1}`, src: "", srcW: 0, srcH: 0, colors: [], vers: [newVer()], hIn: 3 }]);
-  const patchLogo = (id: string, p: Partial<Logo>) => setLogos((xs) => xs.map((x) => (x.id === id ? { ...x, ...p } : x)));
-  const patchVer = (lid: string, vid: string, p: Partial<Ver>) => setLogos((xs) => xs.map((x) => (x.id !== lid ? x : { ...x, vers: x.vers.map((v) => (v.id === vid ? { ...v, ...p } : v)) })));
-
-  // "Optimize sheet": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
-  function tightest() {
-    if (!pieces.length) return;
-    const before = lay ? partsOf(lay, L) : [];
-    let best: { p: Plan; parts: Part[]; len: number } | null = null;
-    for (const turn of ["as is", "flat", "tall"] as const) for (const order of ["height", "area", "added"] as const) {
-      const l = layOut(pieces, W, g, { turn, order }); if (!l) continue;
-      const ps = partsOf(l, L), len = ps.reduce((a, p) => a + p.length, 0), c = costOf(ps);
-      if (!best || c < costOf(best.parts) - 0.005 || (Math.abs(c - costOf(best.parts)) < 0.005 && len < best.len - 0.01)) best = { p: { turn, order }, parts: ps, len };
-    }
-    if (best) { setPlan(best.p); setOptimized({ before: before.reduce((a, p) => a + p.length, 0), beforeCost: costOf(before) }); setShown(0); }
-  }
-
-  // the preview: the file picked, small
-  const pv = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = pv.current, p = parts[Math.min(shown, parts.length - 1)]; if (!c || !p) return;
-    const k = Math.min(Math.min(30, 620 / W) * zoom, 30000 / Math.max(1, p.buy.length));
-    c.width = Math.round(W * k); c.height = Math.round(p.buy.length * k);
-    const x = c.getContext("2d")!; x.clearRect(0, 0, c.width, c.height);
-    x.fillStyle = "rgba(24,95,165,.07)"; x.fillRect(0, p.length * k, c.width, (p.buy.length - p.length) * k);
-    for (const r of p.rects) {
-      const pc = pieces[r.piece], im = verImg[pc.key]?.img;
-      const bx = (r.x + g / 2) * k, by = (r.y + g / 2) * k;
-      x.save();
-      // turned the same way as in the PDF (its top to the left)
-      if (r.rot) { x.translate(bx, by + pc.wIn * k); x.rotate(-Math.PI / 2); } else x.translate(bx, by);
-      if (pc.logo.src && im) x.drawImage(im, 0, 0, pc.wIn * k, pc.hIn * k);
-      else { x.fillStyle = "#c9d3df"; x.fillRect(0, 0, pc.wIn * k, pc.hIn * k); x.fillStyle = "#52637a"; x.font = `${Math.max(9, Math.min(13, pc.hIn * k * 0.3))}px sans-serif`; x.fillText(pc.name, 4, Math.min(pc.hIn * k - 4, 15)); }
-      x.restore();
-      if (g > 0) { x.save(); x.strokeStyle = "rgba(200,40,40,.75)"; x.setLineDash([4, 3]); x.lineWidth = 1; x.strokeRect(r.x * k + 0.5, r.y * k + 0.5, r.w * k - 1, r.h * k - 1); x.restore(); }
-    }
-  }, [parts, shown, pieces, verImg, W, g, zoom]);
 
   async function download() {
     if (!parts.length) return;
@@ -417,7 +483,6 @@ export default function GangSheet() {
         const p = queue.shift()!;
         setBusy(`Making file ${files.length + 1} of ${files.length + queue.length + 1}…`);
         const bytes = await makePdf(pieces, arts, p, W, g);
-        // over the size limit: its rows in two files
         const rowsY = [...new Set(p.rects.map((r) => r.y))].sort((a, b) => a - b);
         if (bytes.byteLength > limit && rowsY.length > 1) {
           const cut = rowsY[Math.ceil(rowsY.length / 2)];
@@ -428,160 +493,172 @@ export default function GangSheet() {
         }
         files.push({ bytes, p });
       }
-      const base = (logos[0]?.name || "gang").replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-").slice(0, 30);
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
+      const base = (sheetName || shortName(logos[0]?.name || "gang")).replace(/[^\w-]+/g, "-").slice(0, 30);
+      const named = files.map((f, i) => ({ ...f, name: `${base}-gang-${W}x${f.p.buy.length}-${i + 1}of${files.length}.pdf` }));
+      for (const f of named) {
         const u = URL.createObjectURL(new Blob([f.bytes as BlobPart], { type: "application/pdf" }));
-        const a = document.createElement("a"); a.href = u; a.download = `${base}-gang-${W}x${f.p.buy.length}-${i + 1}of${files.length}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+        const a = document.createElement("a"); a.href = u; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(u), 60000);
         await new Promise((r) => setTimeout(r, 400));
       }
       setBusy("Filing it under the jobs…");
       const id = await save();
-      const filed = await fileToJobs(id, files.map((f, i) => ({ bytes: f.bytes, name: `${base}-gang-${W}x${f.p.buy.length}-${i + 1}of${files.length}.pdf`, length: f.p.buy.length })));
+      const filed = await fileToJobs(id, named.map((f) => ({ bytes: f.bytes, name: f.name, length: f.p.buy.length })));
       setBusy("");
       const big = Math.max(...files.map((f) => f.bytes.byteLength));
       setDone(`${files.length} PDF${files.length === 1 ? "" : "s"} downloaded (largest ${(big / 1048576).toFixed(1)} MB). Buy ${files.map((f) => `${W}" × ${f.p.buy.length}"`).join(", ")} at ${DTF_DALLAS.name}: ${money(costOf(files.map((f) => f.p)))}.${filed.length ? ` ${filed.join("; ")}.` : ""}`);
     } catch (e) { setBusy(""); setErr(e instanceof Error ? e.message : "The files couldn't be made."); }
   }
 
-  const film = parts.reduce((a, p) => a + p.length, 0);
-  const n = pieces.reduce((a, p) => a + p.qty, 0);
   const cur = parts[Math.min(shown, Math.max(0, parts.length - 1))];
   const each = (pc: Piece) => (usedSqIn ? (cost * pc.wIn * pc.hIn) / usedSqIn : 0);
+  const mineN = sheets.filter((x) => x.owner === me).length;
   return (
     <>
       <div className="page-head">
-        <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: logos laid out on a DTF sheet, priced and ready to upload to {DTF_DALLAS.name}</div></div>
-        <div className="row" style={{ gap: 8 }}>
-          <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
-          {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
-          <button type="button" className="btn" onClick={() => void openSheet("")}>New sheet</button>
-          <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
-        </div>
+        <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: art laid out on a {DTF_DALLAS.name} sheet, priced, and filed with its jobs</div></div>
       </div>
-      {err && <div className="pv-err">{err}</div>}
-      {done && <div className="pv-err sow-msg" role="status">{done}</div>}
+      {/* the bar: whose sheets, the sheet, its settings and the actions */}
       <div className="toolbar gang-bar" data-toolbar>
         <div className="chips">
-          <button type="button" className={"chip" + (whose === "mine" ? " on" : "")} onClick={() => setWhose("mine")}>My sheets <span className="pill-n">{sheets.filter((x) => x.owner === me).length}</span></button>
+          <button type="button" className={"chip" + (whose === "mine" ? " on" : "")} onClick={() => setWhose("mine")}>My sheets <span className="pill-n">{mineN}</span></button>
           <button type="button" className={"chip" + (whose === "all" ? " on" : "")} onClick={() => setWhose("all")}>Everyone&apos;s <span className="pill-n">{sheets.length}</span></button>
         </div>
         <select aria-label="Open a saved sheet" value={sheetId && sheets.some((x) => x.id === sheetId) ? sheetId : ""} onChange={(e) => void openSheet(e.target.value)}>
           <option value="">{sheetId ? "This sheet" : "Open a saved sheet…"}</option>
-          {sheets.filter((x) => whose === "all" || x.owner === me).map((x) => <option key={x.id} value={x.id}>{x.name}{whose === "all" && x.owner !== me ? ` · ${x.owner.split("@")[0]}` : ""} · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</option>)}
+          {sheets.filter((x) => whose === "all" || x.owner === me).map((x) => <option key={x.id} value={x.id}>{x.name}{x.owner !== me ? ` · ${x.owner.split("@")[0]}` : ""} · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</option>)}
         </select>
         <input type="text" aria-label="Sheet name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
-        <select aria-label="Add the logos from another sheet" value="" onChange={(e) => void pullFrom(e.target.value)}>
-          <option value="">Add logos from another sheet…</option>
-          {sheets.filter((x) => x.id !== sheetId && (x.data?.logos || []).length).map((x) => <option key={x.id} value={x.id}>{x.name} · {x.owner.split("@")[0]} · {(x.data?.logos || []).length} logo{(x.data?.logos || []).length === 1 ? "" : "s"}</option>)}
-        </select>
         <span className="faint gang-save">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` · ${DTF_DALLAS.name} #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState}</span>
-      </div>
-      <div className="gang">
-        <div className="stack" style={{ gap: 16 }}>
-          <section className="panel">
-            <div className="panel-h"><h2>Logos</h2><span className="faint">each size or color you need is its own line</span></div>
-            <div className="panel-b stack" style={{ gap: 12 }}>
-              {logos.map((lg) => (
-                <div key={lg.id} className="gang-item">
-                  <div className="gang-item-h">
-                    <div className="gang-pic">{lg.src ? <img src={lg.src} alt="" /> : <span className="faint">Size only</span>}</div>
-                    {lg.src ? <b data-notranslate title={lg.name}>{lg.name}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
-                    <span className="spacer" />
-                    <input className="gang-job" type="text" inputMode="numeric" placeholder="Job #" aria-label="Job number" title="The job these are for: the gang sheet goes in its production files" value={lg.job || ""} onChange={(e) => patchLogo(lg.id, { job: e.target.value.replace(/[^\d]/g, "").slice(0, 8) })} />
-                    <button type="button" className="btn icon ghost" aria-label="Remove this logo" title="Remove this logo" onClick={() => setLogos((xs) => xs.filter((x) => x.id !== lg.id))}>×</button>
-                  </div>
-                  {lg.src && Math.max(...lg.vers.map((v) => v.wIn)) > 0 && Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 && <p className="gang-warn">About {Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at {Math.max(...lg.vers.map((v) => v.wIn))}&quot; wide (DTF wants 300): it may print soft. A bigger file or a vector prints sharper.</p>}
-                  <div className="gang-vers">
-                    <div className="gang-ver gang-ver-h"><span>Width (in)</span><span>Height</span><span>How many</span><span>For</span><span /></div>
-                    {lg.vers.map((v) => (
-                      <div key={v.id}>
-                        <div className="gang-ver">
-                          <input type="number" min="0.25" step="0.05" value={v.wIn} aria-label="Width in inches" onChange={(e) => patchVer(lg.id, v.id, { wIn: Math.max(0.25, +e.target.value || 0) })} />
-                          {lg.src ? <span className="num">{r2((v.wIn * lg.srcH) / lg.srcW)}&quot;</span> : <input type="number" min="0.25" step="0.05" value={lg.hIn || 3} aria-label="Height in inches" onChange={(e) => patchLogo(lg.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
-                          <input type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} />
-                          <input type="text" value={v.label} placeholder="Youth, blue shirts…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} />
-                          {lg.vers.length > 1 ? <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button> : <span />}
-                        </div>
-                        {lg.src && lg.colors.length > 0 && (
-                          <div className="gang-knock">
-                            <button type="button" className="lc-link" onClick={() => setKnockFor(knockFor === v.id ? null : v.id)}>{v.knock.length ? `Knocked out: ${v.knock.length} color${v.knock.length === 1 ? "" : "s"}` : "Knock out a color"}</button>
-                            {v.knock.map((h) => <i key={h} className="gang-sw sm on" style={{ background: h }} title={`${h} knocked out`} />)}
-                            {v.knock.length > 0 && verImg[v.id] && <img className="gang-vthumb" src={verImg[v.id].img.src} alt="With the colors knocked out" />}
-                            {knockFor === v.id && (
-                              <div className="gang-knock-row">
-                                <span className="faint">Click a color that doesn&apos;t print on this shirt:</span>
-                                {lg.colors.map((h) => <button key={h} type="button" className={"gang-sw" + (v.knock.includes(h) ? " on" : "")} style={{ background: h }} title={v.knock.includes(h) ? `${h}: knocked out (click to put it back)` : `Knock out ${h}`} aria-pressed={v.knock.includes(h)} onClick={() => patchVer(lg.id, v.id, { knock: v.knock.includes(h) ? v.knock.filter((x) => x !== h) : [...v.knock, h] })} />)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <button type="button" className="lc-link" onClick={() => patchLogo(lg.id, { vers: [...lg.vers, newVer(lg.vers[lg.vers.length - 1]?.wIn || 3, 10)] })}>+ Another size or color of this logo</button>
-                  </div>
-                </div>
-              ))}
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <label className="btn">{logos.length ? "Add another logo" : "Upload a logo"}<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
-                <button type="button" className="btn ghost" onClick={addSize} title="Price a job before the art is in">Add a size (no art yet)</button>
-              </div>
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-h"><h2>Sheet</h2><span className="faint">{DTF_DALLAS.name}: {DTF_DALLAS.width}&quot; wide, {DTF_DALLAS.dpi} dpi</span></div>
-            <div className="panel-b stack" style={{ gap: 10 }}>
-              <div className="gang-row3">
+        <span className="spacer" />
+        <div className="gang-pop">
+          <button type="button" className={"btn" + (settingsOpen ? " on" : "")} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Sheet settings</button>
+          {settingsOpen && (
+            <div className="gang-pop-b" role="dialog" aria-label="Sheet settings">
+              <div className="gang-row2">
                 <div className="field"><label htmlFor="g-g">Trim gap (in)</label><input id="g-g" type="number" min="0" step="0.05" value={gap} onChange={(e) => setGap(e.target.value)} /></div>
                 <div className="field"><label htmlFor="g-sw">Sheet width (in)</label><input id="g-sw" type="number" min="4" max={DTF_DALLAS.width} step="0.5" value={sheetW} onChange={(e) => setSheetW(String(Math.min(DTF_DALLAS.width, +e.target.value || DTF_DALLAS.width)))} /></div>
                 <div className="field"><label htmlFor="g-ml">Longest file (in)</label><input id="g-ml" type="number" min="10" max={DTF_DALLAS.maxFileLength} step="10" value={maxLen} onChange={(e) => setMaxLen(e.target.value)} /></div>
-              </div>
-              {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
-              <div className="gang-row3">
                 <div className="field"><label htmlFor="g-mb">Largest file (MB)</label><input id="g-mb" type="number" min="5" step="1" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></div>
               </div>
+              {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
+              <p className="faint" style={{ fontSize: 12, margin: 0 }}>{DTF_DALLAS.name}: {DTF_DALLAS.width}&quot; wide, up to {DTF_DALLAS.maxFileLength}&quot; a file, {DTF_DALLAS.dpi} dpi. Prices as of {DTF_DALLAS.checked}.</p>
+            </div>
+          )}
+        </div>
+        <button type="button" className="btn" onClick={() => void openSheet("")}>New sheet</button>
+        <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
+        {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
+        <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
+      </div>
+      {err && <div className="pv-err">{err}</div>}
+      {done && <div className="pv-err sow-msg" role="status">{done}</div>}
+      <div className="gang2">
+        {/* the art, then the order it's for */}
+        <div className={"gang-left" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
+          {logos.map((lg) => (
+            <section key={lg.id} className="panel gang-card">
+              <div className="gang-card-h">
+                <div className="gang-pic">{lg.src ? <img src={lg.src} alt="" /> : <span>no art</span>}</div>
+                <div className="gang-card-t">
+                  {lg.src ? <b data-notranslate title={lg.name}>{shortName(lg.name)}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
+                  <span className="faint">{lg.src ? `${lg.colors.length} color${lg.colors.length === 1 ? "" : "s"}${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 ? ` · about ${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at its biggest: may print soft` : ""}` : "a size with no art yet, for pricing"}</span>
+                </div>
+                <button type="button" className="btn icon ghost" aria-label="Remove this art" title="Remove this art" onClick={() => { setLogos((xs) => xs.filter((x) => x.id !== lg.id)); setJobs((js) => js.map((j) => ({ ...j, logos: j.logos.filter((x) => x !== lg.id) }))); }}>×</button>
+              </div>
+              <table className="gang-vt">
+                <thead><tr><th>Size (W × H in)</th><th>Qty</th><th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
+                <tbody>{lg.vers.map((v) => (
+                  <tr key={v.id}>
+                    <td><span className="gang-wh">
+                      <input type="number" min="0.25" step="0.05" value={v.wIn} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
+                      <span className="faint">×</span>
+                      {lg.src ? <span className="gang-h num" title="Follows the art's shape">{heightOf(lg, v)}</span> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
+                    </span></td>
+                    <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>
+                    <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
+                    <td>{lg.src && lg.colors.length > 0 && <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>}</td>
+                    <td>{lg.vers.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <button type="button" className="lc-link gang-add" onClick={() => addVer(lg)}>+ Add a size</button>
+            </section>
+          ))}
+          <label className="gang-drop">
+            <span><b>Drop art here</b> or <u>upload</u> · PNG, JPG, PDF, AI</span>
+            <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+          </label>
+          <button type="button" className="lc-link" onClick={addSize} style={{ alignSelf: "flex-start" }}>+ Add a size with no art yet (to price it)</button>
+          {/* the order it's for */}
+          <section className="panel">
+            <div className="panel-h"><h2>Order</h2><span className="faint">the job this is for: the sheet goes in its production files</span></div>
+            <div className="panel-b stack" style={{ gap: 10 }}>
+              {jobs.map((j) => {
+                const o = orderOf[j.job];
+                return (
+                  <div key={j.id} className="gang-job-row">
+                    <div className="gang-job-top">
+                      <div className="field"><label>Job / invoice #</label><input type="text" inputMode="numeric" value={j.job} placeholder="13767" onChange={(e) => patchJob(j.id, { job: e.target.value.replace(/\D/g, "").slice(0, 8) })} /></div>
+                      <span className="gang-job-found">{!j.job ? "" : o === undefined ? "Looking…" : o ? <a href={`/shop/orders/${o.id}`} target="_blank" rel="noreferrer">{o.label}</a> : <span className="gang-warn">Not an order in the portal</span>}</span>
+                      <button type="button" className="btn icon ghost" aria-label="Remove this job" onClick={() => setJobs((js) => js.filter((x) => x.id !== j.id))}>×</button>
+                    </div>
+                    {logos.length > 1 && (
+                      <div className="chips gang-job-art">
+                        <span className="faint">Art for it:</span>
+                        <button type="button" className={"chip" + (!j.logos.length ? " on" : "")} onClick={() => patchJob(j.id, { logos: [] })}>All</button>
+                        {logos.map((lg) => <button key={lg.id} type="button" className={"chip" + (j.logos.includes(lg.id) ? " on" : "")} onClick={() => patchJob(j.id, { logos: j.logos.includes(lg.id) ? j.logos.filter((x) => x !== lg.id) : [...j.logos, lg.id] })}>{shortName(lg.name)}</button>)}
+                      </div>
+                    )}
+                    <div className="field"><label>Production note</label><textarea rows={2} value={j.note} placeholder="Added to the job's production notes when you download" onChange={(e) => patchJob(j.id, { note: e.target.value })} /></div>
+                  </div>
+                );
+              })}
+              <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setJobs((js) => [...js, { id: uid(), job: "", logos: [], note: "" }])}>{jobs.length ? "Add another job" : "Add the job it's for"}</button>
             </div>
           </section>
         </div>
-        <section className="panel">
-          <div className="panel-h"><h2>Layout and cost</h2>
-            <button type="button" className="btn sm" disabled={!pieces.length} onClick={tightest} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
+        {/* the cost, then the sheet */}
+        <div className="gang-right">
+          <div className="stats gang-sum">
+            <button type="button" className="stat"><span className="v">{money(cost)}</span><span className="k">{DTF_DALLAS.name} cost</span></button>
+            <button type="button" className="stat"><span className="v">{r2(film)}&quot; of {bought}&quot;</span><span className="k">Film used of what you buy</span></button>
+            <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
+            <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
           </div>
-          <div className="panel-b">
-            {!pieces.length ? <p className="faint">Upload a logo, or add a size to price a job before the art is in.</p> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : (
-              <>
-                <div className="stats gang-sum">
-                  <button type="button" className="stat"><span className="v">{money(cost)}</span><span className="k">{DTF_DALLAS.name} cost</span></button>
-                  <button type="button" className="stat"><span className="v">{r2(film)}&quot;</span><span className="k">Film used</span></button>
-                  <button type="button" className="stat"><span className="v">{n ? money(cost / n) : "—"}</span><span className="k">Per transfer, average</span></button>
-                  <button type="button" className="stat"><span className="v">{filmSqIn ? `${Math.round((usedSqIn / filmSqIn) * 100)}%` : "—"}</span><span className="k">Film covered by art</span></button>
-                </div>
-                {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok">Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5 }}>Optimized: already as tight as it gets.</p>)}
-                <div className="tbl-wrap" style={{ margin: "10px 0" }}><table className="tbl">
-                  <thead><tr><th>Piece</th><th className="r">Size</th><th className="r">How many</th><th className="r">Each</th></tr></thead>
-                  <tbody>{pieces.map((pc) => <tr key={pc.key}><td data-notranslate>{pc.name}</td><td className="r num">{pc.wIn}&quot; × {pc.hIn}&quot;</td><td className="r num">{pc.qty}</td><td className="r num">{money(each(pc))}</td></tr>)}</tbody>
-                </table></div>
-                <div className="tbl-wrap" style={{ margin: "10px 0" }}><table className="tbl">
-                  <thead><tr><th>File</th><th>Layout</th><th>Buy</th><th className="r">Price</th></tr></thead>
-                  <tbody>{parts.map((p, i) => <tr key={i} onClick={() => setShown(i)} style={{ cursor: "pointer", fontWeight: i === Math.min(shown, parts.length - 1) && parts.length > 1 ? 700 : undefined }}><td>{i + 1}</td><td className="num">{r2(p.length)}&quot; long · {p.rects.length} pcs</td><td className="num">{W}&quot; × {p.buy.length}&quot;</td><td className="r num">{money(p.buy.price)}</td></tr>)}</tbody>
-                </table></div>
-                {cur && (
-                  <>
-                    <div className="gang-zoom" role="group" aria-label="Zoom">
-                      <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>−</button>
-                      <span className="num">{Math.round(zoom * 100)}%</span>
-                      <button type="button" className="btn sm" aria-label="Zoom in" disabled={zoom >= 8} onClick={() => setZoom((z) => Math.min(8, z * 1.5))}>+</button>
-                      {zoom > 1 && <button type="button" className="btn sm ghost" onClick={() => setZoom(1)}>Fit</button>}
-                    </div>
-                    <div className={"gang-sheet" + (zoom > 1 ? " zoomed" : "")}><canvas ref={pv} /></div>
-                  </>
-                )}
-                <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>Rows across the sheet with the trim gap between: cut the rows apart, then each piece. The PDF has each version once at {DPI} dpi of its print size, so files stay small. Prices: {DTF_DALLAS.name}&apos;s gang sheets, {DTF_DALLAS.checked}. Ordering is on their site: download, then upload it there.</p>
-              </>
-            )}
+          <div className="toolbar gang-tabs" data-toolbar>
+            <div className="chips">
+              <button type="button" className={"chip" + (tab === "sheet" ? " on" : "")} onClick={() => setTab("sheet")}>Sheet</button>
+              <button type="button" className={"chip" + (tab === "pieces" ? " on" : "")} onClick={() => setTab("pieces")}>Pieces <span className="pill-n">{pieces.length}</span></button>
+              <button type="button" className={"chip" + (tab === "files" ? " on" : "")} onClick={() => setTab("files")}>Files <span className="pill-n">{parts.length}</span></button>
+            </div>
+            <span className="spacer" />
+            <button type="button" className="btn primary sm" disabled={!pieces.length} onClick={optimize} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
+            {tab === "sheet" && <span className="gang-zoom">
+              <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, r2(z / 1.5)))}>−</button>
+              <button type="button" className="btn sm ghost" onClick={() => setZoom(1)} title="Fit the width">{zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}</button>
+              <button type="button" className="btn sm" aria-label="Zoom in" disabled={zoom >= 6} onClick={() => setZoom((z) => Math.min(6, r2(z * 1.5)))}>+</button>
+            </span>}
           </div>
-        </section>
+          {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: already as tight as it gets.</p>)}
+          {!pieces.length ? <div className="gang-empty">Drop art on the left, or add a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
+            <>
+              {parts.length > 1 && <div className="chips" style={{ marginBottom: 8 }}>{parts.map((p, i) => <button key={i} type="button" className={"chip" + (i === Math.min(shown, parts.length - 1) ? " on" : "")} onClick={() => setShown(i)}>File {i + 1} · {W}&quot;×{p.buy.length}&quot;</button>)}</div>}
+              <div ref={box} className="gang-view">{cur && <canvas ref={pv} />}</div>
+              <p className="faint" style={{ fontSize: 12, marginTop: 6 }}>Rows across the sheet with the trim gap between (the dashed lines, on screen only): cut the rows apart, then each piece. Shaded: film you buy past the layout.</p>
+            </>
+          ) : tab === "pieces" ? (
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Piece</th><th className="r">Size</th><th className="r">How many</th><th className="r">Each</th><th className="r">Total</th></tr></thead>
+              <tbody>{pieces.map((pc) => <tr key={pc.key}><td data-notranslate>{pc.name}{pc.ver.knock.length ? <span className="faint"> · {pc.ver.knock.length} knocked out</span> : null}</td><td className="r num">{pc.wIn}&quot; × {pc.hIn}&quot;</td><td className="r num">{pc.qty}</td><td className="r num">{money(each(pc))}</td><td className="r num">{money(each(pc) * pc.qty)}</td></tr>)}</tbody>
+            </table></div>
+          ) : (
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>File</th><th>Layout</th><th>Buy</th><th className="r">Price</th></tr></thead>
+              <tbody>{parts.map((p, i) => <tr key={i}><td>{i + 1}</td><td className="num">{r2(p.length)}&quot; long · {p.rects.length} pcs</td><td className="num">{W}&quot; × {p.buy.length}&quot;</td><td className="r num">{money(p.buy.price)}</td></tr>)}</tbody>
+            </table></div>
+          )}
+        </div>
       </div>
     </>
   );
