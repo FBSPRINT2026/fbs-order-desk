@@ -6,6 +6,7 @@ import { useRole } from "@/components/RoleContext";
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 import CustomerPick from "@/components/CustomerPick";
+import { packFill, type PackItem } from "@/lib/gangPack";
 
 /**
  * Gang sheet builder (Heat press; Oct 26, Nick).
@@ -47,7 +48,12 @@ type Piece = { key: string; logo: Logo; ver: Ver; name: string; wIn: number; hIn
 type Rect = { piece: number; x: number; y: number; w: number; h: number; rot: boolean };
 type Layout = { rows: { y: number; h: number }[]; rects: Rect[]; length: number };
 type Part = { rects: Rect[]; length: number; buy: { length: number; price: number } };
-type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added" };
+/**
+ * How the sheet is laid out. `rows`: straight rows (the first layout). `fill`: each piece in the open space nearest the
+ * top, small ones tucked beside and under big ones (lib/gangPack). Optimize may save the exact order and turn of each
+ * size it found best (`seq`, `modes`: "a" as drawn, "b" turned a quarter, "any" either), so the sheet comes back the same.
+ */
+type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added" | "width"; algo?: "rows" | "fill"; seq?: string[]; modes?: Record<string, "a" | "b" | "any"> };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (v: number) => `$${v.toFixed(2)}`;
@@ -130,7 +136,8 @@ const loadImg = async (src: string) => { const i = new Image(); i.crossOrigin = 
  * Rows across the sheet, each piece taking its size plus the gap. In a row pieces sit side by side, and a piece that
  * fits under another in its column stacks there, so the sheet cuts apart in straight lines.
  */
-function layOut(ps0: Piece[], W: number, g: number, opt: Plan): Layout | null {
+function layOut(ps0: Piece[], W: number, g: number, opt: Plan, L = DTF_DALLAS.maxFileLength): Layout | null {
+  if (opt.algo === "fill") return layFill(ps0, W, g, opt, L);
   type P = { piece: number; w: number; h: number; rot: boolean };
   const ps: P[] = [];
   for (let i = 0; i < ps0.length; i++) {
@@ -161,6 +168,27 @@ function layOut(ps0: Piece[], W: number, g: number, opt: Plan): Layout | null {
     }
   }
   return { rows: rows.map((r) => ({ y: r.y, h: r.h })), rects, length };
+}
+/** the open-space fill: each size as drawn, turned, or either (Optimize's pick), in the plan's order */
+function layFill(ps0: Piece[], W: number, g: number, opt: Plan, L: number): Layout | null {
+  const big = (i: number) => Math.max(ps0[i].wIn, ps0[i].hIn);
+  let idx = ps0.map((_, i) => i);
+  if (opt.seq?.length) { const at = new Map(opt.seq.map((k, i) => [k, i])); idx.sort((a, b) => (at.get(ps0[a].key) ?? 1e6 + big(b)) - (at.get(ps0[b].key) ?? 1e6 + big(a))); }
+  else if (opt.order === "height") idx.sort((a, b) => ps0[b].hIn - ps0[a].hIn || ps0[b].wIn - ps0[a].wIn);
+  else if (opt.order === "width") idx.sort((a, b) => ps0[b].wIn - ps0[a].wIn || ps0[b].hIn - ps0[a].hIn);
+  else if (opt.order === "area") idx.sort((a, b) => ps0[b].wIn * ps0[b].hIn - ps0[a].wIn * ps0[a].hIn);
+  idx = idx.filter((i) => ps0[i].qty > 0);
+  const items: PackItem[] = [];
+  for (const i of idx) {
+    const it = ps0[i], w = it.wIn + g, h = it.hIn + g;
+    const m = opt.modes?.[it.key] || (opt.turn === "flat" ? (it.hIn > it.wIn ? "b" : "a") : opt.turn === "tall" ? (it.wIn > it.hIn ? "b" : "a") : "a");
+    let rot = m === "b";
+    if (!rot && w > W + 1e-6) rot = true; else if (rot && h > W + 1e-6) rot = false;
+    for (let k = 0; k < it.qty; k++) items.push({ piece: i, w: rot ? h : w, h: rot ? w : h, rot, turn: m === "any" });
+  }
+  const r = packFill(items, W, L);
+  if (!r) return null;
+  return { rows: r.bins, rects: r.rects, length: r.bins.reduce((a, b) => a + b.h, 0) };
 }
 /** the files: whole rows, each file no longer than maxLen */
 function partsOf(l: Layout, maxLen: number): Part[] {
@@ -222,7 +250,7 @@ export default function GangSheet() {
   const [sheetW, setSheetW] = useSticky("gang.sheetW", "22");
   const [maxMb, setMaxMb] = useSticky("gang.maxMb", "80");
   const [maxLen, setMaxLen] = useSticky("gang.maxLen", String(DTF_DALLAS.maxFileLength));
-  const [plan, setPlan] = useState<Plan>({ turn: "as is", order: "added" });
+  const [plan, setPlan] = useState<Plan>({ turn: "as is", order: "height", algo: "fill" });
   const [optimized, setOptimized] = useState<{ before: number; beforeCost: number } | null>(null);
   const [shown, setShown] = useState(0);
   const [tab, setTab] = useSticky<"sheet" | "pieces" | "files">("gang.tab", "sheet");
@@ -236,7 +264,7 @@ export default function GangSheet() {
     key: v.id, logo: lg, ver: v, name: `${shortName(lg.name)}${v.label ? ` (${v.label})` : lg.vers.length > 1 ? ` ${r2(v.wIn)}"` : ""}`,
     wIn: v.wIn, hIn: heightOf(lg, v), qty: v.qty,
   }))), [logos]);
-  const lay = useMemo(() => (pieces.length ? layOut(pieces, W, g, plan) : null), [pieces, W, g, plan]);
+  const lay = useMemo(() => (pieces.length ? layOut(pieces, W, g, plan, L) : null), [pieces, W, g, plan, L]);
   const parts = useMemo(() => (lay ? partsOf(lay, L) : []), [lay, L]);
   const cost = costOf(parts);
   const usedSqIn = pieces.reduce((a, p) => a + p.wIn * p.hIn * p.qty, 0);
@@ -300,17 +328,38 @@ export default function GangSheet() {
   const setH = (lg: Logo, v: Ver, h: number) => { const cur = heightOf(lg, v); if (cur > 0) patchVer(lg.id, v.id, { wIn: Math.round(((h * v.wIn) / cur) * 1000) / 1000 }); };
   const toggleKnock = (lg: Logo, v: Ver, h: string) => patchVer(lg.id, v.id, { knock: v.knock.includes(h) ? v.knock.filter((x) => x !== h) : [...v.knock, h] });
 
-  // "Optimize sheet": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
+  // "Optimize sheet" (Oct 26, Nick: "you should have moved the small [ones] under the other small ones… the big logos all
+  // to be on one side… if you had… a really skinny, narrow one, it should know to move it around"): straight rows and the
+  // open-space fill, each size as drawn, turned, or either, in several orders; then shuffled orders and turns for
+  // a moment longer. The cheapest wins, then the least film; the current layout is kept when nothing beats it.
   function optimize() {
     if (!pieces.length) return;
     const before = lay ? partsOf(lay, L) : [];
     let best: { p: Plan; parts: Part[]; len: number } | null = null;
-    for (const turn of ["as is", "flat", "tall"] as const) for (const order of ["height", "area", "added"] as const) {
-      const l = layOut(pieces, W, g, { turn, order }); if (!l) continue;
-      const ps = partsOf(l, L), len = ps.reduce((a, p) => a + p.length, 0), c = costOf(ps);
-      if (!best || c < costOf(best.parts) - 0.005 || (Math.abs(c - costOf(best.parts)) < 0.005 && len < best.len - 0.01)) best = { p: { turn, order }, parts: ps, len };
+    const tryPlan = (p: Plan) => {
+      const l = layOut(pieces, W, g, p, L); if (!l) return;
+      const ps = partsOf(l, L), len = ps.reduce((a, x) => a + x.length, 0), c = costOf(ps);
+      if (!best || c < costOf(best.parts) - 0.005 || (Math.abs(c - costOf(best.parts)) < 0.005 && len < best.len - 0.01)) best = { p, parts: ps, len };
+    };
+    tryPlan(plan);
+    for (const turn of ["as is", "flat", "tall"] as const) for (const order of ["height", "area", "added", "width"] as const) {
+      if (order !== "width") tryPlan({ turn, order, algo: "rows" });
+      tryPlan({ turn, order, algo: "fill" });
     }
-    if (best) { setPlan(best.p); setOptimized({ before: before.reduce((a, p) => a + p.length, 0), beforeCost: costOf(before) }); setShown(0); setTab("sheet"); }
+    const keys = pieces.map((pc) => pc.key);
+    for (const order of ["height", "area", "width"] as const) tryPlan({ turn: "as is", order, algo: "fill", modes: Object.fromEntries(keys.map((k) => [k, "any" as const])) });
+    // shuffled: the sizes in a random order, each as drawn, turned or either
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const t0 = performance.now();
+    while (performance.now() - t0 < 700) {
+      const seq = [...keys].sort(() => rnd() - 0.5);
+      const modes = Object.fromEntries(keys.map((k) => { const x = rnd(); return [k, x < 0.34 ? "a" : x < 0.67 ? "b" : "any"] as const; }));
+      tryPlan({ turn: "as is", order: "added", algo: "fill", seq, modes });
+      if (keys.length < 2 && performance.now() - t0 > 150) break;
+    }
+    const won = best as { p: Plan; parts: Part[]; len: number } | null;
+    if (won) { setPlan(won.p); setOptimized({ before: before.reduce((a, p) => a + p.length, 0), beforeCost: costOf(before) }); setShown(0); setTab("sheet"); }
   }
 
   // ---------- the preview: fits its box's width, and follows the window ----------
@@ -782,7 +831,7 @@ export default function GangSheet() {
                 {pieces.length > 0 && <span className="faint num">{r2(film)}&quot; of film</span>}
               </div>
               {g < 0.25 && pieces.length > 0 && <p className="gang-warn" style={{ margin: "0 0 8px" }}>Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
-              {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: already as tight as it gets.</p>)}
+              {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: {r2(film)}&quot; is already the shortest it gets for these sizes.</p>)}
               {!pieces.length ? <div className="gang-empty">Add art on the left (drop it, upload it, or pick a customer&apos;s), or a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
                 <>
                   {parts.length > 1 && <div className="chips" style={{ marginBottom: 8 }}>{parts.map((p, i) => <button key={i} type="button" className={"chip" + (i === Math.min(shown, parts.length - 1) ? " on" : "")} onClick={() => setShown(i)}>File {i + 1} · {W}&quot;×{p.buy.length}&quot;</button>)}</div>}
