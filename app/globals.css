@@ -14425,26 +14425,26 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 
 /* My Day → Email summary (Oct 26, Nick picked the graphic version): three count tiles, then people, calm colors */
 .md-email{--mc:var(--fbs-blue)}
-.md2-side .md-email .md-scroll{max-height:440px}
-.es-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:2px 0 8px}
-.es-tile{--tc:var(--fbs-blue);display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 4px 8px;border-radius:var(--r);text-decoration:none;color:var(--tc);background:color-mix(in srgb,var(--tc) 11%,var(--surface))}
-.es-tile.fresh,.es-av.fresh{--tc:var(--ok)}.es-tile.web,.es-av.web{--tc:var(--fbs-orange)}
-.es-tile.web{color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink))}
-.es-tile svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.es-tile b{font-size:20px;line-height:1.1;font-weight:700}
-.es-tile span{font-size:11.5px;font-weight:600;text-align:center;line-height:1.2}
-.es-tile.zero{opacity:.55}
-.es-h{font-size:12px;color:var(--ink-3);margin:8px 0 0;padding-top:8px;border-top:1px solid var(--line-2)}
-.es-row{display:flex;align-items:center;gap:10px;padding:6px 0;text-decoration:none;color:var(--ink);min-width:0}
-.es-row:hover .es-n{color:var(--accent)}
-.es-av{--tc:var(--fbs-blue);width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,var(--surface))}
-.es-av.web{color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink))}
-.es-x{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
-.es-n{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.es-t{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.es-w{font-size:12px;color:var(--ink-3);white-space:nowrap;display:flex;align-items:center;gap:5px}
-.es-rush{width:7px;height:7px;border-radius:50%;background:var(--fbs-orange)}
-.es-none{font-size:13px;color:var(--ink-3);padding:8px 2px}
+.md2-side .md-email .md-scroll{max-height:440px;overflow-x:hidden}
+.mds-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:2px 0 8px}
+.mds-tile{--tc:var(--fbs-blue);display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 4px 8px;border-radius:var(--r);text-decoration:none;color:var(--tc);background:color-mix(in srgb,var(--tc) 11%,var(--surface))}
+.mds-tile.k-fresh,.mds-av.k-fresh{--tc:var(--ok)}.mds-tile.k-web,.mds-av.k-web{--tc:var(--fbs-orange)}
+.mds-tile.k-web{color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink))}
+.mds-tile svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mds-tile b{font-size:20px;line-height:1.1;font-weight:700}
+.mds-tile span{font-size:11.5px;font-weight:700;text-align:center;line-height:1.2}
+.mds-tile.zero{opacity:.55}
+.mds-h{font-size:12px;color:var(--ink-3);margin:8px 0 0;padding-top:8px;border-top:1px solid var(--line-2)}
+.mds-row{display:flex;align-items:center;gap:10px;padding:6px 0;text-decoration:none;color:var(--ink);min-width:0}
+.mds-row:hover .mds-n{color:var(--accent)}
+.mds-av{--tc:var(--fbs-blue);width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,var(--surface))}
+.mds-av.k-web{color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink))}
+.mds-x{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.mds-n{font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mds-t{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mds-w{font-size:12px;color:var(--ink-3);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.mds-rush{width:7px;height:7px;border-radius:50%;background:var(--fbs-orange)}
+.mds-none{font-size:13px;color:var(--ink-3);padding:8px 2px}
 
 /* To-dos, option A (Oct 26, Nick): just the list. One line each, the due day on the right; click one for its details */
 .md-task-a{align-items:center;padding:7px 0}

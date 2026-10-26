@@ -22,25 +22,25 @@ export default function EmailSummary({ groups, loading }: { groups: EmailGroups;
   if (loading) return <div className="md-empty">Loading…</div>;
   const total = groups.back.length + groups.fresh.length + groups.web.length;
   const row = (x: EmailItem, k: string) => (
-    <Link key={x.k} href={x.href} className="es-row">
-      <span className={"es-av " + k} aria-hidden>{x.initials}</span>
-      <span className="es-x"><span className="es-n" data-notranslate>{x.who}</span><span className="es-t">{x.text}</span></span>
-      <span className="es-w">{x.rush && <i className="es-rush" title="They need it soon" />}{ago(x.at)}</span>
+    <Link key={x.k} href={x.href} className="mds-row">
+      <span className={"mds-av k-" + k} aria-hidden>{x.initials}</span>
+      <span className="mds-x"><span className="mds-n" data-notranslate>{x.who}</span><span className="mds-t">{x.text}</span></span>
+      <span className="mds-w">{x.rush && <i className="mds-rush" title="They need it soon" />}{ago(x.at)}</span>
     </Link>
   );
   return (
-    <div className="md-scroll es">
-      <div className="es-tiles">
+    <div className="md-scroll mds">
+      <div className="mds-tiles">
         {KINDS.map((t) => (
-          <a key={t.k} href={`#es-${t.k}`} className={"es-tile " + t.k + (groups[t.k].length ? "" : " zero")}>
+          <a key={t.k} href={`#es-${t.k}`} className={"mds-tile k-" + t.k + (groups[t.k].length ? "" : " zero")}>
             <svg viewBox="0 0 24 24" aria-hidden>{t.icon}</svg>
             <b>{groups[t.k].length}</b><span>{t.label}</span>
           </a>
         ))}
       </div>
-      {!total ? <div className="es-none">You&apos;re caught up. Customer emails land here the moment one needs you.</div> : KINDS.filter((t) => groups[t.k].length).map((t, i) => (
-        <div key={t.k} id={`es-${t.k}`} className="es-grp">
-          {(i > 0 || t.k !== "back") && <div className="es-h">{t.label}</div>}
+      {!total ? <div className="mds-none">You&apos;re caught up. Customer emails land here the moment one needs you.</div> : KINDS.filter((t) => groups[t.k].length).map((t, i) => (
+        <div key={t.k} id={`es-${t.k}`} className="mds-grp">
+          {(i > 0 || t.k !== "back") && <div className="mds-h">{t.label}</div>}
           {groups[t.k].map((x) => row(x, t.k))}
         </div>
       ))}
