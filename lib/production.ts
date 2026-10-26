@@ -157,6 +157,8 @@ export type ProductionSettings = {
     trimSecs: number; trimsPerDesign: number;
     /** thread breaks and fixes: minutes per 10,000 stitches */
     breakMinPer10k: number;
+    /** 3D puff: the thinnest and widest stroke it puffs well (inches; Oct 26) */
+    puffMinIn?: number; puffMaxIn?: number;
     /** job setup (frames, threading, test sew) and each extra location */
     setupMin: number; extraLocationSetupMin: number;
     /** stitches when the order doesn't say */

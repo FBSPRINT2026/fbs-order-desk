@@ -95,7 +95,7 @@ export default function Digitizing() {
       `Garment and fabric: ${[l?.brand, l?.style, l?.garment].filter(Boolean).join(" ") || "see order"}${colors.length ? `, ${colors.join(" / ")}` : ""}`,
       `Backing: ${emb.backing || "cutaway"}${emb.topping && emb.topping !== "None" ? `, with ${emb.topping}` : ""}`,
       `Thread colors: ${lineName(emb.line || "Polyneon 40")}${threadsTxt.length ? `: ${threadsTxt.join(", ")}` : ""}`,
-      emb.puff ? "Effects: 3D puff (please digitize for 3 mm foam)" : emb.metallic ? "Effects: metallic thread" : "",
+      emb.puff ? `Effects: ${emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff, all of it"} (please digitize for 3 mm foam)${emb.puffWarn ? `. Size check: ${emb.puffWarn}` : ""}` : emb.metallic ? "Effects: metallic thread" : "",
       "Machine format: Tajima DST to sew, plus the Wilcom EMB (we edit in Hatch) and the production worksheet PDF (stitch count, size, color stops).",
       `Quantity: ${pcs ? `${pcs} pieces` : "see order"}${due ? ` · needed by ${due}` : ""}`,
       "",

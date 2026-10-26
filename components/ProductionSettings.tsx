@@ -151,6 +151,8 @@ export default function ProductionSettingsView({ part }: { part: "machines" | "t
             {num("Thread breaks (min per 10k stitches)", s.embroidery.breakMinPer10k, (x) => upd((d) => { d.embroidery.breakMinPer10k = x; }), 0.5)}
             {num("Job setup (min)", s.embroidery.setupMin, (x) => upd((d) => { d.embroidery.setupMin = x; }), 1, "~15")}
             {num("Each extra location (min)", s.embroidery.extraLocationSetupMin, (x) => upd((d) => { d.embroidery.extraLocationSetupMin = x; }))}
+            {num("3D puff: thinnest stroke (in)", s.embroidery.puffMinIn ?? 0.125, (x) => upd((d) => { d.embroidery.puffMinIn = Math.max(0.03, Math.min(1, x)); }), 0.025, "1/8\" = 0.125")}
+            {num("3D puff: widest stroke (in)", s.embroidery.puffMaxIn ?? 0.5, (x) => upd((d) => { d.embroidery.puffMaxIn = Math.max(0.1, Math.min(2, x)); }), 0.05, "wider gets split")}
           </div>
           <div className="panel-b">
             <div className="lbl" style={{ marginBottom: 6 }}>Stitches when the order doesn&apos;t say</div>

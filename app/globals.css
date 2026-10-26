@@ -14156,3 +14156,14 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .mk-noback .btn{align-self:flex-start;cursor:pointer}
 .mk-noback .btn.off{opacity:.6;pointer-events:none}
 .mk-noback .err{font-size:12.5px;color:var(--danger)}
+/* 3D puff: what's puffed and the size check, in the embroidery panel (Oct 26) */
+.puff{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.puff-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.puff-b{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:10px;align-items:start}
+.puff-pic{display:flex;flex-direction:column;gap:4px}
+.puff-pic canvas{width:100%;height:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.puff-pic .faint{font-size:12px;color:var(--ink-3)}
+.puff-cols{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.puff-cols .check{gap:6px}
+.puff-sw{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line)}
+.puff-ok{margin:0;font-size:12.5px;color:var(--ok)}

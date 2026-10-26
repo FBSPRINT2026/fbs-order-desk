@@ -344,7 +344,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
     ? [["Size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Stitches", d.stitches ? `${d.stitches.toLocaleString()}${emb?.stitchesFrom === "file" ? "" : emb?.stitchesFrom === "estimate" ? " (est.)" : ""}` : "—"], ["Threads", String(d.colors || inks.length || "—")],
       ...(emb?.backing ? [["Backing", `${emb.backing}${emb.topping && emb.topping !== "None" ? ` + ${emb.topping.replace(/ \(.*\)$/, "")}` : ""}`] as [string, string]] : []),
       ...(emb?.file ? [["File", emb.file.name] as [string, string]] : []),
-      ...(emb?.puff || emb?.metallic ? [["Effects", [emb.puff && "3D puff", emb.metallic && "Metallic"].filter(Boolean).join(", ")] as [string, string]] : [])]
+      ...(emb?.puff || emb?.metallic ? [["Effects", [emb.puff && (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff"), emb.metallic && "Metallic"].filter(Boolean).join(", ")] as [string, string]] : [])]
     : d.method === "dtf"
       ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
@@ -731,7 +731,7 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
           <div className="lbl">Embroidery</div>
           {d ? <div className="pf-pr">
             <b>{d.location}</b>{d.size ? <> · <b>{d.size}</b></> : null}{d.stitches ? ` · ${d.stitches.toLocaleString()} stitches` : ""}
-            <div className="faint">{[des ? `D-${des.number}${des.name ? ` · ${des.name}` : ""}` : "", emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? "3D puff" : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</div>
+            <div className="faint">{[des ? `D-${des.number}${des.name ? ` · ${des.name}` : ""}` : "", emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</div>
             {threads.length > 0 && <div className="pf-inks">{threads.map((k) => { const t = threadByName(k); return <span key={k}><Swatch c={t?.hex || "#ccc"} />{k}{t?.pms[0] ? ` (PMS ${t.pms[0].replace(/^PMS\s*/i, "")})` : ""}</span>; })}</div>}
           </div> : <div className="pf-pr">This print isn&apos;t on the order anymore.</div>}
         </div>

@@ -274,6 +274,8 @@ export type EmbSpec = {
   /** how much of the logo's box is stitched, read off the art (for the estimate) */ coverage?: number;
   backing?: string; topping?: string;
   puff?: boolean; metallic?: boolean; detail?: boolean;
+  /** 3D puff on part of the logo (Oct 26): thread colors and clicked shapes; none = all of it */ puffParts?: import("@/lib/puff").PuffSel;
+  /** what's puffed, in words (work order, digitizing request), and a warning when it's too small to puff */ puffNote?: string; puffWarn?: string;
   line?: Thread["line"];
   /** the digitized file (DST) for this print, with the EMB and the worksheet when they came with it */ file?: import("@/lib/digitizedFiles").DigitizedSet;
 };

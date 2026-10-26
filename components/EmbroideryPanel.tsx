@@ -9,6 +9,7 @@ import { takeDigitized } from "@/lib/digitizedFiles";
 import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { loadThreadStock, stockKey } from "@/lib/threadStock";
 import { lastOf, type EmbLast } from "@/lib/embroideryLast";
+import PuffPicker from "@/components/PuffPicker";
 
 /**
  * The Mockup Creator's embroidery print (Oct 23, Nick: "when you select the logo and you're on embroidery, not screen
@@ -178,6 +179,13 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
           <label className="check" title="Small lettering or fine detail: sews slower"><input type="checkbox" checked={!!emb.detail} onChange={(e) => set({ detail: e.target.checked || undefined })} /> Small detail</label>
           <select className="emb-line" value={line} onChange={(e) => set({ line: e.target.value as Thread["line"] })} aria-label="Thread line">{THREAD_LINES.map((l) => <option key={l} value={l}>{lineName(l)}</option>)}</select>
         </div>
+        {/* 3D puff: all of it or only some parts, and big enough to puff (Oct 26) */}
+        {emb.puff && artUrl && (
+          <PuffPicker artUrl={artUrl} rows={rows.map((r) => ({ key: r.hexes.join(","), hexes: r.hexes, label: r.cur && r.cur.name !== "none" ? r.cur.name : r.hexes[0] }))} wIn={wIn}
+            sel={emb.puffParts || {}} minIn={prod?.embroidery.puffMinIn ?? 0.125} maxIn={prod?.embroidery.puffMaxIn ?? 0.5}
+            onChange={(sel) => set({ puffParts: sel })}
+            onSummary={(note, warn) => { if (note !== (emb.puffNote || "") || warn !== (emb.puffWarn || "")) set({ puffNote: note || undefined, puffWarn: warn || undefined }); }} />
+        )}
         {(warns.length > 0 || mx) && (
           <ul className="emb-warn">
             {warns.map((w, i) => <li key={i} className="bad">{w}</li>)}
