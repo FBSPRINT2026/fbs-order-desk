@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { brandHitFor, brandSizeFor, colorChanges } from "@/lib/pricing";
+import { brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -3759,7 +3759,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       })()}
                       {/* Color change (Oct 24, Nick: "when you click on… the second garment… another one right there that says color
                           change… confirm you're changing the color on this garment only… select the color"): this garment's ink(s) */}
-                      {designOf(im) && im.method !== "embroidery" && im.method !== "dtf" && line && (() => {
+                      {designOf(im) && im.method !== "dtf" && line && (() => {
                         const first = lines.find((l) => (l.color || "").trim()) || lines[0];
                         if (!first || colorKey(first.color) === colorKey(line.color) || !(line.color || "").trim()) return null;
                         const ck = colorKey(line.color), cur = im.inkBy?.[ck];
@@ -3774,9 +3774,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         const n = colorChanges({ inkBy: cur ? { [ck]: cur } : {} });
                         return (
                           <>
-                            <label className="mk-ctr" title={`Print this location in another ink on the ${line.color} only`}>
+                            <label className="mk-ctr" title={im.method === "embroidery" ? `Sew this location in another thread on the ${line.color} only` : `Print this location in another ink on the ${line.color} only`}>
                               <input type="checkbox" checked={!!cur} disabled={!names.length} onChange={(e) => put(e.target.checked ? Object.fromEntries(names.map((nm) => [nm, ""])) : null)} />
-                              Color change
+                              {changeWord(im.method)}
                             </label>
                             {cur && (
                               <div className="mk-cchg">
@@ -3784,11 +3784,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 {names.map((nm) => (
                                   <div key={nm} className="mk-cchg-r">
                                     <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
-                                    <input type="text" list="mk-ink-names" aria-label={`${nm} on the ${line.color}`} placeholder="the ink on this color" value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
+                                    <input type="text" list="mk-ink-names" aria-label={`${nm} on the ${line.color}`} placeholder={im.method === "embroidery" ? "the thread on this color" : "the ink on this color"} value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
                                     {cur[nm] && colorHex(cur[nm]) ? <i style={{ background: colorHex(cur[nm])! }} /> : null}
                                   </div>
                                 ))}
-                                <span className="faint">{n ? `${n} color change${n === 1 ? "" : "s"}: charged as ${n === 1 ? "an ink change" : "ink changes"} on the order (per screen)` : "Type the ink it prints in on this color"}</span>
+                                <span className="faint">{im.method === "embroidery" ? (n ? `${n} thread change${n === 1 ? "" : "s"}: charged on the order (per thread)` : "Type the thread it sews in on this color") : n ? `${n} color change${n === 1 ? "" : "s"}: charged as ${n === 1 ? "an ink change" : "ink changes"} on the order (per screen)` : "Type the ink it prints in on this color"}</span>
                               </div>
                             )}
                           </>

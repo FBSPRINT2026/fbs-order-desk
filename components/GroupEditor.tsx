@@ -1,6 +1,6 @@
 "use client";
 import { threadByName } from "@/lib/embroidery";
-import { cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -417,6 +417,8 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
+    // embroidery: its thread change on the same kind of line (Oct 26, Nick: "thread change… exactly the same as color change")
+    if (embImps.includes(d)) { const tc = +(d.inkChanges || 0); return tc > 0 ? <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Thread change</span><span className="pr-scr-v">{tc}{!hidePrices && <> · <b className="num">{money(tc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div> : null; }
     if (!scrImps.includes(d)) return null;
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
@@ -1271,11 +1273,11 @@ function ChangeTile({ d, url, color, hex, swap }: { d: Group["imprints"][number]
     <div className="pr-tw">
       <span className="pr-tc">{color}</span>
       <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => pic && setZoom(true)} title="See it bigger">{pic ? <img src={pic} alt="" /> : <span>No logo</span>}</button>
-      <span className="pr-cc">Color change</span>
+      <span className="pr-cc">{changeWord(d.method)}</span>
       {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={`On ${color}`} onClick={() => setZoom(false)} tabIndex={-1} ref={(el) => el?.focus()} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={pic} alt="" style={{ background: hex }} />
-          <figcaption><span><b>Color change on {color}</b> · {Object.entries(swap).map(([a, b]) => `${b} instead of ${a}`).join(", ")}</span><button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+          <figcaption><span><b>{changeWord(d.method)} on {color}</b> · {Object.entries(swap).map(([a, b]) => `${b} instead of ${a}`).join(", ")}</span><button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
         </figure>
       </div>}
     </div>

@@ -28,12 +28,21 @@ const RECENT_DAYS = 30;
 const recentSince = () => new Date(Date.now() - RECENT_DAYS * 86400000).toISOString();
 // after hours (7 PM – 6 AM shop time): older orders we never got (the rest of 2023) are brought over, once each
 const afterHours = () => { const h = +new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()); return h >= 19 || h < 6; };
-type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
+// history before 2026 is locked (migration 082): never re-read
+const FREEZE = "2026-01-01T00:00:00Z";
+/** the twice-a-day 90-day check (Oct 26, Nick: "twice a day at like noon and then maybe at midnight… a 90-day run"):
+ * the latest noon or midnight, shop time, that has passed */
+function lastSlot(now = new Date()): number {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(now).map((x) => [x.type, x.value]));
+  const mins = (+p.hour % 12) * 60 + +p.minute;
+  return now.getTime() - mins * 60000 - now.getSeconds() * 1000 - now.getMilliseconds();
+}
+type Sync = { range_since: string | null; range_label: string | null; range_cursor: string | null; range_pages: number; range_seen: number; range_changed: number; range_started_at: string | null; range_done_at: string | null; range_auto_at: string | null; enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string; imported_fingerprint: string | null; archived_id: string | null };
 
 export async function GET(req: Request) {
   const admin = createAdminClient();
-  const { data: s } = await admin.from("printavo_sync").select("enabled, token, pause_until, quick_cursor, quick_pages, quick_done_at, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
+  const { data: s } = await admin.from("printavo_sync").select("range_since, range_label, range_cursor, range_pages, range_seen, range_changed, range_started_at, range_done_at, range_auto_at, enabled, token, pause_until, quick_cursor, quick_pages, quick_done_at, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
   const sync = s as Sync | null;
   if (!sync || req.headers.get("x-sync-token") !== sync.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!sync.enabled) return NextResponse.json({ off: true });
@@ -73,7 +82,16 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const quickDue = !!sync.quick_cursor || !sync.quick_done_at || Date.now() - new Date(sync.quick_done_at).getTime() > QUICK_EVERY;
     if (quickDue) { await quickPage(admin, sync, did); continue; }
 
-    let { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").gte("created_at", recentSince()).order("created_at", { ascending: false, nullsFirst: false }).limit(1);
+    // the noon and midnight 90-day check starts by itself (not over a run staff started)
+    const running = !!sync.range_since && !sync.range_done_at;
+    if (!running && lastSlot() > Math.max(new Date(sync.range_auto_at || 0).getTime(), new Date(sync.range_started_at || 0).getTime())) {
+      const since = new Date(Math.max(Date.now() - 90 * 86400000, Date.parse(FREEZE))).toISOString(), now = new Date().toISOString();
+      Object.assign(sync, { range_since: since, range_label: "Scheduled 90-day check", range_cursor: null, range_pages: 0, range_seen: 0, range_changed: 0, range_started_at: now, range_done_at: null, range_auto_at: now });
+      await admin.from("printavo_sync").update({ range_since: since, range_label: sync.range_label, range_cursor: null, range_pages: 0, range_seen: 0, range_changed: 0, range_started_at: now, range_done_at: null, range_auto_at: now, range_by: "schedule" }).eq("id", 1);
+    }
+
+    // waiting imports (anything 2026 or later: only the windows above queue them)
+    let { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").gte("created_at", FREEZE).order("created_at", { ascending: false, nullsFirst: false }).limit(1);
     if (!next?.length && afterHours()) ({ data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").is("archived_id", null).order("created_at", { ascending: false, nullsFirst: false }).limit(1));
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
@@ -84,6 +102,10 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const sweepDue = false as boolean;
     // a pass that's under way gets most turns (it only reads lists, and it's how new orders are found); otherwise every 6th
     if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 1))) { await sweepPage(admin, sync, did); continue; }
+
+    // a time-frame run (staff's pick, or the noon / midnight 90-day check): one page of the order list, newest number
+    // first, every other turn while imports are waiting (so what it finds gets brought over as it goes)
+    if (sync.range_since && !sync.range_done_at && (!pending || turn % 2 === 1)) { await rangePage(admin, sync, did); continue; }
 
     // a big order can take 15+ seconds to read at our pace: don't start one near the end of the run
     if (pending) { if (Date.now() > deadline - 17000) break; await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
@@ -106,7 +128,7 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
 }
 
 /** Compares a page of Printavo's order list with what we have: new orders are queued, changed ones are queued again. */
-async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typeof listOrders>>["orders"], did: Record<string, number>, pass: number | null, currentPass = 0) {
+async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typeof listOrders>>["orders"], did: Record<string, number>, pass: number | null, currentPass = 0, /** how far back: the last 30 days unless a time-frame run says otherwise */ since = recentSince()) {
   if (!orders.length) return;
   const ids = orders.map((o) => o.id);
   const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status, imported_fingerprint, archived_id").in("printavo_id", ids);
@@ -132,8 +154,8 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
     if (ours.has(o.id) || +o.visualId >= 40000) return [];
     const k = known.get(o.id);
     const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass || currentPass }; // (every row sends the same columns; an order seen by the quick check counts as seen)
-    // older than 30 days: left as it is
-    if (o.createdAt && o.createdAt < recentSince()) return [];
+    // older than the window (30 days, or the time-frame run's): left as it is; history before 2026 never
+    if (o.createdAt && (o.createdAt < since || o.createdAt < FREEZE)) return [];
     if (!k) return [row];
     // back after being marked removed, and nothing changed since we imported it: no need to read it all again
     if (k.status === "gone" && k.archived_id && k.imported_fingerprint === o.fingerprint) { back.push(o.id); return []; }
@@ -147,6 +169,26 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
     if (unchanged.length) await admin.from("printavo_index").update({ seen_sweep: pass }).in("printavo_id", unchanged);
   }
   did.listed += orders.length;
+}
+
+/** One page of a time-frame run: Printavo's orders, newest number first, compared back to range_since. */
+async function rangePage(admin: SupabaseClient, sync: Sync, did: Record<string, number>) {
+  const since = sync.range_since!;
+  const page = await listOrders(sync.range_cursor, "number");
+  const before = did.changed;
+  await comparePage(admin, page.orders, did, null, sync.sweep_no + 1, since);
+  // queued (new or changed) on this page: what comparePage counted plus the new ones it queued
+  const inRange = page.orders.filter((o) => !o.createdAt || o.createdAt >= since);
+  sync.range_pages = (sync.range_pages || 0) + 1;
+  sync.range_seen = (sync.range_seen || 0) + inRange.length;
+  sync.range_changed = (sync.range_changed || 0) + (did.changed - before);
+  // done at the end of the list, or once a whole page is older than the window (our own 40,000s come first, so a page
+  // of only those doesn't end it)
+  const older = page.orders.filter((o) => +o.visualId < 40000);
+  const done = !page.next || (older.length > 0 && older.every((o) => o.createdAt && o.createdAt < since));
+  sync.range_cursor = done ? null : page.next;
+  if (done) sync.range_done_at = new Date().toISOString();
+  await admin.from("printavo_sync").update({ range_cursor: sync.range_cursor, range_pages: sync.range_pages, range_seen: sync.range_seen, range_changed: sync.range_changed, ...(done ? { range_done_at: sync.range_done_at } : {}) }).eq("id", 1);
 }
 
 /** One page of the active jobs (latest due dates first). */

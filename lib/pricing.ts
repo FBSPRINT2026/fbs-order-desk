@@ -651,6 +651,9 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
 /** PMS matching fees on a print: the named inks charged as matches, or the count typed when no inks are named */
 /** the same PMS however it's written: "PMS 230 C", "230C", "Pantone 230" → "230" */
 /** how many screens change ink across the garment colors (Imprint.inkBy): the color changes charged as ink changes */
+/** what a color change is called (Oct 26, Nick: "on embroidery orders, you'd call it thread change and not color
+ * change… It should operate exactly the same as color change") */
+export const changeWord = (method?: string | null) => (method === "embroidery" ? "Thread change" : "Color change");
 export const colorChanges = (d: Pick<Imprint, "inkBy">) => Object.values(d.inkBy || {}).reduce((n, m) => n + Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length, 0);
 export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m ? m[1] : n.trim().toLowerCase().replace(/\s+/g, " "); };
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
@@ -795,7 +798,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const minCharge = pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
-  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number }[] = [];
+  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean }[] = [];
   if (!o.waive_setup) setups.forEach((d, i) => {
     const im = (g.imprints || [])[i];
     if (!im || !d.setup) return;
@@ -808,7 +811,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const im = (g.imprints || [])[i]; if (!im) return;
     const pms = pmsFresh[i] ?? (im.method === "screen" ? pmsCount(im) : num(im.pms)), ic = num(im.inkChanges);
     if (pms && num(pl.pmsFee)) setupItems.push({ kind: "pms", qty: pms, unit: num(pl.pmsFee), amount: r2(pms * num(pl.pmsFee)) });
-    if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)) });
+    if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
   return { id: g.id, qty, ti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };

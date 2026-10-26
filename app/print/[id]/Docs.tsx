@@ -1,7 +1,7 @@
 import { threadByName, threads as threadsAll } from "@/lib/embroidery";
 import { sheetThreadName } from "@/lib/worksheet";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -242,7 +242,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
                               {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">Color change</span> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">{changeWord(d.method)}</span> : null}</div>
                           </div>
                         );
                       })}
@@ -298,7 +298,7 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
         <i>Method</i><span>{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
         {inks.length > 0 && <><i>{inks.length === 1 ? "Ink" : "Inks"}</i>
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && <b>{n + 1} </b>}<b>{k}</b></span>)}</div></>}
-        {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> (color change, not {a}) </span>)}</span></span>)}
+        {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
         {d.method === "embroidery" ? (d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null)
           : sc ? <><i>Screens</i><span>{sc.n ? sc.n : "see separations"} · {d.printStyle === "fashion" ? "no underbase" : sc.under ? "underbase" : "no underbase"}</span></> : null}
@@ -352,7 +352,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   return (
     <section className="sheet">
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
-      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{variant && <div className="cc-tag">COLOR CHANGE · {variant.color.toUpperCase()}</div>}</div>
+      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
       <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
         {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
@@ -390,7 +390,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
       {/* a color change (Oct 24): this print in another ink on a garment color */}
       {!d.visualOnly && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())) && (
-        <div className="n2"><b>COLOR CHANGE:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `on ${k}, ${b} instead of ${a}`)).join("; ")}</div>
+        <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `on ${k}, ${b} instead of ${a}`)).join("; ")}</div>
       )}
       {/* prints differently by shirt color (Oct 21, Nick): the screens left off on some colors */}
       {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="n2 warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c} shirts: skip ${n.join(" + ")} (pull the screen or don't flood it)`).join(". ")}</div>}
@@ -537,7 +537,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   ];
   return (
     <section className="sheet pf">
-      <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">{variant ? <><b className="cc-tag">COLOR CHANGE · {variant.color.toUpperCase()}</b> · </> : null}Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
+      <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">{variant ? <><b className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</b> · </> : null}Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
       <div className={"art pf-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
         {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
@@ -553,7 +553,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
       )}
       {/* a color change is noted on the one proof page, not a second page (Oct 26) */}
       {!variant && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase())) && (
-        <div className="n2"><b>Color change:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase()).map(([x, y]) => `on ${k.charAt(0).toUpperCase() + k.slice(1)}, ${y} instead of ${x}`)).join("; ")}</div>
+        <div className="n2"><b>{changeWord(d.method)}:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase()).map(([x, y]) => `on ${k.charAt(0).toUpperCase() + k.slice(1)}, ${y} instead of ${x}`)).join("; ")}</div>
       )}
       {/* our own notes aren't the customer's (Oct 23, Nick: "on the PDF proof, we don't need… the notes"); what we changed
           in their art is, as a list */}
@@ -566,9 +566,9 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
 }
 
 // ───────────────────────────── invoice / quote ─────────────────────────────
-const SETUP_LABEL = (k: string, q: number) => ({
+const SETUP_LABEL = (k: string, q: number, thread = false) => ({
   screens: `Setup: ${q} screen${q === 1 ? "" : "s"}`, remake: `Screen remake: ${q} screen${q === 1 ? "" : "s"}`, digitize: "Digitizing",
-  pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `Ink changes${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
+  pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `${thread ? "Thread changes" : "Ink changes"}${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
 } as Record<string, string>)[k] || "Setup";
 
 export function InvoiceDoc(p: DocData) {
@@ -655,7 +655,7 @@ export function InvoiceDoc(p: DocData) {
               </table>
               {(gc.setupItems.length > 0 || gc.materials > 0) && (
                 <table className="extra"><tbody>
-                  {gc.setupItems.map((s, i) => <tr key={i}><td>{SETUP_LABEL(s.kind, s.qty)}</td><td className="r">{money(s.amount)}</td></tr>)}
+                  {gc.setupItems.map((s, i) => <tr key={i}><td>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</td><td className="r">{money(s.amount)}</td></tr>)}
                   {gc.materials > 0 && <tr><td>2XL+ materials</td><td className="r">{money(gc.materials)}</td></tr>}
                 </tbody></table>
               )}

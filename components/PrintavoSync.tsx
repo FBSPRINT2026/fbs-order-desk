@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 
 type Status = {
@@ -15,6 +16,10 @@ type Status = {
   by_year: { year: number; found: number; imported: number; est: number }[];
 };
 
+type Range = { range_since: string | null; range_label: string | null; range_pages: number; range_seen: number; range_changed: number; range_started_at: string | null; range_done_at: string | null; range_by: string | null };
+/** the time frames to sync (Oct 26, Nick: "what would you like to sync? And I could select the time frame") */
+const FRAMES = [{ days: 7, label: "Last 7 days" }, { days: 30, label: "Last 30 days" }, { days: 90, label: "Last 90 days" }, { days: 180, label: "Last 6 months" }, { days: 0, label: "All of 2026" }];
+const sinceJan = () => Math.ceil((Date.now() - Date.parse("2026-01-01T06:00:00Z")) / 86400000) + 1;
 const size = (b: number) => { const u = ["bytes", "KB", "MB", "GB", "TB"]; let i = 0, x = b; while (x >= 1024 && i < u.length - 1) { x /= 1024; i++; } return `${x >= 100 || i === 0 ? Math.round(x) : x.toFixed(1)} ${u[i]}`; };
 const ago = (t: string | null) => { if (!t) return "never"; const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 const pct = (a: number, b: number) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
@@ -27,11 +32,24 @@ export default function PrintavoSync() {
   const sb = createClient();
   const [s, setS] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const [rg, setRg] = useState<Range | null>(null), [ask, setAsk] = useState(false), [pick, setPick] = useState(30);
   const load = useCallback(async () => {
-    const { data, error } = await sb.rpc("printavo_sync_status");
+    const [{ data, error }, { data: r }] = await Promise.all([
+      sb.rpc("printavo_sync_status"),
+      sb.from("printavo_sync").select("range_since, range_label, range_pages, range_seen, range_changed, range_started_at, range_done_at, range_by").eq("id", 1).maybeSingle(),
+    ]);
     if (error) setErr(error.message); else setS(data as Status);
+    setRg((r as Range | null) || null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+
+  async function runRange() {
+    const f = FRAMES.find((x) => x.days === pick) || FRAMES[1];
+    setBusy(true); setErr("");
+    const { error } = await sb.rpc("printavo_sync_range", { p_days: f.days || sinceJan(), p_label: f.label });
+    if (error) setErr(error.message); else setAsk(false);
+    await load(); setBusy(false);
+  }
 
   async function toggle(on: boolean) {
     setBusy(true); setErr("");
@@ -67,6 +85,7 @@ export default function PrintavoSync() {
         <div><h2>Printavo sync</h2><div className="faint" style={{ fontSize: 12.5 }}>Read-only: it never changes anything in Printavo.</div></div>
         <div className="row" style={{ gap: 10 }}>
           <span className={"psy-state" + (s.enabled ? " on" : "")}>{s.enabled ? "● Running" : "Paused"}</span>
+          {s.enabled && <button type="button" className="btn primary" disabled={busy} onClick={() => setAsk(true)}>Sync now</button>}
           {s.enabled
             ? <button type="button" className="btn" disabled={busy} onClick={() => toggle(false)}>Pause</button>
             : <button type="button" className="btn primary" disabled={busy} onClick={() => toggle(true)}>{s.orders ? "Resume" : "Start importing everything"}</button>}
@@ -74,6 +93,11 @@ export default function PrintavoSync() {
       </div>
       <div className="panel-b stack" style={{ gap: 12 }}>
         <div className="psy-phase"><b>{phase}</b>{s.enabled && <span className="faint"> · last run {ago(s.last_run_at)}</span>}</div>
+        {rg?.range_started_at && (
+          rg.range_done_at
+            ? <div className="faint" style={{ fontSize: 12.5 }}>{rg.range_label || "Time-frame check"} finished {ago(rg.range_done_at)}: {rg.range_seen.toLocaleString()} orders checked, {rg.range_changed.toLocaleString()} changed and brought over.</div>
+            : <div style={{ fontSize: 13.5 }}><b>{rg.range_label || "Time-frame check"}</b> <span className="faint">· started {ago(rg.range_started_at)}{rg.range_by && rg.range_by !== "schedule" ? ` by ${rg.range_by.split("@")[0]}` : ""} · {rg.range_seen.toLocaleString()} orders checked so far, {rg.range_changed.toLocaleString()} changed</span></div>
+        )}
         {s.orders > 0 && (
           <>
             {s.listing
@@ -100,7 +124,7 @@ export default function PrintavoSync() {
         )}
         <div className="faint" style={{ fontSize: 12.5 }}>
           {s.sweep_no > 0 && <>Last full check of Printavo {ago(s.sweep_done_at)}. </>}
-          Runs on our server every minute, so this page doesn&apos;t need to stay open. Active jobs are checked for changes every 5 minutes (status, payments, due dates, edits, new orders). The full check goes customer by customer through every Printavo customer&apos;s orders (Printavo&apos;s all-orders list stops at 10,000, so that&apos;s the only way to see them all); recent orders are re-read in full once a day for new messages and files.
+          Runs on our server every minute, so this page doesn&apos;t need to stay open. Active jobs from the last 30 days are checked for changes every 10 minutes (status, payments, due dates, edits, new orders), and every order from the last 90 days at noon and midnight. Recent orders are re-read in full once a day for new messages and files, and invoices still owing once a day however old. Orders from before 2026 are locked history and stay as imported.
           {s.gone > 0 && <> {s.gone} order{s.gone === 1 ? " was" : "s were"} removed in Printavo (our copies are kept).</>}
         </div>
         {stale && <div className="banner">The sync hasn&apos;t run in a few minutes. It usually picks up again by itself; if it stays like this, let us know.</div>}
@@ -112,6 +136,22 @@ export default function PrintavoSync() {
         )}
         {err && <div className="pv-err">{err}</div>}
       </div>
+      {ask && typeof document !== "undefined" && createPortal(
+        <div className="atc-back" role="dialog" aria-modal="true" aria-label="Sync from Printavo" onClick={() => !busy && setAsk(false)}>
+          <div className="atc-box" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dla-x" aria-label="Close" onClick={() => setAsk(false)}>×</button>
+            <h3>What would you like to sync?</h3>
+            <p className="faint" style={{ margin: "0 0 10px", fontSize: 12.5 }}>Every Printavo order made in this time frame is checked, and anything new or changed comes over. It only reads from Printavo. Orders from before 2026 are locked and stay as they are.</p>
+            <div className="chips" role="radiogroup" aria-label="Time frame">
+              {FRAMES.map((f) => <button key={f.days} type="button" role="radio" aria-checked={pick === f.days} className={"chip" + (pick === f.days ? " on" : "")} onClick={() => setPick(f.days)}>{f.label}</button>)}
+            </div>
+            {rg?.range_started_at && !rg.range_done_at && <p className="faint" style={{ margin: "10px 0 0", fontSize: 12.5 }}>{rg.range_label || "A check"} is running now: starting this one replaces it.</p>}
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+              <button type="button" className="btn ghost" onClick={() => setAsk(false)}>Cancel</button>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => void runRange()}>{busy ? "Starting…" : "Sync"}</button>
+            </div>
+          </div>
+        </div>, document.body)}
     </section>
   );
 }
