@@ -91,8 +91,8 @@ export default function ProjectView({ mode, project, tasks, orders, linkable, me
                 <table className="aa-tbl pv2-orders"><tbody>
                   {orders.map((o) => (
                     <tr key={o.id} onClick={() => (location.href = o.href)}>
-                      <td className="num"><Link href={o.href} onClick={(e) => e.stopPropagation()}>#{o.number}</Link></td>
-                      <td><div className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}{o.archived && <PrintavoMark />}</div>{o.due_date && <div className="aa-s">In hands {fmtDateLong(o.due_date)}</div>}</td>
+                      <td className="num"><Link href={o.href} onClick={(e) => e.stopPropagation()}>#{o.number}</Link>{o.archived && <PrintavoMark />}</td>
+                      <td><div className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</div>{o.due_date && <div className="aa-s">In hands {fmtDateLong(o.due_date)}</div>}</td>
                       <td><span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--accent)" }}>{o.statusLabel}</span></td>
                       <td className="r num b">{money(o.total)}</td>
                       {act.unlink && <td className="r" onClick={(e) => e.stopPropagation()}><button type="button" className="btn icon ghost sm" title="Take out of this project" aria-label="Take out of this project" onClick={() => run(act.unlink!(o.id, o.archived))}>✕</button></td>}

@@ -282,10 +282,10 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
           <tbody>
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
-                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
-                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span>{o.archived && <PrintavoMark />}</div><div className="aa-s">{o.qty} pcs</div></td>
+                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span></div><div className="aa-s">{o.qty} pcs</div></td>
                 <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
@@ -497,8 +497,8 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
             <tbody>
               {P.items.map((o) => (
                 <tr key={o.id} tabIndex={0} onClick={() => router.push(orderHref(o.id))} onKeyDown={(e) => e.key === "Enter" && router.push(orderHref(o.id))}>
-                  <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span></td>
-                  <td><div>{o.nickname || "Untitled Job"}{o.archived && <PrintavoMark />}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
+                  <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.archived && <PrintavoMark />}</td>
+                  <td><div>{o.nickname || "Untitled Job"}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
                   <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
                   <td>{when(dayOf(o)) || "—"}</td>
                   <td>{when(o.due_date) || <span className="faint">No date</span>}</td>
