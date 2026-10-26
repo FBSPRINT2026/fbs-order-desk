@@ -14144,4 +14144,4 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ink-to{font-size:11.5px;font-weight:600;color:var(--fbs-salmon)}
 .ink-tw{display:inline-flex;align-items:center;gap:5px}
 .ink-on{font-size:11.5px;color:var(--ink-3)}
-.pr-scr-cc{margin-left:10px;white-space:nowrap}
+.pr-cc-line .pr-scr-v{white-space:nowrap}

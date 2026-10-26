@@ -414,10 +414,9 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     if (!scrImps.includes(d)) return null;
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
-    return (
+    const cc = +(d.inkChanges || 0);
+    return (<>
       <ScreensLine key={d.id} summary={<>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}
-        {/* the color change's charge, seen where it's charged (Oct 26, Nick: "put color change 1 at 10") */}
-        {(+(d.inkChanges || 0)) > 0 && <span className="pr-scr-cc">Color change {d.inkChanges}{!hidePrices && <> · <b className="num">{money((+(d.inkChanges || 0)) * (+(wpl.inkChangeFee || 0)))}</b></>}</span>}
         {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
         <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same as with an underbase (two rounds on press)."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })} />Fashion hit</label>
@@ -428,7 +427,10 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
         </span>}
         {wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
       </ScreensLine>
-    );
+      {/* the color change's charge on its own line under the screens, so underbase, remake and the edit stay with the
+          screens (Oct 26, Nick: "making the color change a new line right below screens") */}
+      {cc > 0 && <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{cc}{!hidePrices && <> · <b className="num">{money(cc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div>}
+    </>);
   };
   // a print's inks as chips, with its PMS matches and their charge on the same line (Oct 21, Nick: "the colors just seem
   // to run on and on… the inks can go up underneath the imprints, just like we charge for screens")
