@@ -1,6 +1,7 @@
 import { EMAIL_FROM, SITE_URL } from "@/lib/config";
 import "server-only";
-import { siteEmail, siteFrom } from "@/lib/siteEmail";
+import { siteEmail, siteFrom, siteMailbox } from "@/lib/siteEmail";
+import { sendFromMailbox } from "@/lib/mail/send";
 
 /**
  * Sends an email through Brevo (BREVO_API_KEY) or Resend (RESEND_API_KEY), whichever is set.
@@ -18,9 +19,22 @@ export async function sendEmailWhy(opts: { to: string; subject: string; html: st
   // the site's own address from Settings → Connections → Site email when it's set (Oct 26), else EMAIL_FROM
   const from = (await siteFrom()) || EMAIL_FROM || "";
   if (!opts.replyTo) { const r = (await siteEmail()).replyTo; if (r && /@/.test(r)) opts = { ...opts, replyTo: r.trim() }; }
+  // the site's own mailbox (Settings → Connections → Site email → Connect), when it's connected: sent like a staff reply
+  const box = await siteMailbox();
+  if (box && opts.to) {
+    const s = await siteEmail();
+    try {
+      await sendFromMailbox({ user: box.email, pass: box.pass, imapHost: box.host, smtpHost: box.host, imapPort: 993, smtpPort: 587, fromName: (s.fromName || "FBS Print").trim() }, { to: opts.to, subject: opts.subject, text: opts.html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000), html: opts.html, replyTo: opts.replyTo }, async () => { /* no Sent Items copy: quicker, and a big send doesn't fill the mailbox */ });
+      return { ok: true, service: "the portal mailbox", from: `${(s.fromName || "FBS Print").trim()} <${box.email}>` };
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      console.error(`[email] portal mailbox ${box.email} failed: ${why}`);
+      return { ok: false, service: "the portal mailbox", from: box.email, why };
+    }
+  }
   const service = process.env.BREVO_API_KEY ? "Brevo" : process.env.RESEND_API_KEY ? "Resend" : "";
   if (!opts.to || !from) return { ok: false, service, from, why: !from ? "No sending address is set." : "No one to send to." };
-  if (!service) return { ok: false, service, from, why: "No email service is connected (the Brevo or Resend key isn't in Vercel)." };
+  if (!service) return { ok: false, service, from, why: "Nothing to send through yet: connect the portal mailbox below (or add a Brevo or Resend key in Vercel)." };
   try {
     let res: Response;
     if (service === "Brevo") {

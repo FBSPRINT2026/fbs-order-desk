@@ -25,13 +25,13 @@ export async function checkSending(c: MailCfg) {
  * inReplyTo/references are given, and put a copy in Sent Items so it shows in Outlook like any other reply.
  */
 export async function sendFromMailbox(c: MailCfg, o: {
-  to: string; cc?: string; subject: string; text: string; html?: string; inReplyTo?: string; references?: string[];
+  to: string; cc?: string; subject: string; text: string; html?: string; inReplyTo?: string; references?: string[]; replyTo?: string;
   attachments?: { filename: string; content: Buffer; contentType: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
 }, /** keep the Sent Items copy some other way (EWS); IMAP when it fails or there isn't one */ saveSent?: (raw: Buffer) => Promise<void>) {
   const messageId = `<${crypto.randomUUID()}@fbsprint.com>`;
   const mail = {
     from: { name: c.fromName, address: c.user }, to: o.to, cc: o.cc || undefined, subject: o.subject, text: o.text, html: o.html || undefined, attachments: o.attachments?.length ? o.attachments : undefined,
-    inReplyTo: o.inReplyTo || undefined, references: o.references?.length ? o.references : undefined, messageId, date: new Date(),
+    replyTo: o.replyTo || undefined, inReplyTo: o.inReplyTo || undefined, references: o.references?.length ? o.references : undefined, messageId, date: new Date(),
   };
   const smtp = smtpOf(c);
   try { await smtp.sendMail(mail); } catch (e) { throw new Error(smtpProblem(e)); }
