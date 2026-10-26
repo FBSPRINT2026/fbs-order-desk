@@ -14352,10 +14352,10 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
   .gang-pop-b{left:0;right:0;width:auto}
   .gang-row2{grid-template-columns:1fr}
 }
-/* the art card's quantity, in line with the art and standing out */
-.gang-qbox{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px 6px;border:1px solid var(--accent);border-radius:var(--r);background:var(--accent-soft);flex:none}
-.gang-qbox span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
-.gang-qbox input{width:72px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:700 18px var(--body);color:var(--ink);text-align:center;padding:0 4px}
+/* the art card's quantity: a normal field by the art, its label in blue to the left (Oct 26, Nick) */
+.gang-qbox{display:flex;flex-direction:row;align-items:center;gap:8px;flex:none}
+.gang-qbox span{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.gang-qbox input{width:80px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:700 14px var(--body);color:var(--ink);padding:0 10px}
 .gang-qtot{flex:none;font-size:14px;font-weight:700;color:var(--accent);white-space:nowrap}
 /* saved gang sheets: a row with its delete (click twice) */
 .gang-sr-row{display:flex;align-items:center;gap:4px;min-width:0}
