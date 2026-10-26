@@ -100,7 +100,7 @@ function TodayTab({ d, err, hello, name, today, cheer, apptsToday, jobsToday, ma
       <div className="mdp-card">
         {next.map((e) => (
           <button key={e.id} type="button" className="mdp-row" onClick={() => go("cal", "appts")}>
-            <span className="mdp-t">{e.day !== today ? fmt(e.day || today, { weekday: "short" }) + " " : ""}{e.starts_at ? clock(minsOf(e.starts_at)) : "All day"}</span>
+            <span className="mdp-t">{e.day !== today && <small>{fmt(e.day || today, { weekday: "short" })}</small>}{e.starts_at ? clock(minsOf(e.starts_at)) : "All day"}</span>
             <span className="mdp-m"><b>{e.title}</b>{e.place ? <small>{e.place}</small> : null}</span><span className="mdp-chev" aria-hidden>›</span>
           </button>
         ))}
