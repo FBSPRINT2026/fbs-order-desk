@@ -14377,3 +14377,4 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-gc-s.ord{color:var(--ok)}
 .gang-gc-acts{display:flex;align-items:center;gap:6px;margin-top:6px}
 .gang-tabs .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.aa-card.aa-gang{margin-top:0}

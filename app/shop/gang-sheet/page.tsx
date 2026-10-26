@@ -5,6 +5,7 @@ import { useRole } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
 import GangReorder from "@/components/GangReorder";
+import GangSheetCard from "@/components/GangSheetCard";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 
 /**
@@ -109,28 +110,7 @@ export default function GangSheets() {
         <div className="gang-empty">{rows.length ? "No sheets match." : <>No gang sheets yet. <a href="/shop/gang-sheet/builder?new=1">Make the first one</a>.</>}</div>
       ) : (
         <div className="design-grid gang-grid">
-          {list.map((r) => {
-            const lgs = r.data?.logos || [], js = jobs(r);
-            return (
-              <div key={r.id} className="design-card gang-gc">
-                <a className="dc-img gang-gc-img" href={`/shop/gang-sheet/builder?sheet=${r.id}`} aria-label={`Open ${r.name}`}>
-                  {lgs.length ? lgs.slice(0, 4).map((l, i) => { const u = l.path ? thumbs[l.path] : l.src; return <span key={i} className="gang-gc-t">{u ? <img src={u} alt="" /> : <span className="faint">{l.name.replace(/\.[^.]+$/, "").slice(0, 12)}</span>}</span>; }) : <span className="faint">No art yet</span>}
-                </a>
-                <div className="dc-b">
-                  <a className="gang-gc-n" href={`/shop/gang-sheet/builder?sheet=${r.id}`} data-notranslate>{r.name || "Gang sheet"}</a>
-                  <span className="faint">{cust[r.customer_id || ""] ? <span data-notranslate>{cust[r.customer_id || ""]}</span> : "No customer"}{js.length ? ` · ${js.map((j) => `#${j}`).join(", ")}` : ""}</span>
-                  <span className="faint num">{lgs.length} logo{lgs.length === 1 ? "" : "s"} · {pcs(r)} pcs · {who(r.owner)} · {new Date(r.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                  <span className={"gang-gc-s" + (r.status === "ordered" ? " ord" : "")}>{r.status === "ordered" ? `Ordered${r.supplier_order ? ` #${r.supplier_order}` : ""}${r.expected ? ` · ${r.expected}` : ""}` : "Open"}</span>
-                  <span className="dc-acts gang-gc-acts">
-                    <a className="btn sm" href={`/shop/gang-sheet/builder?sheet=${r.id}`}>Open</a>
-                    {lgs.length > 0 && <button type="button" className="btn sm" onClick={() => setReorder(r)}>Reorder sheet</button>}
-                    <span className="spacer" />
-                    <button type="button" className={"gang-del" + (armed === r.id ? " armed" : "")} aria-label={armed === r.id ? `Click again to delete ${r.name}` : `Delete ${r.name}`} title={armed === r.id ? "Click again to delete" : "Delete (click twice)"} onClick={() => void del(r.id)}>{armed === r.id ? "Delete?" : "×"}</button>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {list.map((r) => <GangSheetCard key={r.id} r={r} thumbs={thumbs} customer={cust[r.customer_id || ""] || null} armed={armed === r.id} onDelete={() => void del(r.id)} onReorder={() => setReorder(r)} />)}
         </div>
       )}
       {reorder && <GangReorder sheetId={reorder.id} customerId={reorder.customer_id} onClose={() => setReorder(null)} />}
