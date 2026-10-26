@@ -828,7 +828,8 @@ export default function GangSheet() {
                 <b className="num">{+g.toFixed(3)}&quot;</b>
                 <div className="chips">{([[0.125, "1/8"], [0.25, "1/4"], [0.5, "1/2"]] as const).map(([v, t]) => <button key={v} type="button" className={"chip" + (Math.abs(g - v) < 0.001 ? " on" : "")} onClick={() => setGap(String(v))}>{t}&quot;</button>)}</div>
                 <span className="spacer" />
-                {pieces.length > 0 && <span className="faint num">{r2(film)}&quot; of film</span>}
+                {/* the size to buy (Oct 26, Nick: DTF Dallas "rounds up to the nearest 10 inches… say current size") */}
+                {pieces.length > 0 && lay && <span className="gang-size num">Sheet size: <b>{parts.map((p) => `${W}" × ${p.buy.length}"`).join(" + ")}</b><span className="faint"> · {r2(film)}&quot; used</span></span>}
               </div>
               {g < 0.25 && pieces.length > 0 && <p className="gang-warn" style={{ margin: "0 0 8px" }}>Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
               {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: {r2(film)}&quot; is already the shortest it gets for these sizes.</p>)}
