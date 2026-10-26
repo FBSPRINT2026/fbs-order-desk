@@ -23,7 +23,7 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EEF1F5"><tr><td align="center" style="padding:24px 10px">
 <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;background:#ffffff;border-radius:12px;overflow:hidden">
   <tr><td align="center" style="background:#141D2B;padding:28px 28px 16px;${F};color:#ffffff">
-    <img src="${img("logo-round-white.png")}" width="120" height="108" alt="FBS Print: Create, Print, Deliver" style="display:block;width:120px;height:108px;border:0;margin:0 auto">
+    <img src="${img("logo-white.png")}" width="64" height="64" alt="FBS Print" style="display:block;border:0;margin:0 auto">
     <div style="font-size:42px;line-height:1;font-weight:bold;padding-top:16px;letter-spacing:-0.5px">It's here.</div>
     <div style="font-size:18px;line-height:1.3;color:#DDE3EA;padding-top:4px">Your new FBS Print customer portal</div>
   </td></tr>
@@ -50,7 +50,6 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${o.portalUrl}" style="height:52px;v-text-anchor:middle;width:260px;" arcsize="16%" stroke="f" fillcolor="#0e9bd8"><w:anchorlock/><center style="color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:17px;font-weight:bold;">Open your portal &rarr;</center></v:roundrect><![endif]-->
     <!--[if !mso]><!--><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="#0e9bd8" style="background:#0e9bd8;border-radius:10px;box-shadow:0 4px 12px rgba(14,155,216,.35)"><a href="${o.portalUrl}" style="display:block;min-width:200px;padding:16px 40px;border:1px solid #0b86bc;border-radius:10px;${F};font-size:17px;line-height:20px;font-weight:bold;color:#ffffff;text-decoration:none;text-align:center">Open your portal &rarr;</a></td></tr></table><!--<![endif]-->
   </td></tr>
-  <tr><td align="center" style="padding:22px 30px 0"><img src="${img("logo-round.png")}" width="72" height="65" alt="FBS Print" style="display:block;width:72px;height:65px;border:0;margin:0 auto"></td></tr>
   <tr><td align="center" style="padding:10px 30px 28px;${F};font-size:13px;line-height:1.5;color:#5B6678">Questions? Reply to this email or call us at (972) 487-7858, and we'll walk you through it.</td></tr>
   <tr><td style="background:#141D2B;padding:0;line-height:0;font-size:0"><img src="${img("fade-wide.png")}" width="680" height="4" alt="" style="display:block;width:100%;max-width:680px;height:4px;border:0"></td></tr>
   <tr><td align="center" style="background:#141D2B;padding:14px 28px 16px;${F};font-size:11.5px;line-height:1.6;color:#AAB4C3">FBS Print · 811 Alpha Dr, Ste 343, Richardson, TX 75081 · (972) 487-7858</td></tr>
