@@ -757,6 +757,8 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
           {files.length > 1 && <button type="button" className="mf-look-nav" disabled={i === files.length - 1} onClick={() => setI(i + 1)} aria-label="Next file">›</button>}
           <span className="spacer" />
           <a className="btn sm ghost" href={f.href} target="_blank" rel="noreferrer">Open in a tab</a>
+          {/* Oct 26, Nick (ClickUp jobs): "there's no way to download the attachments… put a little download button" */}
+          <button type="button" className="btn sm" onClick={() => void downloadFile(f.href!, f.name)}>Download</button>
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="mf-look-b">
@@ -1061,3 +1063,13 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
 export type MailView = { kind: "inbox" } | { kind: "folder"; path: string } | { kind: "search"; q: string; /** a person or customer picked from the suggestions: their addresses */ who?: string[];
   /** a recent project picked from the suggestions (Oct 15, Nick): the words that name it, and whose it is */ about?: string; cust?: string };
 export const isTyping = (e: React.KeyboardEvent) => e.key === "Enter";
+
+/** save a file under its own name (its link is on another site, so the browser's download attribute alone won't do) */
+async function downloadFile(href: string, name: string) {
+  try {
+    const r = await fetch(href); if (!r.ok) throw new Error(String(r.status));
+    const u = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a"); a.href = u; a.download = name || "file"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 30000);
+  } catch { window.open(href, "_blank", "noopener"); }
+}
