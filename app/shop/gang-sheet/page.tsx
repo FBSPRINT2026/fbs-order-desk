@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
+import { createClient } from "@/lib/supabase/client";
+import { useRole } from "@/components/RoleContext";
 import { PDFJS, PDFJS_WORKER } from "@/lib/artPrep";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 
@@ -28,7 +30,11 @@ import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
 const DPI = DTF_DALLAS.dpi;
 type Ver = { id: string; wIn: number; qty: number; knock: string[]; label: string };
 type Logo = { id: string; name: string; /** the art as uploaded (a data URL), "" for a size with no art yet */ src: string; srcW: number; srcH: number; colors: string[]; vers: Ver[];
-  /** a size with no art: its own height */ hIn?: number };
+  /** a size with no art: its own height */ hIn?: number;
+  /** where the art is kept once the sheet is saved (storage proofs/gang/…) */ path?: string;
+  /** the job it's for (Oct 26, Nick: "plug in a job number so that we can save the gang sheet to the production file") */ job?: string };
+type SheetRow = { id: string; name: string; owner: string; status: string; updated_at: string; ordered_at: string | null; supplier_order: string | null; expected: string | null; data: SheetData };
+type SheetData = { logos?: Logo[]; gap?: string; sheetW?: string; maxLen?: string; plan?: Plan; files?: { path: string; name: string; length: number; at: string }[] };
 /** one version, ready to lay out */
 type Piece = { key: string; logo: Logo; ver: Ver; name: string; wIn: number; hIn: number; qty: number };
 type Rect = { piece: number; x: number; y: number; w: number; h: number; rot: boolean };
@@ -99,7 +105,7 @@ function knocked(img: HTMLImageElement, hexes: string[], w = img.naturalWidth, h
   x.putImageData(im, 0, 0);
   return o;
 }
-const loadImg = async (src: string) => { const i = new Image(); i.src = src; await i.decode(); return i; };
+const loadImg = async (src: string) => { const i = new Image(); i.crossOrigin = "anonymous"; i.src = src; await i.decode(); return i; };
 
 // ---------- laying out ----------
 /**
@@ -153,8 +159,9 @@ function partsOf(l: Layout, maxLen: number): Part[] {
 const costOf = (ps: Part[]) => ps.reduce((a, p) => a + p.buy.price, 0);
 
 // ---------- the PDF ----------
-async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, p: Part, W: number, g: number, cutLines: boolean): Promise<Uint8Array> {
-  const { PDFDocument, degrees, rgb } = await import("pdf-lib");
+// cut lines show on screen only, never in the file: they'd print on the film (Oct 26, Nick)
+async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, p: Part, W: number, g: number): Promise<Uint8Array> {
+  const { PDFDocument, degrees } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const L = p.buy.length, pt = 72;
   const page = doc.addPage([W * pt, L * pt]);
@@ -173,7 +180,6 @@ async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, 
     if (!r.rot) page.drawImage(im, { x: bx * pt, y: (L - by - pc.hIn) * pt, width: pc.wIn * pt, height: pc.hIn * pt });
     // turned a quarter: it covers hIn across and wIn down
     else page.drawImage(im, { x: (bx + pc.hIn) * pt, y: (L - by - pc.wIn) * pt, width: pc.wIn * pt, height: pc.hIn * pt, rotate: degrees(90) });
-    if (cutLines && g > 0) page.drawRectangle({ x: r.x * pt, y: (L - r.y - r.h) * pt, width: r.w * pt, height: r.h * pt, borderColor: rgb(0.8, 0.15, 0.15), borderWidth: 0.5, borderDashArray: [4, 3] });
   }
   return doc.save();
 }
@@ -184,7 +190,6 @@ export default function GangSheet() {
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [done, setDone] = useState("");
   const [gap, setGap] = useSticky("gang.gap", "0.25");
   const [sheetW, setSheetW] = useSticky("gang.sheetW", "22");
-  const [lines, setLines] = useSticky<"screen" | "print">("gang.lines", "screen");
   const [maxMb, setMaxMb] = useSticky("gang.maxMb", "80");
   const [maxLen, setMaxLen] = useSticky("gang.maxLen", String(DTF_DALLAS.maxFileLength));
   const [plan, setPlan] = useState<Plan>({ turn: "as is", order: "added" });
@@ -221,6 +226,129 @@ export default function GangSheet() {
   }, [pieces, arts]); // eslint-disable-line react-hooks/exhaustive-deps
   // zoom on the preview (Oct 26, Nick: "there's got to be some sort of zoom function")
   const [zoom, setZoom] = useState(1);
+
+  // ---------- saved sheets (Oct 26, Nick: "be able to save a gang sheet and come back to it and add to it… Claudia viewed
+  // her gang sheets and Amanda viewed her gang sheets. Or they could view each other's") ----------
+  const sb = useMemo(() => createClient(), []);
+  const { email: me0, staffName } = useRole();
+  const me = (me0 || "").toLowerCase();
+  const [sheetId, setSheetId] = useSticky("gang.sheet", "");
+  const [sheetName, setSheetName] = useState("");
+  const [row, setRow] = useState<SheetRow | null>(null);
+  const [sheets, setSheets] = useState<SheetRow[]>([]);
+  const [whose, setWhose] = useSticky<"mine" | "all">("gang.whose", "mine");
+  const [saveState, setSaveState] = useState("");
+  const loading = useRef(false), saving = useRef<Promise<string> | null>(null);
+  const listSheets = async () => {
+    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").is("archived_at", null).order("updated_at", { ascending: false }).limit(80);
+    setSheets((data || []) as SheetRow[]);
+  };
+  useEffect(() => { void listSheets(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function openSheet(id: string) {
+    if (!id) { loading.current = true; setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 0); return; }
+    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").eq("id", id).maybeSingle();
+    if (!data) { setSheetId(""); return; }
+    loading.current = true;
+    const r = data as SheetRow, d = r.data || {};
+    const lgs = (d.logos || []).map((x) => ({ ...x, src: x.path ? "" : x.src }));
+    const signed = lgs.filter((x) => x.path).length ? (await sb.storage.from("proofs").createSignedUrls(lgs.filter((x) => x.path).map((x) => x.path!), 3600 * 8)).data || [] : [];
+    const url = new Map(signed.map((x) => [x.path, x.signedUrl]));
+    const withSrc = lgs.map((x) => (x.path ? { ...x, src: url.get(x.path) || "" } : x));
+    const imgs: Record<string, HTMLImageElement> = {};
+    await Promise.all(withSrc.filter((x) => x.src).map(async (x) => { try { imgs[x.id] = await loadImg(x.src); } catch { /* art gone */ } }));
+    setRow(r); setSheetId(r.id); setSheetName(r.name);
+    setArts(imgs); setLogos(withSrc);
+    if (d.gap) setGap(d.gap); if (d.sheetW) setSheetW(d.sheetW); if (d.maxLen) setMaxLen(d.maxLen); if (d.plan) setPlan(d.plan);
+    setOptimized(null); setShown(0); setDone(""); setErr("");
+    setTimeout(() => { loading.current = false; }, 0);
+  }
+  // the sheet in the link (from a job's production files), else the one open last time
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("sheet");
+    if (q || sheetId) void openSheet(q || sheetId);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** save now: makes the sheet the first time, keeps the art in storage, then the logos and settings */
+  async function save(extra: Partial<SheetData> = {}): Promise<string> {
+    if (saving.current) await saving.current.catch(() => "");
+    const run = (async () => {
+      setSaveState("Saving…");
+      let id = sheetId;
+      const first = (staffName || me.split("@")[0] || "").split(" ")[0];
+      const name0 = sheetName.trim() || `${first ? first[0].toUpperCase() + first.slice(1) + "'s" : "A"} sheet · ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      if (!id) {
+        const { data, error } = await sb.from("gang_sheets").insert({ name: name0, owner: me, data: {} }).select("id").single();
+        if (error || !data) { setSaveState("Not saved"); throw new Error(error?.message || "Couldn't save the sheet."); }
+        id = data.id as string; setSheetId(id); setSheetName(name0);
+      }
+      // the art goes to storage once (a data URL in the browser until then)
+      const stored: Logo[] = [];
+      for (const lg of logos) {
+        if (lg.src && !lg.path && lg.src.startsWith("data:")) {
+          const path = `gang/${id}/${lg.id}.png`;
+          const up = await sb.storage.from("proofs").upload(path, await (await fetch(lg.src)).blob(), { contentType: "image/png", upsert: true });
+          stored.push(up.error ? lg : { ...lg, path });
+        } else stored.push(lg);
+      }
+      if (stored.some((x, i) => x.path !== logos[i].path)) setLogos((xs) => xs.map((x) => { const s2 = stored.find((y) => y.id === x.id); return s2?.path && !x.path ? { ...x, path: s2.path } : x; }));
+      const data: SheetData = { ...(row?.data || {}), logos: stored.map(({ src, ...x }) => (x.path ? x : { ...x, src })), gap, sheetW, maxLen, plan, ...extra };
+      const { error } = await sb.from("gang_sheets").update({ name: sheetName.trim() || name0, data, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) { setSaveState("Not saved"); throw new Error(error.message); }
+      setRow((r) => (r && r.id === id ? { ...r, data, name: sheetName.trim() || name0 } : { id, name: sheetName.trim() || name0, owner: me, status: "open", updated_at: new Date().toISOString(), ordered_at: null, supplier_order: null, expected: null, data }));
+      setSaveState("Saved");
+      void listSheets();
+      return id;
+    })();
+    saving.current = run;
+    return run;
+  }
+  // saves as you go: a sheet with a logo on it is never lost
+  useEffect(() => {
+    if (loading.current || (!logos.length && !sheetId)) return;
+    const t = setTimeout(() => { void save().catch((e) => setErr(e instanceof Error ? e.message : "Couldn't save the sheet.")); }, 1200);
+    return () => clearTimeout(t);
+  }, [logos, gap, sheetW, maxLen, plan, sheetName]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function markOrdered() {
+    const id = await save();
+    await sb.from("gang_sheets").update({ status: "ordered", ordered_at: new Date().toISOString(), ordered_by: me }).eq("id", id);
+    setRow((r) => (r ? { ...r, status: "ordered", ordered_at: new Date().toISOString() } : r));
+    setDone(`Marked ordered. When ${DTF_DALLAS.name}'s confirmation comes in, its order number and date go in the jobs' production notes.`);
+    void listSheets();
+  }
+  async function pullFrom(id: string) {
+    if (!id) return;
+    const { data } = await sb.from("gang_sheets").select("name, data").eq("id", id).maybeSingle();
+    const lg = ((data?.data as SheetData | null)?.logos || []);
+    if (!lg.length) return;
+    const paths = lg.filter((x) => x.path).map((x) => x.path!);
+    const signed = paths.length ? (await sb.storage.from("proofs").createSignedUrls(paths, 3600 * 8)).data || [] : [];
+    const url = new Map(signed.map((x) => [x.path, x.signedUrl]));
+    const copies = lg.map((x) => ({ ...x, id: uid(), vers: x.vers.map((v) => ({ ...v, id: uid() })), src: x.path ? url.get(x.path) || "" : x.src }));
+    const imgs: Record<string, HTMLImageElement> = {};
+    await Promise.all(copies.filter((x) => x.src).map(async (x) => { try { imgs[x.id] = await loadImg(x.src); } catch { /* gone */ } }));
+    setArts((m) => ({ ...m, ...imgs }));
+    setLogos((xs) => [...xs, ...copies]);
+    setDone(`Added ${copies.length} logo${copies.length === 1 ? "" : "s"} from "${data?.name || "that sheet"}".`);
+  }
+  /** the downloaded files in each job's production files, with a link back to the sheet */
+  async function fileToJobs(id: string, files: { bytes: Uint8Array; name: string; length: number }[]): Promise<string[]> {
+    const at = new Date().toISOString(), stored: { path: string; name: string; length: number; at: string }[] = [];
+    for (const f of files) {
+      const path = `gang/${id}/files/${Date.now().toString(36)}-${f.name.replace(/[^\w.-]+/g, "_")}`;
+      const up = await sb.storage.from("proofs").upload(path, new Blob([f.bytes as BlobPart], { type: "application/pdf" }), { contentType: "application/pdf" });
+      if (!up.error) stored.push({ path, name: f.name, length: f.length, at });
+    }
+    await save({ files: [...(row?.data?.files || []), ...stored] }).catch(() => "");
+    const jobs = [...new Set(logos.map((x) => (x.job || "").replace(/[^\d]/g, "")).filter(Boolean))];
+    const notes: string[] = [];
+    for (const j of jobs) {
+      const { data: o } = await sb.from("orders").select("id, number").eq("number", +j).maybeSingle();
+      if (!o) { notes.push(`#${j} isn't an order in the portal: not filed`); continue; }
+      const mine = pieces.filter((pc) => (pc.logo.job || "").replace(/[^\d]/g, "") === j).map((pc) => `${pc.qty} × ${pc.name} ${pc.wIn}"`).join(", ");
+      for (const f of stored) await sb.from("art_files").insert({ order_id: o.id, name: f.name, file_path: f.path, file_type: "application/pdf", category: "gang_sheet", note: `DTF gang sheet "${sheetName || "gang sheet"}": ${mine}. Open the sheet: /shop/gang-sheet?sheet=${id}`.slice(0, 500) });
+      notes.push(`filed under #${j}`);
+    }
+    return notes;
+  }
 
   async function add(files: FileList | null) {
     if (!files?.length) return;
@@ -288,7 +416,7 @@ export default function GangSheet() {
       while (queue.length) {
         const p = queue.shift()!;
         setBusy(`Making file ${files.length + 1} of ${files.length + queue.length + 1}…`);
-        const bytes = await makePdf(pieces, arts, p, W, g, lines === "print");
+        const bytes = await makePdf(pieces, arts, p, W, g);
         // over the size limit: its rows in two files
         const rowsY = [...new Set(p.rects.map((r) => r.y))].sort((a, b) => a - b);
         if (bytes.byteLength > limit && rowsY.length > 1) {
@@ -308,9 +436,12 @@ export default function GangSheet() {
         setTimeout(() => URL.revokeObjectURL(u), 60000);
         await new Promise((r) => setTimeout(r, 400));
       }
+      setBusy("Filing it under the jobs…");
+      const id = await save();
+      const filed = await fileToJobs(id, files.map((f, i) => ({ bytes: f.bytes, name: `${base}-gang-${W}x${f.p.buy.length}-${i + 1}of${files.length}.pdf`, length: f.p.buy.length })));
       setBusy("");
       const big = Math.max(...files.map((f) => f.bytes.byteLength));
-      setDone(`${files.length} PDF${files.length === 1 ? "" : "s"} downloaded (largest ${(big / 1048576).toFixed(1)} MB). Buy ${files.map((f) => `${W}" × ${f.p.buy.length}"`).join(", ")} at ${DTF_DALLAS.name}: ${money(costOf(files.map((f) => f.p)))}.`);
+      setDone(`${files.length} PDF${files.length === 1 ? "" : "s"} downloaded (largest ${(big / 1048576).toFixed(1)} MB). Buy ${files.map((f) => `${W}" × ${f.p.buy.length}"`).join(", ")} at ${DTF_DALLAS.name}: ${money(costOf(files.map((f) => f.p)))}.${filed.length ? ` ${filed.join("; ")}.` : ""}`);
     } catch (e) { setBusy(""); setErr(e instanceof Error ? e.message : "The files couldn't be made."); }
   }
 
@@ -324,12 +455,29 @@ export default function GangSheet() {
         <div><h1>Gang sheet builder</h1><div className="eyebrow">Heat press: logos laid out on a DTF sheet, priced and ready to upload to {DTF_DALLAS.name}</div></div>
         <div className="row" style={{ gap: 8 }}>
           <a className="btn" href={DTF_DALLAS.url} target="_blank" rel="noreferrer">Open {DTF_DALLAS.name}</a>
-          {logos.length > 0 && <button type="button" className="btn" onClick={() => { setLogos([]); setOptimized(null); setDone(""); setErr(""); }}>Clear</button>}
+          {sheetId && row?.status !== "ordered" && logos.length > 0 && <button type="button" className="btn" onClick={() => void markOrdered()} title={`You ordered it at ${DTF_DALLAS.name}: its confirmation is matched to this sheet`}>Mark ordered</button>}
+          <button type="button" className="btn" onClick={() => void openSheet("")}>New sheet</button>
           <button type="button" className="btn primary" disabled={!parts.length || !!busy} onClick={() => void download()}>{busy || "Download PDF"}</button>
         </div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {done && <div className="pv-err sow-msg" role="status">{done}</div>}
+      <div className="toolbar gang-bar" data-toolbar>
+        <div className="chips">
+          <button type="button" className={"chip" + (whose === "mine" ? " on" : "")} onClick={() => setWhose("mine")}>My sheets <span className="pill-n">{sheets.filter((x) => x.owner === me).length}</span></button>
+          <button type="button" className={"chip" + (whose === "all" ? " on" : "")} onClick={() => setWhose("all")}>Everyone&apos;s <span className="pill-n">{sheets.length}</span></button>
+        </div>
+        <select aria-label="Open a saved sheet" value={sheetId && sheets.some((x) => x.id === sheetId) ? sheetId : ""} onChange={(e) => void openSheet(e.target.value)}>
+          <option value="">{sheetId ? "This sheet" : "Open a saved sheet…"}</option>
+          {sheets.filter((x) => whose === "all" || x.owner === me).map((x) => <option key={x.id} value={x.id}>{x.name}{whose === "all" && x.owner !== me ? ` · ${x.owner.split("@")[0]}` : ""} · {new Date(x.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</option>)}
+        </select>
+        <input type="text" aria-label="Sheet name" placeholder="Name this sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
+        <select aria-label="Add the logos from another sheet" value="" onChange={(e) => void pullFrom(e.target.value)}>
+          <option value="">Add logos from another sheet…</option>
+          {sheets.filter((x) => x.id !== sheetId && (x.data?.logos || []).length).map((x) => <option key={x.id} value={x.id}>{x.name} · {x.owner.split("@")[0]} · {(x.data?.logos || []).length} logo{(x.data?.logos || []).length === 1 ? "" : "s"}</option>)}
+        </select>
+        <span className="faint gang-save">{row?.status === "ordered" ? `Ordered${row.supplier_order ? ` · ${DTF_DALLAS.name} #${row.supplier_order}` : ""}${row.expected ? ` · ${row.expected}` : ""}` : saveState}</span>
+      </div>
       <div className="gang">
         <div className="stack" style={{ gap: 16 }}>
           <section className="panel">
@@ -341,6 +489,7 @@ export default function GangSheet() {
                     <div className="gang-pic">{lg.src ? <img src={lg.src} alt="" /> : <span className="faint">Size only</span>}</div>
                     {lg.src ? <b data-notranslate title={lg.name}>{lg.name}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
                     <span className="spacer" />
+                    <input className="gang-job" type="text" inputMode="numeric" placeholder="Job #" aria-label="Job number" title="The job these are for: the gang sheet goes in its production files" value={lg.job || ""} onChange={(e) => patchLogo(lg.id, { job: e.target.value.replace(/[^\d]/g, "").slice(0, 8) })} />
                     <button type="button" className="btn icon ghost" aria-label="Remove this logo" title="Remove this logo" onClick={() => setLogos((xs) => xs.filter((x) => x.id !== lg.id))}>×</button>
                   </div>
                   {lg.src && Math.max(...lg.vers.map((v) => v.wIn)) > 0 && Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 && <p className="gang-warn">About {Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at {Math.max(...lg.vers.map((v) => v.wIn))}&quot; wide (DTF wants 300): it may print soft. A bigger file or a vector prints sharper.</p>}
@@ -391,12 +540,6 @@ export default function GangSheet() {
               {g < 0.25 && <p className="gang-warn">Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
               <div className="gang-row3">
                 <div className="field"><label htmlFor="g-mb">Largest file (MB)</label><input id="g-mb" type="number" min="5" step="1" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></div>
-                <div className="field" style={{ gridColumn: "span 2" }}><label>Cut lines</label>
-                  <div className="chips">
-                    <button type="button" className={"chip" + (lines === "screen" ? " on" : "")} onClick={() => setLines("screen")}>On screen only</button>
-                    <button type="button" className={"chip" + (lines === "print" ? " on" : "")} onClick={() => setLines("print")}>Print them</button>
-                  </div>
-                </div>
               </div>
             </div>
           </section>
