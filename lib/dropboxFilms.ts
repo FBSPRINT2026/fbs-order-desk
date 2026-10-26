@@ -13,6 +13,8 @@ const ART = /\.(ai|pdf|eps)$/i;
 const STOP = new Set(["shirt", "shirts", "tee", "tees", "tshirt", "tshirts", "t", "hoodie", "hoodies", "new", "colors", "color", "reorder", "the", "and", "of", "for", "a", "order", "job", "print", "prints", "logo", "logos", "front", "back"]);
 const words = (s: string) => (s || "").toLowerCase().replace(/\.[a-z0-9]+$/, "").split(/[^a-z0-9]+/).filter((w) => w && !STOP.has(w));
 const squash = (s: string) => words(s).join("");
+/** company-name words too common to match a folder on their own */
+const GENERIC = new Set(["brands", "brand", "group", "inc", "llc", "ltd", "co", "company", "companies", "corp", "corporation", "enterprises", "designs", "design", "apparel", "clothing", "printing", "print", "prints", "solutions", "services", "marketing", "promo", "promotions", "promotional", "creative", "studio", "studios", "media", "church", "school", "isd", "high", "club", "team", "sports", "athletics", "foundation", "association", "dallas", "texas", "tx", "usa", "america", "american", "north", "south", "east", "west", "global", "international", "products", "supply", "gear", "goods", "shop", "store", "online", "ink", "custom", "customs"]);
 
 let rootCache: { at: number; list: DbxEntry[] } | null = null;
 
@@ -24,7 +26,9 @@ async function customerFolder(admin: SupabaseClient, names: string[]) {
     const fw = words(e.name), fs = squash(e.name);
     for (const n of want) {
       if (!fs) continue;
-      const score = fs === n.s ? 10 : n.s.startsWith(fs) || fs.startsWith(n.s) ? 6 : fw.filter((w) => n.w.includes(w) && w.length > 2).length * 3;
+      // a shared word only counts when it's the customer's own name, not a word lots of companies have (Oct 26, Nick: JJB
+      // Brands was shown Incentive Brands' film folder because both say "Brands")
+      const score = fs === n.s ? 10 : n.s.startsWith(fs) || fs.startsWith(n.s) ? 6 : fw.filter((w) => n.w.includes(w) && w.length > 2 && !GENERIC.has(w)).length * 3;
       if (score > (best?.score || 0)) best = { e, score };
     }
   }

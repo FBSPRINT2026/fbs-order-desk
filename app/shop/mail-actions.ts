@@ -646,11 +646,39 @@ export async function addSenderToCustomer(input: { email: string; name?: string;
         }
       }
     }
-    // their email is this customer's from now on, and what's already in the portal from them moves onto it
-    await admin.from("mail_senders").upsert({ email: e, kind: "customer", customer_id: customerId, decided_by: me || "staff", decided_at: new Date().toISOString() });
-    const { data: acts } = await admin.from("activities").select("id, meta").eq("from_email", e).is("customer_id", null).limit(500);
-    for (const a of (acts || []) as { id: string; meta: Record<string, unknown> | null }[]) await admin.from("activities").update({ customer_id: customerId, meta: { ...(a.meta || {}), lead: false, match: "override" } }).eq("id", a.id);
-    await admin.from("ai_suggestions").update({ customer_id: customerId }).in("activity_id", ((acts || []) as { id: string }[]).map((a) => a.id));
+    await claimFor(admin, e, customerId as string, me || "staff");
     return { ok: true as const, customerId: customerId as string, customer: label };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * This email address is this customer's from now on (Oct 26, Nick: support@effinggear.com was put on JJB Brands, but
+ * Create order still found Effing Gear: the email had been matched to Effing Gear by its domain before, and adding a
+ * contact didn't change that). The address's emails go to this customer, and the ones already in the portal that were
+ * only matched by a guess (no match yet, or by domain / contact / company name) move onto it. Ones staff chose stay.
+ */
+async function claimFor(admin: ReturnType<typeof createAdminClient>, email: string, customerId: string, by: string) {
+  const e = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 0;
+  await admin.from("mail_senders").upsert({ email: e, kind: "customer", customer_id: customerId, decided_by: by, decided_at: new Date().toISOString() });
+  const { data: acts } = await admin.from("activities").select("id, customer_id, meta").eq("kind", "email").ilike("from_email", e).limit(500);
+  const move = ((acts || []) as { id: string; customer_id: string | null; meta: Record<string, unknown> | null }[])
+    .filter((a) => a.customer_id !== customerId && (!a.customer_id || ["domain", "contact", "company", "printavo", "email", "thread", undefined, null].includes(a.meta?.match as string | undefined)));
+  for (const a of move) await admin.from("activities").update({ customer_id: customerId, meta: { ...(a.meta || {}), lead: false, match: "override" } }).eq("id", a.id);
+  if (move.length) {
+    await admin.from("ai_suggestions").update({ customer_id: customerId }).in("activity_id", move.map((a) => a.id));
+    // an order reading made for the old customer is read again (their jobs, prices and reorders were the other customer's)
+    const { data: drafts } = await admin.from("ai_suggestions").select("id, payload").eq("kind", "draft_order").neq("status", "done").in("activity_id", move.map((a) => a.id));
+    for (const d of (drafts || []) as { id: string; payload: Record<string, unknown> | null }[]) if (d.payload) await admin.from("ai_suggestions").update({ payload: { ...d.payload, rev: "moved-customer" } }).eq("id", d.id);
+  }
+  return move.length;
+}
+
+/** a contact's email typed in on the customer page: claim it for this customer (see claimFor) */
+export async function claimContactEmail(customerId: string, email: string) {
+  try {
+    const { admin, email: me } = await staff();
+    const moved = await claimFor(admin, email, customerId, me || "staff");
+    return { ok: true as const, moved };
   } catch (e) { return fail(e); }
 }

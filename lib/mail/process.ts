@@ -51,7 +51,8 @@ export async function matchAddress(admin: SupabaseClient, email: string): Promis
   if (o?.kind === "customer" && o.customer_id) return { customerId: o.customer_id as string, how: "override" };
   const { data: c } = await admin.from("customers").select("id").or(`email.ilike.${e},contact2_email.ilike.${e}`).limit(1);
   if (c?.[0]) return { customerId: c[0].id as string, how: "email" };
-  const { data: k } = await admin.from("customer_contacts").select("customer_id").ilike("email", e).limit(1);
+  // a contact at more than one customer: the newest one wins (the latest someone put them on); removed ones don't count
+  const { data: k } = await admin.from("customer_contacts").select("customer_id").ilike("email", e).is("removed_at", null).order("created_at", { ascending: false }).limit(1);
   if (k?.[0]?.customer_id) return { customerId: k[0].customer_id as string, how: "contact" };
   const { data: p } = await admin.from("printavo_customers").select("customer_id").ilike("data->>email", e).not("customer_id", "is", null).limit(1);
   if (p?.[0]?.customer_id) return { customerId: p[0].customer_id as string, how: "printavo" };
