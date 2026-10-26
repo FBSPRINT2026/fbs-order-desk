@@ -14171,3 +14171,19 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .mk-full{display:flex;flex-direction:column;gap:6px;margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);font-size:13px}
 .mk-full.ask{border-color:var(--warn);background:var(--warn-soft)}
 .mk-full .faint{font-size:12.5px;color:var(--ink-3)}
+/* Gang sheet builder (Heat press, Oct 26) */
+.gang{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.gang{grid-template-columns:1fr}}
+.gang-up{display:flex;align-items:center;gap:12px;min-height:72px;padding:10px;border:1.5px dashed var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;color:var(--ink)}
+.gang-up:hover{border-color:var(--accent)}
+.gang-up img{width:64px;height:48px;object-fit:contain;background:repeating-conic-gradient(var(--surface-2) 0 25%,var(--surface) 0 50%) 0 0/10px 10px;border-radius:4px}
+.gang-up span{display:flex;flex-direction:column;gap:2px}
+.gang-up .faint{font-size:12px;color:var(--ink-3)}
+.gang-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gang-row .field input{height:36px;border-radius:6px;border:1px solid var(--line);font-size:14px;padding:0 10px;width:100%}
+.gang .field > input{height:36px;border-radius:6px;border:1px solid var(--line);font-size:14px;padding:0 10px}
+.gang-warn{margin:0;font-size:12.5px;color:var(--warn)}
+.gang-sheet{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--surface-2)}
+.gang-sheet canvas{display:block;max-width:100%;height:auto;background:repeating-conic-gradient(#e9e9e9 0 25%,#fff 0 50%) 0 0/14px 14px;box-shadow:0 0 0 1px var(--line)}
+.gang-stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px;color:var(--ink-2)}
+.gang-stats .faint{color:var(--ink-3)}
