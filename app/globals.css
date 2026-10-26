@@ -9950,8 +9950,10 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .tk-tbl tr:hover .tk-move{opacity:1}.tk-move:hover{color:var(--accent);background:var(--accent-soft)}
 .tk-report-f{margin:12px 0 0;font-size:11.5px;color:var(--ink-3)}
 @media print{
-  body *{visibility:hidden!important}
-  .tk-report,.tk-report *{visibility:visible!important}
+  /* only on a page with the payroll report: unscoped, this blanked every other page's printout (Oct 26, Nick: work
+     order and proofs "just printing blank pages") */
+  body:has(.tk-report) *{visibility:hidden!important}
+  body:has(.tk-report) .tk-report,body:has(.tk-report) .tk-report *{visibility:visible!important}
   .tk-report{position:absolute;left:0;top:0;width:100%;border:0;box-shadow:none;padding:0}
   .tk-noprint{display:none!important}
   .tk-tbl{font-size:11px}.tk-tbl td,.tk-tbl th{padding:4px 6px}
