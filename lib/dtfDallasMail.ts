@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * before it, of the same length when the email says one; then each job on the sheet gets a line in its production
  * notes. Pickup and cancel emails add their line to the same jobs. Each email is used once (the sheet keeps its ids).
  */
-type Sheet = { id: string; name: string; owner: string; status: string; ordered_at: string | null; updated_at: string; supplier_order: string | null; data: { logos?: { job?: string }[]; files?: { length: number; at: string }[]; dtfMail?: string[] } };
+type Sheet = { id: string; name: string; owner: string; status: string; ordered_at: string | null; updated_at: string; supplier_order: string | null; data: { logos?: { job?: string }[]; /** the builder now keeps jobs here */ jobs?: { job?: string }[]; files?: { length: number; at: string }[]; dtfMail?: string[] } };
 const day = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Chicago" });
 
 export async function checkDtfDallas(admin: SupabaseClient): Promise<{ matched: number; notes: number }> {
@@ -51,7 +51,7 @@ export async function checkDtfDallas(admin: SupabaseClient): Promise<{ matched: 
     else if (sheet && /shipped|on its way|tracking/i.test(subj)) line = `DTF Dallas order #${num} shipped (${day(at)}).`;
     if (!sheet || !line) continue;
     // each job on the sheet: the line in its production notes
-    const jobs = [...new Set((sheet.data?.logos || []).map((l) => String(l.job || "").replace(/\D/g, "")).filter(Boolean))].map(Number);
+    const jobs = [...new Set([...(sheet.data?.jobs || []), ...(sheet.data?.logos || [])].map((l) => String(l.job || "").replace(/\D/g, "")).filter(Boolean))].map(Number);
     if (jobs.length) {
       const { data: os } = await admin.from("orders").select("id, number").in("number", jobs);
       for (const o of (os || []) as { id: string; number: number }[]) {
