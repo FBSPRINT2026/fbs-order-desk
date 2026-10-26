@@ -9,6 +9,7 @@ import { guessHex, spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
+import WoFit from "./WoFit";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
 /** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
@@ -26,6 +27,7 @@ export type DocData = {
   /** vector art (EPS / PDF / AI / SVG): a signed link to the original file, drawn at full resolution in the saved PDF */ designFiles?: Record<string, string>;
   /** per group: signed mockup pictures (photos only), the first is the big one */ mockups: string[][];
   /** per group: the shirt color behind the art */ hexes: string[];
+  /** each garment color's shirt color (lower-case letters and digits → hex) */ colorHexes?: Record<string, string>;
   /** per group, per print: the largest it can print (inches) and on which size */ maxes: ({ w: number; h: number; on: string } | null)[][];
   printavo: boolean;
 };
@@ -134,6 +136,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
   const qr = qrSvg(jobLink(o.number), 2).svg;
   return (
     <>
+      <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
         const { lines, noteParts, longNotes, more, mk, notesPage, vars } = plans[gi];
@@ -168,7 +171,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         return (
           <div key={g.id}>
             {/* 1. the job */}
-            <section className="sheet wo1">
+            <section className="sheet wo1 wo-first">
               <div className="hd">
                 <div>
                   <div className="lbl">Work order · #{o.number}{groups.length > 1 ? ` · group ${gi + 1} of ${groups.length}` : ""}</div>
@@ -221,7 +224,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             ))}
             {/* 3. each mockup big, its prints blown up under it */}
             {mk.map((u, i) => {
-              const col = mkColor(i), bg = col ? guessHex(col) || mkHex(i) : mkHex(i);
+              const col = mkColor(i), bg = col ? p.colorHexes?.[ckey(col)] || mkHex(i) : mkHex(i);
               const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0;
               return (
                 <section className="sheet wo1" key={"mk" + i}>
@@ -232,13 +235,12 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                       {g.imprints.map((d, di) => {
                         const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "", sz = printSize(d, des);
                         const v = col ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
-                        const chg = v ? Object.entries(v.swap).map(([a, b]) => `${b} (not ${a})`) : [];
                         return (
                           <div className="wo-cube" key={d.id}>
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
-                              {v && <span className="cc">Color change</span>}{pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
+                              {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="cc">Color change</span> : null}</div>
                           </div>
                         );
                       })}
@@ -331,7 +333,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   const sz0 = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
   // visual only: no guessed size or inks on the press sheet; the press writes what ran
   const sz = d.visualOnly ? { ...sz0, label: "" } : sz0;
-  const hex = variant ? guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
+  const hex = variant ? p.colorHexes?.[ckey(variant.color)] || guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
@@ -523,7 +525,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const { o } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
   const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
-  const hex = variant ? guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
+  const hex = variant ? p.colorHexes?.[ckey(variant.color)] || guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art as big as the panel takes, with room left for its measurements drawn beside and under it (Oct 23, Nick: "the
   // measurements are spilling out over the red box")
   const PW = 5.9, PH = 5.4;

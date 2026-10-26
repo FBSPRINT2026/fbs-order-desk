@@ -31,7 +31,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const cust = (cu || {}) as Partial<Customer>;
 
   // designs (proportions for the print sizes; previews for the work order), mockup pictures, the shirt colors
-  const { designs, hexes, maxes } = await loadGroupLook(admin, groups);
+  const { designs, hexes, maxes, colorHexes } = await loadGroupLook(admin, groups);
   const work0 = !!work && isStaff;
   // the art proof (?proof=1): every mockup big and each print's art up close, for the customer to approve (Oct 20)
   const proof0 = !!proof && !work0;
@@ -57,7 +57,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       (vs || []).forEach((r, i) => { if (r.signedUrl) designFiles[vec[i].id] = r.signedUrl; });
     }
   }
-  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, hexes, colorHexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
   // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };

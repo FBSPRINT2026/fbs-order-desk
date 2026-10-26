@@ -28,6 +28,14 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
     const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
     return garmentHex(ci?.hex, l.color) || "#9aa1ab";
   });
+  /** every garment color's own shirt color (lower-case letters and digits → hex): a color change's close-ups (Oct 26) */
+  const colorHexes: Record<string, string> = {};
+  for (const g of groups) for (const l of g.lines) {
+    if (!l.color || colorHexes[key(l.color)]) continue;
+    const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
+    const h = garmentHex(ci?.hex, l.color);
+    if (h) colorHexes[key(l.color)] = h;
+  }
   const maxes: MaxArea[][] = groups.map((g) => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
     const gar = l ? garOf(l.style) : null;
@@ -48,7 +56,7 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
     const run = sortSizes(ordered);
     return g.mockupSize && run.includes(g.mockupSize) ? g.mockupSize : bodyOf(l ? garOf(l.style) : null, run).size;
   });
-  return { designs, hexes, maxes, shownSizes };
+  return { designs, hexes, maxes, shownSizes, colorHexes };
 }
 
 const fmtIn = (n: number) => (n ? `${+n.toFixed(2)}"` : `?"`);
