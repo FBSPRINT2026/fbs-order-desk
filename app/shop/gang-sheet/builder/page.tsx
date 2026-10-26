@@ -53,7 +53,7 @@ type Part = { rects: Rect[]; length: number; buy: { length: number; price: numbe
  * top, small ones tucked beside and under big ones (lib/gangPack). Optimize may save the exact order and turn of each
  * size it found best (`seq`, `modes`: "a" as drawn, "b" turned a quarter, "any" either), so the sheet comes back the same.
  */
-type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added" | "width"; algo?: "rows" | "fill"; seq?: string[]; modes?: Record<string, "a" | "b" | "any"> };
+type Plan = { turn: "as is" | "flat" | "tall"; order: "height" | "area" | "added" | "width"; algo?: "rows" | "fill" | "grouped"; seq?: string[]; modes?: Record<string, "a" | "b" | "any"> };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (v: number) => `$${v.toFixed(2)}`;
@@ -138,6 +138,7 @@ const loadImg = async (src: string) => { const i = new Image(); i.crossOrigin = 
  */
 function layOut(ps0: Piece[], W: number, g: number, opt: Plan, L = DTF_DALLAS.maxFileLength): Layout | null {
   if (opt.algo === "fill") return layFill(ps0, W, g, opt, L);
+  if (opt.algo === "grouped") return layGrouped(ps0, W, g);
   type P = { piece: number; w: number; h: number; rot: boolean };
   const ps: P[] = [];
   for (let i = 0; i < ps0.length; i++) {
@@ -168,6 +169,29 @@ function layOut(ps0: Piece[], W: number, g: number, opt: Plan, L = DTF_DALLAS.ma
     }
   }
   return { rows: rows.map((r) => ({ y: r.y, h: r.h })), rects, length };
+}
+/**
+ * Grouped layout (Oct 26, Nick: "all the same sizes are together, easy to cut like one by one… sometimes it's going to
+ * get weird if you don't"): each size in its own full rows, the biggest first, turned when that takes less film; the
+ * next size starts on a fresh row, so every size cuts off the sheet in one straight line.
+ */
+function layGrouped(ps0: Piece[], W: number, g: number): Layout | null {
+  const idx = ps0.map((_, i) => i).filter((i) => ps0[i].qty > 0).sort((a, b) => ps0[b].wIn * ps0[b].hIn - ps0[a].wIn * ps0[a].hIn);
+  const rows: { y: number; h: number }[] = [], rects: Rect[] = [];
+  let y = 0;
+  for (const i of idx) {
+    const it = ps0[i];
+    const opts = [{ w: it.wIn + g, h: it.hIn + g, rot: false }, { w: it.hIn + g, h: it.wIn + g, rot: true }]
+      .filter((o) => o.w <= W + 1e-6)
+      .map((o) => { const per = Math.max(1, Math.floor((W + 1e-6) / o.w)); return { ...o, per, len: Math.ceil(it.qty / per) * o.h }; })
+      .sort((a, b) => a.len - b.len || (a.rot ? 1 : -1));
+    const o = opts[0]; if (!o) return null;
+    for (let k = 0; k < it.qty; k += o.per) {
+      for (let j = 0; j < o.per && k + j < it.qty; j++) rects.push({ piece: i, x: j * o.w, y, w: o.w, h: o.h, rot: o.rot });
+      rows.push({ y, h: o.h }); y += o.h;
+    }
+  }
+  return { rows, rects, length: y };
 }
 /** the open-space fill: each size as drawn, turned, or either (Optimize's pick), in the plan's order */
 function layFill(ps0: Piece[], W: number, g: number, opt: Plan, L: number): Layout | null {
@@ -816,6 +840,7 @@ export default function GangSheet() {
                 <button type="button" className={"chip" + (tab === "files" ? " on" : "")} onClick={() => setTab("files")}>Files <span className="pill-n">{parts.length}</span></button>
               </div>
               <span className="spacer" />
+              <button type="button" className={"btn sm" + (plan.algo === "grouped" ? " on" : "")} disabled={!pieces.length} aria-pressed={plan.algo === "grouped"} onClick={() => { setPlan({ turn: "as is", order: "area", algo: "grouped" }); setOptimized(null); setShown(0); setTab("sheet"); }} title="Each size together in its own rows, so they cut apart one size at a time">Grouped layout</button>
               <button type="button" className="btn primary sm" disabled={!pieces.length} onClick={optimize} title="Tries each piece turned and not, and ways of stacking them, and keeps the one that costs least">Optimize sheet</button>
               {tab === "sheet" && <span className="gang-zoom">
                 <button type="button" className="btn sm" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, r2(z / 1.5)))}>−</button>
@@ -835,6 +860,7 @@ export default function GangSheet() {
                 {pieces.length > 0 && lay && <span className="gang-size num">Sheet size: <b>{parts.map((p) => `${W}" × ${p.buy.length}"`).join(" + ")}</b><span className="faint"> · {r2(film)}&quot; used</span></span>}
               </div>
               {g < 0.25 && pieces.length > 0 && <p className="gang-warn" style={{ margin: "0 0 8px" }}>Under 1/4&quot; between pieces is hard to cut apart with scissors.</p>}
+              {plan.algo === "grouped" && <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Grouped: each size in its own rows, biggest first. Optimize sheet packs them tighter.</p>}
               {optimized && (optimized.before - film > 0.05 ? <p className="puff-ok" style={{ margin: "0 0 8px" }}>Optimized: {r2(optimized.before - film)}&quot; less film{optimized.beforeCost - cost > 0.005 ? `, ${money(optimized.beforeCost - cost)} less` : ""}.</p> : <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Optimized: {r2(film)}&quot; is already the shortest it gets for these sizes.</p>)}
               {!pieces.length ? <div className="gang-empty">Add art on the left (drop it, upload it, or pick a customer&apos;s), or a size with no art to price a job.</div> : !lay ? <p className="gang-warn">A piece is wider than the {W}&quot; sheet even turned. Make it smaller.</p> : tab === "sheet" ? (
                 <>

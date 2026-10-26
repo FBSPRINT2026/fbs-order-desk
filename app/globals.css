@@ -14376,3 +14376,4 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-gc-s{font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
 .gang-gc-s.ord{color:var(--ok)}
 .gang-gc-acts{display:flex;align-items:center;gap:6px;margin-top:6px}
+.gang-tabs .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
