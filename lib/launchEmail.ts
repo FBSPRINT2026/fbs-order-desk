@@ -14,7 +14,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 export const LAUNCH_SUBJECT = "It's here: your new FBS Print customer portal";
 
-export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?: string; replyTo?: string }) {
+export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?: string; replyTo?: string; /** the customer's company, shown in the portal picture */ company?: string }) {
   // the version on each picture's address: phones and mail services keep pictures by address, so a picture that changed
   // under the same name (the proof tile) showed the old one on a phone (Oct 26, Nick)
   const img = (f: string) => `${o.site.replace(/\/$/, "")}/email/launch/${f}?v=${APP_VERSION}`;
@@ -43,7 +43,7 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     </tr></table>
   </td></tr>
   <tr><td align="center" style="padding:0 20px;line-height:0;font-size:0">
-    <a href="${o.portalUrl}"><img src="${img("hero-bottom.png")}" width="680" alt="" style="display:block;width:100%;max-width:680px;height:auto;border:0"></a>
+    <a href="${o.portalUrl}"><img src="${o.company ? `${o.site.replace(/\/$/, "")}/email/hero.png?n=${encodeURIComponent(o.company.slice(0, 42))}&v=${APP_VERSION}` : img("hero-bottom.png")}" width="680" alt="" style="display:block;width:100%;max-width:680px;height:auto;border:0"></a>
   </td></tr>
   <tr><td align="center" style="padding:0 16px">
 <table role="presentation" align="center" width="680" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;margin:0 auto">
@@ -54,8 +54,8 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     <div style="${F};font-size:12.5px;color:#7A8599;text-align:center;padding-top:10px">No password to remember. The code comes to this email address. <a href="${o.portalUrl}" style="color:#0e9bd8">portal.fbsprint.com</a></div>
   </td></tr>
   <tr><td align="center" style="padding:30px 28px 0">
-    <img src="${img("fade-short.png")}" width="64" height="4" alt="" style="display:block;width:64px;height:4px;border:0;margin:0 auto">
-    <div style="${F};font-size:20px;font-weight:bold;color:#141D2B;padding-top:12px">New features</div>
+    <div style="${F};font-size:20px;font-weight:bold;color:#141D2B">New features</div>
+    <img src="${img("fade-title.png")}" width="170" height="4" alt="" style="display:block;width:170px;height:4px;border:0;margin:8px auto 0">
   </td></tr>
   <tr><td style="padding:16px 22px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
