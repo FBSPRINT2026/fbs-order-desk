@@ -233,7 +233,7 @@ export default function GangSheet() {
   const g = Math.max(0, +gap || 0), W = Math.min(DTF_DALLAS.width, Math.max(4, +sheetW || DTF_DALLAS.width));
   const L = Math.max(10, Math.min(DTF_DALLAS.maxFileLength, +maxLen || DTF_DALLAS.maxFileLength));
   const pieces: Piece[] = useMemo(() => logos.flatMap((lg) => lg.vers.map((v) => ({
-    key: v.id, logo: lg, ver: v, name: `${shortName(lg.name)}${v.label ? ` (${v.label})` : lg.vers.length > 1 ? ` ${v.wIn}"` : ""}`,
+    key: v.id, logo: lg, ver: v, name: `${shortName(lg.name)}${v.label ? ` (${v.label})` : lg.vers.length > 1 ? ` ${r2(v.wIn)}"` : ""}`,
     wIn: v.wIn, hIn: heightOf(lg, v), qty: v.qty,
   }))), [logos]);
   const lay = useMemo(() => (pieces.length ? layOut(pieces, W, g, plan) : null), [pieces, W, g, plan]);
@@ -295,6 +295,9 @@ export default function GangSheet() {
   };
   /** a size with no art: the width changed, the height keeps its shape */
   const setW = (lg: Logo, v: Ver, w: number) => patchVer(lg.id, v.id, lg.src ? { wIn: w } : { wIn: w, hIn: r2((w * heightOf(lg, v)) / Math.max(0.01, v.wIn)) });
+  /** art: the height typed, the width follows so the art keeps its shape (Oct 26, Nick: "fill in the width or the height…
+   * it keeps… the perspective") */
+  const setH = (lg: Logo, v: Ver, h: number) => { const cur = heightOf(lg, v); if (cur > 0) patchVer(lg.id, v.id, { wIn: Math.round(((h * v.wIn) / cur) * 1000) / 1000 }); };
   const toggleKnock = (lg: Logo, v: Ver, h: string) => patchVer(lg.id, v.id, { knock: v.knock.includes(h) ? v.knock.filter((x) => x !== h) : [...v.knock, h] });
 
   // "Optimize sheet": each piece turned or not and ways of ordering the rows; the cheapest wins, then the least film
@@ -677,9 +680,9 @@ export default function GangSheet() {
                     <tbody>{lg.vers.map((v) => (
                       <tr key={v.id}>
                         <td><span className="gang-wh">
-                          <input type="number" min="0.25" step="0.05" value={v.wIn} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
+                          <input type="number" min="0.25" step="0.05" value={r2(v.wIn)} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
                           <span className="faint">×</span>
-                          {lg.src ? <span className="gang-h num" title="Follows the art's shape">{heightOf(lg, v)}</span> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
+                          {lg.src ? <input type="number" min="0.25" step="0.05" value={heightOf(lg, v)} aria-label="Height in inches" title="Type either one: the other follows the art's shape" onChange={(e) => { const h = +e.target.value; if (h > 0) setH(lg, v, Math.max(0.25, h)); }} /> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
                         </span></td>
                         {lg.vers.length > 1 && <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>}
                         <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
