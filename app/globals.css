@@ -14458,3 +14458,35 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .md-task-a .md-more{opacity:0;padding:0 2px}
 .md-task-a:hover .md-more,.md-task-a .md-more[aria-expanded="true"],.md-task-a .md-more:focus-visible{opacity:1}
 .md-all{display:block;margin:6px 0 2px;font-size:12.5px}
+
+/* Favorites, graphic (Oct 26, Nick: "more graphic based… don't use such bold colors so it's calm and neutral"): two
+   cards a row, what's waiting as quiet counts, each job with a soft five-step track */
+.fv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.fv-g{margin:0;display:flex;flex-direction:column}
+.fv-g .fv-top{border-bottom:0;padding-bottom:8px}
+.fv-g .fv-av{color:var(--ink-2);background:var(--surface-2)}
+.fv-waits{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+.fv-wb{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line-2);border-radius:99px;padding:3px 10px;text-decoration:none;white-space:nowrap}
+.fv-wb:hover{border-color:var(--accent);color:var(--accent)}
+.fv-wb .fv-ic svg{width:13px;height:13px;transform:none;stroke:currentColor}
+.fv-gj{display:block;padding:9px 14px;border-top:1px solid var(--line-2);text-decoration:none;color:var(--ink)}
+.fv-gj:hover .fv-x{color:var(--accent)}
+.fv-gt{display:flex;align-items:baseline;gap:8px;font-size:14px;min-width:0}
+.fv-gt .ordno{font-weight:700;white-space:nowrap}
+.fv-gt .fv-d{margin-left:auto}
+.fv-tk{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:7px}
+.fv-tk i{height:5px;border-radius:3px;background:var(--line-2)}
+.fv-tk i.d{background:color-mix(in srgb,var(--fbs-blue) 35%,var(--surface))}
+.fv-tk i.c{background:color-mix(in srgb,var(--fbs-blue) 70%,var(--surface))}
+.fv-tl{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:3px;font-size:11px;color:var(--ink-3)}
+.fv-tl .c{color:var(--ink);font-weight:700}
+.fv-g .fv-foot{display:flex;justify-content:space-between;margin-top:auto;border-top:1px solid var(--line-2)}
+.fv-g .fv-q{font-size:13px;color:var(--ink-3)}
+.fv-g .fv-d.late{color:var(--danger);font-weight:700}
+/* the Email tiles and faces, calm like the rest of My Day (Oct 26, Nick: "calm and neutral") */
+.mds-tile{background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink)}
+.mds-tile svg{color:color-mix(in srgb,var(--tc) 75%,var(--ink-3))}
+.mds-tile.k-web{color:var(--ink)}
+.mds-tile span{color:var(--ink-3)}
+.mds-tile.zero{opacity:1}.mds-tile.zero b{color:var(--ink-3)}
+.mds-av,.mds-av.k-web{color:var(--ink-2);background:var(--surface-2)}

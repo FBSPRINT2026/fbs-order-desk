@@ -29,8 +29,6 @@ function stepOf(j: FavJob): number {
   if (/goods|blank|garment|receiv|order(ed)? |s&s|sanmar/.test(s)) return 2;
   return 1; // art, proofs, mockups, approved, waiting on details
 }
-/** one word for where a job is (Oct 26, Nick picked option A: one line per job) */
-const SHORT = ["Quote", "Art", "Goods", "Printing", "Ready"];
 const shortDue = (d: string, today: string) => { const x = d.slice(0, 10); const days = Math.round((Date.parse(x + "T12:00") - Date.parse(today + "T12:00")) / 864e5); return days >= 0 && days < 7 ? (days === 0 ? "Today" : new Date(x + "T12:00").toLocaleDateString([], { weekday: "short" })) : new Date(x + "T12:00").toLocaleDateString([], { month: "short", day: "numeric" }); };
 /** an email's summary without the customer's name in front ("Peticolas Brewing wants…" → "Wants…") */
 const trimWho = (t: string, who: string) => { const w = who.trim(); let x = t.trim(); if (w && x.toLowerCase().startsWith(w.toLowerCase())) x = x.slice(w.length).replace(/^[\s,:-]+/, ""); else x = x.replace(/^(the )?customer\s+(is\s+)?/i, ""); return x ? x[0].toUpperCase() + x.slice(1) : t; };
@@ -99,39 +97,38 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
         <div className="fv-none">Star a customer on the Customers page (☆ next to their name) and they show up here with their jobs, emails and texts.</div>
       ) : (
         <>
-          {busy.map(({ c, js, waiting, last, s }) => {
-            const jl = js.slice(0, 3), wl = waiting.slice(0, 2), moreJ = js.length - jl.length, moreW = waiting.length - wl.length;
+          <div className="fv-grid">{busy.map(({ c, js, waiting, last, s }) => {
+            const jl = js.slice(0, 3);
             const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+            const nOf = (k: Item["kind"]) => waiting.filter((w) => w.kind === k).length;
+            const msgHref = `/shop/customers/${c.id}?area=messages`;
             return (
-            <article key={c.id} className="fv-card fv-a">
+            <article key={c.id} className="fv-card fv-g">
               <header className="fv-top">
                 <span className="fv-av" aria-hidden>{initials(c.name)}</span>
                 <div className="fv-who"><Link href={`/shop/customers/${c.id}`} className="fv-n" data-notranslate>{c.name}</Link><span className="faint">{[c.contact, last ? when(last) : ""].filter(Boolean).join(" · ")}</span></div>
-                <span className="spacer" />
-                {waiting.length > 0 && <Link href={`/shop/customers/${c.id}?area=messages`} className="fv-wait">{waiting.length} waiting</Link>}
               </header>
+              {waiting.length > 0 && <div className="fv-waits">
+                {(["email", "text", "portal"] as const).filter((k) => nOf(k)).map((k) => (
+                  <Link key={k} href={k === "email" ? (waiting.find((w) => w.kind === "email")?.href || msgHref) : msgHref} className="fv-wb" title={waiting.filter((w) => w.kind === k).map((w) => w.text).slice(0, 3).join("\n")}>
+                    <span className="fv-ic" aria-hidden>{icon(k)}</span>{nOf(k)} {k === "email" ? (nOf(k) === 1 ? "email" : "emails") : k === "text" ? (nOf(k) === 1 ? "text" : "texts") : "portal"}
+                  </Link>
+                ))}
+              </div>}
               {jl.map((j) => { const st = stepOf(j); const late = !!j.due && j.due.slice(0, 10) < today; return (
-                <Link key={(j.printavo ? "p" : "o") + j.id} href={j.href} className="fv-row">
-                  <b className="ordno">#{j.number}</b><span className="fv-x" data-notranslate>{j.nickname || "Untitled job"}</span>
-                  <span className={"fv-pl s" + st} title={label(j)}>{SHORT[st]}</span>
-                  <span className={"fv-d" + (late ? " late" : "")}>{j.due ? shortDue(j.due, today) : ""}</span>
+                <Link key={(j.printavo ? "p" : "o") + j.id} href={j.href} className="fv-gj" title={label(j)}>
+                  <span className="fv-gt"><b className="ordno">#{j.number}</b><span className="fv-x" data-notranslate>{j.nickname || "Untitled job"}</span><span className={"fv-d" + (late ? " late" : "")}>{j.due ? shortDue(j.due, today) : ""}</span></span>
+                  <span className="fv-tk" aria-label={`${STEPS[st]}: ${label(j)}`}>{STEPS.map((x, i) => <i key={x} className={i < st ? "d" : i === st ? "c" : ""} />)}</span>
+                  <span className="fv-tl" aria-hidden>{STEPS.map((x, i) => <span key={x} className={i === st ? "c" : ""}>{x}</span>)}</span>
                 </Link>
               ); })}
-              {wl.map((x) => (
-                <Link key={x.k} href={x.href || "#"} className="fv-row">
-                  <span className="fv-ic" title={x.kind === "portal" ? "Portal message" : x.kind === "text" ? "Text" : "Email"}>{icon(x.kind)}</span>
-                  <span className="fv-x">{x.text}</span>
-                  <span className="fv-d">{when(x.at)}</span>
-                </Link>
-              ))}
-              {!jl.length && !wl.length && <div className="fv-row fv-q">Nothing open, nothing waiting.</div>}
+              {!jl.length && <div className="fv-gj fv-q">No open jobs.</div>}
               <footer className="fv-foot">
-                {[moreJ > 0 ? `+${moreJ} more job${moreJ === 1 ? "" : "s"}` : "", moreW > 0 ? `${moreW} more waiting` : ""].filter(Boolean).join(", ")}
-                {(moreJ > 0 || moreW > 0) && " · "}
-                <b>{money0(s?.sales || 0)}</b> this year
+                <span>{js.length ? `${js.length} open job${js.length === 1 ? "" : "s"}` : "No open jobs"}</span>
+                <span><b>{money0(s?.sales || 0)}</b> this year</span>
               </footer>
             </article>
-          ); })}
+          ); })}</div>
           {quiet.length > 0 && <>
             <div className="fv-ql">Quiet: no open jobs, nothing new</div>
             <div className="fv-quiet">{quiet.map(({ c, s }) => (
