@@ -264,6 +264,40 @@ export const DOC_CSS = `
 .pdoc .pf-cover .pf-sign{margin-top:28px}
 .pdoc .pf-cover .foot{padding-top:6px}
 @media screen and (max-width:840px){.pdoc{padding:0 8px 16px}.pdoc .print-bar{padding:10px 0}}
+/* work order (Oct 26, Nick): every page exactly letter size; on the first page the mockups fill whatever room is left */
+.pdoc .sheet.wo1{height:11in;min-height:0;overflow:hidden}
+.pdoc .wo1 h2{margin:10px 0 4px}
+.pdoc .wo-mks{flex:1 1 0;min-height:2.6in;display:grid;gap:10px;margin-top:10px}
+.pdoc .wo-mks.n2{grid-template-columns:1fr 1fr}
+.pdoc .wo-mks.n3,.pdoc .wo-mks.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.pdoc .wo-m{min-height:0;display:flex;flex-direction:column;align-items:center;background:#f4f5f7;border-radius:12px;padding:8px}
+.pdoc .wo-m img{flex:1 1 0;min-height:0;width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.pdoc .wo-m span{font-size:9pt;color:var(--ink3);margin-top:3px}
+.pdoc .wo-m.none{display:grid;place-items:center;font-size:12pt;color:#fff}
+.pdoc .wo-prints{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pdoc .wo-prints>.lbl{flex-basis:100%}
+.pdoc .wo-p{flex:1 1 3.2in;border:1.5px solid var(--ink);border-radius:8px;padding:5px 10px;display:flex;flex-wrap:wrap;gap:1px 10px;align-items:baseline;font-size:10pt;color:var(--ink2)}
+.pdoc .wo-p b{color:var(--ink)}
+.pdoc .wo-p b.disp{font-size:13pt}
+.pdoc .wo-p .inks .ink{display:inline-flex;align-items:center;gap:4px;margin-right:8px;color:var(--ink);font-weight:700}
+.pdoc .wo-p .warn{color:#B4432F;font-weight:700;font-size:9pt}
+.pdoc .wo-p .f{margin-left:auto;font-size:9pt;color:var(--ink3)}
+.pdoc .cnt.tight td{padding:4px 6px}
+.pdoc .cnt.tight td.sz b{font-size:16pt}
+.pdoc .cnt.tight td.tot b{font-size:18pt}
+.pdoc .cnt.tight tr.counted td.sz div{height:.27in}
+.pdoc .cnt.tight tr.counted td:first-child .by{margin-top:2px}
+.pdoc .notes.clip{max-height:1.05in;overflow:hidden}
+.pdoc .wo-big{flex:1 1 0;min-height:3in;display:flex;align-items:center;justify-content:center;background:#f4f5f7;border-radius:14px;padding:12px;margin-top:10px}
+.pdoc .wo-big img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.pdoc .wo-cubes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.pdoc .wo-cubes.n3{grid-template-columns:repeat(3,1fr)}
+.pdoc .wo-cube .a{height:2.5in;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:.2in}
+.pdoc .wo-cubes.n3 .wo-cube .a{height:2in}
+.pdoc .wo-cube .a img{max-width:100%;max-height:100%;object-fit:contain}
+.pdoc .wo-cube .a .none{color:#fff;font-size:11pt}
+.pdoc .wo-cube .s{font-size:10pt;margin-top:5px;color:var(--ink2)}
+.pdoc .wo-cube .s b{color:var(--ink)}
 @page{size:letter;margin:.4in .45in}
 @media print{
   html,body{background:#fff!important}
@@ -272,5 +306,6 @@ export const DOC_CSS = `
   .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page;zoom:1!important}
   .pdoc .sheet:last-child{break-after:auto}
   .pdoc .sheet.pf{height:10.1in;min-height:0}
+  .pdoc .sheet.wo1{height:10.1in;min-height:0}
 }
 `;

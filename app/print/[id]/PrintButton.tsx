@@ -54,7 +54,7 @@ function hiresArt(url: string, name: string, inkJson: string, shown: HTMLImageEl
 /** that part of the picture at its full resolution (vector art drawn again from its file), as PNG (art, which has
  *  see-through parts) or JPEG (photos and mockups) bytes */
 async function cropAtFullSize(src: string, shown: HTMLImageElement, r: NonNullable<ReturnType<typeof visibleRect>>): Promise<{ bytes: ArrayBuffer; png: boolean } | null> {
-  const art = !!shown.closest(".art, .pf-tile-art");
+  const art = !!shown.closest(".art, .pf-tile-art, .wo-cube");
   const hi = shown.dataset.hires ? await hiresArt(shown.dataset.hires, shown.dataset.hiresName || "", shown.dataset.inkmap || "", shown) : null;
   // a raster logo shown repainted in its inks: repainted again from the original at its full size
   let img: HTMLImageElement | null = hi;

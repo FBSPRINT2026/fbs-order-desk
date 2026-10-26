@@ -5,7 +5,7 @@ import { calcOrder, shopNotes, printHow, termsText, inkNames, isLightColor, isPm
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
-import { guessHex, spotFor } from "@/lib/mockup";
+import { guessHex } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
@@ -81,9 +81,35 @@ function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: s
 // ───────────────────────────── work order ─────────────────────────────
 export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string }) {
   const { o, cust, groups, c } = p;
-  const total = groups.reduce((a, g) => a + 1 + g.imprints.length, 0);
+  // each group's pages (Oct 26, Nick: "the mock-ups aren't nearly big enough, and the little print cubes are too big… the
+  // first page… small versions… then a larger mock-up and its printing underneath"; "make it fill the space… variable";
+  // "4 items… is probably the max… more than that, create a second page"):
+  //   1. the job: header, the mockups filling whatever room is left, the prints as a strip, up to 4 garments' counts, notes
+  //   2. more garments' counts (8 a page) when there are over 4
+  //   3. each mockup big, with its prints blown up under it (the full notes on the first when they're long)
+  //   4. each print's press sheet
+  const plans = groups.map((g, gi) => {
+    const lines = g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1);
+    const first = gi === 0;
+    const gc = c.groups[gi];
+    const noteParts = [
+      first && p.notes ? p.notes : "",
+      gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
+      neckLine(cust, g, gc?.finishing || []),
+      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method ? ` (${o.ship_method})` : ""}` : "",
+    ].filter(Boolean);
+    const extra = first ? p.shopNotes.length + (p.cust.brand_print?.rules || []).length : 0;
+    const noteText = noteParts.join("\n\n");
+    const longNotes = noteText.length + extra * 120 > 380 || noteText.split("\n").length + extra > 6;
+    const more: (typeof lines)[] = [];
+    for (let i = 4; i < lines.length; i += 8) more.push(lines.slice(i, i + 8));
+    const mk = (p.mockups[gi] || []).slice(0, 8);
+    const notesPage = longNotes && !mk.length;
+    return { lines, noteParts, longNotes, more, mk, notesPage, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + g.imprints.length };
+  });
+  const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
-  groups.reduce((a, g, i) => { starts[i] = a; return a + 1 + g.imprints.length; }, 1);
+  plans.reduce((a, x, i) => { starts[i] = a; return a + x.n; }, 1);
   const who = [cust.company, cust.name && cust.name !== cust.company ? cust.name : "", o.po_number ? `PO ${o.po_number}` : ""].filter(Boolean) as string[];
   const footL = `#${o.number} ${o.nickname}${cust.company || cust.name ? ` · ${cust.company || cust.name}` : ""}`;
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
@@ -93,24 +119,36 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     <>
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
+        const { lines, noteParts, longNotes, more, mk, notesPage } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
-        const lines = g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1);
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
-        const colors = [...new Set(lines.map((l) => l.color).filter(Boolean))].join(", ");
-        const mk = p.mockups[gi] || [];
+        const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
+        const colors = colorList.join(", ");
         const hex = p.hexes[gi] || "#9aa1ab";
         const first = gi === 0;
-        const noteParts = [
-          first && p.notes ? p.notes : "",
-          gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
-          neckLine(cust, g, gc?.finishing || []),
-          first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method ? ` (${o.ship_method})` : ""}` : "",
-        ].filter(Boolean);
+        // a mockup's garment color: one mockup per color, in the order of the lines
+        const mkColor = (i: number) => (mk.length === colorList.length ? colorList[i] : "");
+        const mkHex = (i: number) => (mkColor(i) && colorHex(mkColor(i))) || hex;
         const pg = starts[gi];
+        const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
+        const notesBlock = (
+          <>
+            {noteParts.join("\n\n")}
+            {first && (p.cust.brand_print?.rules || []).length > 0 && <div className="sn"><b>BRAND RULES: </b>{p.cust.brand_print!.rules!.join(" · ")}</div>}
+            {first && p.shopNotes.map((n, i) => <div className="sn" key={i}>{n.tag ? <b>{n.tag.toUpperCase()}: </b> : null}{n.body} <small>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })})</small></div>)}
+          </>
+        );
+        const top = (sub: string) => <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">{sub}</div></div>;
+        const countTable = (ls: typeof lines) => (
+          <table className={"cnt" + (ls.length > 2 ? " tight" : "")}>
+            <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz" style={{ width: ".85in" }}>Total</th></tr></thead>
+            <tbody>{ls.map((l) => <LineRows key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} />)}</tbody>
+          </table>
+        );
         return (
           <div key={g.id}>
-            {/* the job */}
-            <section className="sheet">
+            {/* 1. the job */}
+            <section className="sheet wo1">
               <div className="hd">
                 <div>
                   <div className="lbl">Work order · #{o.number}{groups.length > 1 ? ` · group ${gi + 1} of ${groups.length}` : ""}</div>
@@ -127,59 +165,100 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                 <div className="due"><div className="lbl">In hands</div><div className="d disp">{due || "NOT SET"}</div>{dueSub && <small>{dueSub}</small>}</div>
                 <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
               </div>
-              <div className="fade" style={{ margin: "12px 0 4px" }} />
-              {/* front and back (or sleeves): the mockup shows both views side by side, so it runs the full width and the
-                  prints sit in a row underneath (Oct 15, Nick: "what will the mockup look like with a two sided print") */}
-              <div className={"hero" + (new Set(g.imprints.map((d) => spotFor(d.location || "").view)).size > 1 ? " wide" : "") + (lines.length >= 3 ? " h3l" : lines.length === 2 ? " h2l" : "")}>
-                <div className="mk">
-                  {mk[0] ? <img className="big" src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>No mockup yet</div>}
-                  {mk.length > 1 && <div className="more">{mk.slice(1, 5).map((u, i) => <img key={i} src={u} alt="" />)}</div>}
-                  <span>Mockup{colors ? ` · ${colors}` : ""}</span>
-                </div>
-                <div className={"hp" + (g.imprints.length > 2 ? " many" : "")}>
-                  <div className="lbl">Prints</div>
-                  {g.imprints.length === 0 && <div className="pp"><div className="s">No prints on this group.</div></div>}
-                  {g.imprints.map((d, di) => {
-                    const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), sc = screensOf(d, allLight);
-                    return (
-                      <div className="pp" key={d.id}>
-                        <div className="t disp">{(d.location || "Print").toUpperCase()}</div>
-                        <div className="s">{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b></div>
-                        {!d.visualOnly && inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
-                        {!d.visualOnly && Object.entries(d.inkBy || {}).map(([k, m]) => { const ch = Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()); return ch.length ? <div key={k} className="s inks"><b>COLOR CHANGE on {k}:</b>{ch.map(([a, b]) => <span key={a} className="ink"><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> (not {a})</span>)}</div> : null; })}
-                        <div className="s">{d.visualOnly ? <b>Inks, size and placement: set on press (reorder)</b> : <>{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</>}</div>
-                        {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {d.printStyle === "fashion" ? <b>FASHION HIT: no underbase</b> : sc.under ? "underbase" : "no underbase"}</div>}
-                        {(d.printStyle === "fashion" || d.softHand) && <div className="s hitf">{d.printStyle === "fashion" && <span className="flag">FASHION HIT</span>}{d.softHand && <span className="flag">SOFT HAND</span>}</div>}
-                        {d.method === "embroidery" && d.stitches ? <div className="s">{d.stitches.toLocaleString()} stitches</div> : null}
-                        {d.visualOnly && <div className="warn">VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS</div>}
-                        {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}</div>}
-                        {!d.visualOnly && (d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING</div>}
-                        <div className="s f">Close-up on page {pg + 1 + di} ›</div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="fade" style={{ margin: "10px 0 0" }} />
+              {/* the mockups take whatever room the rest leaves (never under ~2.6"); up to 4 here, all of them big on their own pages */}
+              <div className={"wo-mks n" + Math.min(4, Math.max(1, mk.length))}>
+                {mk.length ? mk.slice(0, 4).map((u, i) => (
+                  <div className="wo-m" key={u}>
+                    <img src={u} alt="Mockup" />
+                    <span>{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>
+                  </div>
+                )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
               </div>
-              <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes</span></h2>
-              <table className="cnt">
-                <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz" style={{ width: ".85in" }}>Total</th></tr></thead>
-                <tbody>
-                  {lines.map((l) => (
-                    <LineRows key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} />
-                  ))}
-                </tbody>
-              </table>
-              <h2>Notes</h2>
-              <div className="notes">
-                {noteParts.join("\n\n")}
-                {first && (p.cust.brand_print?.rules || []).length > 0 && <div className="sn"><b>BRAND RULES: </b>{p.cust.brand_print!.rules!.join(" · ")}</div>}
-                {first && p.shopNotes.map((n, i) => <div className="sn" key={i}>{n.tag ? <b>{n.tag.toUpperCase()}: </b> : null}{n.body} <small>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })})</small></div>)}
+              <div className="wo-prints">
+                <div className="lbl">Prints</div>
+                {g.imprints.length === 0 && <div className="wo-p">No prints on this group.</div>}
+                {g.imprints.map((d, di) => {
+                  const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), sc = screensOf(d, allLight);
+                  const changes = Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([, b]) => `${k}: ${b}`));
+                  return (
+                    <div className="wo-p" key={d.id}>
+                      <b className="disp">{(d.location || "Print").toUpperCase()}</b>
+                      <span>{METHODS[d.method] || d.method} · {colorsLabel(d)}</span>
+                      {d.visualOnly ? <span><b>Run it like last time</b></span> : <>
+                        {inkNames(d.inks).length > 0 && <span className="inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</span>}
+                        {changes.length > 0 && <span><b>Color change</b> {changes.join(", ")}</span>}
+                        {sz.label && <span><b>{sz.label}</b></span>}
+                        <span>{dropLabel(d)}</span>
+                      </>}
+                      {sc && <span>{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "screens: see seps"} · {d.printStyle === "fashion" ? "fashion hit" : sc.under ? "UB" : "no UB"}</span>}
+                      {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
+                      {d.visualOnly && <span className="warn">VISUAL MOCKUP ONLY: CONFIRM THE SPECS</span>}
+                      {Object.keys(d.byColor?.skip || {}).length > 0 && <span className="warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}</span>}
+                      {!d.visualOnly && (d.confirm?.size || d.confirm?.ink) && <span className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")}</span>}
+                      <span className="f">p. {pgPrint + di}</span>
+                    </div>
+                  );
+                })}
               </div>
+              <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
+              {countTable(lines.slice(0, 4))}
+              {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
+                <h2>Notes {longNotes && <span>continued on page {mk.length ? pgMk : pgNotes}</span>}</h2>
+                <div className={"notes" + (longNotes ? " clip" : "")}>{notesBlock}</div>
+              </>}
               <div className="foot"><span>{footL}</span><span>Page {pg} of {total} · printed {p.printed}</span></div>
             </section>
-            {/* each print up close */}
+            {/* 2. more garments (8 a page) */}
+            {more.map((ls, mi) => (
+              <section className="sheet wo1" key={"more" + mi}>
+                {top(`Garments ${4 + mi * 8 + 1}–${4 + mi * 8 + ls.length} of ${lines.length}`)}
+                <h2>Garments <span>write the counts in the boxes</span></h2>
+                {countTable(ls)}
+                <div className="foot"><span>{footL}</span><span>Page {pgMore + mi} of {total}</span></div>
+              </section>
+            ))}
+            {/* 3. each mockup big, its prints blown up under it */}
+            {mk.map((u, i) => {
+              const col = mkColor(i), bg = mkHex(i);
+              const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0;
+              return (
+                <section className="sheet wo1" key={"mk" + i}>
+                  {top([col || colors, `${qty} pcs`, mk.length > 1 ? `mockup ${i + 1} of ${mk.length}` : ""].filter(Boolean).join(" · "))}
+                  <div className="wo-big"><img src={u} alt="Mockup" /></div>
+                  {g.imprints.length > 0 && (
+                    <div className={"wo-cubes n" + Math.min(3, g.imprints.length)}>
+                      {g.imprints.map((d, di) => {
+                        const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "", sz = printSize(d, des);
+                        const ch = col ? Object.entries(d.inkBy || {}).find(([k]) => k.trim().toLowerCase() === col.trim().toLowerCase())?.[1] : null;
+                        const chg = ch ? Object.entries(ch).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `${b} (not ${a})`) : [];
+                        return (
+                          <div className="wo-cube" key={d.id}>
+                            <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
+                              {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
+                            </div>
+                            <div className="s"><b className="disp">{(d.location || "Print").toUpperCase()}</b> {d.visualOnly ? "· run it like last time" : `· ${[sz.label, inkNames(d.inks).join(", ")].filter(Boolean).join(" · ")}`}{chg.length ? <><br /><b>Color change:</b> {chg.join(", ")}</> : null}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {i === 0 && longNotes && <><h2>Notes</h2><div className="notes">{notesBlock}</div></>}
+                  <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
+                </section>
+              );
+            })}
+            {notesPage && (
+              <section className="sheet wo1">
+                {top("Notes")}
+                <h2>Notes</h2>
+                <div className="notes">{notesBlock}</div>
+                <div className="foot"><span>{footL}</span><span>Page {pgNotes} of {total}</span></div>
+              </section>
+            )}
+            {/* 4. each print's press sheet */}
             {g.imprints.map((d, di) => (
-              <CloseUp key={d.id} d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={pg + 1 + di} total={total} footL={footL} />
+              <CloseUp key={d.id} d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={pgPrint + di} total={total} footL={footL} />
             ))}
           </div>
         );
