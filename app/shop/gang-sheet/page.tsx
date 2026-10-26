@@ -649,10 +649,15 @@ export default function GangSheet() {
                       {lg.src ? <b data-notranslate title={lg.name}>{shortName(lg.name)}</b> : <input type="text" value={lg.name} onChange={(e) => patchLogo(lg.id, { name: e.target.value })} aria-label="Name" />}
                       <span className="faint">{lg.src ? `${lg.colors.length} color${lg.colors.length === 1 ? "" : "s"}${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn))) < 200 ? ` · about ${Math.round(lg.srcW / Math.max(...lg.vers.map((v) => v.wIn)))} dpi at its biggest: may print soft` : ""}` : "a size with no art yet, to price it"}</span>
                     </div>
+                    {/* how many, right by the art (Oct 26, Nick: "the quantity… in line with the logo… a box that stands out more"); with
+                        several sizes each size keeps its own */}
+                    {lg.vers.length === 1 ? (
+                      <label className="gang-qbox"><span>Qty</span><input type="number" min="1" step="1" value={lg.vers[0].qty} aria-label="How many" onChange={(e) => patchVer(lg.id, lg.vers[0].id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></label>
+                    ) : <span className="gang-qtot num">{lg.vers.reduce((a, v) => a + v.qty, 0)} pcs</span>}
                     <button type="button" className="btn icon ghost" aria-label="Remove this art" title="Remove this art" onClick={() => { setLogos((xs) => xs.filter((x) => x.id !== lg.id)); setJobs((js) => js.map((j) => ({ ...j, logos: j.logos.filter((x) => x !== lg.id) }))); }}>×</button>
                   </div>
                   <table className="gang-vt">
-                    <thead><tr><th>Size (W × H in)</th><th>Qty</th><th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
+                    <thead><tr><th>Size (W × H in)</th>{lg.vers.length > 1 && <th>Qty</th>}<th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
                     <tbody>{lg.vers.map((v) => (
                       <tr key={v.id}>
                         <td><span className="gang-wh">
@@ -660,7 +665,7 @@ export default function GangSheet() {
                           <span className="faint">×</span>
                           {lg.src ? <span className="gang-h num" title="Follows the art's shape">{heightOf(lg, v)}</span> : <input type="number" min="0.25" step="0.05" value={v.hIn || 3} aria-label="Height in inches" onChange={(e) => patchVer(lg.id, v.id, { hIn: Math.max(0.25, +e.target.value || 0) })} />}
                         </span></td>
-                        <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>
+                        {lg.vers.length > 1 && <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>}
                         <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
                         <td>{lg.src && lg.colors.length > 0 && <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>}</td>
                         <td>{lg.vers.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button>}</td>
