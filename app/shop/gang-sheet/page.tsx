@@ -358,6 +358,19 @@ export default function GangSheet() {
     setSheets((data || []) as SheetRow[]);
   };
   useEffect(() => { void listSheets(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // delete takes two clicks (Oct 26, Nick: "make a delete button… you have to double click it"); the sheet is put away
+  // (archived), never erased, so its files and production notes stay
+  const [armed, setArmed] = useState("");
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(""), 4000); return () => clearTimeout(t); }, [armed]);
+  async function delSheet(id: string) {
+    if (armed !== id) { setArmed(id); return; }
+    setArmed("");
+    const { error } = await sb.from("gang_sheets").update({ archived_at: new Date().toISOString() }).eq("id", id);
+    if (error) { setErr(error.message); return; }
+    if (id === sheetId) await openSheet("");
+    setSheets((xs) => xs.filter((x) => x.id !== id));
+    void listSheets();
+  }
   async function openSheet(id: string) {
     loading.current = true;
     if (!id) { setCustFor(null); setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setJobs([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 50); return; }
@@ -612,10 +625,13 @@ export default function GangSheet() {
             <div className="panel-b gang-sheets">
               {!sheets.length && <p className="faint" style={{ fontSize: 12.5, margin: 0 }}>Your sheet saves as soon as you add art.</p>}
               {recent.map((x) => (
-                <button key={x.id} type="button" className={"gang-sr" + (x.id === sheetId ? " on" : "")} onClick={() => void openSheet(x.id)}>
-                  <span className="gang-sr-n" data-notranslate>{x.name}</span>
-                  <span className="gang-sr-m">{who(x.owner)}&apos;s · {pcsOf(x)} pcs{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</span>
-                </button>
+                <div key={x.id} className={"gang-sr-row" + (x.id === sheetId ? " on" : "")}>
+                  <button type="button" className={"gang-sr" + (x.id === sheetId ? " on" : "")} onClick={() => void openSheet(x.id)}>
+                    <span className="gang-sr-n" data-notranslate>{x.name}</span>
+                    <span className="gang-sr-m">{who(x.owner)}&apos;s · {pcsOf(x)} pcs{x.status === "ordered" ? ` · ordered${x.supplier_order ? ` #${x.supplier_order}` : ""}` : ""}</span>
+                  </button>
+                  <button type="button" className={"gang-del" + (armed === x.id ? " armed" : "")} aria-label={armed === x.id ? `Click again to delete ${x.name}` : `Delete ${x.name}`} title={armed === x.id ? "Click again to delete" : "Delete (click twice)"} onClick={() => void delSheet(x.id)}>{armed === x.id ? "Delete?" : "×"}</button>
+                </div>
               ))}
               {sheets.length > recent.length && (
                 <select className="gang-more" aria-label="More gang sheets" value="" onChange={(e) => void openSheet(e.target.value)}>

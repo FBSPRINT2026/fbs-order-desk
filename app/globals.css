@@ -14357,3 +14357,9 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gang-qbox span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
 .gang-qbox input{width:72px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:700 18px var(--body);color:var(--ink);text-align:center;padding:0 4px}
 .gang-qtot{flex:none;font-size:14px;font-weight:700;color:var(--accent);white-space:nowrap}
+/* saved gang sheets: a row with its delete (click twice) */
+.gang-sr-row{display:flex;align-items:center;gap:4px;min-width:0}
+.gang-sr-row .gang-sr{flex:1}
+.gang-del{flex:none;height:26px;min-width:26px;padding:0 6px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink-3);font:13px var(--body);cursor:pointer;white-space:nowrap;margin-left:4px}
+.gang-del:hover{border-color:var(--line);color:var(--danger)}
+.gang-del.armed{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700}

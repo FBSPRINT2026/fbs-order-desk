@@ -14,6 +14,15 @@ export default function CustomerGangSheets({ customerId }: { customerId: string 
   const sb = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [reorder, setReorder] = useState("");
+  // delete takes two clicks; the sheet is archived, never erased
+  const [armed, setArmed] = useState("");
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(""), 4000); return () => clearTimeout(t); }, [armed]);
+  const del = async (id: string) => {
+    if (armed !== id) { setArmed(id); return; }
+    setArmed("");
+    const { error } = await sb.from("gang_sheets").update({ archived_at: new Date().toISOString() }).eq("id", id);
+    if (!error) setRows((rs) => (rs || []).filter((r) => r.id !== id));
+  };
   useEffect(() => {
     void sb.from("gang_sheets").select("id, name, owner, status, updated_at, supplier_order, data").eq("customer_id", customerId).is("archived_at", null).order("updated_at", { ascending: false }).limit(30)
       .then(({ data }) => setRows((data || []) as Row[]));
@@ -34,7 +43,8 @@ export default function CustomerGangSheets({ customerId }: { customerId: string 
             <td>{who(r.owner)}</td>
             <td className="num">{new Date(r.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
             <td>{r.status === "ordered" ? `Ordered${r.supplier_order ? ` #${r.supplier_order}` : ""}` : "Open"}</td>
-            <td className="r">{(r.data?.logos || []).length > 0 && <button type="button" className="btn sm" onClick={() => setReorder(r.id)}>Reorder sheet</button>}</td>
+            <td className="r">{(r.data?.logos || []).length > 0 && <button type="button" className="btn sm" onClick={() => setReorder(r.id)}>Reorder sheet</button>}
+              <button type="button" className={"gang-del" + (armed === r.id ? " armed" : "")} aria-label={armed === r.id ? `Click again to delete ${r.name}` : `Delete ${r.name}`} title={armed === r.id ? "Click again to delete" : "Delete (click twice)"} onClick={() => void del(r.id)}>{armed === r.id ? "Delete?" : "×"}</button></td>
           </tr>
         ))}</tbody>
       </table></div>
