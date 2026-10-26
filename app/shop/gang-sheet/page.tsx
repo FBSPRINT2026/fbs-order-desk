@@ -40,7 +40,7 @@ type Logo = { id: string; name: string; /** the art (a data URL or a signed link
   /** older sheets: the job on the logo (now in jobs) */ job?: string };
 /** the job a sheet is for: its number, which art goes to it (all when none picked) and a note for its production notes */
 type Job = { id: string; job: string; logos: string[]; note: string };
-type SheetRow = { id: string; name: string; owner: string; status: string; updated_at: string; ordered_at: string | null; supplier_order: string | null; expected: string | null; data: SheetData };
+type SheetRow = { id: string; name: string; owner: string; status: string; customer_id?: string | null; updated_at: string; ordered_at: string | null; supplier_order: string | null; expected: string | null; data: SheetData };
 type SheetData = { logos?: Logo[]; jobs?: Job[]; gap?: string; sheetW?: string; maxLen?: string; plan?: Plan; files?: { path: string; name: string; length: number; at: string }[]; noted?: string[] };
 /** one version, ready to lay out */
 type Piece = { key: string; logo: Logo; ver: Ver; name: string; wIn: number; hIn: number; qty: number };
@@ -327,16 +327,19 @@ export default function GangSheet() {
   const [row, setRow] = useState<SheetRow | null>(null);
   const [sheets, setSheets] = useState<SheetRow[]>([]);
   const [saveState, setSaveState] = useState("");
+  // the customer it's for (Oct 26, Nick: "not only be for an invoice, it should also just be for a customer… see them by
+  // customer"): on their page under Artwork, staff only
+  const [custFor, setCustFor] = useState<{ id: string; label: string } | null>(null);
   const loading = useRef(false), saving = useRef<Promise<string> | null>(null);
   const listSheets = async () => {
-    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").is("archived_at", null).order("updated_at", { ascending: false }).limit(80);
+    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data, customer_id").is("archived_at", null).order("updated_at", { ascending: false }).limit(80);
     setSheets((data || []) as SheetRow[]);
   };
   useEffect(() => { void listSheets(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function openSheet(id: string) {
     loading.current = true;
-    if (!id) { setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setJobs([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 50); return; }
-    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data").eq("id", id).maybeSingle();
+    if (!id) { setCustFor(null); setRow(null); setSheetId(""); setSheetName(""); setLogos([]); setJobs([]); setArts({}); setOptimized(null); setDone(""); setErr(""); setTimeout(() => { loading.current = false; }, 50); return; }
+    const { data } = await sb.from("gang_sheets").select("id, name, owner, status, updated_at, ordered_at, supplier_order, expected, data, customer_id").eq("id", id).maybeSingle();
     if (!data) { setSheetId(""); loading.current = false; return; }
     const r = data as SheetRow, d = r.data || {};
     const lgs = d.logos || [];
@@ -349,6 +352,7 @@ export default function GangSheet() {
     const imgs: Record<string, HTMLImageElement> = {};
     await Promise.all(withSrc.filter((x) => x.src).map(async (x) => { try { imgs[x.id] = await loadImg(x.src); } catch { /* art gone */ } }));
     setRow(r); setSheetId(r.id); setSheetName(r.name);
+    if (r.customer_id) { const { data: c } = await sb.from("customers").select("id, company, name").eq("id", r.customer_id).maybeSingle(); setCustFor(c ? { id: c.id as string, label: String(c.company || c.name || "Customer") } : null); } else setCustFor(null);
     setArts(imgs); setLogos(withSrc); setJobs(d.jobs || oldJobs);
     if (d.gap) setGap(d.gap); if (d.sheetW) setSheetW(d.sheetW); if (d.maxLen) setMaxLen(d.maxLen); if (d.plan) setPlan(d.plan);
     setOptimized(null); setShown(0); setDone(""); setErr("");
@@ -382,7 +386,7 @@ export default function GangSheet() {
       if (stored.some((x, i) => x.path !== logos[i].path)) setLogos((xs) => xs.map((x) => { const s2 = stored.find((y) => y.id === x.id); return s2?.path && !x.path ? { ...x, path: s2.path } : x; }));
       const data: SheetData = { ...(row?.data || {}), logos: stored.map(({ src, job: _j, ...x }) => (x.path ? x : { ...x, src })), jobs, gap, sheetW, maxLen, plan, ...extra };
       const nm = sheetName.trim() || name0;
-      const { error } = await sb.from("gang_sheets").update({ name: nm, data, updated_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await sb.from("gang_sheets").update({ name: nm, data, customer_id: custFor?.id || null, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) { setSaveState("Not saved"); throw new Error(error.message); }
       setRow((r) => (r && r.id === id ? { ...r, data, name: nm } : { id, name: nm, owner: me, status: "open", updated_at: new Date().toISOString(), ordered_at: null, supplier_order: null, expected: null, data }));
       setSaveState("Saved");
@@ -396,7 +400,7 @@ export default function GangSheet() {
     if (loading.current || (!logos.length && !sheetId)) return;
     const t = setTimeout(() => { void save().catch((e) => setErr(e instanceof Error ? e.message : "Couldn't save the sheet.")); }, 1200);
     return () => clearTimeout(t);
-  }, [logos, jobs, gap, sheetW, maxLen, plan, sheetName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [logos, jobs, gap, sheetW, maxLen, plan, sheetName, custFor?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   async function markOrdered() {
     const id = await save();
     await sb.from("gang_sheets").update({ status: "ordered", ordered_at: new Date().toISOString(), ordered_by: me }).eq("id", id);
@@ -436,6 +440,9 @@ export default function GangSheet() {
       const got: Record<string, { id: string; label: string } | null> = {};
       for (const j of want) { const o = (data || []).find((x) => String(x.number) === j); got[j] = o ? { id: o.id as string, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}` } : null; }
       setOrderOf((m) => ({ ...m, ...got }));
+      // the job's customer is the sheet's, when none is set yet
+      const cid = (data || []).find((x) => x.customer_id)?.customer_id as string | undefined;
+      if (cid && !custFor) { const { data: c } = await sb.from("customers").select("id, company, name").eq("id", cid).maybeSingle(); if (c) setCustFor({ id: c.id as string, label: String(c.company || c.name || "Customer") }); }
     })();
   }, [jobs]); // eslint-disable-line react-hooks/exhaustive-deps
   const patchJob = (id: string, p: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...p } : j)));
@@ -669,8 +676,10 @@ export default function GangSheet() {
           </section>
           {/* 3. the order it's for */}
           <section className="panel">
-            <div className="panel-h"><h2>Order</h2><span className="faint">the job this is for: the sheet goes in its production files</span></div>
+            <div className="panel-h"><h2>Order</h2><span className="faint">who and which job it&apos;s for</span></div>
             <div className="panel-b stack" style={{ gap: 10 }}>
+              <div className="field"><label>Customer</label><CustomerPick value={custFor?.id || null} label={custFor?.label} field ariaLabel="The customer this sheet is for" onPick={(cid, label) => setCustFor(cid ? { id: cid, label } : null)} />
+                <span className="faint" style={{ fontSize: 12 }}>{custFor ? `On ${custFor.label}'s page under Artwork (staff only).` : "Saved under the customer's Artwork (staff only)."}</span></div>
               {jobs.map((j) => {
                 const o = orderOf[j.job];
                 return (

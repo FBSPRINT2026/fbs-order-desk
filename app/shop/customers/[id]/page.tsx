@@ -14,6 +14,7 @@ import { pvCountsAsSale, orderCountsAsSale } from "@/lib/sales";
 import { useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf } from "@/components/bits";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } from "@/components/AccountAreas";
+import CustomerGangSheets from "@/components/CustomerGangSheets";
 import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
@@ -293,7 +294,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           </aside>
         </div>
       )}
-      <AccountAreas mode="shop" brandPortal={c?.brand_portal !== false} onBrandPortal={(v) => set("brand_portal", v)} brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
+      <AccountAreas mode="shop" gangPanel={<CustomerGangSheets customerId={id} />} brandPortal={c?.brand_portal !== false} onBrandPortal={(v) => set("brand_portal", v)} brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} /> : undefined}

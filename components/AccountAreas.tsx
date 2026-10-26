@@ -76,8 +76,10 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
+  /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
+  gangPanel?: ReactNode;
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
   /** staff: the brand standards editor (components/CustomerBrandColors.tsx), shown in place of the read-only list */
@@ -970,6 +972,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
       </div>
       {/* a small text button under the mockups, on the right (Oct 24, Nick: "at the bottom right-hand corner under mockups") */}
       <div className="aa-arch-foot"><button type="button" className="linkbtn aa-arch-link" onClick={() => { setShowArch(!showArch); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{showArch ? "Hide archive" : "Show archive"}</button></div>
+      {mode === "shop" && gangPanel}
       {mode === "shop" && productionPanel}
       </div>
       <aside className="aa-attn aa-favs">
