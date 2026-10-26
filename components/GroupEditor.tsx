@@ -436,6 +436,8 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
   // a print's inks as chips, with its PMS matches and their charge on the same line (Oct 21, Nick: "the colors just seem
   // to run on and on… the inks can go up underneath the imprints, just like we charge for screens")
   const inkCtl = (d: Group["imprints"][number], chips = true) => {
+    // heat press: no inks, just "DTF transfer" (Oct 26, Nick: "it shouldn't say inks anymore. It should just say transfer")
+    if (d.method === "dtf") return <div key={"ink" + d.id} className="pr-scr pr-inkl"><span className="pr-scr-l">Transfer</span><span className="pr-scr-v">DTF transfer</span></div>;
     const di = g.imprints.indexOf(d), inks = pmsInks(d), isScr = scrImps.includes(d);
     const pms = isScr ? inks.filter((x) => x.auto) : [];
     const typed = isScr && !inks.length && !!wpl.pmsFee;
