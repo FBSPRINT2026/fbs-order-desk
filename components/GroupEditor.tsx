@@ -416,6 +416,8 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
     return (
       <ScreensLine key={d.id} summary={<>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}
+        {/* the color change's charge, seen where it's charged (Oct 26, Nick: "put color change 1 at 10") */}
+        {(+(d.inkChanges || 0)) > 0 && <span className="pr-scr-cc">Color change {d.inkChanges}{!hidePrices && <> · <b className="num">{money((+(d.inkChanges || 0)) * (+(wpl.inkChangeFee || 0)))}</b></>}</span>}
         {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
         <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same as with an underbase (two rounds on press)."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })} />Fashion hit</label>
@@ -443,12 +445,16 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     const firstOn = (name: string) => g.imprints.slice(0, di).find((o) => pmsInks(o).some((x) => x.charge && pmsKey(x.name) === pmsKey(name)))?.location;
     // color changes (Imprint.inkBy, set in the Mockup Creator): "Color change on F260 Mauve: Burgundy"
     const ck = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const cc = Object.entries(d.inkBy || {}).flatMap(([k, m]) => { const ch = Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()); const l = g.lines.find((x) => ck(x.color) === k); return ch.length ? [`${l ? [l.style, l.color].filter(Boolean).join(" ") : k}: ${ch.map(([, b]) => b).join(", ")}`] : []; });
-    const ccNote = cc.length ? <span className="pr-scr-tag" title="A color change: this print in another ink on that garment color (an ink change per screen)">Color change on {cc.join("; ")}</span> : null;
+    // shown on the ink itself (Oct 26, Nick): "White · change to Maroon · on Mauve", only on the inks that change
+    const changes: Record<string, { to: string; on: string }[]> = {};
+    for (const [k, m] of Object.entries(d.inkBy || {})) {
+      const l = g.lines.find((x) => ck(x.color) === ck(k));
+      for (const [a, b] of Object.entries(m || {})) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) (changes[a.trim().toLowerCase()] ||= []).push({ to: b.trim(), on: l?.color || k });
+    }
     const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
     return (
-      <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
-        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}{ccNote}</span> : ccNote ? <span className="pr-pms">{ccNote}</span> : null}
+      <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
+        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
           : pms.map((x) => <label key={x.name} className="check" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />{x.name}: standard, no charge</label>)}
@@ -1130,13 +1136,21 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 const printNotes = (s: string | null | undefined) => cleanPrintNotes(shopNotes(s));
 
 /** A print's inks: a swatch chip each (PMS matches marked), then the PMS charge; the pencil opens "standard, no charge". */
-function InkLine({ inks, charged, summary, editable, children, thread }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode; /** an embroidered print: its threads (Madeira, Isacord) */ thread?: boolean }) {
+function InkLine({ inks, charged, summary, editable, children, thread, changes }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode; /** an embroidered print: its threads (Madeira, Isacord) */ thread?: boolean;
+  /** color changes by ink (lower case): what it changes to and on which garment color */ changes?: Record<string, { to: string; on: string }[]> }) {
   const [edit, setEdit] = useState(false);
+  const chip = (name: string, cls = "") => { const t = thread ? threadByName(name) : null; return <span key={name + cls} className={"ink-chip" + cls + (charged(name) ? " pms" : "")} title={charged(name) ? "PMS match: charged" : t?.pms.length ? `PMS ${t.pms[0]}` : undefined}><i style={{ background: t?.hex || colorHex(name) || "#d6d6d6" }} />{name}</span>; };
+  const anyChange = !!changes && Object.keys(changes).length > 0;
   return (
     <div className="pr-scr pr-inkl">
       <span className="pr-scr-l">{thread ? "Threads" : "Inks"}</span>
       <span className="pr-scr-v">
-        {inks.length > 0 && <span className="ink-chips">{inks.map((k) => { const t = thread ? threadByName(k.name) : null; return <span key={k.name} className={"ink-chip" + (charged(k.name) ? " pms" : "")} title={charged(k.name) ? "PMS match: charged" : t?.pms.length ? `PMS ${t.pms[0]}` : undefined}><i style={{ background: t?.hex || colorHex(k.name) || "#d6d6d6" }} />{k.name}</span>; })}</span>}
+        {inks.length > 0 && !anyChange && <span className="ink-chips">{inks.map((k) => chip(k.name))}</span>}
+        {/* a color change: each ink on its own line, the ones that change followed by what they change to (Oct 26, Nick) */}
+        {inks.length > 0 && anyChange && <span className="ink-lines">{inks.map((k) => {
+          const ch = changes![k.name.trim().toLowerCase()] || [];
+          return <span key={k.name} className="ink-ln">{chip(k.name)}{ch.length > 0 && <><span className="ink-to">change to</span>{ch.map((c) => <span key={c.on} className="ink-tw">{chip(c.to, " chg")}<span className="ink-on">on {c.on}</span></span>)}</>}</span>;
+        })}</span>}
         {summary}
       </span>
       {editable && <button type="button" className={"pr-scr-ed" + (edit ? " on" : "")} aria-label={edit ? "Done with the PMS charges" : "Change the PMS charges"} title={edit ? "Done" : "PMS charges"} onClick={() => setEdit(!edit)}>

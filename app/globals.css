@@ -14135,3 +14135,10 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 /* the scale control: − and + only; the ↺ keeps its spot on the left even when hidden (Oct 26, Nick) */
 .mk-pill.mk-zoom .mk-zoom-r{color:var(--accent)}
 .mk-pill.mk-zoom .mk-zoom-r.off{visibility:hidden}
+/* a print's inks with a color change: one ink a line, "change to" the new ink's swatch, "on" the garment color (Oct 26, Nick) */
+.ink-lines{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.ink-ln{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px}
+.ink-to{font-size:11.5px;font-weight:600;color:var(--fbs-salmon)}
+.ink-tw{display:inline-flex;align-items:center;gap:5px}
+.ink-on{font-size:11.5px;color:var(--ink-3)}
+.pr-scr-cc{margin-left:10px;white-space:nowrap}
