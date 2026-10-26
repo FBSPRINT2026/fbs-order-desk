@@ -12,7 +12,7 @@ export type SiteEmail = { fromName?: string; fromAddress?: string; replyTo?: str
 
 let cache: { at: number; v: SiteEmail } | null = null;
 export async function siteEmail(): Promise<SiteEmail> {
-  if (cache && Date.now() - cache.at < 60_000) return cache.v;
+  if (cache && Date.now() - cache.at < 15_000) return cache.v;
   try {
     const { data } = await createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle();
     const v = ((data?.data as { siteEmail?: SiteEmail } | null)?.siteEmail || {}) as SiteEmail;

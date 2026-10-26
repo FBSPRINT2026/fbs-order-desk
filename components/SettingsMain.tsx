@@ -40,7 +40,11 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
   async function save() {
     if (!s) return;
     setState("Saving…");
-    const { error } = await createClient().from("settings").upsert({ id: 1, data: s, updated_at: new Date().toISOString() });
+    const sb = createClient();
+    // the site email is saved on its own page (Connections → Site email): keep it as it is now, not as it was when this page opened
+    const { data: fresh } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
+    const keep = (fresh?.data as { siteEmail?: unknown } | null)?.siteEmail;
+    const { error } = await sb.from("settings").upsert({ id: 1, data: keep ? { ...s, siteEmail: keep } : s, updated_at: new Date().toISOString() });
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   async function addStaff() {
