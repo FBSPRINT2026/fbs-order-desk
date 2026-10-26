@@ -1,12 +1,15 @@
 import { EMAIL_FROM, SITE_URL } from "@/lib/config";
 import "server-only";
+import { siteEmail, siteFrom } from "@/lib/siteEmail";
 
 /**
  * Sends an email through Brevo (BREVO_API_KEY) or Resend (RESEND_API_KEY), whichever is set.
  * Returns false when email is off or the send fails.
  */
 export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string }) {
-  const from = EMAIL_FROM || "";
+  // the site's own address from Settings → Connections → Site email when it's set (Oct 26), else EMAIL_FROM
+  const from = (await siteFrom()) || EMAIL_FROM || "";
+  if (!opts.replyTo) { const r = (await siteEmail()).replyTo; if (r && /@/.test(r)) opts = { ...opts, replyTo: r.trim() }; }
   if (!opts.to || !from) return false;
   try {
     if (process.env.BREVO_API_KEY) {
