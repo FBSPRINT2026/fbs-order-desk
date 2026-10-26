@@ -478,7 +478,7 @@ export default function GangSheet() {
     else if (q || sheetId) void openSheet(q || sheetId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /**
-   * Order DTF transfers (Oct 26, Nick: "you've made an order, it's going to be heat [press]… we need 10 of these and 12
+   * Create DTF gang sheet, on an order's Ask AI (Oct 26, Nick: "you've made an order, it's going to be heat [press]… we need 10 of these and 12
    * of these shirts, and then you click it, brings in the art for both, drops them in here, knows whether the background
    * is removed… orders the exact same quantities"). Every heat press print on the order: its art as the Mockup Creator
    * showed it (background off), at its size, as many as the garments in its group; the same art at the same size adds
@@ -490,6 +490,9 @@ export default function GangSheet() {
     try {
       const { data: o } = await sb.from("orders").select("id, number, customer_id, groups, lines").eq("id", orderId).maybeSingle();
       if (!o) throw new Error("That order wasn't found.");
+      // the order already has a sheet: open it instead of making another
+      const { data: had } = await sb.from("gang_sheets").select("id").is("archived_at", null).contains("data", { jobs: [{ job: String(o.number) }] }).order("updated_at", { ascending: false }).limit(1);
+      if (had?.[0]) { setBusy(""); await openSheet(had[0].id as string); setDone(`Order #${o.number}'s gang sheet. Add to it here, or make another from the Gang sheets page.`); window.history.replaceState(null, "", `/shop/gang-sheet/builder?sheet=${had[0].id}`); return; }
       const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
       type Want = { src: string; name: string; size: string; qty: number; where: string };
       const want: Want[] = [];
