@@ -12,7 +12,7 @@ import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import { rememberOrderNote } from "@/app/shop/ai-actions";
-import { cleanPrintNotes, LOCATIONS, inkNames } from "@/lib/pricing";
+import { cleanPrintNotes, LOCATIONS, inkNames, locationsFor } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { newImprint, uid } from "@/lib/pricing";
 import { makePreview } from "@/lib/artPrep";
@@ -48,12 +48,12 @@ import { colorHex } from "@/lib/inkColors";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string; company?: string | null; name?: string | null } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string; /** art the Helper pulled off a mockup: its size and drop */ pc?: ArtPiece; from?: string; how?: Pulled["kind"]; /** what our mockup sheet says about this print (size, inks) */ sheet?: SheetSpec } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { /** the spots these garments print on: a hat's own spots (Oct 26, Nick) */ spots?: string[]; job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; /** every garment line, for "which items get this art" */ lines: { id: string; gi: number; label: string }[]; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; /** prints already covered by the art they sent: only the old job's other files are asked about */ settled?: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
 type HelpAns = { /** art for a spot the old job didn't print (Oct 24, Nick: "tell me what it is: full front, full back, left chest"): a new print on every group */ adds?: { location: string; pick: HelpPick }[]; picks: Record<string, HelpPick>; /** art for only some of a group's lines: those lines become a group of their own with this art */ splits?: { pk: string; lineIds: string[]; pick: HelpPick }[]; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ know?: Record<string, { colors: number; ub: boolean } | null>; /** visual: a mockup only, the details wait for production on the print run; details: the mockup with our details */ mode?: "visual" | "details"; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
-type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
+type Confirm = { /** the spots these garments print on (hats: Full Front, sides, Back) */ spots?: string[]; job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 /** a reorder email that came with art: theirs, or the old job's (Oct 22, Nick: "he actually attached all the art. We
  *  could have just used it, but you ignored it because you treated it as a reorder") */
@@ -267,7 +267,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const unsure = d.groups.flatMap((x, gi) => x.imprints.map((im, ii) => ({ gi, ii, im }))).filter(({ im }) => im.design_id && /Art: the original from|Art and size from the film/.test(im.notes || ""));
     if (unsure.length && !pvAll) {
       note("Found the art, but not on a mockup: checking with you where it goes");
-      const ans = await waitFor<ConfirmAns>((resolve) => setConfirm({ job: jobLabel || "the old job", items: unsure.map(({ gi, ii, im }) => ({ gi, ii, design: im.design_id!, location: im.location, size: (im.size || "").replace(/"\s*wide/, ""), colors: im.colors || 1 })), resolve }));
+      const ans = await waitFor<ConfirmAns>((resolve) => setConfirm({ spots: locationsFor(d!.groups.flatMap((x) => x.lines)), job: jobLabel || "the old job", items: unsure.map(({ gi, ii, im }) => ({ gi, ii, design: im.design_id!, location: im.location, size: (im.size || "").replace(/"\s*wide/, ""), colors: im.colors || 1 })), resolve }));
       setConfirm(null);
       for (const a of ans) {
         d = { ...d, groups: d.groups.map((x, xi) => (xi !== a.gi ? x : { ...x, imprints: x.imprints.map((y, yi) => {
@@ -297,7 +297,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (pvAll) step(`${of}Asking you about the files on ${jobLabel || "the old job"}…`);
       note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
       const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), method: im.method, dark: grp.lines.some((l) => l.color && !LIGHTISH.test(l.color)), ...(im.design_id ? { design: im.design_id } : {}) }));
-      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, ...(othersOnly ? { settled: sentArt.map((z) => `${z.x.name ? `${z.x.name} · ` : ""}${z.im.location}`) } : {}), lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
+      const ans = await waitFor<HelpAns>((resolve) => setHelp({ spots: locationsFor(d!.groups.flatMap((x) => x.lines)), customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, ...(othersOnly ? { settled: sentArt.map((z) => `${z.x.name ? `${z.x.name} · ` : ""}${z.im.location}`) } : {}), lines: d!.groups.flatMap((x, gi) => x.lines.map((l) => ({ id: l.id, gi, label: [l.style, l.color].filter(Boolean).join(" ") || "Garment" }))), resolve }));
       setHelp(null);
       const made = new Map<File, string>();
       // a file that's a mockup (the art on a shirt, a person, our old mockup or theirs): the Helper pulls the art off it,
@@ -1385,7 +1385,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           {!it.only && locs.map((l) => { const n = help.prints.filter((p) => p.location === l && !p.design).length; return <button key={l} type="button" role="radio" aria-checked={v === `loc:${l}`} className={"chip" + (v === `loc:${l}` ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, `loc:${l}`)}>{n > 1 ? `${l}, all styles` : `${l} art`}</button>; })}
           {help.prints.filter((p) => (it.only ? p.key === it.only : perStyle && help.prints.filter((q) => q.location === p.location && !q.design).length > 1)).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `Only ${p.label}`}</button>)}
           {!it.only && (() => {
-            const other = LOCATIONS.filter((l) => !locs.includes(l) && !help.prints.some((p) => p.location === l));
+            const other = (help.spots || LOCATIONS).filter((l) => !locs.includes(l) && !help.prints.some((p) => p.location === l));
             const nv = v.startsWith("new:") ? v.slice(4) : "";
             return <select className={"chip arc-spot" + (nv ? " on" : "")} aria-label="Art for another spot" value={nv} disabled={!it.ready} onChange={(e) => { if (e.target.value) answer(it.key, `new:${e.target.value}`); else if (nv) answer(it.key, v); }}>
               <option value="">{nv ? "" : "Art for another spot…"}</option>
@@ -1500,7 +1500,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
                   <div className="arc-det-h">
                     <b>{pl.location || p.location}</b>
                     {moving
-                      ? <select autoFocus value={pl.location || p.location} onChange={(e) => { setPl({ location: e.target.value }); setSpotOpen(""); }} onBlur={() => setSpotOpen("")} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+                      ? <select autoFocus value={pl.location || p.location} onChange={(e) => { setPl({ location: e.target.value }); setSpotOpen(""); }} onBlur={() => setSpotOpen("")} aria-label="Where it prints">{(help.spots || LOCATIONS).map((l) => <option key={l} value={l}>{l}</option>)}</select>
                       : <button type="button" className="ap-link arc-spot" onClick={() => setSpotOpen(p.location)}>Change spot</button>}
                   </div>
                   {asks && (
@@ -1913,7 +1913,8 @@ function ArtConfirm({ c, onCancel }: { c: Confirm; onCancel: () => void }) {
     return () => { live = false; };
   }, [c]);
   // the usual spots first, then the rest
-  const COMMON = ["Full Front", "Full Back", "Left Chest", "Center Chest", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve"].filter((l) => LOCATIONS.includes(l));
+  const spots = c.spots || LOCATIONS;
+  const COMMON = spots === LOCATIONS ? ["Full Front", "Full Back", "Left Chest", "Center Chest", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve"].filter((l) => LOCATIONS.includes(l)) : spots;
   const set = (k: number, patch: Partial<ConfirmItem>) => setRows((x) => x.map((y, yi) => (yi === k ? { ...y, ...patch } : y)));
   return (
     <div className="ap" role="group" aria-label="What is this art">
@@ -1927,7 +1928,7 @@ function ArtConfirm({ c, onCancel }: { c: Confirm; onCancel: () => void }) {
               {[...COMMON, ...(COMMON.includes(r.location) ? [] : [r.location])].map((l) => <button key={l} type="button" role="radio" aria-checked={r.location === l} className={"chip" + (r.location === l ? " on" : "")} onClick={() => set(k, { location: l })}>{l}</button>)}
               <select className="ap-other" value="" aria-label="Another location" onChange={(e) => e.target.value && set(k, { location: e.target.value })}>
                 <option value="">Other…</option>
-                {LOCATIONS.filter((l) => !COMMON.includes(l)).map((l) => <option key={l} value={l}>{l}</option>)}
+                {spots.filter((l) => !COMMON.includes(l)).map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
               <button type="button" role="radio" aria-checked={r.location === "none"} className={"chip" + (r.location === "none" ? " on" : "")} onClick={() => set(k, { location: "none" })}>Not the art</button>
             </div>
