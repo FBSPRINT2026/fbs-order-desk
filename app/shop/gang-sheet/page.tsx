@@ -187,11 +187,11 @@ async function makePdf(pieces: Piece[], arts: Record<string, HTMLImageElement>, 
   for (const i of new Set(p.rects.map((r) => r.piece))) {
     const pc = pieces[i];
     // the version at 300 dpi of its print size, its knocked-out colors taken out
-    const img = arts[pc.logo.id], b = boxFor(pc.ver), ow = Math.max(1, Math.round(pc.wIn * DPI)), oh = Math.max(1, Math.round(pc.hIn * DPI));
-    const fw = Math.max(1, Math.round(ow / Math.max(0.01, b[2] - b[0]))), fh = Math.max(1, Math.round(oh / Math.max(0.01, b[3] - b[1])));
+    const img = arts[pc.logo.id], bx = boxFor(pc.ver), ow = Math.max(1, Math.round(pc.wIn * DPI)), oh = Math.max(1, Math.round(pc.hIn * DPI));
+    const fw = Math.max(1, Math.round(ow / Math.max(0.01, bx[2] - bx[0]))), fh = Math.max(1, Math.round(oh / Math.max(0.01, bx[3] - bx[1])));
     const full = knocked(img, pc.ver.knock, fw, fh);
     const c = document.createElement("canvas"); c.width = ow; c.height = oh;
-    c.getContext("2d")!.drawImage(full, Math.round(b[0] * fw), Math.round(b[1] * fh), ow, oh, 0, 0, ow, oh);
+    c.getContext("2d")!.drawImage(full, Math.round(bx[0] * fw), Math.round(bx[1] * fh), ow, oh, 0, 0, ow, oh);
     const b = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
     if (!b) throw new Error("A logo couldn't be prepared.");
     emb.set(i, await doc.embedPng(new Uint8Array(await b.arrayBuffer())));
