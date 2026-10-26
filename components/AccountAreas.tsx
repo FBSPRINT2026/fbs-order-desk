@@ -1,4 +1,5 @@
 "use client";
+import PrintavoMark from "@/components/PrintavoMark";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -282,7 +283,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
-                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span>{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
+                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span>{o.archived && <PrintavoMark />}</div><div className="aa-s">{o.qty} pcs</div></td>
                 <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
@@ -305,7 +306,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
               <li key={o.id} className={"aa-oc" + (owes && payDue(o) && (payDue(o) as string) < today() ? " late" : "")} onClick={() => router.push(orderHref(o.id))}>
                 <div className="aa-oc-top">
                   <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => e.stopPropagation()}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
-                  {o.archived ? <span className="aa-arch">Archived</span> : mode === "portal" && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}
+                  {o.archived ? <PrintavoMark /> : mode === "portal" && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}
                 </div>
                 <div className="aa-oc-sub">#{o.number}{o.qty ? ` · ${o.qty.toLocaleString("en-US")} pcs` : ""}{dt ? ` · ${cols === "quote" ? "Created" : "In hands"} ${dt}` : ""}</div>
                 <div className="aa-oc-bot">
@@ -495,7 +496,7 @@ export default function AccountAreas({ brandPortal = true, onBrandPortal, brandC
               {P.items.map((o) => (
                 <tr key={o.id} tabIndex={0} onClick={() => router.push(orderHref(o.id))} onKeyDown={(e) => e.key === "Enter" && router.push(orderHref(o.id))}>
                   <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span></td>
-                  <td><div>{o.nickname || "Untitled Job"}{o.archived && <span className="aa-arch">Printavo</span>}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
+                  <td><div>{o.nickname || "Untitled Job"}{o.archived && <PrintavoMark />}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
                   <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
                   <td>{when(dayOf(o)) || "—"}</td>
                   <td>{when(o.due_date) || <span className="faint">No date</span>}</td>

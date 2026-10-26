@@ -14122,3 +14122,6 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
   .side .side-drawer .prod-side button{font-size:12px;padding:6px 8px;border-radius:6px}
   .side .side-drawer .prod-side button.on{background:rgba(255,255,255,.08)}
 }
+/* the Printavo "P" in place of "Archived" on order lists (Oct 26, Nick) */
+.pv-mark{margin-left:8px;flex:0 0 auto}
+.aa-oc-top .pv-mark{margin-left:0}
