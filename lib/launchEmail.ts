@@ -57,6 +57,7 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>${tile("orders.png", "Track every job", "Every job, from proof to pickup.")}${tile("artwork.png", "Approve your art", "See the proof, approve it in a tap.")}</tr>
       <tr>${tile("reorder.png", "Reorder in a click", "Same art, same specs, saved.")}${tile("payments.png", "Pay online", "Card or bank, any time. Statements too.")}</tr>
+      <tr>${tile("devices.png", "Phone or computer: FBS On the go", "Mobile and full browser versions.")}${tile("messages.png", "Message us", "Talk to us right on the order.")}</tr>
     </table>
   </td></tr>
   <tr><td align="center" style="padding:14px 28px 8px">
