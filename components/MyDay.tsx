@@ -213,7 +213,7 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
   // Appointments or Jobs, the same switch as the Calendar page (Oct 26, Nick: "add the toggle for appointments and jobs
   // to the My Day view"): appointments are yours (and go to your phone), jobs are what's due by day, ours and Printavo's
   const [mode, setMode] = useSticky<"appts" | "jobs">("calendar.tab", "appts");
-  const [jobs, setJobs] = useState<CalJob[] | null>(null);
+  const [jobs, setJobs] = useState<CalJob[] | null>(null), [lateOpen, setLateOpen] = useState(false);
   useEffect(() => { if (mode === "jobs" && !jobs) jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) setJobs(r.jobs); }); }, [mode, jobs, today]);
   void shop;
   const jobsOn = (day: string) => (jobs || []).filter((j) => j.day === day);
@@ -245,9 +245,10 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
       })}</div>
       {adding && mode === "appts" && <NewEvent day={sel} onDone={(e) => { setAdding(false); if (e) setD((x) => (x ? { ...x, events: [...x.events, e] } : x)); }} />}
       <div className="md-scroll">
-        {mode === "jobs" && sel === today && late.length > 0 && <div className="md-grp"><div className="md-grp-h">Late<span>{late.length}</span></div><ul className="md-evs">
+        {/* late ones folded into one line (Oct 26, Nick: "it's showing me like 100 jobs"): today's list comes first */}
+        {mode === "jobs" && sel === today && late.length > 0 && <div className="md-grp"><button type="button" className="md-late" aria-expanded={lateOpen} onClick={() => setLateOpen(!lateOpen)}><b>{late.length} late</b><span>{lateOpen ? "Hide" : "Show"}</span></button>{lateOpen && <ul className="md-evs">
           {late.map((o) => <li key={o.id} className="md-ev due"><span className="md-ev-t">{new Date(o.day + "T12:00:00").toLocaleDateString([], { month: "numeric", day: "numeric" })}</span><Link href={o.href}><b>#{o.number} {o.customer}</b>{o.nickname && <span> · {o.nickname}</span>}</Link></li>)}
-        </ul></div>}
+        </ul>}</div>}
         <div className="md-grp"><div className="md-grp-h">{dayName(sel, today)}{mode === "jobs" && jobs ? <span>{dueOn(sel).length} due</span> : null}</div>
           {mode === "jobs" && !jobs ? <div className="md-quiet">Loading jobs…</div>
             : mode === "jobs" ? (!dueOn(sel).length ? <div className="md-quiet">Nothing due.</div> : <ul className="md-evs">
