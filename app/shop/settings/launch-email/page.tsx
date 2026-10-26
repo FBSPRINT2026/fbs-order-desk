@@ -2,6 +2,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/email";
 import { LAUNCH_SUBJECT, launchEmailHtml } from "@/lib/launchEmail";
 import SendTest from "./SendTest";
+import LaunchSend from "./LaunchSend";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 
 /** Settings → Portal launch email (owner only): the "It's here" email, previewed as customers get it, with a test send. */
@@ -29,6 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
           <iframe title="Launch email preview" srcDoc={html} style={{ width: "100%", maxWidth: 680, height: 1500, border: "1px solid var(--line)", borderRadius: 10, background: "#EEF1F5" }} />
         </div>
       </section>
+      <LaunchSend />
     </>
   );
 }
