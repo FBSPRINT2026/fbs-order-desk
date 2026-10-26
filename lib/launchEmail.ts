@@ -42,7 +42,7 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
     <a href="${o.portalUrl}"><img src="${img("hero-bottom.png")}" width="680" alt="" style="display:block;width:100%;max-width:680px;height:auto;border:0"></a>
   </td></tr>
   <tr><td align="center" style="padding:0 16px">
-<table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px">
+<table role="presentation" align="center" width="680" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;margin:0 auto">
   <tr><td align="center" style="padding:24px 40px 0;${F};font-size:15px;line-height:1.55;color:#3A4558">${hi}e're excited to share it with you: your orders, art, payments and messages, all in one place. <b style="color:#141D2B">Your login is already set up.</b></td></tr>
   <tr><td align="center" style="padding:26px 28px 0;${F};font-size:12px;font-weight:bold;letter-spacing:1px;color:#5B6678">SIGN IN IN THREE STEPS</td></tr>
   <tr><td style="padding:12px 28px 0">
@@ -63,7 +63,13 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
   <tr><td style="padding:0 0 26px;font-size:0;line-height:0">&nbsp;</td></tr>
 </table>
   </td></tr>
-  <tr><td style="padding:0;line-height:0;font-size:0"><img src="${img("fade-wide.png")}" width="1200" height="4" alt="" style="display:block;width:100%;height:4px;border:0"></td></tr>
+  <tr><td style="padding:0;line-height:0;font-size:0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td width="33%" height="4" bgcolor="#0e9bd8" style="background:#0e9bd8;height:4px;line-height:4px;font-size:0;mso-line-height-rule:exactly">&nbsp;</td>
+      <td width="34%" height="4" bgcolor="#f26660" style="background:#f26660;height:4px;line-height:4px;font-size:0;mso-line-height-rule:exactly">&nbsp;</td>
+      <td width="33%" height="4" bgcolor="#fcb122" style="background:#fcb122;height:4px;line-height:4px;font-size:0;mso-line-height-rule:exactly">&nbsp;</td>
+    </tr></table>
+  </td></tr>
   <tr><td align="center" bgcolor="#141D2B" style="background:#141D2B;padding:16px 20px 18px;${F};font-size:11.5px;line-height:1.6;color:#AAB4C3">FBS Print · 811 Alpha Dr, Ste 343, Richardson, TX 75081 · (972) 487-7858</td></tr>
 </table>
 </body></html>`;
