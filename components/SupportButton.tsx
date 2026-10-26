@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { MicButton } from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { customerSupport, supportUploadUrl } from "@/app/portal/support-actions";
+import { shareMyScreen } from "@/components/ScreenShare";
 
 async function grabTab(): Promise<Blob | null> {
   const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (o: object) => Promise<MediaStream> };
@@ -55,7 +56,7 @@ async function drawPage(): Promise<Blob | null> {
 /** `portal`: a customer's "Get help" in their portal (Oct 24): saved for them by the server, under Customers on Support */
 export default function SupportButton({ email, portal = false }: { email: string; portal?: boolean }) {
   const sb = useMemo(() => createClient(), []);
-  const { role, viewAs } = useRole();
+  const { role, viewAs, realRole } = useRole();
   const [open, setOpen] = useState(false), [shot, setShot] = useState<Blob | null>(null), [url, setUrl] = useState("");
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [err, setErr] = useState(""), [done, setDone] = useState(false);
   const page = useRef({ href: "", title: "" });
@@ -170,6 +171,8 @@ export default function SupportButton({ email, portal = false }: { email: string
               <div className="faint" style={{ fontSize: 12 }} data-notranslate>{page.current.title || page.current.href}</div>
               {err && <div className="pv-err">{err}</div>}
               <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                {/* talk it through live instead (Oct 26, Nick): Nick sees this screen and you can both talk */}
+                {!portal && realRole !== "owner" && <button type="button" className="btn" style={{ marginRight: "auto" }} disabled={!!busy} onClick={() => { setOpen(false); shareMyScreen(text.trim()); }} title="Nick gets a Join button and sees your screen live; you can talk with your mics">Share my screen with Nick</button>}
                 <button type="button" className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>
                 <button type="button" className="btn primary" disabled={!!busy || (!text.trim() && !shot)} onClick={send}>{busy || "Send"}</button>
               </div>

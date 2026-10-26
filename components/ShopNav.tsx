@@ -21,6 +21,7 @@ import { needsDetails, ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
+import ScreenShareDock from "@/components/ScreenShare";
 import PasswordButton from "@/components/PasswordButton";
 import TimeBubble from "@/components/time/TimeBubble";
 import { useSticky } from "@/lib/useSticky";
@@ -89,7 +90,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     window.addEventListener("pagehide", keep);
     return () => { document.removeEventListener("click", keep, true); window.removeEventListener("pagehide", keep); };
   }, []);
-  const { realRole, role, viewAs, perms } = useRole();
+  const { realRole, role, viewAs, perms, staffName } = useRole();
   // screen printing or embroidery (Oct 24): the switch under Production, and which of its tools show
   const [side, setSide, sideLocked] = useProdSide();
   const crew = !perms.money;
@@ -429,6 +430,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           <button type="button" className="nav-add-sc" onClick={() => { setAddOpen(true); setAdding(null); }} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>
           {/* report a problem with a screenshot: everyone, beside Sign out (Oct 16, Nick) */}
           <SupportButton email={email} />
+          {/* screen sharing for Support (Oct 26): the share bar, Nick's "Join" cards and the viewer */}
+          <ScreenShareDock email={email} name={staffName || ""} owner={realRole === "owner"} />
           {/* set your own password for signing in (Oct 22, Nick) */}
           <PasswordButton />
           {/* sign out: a door with an arrow going out (Oct 16, Nick) */}

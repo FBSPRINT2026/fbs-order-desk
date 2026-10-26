@@ -14490,3 +14490,20 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .mds-tile span{color:var(--ink-3)}
 .mds-tile.zero{opacity:1}.mds-tile.zero b{color:var(--ink-3)}
 .mds-av,.mds-av.k-web{color:var(--ink-2);background:var(--surface-2)}
+
+/* Screen sharing (Oct 26): the sharer's bar, Nick's Join card, and the viewer */
+.ss-pill,.ss-invite{position:fixed;right:18px;bottom:18px;z-index:1200;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(20,29,43,.16);padding:10px 12px;font-size:14px;color:var(--ink);max-width:min(520px,calc(100vw - 36px))}
+.ss-invite{bottom:84px}
+.ss-t{flex:1;min-width:0}
+.ss-live{width:9px;height:9px;border-radius:50%;background:var(--ink-3);flex:none}
+.ss-live.on{background:var(--danger);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 18%,transparent)}
+.ss-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--ink-2);background:var(--surface-2)}
+.ss-iv-b{display:flex;flex-direction:column;min-width:0;flex:1}
+.ss-iv-b .faint{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-view{position:fixed;inset:0;z-index:1300;background:#0d131c;display:flex;flex-direction:column}
+.ss-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)}
+.ss-bar .faint{font-size:12.5px}
+.ss-stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+.ss-stage video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;background:#0d131c}
+.ss-wait{position:absolute;color:#cfd6df;font-size:15px}
+@media (max-width:640px){ .ss-pill,.ss-invite{left:12px;right:12px;bottom:12px;flex-wrap:wrap} .ss-invite{bottom:76px} }
