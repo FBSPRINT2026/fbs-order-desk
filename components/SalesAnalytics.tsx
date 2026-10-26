@@ -61,20 +61,21 @@ function loadSales(y: number) {
 }
 
 /** Top customers: this year or the last 30 days (remembered on this computer). */
-function TopCustomers({ topYear, top30, y, compact }: { topYear: Top[]; top30: Top[]; y: number; compact?: boolean }) {
+function TopCustomers({ topYear, top30, y, compact, few }: { topYear: Top[]; top30: Top[]; y: number; compact?: boolean; /** the first 3, the rest on a click */ few?: boolean }) {
   const [range, setRange] = useSticky<"year" | "30">("sales.topRange", "year");
+  const [all, setAll] = useState(false);
   const top = range === "30" ? top30 : topYear, max = Math.max(1, ...top.map((t) => t.sales));
   return (
     <div className={compact ? "" : "an-top"}>
       <div className="an-ch-h" style={compact ? { marginTop: 6 } : undefined}>
-        <b>Top {compact ? "10 " : ""}customers</b><span className="spacer" />
+        <b>Top {compact && !few ? "10 " : ""}customers</b><span className="spacer" />
         <span className="an-seg" role="group" aria-label="Top customers for">
           <button type="button" className={range === "year" ? "on" : ""} aria-pressed={range === "year"} onClick={() => setRange("year")}>This year</button>
           <button type="button" className={range === "30" ? "on" : ""} aria-pressed={range === "30"} onClick={() => setRange("30")}>Last 30 days</button>
         </span>
       </div>
       {!top.length ? <div className="db-empty">{range === "30" ? "No sales in the last 30 days." : `No sales in ${y} yet.`}</div> : (
-        <ol className={"an-toplist" + (compact ? " an-toplist-sm" : "")}>{top.slice(0, 10).map((t, i) => (
+        <ol className={"an-toplist" + (compact ? " an-toplist-sm" : "")}>{top.slice(0, few && !all ? 3 : 10).map((t, i) => (
           <li key={t.customer_id}>
             <span className="an-rank">{i + 1}</span>
             <span className="an-tn"><Link href={`/shop/customers/${t.customer_id}`}>{t.name}</Link><span className="an-bar"><span style={{ width: `${(t.sales / max) * 100}%` }} /></span></span>
@@ -82,12 +83,15 @@ function TopCustomers({ topYear, top30, y, compact }: { topYear: Top[]; top30: T
           </li>
         ))}</ol>
       )}
+      {few && top.length > 3 && <button type="button" className="linkbtn an-more" onClick={() => setAll(!all)}>{all ? "Show fewer" : `See all ${Math.min(10, top.length)}`}</button>}
     </div>
   );
 }
 
 /** part: the numbers, the month chart, the top customers, or all three together. */
-export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" | "charts" }) {
+export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" | "charts" | "board" }) {
+  // the board's one big chart, flipped between three views (Oct 26, Nick picked option B: "make it more readable")
+  const [view, setView] = useSticky<"year" | "dept" | "pace">("sales.board.view", "year");
   const [data, setData] = useState<Sales | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [table, setTable] = useSticky("sales.table", false);
@@ -134,7 +138,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
   const C = (
         <div className="an-chart">
           <div className="an-ch-h">
-            <b>Sales by month</b>
+            {part !== "board" && <b>Sales by month</b>}
             <span className="an-legend"><i className="k1" /> {y} <i className="k2" /> {y - 1}</span>
             <span className="spacer" />
             <button type="button" className="linkbtn" onClick={() => setTable((x) => !x)}>{table ? "Show chart" : "Show as table"}</button>
@@ -193,6 +197,30 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact />
     </div>
   );
+  if (part === "board") return (
+    <div className="an-board">
+      <div className="an-board-l">
+        <div className="an-ch-h an-board-h">
+          <b>Sales by month</b><span className="spacer" />
+          <span className="an-seg" role="group" aria-label="Show">
+            {([["year", `vs ${y - 1}`], ["dept", "By department"], ["pace", "Pace"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} aria-pressed={view === k} onClick={() => setView(k)}>{l}</button>)}
+          </span>
+        </div>
+        {view === "year" ? C : view === "dept" ? <Depts rows={data!.depts} y={y} bare /> : <Pace days={data!.days} y={y} bare />}
+        <DeptBar rows={data!.depts} y={y} />
+      </div>
+      <div className="an-board-r">
+        <div className="an-k4">
+          <div className="an-side-k"><span>This month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
+          <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+          <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>
+          <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
+        </div>
+        <OwnerBar reps={data!.reps} y={y} />
+        <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact few />
+      </div>
+    </div>
+  );
   if (part === "charts") return (
     <div className="an-charts">
       <div className="an-card">{C}</div>
@@ -219,7 +247,7 @@ const doy = (d: string) => { const [yy, mm, dd] = d.split("-").map(Number); retu
 const dayName = (y: number, i: number) => new Date(y, 0, 1 + i).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 /** Year-to-date pace: sales added up day by day, this year against last year on the same calendar day. */
-function Pace({ days, y }: { days: Day[]; y: number }) {
+function Pace({ days, y, bare }: { days: Day[]; y: number; bare?: boolean }) {
   const [hov, setHov] = useState<number | null>(null);
   const today = doy(ymd(new Date()));
   const cum = (yy: number) => { const a = new Array(366).fill(0); for (const d of days) if (d.day.startsWith(yy + "-")) a[Math.min(365, doy(d.day))] += d.sales; for (let i = 1; i < 366; i++) a[i] += a[i - 1]; return a; };
@@ -233,7 +261,7 @@ function Pace({ days, y }: { days: Day[]; y: number }) {
   const h = hov;
   return (
     <div className="an-chart">
-      <div className="an-ch-h"><b>Year-to-date pace</b><span className="an-legend"><i className="k1" /> {y} <i className="k2" /> {y - 1}</span></div>
+      <div className="an-ch-h">{!bare && <b>Year-to-date pace</b>}<span className="an-legend"><i className="k1" /> {y} <i className="k2" /> {y - 1}</span></div>
       <div className="an-sub">{short(ty[today])} so far{diff !== null ? <> · <span className={diff >= 0 ? "up" : "down"}>{diff >= 0 ? "▲" : "▼"} {Math.abs(diff)}%</span> vs {y - 1} on {dayName(y, today)}</> : null}</div>
       <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales added up through the year, ${y} against ${y - 1}`} onMouseMove={onMove}>
@@ -282,7 +310,7 @@ function Reps({ reps, y }: { reps: Rep[]; y: number }) {
 const DEPTS = [
   { k: "Screen printing", c: "dp-sp" }, { k: "Embroidery", c: "dp-emb" }, { k: "Heat press", c: "dp-hp" }, { k: "Other", c: "dp-ot" },
 ];
-function Depts({ rows, y }: { rows: DeptRow[]; y: number }) {
+function Depts({ rows, y, bare }: { rows: DeptRow[]; y: number; bare?: boolean }) {
   const [hov, setHov] = useState<number | null>(null);
   const m = new Date().getMonth();
   const val = (i: number, k: string) => rows.filter((r) => r.month === `${y}-${String(i + 1).padStart(2, "0")}` && r.dept === k).reduce((t, r) => t + r.sales, 0);
@@ -293,10 +321,10 @@ function Depts({ rows, y }: { rows: DeptRow[]; y: number }) {
   const yv = (n: number) => padT + (H - padT - padB) * (1 - n / max);
   return (
     <div className="an-chart">
-      <div className="an-ch-h"><b>Sales by department</b><span className="faint">{y} so far</span></div>
-      <div className="dp-legend">{DEPTS.map((d, j) => (
+      {!bare && <div className="an-ch-h"><b>Sales by department</b><span className="faint">{y} so far</span></div>}
+      {!bare && <div className="dp-legend">{DEPTS.map((d, j) => (
         <span key={d.k} className="dp-k"><i className={d.c} />{d.k}<b>{short(tot[j])}</b><span className="faint">{all ? Math.round((tot[j] / all) * 100) : 0}%</span></span>
-      ))}</div>
+      ))}</div>}
       <div className="an-svg-wrap" onMouseLeave={() => setHov(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Sales by department by month, ${y}`}>
           {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W} y1={yv(max * f)} y2={yv(max * f)} className="an-grid-l" /><text x={padL - 8} y={yv(max * f) + 4} className="an-ax" textAnchor="end">{short(max * f)}</text></g>)}
@@ -318,6 +346,35 @@ function Depts({ rows, y }: { rows: DeptRow[]; y: number }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** the year's department split as one bar (the board, under the big chart) */
+function DeptBar({ rows, y }: { rows: DeptRow[]; y: number }) {
+  const tot = DEPTS.map((d) => rows.filter((r) => r.month.startsWith(`${y}-`) && r.dept === d.k).reduce((t, r) => t + r.sales, 0));
+  const all = tot.reduce((a, b) => a + b, 0) || 1;
+  return (
+    <div className="an-split">
+      <div className="an-split-h"><b>By department</b><span className="faint">{y} so far</span></div>
+      <div className="an-split-bar" role="img" aria-label={DEPTS.map((d, j) => `${d.k} ${short(tot[j])}`).join(", ")}>{DEPTS.map((d, j) => tot[j] > 0 && <i key={d.k} className={d.c} style={{ flexGrow: tot[j] }} title={`${d.k}: ${money0(tot[j])}`} />)}</div>
+      <div className="an-split-l">{DEPTS.map((d, j) => <span key={d.k}><i className={d.c} />{d.k} <b>{short(tot[j])}</b> <span className="faint">{Math.round((tot[j] / all) * 100)}%</span></span>)}</div>
+    </div>
+  );
+}
+
+/** you and Amanda as one shared bar (the board) */
+function OwnerBar({ reps, y }: { reps: Rep[]; y: number }) {
+  const total = reps.reduce((t, r) => t + r.sales, 0) || 1;
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+  const cls = ["dp-sp", "dp-emb", "dp-hp", "dp-ot"];
+  return (
+    <div className="an-split">
+      <div className="an-split-h"><b>By account owner</b><span className="faint">{y} so far</span></div>
+      <div className="an-split-bar">{reps.map((r, i) => <i key={r.owner} className={cls[i % 4]} style={{ flexGrow: r.sales }} title={`${cap(r.owner)}: ${money0(r.sales)}`} />)}</div>
+      <div className="an-split-o">{reps.map((r) => (
+        <span key={r.owner}><span><b>{cap(r.owner)}</b> {short(r.sales)}</span><span className="faint">{Math.round((r.sales / total) * 100)}% · {r.orders.toLocaleString("en-US")} orders</span></span>
+      ))}</div>
     </div>
   );
 }

@@ -14536,3 +14536,28 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .md2 .an-bar span{background:color-mix(in srgb,var(--fbs-blue) 60%,var(--surface))}
 .md2 .fv-card{box-shadow:0 1px 2px rgba(20,29,43,.04)}
 .md-cheer.on{background:var(--surface-2);color:var(--ink);border-color:var(--line)}
+
+/* Sales, option B (Oct 26, Nick: "rethink this layout, make it more readable"): one big chart you flip on the left,
+   the four numbers, the owner split and the top customers on the right */
+.an-board{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr);gap:20px;align-items:start}
+.an-board-l,.an-board-r{min-width:0;display:flex;flex-direction:column;gap:14px}
+.an-board-h{margin-bottom:0}
+.an-board-h b{font-size:15px}
+.an-board .an-ax{font-size:12.5px}
+.an-k4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.an-k4 .an-side-k b{font-size:22px}
+.an-split{display:flex;flex-direction:column;gap:6px}
+.an-split-h{display:flex;align-items:baseline;gap:8px;font-size:14px}
+.an-split-h .faint{font-size:12px}
+.an-split-bar{display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;background:var(--line-2)}
+.an-split-bar i{display:block;height:100%;min-width:3px}
+.an-split-l{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--ink-2)}
+.an-split-l>span{white-space:nowrap;display:inline-flex;align-items:baseline;gap:4px}
+.an-split-l i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.an-split-l b,.an-split-o b{color:var(--ink);font-weight:700}
+.an-split-o{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.an-split-o>span{display:flex;flex-direction:column;white-space:nowrap}
+.an-split-o>span:last-child{text-align:right}
+.an-split-o .faint{font-size:12px}
+.an-more{font-size:12.5px;margin-top:6px;align-self:flex-start}
+@media (max-width:1100px){ .an-board{grid-template-columns:minmax(0,1fr)} }
