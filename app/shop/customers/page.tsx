@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,12 +15,19 @@ export default function CustomersPage() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   // starred customers go to the top (Oct 21, Nick: "a little star so that we can favor the clients")
+  // each person's own stars (Oct 26, Nick: "Amanda should have her own favorites, not my favorites"): customer_favorites
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  const isFav = (c: { id: string; favorite?: boolean }) => favs[c.id] ?? !!c.favorite;
-  async function star(c: { id: string; favorite?: boolean }) {
+  useEffect(() => { void createClient().from("customer_favorites").select("customer_id").then(({ data }) => setFavs(Object.fromEntries(((data || []) as { customer_id: string }[]).map((r) => [r.customer_id, true])))); }, []);
+  const isFav = (c: { id: string }) => !!favs[c.id];
+  async function star(c: { id: string }) {
     const v = !isFav(c);
     setFavs((f) => ({ ...f, [c.id]: v }));
-    const { error } = await createClient().from("customers").update({ favorite: v }).eq("id", c.id);
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    const me = (user?.email || "").toLowerCase();
+    const { error } = v
+      ? await sb.from("customer_favorites").upsert({ staff_email: me, customer_id: c.id })
+      : await sb.from("customer_favorites").delete().eq("staff_email", me).eq("customer_id", c.id);
     if (error) { setFavs((f) => ({ ...f, [c.id]: !v })); alert(error.message); }
   }
   const [tag, setTag] = useSticky("customers.filter", "");

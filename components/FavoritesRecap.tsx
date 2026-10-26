@@ -49,7 +49,8 @@ const initials = (n: string) => n.replace(/[^A-Za-z0-9 ]/g, "").split(/\s+/).fil
 
 type Item = { k: string; kind: "email" | "text" | "portal"; text: string; at: string; href?: string; out?: boolean };
 
-export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
+export default function FavoritesRecap({ jobs, msgs, needIds, mailMine, as }: {
+  /** an owner viewing as someone: their favorites */ as?: string;
   jobs: FavJob[] | null; msgs: FavMsg[];
   /** emails waiting on a reply (the page's rule) */ needIds: Set<string>;
   /** whose mailbox an email belongs to (someone else's email never shows) */ mailMine: (e: { to_email?: string | null; direction?: string; meta?: { account_id?: string; cc?: string[] } | null }) => boolean;
@@ -57,11 +58,11 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine }: {
   const [d, setD] = useState<{ favs: FavCustomer[]; emails: FavEmail[]; texts: FavText[]; sales: FavSales[]; seesTexts: boolean } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    const load = () => getFavoritesRecap().then((r) => { if (r.ok) { setD(r); setErr(""); } else setErr(r.error); }, () => null);
+    const load = () => getFavoritesRecap(as).then((r) => { if (r.ok) { setD(r); setErr(""); } else setErr(r.error); }, () => null);
     load();
     const t = setInterval(load, 120000);
     return () => clearInterval(t);
-  }, []);
+  }, [as]);
 
   const cards = useMemo(() => {
     if (!d) return [];

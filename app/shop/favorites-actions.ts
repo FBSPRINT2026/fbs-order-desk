@@ -14,12 +14,17 @@ export type FavEmail = { id: string; customer_id: string; direction: string; sub
 export type FavText = { customer_id: string; from_me: boolean; body: string; sent_at: string; pics: number };
 export type FavSales = { customer_id: string; sales: number; orders: number; last_order: string | null };
 
-export async function getFavoritesRecap() {
+/** `as`: an owner viewing the portal as someone sees that person's favorites */
+export async function getFavoritesRecap(as?: string) {
   try {
     const v = await getViewer();
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can see this.");
     const admin = createAdminClient();
-    const { data: cs } = await admin.from("customers").select("id, company, name").eq("favorite", true).or("is_test.is.null,is_test.eq.false").limit(24);
+    // each person's own stars (Oct 26, Nick: "Amanda should have her own favorites, not my favorites")
+    const who = (as && v.role === "owner" ? as : v.email).toLowerCase();
+    const { data: mine } = await admin.from("customer_favorites").select("customer_id").eq("staff_email", who).limit(60);
+    const favIds = ((mine || []) as { customer_id: string }[]).map((r) => r.customer_id);
+    const { data: cs } = favIds.length ? await admin.from("customers").select("id, company, name").in("id", favIds).or("is_test.is.null,is_test.eq.false").limit(24) : { data: [] };
     const favs: FavCustomer[] = ((cs || []) as { id: string; company: string | null; name: string | null }[])
       .map((c) => ({ id: c.id, name: c.company || c.name || "Customer", contact: c.company && c.name ? c.name : "" }))
       .sort((a, b) => a.name.localeCompare(b.name));

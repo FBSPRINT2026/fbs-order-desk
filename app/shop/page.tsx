@@ -396,7 +396,7 @@ export default function Dashboard() {
           {/* one big chart on the left, the numbers and lists on the right (Oct 26, Nick picked option B) */}
           <SalesAnalytics part="board" />
         </section>}
-        <FavoritesRecap jobs={jobs} msgs={myMsgs} needIds={needIds} mailMine={(e) => emailIsMine(e, myBox, myBoxEmail)} />
+        <FavoritesRecap as={viewing ? myEmail : undefined} jobs={jobs} msgs={myMsgs} needIds={needIds} mailMine={(e) => emailIsMine(e, myBox, myBoxEmail)} />
       </MyDay>
     </>
   );
