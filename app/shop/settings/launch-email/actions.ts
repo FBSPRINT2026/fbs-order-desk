@@ -12,9 +12,12 @@ import { siteFrom } from "@/lib/siteEmail";
  * Inbox), else the site's email service. Sending to customers is its own step below (sendLaunchBatch), owner only,
  * picked customer by customer.
  */
-export async function sendLaunchTest(company = ""): Promise<{ ok: boolean; to?: string; error?: string }> {
+/** a test copy: to you, or to any one address you type (Oct 26, Nick: "send it to Amanda just to see how it shows on her phone") */
+export async function sendLaunchTest(company = "", toAddr = ""): Promise<{ ok: boolean; to?: string; error?: string }> {
   const v = await getViewer();
   if (!v.user || v.role !== "owner") return { ok: false, error: "Only the owner can send this." };
+  const to = (toAddr || v.email || "").trim().toLowerCase();
+  if (!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(to)) return { ok: false, error: "Type one email address." };
   const site = siteUrl();
   const first = String(v.user.user_metadata?.full_name || v.user.user_metadata?.name || "").split(/\s+/)[0] || "";
   const subject = `[Test] ${LAUNCH_SUBJECT}`;
@@ -23,9 +26,9 @@ export async function sendLaunchTest(company = ""): Promise<{ ok: boolean; to?: 
   let why = "";
   try {
     const own = await accountForUser(createAdminClient(), v.user.id);
-    if (own?.enabled) { await sendFromMailbox(cfgOf(own), { to: v.email, subject, text, html }); return { ok: true, to: v.email }; }
+    if (own?.enabled) { await sendFromMailbox(cfgOf(own), { to, subject, text, html }); return { ok: true, to }; }
   } catch (e) { why = e instanceof Error ? e.message : String(e); }
-  if (await sendEmail({ to: v.email, subject, html })) return { ok: true, to: v.email };
+  if (await sendEmail({ to, subject, html })) return { ok: true, to };
   return { ok: false, error: why || "Couldn't send it: connect your email in the Inbox, or check the email service in Settings → Connections." };
 }
 

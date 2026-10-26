@@ -22,7 +22,7 @@ export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?
   const hi = o.firstName ? `Hi ${esc(o.firstName)}, w` : "W";
   const tile = (f: string, alt: string, sub: string) => `<td width="50%" valign="top" style="padding:0 6px 14px">
       <a href="${o.portalUrl}" style="text-decoration:none"><img src="${img(f)}" width="300" alt="${alt}" style="display:block;width:100%;max-width:300px;height:auto;border:0"></a>
-      <div style="${F};font-size:13px;line-height:1.4;padding:6px 2px 0;color:#5B6678">${sub}</div></td>`;
+      <div style="${F};font-size:13px;line-height:1.4;padding:6px 2px 0;color:#5B6678;text-align:center">${sub}</div></td>`;
   return `<!doctype html><html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(LAUNCH_SUBJECT)}</title></head>
 <body style="margin:0;padding:0;background:#ffffff">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">Track orders, approve art, reorder and pay, all in one place. Your login is already set up.</div>
