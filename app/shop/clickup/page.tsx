@@ -9,7 +9,7 @@ import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
-import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
+import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpField, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 import CustomerPick from "@/components/CustomerPick";
 
 /**
@@ -171,6 +171,13 @@ export default function ClickUpJobs() {
     if (!r.ok) { put(on ? "—" : "✓"); setErr(r.error); return; }
     flash(`${on ? "Ticked" : "Unticked"} "${boxName(name)}" on "${t.name}" in ClickUp.`);
     if (/printavo/i.test(name)) void load();
+  };
+  /** a column this workspace doesn't keep (Oct 27, Nick: McKenna's "PO RECEIVED"): hidden here, or shown again */
+  const hideField = async (teamId: string, name: string, hide: boolean) => {
+    const r = await hideClickUpField(teamId, name, hide);
+    if (!r.ok) { setErr(r.error); return; }
+    flash(hide ? `"${name}" is hidden on this workspace and won't be kept from ClickUp.` : `"${name}" shows again; it comes back as each job is read from ClickUp.`);
+    await load(); await loadWs(teamId);
   };
   const loadWs = useCallback(async (id: string) => {
     const r = await clickUpWorkspace(id);
@@ -362,6 +369,7 @@ export default function ClickUpJobs() {
         onCreated={(id, n) => madeIt(id, n)} />}
 
       {ws ? (() => {
+        const wsId = ws;
         const tm = teams.get(ws);
         const tasks = wsData?.team === ws ? wsData.tasks : null;
         const open = (tasks || []).filter((t) => !isDoneT(t)), shut = (tasks || []).filter(isDoneT);
@@ -371,7 +379,8 @@ export default function ClickUpJobs() {
         // the check boxes the boards use most (In Printavo, PO Ready, Embroidery Order…) as columns, like ClickUp
         const boxN: Record<string, number> = {};
         for (const t of tasks || []) for (const [k, v] of Object.entries(t.fields)) if (v === "✓" || v === "—") boxN[k] = (boxN[k] || 0) + 1;
-        const boxes = Object.entries(boxN).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
+        const offF = new Set((tm?.hidden_fields || []).map((x) => x.toLowerCase()));
+        const boxes = Object.entries(boxN).filter(([k]) => !offF.has(k.toLowerCase())).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
         const board = (t: ClickUpTask) => t.where_text || "Completed jobs";
         const list2 = [...shown].sort((a, b) => board(a).localeCompare(board(b)) || Number(isDoneT(a)) - Number(isDoneT(b))
           || (isDoneT(a) ? (b.updated_at_cu || "").localeCompare(a.updated_at_cu || "") : byDue(a, b)));
@@ -386,10 +395,11 @@ export default function ClickUpJobs() {
                 .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (wsShow === k ? " on" : "")} onClick={() => setWsShow(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
             </div>
             <SearchInput placeholder="Search this workspace" value={wsQ} onChange={(e) => setWsQ(e.target.value)} />
+            {(tm?.hidden_fields || []).length > 0 && <span className="faint cu-hid">Hidden: {tm!.hidden_fields!.map((f, i) => <span key={f}>{i ? ", " : ""}{f} <button type="button" className="lc-link" onClick={() => void hideField(wsId, f, false)}>Show</button></span>)}</span>}
           </div>
           <div className={"tbl-wrap cu-fit" + (pin ? " cu-pinhead" : "")} style={pinStyle}>
             <table className="tbl cu-tbl" data-keep>
-              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, boxName(b), "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-inv")}<th className="cu-w-act" /></tr></thead>
+              <thead><tr>{rth("w.board", "Board", "cu-w-rail")}{rth("w.job", "Job")}{rth("w.status", "Status", "cu-w-status")}{rth("w.due", "Due", "cu-w-due")}{boxes.map((b) => rth(`w.box.${b}`, <>{boxName(b)}{!/printavo/i.test(b) && <button type="button" className="cu-box-x" title={`Hide "${b}" on this workspace (it won't be kept from ClickUp)`} aria-label={`Hide ${b}`} onClick={(e) => { e.stopPropagation(); void hideField(wsId, b, true); }}>×</button>}</>, "cu-box-h"))}{rth("w.pv", "FBS INV#", "cu-w-inv")}<th className="cu-w-act" /></tr></thead>
               <tbody>
                 {!tasks ? <tr><td colSpan={cols}><div className="empty">Loading the workspace…</div></td></tr> : list2.length ? list2.map((t, i) => {
                   const first = i === 0 || board(list2[i - 1]) !== board(t);

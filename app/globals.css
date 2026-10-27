@@ -12040,6 +12040,11 @@ tr.cu-off td{color:var(--ink-3)}
 .tbl.cu-tbl th.cu-w-status{width:130px}
 .tbl.cu-tbl th.cu-w-act{width:118px}
 .tbl.cu-tbl th.cu-box-h{width:92px;white-space:normal;line-height:1.2}
+/* hide a ClickUp column on a workspace (Oct 27) */
+.cu-box-x{all:unset;cursor:pointer;margin-left:4px;color:var(--ink-3);font-size:13px;line-height:1;opacity:0;padding:0 2px}
+.tbl.cu-tbl th.cu-box-h:hover .cu-box-x,.cu-box-x:focus-visible{opacity:1}
+.cu-box-x:hover{color:var(--danger)}
+.cu-hid{font-size:12px;white-space:nowrap}
 /* a new customer (or board) starts with a blue bar and a little space (Oct 22, Nick: "they look to run together") */
 .tbl.cu-tbl tbody tr.cu-gstart:not(:first-child) > td{border-top:3px solid var(--fbs-blue);padding-top:14px}
 @media (max-width:1100px){.tbl.cu-tbl th.cu-w-added{width:0;padding:0;font-size:0}.tbl.cu-tbl td.cu-added{display:none}.tbl.cu-tbl th.cu-w-rail{width:140px}}

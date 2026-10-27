@@ -123,6 +123,30 @@ export async function setClickUpCustomer(teamId: string, customerId: string | nu
   return error ? { ok: false as const, error: error.message } : { ok: true as const };
 }
 
+/** a ClickUp field (column) this workspace doesn't keep or show, or back again (Oct 27, Nick: McKenna's "PO RECEIVED", "we
+ *  don't need to sync that column. It shouldn't show"). Hiding it clears it from the jobs here; ClickUp isn't touched.
+ *  Showing it again brings it back on the next read of each job. */
+export async function hideClickUpField(teamId: string, name: string, hide: boolean) {
+  const v = await who(); if (!v) return NO;
+  const n = String(name || "").trim();
+  if (!n || /printavo/i.test(n)) return { ok: false as const, error: "The In Printavo box is always kept." };
+  const admin = createAdminClient();
+  const { data: t } = await admin.from("clickup_teams").select("hidden_fields").eq("id", teamId).maybeSingle();
+  if (!t) return { ok: false as const, error: "That workspace isn't here." };
+  const was = ((t.hidden_fields || []) as string[]).filter((x) => x.toLowerCase() !== n.toLowerCase());
+  const { error } = await admin.from("clickup_teams").update({ hidden_fields: hide ? [...was, n] : was }).eq("id", teamId);
+  if (error) return { ok: false as const, error: error.message };
+  if (hide) {
+    const { data: rows } = await admin.from("clickup_tasks").select("id, fields, field_ids").eq("team_id", teamId);
+    for (const r of (rows || []) as { id: string; fields: Record<string, string> | null; field_ids: Record<string, string> | null }[]) {
+      const drop = (m: Record<string, string> | null) => Object.fromEntries(Object.entries(m || {}).filter(([k]) => k.trim().toLowerCase() !== n.toLowerCase()));
+      if (Object.keys(r.fields || {}).some((k) => k.trim().toLowerCase() === n.toLowerCase()) || Object.keys(r.field_ids || {}).some((k) => k.trim().toLowerCase() === n.toLowerCase()))
+        await admin.from("clickup_tasks").update({ fields: drop(r.fields), field_ids: drop(r.field_ids) }).eq("id", r.id);
+    }
+  }
+  return { ok: true as const };
+}
+
 /** a workspace that isn't a customer's jobs (hidden) or back again; its jobs' waiting is worked out again */
 export async function hideClickUpTeam(teamId: string, hidden: boolean) {
   const v = await who(); if (!v) return NO;

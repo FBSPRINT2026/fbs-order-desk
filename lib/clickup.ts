@@ -71,7 +71,8 @@ export type ClickUpTaskRow = {
   /** ClickUp priority: urgent | high | normal | low | "" */ priority: string;
   /** its check box fields by name → ClickUp field id */ field_ids: Record<string, string>;
 };
-export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string };
+export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string;
+  /** the workspace's fields that aren't kept or shown (Oct 27, Nick: McKenna's "PO RECEIVED", "we don't need to sync that column") */ hidden_fields?: string[] };
 export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
 
 /** ClickUp calls per token this run (ClickUp allows 100 a minute per token) */
@@ -113,8 +114,11 @@ function fieldText(f: CuField): string | null {
 const printavoBox = (t: CuTask) => (t.custom_fields || []).find((f) => f.type === "checkbox" && /printavo/i.test(f.name));
 
 /** a task (read in full) as its row; the portal's own columns (order, dismissed, activity) aren't touched */
-function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string) {
+function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string, skip: string[] = []) {
   const box = printavoBox(t);
+  // a field the workspace doesn't keep (clickup_teams.hidden_fields) is left out; the In Printavo box never is
+  const off = new Set(skip.map((x) => x.trim().toLowerCase()));
+  t = { ...t, custom_fields: (t.custom_fields || []).filter((f) => /printavo/i.test(f.name) || !off.has(f.name.trim().toLowerCase())) };
   const fields = Object.fromEntries((t.custom_fields || []).map((f) => [f.name.trim(), fieldText(f)] as const).filter((x): x is [string, string] => x[1] != null));
   return {
     id: t.id, team_id: teamId, list_id: t.list?.id || null, priority: String(t.priority?.priority || "").toLowerCase(), where_text: [t.folder && !t.folder.hidden ? t.folder.name : "", t.list?.name].filter(Boolean).join(" › "), name: String(t.name || "").slice(0, 300),
@@ -172,8 +176,8 @@ export async function readClickUpTask(admin: SupabaseClient, id: string): Promis
   const t = await cu<CuTask & { team_id?: string }>(tok, `/task/${encodeURIComponent(id)}?include_markdown_description=true`);
   const comments = (await cu<{ comments: CuComment[] }>(tok, `/task/${encodeURIComponent(id)}/comment`).catch(() => ({ comments: [] }))).comments || [];
   const teamId = String(old?.team_id || t.team_id || "");
-  const { data: team } = teamId ? await admin.from("clickup_teams").select("hidden").eq("id", teamId).maybeSingle() : { data: null };
-  const row = rowOf(t, teamId, comments, String(st?.user_email || ""));
+  const { data: team } = teamId ? await admin.from("clickup_teams").select("hidden, hidden_fields").eq("id", teamId).maybeSingle() : { data: null };
+  const row = rowOf(t, teamId, comments, String(st?.user_email || ""), (team?.hidden_fields as string[] | null) || []);
   row.attachments = keepPaths(row.attachments, old?.attachments as CuFile[] | null);
   await admin.from("clickup_tasks").upsert({ ...row, waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at, pv_number: old?.pv_number }, !!team?.hidden) });
   const { data } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
@@ -241,8 +245,8 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
     }
     if (myEmail && myEmail !== st.user_email) await admin.from("clickup_state").update({ user_email: myEmail }).eq("id", 1);
     out.teams = seen.length;
-    const { data: had } = await admin.from("clickup_teams").select("id, customer_id, hidden").in("id", seen.map((x) => x.team.id));
-    const teamRow = new Map(((had || []) as { id: string; customer_id: string | null; hidden: boolean }[]).map((r) => [r.id, r]));
+    const { data: had } = await admin.from("clickup_teams").select("id, customer_id, hidden, hidden_fields").in("id", seen.map((x) => x.team.id));
+    const teamRow = new Map(((had || []) as { id: string; customer_id: string | null; hidden: boolean; hidden_fields?: string[] }[]).map((r) => [r.id, r]));
     for (const { team, key, me } of seen) {
       const members = (team.members || []).map((m) => String(m.user?.email || "").toLowerCase()).filter((e) => e && !ours(e) && e !== me && e !== myEmail).slice(0, 50);
       if (!teamRow.get(team.id)) {
@@ -299,7 +303,7 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         // a closed task only needs its status; an open one is read in full (files, fields, comments)
         const full = isDone(t0.status?.type) ? null : await cu<CuTask>(tok, `/task/${t0.id}?include_markdown_description=true`);
         const comments = full ? (await cu<{ comments: CuComment[] }>(tok, `/task/${t0.id}/comment`).catch(() => ({ comments: [] }))).comments || [] : [];
-        const row = rowOf(full || t0, team.id, comments, me || myEmail);
+        const row = rowOf(full || t0, team.id, comments, me || myEmail, teamRow.get(team.id)?.hidden_fields || []);
         row.attachments = keepPaths(row.attachments, k?.attachments);
         const waiting = waitingOf({ ...row, order_id: k?.order_id, dismissed_at: k?.dismissed_at, pv_number: k?.pv_number }, hidden);
         // a new job's files come into storage now, so they're there when it's opened
