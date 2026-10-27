@@ -16,6 +16,8 @@ import { OrderGoodsDock } from "@/components/tools/OrderGoodsTool";
 import SameArtPrompt from "@/components/SameArtPrompt";
 
 export const dynamic = "force-dynamic";
+// the shop's server actions (the Order chat reading a big PDF and making many edits) get up to 5 minutes
+export const maxDuration = 300;
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   // the shop settings don't depend on who's signed in: ask for them while the sign-in is being checked

@@ -5,6 +5,7 @@ import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { colorHex } from "@/lib/inkColors";
+import { pdfTextServer } from "@/lib/pdfTextServer";
 import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, uid, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
@@ -44,6 +45,53 @@ const ORDER_FIELDS: Record<string, { say: string; set: (v: string) => unknown | 
 };
 const EXTRAS = ["printed_free", "not_printed_free", "printed_charged", "not_printed_charged", "not_extras"];
 
+/**
+ * Anything else on the order (Oct 27, Nick: "there should be no restrictions on what that create order tool can do. If
+ * it's within the context of an order, it should be able to do anything… make all the prices $5… put these two groups
+ * together… there's nothing that I shouldn't be able to tell it that I couldn't tell you"): the order as a document the
+ * AI edits with JSON Patch operations (RFC 6902), checked and saved like the order page saves it.
+ */
+const DOC_KEYS = ["groups", "fees", "nickname", "po_number", "due_date", "due_time", "firm", "production_date", "rush", "delivery_method", "ship_to", "ship_method", "tracking", "notes", "price_type", "tax_exempt", "tax_rate", "discount_pct", "discount_amt", "discount_type", "waive_setup", "order_type"] as const;
+const docOf = (o: Record<string, unknown>) => Object.fromEntries(DOC_KEYS.map((k) => [k, o[k] ?? null]));
+type PatchOp = { op: "add" | "remove" | "replace" | "move" | "copy"; path: string; from?: string; value?: unknown };
+const ptr = (p: string) => p.split("/").slice(1).map((x) => x.replace(/~1/g, "/").replace(/~0/g, "~"));
+function getAt(doc: unknown, parts: string[]): unknown { let cur = doc as Record<string, unknown>; for (const k of parts) { if (cur == null || typeof cur !== "object") return undefined; cur = (cur as Record<string, unknown>)[k] as Record<string, unknown>; } return cur; }
+/** JSON Patch on a copy of the document: the new document, or why it couldn't */
+function patchDoc(doc0: Record<string, unknown>, ops: PatchOp[]): { ok: true; doc: Record<string, unknown> } | { ok: false; error: string } {
+  const doc = JSON.parse(JSON.stringify(doc0)) as Record<string, unknown>;
+  for (const o of ops) {
+    const parts = ptr(String(o.path || ""));
+    if (!parts.length || !(DOC_KEYS as readonly string[]).includes(parts[0])) return { ok: false, error: `can't change ${o.path}` };
+    const parent = getAt(doc, parts.slice(0, -1)) as Record<string, unknown> | unknown[] | undefined, key = parts[parts.length - 1];
+    if (!parent || typeof parent !== "object") return { ok: false, error: `${o.path} isn't there` };
+    let value = o.value;
+    if (o.op === "move" || o.op === "copy") {
+      const fp = ptr(String(o.from || "")), fpar = getAt(doc, fp.slice(0, -1)) as Record<string, unknown> | unknown[] | undefined, fk = fp[fp.length - 1];
+      if (!fpar || typeof fpar !== "object") return { ok: false, error: `${o.from} isn't there` };
+      value = JSON.parse(JSON.stringify(Array.isArray(fpar) ? fpar[+fk] : fpar[fk]));
+      if (value === undefined) return { ok: false, error: `${o.from} isn't there` };
+      if (o.op === "move") { if (Array.isArray(fpar)) fpar.splice(+fk, 1); else delete fpar[fk]; }
+    }
+    if (o.op === "remove") { if (Array.isArray(parent)) { if (!(+key >= 0 && +key < parent.length)) return { ok: false, error: `${o.path} isn't there` }; parent.splice(+key, 1); } else delete parent[key]; continue; }
+    if (Array.isArray(parent)) {
+      const i = key === "-" ? parent.length : +key;
+      if (!(i >= 0 && i <= parent.length)) return { ok: false, error: `${o.path} is out of range` };
+      if (o.op === "replace") { if (i >= parent.length) return { ok: false, error: `${o.path} isn't there` }; parent[i] = value; } else parent.splice(i, 0, value);
+    } else parent[key] = value;
+  }
+  // still an order: groups with lines and prints, each with an id
+  const gs = doc.groups;
+  if (!Array.isArray(gs)) return { ok: false, error: "the groups went missing" };
+  for (const g of gs as Group[]) {
+    if (!g || typeof g !== "object" || !Array.isArray(g.lines) || !Array.isArray(g.imprints)) return { ok: false, error: "a group lost its lines or prints" };
+    if (!g.id) g.id = uid();
+    for (const l of g.lines) { if (!l.id) l.id = uid(); if (!l.sizes || typeof l.sizes !== "object") l.sizes = {}; }
+    for (const d of g.imprints) if (!d.id) d.id = uid();
+  }
+  if (doc.fees != null && !Array.isArray(doc.fees)) return { ok: false, error: "fees must be a list" };
+  return { ok: true, doc };
+}
+
 /** the order's garment lines with their ids, so a change can point at one */
 const sizeRun = (l: Group["lines"][number]) => SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${z} ${l.sizes?.[z]}`).join(", ");
 const linesText = (groups: Group[]) => groups.map((g, gi) => `Group ${gi + 1}${g.name ? ` "${g.name}"` : ""}: prints ${g.imprints.length ? g.imprints.map((d) => `${d.location} (${d.method})`).join(", ") : "none"}\n` + g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs (${sizeRun(l) || "no sizes"})${l.priceOverride != null && (l.priceOverride as unknown) !== "" ? `, priced $${l.priceOverride} each` : ""}${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
@@ -56,11 +104,24 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
   const { o, images, documents } = b;
   const groups = orderGroups(o as Order);
   // what the customer sent: their mockup and art files on the order, to compare with
-  const { data: theirs } = await admin.from("art_files").select("name, file_path, category").eq("order_id", orderId).in("category", ["customer_mockup", "order_sheet", "print_art"]).order("created_at").limit(6);
-  for (const f of theirs || []) {
-    const t = imgType(f.file_path);
-    if (t && images.length < 10) { const x = await fileB64(admin, f.file_path); if (x) images.push({ media_type: t, data: x, label: `What the customer sent: ${f.name}` }); }
-    else if (/\.(pdf|ai)$/i.test(f.file_path) && documents.length < 4) { const x = await fileB64(admin, f.file_path); if (x && Buffer.from(x.slice(0, 12), "base64").toString().startsWith("%PDF")) documents.push({ data: x, label: `What the customer sent: ${f.name}` }); }
+  // every file on the order (Oct 27, Nick: "should definitely be able to view the attachment… view the customer's PDF
+  // mockup and group…"), not production's own (films, separations, barcodes): pictures and PDFs to look at, and a PDF
+  // too big to send is read as text
+  const { data: theirs } = await admin.from("art_files").select("name, file_path, category").eq("order_id", orderId).order("created_at").limit(20);
+  const PROD = /film|separation|barcode|mailing|label|dst|emb/i;
+  let budget = 18 * 1024 * 1024;
+  const pdfText: string[] = [];
+  for (const f of (theirs || []).filter((x) => !PROD.test(String(x.category || ""))).slice(0, 10)) {
+    const t = imgType(f.file_path), who = f.category === "customer_mockup" || f.category === "order_sheet" || !f.category ? "What the customer sent" : "On the order";
+    if (t && images.length < 10) { const x = await fileB64(admin, f.file_path); if (x) images.push({ media_type: t, data: x, label: `${who}: ${f.name}` }); continue; }
+    if (!/\.(pdf|ai)$/i.test(f.file_path)) continue;
+    const { data: blob } = await admin.storage.from("proofs").download(f.file_path);
+    if (!blob) continue;
+    const buf = Buffer.from(await blob.arrayBuffer());
+    if (!buf.subarray(0, 5).toString().startsWith("%PDF")) continue;
+    if (documents.length < 4 && buf.length <= 15 * 1024 * 1024 && buf.length <= budget) { budget -= buf.length; documents.push({ data: buf.toString("base64"), label: `${who}: ${f.name}` }); continue; }
+    const tx = await pdfTextServer(buf).catch(() => "");
+    if (tx) pdfText.push(`${who}: ${f.name} (too big to show; its text):\n${tx.slice(0, 12000)}`);
   }
   const { data: cuBp } = o.customer_id ? await admin.from("customers").select("brand_print").eq("id", o.customer_id as string).maybeSingle() : { data: null };
   const hasMask = !!((cuBp?.brand_print || {}) as { distress?: { path?: string } }).distress?.path;
@@ -68,13 +129,15 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
   const prompt = [
     b.text,
     "Garment lines:", linesText(groups),
+    ...pdfText.map((x) => `\n${x}`),
+    `\nORDER JSON (what an "edit" changes; paths like /groups/0/lines/1/priceOverride, /fees/-, /due_date):\n${JSON.stringify(docOf(o as Record<string, unknown>)).slice(0, 60000)}`,
     mem.length ? `\nWhat the shop has taught you about this customer:\n${mem.slice(0, 15).map((m) => `- ${m.text}`).join("\n")}` : "",
     shopRulesText(await loadShopRules(admin).catch(() => [])),
     earlier.trim() ? `\nEarlier in this check (already done; the order above already has these changes):\n${earlier.trim().slice(0, 3000)}` : "",
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
   const r = await askClaude<{ reply: string; changes?: OrderChange[]; lesson?: string; rule?: string }>({
-    task: "order_fix", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 60_000, admin, images, documents,
+    task: "order_fix", model: s.assistant.ai.model, maxTokens: 8000, timeoutMs: 150_000, admin, images, documents,
     ctx: { order_id: orderId, customer_id: o.customer_id, by },
     tool: { name: "order_fix", description: "What you'll change on the order and its art.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, short: what you found or what you changed. No headings. Name prints by their spot (the Full Front print), never by an id." },
@@ -85,6 +148,10 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
         value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; confirm (production confirms the print's details on the run, the Reorder Details screen): "both", "size", "ink" or "none" (take it off); art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); line group: the id of another line whose group this line joins, or "new" for a group of its own; line group_name: the name of the group that line is in after the moves ("Left chest", "Sleeve"); order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
         say: { type: "string", description: "One plain sentence saying the change, past tense. An art change goes on the customer's proof, so say what we changed and why, in their words: \"Flattened the art to two colors, black and white (there was shading in the black)\", \"Removed the thin white outline around the hawk (too thin to print)\"" },
       }, required: ["what", "id", "field", "value", "say"] } },
+      edits: { type: "array", description: "Anything the changes above can't do: add or remove a garment line, a print, a group or a fee; set every price; change a print's method; move things between groups; anything else on the order. JSON Patch operations on the ORDER JSON, with one plain sentence each.", items: { type: "object", properties: {
+        say: { type: "string", description: "One plain sentence, past tense: \"Set every garment to $5.00 each\"" },
+        ops: { type: "array", items: { type: "object", properties: { op: { type: "string", enum: ["add", "remove", "replace", "move", "copy"] }, path: { type: "string" }, from: { type: "string" }, value: {} }, required: ["op", "path"] } },
+      }, required: ["say", "ops"] } },
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
       rule: { type: "string", description: "Only when the mistake was the shop's own way of doing things, not this customer's (a print placed far too low, a wrong default): one sentence of the rule that would have prevented it. Empty otherwise." },
     }, required: ["reply", "changes"] } },
@@ -93,6 +160,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
 You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
 
 Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; which group a line is in (field group: the id of a line in the group it joins, or "new"): this is how groups are combined or split ("put all the left chest ones together, the sleeve ones together" → move every left-chest line into one left-chest line's group and every sleeve line into one sleeve line's group). A line that joins a group takes that group's prints; a group left with no lines goes away. Name each group you combine (group_name on one of its lines) by what it gets: "Left chest", "Left chest + sleeve"; a print's size, location, inks, number of colors, drop and white underbase; a print's details sent to production to confirm on the run (Reorder Details: "production needs to confirm the details" on a reorder → confirm "both", or just "size" / "ink"; "they confirmed it" / "take it off Reorder Details" → "none"; when staff ask for it without naming one print ("have production confirm these", "the mockups", "this order", "it's a reorder, please confirm"), send a confirm change for EVERY print on the order, not just one. It keeps the details already entered as our best guess and never changes the mockup); extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
+ANYTHING ELSE on the order (add or remove lines, prints, groups or fees; every price at once; a print's method; a group's name or its notes; whatever staff ask that's part of the order): make it with "edits", JSON Patch operations on the ORDER JSON (paths into it, array indexes from 0, "-" to add at the end; a new line or print copies the shape of the ones there, with a new short id). Use a field change when one fits, an edit for the rest. Never answer that you can't change something on the order: there's nothing on it you can't change. Only things outside the order (sending the customer an email, ordering goods, Printavo) are for staff to do.
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -110,7 +178,17 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
     (c.what === "line" && lineIds.has(c.id) && ((c.field === "group" && (c.value === "new" || (lineIds.has(c.value) && c.value !== c.id))) || (c.field === "group_name" && !!String(c.value || "").trim()) || (c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
     (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 40);
-  const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
+  // the edits: each one checked on a copy of the order now (one that wouldn't apply is left out and said so)
+  const docNow = docOf(o as Record<string, unknown>);
+  let skipped = "";
+  for (const e of (Array.isArray((r.data as { edits?: unknown }).edits) ? (r.data as { edits: { say?: string; ops?: PatchOp[] }[] }).edits : []).slice(0, 20)) {
+    const ops = Array.isArray(e.ops) ? e.ops.slice(0, 200) : [];
+    if (!ops.length) continue;
+    const t = patchDoc(docNow, ops);
+    if (!t.ok) { skipped += ` (Couldn't: ${String(e.say || "a change")}: ${t.error}.)`; continue; }
+    changes.push({ what: "order", id: "order", field: "edit", value: JSON.stringify(ops), say: String(e.say || "Changed the order").slice(0, 300) });
+  }
+  const res: FixResult = { reply: (String(r.data.reply || "") + skipped).slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
     if (!a.ok) return a;
@@ -171,10 +249,23 @@ function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "
 /** the order changes (not art): print fields, their extras, the date */
 export async function applyChanges(admin: SupabaseClient, orderId: string, by: string, changes: OrderChange[]): Promise<{ ok: true; applied: string[] } | { ok: false; error: string }> {
   if (!changes.length) return { ok: true, applied: [] };
-  const { data: o } = await admin.from("orders").select("id, groups, due_date, firm").eq("id", orderId).maybeSingle();
+  const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!o) return { ok: false, error: "Order not found." };
-  const groups = (o.groups || []) as Group[];
+  let groups = (o.groups || []) as Group[];
   const patch: Record<string, unknown> = {}, applied: string[] = [];
+  // the edits first, on the order as a document (then the field changes on what they left)
+  const edits = changes.filter((c) => c.what === "order" && c.field === "edit");
+  if (edits.length) {
+    let doc = docOf(o as Record<string, unknown>);
+    for (const c of edits) {
+      let ops: PatchOp[] = []; try { ops = JSON.parse(c.value) as PatchOp[]; } catch { continue; }
+      const t = patchDoc(doc, ops); if (!t.ok) continue;
+      doc = t.doc; applied.push(c.say);
+    }
+    groups = doc.groups as Group[];
+    for (const k of DOC_KEYS) if (k !== "groups" && JSON.stringify(doc[k] ?? null) !== JSON.stringify((o as Record<string, unknown>)[k] ?? null)) patch[k] = doc[k];
+    changes = changes.filter((c) => !(c.what === "order" && c.field === "edit"));
+  }
   // group names after the moves (the line's group is where it ends up)
   for (const c of [...changes.filter((x) => x.field !== "group_name"), ...changes.filter((x) => x.field === "group_name")]) {
     const v = String(c.value || "").trim().slice(0, 120);
