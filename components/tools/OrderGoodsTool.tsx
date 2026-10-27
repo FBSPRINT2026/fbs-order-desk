@@ -177,7 +177,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   }, [optKey2, opts]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setChosen(null); }, [optKey2]);
   const need = needBy ? new Date(needBy + "T23:59") : null;
-  const pick = options ? pickOption(options, need) : null;
+  const pick = options && opts ? pickOption(options, need, opts.money.bigRun) : null;
   const plan: DayOption | null = options && pick ? options[chosen ?? pick.i] || pick.option : null;
   const byKey = new Map(lines.map((x) => [x.key, x]));
   const ssParts = (plan?.parts || []).filter((p) => p.sup === "ss"), smParts = (plan?.parts || []).filter((p) => p.sup === "sm");

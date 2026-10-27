@@ -331,7 +331,7 @@ async function goodsMoney(admin: ReturnType<typeof createAdminClient>): Promise<
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const g = ((data?.data as { goods?: Partial<Record<"sanmarFee" | "pointsPerDollar" | "pointValue" | "taxRate" | "bigRun", number>> } | null)?.goods) || {};
   const ok = (v: unknown, lo: number, hi: number, d: number) => { const n = +(v ?? NaN); return isFinite(n) && n >= lo && n < hi ? n : d; };
-  return { fee: ok(g.sanmarFee, 0, 20, 3.25), ppd: ok(g.pointsPerDollar, 0, 20, 2), pointValue: ok(g.pointValue, 0, 1, 0.01), tax: ok(g.taxRate, 0, 90, 20), bigRun: Math.round(ok(g.bigRun, 1, 1e6, 1000)) };
+  return { fee: ok(g.sanmarFee, 0, 20, 3.25), ppd: ok(g.pointsPerDollar, 0, 20, 2), pointValue: ok(g.pointValue, 0, 1, 0.01), tax: ok(g.taxRate, 0, 90, 20), bigRun: Math.round(ok(g.bigRun, 1, 1e6, 250)) };
 }
 export async function setGoodsMoney(p: Partial<GoodsMoney>) {
   try {

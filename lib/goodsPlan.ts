@@ -133,7 +133,7 @@ const startOf = (p: Plan, share = 0.8) => {
   return { start: p.days, startPcs: pcs, pcs };
 };
 
-export function dayOptions(items: PlanItem[], feePct: number, bigRun = 1000): DayOption[] {
+export function dayOptions(items: PlanItem[], feePct: number, bigRun = 250): DayOption[] {
   const its = items.filter((i) => i.qty > 0);
   const all = its.flatMap((i) => i.srcs.filter((s) => s.stock > 0));
   const days = [...new Set(all.map((s) => whInfo(s.sup, s.wh).days))].sort((a, b) => a - b);
@@ -146,7 +146,8 @@ export function dayOptions(items: PlanItem[], feePct: number, bigRun = 1000): Da
     const easy = makePlan(sub, "easy", feePct);
     const p = !easy.short.length && easy.total <= cheap.total + 0.005 && easy.ships < cheap.ships ? easy : cheap;
     const prev = out[out.length - 1];
-    if (prev && (p.total >= prev.total - 0.005 || p.days <= prev.days)) continue;
+    // a later day shows only when it's cheaper or takes fewer shipments than every sooner one
+    if (p.days <= (prev?.days ?? -1) || out.some((o) => p.total >= o.total - 0.005 && p.ships >= o.ships)) continue;
     out.push({ ...p, kind: "full", ...startOf(p) });
   }
   if (!out.length) {
@@ -155,29 +156,45 @@ export function dayOptions(items: PlanItem[], feePct: number, bigRun = 1000): Da
     out.push({ ...p, kind: "full", ...startOf(p) });
   }
   const pcs = its.reduce((a, i) => a + i.qty, 0);
-  if (pcs >= bigRun) {
+  if (pcs > bigRun) {
     const f = makePlan(its, "fast", feePct), s = startOf(f);
     if (!f.short.length && s.start < out[0].days && s.start < f.days) out.unshift({ ...f, kind: "early", ...s });
   }
   return out;
 }
 
-/** the one to order: the cheapest that's here when it's needed (on a big run, enough to start); else the soonest */
-export function pickOption(opts: DayOption[], needBy: Date | null): Pick {
-  const big = opts.some((o) => o.kind === "early");
-  const when = (o: DayOption) => arriveOn(big ? o.start : o.days);
-  const cheapest = [...opts].sort((a, b) => a.total - b.total || a.days - b.days)[0];
-  const soonest = [...opts].sort((a, b) => (big ? a.start - b.start : a.days - b.days) || a.total - b.total)[0];
+/**
+ * The one to order (Oct 27, Nick: "it's always fastest and cheapest… if it's not cheapest and fastest, then we have to
+ * make the decision… under 250 pieces… go easiest… over 250 pieces… go with fastest… if you have to run it earlier and
+ * you're missing a box"):
+ *   1. one way is both the cheapest and the soonest: that one.
+ *   2. otherwise, `split` pieces or fewer: the easiest, the fewest shipments, never costing more than the cheapest
+ *      ("we're never going to pay more for it to be easy"), then the soonest.
+ *   3. over `split` pieces: the fastest, the soonest the run can start (most of it here, a box may follow), then the
+ *      cheapest.
+ * When the goods are needed by a day (an order), only ways that are here in time are picked, if there are any.
+ */
+export function pickOption(opts: DayOption[], needBy: Date | null, split = 250): Pick {
+  const pcs = opts[0]?.pcs || 0, big = pcs > split;
+  const startDay = (o: DayOption) => (big ? o.start : o.days);
+  const when = (o: DayOption) => arriveOn(startDay(o));
+  const cheapest = [...opts].sort((a, b) => a.total - b.total || a.days - b.days || a.ships - b.ships)[0];
+  const soonest = [...opts].sort((a, b) => startDay(a) - startDay(b) || a.total - b.total || a.ships - b.ships)[0];
   const at = (o: DayOption) => opts.indexOf(o);
   const day = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short" });
   const money = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (cheapest === soonest) return { option: cheapest, i: at(cheapest), why: "Cheapest and fastest", tone: "best", cheapest, late: !!needBy && when(cheapest) > needBy };
-  if (needBy) {
-    const onTime = opts.filter((o) => when(o) <= needBy).sort((a, b) => a.total - b.total || a.ships - b.ships || a.days - b.days);
-    const o = onTime[0];
-    if (o && o === cheapest) return { option: o, i: at(o), why: `Cheapest, and here in time (by ${day(needBy)})`, tone: "best", cheapest, late: false };
-    if (o) return { option: o, i: at(o), why: o.kind === "early" ? `Start running ${day(arriveOn(o.start))}: ${o.startPcs.toLocaleString("en-US")} of ${o.pcs.toLocaleString("en-US")} pcs here by then, ${money(o.total - cheapest.total)} more than the cheapest` : `Faster, because you need it by ${day(needBy)}: ${money(o.total - cheapest.total)} more than the cheapest (${day(arriveOn(cheapest.days))})`, tone: "trade", cheapest, late: false };
-    return { option: soonest, i: at(soonest), why: `The soonest it can be here, still after ${day(needBy)}`, tone: "trade", cheapest, late: true };
+  const lateOf = (o: DayOption) => !!needBy && when(o) > needBy;
+  if (cheapest === soonest || (startDay(cheapest) === startDay(soonest) && Math.abs(cheapest.total - soonest.total) < 0.005)) return { option: cheapest, i: at(cheapest), why: "Cheapest and fastest", tone: "best", cheapest, late: lateOf(cheapest) };
+  const pool = needBy && opts.some((o) => !lateOf(o)) ? opts.filter((o) => !lateOf(o)) : opts;
+  const floor = Math.min(...pool.map((o) => o.total));
+  let o: DayOption, why: string;
+  if (!big) {
+    o = [...pool].filter((x) => x.total <= floor + 0.005).sort((a, b) => a.ships - b.ships || a.days - b.days)[0];
+    why = `Cheapest and fastest isn't one option: easiest, ${o.ships === 1 ? "one shipment" : `${o.ships} shipments`}${o.total > cheapest.total + 0.005 ? `, ${money(o.total - cheapest.total)} more to be here by ${needBy ? day(needBy) : "then"}` : ""}`;
+  } else {
+    o = [...pool].sort((a, b) => startDay(a) - startDay(b) || a.total - b.total || a.ships - b.ships)[0];
+    const extra = o.total - cheapest.total;
+    why = `Cheapest and fastest isn't one option: fastest, ${o.kind === "early" ? `${o.startPcs.toLocaleString("en-US")} of ${o.pcs.toLocaleString("en-US")} pcs here ${day(arriveOn(o.start))} to start the run` : `here ${day(arriveOn(o.days))}`}${extra > 0.005 ? `, ${money(extra)} more than the cheapest` : ""}`;
   }
-  return { option: cheapest, i: at(cheapest), why: "Cheapest", tone: "best", cheapest, late: false };
+  return { option: o, i: at(o), why, tone: "trade", cheapest, late: lateOf(o) };
 }
