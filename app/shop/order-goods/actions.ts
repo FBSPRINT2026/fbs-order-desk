@@ -5,7 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
 import { sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
-import type { Src } from "@/lib/goodsPlan";
+import { SM_WH, type Src } from "@/lib/goodsPlan";
+// a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
+const smWh = (id: string, name: string) => (SM_WH[id] ? id : Object.entries(SM_WH).find(([, v]) => name && new RegExp(v[1], "i").test(name))?.[0] || id);
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { goodsPcs, goodsSizes, type GoodsGarment } from "@/lib/goodsGarments";
@@ -92,12 +94,23 @@ export async function goodsStart(p: { email?: string; order?: string }) {
       return rows.sort((a, b) => `${a.brand}|${a.style}|${a.color}`.localeCompare(`${b.brand}|${b.style}|${b.color}`) || sizeRank(a.size) - sizeRank(b.size));
     };
     if (p.order) {
-      const { data: o } = await admin.from("orders").select("id, number, nickname, groups, lines, customer_id, customers(id, company, name)").eq("id", p.order).maybeSingle();
+      const { data: o } = await admin.from("orders").select("id, number, nickname, groups, lines, customer_id, due_date, production_date, customers(id, company, name)").eq("id", p.order).maybeSingle();
       if (!o) return { ok: false as const, error: "Order not found." };
       const c = (o as unknown as { customers: { id: string; company: string; name: string } | null }).customers;
       const rows = rowsOf(orderGroups(o as unknown as Order));
       if (ssConfigured()) await matchToSS(admin, rows);
-      return { ok: true as const, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim() };
+      // when the goods have to be here (Oct 27, Nick: Order goods goes by the day they arrive): the day before production,
+      // else the in-hands date less the goods lead days (Settings → Shipping)
+      const prod = (o as { production_date?: string | null }).production_date || null, due = (o as { due_date?: string | null }).due_date || null;
+      let needBy: string | null = null;
+      if (prod || due) {
+        const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+        const lead = prod ? 1 : Math.max(1, +(mergeSettings(st?.data).ship.goodsLeadDays || 3));
+        const d = new Date((prod || due)!.slice(0, 10) + "T12:00");
+        let n = lead; while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+        needBy = d.toISOString().slice(0, 10);
+      }
+      return { ok: true as const, needBy, production: prod, due, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim() };
     }
     if (p.email) {
       const { data: a } = await admin.from("activities").select("id, subject, from_email, customer_id, order_id, meta").eq("id", p.email).maybeSingle();
@@ -313,12 +326,12 @@ async function sanmarFeePct(admin: ReturnType<typeof createAdminClient>) { retur
  * Paying by card (Oct 27, Nick: "every dollar is 2 points… a cent per point… there's a 20% tax on that"): SanMar's card
  * fee, points a dollar, a point's value and the tax rate, for the Points decision (owners only). Settings data.goods.
  */
-export type GoodsMoney = { fee: number; ppd: number; pointValue: number; tax: number };
+export type GoodsMoney = { fee: number; ppd: number; pointValue: number; tax: number; bigRun: number };
 async function goodsMoney(admin: ReturnType<typeof createAdminClient>): Promise<GoodsMoney> {
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-  const g = ((data?.data as { goods?: Partial<Record<"sanmarFee" | "pointsPerDollar" | "pointValue" | "taxRate", number>> } | null)?.goods) || {};
+  const g = ((data?.data as { goods?: Partial<Record<"sanmarFee" | "pointsPerDollar" | "pointValue" | "taxRate" | "bigRun", number>> } | null)?.goods) || {};
   const ok = (v: unknown, lo: number, hi: number, d: number) => { const n = +(v ?? NaN); return isFinite(n) && n >= lo && n < hi ? n : d; };
-  return { fee: ok(g.sanmarFee, 0, 20, 3.25), ppd: ok(g.pointsPerDollar, 0, 20, 2), pointValue: ok(g.pointValue, 0, 1, 0.01), tax: ok(g.taxRate, 0, 90, 20) };
+  return { fee: ok(g.sanmarFee, 0, 20, 3.25), ppd: ok(g.pointsPerDollar, 0, 20, 2), pointValue: ok(g.pointValue, 0, 1, 0.01), tax: ok(g.taxRate, 0, 90, 20), bigRun: Math.round(ok(g.bigRun, 1, 1e6, 1000)) };
 }
 export async function setGoodsMoney(p: Partial<GoodsMoney>) {
   try {
@@ -327,10 +340,10 @@ export async function setGoodsMoney(p: Partial<GoodsMoney>) {
     const cur = await goodsMoney(admin);
     const num = (v: unknown) => Math.round(+(v as number) * 10000) / 10000;
     const next = { ...cur, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v != null && isFinite(+v)).map(([k, v]) => [k, num(v)])) } as GoodsMoney;
-    if (next.fee < 0 || next.fee >= 20 || next.ppd < 0 || next.ppd >= 20 || next.pointValue < 0 || next.pointValue >= 1 || next.tax < 0 || next.tax >= 90) return { ok: false as const, error: "One of those numbers is out of range." };
+    if (next.fee < 0 || next.fee >= 20 || next.ppd < 0 || next.ppd >= 20 || next.pointValue < 0 || next.pointValue >= 1 || next.tax < 0 || next.tax >= 90 || next.bigRun < 1) return { ok: false as const, error: "One of those numbers is out of range." };
     const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const d = (data?.data || {}) as Record<string, unknown>;
-    const { error } = await admin.from("settings").update({ data: { ...d, goods: { ...((d.goods as object) || {}), sanmarFee: next.fee, pointsPerDollar: next.ppd, pointValue: next.pointValue, taxRate: next.tax } } }).eq("id", 1);
+    const { error } = await admin.from("settings").update({ data: { ...d, goods: { ...((d.goods as object) || {}), sanmarFee: next.fee, pointsPerDollar: next.ppd, pointValue: next.pointValue, taxRate: next.tax, bigRun: Math.round(next.bigRun) } } }).eq("id", 1);
     return error ? { ok: false as const, error: error.message } : { ok: true as const, money: next, fee: next.fee };
   } catch (e) { return fail(e); }
 }
@@ -386,7 +399,7 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
           const price = hit.myPrice || hit.casePrice || hit.piecePrice;
           sm[r.key] = { style: smStyle, color: hit.catalogColor || hit.color, size: hit.rawSize, inventoryKey: hit.inventoryKey || undefined, sizeIndex: hit.sizeIndex || undefined };
           const whs = (inv.get(sanmarStockKey(hit.catalogColor, hit.rawSize)) || inv.get(sanmarStockKey(hit.color, hit.rawSize)) || []) as { whse: string; qty: number }[];
-          if (price > 0) for (const w of whs) if (w.qty > 0) srcs[r.key].push({ sup: "sm", wh: w.whse, stock: w.qty, price });
+          if (price > 0) for (const w of whs) if (w.qty > 0) srcs[r.key].push({ sup: "sm", wh: smWh(w.whse, (w as { name?: string }).name || ""), stock: w.qty, price });
         }
       }));
     }

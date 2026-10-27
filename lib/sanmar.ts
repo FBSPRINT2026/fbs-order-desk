@@ -231,6 +231,37 @@ export async function sanmarProbe(): Promise<Record<string, string>> {
  * the catalog (mainframe) color and SanMar's own size name; quantities are capped at 3,000 a warehouse by SanMar.
  */
 export async function sanmarInventory(style: string): Promise<Map<string, { whse: string; name: string; qty: number }[]>> {
+  // SanMar's own inventory call first; when it turns the style down ("Invalid product specified", Oct 27 on 1717) or
+  // sends nothing, the PromoStandards Inventory 2.0 call (same login) instead
+  let first: unknown = null;
+  try { const m = await sanmarInventoryStd(style); if (m.size) return m; } catch (e) { first = e; }
+  try { const m = await sanmarInventoryPS(style); if (m.size || !first) return m; } catch (e) { if (!first) throw e; }
+  throw first instanceof Error ? first : new Error("SanMar's stock isn't available");
+}
+async function sanmarInventoryPS(style: string): Promise<Map<string, { whse: string; name: string; qty: number }[]>> {
+  const c = cred(), ns = "http://www.promostandards.org/WSDL/Inventory/2.0.0/";
+  const body = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${ns}" xmlns:shar="${ns}SharedObjects/"><soapenv:Header/><soapenv:Body><ns:GetInventoryLevelsRequest><shar:wsVersion>2.0.0</shar:wsVersion><shar:id>${esc(c.user)}</shar:id><shar:password>${esc(c.pass)}</shar:password><shar:productId>${esc(style.trim())}</shar:productId></ns:GetInventoryLevelsRequest></soapenv:Body></soapenv:Envelope>`;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 40000);
+  try {
+    const r = await fetch(host() + "/promostandards/InventoryServiceBindingV2final", { method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "getInventoryLevels" }, body, cache: "no-store", signal: ctl.signal });
+    const x = await r.text();
+    const fault = tag(x, "faultstring");
+    if (fault) throw new Error("SanMar: " + fault);
+    if (!r.ok) throw new Error(`SanMar returned ${r.status}`);
+    const out = new Map<string, { whse: string; name: string; qty: number }[]>();
+    for (const p of blocks(x, "PartInventory")) {
+      const color = tag(p, "partColor"), size = tag(p, "labelSize");
+      const whs = blocks(p, "InventoryLocation").map((w) => ({ whse: tag(w, "inventoryLocationId"), name: tag(w, "inventoryLocationName"), qty: Math.max(0, Math.round(num(tag(tag(w, "inventoryLocationQuantity") || w, "value")))) })).filter((w) => w.whse);
+      if (color) out.set(pkey(color, size), whs);
+    }
+    if (!out.size) { const msg = tag(x, "description") || tag(x, "ServiceMessage"); if (msg) throw new Error("SanMar: " + msg); }
+    return out;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("SanMar didn't answer in time.");
+    throw e;
+  } finally { clearTimeout(t); }
+}
+async function sanmarInventoryStd(style: string): Promise<Map<string, { whse: string; name: string; qty: number }[]>> {
   const c = cred();
   const x = await soap("/SanMarWebService/SanMarWebServicePort", "getInventoryQtyForStyleColorSize",
     `<arg0>${esc(c.num)}</arg0><arg1>${esc(c.user)}</arg1><arg2>${esc(c.pass)}</arg2><arg3>${esc(style.trim())}</arg3><arg4></arg4><arg5></arg5>`, 30000, "http://webservice.integration.sanmar.com/");

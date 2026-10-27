@@ -11,8 +11,7 @@ import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/S
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
 import { goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
-import { arriveOn, makePlan, shipKey, supName, whInfo, type Plan, type PlanMode, type Src, type Sup } from "@/lib/goodsPlan";
-import { useSticky } from "@/lib/useSticky";
+import { arriveOn, dayOptions, pickOption, shipKey, supName, whInfo, type DayOption, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSeesMoney } from "@/components/RoleContext";
 import PointsDecision from "@/components/PointsDecision";
 import type { GoodsMoney } from "@/app/shop/order-goods/actions";
@@ -68,7 +67,10 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const [opts, setOpts] = useState<null | { srcs: Record<string, Src[]>; sm: Record<string, SanMarRef>; notes: string[]; fee: number; money: GoodsMoney; sanmar: boolean; sanmarOrders: string }>(null);
   // the Points decision: owners only (Oct 27, Nick: "my employees don't need to see this")
   const owner = useSeesMoney(), [pointsOpen, setPointsOpen] = useState(false);
-  const [planMode, setPlanMode] = useSticky<PlanMode>("goods.plan", "easy");
+  // one way picked for you by arrival day (Oct 27, Nick: "treat it by date… like UPS… arrive Thursday, this cost");
+  // tap another day to switch. When the goods are needed comes from the order (the day before production)
+  const [needBy, setNeedBy] = useState<string | null>(null), [prodDay, setProdDay] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<number | null>(null), [otherOpen, setOtherOpen] = useState(false);
   const [ssOnly, setSsOnly] = useState(false), [feeEdit, setFeeEdit] = useState(false);
   const [editing, setEditing] = useState(false), [arrive, setArrive] = useState<Record<string, string>>({});
   const stopped = useRef(false), waiting = useRef<((e: Error) => void) | null>(null), ran = useRef(false);
@@ -97,6 +99,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
           const o = "order" in r ? r.order : null, c = "customer" in r ? r.customer : null;
           if (c) { setCust({ id: c.id, name: c.name }); setWho(o ? `#${o.number} ${c.name}` : c.name); } else if (o) setWho(`#${o.number}`);
           if (o) setOrderNo(o.number);
+          if ("needBy" in r) { setNeedBy((r.needBy as string | null) || null); setProdDay(((r as { production?: string | null }).production) || null); }
           if ("label" in r && r.label) setLabel0(String(r.label));
           step("Checking stock and price with S&S and SanMar…");
           setRows((r.rows || []) as Row[]);
@@ -166,12 +169,16 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
     const t = setTimeout(() => { void goodsOptions(wanted.map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price }))).then((r) => { if (live && r.ok) setOpts(r); else if (live && !r.ok) setErr(r.error); }); }, 300);
     return () => { live = false; clearTimeout(t); };
   }, [optKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const plans = useMemo(() => {
+  const optKey2 = wanted.map((x) => `${x.key}:${x.qty}`).join(",") + "|" + ssOnly + "|" + (opts ? opts.fee + ":" + opts.money.bigRun + ":" + Object.keys(opts.srcs).length : "");
+  const options = useMemo(() => {
     if (!opts) return null;
     const items = wanted.map((x) => ({ key: x.key, qty: x.qty, srcs: (opts.srcs[x.key] || []).filter((s) => !ssOnly || s.sup === "ss") }));
-    return { easy: makePlan(items, "easy", opts.fee), cheap: makePlan(items, "cheap", opts.fee), fast: makePlan(items, "fast", opts.fee) } as Record<PlanMode, Plan>;
-  }, [opts, ssOnly, wanted.map((x) => `${x.key}:${x.qty}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
-  const plan = plans ? plans[planMode] || plans.easy : null;
+    return dayOptions(items, opts.fee, opts.money.bigRun);
+  }, [optKey2, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setChosen(null); }, [optKey2]);
+  const need = needBy ? new Date(needBy + "T23:59") : null;
+  const pick = options ? pickOption(options, need) : null;
+  const plan: DayOption | null = options && pick ? options[chosen ?? pick.i] || pick.option : null;
   const byKey = new Map(lines.map((x) => [x.key, x]));
   const ssParts = (plan?.parts || []).filter((p) => p.sup === "ss"), smParts = (plan?.parts || []).filter((p) => p.sup === "sm");
   const smOn = !!opts?.sanmarOrders;
@@ -233,6 +240,34 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {rows && <div className="og-list">
           {!lines.length ? <p className="faint">Nothing to order: no garment with a style and sizes.{skipped.length ? ` Left for now: ${skipped.join(", ")}.` : ""}</p> : <>
+            {!editing && plan && pick && options && <div className="og-rec">
+              {(needBy || prodDay) && <div className="og-need"><svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>{prodDay ? <>Production <b>{dayShort(new Date(prodDay + "T12:00"))}</b> · </> : null}goods needed by <b>{needBy ? dayShort(new Date(needBy + "T12:00")) : "—"}</b></div>}
+              {(() => {
+                const mine = chosen == null || chosen === pick.i;
+                const late = !!need && arriveOn(plan.kind === "early" ? plan.start : plan.days) > need;
+                return (
+                  <div className={"og-pick" + (late ? " late" : mine && pick.tone === "trade" ? " trade" : "")}>
+                    <div className="og-pk">{mine ? (pick.tone === "best" ? "👍 " : "") + pick.why : "Your pick"}</div>
+                    <div className="og-pv"><b>{money(plan.total)}</b><span>{plan.kind === "early" ? `${plan.startPcs.toLocaleString()} pcs ${dayShort(arriveOn(plan.start))}, all ${dayShort(arriveOn(plan.days))}` : `Arrives ${dayShort(arriveOn(plan.days))}`} · {plan.ships} shipment{plan.ships === 1 ? "" : "s"}</span></div>
+                    {late && <div className="og-pw">Arrives after the goods are needed.</div>}
+                  </div>
+                );
+              })()}
+              {options.length > 1 && <>
+                <button type="button" className="linkbtn og-other" aria-expanded={otherOpen} onClick={() => setOtherOpen((x) => !x)}>{otherOpen ? "Hide other days" : `${options.length - 1} other day${options.length === 2 ? "" : "s"}`} {otherOpen ? "▴" : "▾"}</button>
+                {otherOpen && <div className="og-days" role="radiogroup" aria-label="Arrival days">{options.map((o, i) => {
+                  const d = arriveOn(o.kind === "early" ? o.start : o.days), late = !!need && d > need, on = (chosen ?? pick.i) === i;
+                  const lateBy = late && need ? Math.max(1, Math.round((d.getTime() - new Date(needBy + "T12:00").getTime()) / 864e5)) : 0;
+                  return (
+                    <button key={i} type="button" role="radio" aria-checked={on} className={"og-day" + (on ? " on" : "") + (late ? " late" : "")} onClick={() => { setChosen(i); setCheck(null); setSure(false); }}>
+                      <span className="og-dd"><b>{o.kind === "early" ? `Most here ${dayShort(d)}` : `Arrives ${dayShort(d)}`}</b>{o === pick.cheapest && <i className="og-tag c">Cheapest</i>}{i === pick.i && <i className="og-tag g">Picked</i>}{late && <i className="og-tag l">{lateBy} day{lateBy === 1 ? "" : "s"} late</i>}
+                        <small>{o.ships} shipment{o.ships === 1 ? "" : "s"} · {[...new Set(o.parts.map((p) => `${supName(p.sup)} ${whInfo(p.sup, p.wh).short}`))].join(" + ")}{o.kind === "early" ? ` · all by ${dayShort(arriveOn(o.days))}` : ""}</small></span>
+                      <span className="og-dp"><b>{money(o.total)}</b><small>{o === pick.cheapest ? "lowest" : `+${money(o.total - pick.cheapest.total)}`}</small></span>
+                    </button>
+                  );
+                })}</div>}
+              </>}
+            </div>}
             {!editing && plan && plan.parts.length > 0 ? (() => {
               // by shipment (supplier and warehouse): a small table each, a row per garment and color, the sizes across
               const ships = [...new Set(plan.parts.map(shipKey))].sort((x, y) => { const [sx, wx] = x.split(":"), [sy, wy] = y.split(":"); return whInfo(sx as Sup, wx).days - whInfo(sy as Sup, wy).days || (sx === sy ? 0 : sx === "ss" ? -1 : 1); });
@@ -294,17 +329,19 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             })}
             </>}
             {skipped.length > 0 && <p className="faint og-note">Left for now (no blank picked): {skipped.join(", ")}.</p>}
-            {plans && <div className="og-plans" role="radiogroup" aria-label="How to order it">
-              {([["easy", "Easiest"], ["cheap", "Cheapest"], ["fast", "Fastest"]] as [PlanMode, string][]).map(([m, l]) => { const p = plans[m]; return (
-                <button key={m} type="button" role="radio" aria-checked={planMode === m} className={"og-plan" + (planMode === m ? " on" : "")} onClick={() => { setPlanMode(m); setCheck(null); setSure(false); }}
-                  title={m === "easy" ? "Fewest shipments, then the cheapest of those" : m === "cheap" ? "Lowest cost for each size (SanMar with our card fee); a tie goes to S&S" : "The soonest warehouse for each size, then the cheapest"}>
-                  <span className="k">{l}</span><b>{money(p.total)}</b><small>{p.parts.length ? `${dayShort(arriveOn(p.days)).replace(/,.*$/, "")} · ${p.ships} shipment${p.ships === 1 ? "" : "s"}` : "—"}</small>
-                </button>); })}
-            </div>}
             <div className="og-tot"><span>{pcs.toLocaleString()} pcs{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
             {owner && plan && opts && plan.parts.length > 0 && <>
-              <button type="button" className="og-pts" aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
-                <svg viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="9" r="6" /><path d="M15.5 9.5a6 6 0 1 1-6 6" /></svg>Points decision<span aria-hidden>{pointsOpen ? "▴" : "▾"}</span>
+              <button type="button" className={"og-pts" + (smParts.length ? "" : " none")} aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
+                <svg viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="9" r="6" /><path d="M15.5 9.5a6 6 0 1 1-6 6" /></svg>{(() => {
+                  // nothing to decide when it's all S&S (no card fee, points either way); SanMar only wins after the fee
+                  const m = opts.money, pts = (n: number) => Math.round(n * m.ppd) * m.pointValue * (m.tax < 100 ? 100 / (100 - m.tax) : 1);
+                  if (!smParts.length) return `No points decision: all S&S, no card fee, +${money(pts(plan.total))} in points`;
+                  // the SanMar part against S&S's price for the same sizes (with SanMar's card fee in)
+                  let sm = 0, ss = 0, cmp = true;
+                  for (const p of smParts) { const s2 = (opts.srcs[p.key] || []).filter((x) => x.sup === "ss").sort((a, b) => a.price - b.price)[0]; if (!s2) { cmp = false; continue; } sm += p.qty * p.each; ss += p.qty * s2.price; }
+                  if (!cmp && !ss) return "Points decision: S&S doesn't carry SanMar's part";
+                  return sm <= ss ? `Points decision: SanMar is ${money(ss - sm)} cheaper, even with the card fee` : `Points decision: SanMar for speed, ${money(sm - ss)} more than S&S with the fee`;
+                })()}<span aria-hidden>{pointsOpen ? "▴" : "▾"}</span>
               </button>
               {pointsOpen && <PointsDecision plan={plan} items={wanted} srcs={opts.srcs} money={opts.money} onMoney={(m) => setOpts((o) => (o ? { ...o, money: m, fee: m.fee } : o))} />}
             </>}

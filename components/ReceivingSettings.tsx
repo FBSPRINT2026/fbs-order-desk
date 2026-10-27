@@ -10,7 +10,7 @@ import type { ManifestBoxPublic } from "@/lib/manifestMail";
  */
 const when = (s?: string | null) => (s ? new Date(s).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
 
-export default function ReceivingSettings() {
+export default function ReceivingSettings({ upBusy, onUpload }: { upBusy?: boolean; onUpload?: (files: File[]) => void }) {
   const [box, setBox] = useState<ManifestBoxPublic | null>(null), [can, setCan] = useState(false), [loaded, setLoaded] = useState(false);
   const [email, setEmail] = useState(""), [pw, setPw] = useState(""), [on, setOn] = useState(true);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [err, setErr] = useState("");
@@ -68,6 +68,10 @@ export default function ReceivingSettings() {
               <td className="nw">{l.error ? <span className="rs-bad">{l.error}</span> : `${l.new} new of ${l.lines}`}</td></tr>
           ))}</tbody>
         </table></div>}
+        {onUpload && <div className="rs-hand">
+          <div><b>Import a manifest by hand</b><span className="faint"> · an .xlsx or .csv from S&amp;S or SanMar that didn&apos;t come to the mailbox</span></div>
+          <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Choose files"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; if (fs.length) onUpload(fs); }} /></label>
+        </div>}
       </div>
     </section>
   );

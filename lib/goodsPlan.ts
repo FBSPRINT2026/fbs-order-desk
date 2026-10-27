@@ -114,3 +114,70 @@ export function makePlan(items: PlanItem[], mode: PlanMode, feePct: number): Pla
   }
   return inSet(set);
 }
+
+/* ---------- arrival-day options (Oct 27, Nick) ----------
+ * "you should treat it by date… like UPS does… arrive Thursday, this cost". One option per arrival day: the cheapest
+ * way to have everything here that day, with the fewest shipments when that costs nothing more ("easiest is never
+ * available if it costs more"). A later day only shows when it's cheaper. On a big run, a split that gets most of the
+ * goods here sooner is its own option ("the majority of the goods here Wednesday and one box Thursday… so that we can
+ * start running it"). Shipping is free at both suppliers: only the goods and SanMar's card fee count (points come back
+ * on both, the same share of what's paid, so they never change the order of the options). */
+export type DayOption = Plan & { kind: "full" | "early"; start: number; startPcs: number; pcs: number };
+export type Pick = { option: DayOption; i: number; why: string; tone: "best" | "trade"; cheapest: DayOption; late: boolean };
+
+const startOf = (p: Plan, share = 0.8) => {
+  const pcs = p.parts.reduce((a, x) => a + x.qty, 0);
+  const days = [...new Set(p.parts.map((x) => x.days))].sort((a, b) => a - b);
+  let got = 0;
+  for (const d of days) { got += p.parts.filter((x) => x.days === d).reduce((a, x) => a + x.qty, 0); if (got >= pcs * share) return { start: d, startPcs: got, pcs }; }
+  return { start: p.days, startPcs: pcs, pcs };
+};
+
+export function dayOptions(items: PlanItem[], feePct: number, bigRun = 1000): DayOption[] {
+  const its = items.filter((i) => i.qty > 0);
+  const all = its.flatMap((i) => i.srcs.filter((s) => s.stock > 0));
+  const days = [...new Set(all.map((s) => whInfo(s.sup, s.wh).days))].sort((a, b) => a - b);
+  const out: DayOption[] = [];
+  for (const d of days) {
+    const sub = its.map((i) => ({ ...i, srcs: i.srcs.filter((s) => s.stock > 0 && whInfo(s.sup, s.wh).days <= d) }));
+    const cheap = makePlan(sub, "cheap", feePct);
+    if (cheap.short.length) continue;
+    // the fewest shipments at that same cost
+    const easy = makePlan(sub, "easy", feePct);
+    const p = !easy.short.length && easy.total <= cheap.total + 0.005 && easy.ships < cheap.ships ? easy : cheap;
+    const prev = out[out.length - 1];
+    if (prev && (p.total >= prev.total - 0.005 || p.days <= prev.days)) continue;
+    out.push({ ...p, kind: "full", ...startOf(p) });
+  }
+  if (!out.length) {
+    // nobody has all of it: the cheapest that can be had, with what's short
+    const p = makePlan(its, "cheap", feePct);
+    out.push({ ...p, kind: "full", ...startOf(p) });
+  }
+  const pcs = its.reduce((a, i) => a + i.qty, 0);
+  if (pcs >= bigRun) {
+    const f = makePlan(its, "fast", feePct), s = startOf(f);
+    if (!f.short.length && s.start < out[0].days && s.start < f.days) out.unshift({ ...f, kind: "early", ...s });
+  }
+  return out;
+}
+
+/** the one to order: the cheapest that's here when it's needed (on a big run, enough to start); else the soonest */
+export function pickOption(opts: DayOption[], needBy: Date | null): Pick {
+  const big = opts.some((o) => o.kind === "early");
+  const when = (o: DayOption) => arriveOn(big ? o.start : o.days);
+  const cheapest = [...opts].sort((a, b) => a.total - b.total || a.days - b.days)[0];
+  const soonest = [...opts].sort((a, b) => (big ? a.start - b.start : a.days - b.days) || a.total - b.total)[0];
+  const at = (o: DayOption) => opts.indexOf(o);
+  const day = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short" });
+  const money = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (cheapest === soonest) return { option: cheapest, i: at(cheapest), why: "Cheapest and fastest", tone: "best", cheapest, late: !!needBy && when(cheapest) > needBy };
+  if (needBy) {
+    const onTime = opts.filter((o) => when(o) <= needBy).sort((a, b) => a.total - b.total || a.ships - b.ships || a.days - b.days);
+    const o = onTime[0];
+    if (o && o === cheapest) return { option: o, i: at(o), why: `Cheapest, and here in time (by ${day(needBy)})`, tone: "best", cheapest, late: false };
+    if (o) return { option: o, i: at(o), why: o.kind === "early" ? `Start running ${day(arriveOn(o.start))}: ${o.startPcs.toLocaleString("en-US")} of ${o.pcs.toLocaleString("en-US")} pcs here by then, ${money(o.total - cheapest.total)} more than the cheapest` : `Faster, because you need it by ${day(needBy)}: ${money(o.total - cheapest.total)} more than the cheapest (${day(arriveOn(cheapest.days))})`, tone: "trade", cheapest, late: false };
+    return { option: soonest, i: at(soonest), why: `The soonest it can be here, still after ${day(needBy)}`, tone: "trade", cheapest, late: true };
+  }
+  return { option: cheapest, i: at(cheapest), why: "Cheapest", tone: "best", cheapest, late: false };
+}

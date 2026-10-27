@@ -482,7 +482,6 @@ export default function GoodsReceiving() {
           <Link className="btn primary rv-ck" href="/shop/receiving/checkin" title="Count jobs' goods in, size by size">✓ Check-In{ck && (ck.ready + ck.issue) > 0 && <span className="rv-ck-n">{ck.ready ? <i className="rd" title="Jobs on today's schedule (or earlier) with everything here">{ck.ready} ready today</i> : null}{ck.issue ? <i className="pb">{ck.issue} problem{ck.issue === 1 ? "" : "s"}</i> : null}</span>}</Link>
           <button type="button" className="btn" disabled={aiBusy} onClick={(e) => askAi(e.shiftKey)} title="Runs the hourly pass now: refreshes tracking, links exact matches, and has the AI recommend a job for the rest. (Runs on its own every hour, Mon–Fri 6 a.m.–6 p.m.) Shift-click: the AI looks at every shipment again.">{aiBusy ? "Relinking…" : "↻ Attempt to Relink Orders"}</button>
           <button type="button" className="btn" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
-          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import Supplier Manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
 </div>
       </div>
@@ -493,10 +492,12 @@ export default function GoodsReceiving() {
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
         <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "today" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
-        <button type="button" className={"rv-set-tab" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "today" : "settings")} title="Goods & Receiving settings: the mailbox supplier manifests come to"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
-        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
+        <div className="rv-search-row">
+          <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
+          <button type="button" className={"btn sm rv-set-btn" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "today" : "settings")} title="Goods & Receiving settings: the manifest mailbox, and importing a manifest file by hand"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
+        </div>
       </div>
 
       {SHOW_BOARDS && view === "customer" && <>
@@ -514,7 +515,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
-      {view === "settings" && <ReceivingSettings />}
+      {view === "settings" && <ReceivingSettings upBusy={upBusy} onUpload={upload} />}
       {view === "ignored" && (
         <section className="rv-day">
           <div className="rv-day-h"><b>Ignored</b><span className="faint">shipments taken out of the lists by hand. Restore puts one back.</span></div>
