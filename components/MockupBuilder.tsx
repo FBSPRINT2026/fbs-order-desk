@@ -1105,33 +1105,46 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // Oct 23, Nick: "those K500 images are extremely small… they need to be much bigger"): the whole picture, photo and
   // prints together, zoomed so the shirt fills the frame like the others. One zoom per line from its front photo, used
   // for the back too, so front and back stay the same size (Oct 22: each photo zoomed on its own made backs bigger)
-  const [frames, setFrames] = useState<Record<string, { z: number; tx: number; ty: number }>>({});
+  // Oct 27 (DT6000: the back came out low and cut off): the zoom still comes from the front, so both sides stay the
+  // same size, but each photo is centered on its own shirt (a back photo isn't framed like its front)
+  type Box = { bx: number; by: number; bw: number; bh: number };
+  const [boxes, setBoxes] = useState<Record<string, Box | null>>({});
   const framing = useRef(new Set<string>());
   useEffect(() => {
     for (const l of lines) {
-      const u = photo(l, "front");
-      if (!u || !/[?&]u=https?%3A%2F%2F[^&]*sanmar/i.test(u) || framing.current.has(u)) continue;
-      framing.current.add(u);
-      void loadImg(u).then((img) => {
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        if (!iw || ih / iw < 1.4) return;
-        const k0 = Math.min(1, 600 / ih), w = Math.round(iw * k0), h = Math.round(ih * k0);
-        const c = document.createElement("canvas"); c.width = w; c.height = h;
-        const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return;
-        g.drawImage(img, 0, 0, w, h);
-        const d = g.getImageData(0, 0, w, h).data;
-        let x0 = w, y0 = h, x1 = 0, y1 = 0;
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const p = (y * w + x) * 4; if (d[p] < 235 || d[p + 1] < 235 || d[p + 2] < 235) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
-        if (x1 <= x0 || y1 <= y0) return;
-        const cr = containRect(img), s0 = cr.w / w;
-        const bx = cr.x + x0 * s0, by = cr.y + y0 * s0, bw = (x1 - x0) * s0, bh = (y1 - y0) * s0;
-        const z = Math.max(1, Math.min(1.35, (PHOTO_W * 0.9) / bw, (PHOTO_H * 0.92) / bh));
-        if (z < 1.05) return;
-        setFrames((f) => ({ ...f, [u]: { z, tx: PHOTO_W / 2 - z * (bx + bw / 2), ty: PHOTO_H / 2 - z * (by + bh / 2) } }));
-      }).catch(() => null);
+      const fu = photo(l, "front");
+      if (!fu || !/[?&]u=https?%3A%2F%2F[^&]*sanmar/i.test(fu)) continue;
+      for (const u of [fu, photo(l, "back")]) {
+        if (!u || framing.current.has(u)) continue;
+        framing.current.add(u);
+        void loadImg(u).then((img) => {
+          const iw = img.naturalWidth, ih = img.naturalHeight;
+          if (!iw || (u === fu && ih / iw < 1.4)) { setBoxes((f) => ({ ...f, [u]: null })); return; }
+          const k0 = Math.min(1, 600 / Math.max(ih, iw)), w = Math.round(iw * k0), h = Math.round(ih * k0);
+          const c = document.createElement("canvas"); c.width = w; c.height = h;
+          const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return;
+          g.drawImage(img, 0, 0, w, h);
+          const d = g.getImageData(0, 0, w, h).data;
+          let x0 = w, y0 = h, x1 = 0, y1 = 0;
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const p = (y * w + x) * 4; if (d[p + 3] > 20 && (d[p] < 235 || d[p + 1] < 235 || d[p + 2] < 235)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+          if (x1 <= x0 || y1 <= y0) { setBoxes((f) => ({ ...f, [u]: null })); return; }
+          const cr = containRect(img), s0 = cr.w / w;
+          setBoxes((f) => ({ ...f, [u]: { bx: cr.x + x0 * s0, by: cr.y + y0 * s0, bw: (x1 - x0) * s0, bh: (y1 - y0) * s0 } }));
+        }).catch(() => null);
+      }
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
-  const frameOf = (l?: Line) => (l ? frames[photo(l, "front")] : undefined) || RAW;
+  const frameOf = (l?: Line, v: View = "front") => {
+    if (!l) return RAW;
+    const fb = boxes[photo(l, "front")];
+    if (!fb) return RAW;
+    const z = Math.max(1, Math.min(1.35, (PHOTO_W * 0.9) / fb.bw, (PHOTO_H * 0.92) / fb.bh));
+    if (z < 1.05) return RAW;
+    const b = (v === "back" && boxes[photo(l, "back")]) || fb;
+    // never pushed so far that the shirt leaves the frame
+    const tx = PHOTO_W / 2 - z * (b.bx + b.bw / 2), ty = Math.max(PHOTO_H * 0.04 - z * b.by, Math.min(PHOTO_H * 0.96 - z * (b.by + b.bh), PHOTO_H / 2 - z * (b.by + b.bh / 2)));
+    return { z, tx, ty };
+  };
   // a sweatshirt's or hoodie's back photo drawn at the size of its front (lib/levelBack.ts, Oct 23 Bella 3945)
   const [leveled, setLeveled] = useState<Record<string, string>>({});
   const leveling = useRef(new Set<string>());
@@ -2024,7 +2037,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
-      const nm = frameOf(l);
+      const nm = frameOf(l, v);
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
       // fitted inside the frame the way it was measured and is shown on screen (object-fit: contain), not stretched: a SanMar
       // photo (2:3) stretched to the 4:5 frame came out 20% wider than the S&S shirts next to it (Oct 20, PC55RS)
@@ -2113,7 +2126,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
-    const nm = frameOf(l);
+    const nm = frameOf(l, v);
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * nm.z * (p.rot ? 1.35 : 1.12)));
     const cx = nm.tx + nm.z * (p.x + p.w / 2), cy = nm.ty + nm.z * (p.y + p.h / 2);
     const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
@@ -2971,7 +2984,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
-      const nm = frameOf(l);
+      const nm = frameOf(l, v);
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
@@ -3427,7 +3440,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={frameOf(line)}
+              <Stage key={v} grid={grid} norm={frameOf(line, v)}
                 neckLine={USE_HAND_AREAS && v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={fitFor(line, v)?.cx}
                 areaEdit={false}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
