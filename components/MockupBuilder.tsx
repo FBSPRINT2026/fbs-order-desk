@@ -403,7 +403,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
   const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[];
-    /** the garments the sheet shows, read by the AI (Oct 27): drawn as the blank when they're not in a catalog */ garments?: SheetGarment[]; gBusy?: boolean; gErr?: string; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
+    /** the garments the sheet shows, read by the AI (Oct 27): drawn as the blank when they're not in a catalog */ garments?: SheetGarment[]; gBusy?: boolean; gErr?: string;
+    /** the customer's file itself, and whether it goes on the order as a production file when it's put on (Oct 27, Nick) */ file?: File; keepFile?: boolean; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   // opened as the Mockup Helper tool (AI Workbench → Tools, lib/aiTools.ts): the Helper open and in view
@@ -1883,7 +1884,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   async function helperRead(f: File) {
     if (!/\.(pdf|ai)$/i.test(f.name) && !/pdf|postscript|illustrator/i.test(f.type)) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Use the PDF or Illustrator file (saved PDF-compatible). A picture (JPG, PNG) has the art flattened into the shirt." }); return; }
     setHelpOpen(true);
-    setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [] });
+    setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [], file: f, keepFile: true });
     try {
       const buf = await f.arrayBuffer();
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
@@ -1909,7 +1910,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const a = await artFromArtPdf(buf.slice(0), base).catch(() => null);
         if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0, ...(a.mask ? { mask: a.mask } : {}) }];
       }
-      if (!got.length) { setHelper((h) => ({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on.", ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr } : {}) })); return; }
+      if (!got.length) { setHelper((h) => ({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on.", ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr, file: h.file, keepFile: h.keepFile } : {}) })); return; }
       setHelper((h) => h && { ...h, busy: "Reading the colors…" });
       // the biggest print on each side first; a second one at a spot that's taken waits unchecked
       got.sort((x, y) => Number(x.side === "back") - Number(y.side === "back") || y.widthIn * y.heightIn - x.widthIn * x.heightIn);
@@ -1952,7 +1953,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         taken.add(location);
       }
       const notes = await proofNotes(buf.slice(0)).catch(() => []);
-      setHelper((h) => ({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked, ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr } : {}) }));
+      setHelper((h) => ({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked, ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr, file: h.file, keepFile: h.keepFile } : {}) }));
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
@@ -2013,6 +2014,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       });
       setRasterOk((r) => ({ ...r, ...Object.fromEntries(made.map((m) => [m.d.id, true])) })); // drawn at 300 dpi off the vector art: no "picture file" warning
       setTab(sideOf(made[0].im.location));
+      // the customer's own mockup goes on the order as a production file (Oct 27, Nick: "include the document along with
+      // the mockup as a production file… a checkmark"), once
+      if (orderId && helper.keepFile && helper.file) {
+        const f = helper.file, label = `Customer's mockup: ${f.name}`.slice(0, 200);
+        const { data: have } = await sb.from("art_files").select("id").eq("order_id", orderId).eq("name", label).limit(1);
+        if (!have?.length) {
+          const path = `art/${orderId}/${uid()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
+          const up = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || undefined, upsert: false });
+          if (!up.error) await sb.from("art_files").insert({ order_id: orderId, name: label, file_path: path, file_type: f.type || "application/pdf", note: "The customer's sheet the mockup was made from (Mockup Creator Helper)" });
+        }
+      }
       helper.rows.forEach((r) => { URL.revokeObjectURL(r.url); if (r.durl) URL.revokeObjectURL(r.durl); });
       setHelper(null);
       setMsg(`Put ${made.map((m) => `${m.im.location} (${m.im.size})`).join(" and ")} on the mockup from ${helper.name}. Check the sizes against the art.`);
@@ -4155,6 +4167,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                       </div>
                     ))}
+                    {orderId && helper.file && <label className="check mk-help-keep"><input type="checkbox" checked={!!helper.keepFile} onChange={(e) => setHelper((h) => h && { ...h, keepFile: e.target.checked })} />Include the customer&apos;s original mockup ({helper.name}) as a production file</label>}
                     <div className="row" style={{ gap: 8 }}>
                       <button type="button" className="btn primary sm" disabled={!customerId || !helper.rows.some((r) => r.use)} title={customerId ? undefined : "Pick the customer first"} onClick={() => void helperApply()}>Put on the mockup</button>
                       <span className="faint mk-help-d">{helper.kind === "drawn" ? "Sizes are read off a drawn shirt: close, not exact." : "Placed centered in each print area, like every print."}</span>
