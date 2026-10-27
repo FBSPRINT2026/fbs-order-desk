@@ -309,7 +309,7 @@ function tool(finishingIds: string[]) {
         delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
         ship_to: { type: "string" },
         customer_notes: { type: "string", description: "Rule 13: the short note the CUSTOMER reads on their quote and invoice: at most two short lines, only a request of theirs that nothing else on the order shows (e.g. \"Deliver by local courier.\", \"NOT A REPEAT ORDER - NEW LEFT CHEST LOGO.\"). Never how to decorate it, sizes, styles, quantities, dates, supplier, tracking, SKU or reference numbers, your guesses or questions. Usually empty." },
-        notes: { type: "string", description: "Anything else the shop should know (one or two sentences). For a purchase order: the PO's own notes word for word, then its other useful facts (see rule 10)" },
+        notes: { type: "string", description: "Rule 13: the production note staff read: at most three short lines of what production needs that nothing else on the order shows (how to decorate when there are no prints yet, the past job to match, packing). Never the task's or email's name, who made it or when, the due date, what staff told you, new vs reorder, or garments and sizes already on the lines. For a purchase order: its own special instructions (rule 10), short. Often empty." },
         garments_supplied_by: { type: "string", enum: ["customer", "shop", "unknown"], description: "customer = they buy the blanks and send them to us" },
         goods: { type: "object", properties: {
           supplier: { type: "string", description: "Where their garments come from, e.g. SanMar, S&S Activewear" },
@@ -407,7 +407,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-27c";
+export const READER_REV = "2026-10-27d";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {

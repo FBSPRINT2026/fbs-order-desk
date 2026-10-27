@@ -13859,7 +13859,8 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .imp-sup-chk{margin:8px 0 2px;font-size:14px}
 .imp-sup-chk .faint{font-size:12px;margin-left:6px}
 .imp-sup{border-top:1px dashed var(--line);margin-top:8px;padding-top:10px}
-.imp-sup-f{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.imp-sup-f{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+@media (max-width:760px){.imp-sup-f{grid-template-columns:1fr}}
 .imp-sup-f label{display:flex;flex-direction:column;gap:4px}
 .imp-sup-f input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink)}
 .imp-sup-ref{display:flex;gap:12px;align-items:flex-start;margin-top:4px}

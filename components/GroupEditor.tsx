@@ -1592,6 +1592,7 @@ function SuppliedBox({ d, onChange, url }: { d: Imprint; onChange: (fn: (im: Imp
       <div className="imp-sup-f">
         <label><span className="imp-l">Supplied by</span><input type="text" placeholder="DTF Dallas" value={sup.by || ""} onChange={(e) => onChange((im) => { im.supplied = { ...(im.supplied || {}), by: e.target.value.slice(0, 60) }; })} /></label>
         <label><span className="imp-l">Their order #</span><input type="text" placeholder="182715" value={sup.ref || ""} onChange={(e) => onChange((im) => { im.supplied = { ...(im.supplied || {}), ref: e.target.value.slice(0, 60) }; })} /></label>
+        <label><span className="imp-l">Where they go</span><input type="text" placeholder="Front & back" value={sup.where || ""} onChange={(e) => onChange((im) => { im.supplied = { ...(im.supplied || {}), where: e.target.value.slice(0, 60) }; })} /></label>
       </div>
       <span className="imp-l">Placement reference</span>
       <div className="imp-sup-ref">

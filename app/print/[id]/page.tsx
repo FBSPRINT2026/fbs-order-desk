@@ -120,7 +120,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
         <title>{nameOf("Work Order")}</title>
         <div className="print-bar"><PrintButton fileName={nameOf("Work Order")} /></div>
-        <WorkOrderDoc {...data} notes={[...((apc || []) as { customer_comment: string; decided_name: string | null; decided_at: string | null }[]).map((x) => `APPROVED WITH CHANGES${x.decided_name ? ` (${x.decided_name})` : ""}: ${x.customer_comment}`), inn?.production_notes || ""].filter(Boolean).join("\n\n")} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} />
+        <WorkOrderDoc {...data} notes={[...((apc || []) as { customer_comment: string; decided_name: string | null; decided_at: string | null }[]).map((x) => `APPROVED WITH CHANGES${x.decided_name ? ` (${x.decided_name})` : ""}: ${x.customer_comment}`), woNotes(inn?.production_notes || "")].filter(Boolean).join("\n\n")} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} />
       </div>
     );
   }
@@ -133,4 +133,16 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       <InvoiceDoc {...data} />
     </div>
   );
+}
+
+/**
+ * The production notes as the work order prints them (Oct 27, Nick: "you don't need… there's too much"): Create order's
+ * working notes are left off (what staff told the AI, who made the ClickUp task and when, its name, "Made with Create
+ * order"), and "From reading the email:" loses its preamble. The order page keeps the full notes.
+ */
+function woNotes(t: string) {
+  const drop = /^(clickup task made by|task made by|task name:|from .{0,40}clickup board|staff (instructed|want)|made with create order|this is a new order|this is a reorder)/i;
+  return t.split(/\n{2,}/).filter((p) => !/^what we told the ai:/i.test(p.trim()))
+    .map((p) => p.replace(/^from reading the email:\s*/i, "").split("\n").map((ln) => ln.split(/(?<=[.!?])\s+(?=[A-Z"])/).filter((x) => !drop.test(x.trim())).join(" ")).filter((ln) => ln.trim()).join("\n"))
+    .filter((p) => p.trim()).join("\n\n").trim();
 }

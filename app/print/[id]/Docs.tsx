@@ -119,14 +119,17 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     const longNotes = noteText.length + extra * 120 > 380 || noteText.split("\n").length + extra > 6;
     const more: (typeof lines)[] = [];
     for (let i = 4; i < lines.length; i += 8) more.push(lines.slice(i, i + 8));
-    const mk = (p.mockups[gi] || []).slice(0, 8);
+    // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
+    // for placement"): one placement page, no press sheets
+    const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
+    const mk = (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
     const notesPage = longNotes && !mk.length;
     const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
     // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
     // doesn't change, you just need one close-up")
-    const printPages = g.imprints.length;
-    return { lines, noteParts, longNotes, more, mk, notesPage, vars, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+    const printPages = allSup ? 0 : g.imprints.length;
+    return { lines, noteParts, longNotes, more, mk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -141,7 +144,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
       <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, notesPage, vars } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, notesPage, vars, allSup } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -158,6 +161,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         // each print's press sheet, then one more for each color change
         const printPg: number[] = [];
         g.imprints.reduce((a, _d, di) => { printPg[di] = a; return a + 1; }, pgPrint);
+        // their transfers: the print box points at the placement page
+        if (allSup) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
+        const where = g.imprints.map((d) => d.supplied?.where || "").find(Boolean) || "";
         const notesBlock = (
           <>
             {noteParts.join("\n\n")}
@@ -200,7 +206,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                   <div className="wo-m" key={u}>
                     <img src={u} alt="Mockup" />
                     {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
-                    {sup && !(g.mockupThumbs || []).length ? <span>Placement reference · customer supplied transfers{mk.length > 1 || i === 0 ? ` · big on page ${pgMk + i}` : ""}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
+                    {sup && !(g.mockupThumbs || []).length ? <span>{where ? <b className="wo-st">{where}</b> : null}Placement reference · big on page {pgMk + i}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
                   </div>
                 )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
               </div>
@@ -236,7 +242,11 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                 <section className="sheet wo1" key={"mk" + i}>
                   {top([col || colors, `${qty} pcs`, mk.length > 1 ? `mockup ${i + 1} of ${mk.length}` : ""].filter(Boolean).join(" · "))}
                   <div className="wo-big"><img src={u} alt="Mockup" /></div>
-                  {g.imprints.length > 0 && (
+                  {allSup && <>
+                    <div className="wo-place"><b className="disp">{where || "Placement as shown"}</b><span>Customer supplied transfers{[g.imprints[0].supplied?.by, g.imprints[0].supplied?.ref ? `order ${g.imprints[0].supplied.ref}` : ""].filter(Boolean).length ? ` · ${[g.imprints[0].supplied?.by, g.imprints[0].supplied?.ref ? `order ${g.imprints[0].supplied.ref}` : ""].filter(Boolean).join(" · ")}` : ""} · press them where they are in this picture</span></div>
+                    <div className="specs wo-place-f">{["Press temp", "Time", "Pressure", "Peel"].map((k) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v fill" /></div>)}</div>
+                  </>}
+                  {g.imprints.length > 0 && !allSup && (
                     <div className={"wo-cubes n" + Math.min(3, g.imprints.length)}>
                       {g.imprints.map((d, di) => {
                         const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "", sz = printSize(d, des);
@@ -267,7 +277,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               </section>
             )}
             {/* 4. each print's press sheet */}
-            {g.imprints.map((d, di) => (
+            {!allSup && g.imprints.map((d, di) => (
               <div key={d.id} style={{ display: "contents" }}>
                 <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={printPg[di]} total={total} footL={footL} />
               </div>
@@ -298,11 +308,11 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
   // their own transfers: who made them and where they go, nothing to set up (Oct 27, Nick)
   if (d.supplied) return (
     <div className="wo-pc">
-      <div className="h"><b className="disp">HEAT PRESS</b><span>customer supplied · p. {page}</span></div>
+      <div className="h"><b className="disp">HEAT PRESS</b><span>customer supplied transfers</span></div>
       <div className="kv">
         <i>Method</i><span>Heat press · <b>customer supplied transfers</b></span>
         <i>Transfers</i><span>{[d.supplied.by, d.supplied.ref ? `order ${d.supplied.ref}` : ""].filter(Boolean).join(" · ") || "From the customer"}</span>
-        <i>Placement</i><span>As shown in the placement reference</span>
+        <i>Placement</i><span>{d.supplied.where ? `${d.supplied.where}, ` : ""}as on page {page}</span>
       </div>
     </div>
   );

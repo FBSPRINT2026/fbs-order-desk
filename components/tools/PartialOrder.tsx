@@ -60,7 +60,7 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
         if (mode === "sizes") d = { ...d, groups: d.groups.map((g) => ({ ...g, imprints: [] })), art: {} };
         if (mode === "art") d = { ...d, groups: d.groups.map((g) => ({ ...g, lines: [] })) };
         if (mode === "empty") d = { ...d, groups: d.groups.slice(0, 1).map((g) => ({ ...g, lines: [], imprints: [], name: "" })), art: {}, mockups: {}, questions: [], check: [] };
-        d = { ...d, check: [], notes: [d.notes, `Made with Create order → ${m.label.toLowerCase()}${start.note ? ` ("${start.note}")` : ""}.`].filter(Boolean).join("\n").slice(0, 2000) };
+        d = { ...d, check: [], notes: [d.notes, start.note ? `Staff: ${start.note}` : ""].filter(Boolean).join("\n").slice(0, 2000) };
         step(mode === "sizes" ? `Found ${pcsOf(d.groups).toLocaleString("en-US")} pcs on ${d.groups.reduce((n, g) => n + g.lines.length, 0)} garment lines` : mode === "empty" ? "Setting up the blank order…" : `Found ${d.groups.reduce((n, g) => n + g.imprints.length, 0)} print${d.groups.reduce((n, g) => n + g.imprints.length, 0) === 1 ? "" : "s"}`);
         step(into ? `Adding it to #${into.number}…` : "Creating the order…");
         const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote", ...(into ? { addTo: into.id } : {}) }) }).catch(() => null);

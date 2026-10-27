@@ -169,7 +169,7 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  able to just upload the placement reference"): heat press only; they send the transfers (DTF Dallas, their order
    *  number) and we press them where their placement reference shows. Not priced; nothing else on the print to fill in.
    *  picture = the placement reference as a picture (a PDF's first page), file = what was uploaded */
-  supplied?: { by?: string; ref?: string; picture?: { path: string; name: string; file?: string } };
+  supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string } };
   /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
    *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.
    *  inks: that print's ink → the ink here ("" = that color isn't printed here). It prints from the same screens:

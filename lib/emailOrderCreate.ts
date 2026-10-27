@@ -260,9 +260,10 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? (cuJob ? ", from the customer's ClickUp job" : ", from the customer's email") : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : cuJob ? `From the customer's ClickUp job "${cuJob.name}" (ClickUp Jobs)` : "From the customer's email (Inbox → Create order)", actor: by });
   if (tookSpecs.length) await admin.from("order_events").insert({ order_id: oid, kind: "details", detail: `Specs taken from what production confirmed before: ${tookSpecs.join("; ")}`.slice(0, 2000), actor: by });
   const pn = [
-    shopNote ? `From reading the email: ${shopNote}` : "",
+    // short (Oct 27, Nick: "production notes and customer notes… it's all way too much"): the note itself, no preamble,
+    // and not what staff told the AI (that's in the order's history of the reading)
+    shopNote,
     d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",
-    d.told ? `What we told the AI: ${d.told}` : "",
     d.lookedUp ? `Looked up online: ${d.lookedUp.text}${d.lookedUp.sources.length ? ` (${d.lookedUp.sources.map((x) => x.url).join(", ")})` : ""}` : "",
     d.artNotes?.length ? `Reorder art:\n- ${d.artNotes.join("\n- ")}` : "",
     d.prodSuggest || "",
