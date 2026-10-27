@@ -271,6 +271,21 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         }
         cursors[`prio:${team.id}`] = 1;
       }
+      // what the portal changed (Mark complete / Reopen before Oct 27 kept its own time, so a sync never read it back):
+      // read again from ClickUp, so the list shows ClickUp's real status (Oct 27, Nick: "check all the ClickUp tasks")
+      {
+        const { data: unread } = await admin.from("clickup_tasks").select("id, parent, in_printavo, order_id, dismissed_at, pv_number, where_text, created_at_cu, updated_at_cu, synced_at").eq("team_id", team.id).gte("updated_at_cu", new Date(Date.now() - 30 * 864e5).toISOString()).limit(400);
+        const todo = ((unread || []) as { id: string; updated_at_cu: string | null; synced_at: string | null; parent: string | null; in_printavo: boolean; order_id: string | null; dismissed_at: string | null; pv_number: string | null; where_text: string; created_at_cu: string | null }[])
+          .filter((r) => r.updated_at_cu && (!r.synced_at || Date.parse(r.updated_at_cu) > Date.parse(r.synced_at) + 5000)).slice(0, 12);
+        for (const r of todo) {
+          if (Date.now() > deadline - 15000 || used(tok) > 50) break;
+          const x = await cu<CuTask>(tok, `/task/${encodeURIComponent(r.id)}`).catch(() => null);
+          if (!x) continue;
+          const st0 = { status: String(x.status?.status || ""), status_type: String(x.status?.type || ""), status_color: String(x.status?.color || "") };
+          await admin.from("clickup_tasks").update({ ...st0, updated_at_cu: iso(ms(x.date_updated)), synced_at: new Date().toISOString(),
+            waiting: waitingOf({ ...r, ...st0 }, hidden) }).eq("id", r.id);
+        }
+      }
       const since = cursors[team.id];
       // tasks changed since the last run (the first time: every open task)
       const tasks: CuTask[] = [];
@@ -452,9 +467,15 @@ export async function setClickUpDone(admin: SupabaseClient, taskId: string, done
     const sts = [...(list.statuses || [])].sort((a, b) => (a.orderindex ?? 0) - (b.orderindex ?? 0));
     const to = done ? sts.find((x) => x.type === "closed") || sts.find((x) => x.type === "done") : sts.find((x) => x.type === "open") || sts[0];
     if (!to) return { ok: false, error: `That ClickUp board has no ${done ? "complete" : "open"} status.` };
-    await cu(tok, `/task/${encodeURIComponent(taskId)}`, { method: "PUT", body: { status: to.status } });
+    // ClickUp answers with the task as it now is: it's checked, and read again when the answer doesn't show the change
+    // (Oct 27, Nick: "if I mark it complete… it doesn't clear down in ClickUp")
+    let got = await cu<CuTask>(tok, `/task/${encodeURIComponent(taskId)}`, { method: "PUT", body: { status: to.status } });
+    const same = (x?: CuTask) => String(x?.status?.status || "").toLowerCase() === to.status.toLowerCase();
+    if (!same(got)) got = await cu<CuTask>(tok, `/task/${encodeURIComponent(taskId)}`).catch(() => got);
+    if (!same(got)) return { ok: false, error: `ClickUp didn't change it: it's still "${got?.status?.status || "?"}" there. Try again, or change it in ClickUp.` };
     const { data: team } = await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle();
-    const row = { status: to.status, status_type: to.type, status_color: to.color || "", updated_at_cu: new Date().toISOString() };
+    const row = { status: String(got.status?.status || to.status), status_type: String(got.status?.type || to.type), status_color: String(got.status?.color || to.color || ""),
+      updated_at_cu: iso(ms(got.date_updated)) || new Date().toISOString(), synced_at: new Date().toISOString() };
     await admin.from("clickup_tasks").update({ ...row, waiting: done ? false : waitingOf({ ...(t as never as { parent: string | null; in_printavo: boolean }), ...row, order_id: t.order_id, dismissed_at: t.dismissed_at, pv_number: t.pv_number, where_text: t.where_text, created_at_cu: t.created_at_cu }, !!team?.hidden) }).eq("id", taskId);
     return { ok: true, status: to.status };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }

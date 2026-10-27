@@ -56,6 +56,27 @@ async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: Cli
     if (!hits.length || (hits.every(dateLike) && !common)) return 0;
     return hits.length * 100 + common;
   };
+  // each order's numbers and codes, indexed (Oct 27, Nick: Mark complete "just kind of spins": a big workspace compared
+  // every job with every order, a regex each time, on every refresh). A number "matches" when it's a whole run of digits
+  // in the order's text, as before.
+  type Ix = { nums: Map<string, number[]>; codes: Map<string, number[]> };
+  const index = (rows: { customer_id: unknown; po_number?: unknown; nickname?: unknown }[]) => {
+    const by = new Map<string, Ix>();
+    rows.forEach((o, i) => {
+      const c = String(o.customer_id || ""); if (!by.has(c)) by.set(c, { nums: new Map(), codes: new Map() });
+      const ix = by.get(c)!, text = `${o.po_number || ""} ${o.nickname || ""}`;
+      for (const n of new Set(text.match(/\d+/g) || [])) { const a = ix.nums.get(n) || []; a.push(i); ix.nums.set(n, a); }
+      for (const k of new Set(codes(text))) { const a = ix.codes.get(k) || []; a.push(i); ix.codes.set(k, a); }
+    });
+    return by;
+  };
+  const pvIx = index(pv || []), ordIx = index(ord || []);
+  const candidates = (ix: Ix | undefined, name: string) => {
+    if (!ix) return [];
+    const tc = codes(name);
+    const keys = tc.length ? tc.map((k) => ix.codes.get(k) || []) : nums(name).map((n) => ix.nums.get(n) || []);
+    return [...new Set(keys.flat())];
+  };
   for (const t of tasks) {
     const c = custOf.get(t.team_id);
     if (!c || !nums(t.name).length) continue;
@@ -64,12 +85,12 @@ async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: Cli
     // on out is going to be new")
     if (t.created_at_cu && Date.parse(t.created_at_cu) >= TOOL_ONLY_FROM) continue;
     let best: { s: number; at: string; pv: ClickUpKnown["pv"] } | null = null;
-    for (const o of (pv || []).filter((x) => x.customer_id === c)) {
+    for (const o of candidates(pvIx.get(c), t.name).map((i) => (pv || [])[i])) {
       const sc = score(t.name, `${o.po_number || ""} ${o.nickname || ""}`);
       if (sc && (!best || sc > best.s || (sc === best.s && String(o.order_date) > best.at))) best = { s: sc, at: String(o.order_date || ""), pv: { id: o.id as string, number: String(o.visual_id || ""), status: String(o.status_name || ""), name: String(o.nickname || o.po_number || "") } };
     }
     let mine: { s: number; at: string; o: { id: string; number: number } } | null = null;
-    for (const o of (ord || []).filter((x) => x.customer_id === c)) {
+    for (const o of candidates(ordIx.get(c), t.name).map((i) => (ord || [])[i])) {
       const sc = score(t.name, `${o.po_number || ""} ${o.nickname || ""}`);
       if (sc && (!mine || sc > mine.s || (sc === mine.s && String(o.created_at) > mine.at))) mine = { s: sc, at: String(o.created_at || ""), o: { id: o.id as string, number: Number(o.number) } };
     }

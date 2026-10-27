@@ -237,12 +237,19 @@ export default function ClickUpJobs() {
   /** Mark complete / Reopen: the job's status in ClickUp (Oct 22, Nick: "if we mark something complete, it auto-completes") */
   const toggleDone = async (t: ClickUpTask) => {
     const done = !isDoneT(t);
+    // shown done (or open) right away; put back if ClickUp says no (Oct 27, Nick: it "just kind of spins")
+    const put = (x: Pick<ClickUpTask, "status" | "status_type" | "waiting">) => {
+      const f = (r0: ClickUpTask) => (r0.id === t.id ? { ...r0, ...x } : r0);
+      setData((d) => (d ? { ...d, tasks: d.tasks.map(f) } : d));
+      setWsData((d) => (d ? { ...d, tasks: d.tasks.map(f) } : d));
+    };
+    put(done ? { status: "complete", status_type: "closed", waiting: false } : { status: "open", status_type: "open", waiting: t.waiting });
     setBusy(done ? "Marking it complete in ClickUp…" : "Reopening it in ClickUp…"); setErr("");
     const r = await markClickUpDone(t.id, done);
     setBusy("");
-    if (!r.ok) { setErr(r.error); return; }
+    if (!r.ok) { put({ status: t.status, status_type: t.status_type, waiting: t.waiting }); setErr(r.error); return; }
     flash(`"${t.name}" is ${done ? "complete" : "open again"} in ClickUp (${r.status}).`);
-    await load(); if (ws) await loadWs(ws);
+    void load(); if (ws) void loadWs(ws);
   };
   const checkNow = async () => {
     setBusy("Checking ClickUp…");
