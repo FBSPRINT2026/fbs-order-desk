@@ -9,7 +9,8 @@ export const maxDuration = 120;
 
 /**
  * An old Printavo job's files, read (Oct 27, Nick: "pull the files off 33145… show me how you can display a DST").
- * Read-only on Printavo: the files are fetched from its file store, never changed. Each DST is read (lib/dst.ts): its
+ * From our own copies (the Printavo import copied every file into storage); Printavo's file store is read only for a
+ * file that never copied, and never changed. Each DST is read (lib/dst.ts): its
  * stitches, colors, size and the stitch path, so it can be drawn. With `orderId` and `save`, the files are copied into
  * that order's production files. Staff, or the shop's sync token (for jobs run from the database).
  */
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({})) as { visual?: string; orderId?: string; save?: boolean; only?: string; points?: number };
   const visual = String(b.visual || "").replace(/\D/g, "");
   if (!visual) return NextResponse.json({ error: "Which Printavo job?" }, { status: 400 });
-  const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, data").eq("visual_id", visual).maybeSingle();
+  const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, data, files").eq("visual_id", visual).maybeSingle();
   if (!a) return NextResponse.json({ error: `Printavo #${visual} isn't in the archive.` }, { status: 404 });
   const d = (a.data || {}) as { files?: PvFile[]; productionFiles?: PvFile[] };
   let files = [...(d.files || []), ...(d.productionFiles || [])].filter((f) => f.full && /^https:\/\//.test(f.full));
@@ -33,10 +34,14 @@ export async function POST(req: Request) {
   const out: Record<string, unknown>[] = [];
   for (const f of files.slice(0, 20)) {
     const name = String(f.name || "file").slice(0, 160);
-    const r = await fetch(f.full!).catch(() => null);
-    if (!r?.ok) { out.push({ name, error: `couldn't fetch (${r?.status || "no answer"})` }); continue; }
-    const buf = await r.arrayBuffer();
-    const row: Record<string, unknown> = { name, bytes: buf.byteLength };
+    // our own copy (every Printavo file was copied into storage: archived_orders.files, link → path); Printavo's file
+    // store only when a file never copied
+    const ours = ((a.files || {}) as Record<string, string>)[f.full!];
+    let buf: ArrayBuffer | null = null;
+    if (ours && !["failed", "too-big"].includes(ours)) { const { data: blob } = await admin.storage.from("proofs").download(ours); if (blob) buf = await blob.arrayBuffer(); }
+    if (!buf) { const r = await fetch(f.full!).catch(() => null); if (r?.ok) buf = await r.arrayBuffer(); }
+    if (!buf) { out.push({ name, error: "couldn't open it" }); continue; }
+    const row: Record<string, unknown> = { name, bytes: buf.byteLength, from: ours && !["failed", "too-big"].includes(ours) ? "our storage" : "Printavo" };
     if (/\.dst$/i.test(name)) {
       try {
         const info = readDst(buf);
