@@ -2757,7 +2757,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (l.look) ol.look = l.look;
       if (l.look && !(ol.style || "").trim()) { ol.style = l.style; ol.brand = l.brand; if (!(ol.color || "").trim()) ol.color = l.color; }
     }
-    if (mockupSaved) g.mockupAt = new Date().toISOString();
+    if (mockupSaved) { g.mockupAt = new Date().toISOString(); delete g.mockupSkipped; }
     g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
     // the hand moves on the shirt pictures, kept for the next time it's opened (only this group's prints)
     const ids = new Set(g.imprints.map((x) => x.id));

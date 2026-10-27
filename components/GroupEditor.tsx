@@ -160,7 +160,10 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
-  const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt && !g.mockupSkipped);
+  // "Continue without a mockup" only counts until a mockup is saved (Oct 27, #40189: skipped first, then a mockup made, and
+  // the prints stayed open to edit instead of showing as the mockup made them)
+  const skipped = !!g.mockupSkipped && !g.mockupAt;
+  const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt);
   // the group's shirt color (first garment): behind each print's logo, like the Mockup Creator's close-ups (Oct 15, Nick)
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
@@ -759,8 +762,8 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
-                <div className={"imp-body" + (!!onMockup && !g.mockupSkipped && !d.supplied ? " has-logo" : "")}>
-                {!!onMockup && !g.mockupSkipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
+                <div className={"imp-body" + (!!onMockup && !skipped && !d.supplied ? " has-logo" : "")}>
+                {!!onMockup && !skipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
                 <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
@@ -808,7 +811,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 </div>}
                 {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 <div className="imp-art" hidden={!!d.supplied}>
-                      {!(onMockup && !g.mockupSkipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
+                      {!(onMockup && !skipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
                           im.design_id = des?.id || undefined;
