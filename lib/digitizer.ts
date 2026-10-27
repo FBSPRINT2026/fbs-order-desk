@@ -1,0 +1,73 @@
+import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
+import { lineName, threadByName } from "@/lib/embroidery";
+
+/**
+ * The Digitizer (Oct 27, Nick: "I need to add an AI tool, which is called Digitizer… for now, the only functionality of it
+ * is going to be emailing Volikes… sent from Amanda's email… later we'll change that… include the mockup and the
+ * original file… our proof version… more like the work order, so it blows up and it sees the image large, it sees the
+ * dimensions… you have to be clear that you want it digitized… this is for digitizing, please").
+ * The tool: components/tools/DigitizerTool.tsx. Sending: app/api/digitizer/send. Their reply (the zip) is caught by the
+ * mail check (lib/mail/process.ts digitizerReply) and waits on Digitizing to be added.
+ */
+export const DIGITIZER = { name: "Volikes Creative", email: "contact@volikescreative.com", domain: "volikescreative.com" };
+/** whose mailbox the request goes out from (Oct 27, Nick: "for today, it's going to be Amanda's email") */
+export const DIGITIZE_FROM = "amanda@fbsprint.com";
+
+/** the files back 5 working days before the order is due (never sooner than 2 working days from today) */
+export function filesBy(due: string | null | undefined, today = new Date()): Date | null {
+  if (!due) return null;
+  const back = (d: Date, n: number, dir: 1 | -1) => { const x = new Date(d); while (n > 0) { x.setDate(x.getDate() + dir); if (x.getDay() !== 0 && x.getDay() !== 6) n--; } return x; };
+  const by = back(new Date(due + "T12:00:00"), 5, -1);
+  const soonest = back(new Date(today.toDateString() + " 12:00"), 2, 1);
+  return by < soonest ? soonest : by;
+}
+export const dayLabel = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
+
+export type DigitizeCtx = { number: number; company: string; nickname?: string | null; due?: string | null; g: Group; im: Imprint; d: Design | null; wIn?: number; hIn?: number };
+
+/** the print's threads, written out with their Madeira numbers and PMS */
+export const threadsOf = (im: Imprint) => (im.inks || "").split(/\s*,\s*/).filter(Boolean).map((n) => { const t = threadByName(n); return t ? `${t.code} ${t.name}${t.pms.length ? ` (PMS ${t.pms[0].replace(/^PMS\s*/i, "")})` : ""}` : n; });
+
+/** what the sheet and the email list, one line each */
+export function specRows(c: DigitizeCtx): [string, string][] {
+  const { g, im } = c, emb = im.emb || {};
+  const l = (g.lines || [])[0];
+  const colors = [...new Set((g.lines || []).map((x) => x.color).filter(Boolean))];
+  const pcs = (g.lines || []).reduce((a, x) => a + Object.values(x.sizes || {}).reduce((b, v) => b + (+(v || 0)), 0), 0);
+  const size = c.wIn && c.hIn ? `${c.wIn.toFixed(2)}" wide × ${c.hIn.toFixed(2)}" tall` : im.size || "see the art";
+  const area = im.area ? ` (${im.area.w}" × ${im.area.h}" area)` : "";
+  const threads = threadsOf(im);
+  const by = filesBy(c.due);
+  return ([
+    ["Final size", size],
+    ["Placement", `${im.location}${area}${im.drop ? `, ${im.drop}" below the collar` : ""}`],
+    ["Garment", `${[l?.brand, l?.style, l?.garment].filter(Boolean).join(" ") || "see the order"}${colors.length ? `, ${colors.join(" / ")}` : ""}`],
+    ["Thread", `${lineName(emb.line || "Polyneon 40")}${threads.length ? `: ${threads.join(", ")}` : ""}`],
+    ["Backing", `${emb.backing || "Cutaway"}${emb.topping && emb.topping !== "None" ? `, with ${emb.topping}` : ""}`],
+    ...(emb.puff ? [["Effects", `${emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff, all of it"} (digitize for 3 mm foam)`]] : emb.metallic ? [["Effects", "Metallic thread"]] : []) as [string, string][],
+    ["Files back", "Tajima DST, Wilcom EMB and the production worksheet PDF"],
+    ["Quantity", `${pcs ? `${pcs} pieces` : "see the order"}${by ? ` · need the files by ${dayLabel(by)}` : ""}`],
+  ] as [string, string][]);
+}
+
+export const logoName = (c: DigitizeCtx) => (c.d ? designLabel(c.d) : "the logo");
+export const sheetName = (c: DigitizeCtx) => `${c.number}-${(c.company || "logo").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 30)}-digitizing.pdf`;
+
+/** the email: plainly a digitizing request, the specs, what's attached (the sender's Outlook signature goes under it) */
+export function digitizeEmail(c: DigitizeCtx) {
+  const size = c.wIn ? `${c.wIn.toFixed(2)}" wide` : c.im.size || "";
+  const subject = `FOR DIGITIZING: ${logoName(c)}${size ? `, ${size}` : ""} · FBS #${c.number}`;
+  const rows = specRows(c);
+  const body = [
+    `Hi ${DIGITIZER.name.split(" ")[0]} team,`,
+    "",
+    "This is a digitizing request. Please digitize the attached logo for embroidery at the size below.",
+    "",
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    "",
+    "Attached: our digitizing sheet (the logo shown large with its dimensions, and the mockup for placement) and the original art file.",
+    "",
+    "Thank you,",
+  ].join("\n");
+  return { subject, body };
+}

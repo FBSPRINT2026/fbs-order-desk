@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState } from "@/lib/ai/claude";
 import { triageEmail } from "@/lib/ai/tasks";
 import { processEmailActivity } from "@/lib/ai/email";
+import { DIGITIZER } from "@/lib/digitizer";
 
 /**
  * What happens to each email read from the shop mailbox:
@@ -84,7 +85,7 @@ async function threadParent(admin: SupabaseClient, m: MailMsg) {
 }
 
 const ART = /^(image\/|application\/(pdf|postscript|illustrator|eps|x-eps|vnd\.adobe|zip|x-zip|octet-stream))/i;
-const ART_EXT = /\.(png|jpe?g|gif|webp|tiff?|bmp|svg|pdf|ai|eps|ps|psd|cdr|zip|heic|xlsx|xlsm|xls|csv|tsv|numbers|docx|doc|txt|rtf)$/i;
+const ART_EXT = /\.(png|jpe?g|gif|webp|tiff?|bmp|svg|pdf|ai|eps|ps|psd|cdr|zip|heic|xlsx|xlsm|xls|csv|tsv|numbers|docx|doc|txt|rtf|dst|emb|pes|exp)$/i;
 /** spreadsheets and documents (size breakdowns, order sheets, rosters) are kept too, since Oct 7 */
 const DOCS = /^(application\/(vnd\.openxmlformats-officedocument|vnd\.ms-excel|msword|rtf|vnd\.apple\.numbers)|text\/(csv|tab-separated-values|plain))/i;
 /** artwork and documents customers send (not signature logos): saved privately with the email */
@@ -158,13 +159,57 @@ async function orderFor(admin: SupabaseClient, customerId: string | null, subjec
   return o && o.customer_id === customerId ? (o.id as string) : null;
 }
 
-export type Outcome = "customer" | "lead" | "sent" | "skipped" | "duplicate";
+export type Outcome = "customer" | "lead" | "sent" | "skipped" | "duplicate" | "digitizer";
+
+/**
+ * The digitizer's answer to a digitizing request (the Digitizer, lib/digitizer.ts): a reply in the request's thread, or
+ * an email from the digitizer naming the order (#40189). Kept on the order (not a customer email, no AI reply), its
+ * files saved, and the logo marked "files came in" so Digitizing offers to add them. Nothing is added by itself.
+ */
+async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, acct: Acct): Promise<Outcome | null> {
+  const ids = [...new Set([m.inReplyTo, ...m.references].filter(Boolean))].slice(-20);
+  let req: { id: string; order_id: string | null; meta: { digitize?: { order_id: string; imprint_id: string; design_id: string | null } } } | null = null;
+  if (ids.length) {
+    const { data } = await admin.from("activities").select("id, order_id, meta").in("external_id", ids).not("meta->digitize", "is", null).order("occurred_at", { ascending: false }).limit(1);
+    req = (data?.[0] as typeof req) || null;
+  }
+  if (!req && domainOf(from) === DIGITIZER.domain) {
+    const num = orderNum(m.subject);
+    const { data: o } = num ? await admin.from("orders").select("id").eq("number", +num).maybeSingle() : { data: null };
+    if (o) { const { data } = await admin.from("activities").select("id, order_id, meta").eq("order_id", o.id).not("meta->digitize", "is", null).order("occurred_at", { ascending: false }).limit(1); req = (data?.[0] as typeof req) || null; }
+    if (!req) return null;
+  }
+  if (!req?.meta?.digitize) return null;
+  const dz = req.meta.digitize;
+  const attachments = await saveAttachments(admin, m, `digitizer/${dz.order_id}`);
+  const body = await saveBody(admin, m, `digitizer/${dz.order_id}`);
+  const now = new Date().toISOString();
+  const { data: ins, error } = await admin.from("activities").insert({
+    customer_id: null, order_id: dz.order_id, kind: "email", direction: "in",
+    subject: m.subject.slice(0, 500), body: m.text.slice(0, 100000), from_email: from,
+    to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
+    external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
+    occurred_at: m.date.toISOString(), created_by: "mailbox", ai_processed_at: now,
+    meta: { from_name: m.from.name.slice(0, 200), match: "digitizer", references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "inbox", account_id: acct.id, account: acct.email, digitizer_reply: { ...dz, request: req.id } },
+  }).select("id").single();
+  if (error) throw new Error(error.message);
+  if (dz.design_id) {
+    const { data: d } = await admin.from("designs").select("specs").eq("id", dz.design_id).maybeSingle();
+    const sp = (d?.specs || {}) as Record<string, unknown>, emb = (sp.embroidery || {}) as Record<string, unknown>;
+    const files = attachments.filter((a) => /\.(zip|dst|emb|pdf)$/i.test(a.name));
+    await admin.from("designs").update({ specs: { ...sp, embroidery: { ...emb, reply: { at: m.date.toISOString(), activity: ins.id, from, subject: m.subject.slice(0, 200), files, order_id: dz.order_id, imprint_id: dz.imprint_id } } } }).eq("id", dz.design_id);
+  }
+  return "digitizer";
+}
 
 export type Acct = { id: string; email: string };
 export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome> {
   const from = lc(m.from.address);
   if (!from || from === lc(acct.email) || OWN_DOMAINS.has(domainOf(from))) return "skipped";
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return "duplicate"; }
+  // the digitizer answering a digitizing request: kept on the order for Digitizing, not as a customer email
+  const dz = await digitizerReply(admin, m, from, acct);
+  if (dz) return dz;
   const parent = await threadParent(admin, m);
   let match = await matchAddress(admin, from);
   if (match.ignore) return "skipped";
@@ -208,6 +253,9 @@ export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Ac
 export async function keepIncoming(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<string> {
   const from = lc(m.from.address);
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return dup.id as string; }
+  // the digitizer answering a digitizing request: kept on the order for Digitizing, not as a customer email
+  const dz = await digitizerReply(admin, m, from, acct);
+  if (dz) return dz;
   const parent = await threadParent(admin, m);
   let match = await matchAddress(admin, from);
   if (!match.customerId && parent?.customer_id) match = { customerId: parent.customer_id as string, how: "thread" };

@@ -40,6 +40,7 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
+import DigitizerTool from "@/components/tools/DigitizerTool";
 import ChargeOnFile from "@/components/ChargeOnFile";
 import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
@@ -106,6 +107,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
   // a duplicate just made (?reprint=1): offer the reprint screen fee once
   const [reprintAsk, setReprintAsk] = useState(false);
+  // the Digitizer open for one embroidered print (Oct 27)
+  const [digitize, setDigitize] = useState<string | null>(null);
   useEffect(() => { try { const u = new URL(window.location.href); if (u.searchParams.get("reprint") === "1") { setReprintAsk(true); u.searchParams.delete("reprint"); window.history.replaceState(window.history.state, "", u.toString()); } } catch { /* */ } }, []);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
@@ -1170,6 +1173,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
+      {digitize && o && <DigitizerTool orderId={o.id} imprintId={digitize} onClose={() => setDigitize(null)} />}
       {simpleAct && <CreateOrderTool activityId={simpleAct.id} text={simpleAct.text} guess="new" onClose={() => setSimpleAct(null)} onCreated={() => { setSimpleAct(null); window.location.reload(); }} />}
       {(o as Order & { cancel_requested_at?: string | null }).cancel_requested_at && (
         <div className="draft-bar" role="alert">
@@ -1561,7 +1565,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? () => setCustArt(gi) : undefined}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onDigitize={async (imId) => { await save(); setDigitize(imId); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

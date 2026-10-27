@@ -15184,3 +15184,17 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 /* shipping to be decided / taken off (Oct 27) */
 .sqp-tbd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:8px;font-size:13px}
 .sqp-tbd small{font-size:12px}
+/* the Digitizer (components/tools/DigitizerTool.tsx, Oct 27) */
+.dgt{display:flex;flex-direction:column;gap:10px}
+.dgt .dla-sub{margin:0}
+.dgt-f{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dgt textarea{font:inherit;font-size:14px;line-height:1.5;padding:8px 10px;border:1px solid var(--line);border-radius:6px;resize:vertical;color:var(--ink)}
+.dgt-att{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dgt-file{display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);white-space:nowrap;background:var(--surface-2,var(--surface))}
+a.dgt-file{color:var(--accent);text-decoration:none}
+.dgt-pdf{width:100%;height:520px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.dgt-was{margin:0;font-size:12.5px;color:var(--warn)}
+.dgt-done{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2,var(--surface))}
+.dgt-done b{color:var(--ok)}
+.dgt-done span{font-size:12.5px;color:var(--ink-3)}
+.pr-dgt{margin-top:6px}

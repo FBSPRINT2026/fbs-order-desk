@@ -13,6 +13,8 @@ import { lineName, threadByName } from "@/lib/embroidery";
 import SewoutCapture from "@/components/SewoutCapture";
 import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import { approveSewoutAnother, remindSewoutAction } from "@/app/shop/sewout-actions";
+import DigitizerTool from "@/components/tools/DigitizerTool";
+import { DIGITIZER } from "@/lib/digitizer";
 
 /**
  * Digitizing (Oct 23, Nick: "instead of separations, under embroidery… it'll say digitizing… once you create an order
@@ -30,7 +32,9 @@ import { approveSewoutAnother, remindSewoutAction } from "@/app/shop/sewout-acti
  */
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
 type EmbFile = DigitizedSet;
-type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string } };
+type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string; via?: string } | null;
+  /** the digitizer's answer, caught by the mail check (lib/mail/process.ts digitizerReply): its files wait here to be added */
+  reply?: { at: string; from: string; subject: string; files: { name: string; path: string; type: string; size: number }[] } | null };
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
 type State = Exclude<Filter, "all">;
@@ -47,7 +51,8 @@ export default function Digitizing() {
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState("");
   // our digitizer (Oct 23, Nick): Volikes Creative, volikescreative.com
-  const [vendor, setVendor] = useSticky<string>("digitizing.vendor", "contact@volikescreative.com");
+  // the Digitizer open for one print (components/tools/DigitizerTool.tsx)
+  const [tool, setTool] = useState<{ orderId: string; imprintId: string } | null>(null);
   const [sws, setSws] = useState<Sw[]>([]), [swUrls, setSwUrls] = useState<Record<string, string>>({}), [msg, setMsg] = useState("");
 
   async function load() {
@@ -143,7 +148,6 @@ export default function Digitizing() {
                 <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
               ))}
             </div>
-            <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Digitizer's email" aria-label="The digitizing company's email" style={{ maxWidth: 260 }} />
           </div>
           {!orders ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{filter === "need" ? "Nothing waiting to be digitized. An embroidered print on an order shows up here until its DST is in." : "Nothing here."}</div> : (
             <div className="tbl-wrap"><table className="tbl dgz">
@@ -152,13 +156,14 @@ export default function Digitizing() {
                 const st = stateOf(it), e = embOf(it.d), f = it.im.emb?.file || e.files?.[0];
                 return (
                   <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={e.request} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
-                    canEdit={canEdit} busy={busy === it.key} text={requestText(it)} vendor={vendor} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)}
+                    canEdit={canEdit} busy={busy === it.key} text={requestText(it)} reply={e.reply || null} onSend={() => setTool({ orderId: it.o.id, imprintId: it.im.id })} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)}
                     sws={swOf(it)} swUrls={swUrls} onSew={(m) => { setMsg(m); setTimeout(() => setMsg(""), 6000); void load(); }} />
                 );
               })}</tbody>
             </table></div>
           )}
-          <p className="faint" style={{ fontSize: 12.5 }}>Requests aren&apos;t sent by themselves: copy the request or open it in your mail, attach the art, and send it. Mark it requested so it moves to Requested.</p>
+          <p className="faint" style={{ fontSize: 12.5 }}>Send to {DIGITIZER.name} opens the Digitizer: the email, the digitizing sheet and the original art, sent from Amanda&apos;s mailbox when you press Send. Their reply with the files waits on the logo here to be added.</p>
+          {tool && <DigitizerTool orderId={tool.orderId} imprintId={tool.imprintId} onClose={() => setTool(null)} onSent={() => void load()} />}
         </div>
       </section>
     </>
@@ -168,7 +173,18 @@ export default function Digitizing() {
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
-function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, vendor, onAsked, onDst, sws, swUrls, onSew }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; vendor: string; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void }) {
+function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, reply, onSend, onAsked, onDst, sws, swUrls, onSew }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; reply: EmbSpecs["reply"]; onSend: () => void; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void }) {
+  // their files, from the email they came on, added like files dropped in
+  const [taking, setTaking] = useState(false);
+  async function takeReply() {
+    if (!reply?.files.length) return;
+    setTaking(true);
+    const sb = createClient();
+    const got: File[] = [];
+    for (const x of reply.files) { const { data } = await sb.storage.from("proofs").download(x.path); if (data) got.push(new File([data], x.name, { type: x.type || data.type })); }
+    setTaking(false);
+    if (got.length) onDst(got);
+  }
   const [how, setHow] = useState<string | null>(null), [swBusy, setSwBusy] = useState(false);
   const pv = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -189,7 +205,6 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
     })();
     return () => { live = false; };
   }, [open, f, it.im.inks]);
-  const subject = text.split("\n")[0];
   return (
     <>
       <tr className={open ? "on" : ""} onClick={toggle} style={{ cursor: "pointer" }}>
@@ -197,7 +212,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>
-        <td><span className="pill" style={{ ["--sc" as string]: STATE[st][1] }}><span className="pill-t">{STATE[st][0]}</span></span>{req && st === "asked" ? <div className="sub">{day(req.at)}</div> : st === "sent" && sws[0]?.sent_at ? <div className="sub">{day(sws[0].sent_at)}{sws[0].viewed_at ? " · opened" : ""}</div> : null}</td>
+        <td><span className="pill" style={{ ["--sc" as string]: STATE[st][1] }}><span className="pill-t">{STATE[st][0]}</span></span>{reply && !f && reply.files.length ? <div className="sub" style={{ color: "var(--ok)" }}>Files came in {day(reply.at)}</div> : req && st === "asked" ? <div className="sub">{day(req.at)}{req.via === "email" ? " · emailed" : ""}</div> : st === "sent" && sws[0]?.sent_at ? <div className="sub">{day(sws[0].sent_at)}{sws[0].viewed_at ? " · opened" : ""}</div> : null}</td>
         <td className="faint">{open ? "▾" : "▸"}</td>
       </tr>
       {open && (
@@ -208,8 +223,9 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, v
               <pre className="dgz-text">{text}</pre>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? "Copied" : "Copy the request"}</button>
-                <a className="btn sm" href={`mailto:${encodeURIComponent(vendor)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`}>Open it in my mail</a>
-                {canEdit && st === "need" && it.d && <button type="button" className="btn sm primary" disabled={busy} onClick={onAsked}>Mark requested</button>}
+                {canEdit && it.d && <button type="button" className={"btn sm" + (st === "need" ? " primary" : "")} onClick={onSend}>{st === "need" ? `Send to ${DIGITIZER.name.split(" ")[0]}` : "Send again"}</button>}
+                {canEdit && st === "need" && it.d && <button type="button" className="btn sm ghost" disabled={busy} title="Sent some other way" onClick={onAsked}>Mark requested</button>}
+                {canEdit && reply && !f && reply.files.length > 0 && <button type="button" className="btn sm primary" disabled={busy || taking} title={`${reply.subject} (${reply.files.map((x) => x.name).join(", ")})`} onClick={() => void takeReply()}>{taking ? "Getting them…" : `Add their files (${reply.files.length})`}</button>}
                 {canEdit && it.d && <label className="btn sm" style={{ cursor: "pointer" }} title="The zip they send back, or the DST with the EMB and the PDF">{busy ? "Reading…" : f ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const x = [...(e.target.files || [])]; e.target.value = ""; if (x.length) onDst(x); }} /></label>}
               </div>
             </div>
