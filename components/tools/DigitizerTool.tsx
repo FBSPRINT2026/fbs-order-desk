@@ -48,7 +48,7 @@ async function buildSheet(L: Load): Promise<Uint8Array> {
   page.drawText("FOR DIGITIZING", { x: M, y: 742, size: 24, font: fb, color: ink });
   const right = `FBS #${c.number} · ${c.company}`.slice(0, 60);
   page.drawText(right, { x: 612 - M - f.widthOfTextAtSize(right, 11), y: 748, size: 11, font: f, color: grey });
-  page.drawText(`${logoName(c)} · ${c.im.location} · Embroidery`.slice(0, 90), { x: M, y: 720, size: 12, font: f, color: grey });
+  page.drawText(`${logoName(c)} · Embroidery`.slice(0, 90), { x: M, y: 720, size: 12, font: f, color: grey });
   // the logo, big, on the garment's color
   const box = { x: M, y: 330, w: 612 - 2 * M - 34, h: 370 };
   const [r, g, b] = hexRgb(L.logoBg);
@@ -90,7 +90,9 @@ async function buildSheet(L: Load): Promise<Uint8Array> {
   return pdf.save();
 }
 
-export default function DigitizerTool({ orderId, imprintId, onClose, onSent }: { orderId: string; imprintId: string; onClose: () => void; onSent?: () => void }) {
+export default function DigitizerTool({ orderId, imprintId: imprint0, onClose, onSent }: { orderId: string; /** which print; unset = the first embroidered one not digitized yet (a picker when there are several) */ imprintId?: string; onClose: () => void; onSent?: () => void }) {
+  const [imprintId, setImprintId] = useState(imprint0 || "");
+  const [choices, setChoices] = useState<{ id: string; label: string }[]>([]);
   const [L, setL] = useState<Load | null>(null);
   const [err, setErr] = useState("");
   const [to, setTo] = useState(DIGITIZER.email);
@@ -108,8 +110,14 @@ export default function DigitizerTool({ orderId, imprintId, onClose, onSent }: {
       const { data: o, error } = await sb.from("orders").select("*, customers(company, name)").eq("id", orderId).maybeSingle();
       if (!live) return;
       if (error || !o) { setErr(error?.message || "Order not found."); return; }
-      const gs = orderGroups(o as Order), g = gs.find((x) => x.imprints.some((im) => im.id === imprintId)), im = g?.imprints.find((x) => x.id === imprintId);
-      if (!g || !im) { setErr("That print isn't on the order anymore."); return; }
+      const gs = orderGroups(o as Order);
+      // the order's embroidered prints with a logo: the one asked for, else the first not digitized yet
+      const embs = gs.flatMap((x) => x.imprints.filter((d) => d.method === "embroidery" && d.design_id).map((d) => ({ g: x, d })));
+      setChoices(embs.map(({ g: x, d }) => ({ id: d.id, label: `${x.name ? `${x.name} · ` : ""}${d.location}${d.size ? ` · ${d.size}` : ""}${d.digitized || d.emb?.file ? " (digitized)" : ""}` })));
+      const pickId = imprintId || (embs.find(({ d }) => !d.digitized && !d.emb?.file) || embs[0])?.d.id || "";
+      if (!imprintId && pickId) { setImprintId(pickId); return; }
+      const g = gs.find((x) => x.imprints.some((im) => im.id === pickId)), im = g?.imprints.find((x) => x.id === pickId);
+      if (!g || !im) { setErr(embs.length ? "That print isn't on the order anymore." : "No embroidered print with a logo on this order yet."); return; }
       const { data: dd } = im.design_id ? await sb.from("designs").select("*").eq("id", im.design_id).maybeSingle() : { data: null };
       const d = (dd as Design | null) || null;
       const ratio = d?.art_box?.w && d.art_box.h ? d.art_box.h / d.art_box.w : d?.width_px && d.height_px ? d.height_px / d.width_px : 0;
@@ -127,7 +135,7 @@ export default function DigitizerTool({ orderId, imprintId, onClose, onSent }: {
       const origName = d?.specs?.original?.name || d?.file_name || "";
       if (!live) return;
       const Lx: Load = { ctx, logo, logoBg, mock, requested: emb?.request || null, origName };
-      setL(Lx);
+      setL(Lx); setPdfUrl(""); pdfBytes.current = null;
       const e = digitizeEmail(ctx);
       setSubject(e.subject); setBody(e.body);
       try { const bytes = await buildSheet(Lx); pdfBytes.current = bytes; if (live) setPdfUrl(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }))); }
@@ -154,6 +162,7 @@ export default function DigitizerTool({ orderId, imprintId, onClose, onSent }: {
       <div className="dla dgt">
         <h3>Digitizer</h3>
         <p className="dla-sub">Send this logo to {DIGITIZER.name} to be digitized. Nothing goes out until you press Send.</p>
+        {choices.length > 1 && !sent && <label className="field"><span className="lbl">Which print</span><select value={imprintId} onChange={(e) => { setL(null); setImprintId(e.target.value); }}>{choices.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>}
         {!L && !err && <p className="faint">Getting the logo and making the digitizing sheet…</p>}
         {L && L.requested && !sent && <p className="dgt-was">Already requested {dayLabel(new Date(L.requested.at))}{L.requested.by ? ` by ${L.requested.by.split("@")[0]}` : ""}. Sending again sends a new request.</p>}
         {sent ? (

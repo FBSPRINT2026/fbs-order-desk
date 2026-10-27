@@ -42,7 +42,6 @@ type Props = {
   designs?: Design[];
   onMockup?: () => void;
   /** Add logo: the Mockup Creator with only the close-ups (Oct 27) */ onLogo?: () => void;
-  /** the Digitizer for an embroidered print (components/tools/DigitizerTool.tsx) */ onDigitize?: (imprintId: string) => void;
   /** take the group's mockup off the order to make a new one (archived, not deleted; Oct 21, Nick: #40091) */
   onRemoveMockup?: () => void;
   /** why a mockup can't be made yet (no customer / no garment) */
@@ -84,7 +83,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ onLogo, onDigitize, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -763,7 +762,7 @@ export default function GroupEditor({ onLogo, onDigitize, printsFixed = false, o
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={firstColor} changes={changesOf(d)} inksLine={inkCtl(d)} extra={screenCtl(d)} onDigitize={onDigitize && d.design_id ? () => onDigitize(d.id) : undefined} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={firstColor} changes={changesOf(d)} inksLine={inkCtl(d)} extra={screenCtl(d)} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1316,7 +1315,7 @@ function ChangeTile({ d, url, color, hex, swap }: { d: Group["imprints"][number]
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, onDigitize }: { /** the Digitizer for this print */ onDigitize?: () => void; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes }: { /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string> }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
@@ -1343,7 +1342,7 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           right now is not firm… until we email Volikes, get it back, sew it out, get it approved"): the stitches, size
           and price are estimates. Clicking it opens the Digitizer */}
       {!vis && d.method === "embroidery" && !d.digitized && !d.emb?.file && (
-        <button type="button" className="pr-dgz-stamp" disabled={!onDigitize} onClick={onDigitize} title={onDigitize ? "Send it to be digitized (the Digitizer)" : "Upload the logo first"}><span><b>Needs digitizing</b><small>Stitches and price confirmed after the sew-out</small></span></button>
+        <div className="pr-dgz-stamp" title="Send it from Ask AI → Send for digitizing"><span><b>Needs digitizing</b><small>Stitches and price confirmed after the sew-out</small></span></div>
       )}
       {ask && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>

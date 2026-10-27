@@ -35,18 +35,16 @@ export function specRows(c: DigitizeCtx): [string, string][] {
   const colors = [...new Set((g.lines || []).map((x) => x.color).filter(Boolean))];
   const pcs = (g.lines || []).reduce((a, x) => a + Object.values(x.sizes || {}).reduce((b, v) => b + (+(v || 0)), 0), 0);
   const size = c.wIn && c.hIn ? `${c.wIn.toFixed(2)}" wide × ${c.hIn.toFixed(2)}" tall` : im.size || "see the art";
-  const area = im.area ? ` (${im.area.w}" × ${im.area.h}" area)` : "";
   const threads = threadsOf(im);
-  const by = filesBy(c.due);
+  // only what they digitize from (Oct 27, Nick: "all you need is the final size… the garment… the thread. Do not put
+  // the backing… files back is fine… quantity… [a needed-by date] is going to confuse them")
   return ([
     ["Final size", size],
-    ["Placement", `${im.location}${area}${im.drop ? `, ${im.drop}" below the collar` : ""}`],
     ["Garment", `${[l?.brand, l?.style, l?.garment].filter(Boolean).join(" ") || "see the order"}${colors.length ? `, ${colors.join(" / ")}` : ""}`],
     ["Thread", `${lineName(emb.line || "Polyneon 40")}${threads.length ? `: ${threads.join(", ")}` : ""}`],
-    ["Backing", `${emb.backing || "Cutaway"}${emb.topping && emb.topping !== "None" ? `, with ${emb.topping}` : ""}`],
     ...(emb.puff ? [["Effects", `${emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff, all of it"} (digitize for 3 mm foam)`]] : emb.metallic ? [["Effects", "Metallic thread"]] : []) as [string, string][],
     ["Files back", "Tajima DST, Wilcom EMB and the production worksheet PDF"],
-    ["Quantity", `${pcs ? `${pcs} pieces` : "see the order"}${by ? ` · need the files by ${dayLabel(by)}` : ""}`],
+    ["Quantity", pcs ? `${pcs} pieces` : "see the order"],
   ] as [string, string][]);
 }
 

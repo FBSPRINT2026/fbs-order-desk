@@ -27,8 +27,9 @@ async function shrink(f: Blob): Promise<Pic | null> {
   } catch { return null; } finally { URL.revokeObjectURL(url); }
 }
 
-export default function OrderHelper({ orderId, snapshot, apply, undo, onChat }: {
+export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, onDigitize }: {
   orderId: string;
+  /** the Digitizer (components/tools/DigitizerTool.tsx), when the order has embroidery (Oct 27, Nick: "under the AI tools… send for digitizing") */ onDigitize?: () => void;
   /** the Order chat on the right (components/tools/OrderReview.tsx), in this menu (Oct 23, Nick picked "Order chat inside Ask AI") */ onChat?: () => void;
   /** the order as it is on screen */ snapshot: () => HelperOrder | null;
   /** make the changes; returns what was done, line by line */ apply: (a: HelperAction[]) => Promise<string[]>;
@@ -107,6 +108,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat }: 
                 all detailed out perfectly in the order itself"): the one Order Goods tool, filled from this order's garments */}
             <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; openOrderGoodsForOrder(orderId); }} title="Buy this order's garments: the Order goods panel on the right, S&S and SanMar side by side; you place it">Order goods</button>
             {/* Create DTF gang sheet (Oct 26, Nick; first "Order DTF transfers"): the one Gang sheet builder, filled from this order's heat press prints */}
+            {onDigitize && <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onDigitize(); }} title="Send an embroidered logo to Volikes to be digitized: the email, the digitizing sheet and the original art; you press Send">Send for digitizing</button>}
             <a href={`/shop/gang-sheet/builder?order=${orderId}`} title="Opens the Gang sheet builder with this order's heat press prints: their art (background off), sizes and how many, saved with the order (or this order's sheet if it already has one); you order it from DTF Dallas">Create DTF gang sheet</a>
           </div>
         </details>

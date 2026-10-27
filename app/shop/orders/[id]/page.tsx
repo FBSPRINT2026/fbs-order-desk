@@ -1173,7 +1173,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
-      {digitize && o && <DigitizerTool orderId={o.id} imprintId={digitize} onClose={() => setDigitize(null)} />}
+      {digitize != null && o && <DigitizerTool orderId={o.id} imprintId={digitize || undefined} onClose={() => setDigitize(null)} />}
       {simpleAct && <CreateOrderTool activityId={simpleAct.id} text={simpleAct.text} guess="new" onClose={() => setSimpleAct(null)} onCreated={() => { setSimpleAct(null); window.location.reload(); }} />}
       {(o as Order & { cancel_requested_at?: string | null }).cancel_requested_at && (
         <div className="draft-bar" role="alert">
@@ -1236,7 +1236,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
           <span className="ed-br" aria-hidden />
-          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }} />
+          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }}
+            onDigitize={orderGroups(o).some((g) => g.imprints.some((d) => d.method === "embroidery" && d.design_id)) ? async () => { await save(); setDigitize(""); } : undefined} />
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Documents ▾</summary>
             <div className="ot-menu">
@@ -1565,7 +1566,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? () => setCustArt(gi) : undefined}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onDigitize={async (imId) => { await save(); setDigitize(imId); }} onRemoveMockup={() => void removeMockup(gi)}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
