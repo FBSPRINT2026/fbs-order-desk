@@ -21,10 +21,14 @@ export async function checkColors(groups: Group[], /** a customer's usual colors
     const gm = j.garments?.[String(l.style || "").trim().toUpperCase()];
     if (!gm || !gm.colors.length) return;
     const m = l.color ? matchColor(l.color, gm.colors) : null;
-    const exact = !!l.color && gm.colors.includes(l.color);
+    // the same name, written differently, is the same color (Oct 26: Michael wrote "red", "ice blue", "Athletic Heather
+    // (gray)": the style's Red, Ice Blue, Athletic Heather): no question, just its real name
+    const plain = (x: string) => x.replace(/\(.*?\)/g, " ").replace(/^\s*the\s+/i, "").replace(/gr[ae]y/gi, "gray").replace(/\s+/g, " ").trim().toLowerCase();
+    const same = l.color ? gm.colors.find((c) => plain(c) === plain(l.color)) : undefined;
+    const exact = !!same;
     const words = (x: string) => x.toLowerCase().replace(/^the\s+/, "").replace(/gr[ae]y/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
     const theirs = (usual[String(gm.style).toUpperCase()] || []).filter((c) => gm.colors.includes(c)).find((c) => l.color && words(l.color).every((w) => words(c).includes(w)));
-    rows.push({ gi, li, style: gm.style, brand: gm.brand, asked: l.color || "", options: gm.colors, pick: exact ? l.color : theirs || m?.color || "", exact });
+    rows.push({ gi, li, style: gm.style, brand: gm.brand, asked: l.color || "", options: gm.colors, pick: exact ? same! : theirs || m?.color || "", exact });
   }));
   return { rows, ask: rows.filter((x) => !x.exact) };
 }
