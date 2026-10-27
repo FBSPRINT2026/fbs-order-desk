@@ -17,6 +17,13 @@ export type GarmentLook = {
   /** stripes across the body in this color (hex) */ stripes?: string;
   /** quilted channels (a puffer) */ quilted?: boolean;
   /** what the look was read from ("Embark Ridge Vest sheet") */ from?: string;
+  /**
+   * drawn to match the customer's photo (Oct 27, Nick: "you're gonna get a bunch of images, all different ones… the
+   * website needs to be able to do the same thing"): the AI's own shapes for this garment, front and back, in the same
+   * 240 × 280 box as the stock drawings (lib/stockGarments draws it in the photo frame). Colors BODY and TRIM are
+   * painted with the line's colors, so one drawing serves every color of the style. Checked by safeGarmentSvg.
+   */
+  draw?: { front?: string; back?: string };
 };
 export const STOCK_LABEL: Record<StockKind, string> = { tee: "T-shirt", long: "Long sleeve", crew: "Crewneck sweatshirt", hoodie: "Hoodie", polo: "Polo", quarter: "Quarter-zip", vest: "Vest", puffer: "Puffer vest", jacket: "Jacket", tank: "Tank", hat: "Hat", beanie: "Beanie" };
 
@@ -170,6 +177,14 @@ export function stockSvg(kind: StockKind, view: View, look: GarmentLook = {}): s
   const hex = hexOk(look.hex) || "#9aa1ab";
   const dark = lum(hex) < 0.3;
   const trim = hexOk(look.trim) || (dark ? shade(hex, 1.5) : shade(hex, 0.55));
+  // drawn to match their photo (the AI's shapes): painted in this line's colors, no stock texture on top
+  const mine = look.draw?.[view] ? safeGarmentSvg(look.draw[view]!) : "";
+  if (mine) {
+    const art = mine.replace(/\bBODY\b/g, hex).replace(/\bTRIM\b/g, trim);
+    const head = kind === "hat" || kind === "beanie";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250"><rect width="1000" height="1250" fill="#ffffff"/><g transform="${head ? "translate(20,40) scale(4)" : "translate(-28,20) scale(4.4)"}">${art}</g></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
   const [outline, body] = draw(kind, view, { hex, trim, dark });
   const head = kind === "hat" || kind === "beanie";
   // 240 × 280 into 1000 × 1250: garments scaled to fill like a supplier photo; headwear smaller and centered
@@ -186,4 +201,58 @@ export function stockSvg(kind: StockKind, view: View, look: GarmentLook = {}): s
   const art = at > 0 && fx ? body.slice(0, at + 2) + fx + body.slice(at + 2) : body + fx;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250">${defs}<rect width="1000" height="1250" fill="#ffffff"/><g transform="${g}">${art}<path d="${SHINE}" fill="#fff" opacity="${head ? 0 : 0.05}"/></g></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/** the stock drawing's shapes (240 × 280 box) in BODY / TRIM colors: the template the AI draws a new garment from */
+export function stockMarkup(kind: StockKind, view: View): string {
+  const body = draw(kind, view, { hex: "#5b7fa3", trim: "#c9a54a", dark: false })[1];
+  return body.replace(/#5b7fa3/gi, "BODY").replace(/#c9a54a/gi, "TRIM");
+}
+
+const SVG_TAGS = new Set(["g", "path", "rect", "circle", "ellipse", "polygon", "polyline", "line", "defs", "lineargradient", "radialgradient", "stop", "clippath"]);
+const SVG_ATTRS = new Set(["d", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry", "fx", "fy", "width", "height", "points", "fill", "stroke", "stroke-width",
+  "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-miterlimit", "opacity", "fill-opacity", "stroke-opacity", "transform", "id", "clip-path", "offset",
+  "stop-color", "stop-opacity", "gradientunits", "gradienttransform", "fill-rule", "clip-rule", "spreadmethod"]);
+/**
+ * An AI-drawn garment's shapes, made safe to put in a picture (Oct 27): only plain shapes, gradients and clip paths;
+ * no scripts, text, images, links, styles or outside references (url(#id) to its own shapes only, renamed so they
+ * can't clash with ours). Anything else is dropped. Capped at 24,000 characters.
+ */
+export function safeGarmentSvg(src: string): string {
+  const out: string[] = [];
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[a-zA-Z_:][-a-zA-Z0-9_:.]*\s*=\s*(?:"[^"<>]*"|'[^'<>]*'))*)\s*(\/?)>/g;
+  const attrRe = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"<>]*)"|'([^'<>]*)')/g;
+  const text = String(src || "").replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|foreignObject|text|title|desc|metadata)\b[\s\S]*?<\/\1\s*>/gi, "").slice(0, 60000);
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(text))) {
+    const [, close, name0, attrs, self] = m, name = name0.toLowerCase();
+    if (!SVG_TAGS.has(name)) continue;
+    const tag = name === "lineargradient" ? "linearGradient" : name === "radialgradient" ? "radialGradient" : name === "clippath" ? "clipPath" : name;
+    if (close) { out.push(`</${tag}>`); continue; }
+    const kept: string[] = [];
+    let a: RegExpExecArray | null;
+    attrRe.lastIndex = 0;
+    while ((a = attrRe.exec(attrs || ""))) {
+      const k = a[1].toLowerCase();
+      let v = (a[2] ?? a[3] ?? "").trim();
+      if (!SVG_ATTRS.has(k) || /javascript|expression|@import|&|\\/i.test(v)) continue;
+      if (/url\(/i.test(v)) { if (!/^url\(#[\w-]{1,40}\)$/.test(v)) continue; v = v.replace(/^url\(#/, "url(#gd_"); }
+      if (k === "id") { if (!/^[\w-]{1,40}$/.test(v)) continue; v = `gd_${v}`; }
+      if (v.length > 8000) continue;
+      const key = k === "gradientunits" ? "gradientUnits" : k === "gradienttransform" ? "gradientTransform" : k === "spreadmethod" ? "spreadMethod" : k;
+      kept.push(`${key}="${v}"`);
+    }
+    out.push(`<${tag}${kept.length ? " " + kept.join(" ") : ""}${self ? "/" : ""}>`);
+  }
+  // closing tags only for what was opened (a dropped or broken tag can't unbalance the picture)
+  const fixed: string[] = [], open: string[] = [];
+  for (const t of out) {
+    const c = /^<\/(\w+)>$/.exec(t);
+    if (c) { const at = open.lastIndexOf(c[1]); if (at < 0) continue; while (open.length > at) fixed.push(`</${open.pop()}>`); continue; }
+    fixed.push(t);
+    if (!t.endsWith("/>")) open.push(/^<(\w+)/.exec(t)![1]);
+  }
+  while (open.length) fixed.push(`</${open.pop()}>`);
+  const r = fixed.join("");
+  return r.length > 24000 ? "" : r;
 }

@@ -131,6 +131,29 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** a picture as a JPEG data URL, at most `max` pixels on its long side (a cut of it when `box` is given, as fractions) */
+async function jpegOf(src: string, max = 1400, box?: number[]) {
+  const im = await loadImg(src);
+  const W = im.naturalWidth, H = im.naturalHeight;
+  const [l, t, r, b] = box && box.length === 4 ? box : [0, 0, 1, 1];
+  const sx = Math.max(0, l * W), sy = Math.max(0, t * H), sw = Math.max(8, (r - l) * W), sh = Math.max(8, (b - t) * H);
+  const k = Math.min(1, max / Math.max(sw, sh));
+  const c = document.createElement("canvas"); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+  const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.85);
+}
+type GarDraw = { front?: string; back?: string };
+/** a garment drawn to match the customer's photo by the AI (/api/mockup/garment-draw): its shapes, front and back */
+async function drawGarment(image: string, g: { name: string; color: string; kind: string }): Promise<{ draw?: GarDraw; what?: string; error?: string }> {
+  try {
+    const r = await fetch("/api/mockup/garment-draw", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image, name: g.name, color: g.color, kind: g.kind }) });
+    const j = await r.json().catch(() => ({})) as { front?: string; back?: string; what?: string; error?: string };
+    if (!r.ok || !j.front) return { error: j.error || "Couldn't draw it." };
+    return { draw: { front: j.front, ...(j.back ? { back: j.back } : {}) }, what: j.what || "" };
+  } catch { return { error: "Couldn't reach the server to draw it." }; }
+}
+
 /** Mockup builder: garment photos from S&S for each color, the customer's designs placed by location and print size. */
 /**
  * The customer's brand colors (Oct 16, Nick: "a drop down in the mockup creator that has customer colors saved"): first
@@ -404,6 +427,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
   const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[];
     /** the garments the sheet shows, read by the AI (Oct 27): drawn as the blank when they're not in a catalog */ garments?: SheetGarment[]; gBusy?: boolean; gErr?: string;
+    /** the page as a picture (the garments are cut from it to be drawn), and each garment's drawing to match its photo */ pic?: string; gDraw?: Record<number, { busy?: boolean; err?: string; draw?: GarDraw; what?: string }>;
     /** the customer's file itself, and whether it goes on the order as a production file when it's put on (Oct 27, Nick) */ file?: File; keepFile?: boolean; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
@@ -1092,6 +1116,42 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }).catch(() => {});
     });
   }, [lines, catalog]);
+
+  // a garment on the order that's in no catalog, with its look read off the customer's sheet (Create order, rule 3d):
+  // drawn by the AI to match their photo once its style was looked for at S&S / SanMar (Oct 27, Nick: "determine oh I
+  // don't have Peter Millar in my system, I've got to draw that"). Every color of the style gets the one drawing;
+  // auto mode waits for it.
+  const [garDrawing, setGarDrawing] = useState("");
+  const garDrawn = useRef(new Set<string>());
+  useEffect(() => {
+    if (portal || !orderId || lookingUp || garDrawing || !custMocks.length) return;
+    const key = (l: Line) => bareStyle(l.style, l.brand).style.toUpperCase();
+    const l = lines.find((x) => x.look?.kind && !x.look.draw && !x.own && x.style.trim() && !garmentFor(x) && tried.current.has(key(x)) && !garDrawn.current.has(key(x)));
+    if (!l) return;
+    const k = key(l);
+    garDrawn.current.add(k);
+    const words = l.style.toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+    const pics = custMocks.filter((m) => !m.pdf);
+    const src = pics.find((m) => words.some((w) => m.name.toLowerCase().includes(w))) || pics[0] || custMocks[0];
+    setGarDrawing(l.style);
+    setMsg(`${[l.brand, l.style].filter(Boolean).join(" ")} isn't in a catalog: drawing it to match their photo (about a minute)…`);
+    void (async () => {
+      try {
+        const image = src.pdf
+          ? (await pdfPicture(await (await fetch(src.url)).arrayBuffer(), 1400)).toDataURL("image/jpeg", 0.85)
+          : await jpegOf(src.url, 1100);
+        const r = await drawGarment(image, { name: [l.brand, l.style].filter(Boolean).join(" "), color: l.color, kind: l.look!.kind! });
+        if (r.draw) {
+          setLines((ls) => ls.map((x) => (key(x) === k && x.look && !x.look.draw ? { ...x, look: { ...x.look, draw: r.draw } } : x)));
+          setMsg(`Drew ${l.style} to match their photo${r.what ? `: ${r.what}` : ""}.`);
+        } else setMsg(`${r.error || "Couldn't draw it."} It's shown as a plain drawn ${STOCK_LABEL[l.look!.kind!].toLowerCase()}.`);
+      } catch { setMsg(`Couldn't open their photo to draw ${l.style}; it's shown as a plain drawn ${STOCK_LABEL[l.look!.kind!].toLowerCase()}.`); }
+      finally { setGarDrawing(""); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, catalog, custMocks, lookingUp, garDrawing]);
+  // auto mode doesn't save the plain drawing while one is still to be drawn from their photo
+  const drawPending = !portal && !!orderId && custMocks.length > 0 && lines.some((x) => x.look?.kind && !x.look.draw && !x.own && x.style.trim() && !garmentFor(x) && !garDrawn.current.has(bareStyle(x.style, x.brand).style.toUpperCase()));
 
   // a garment we have no photo of, drawn in its color (Oct 27, Nick: "better stock graphics for when we don't have the
   // actual garment"): a tee, long sleeve, hoodie, vest… from its name, painted with the look read off their mockup
@@ -1881,7 +1941,41 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * photos are left out, the art kept), a customer's mockup with the shirts drawn flat (the shirt's color taken out), or a
    * PDF that's just the art. PMS swatches written on the page are read as the inks. Nothing is saved until "Put on".
    */
+  // what garments a sheet shows (Oct 27, Nick: "pull art off and then draw blank"): read by the AI from a picture of the
+  // page while the art is pulled; shown as "The garments on this sheet" with Draw this blank
+  async function readGarments(name: string, pic: string) {
+    setHelper((h) => h && h.name === name ? { ...h, gBusy: true, pic, gDraw: {} } : h);
+    try {
+      const r = await fetch("/api/mockup/garment-look", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: pic, name }) });
+      const j = await r.json().catch(() => ({})) as { garments?: SheetGarment[]; error?: string };
+      setHelper((h) => h && h.name === name ? { ...h, gBusy: false, garments: j.garments || [], gErr: r.ok ? "" : j.error || "Couldn't read the garments." } : h);
+    } catch { setHelper((h) => h && h.name === name ? { ...h, gBusy: false, gErr: "Couldn't read the garments." } : h); }
+  }
+  // which line each garment on the sheet was put on as (its drawing goes there when it comes back)
+  const gLine = useRef<Record<string, string>>({});
+  /** draw a garment on the sheet to match its photo (Oct 27, Nick: "you're gonna get a bunch of images, all different
+   *  ones… the website needs to be able to do the same thing"): the stock drawing shows right away, this one replaces it */
+  async function helperDraw(name: string, gi: number, g: SheetGarment, pic: string) {
+    setHelper((h) => h && h.name === name ? { ...h, gDraw: { ...(h.gDraw || {}), [gi]: { busy: true } } } : h);
+    const crop = await jpegOf(pic, 1100, g.box).catch(() => pic);
+    const r = await drawGarment(crop, { name: g.name, color: g.color, kind: g.kind });
+    setHelper((h) => h && h.name === name ? { ...h, gDraw: { ...(h.gDraw || {}), [gi]: r.draw ? { draw: r.draw, what: r.what } : { err: r.error } } } : h);
+    const lid = gLine.current[`${name}|${gi}`];
+    if (r.draw && lid) setLines((ls) => ls.map((x) => (x.id === lid ? { ...x, look: { ...(x.look || {}), draw: r.draw } } : x)));
+  }
   async function helperRead(f: File) {
+    // a picture (a photo of the garment, a screenshot): the art is flattened into it, but the garments on it are read and
+    // can be drawn (Oct 27, Nick: "you're gonna get a bunch of images")
+    if (!portal && (/\.(jpe?g|png|webp)$/i.test(f.name) || /^image\/(jpeg|png|webp)$/i.test(f.type))) {
+      setHelpOpen(true);
+      setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "This is a picture, so the art is flattened into the shirt and isn't pulled off it (use the PDF or Illustrator file for the art). The garments on it are read below, to draw." });
+      const u = URL.createObjectURL(f);
+      const pic = await jpegOf(u, 1400).catch(() => "");
+      URL.revokeObjectURL(u);
+      if (pic) await readGarments(f.name, pic);
+      else setHelper((h) => h && { ...h, gErr: "Couldn't open that picture." });
+      return;
+    }
     if (!/\.(pdf|ai)$/i.test(f.name) && !/pdf|postscript|illustrator/i.test(f.type)) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Use the PDF or Illustrator file (saved PDF-compatible). A picture (JPG, PNG) has the art flattened into the shirt." }); return; }
     setHelpOpen(true);
     setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [], file: f, keepFile: true });
@@ -1892,13 +1986,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // what garments the sheet shows (Oct 27, Nick: "pull art off and then draw blank"): read by the AI from a picture of
       // the page while the art is pulled; shown as "The garments on this sheet" with Draw this blank
       if (!portal) void (async () => {
-        setHelper((h) => h && { ...h, gBusy: true });
-        try {
-          const c = await pdfPicture(buf.slice(0), 1400);
-          const r = await fetch("/api/mockup/garment-look", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: c.toDataURL("image/jpeg", 0.82), name: f.name }) });
-          const j = await r.json().catch(() => ({})) as { garments?: SheetGarment[]; error?: string };
-          setHelper((h) => h && h.name === f.name ? { ...h, gBusy: false, garments: j.garments || [], gErr: r.ok ? "" : j.error || "Couldn't read the garments." } : h);
-        } catch { setHelper((h) => h && { ...h, gBusy: false }); }
+        try { const c = await pdfPicture(buf.slice(0), 1400); await readGarments(f.name, c.toDataURL("image/jpeg", 0.82)); }
+        catch { setHelper((h) => h && { ...h, gBusy: false }); }
       })();
       setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
       type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number; shirtHex?: string };
@@ -3168,11 +3257,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // ink, save, and move on. Gives up after 30 s with the reason, leaving everything as it is to finish by hand.
   useEffect(() => {
     if (!auto || !order) return;
+    // a garment being drawn to match their photo takes about a minute: the 30 s starts once it's done
+    if (garDrawing) return;
     const t = setTimeout(() => { if (autoState.current === "") { autoState.current = "stuck"; setMsg("Couldn't build the mockup by itself: the garment or the art didn't load. Check it, then Save."); } }, 30_000);
     return () => clearTimeout(t);
-  }, [auto, order]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auto, order, garDrawing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!auto || !order || !ready || saving || autoState.current === "stuck" || autoState.current === "saving" || autoState.current === "done") return;
+    if (!auto || !order || !ready || saving || garDrawing || drawPending || autoState.current === "stuck" || autoState.current === "saving" || autoState.current === "done") return;
     if (!imprints.length || imprints.some((im) => !designOf(im) || paints[im.id]?.design !== im.design_id)) return;
     autoState.current = "saving";
     setMsg("Building our mockup from the customer's art…");
@@ -3199,7 +3290,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");
       setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1${fromEmail ? `&email=${fromEmail}` : ""}` : `/shop/orders/${o.id}${fromEmail ? `?email=${fromEmail}` : ""}`), 900);
     }, 1800);
-  }, [auto, order, ready, saving, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auto, order, ready, saving, garDrawing, drawPending, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
   // unsaved changes (Oct 27, Nick: "we're exiting a lot of times without saving… if you make changes and you go back to
   // an order, a pop-up that says are you sure you want to discard changes"). What's on screen at the first click or key
@@ -4063,10 +4154,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 {!helper && <>
                   <p className="faint mk-help-t">Art that came already on a mockup (ours, the customer&apos;s, or a design sheet)? I&apos;ll take the art off the shirts, show you what I found, and put it on this mockup.</p>
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
-                  <span className="faint mk-help-d">or drop the PDF / AI file here</span>
+                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drop the PDF / AI file (or a picture of the garment) here"}</span>
                 </>}
                 <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
-                <input ref={helpIn} type="file" accept=".pdf,.ai,application/pdf,application/postscript,application/illustrator" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
+                <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
                 {helper && <>
                   <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>
                   {helper.busy && <p className="faint mk-help-t">{helper.busy}</p>}
@@ -4097,7 +4188,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <div className="mk-help-gar-h"><b>The garments on this sheet</b>{helper.gBusy && <span className="faint"> · reading them…</span>}</div>
                         {helper.gErr && <p className="faint">{helper.gErr}</p>}
                         {(helper.garments || []).map((g, gi) => {
-                          const look: GarmentLook = { kind: g.kind as StockKind, hex: g.hex, ...(g.trim ? { trim: g.trim } : {}), heather: g.heather, ...(g.stripes ? { stripes: g.stripes } : {}), quilted: g.quilted, from: helper.name };
+                          const gd = helper.gDraw?.[gi];
+                          const look: GarmentLook = { kind: g.kind as StockKind, hex: g.hex, ...(g.trim ? { trim: g.trim } : {}), heather: g.heather, ...(g.stripes ? { stripes: g.stripes } : {}), quilted: g.quilted, from: helper.name, ...(gd?.draw ? { draw: gd.draw } : {}) };
                           const sizes = Object.entries(g.sizes || {}), pcs = sizes.reduce((a, [, n]) => a + n, 0);
                           const setName = (name: string) => setHelper((h) => h && { ...h, garments: (h.garments || []).map((x, i) => (i === gi ? { ...x, name } : x)) });
                           const draw = () => {
@@ -4106,6 +4198,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             const free = !cur || !(cur.style || "").trim() || !garmentFor(cur);
                             const nl: Line = { id: free && cur ? cur.id : uid(), style: g.name, brand: g.brand || "", garment: "", color: g.color, look };
                             setLines((ls) => (free && cur ? ls.map((x) => (x.id === cur.id ? { ...x, ...nl } : x)) : [...ls, nl]));
+                            gLine.current[`${helper.name}|${gi}`] = nl.id;
+                            // drawn to match their photo (any cut, buttons, snaps): the stock drawing until it's back
+                            if (!gd?.draw && !gd?.busy && helper.pic) void helperDraw(helper.name, gi, g, helper.pic);
                             // its print where the sheet says, on the art pulled off (one print and one piece of art)
                             const pr = g.prints || [], use = helper.rows.filter((r) => r.use);
                             if (pr.length === 1 && use.length === 1) {
@@ -4114,7 +4209,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                               const w = pr[0].width_in && pr[0].width_in > 0 ? pr[0].width_in : use[0].widthIn;
                               helpSet(use[0].key, { side, location: want, widthIn: w, heightIn: Math.round((use[0].heightIn / (use[0].widthIn || 1)) * w * 100) / 100 });
                             }
-                            setMsg(`${g.name} in ${g.color}: drawn, since it isn't in a catalog. Check the color and the print, then Put on.`);
+                            setMsg(`${g.name} in ${g.color}: drawn, since it isn't in a catalog${gd?.draw ? "" : "; drawing it to match their photo now"}. Check the color and the print, then Put on.`);
                           };
                           return (
                             <div key={gi} className="mk-help-gr">
@@ -4125,6 +4220,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 <span className="faint"><i className="mk-gc-dot" style={{ background: g.hex }} /> {g.color} · drawn {STOCK_LABEL[look.kind || "tee"].toLowerCase()}{g.trim ? " · trim " : ""}{g.trim && <i className="mk-gc-dot" style={{ background: g.trim }} />}{g.heather ? " · heather" : ""}{g.stripes ? " · stripes" : ""}{g.quilted ? " · quilted" : ""}</span>
                                 {pcs > 0 && <span className="faint">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} = {pcs}</span>}
                                 {(g.prints || []).map((p, i) => <span key={i} className="faint">{p.location} · {p.method === "screen" ? "screen print" : p.method}{p.width_in ? ` · ${p.width_in}" wide` : ""}{p.ink ? ` · ${p.ink}` : ""}</span>)}
+                                {gd?.busy && <span className="faint">Drawing it to match their photo… (about a minute)</span>}
+                                {gd?.draw && <span className="faint">Drawn to match their photo{gd.what ? `: ${gd.what}` : ""}</span>}
+                                {gd?.err && <span className="faint">{gd.err} <button type="button" className="lc-link" onClick={() => helper.pic && void helperDraw(helper.name, gi, g, helper.pic)}>Try again</button></span>}
                               </div>
                               <button type="button" className="btn sm" onClick={draw}>Draw this blank</button>
                             </div>

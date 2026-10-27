@@ -18,7 +18,7 @@ const HEX = { type: ["string", "null"], description: "#rrggbb, or null when ther
 
 export type SheetGarment = {
   name: string; brand: string; style: string; color: string; kind: string; hex: string; trim: string | null; heather: boolean; stripes: string | null; quilted: boolean;
-  sizes: Record<string, number>; prints: { location: string; method: "screen" | "embroidery" | "dtf"; width_in: number | null; ink: string }[];
+  sizes: Record<string, number>; /** where its photo is on the page, [left, top, right, bottom] as fractions (to draw it from) */ box?: number[]; prints: { location: string; method: "screen" | "embroidery" | "dtf"; width_in: number | null; ink: string }[];
 };
 
 export async function POST(req: Request) {
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
 - hex: the garment's main color as it looks in the photo (look at the body of the garment, not shadows or highlights).
 - trim: the color of the zipper, binding, collar lining, snaps or drawstrings when they're a different color from the body (the snaps' gold, a navy zipper); else null.
 - heather: true when the fabric is a heather (flecked, "heather" in the color name). stripes: the stripe color when it's striped, else null. quilted: true for puffers and quilted channels.
+- box: where this garment's photo (or drawing) is on the page, as [left, top, right, bottom] fractions of the page (0,0 top-left, 1,1 bottom-right), a little generous; it's cut out to draw the garment from.
 - sizes: the size breakdown written on the sheet (XS, S, M, L, XL, 2XL…), numbers only. Leave out the total.
 - prints: each decoration: location in our words (Left Chest, Right Chest, Full Front, Center Chest, Full Back, Left Sleeve, Right Sleeve; on a garment with long sleeves: Left Upper Arm / Right Upper Arm for "left arm" or a print up by the shoulder, Left Cuff / Right Cuff by the wrist), method (screen for "screen print", embroidery, dtf for heat transfers), width_in from the size written ("3" W" = 3), ink as written including any instruction ("PMS Cool Gray 4 C", "navy, match the zipper", "gold, match the snaps"). A logo printed in one ink is one color: the background it sits on is not an ink.
 Only report what the sheet shows. Never invent sizes.`,
@@ -49,6 +50,7 @@ Only report what the sheet shows. Never invent sizes.`,
       name: { type: "string" }, brand: { type: "string" }, style: { type: "string" }, color: { type: "string" }, kind: { type: "string", enum: KINDS }, hex: { type: "string", description: "#rrggbb" },
       trim: HEX, heather: { type: "boolean" }, stripes: HEX, quilted: { type: "boolean" },
       sizes: { type: "object", additionalProperties: { type: "integer" } },
+      box: { type: "array", items: { type: "number" }, description: "[left, top, right, bottom] of the garment's photo, fractions of the page" },
       prints: { type: "array", items: { type: "object", properties: { location: { type: "string" }, method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, width_in: { type: ["number", "null"] }, ink: { type: "string" } } } },
     } } } } } },
   });
@@ -59,6 +61,7 @@ Only report what the sheet shows. Never invent sizes.`,
     hex: ok(g.hex) || "#9aa1ab", trim: ok(g.trim), stripes: ok(g.stripes), heather: !!g.heather, quilted: !!g.quilted,
     sizes: Object.fromEntries(Object.entries(g.sizes || {}).filter(([, n]) => +n > 0).map(([z, n]) => [z.toUpperCase().replace(/^(XXL)$/, "2XL").replace(/^XXXL$/, "3XL"), Math.round(+n)])),
     prints: (g.prints || []).slice(0, 6),
+    ...(Array.isArray(g.box) && g.box.length === 4 && g.box.every((n) => Number.isFinite(+n)) && +g.box[2] > +g.box[0] && +g.box[3] > +g.box[1] ? { box: g.box.map((n) => Math.min(1, Math.max(0, +n))) } : { box: undefined }),
   }));
   return NextResponse.json({ garments });
 }
