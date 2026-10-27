@@ -41,8 +41,8 @@ export function OrderGoodsDock() {
 type Step = { label: string; state: "doing" | "done" | "error" };
 type Row = GoodsRow;
 /** S&S warehouses by their code (Fort Worth is ours, a day away) */
-const WH: Record<string, string> = { TX: "Fort Worth, TX", KS: "Olathe, KS", IL: "Lockport, IL", GA: "McDonough, GA", OH: "West Chester, OH", KY: "Louisville, KY", PA: "Pennsylvania", NV: "Reno, NV", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };
-const WH_SHORT: Record<string, string> = { TX: "Fort Worth", KS: "Olathe KS", IL: "Lockport IL", GA: "McDonough GA", OH: "Ohio", KY: "Louisville KY", PA: "Penn.", NV: "Reno NV", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Mass.", DS: "Mill" };
+const WH: Record<string, string> = { TX: "Fort Worth, TX", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };
+const WH_SHORT: Record<string, string> = { TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Penn.", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Mass.", DS: "Mill" };
 const WH_C = ["var(--fbs-blue)", "#7a5ac2", "#0F8C78", "#d0743c", "#c0507a", "#5a6b82"];
 const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
