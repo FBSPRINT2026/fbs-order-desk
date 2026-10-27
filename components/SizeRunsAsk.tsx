@@ -61,18 +61,20 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
   };
   const ranked = useMemo(() => [...prefs].sort((a, b) => a.rank - b.rank), [prefs]);
   useEffect(() => { void loadStyles(ranked.map((p) => p.style)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const usualFor = (style: string) => ranked.find((p) => p.style.toUpperCase() === style.toUpperCase())?.colors || [];
+  // their brand standards only count once you say Yes (Oct 26, Nick: "if I don't apply the brand standards you should just
+  // assume nothing… just a quick fill thing where you type in the model number")
+  const [applied, setApplied] = useState<boolean | null>(null);
+  const usualFor = (style: string) => (applied ? ranked.find((p) => p.style.toUpperCase() === style.toUpperCase())?.colors || [] : []);
 
   type Cell = { style: string; brand: string; name: string; color: string; ok: boolean; why: string };
   const empty = (): Cell => ({ style: "", brand: "", name: "", color: "", ok: false, why: "" });
   const [cells, setCells] = useState<Record<string, Cell>>(() => Object.fromEntries(runs.map((r) => [r.id, empty()])));
-  const [applied, setApplied] = useState<boolean | null>(null);
   const [remember, setRemember] = useState(true);
   const [typing, setTyping] = useState<Record<string, boolean>>({});
 
   /** a run on a garment: its color found (exact), or the closest recommended */
-  const onGarment = (r: Run, g: Gar | undefined, pick: { style: string; brand: string; name: string }, why = ""): Cell => {
-    const c = colorOn(g, r.color, usualFor(pick.style));
+  const onGarment = (r: Run, g: Gar | undefined, pick: { style: string; brand: string; name: string }, why = "", usual?: string[]): Cell => {
+    const c = colorOn(g, r.color, usual ?? usualFor(pick.style));
     return { ...pick, color: c.pick, ok: c.kind === "exact", why };
   };
   async function apply(yes: boolean) {
@@ -87,7 +89,7 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
       const p = listed || (has.length ? has[0] : ranked[0]);
       if (!p) { next[r.id] = empty(); continue; }
       const why = listed ? `their usual on the ${p.style}` : has.length === 1 ? `only the ${p.style} comes in it` : has.length > 1 ? `their ${p.rank === 1 ? "1st" : "next"} choice that comes in it` : `none of theirs comes in ${clean(r.color) || "it"}: pick the color`;
-      next[r.id] = onGarment(r, g[p.style.toUpperCase()], { style: p.style, brand: p.brand, name: p.name }, why);
+      next[r.id] = onGarment(r, g[p.style.toUpperCase()], { style: p.style, brand: p.brand, name: p.name }, why, p.colors || []);
     }
     setCells(next);
   }
@@ -116,7 +118,7 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
         const g = cell.style ? known(cell.style) : undefined;
         const col = cell.style ? colorOn(g, r.color, usualFor(cell.style)) : null;
         const sw = g?.hex?.[cell.color] || "";
-        const toggle = ranked.length >= 2 && ranked.length <= 3;
+        const toggle = applied === true && ranked.length >= 2 && ranked.length <= 3;
         return (
           <div key={r.id} className="sra-run">
             <div className="sra-rt"><b>{runs.length > 1 ? `Size run ${i + 1}` : "The garment"}{r.called && runs.some((x) => x.called !== r.called) ? ` · ${r.called}` : ""}</b><span>{sizesLine(r.sizes)}</span></div>
@@ -131,7 +133,7 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
               </div>
             )}
             {(!toggle || typing[r.id] || (cell.style && !ranked.some((p) => p.style.toUpperCase() === cell.style.toUpperCase()))) &&
-              <StyleBox value={cell.style && !typing[r.id] ? cell : null} prefs={ranked} said={r.color} known={known} loadStyles={loadStyles} onPick={(p) => { setTyping((x) => ({ ...x, [r.id]: false })); void setGarment(r, p); }} />}
+              <StyleBox value={cell.style && !typing[r.id] ? cell : null} prefs={applied ? ranked : []} said={r.color} known={known} loadStyles={loadStyles} onPick={(p) => { setTyping((x) => ({ ...x, [r.id]: false })); void setGarment(r, p); }} />}
             {toggle && !typing[r.id] && <button type="button" className="linkbtn sra-other" onClick={() => setTyping((x) => ({ ...x, [r.id]: true }))}>Another style…</button>}
             {cell.style && g && (
               <div className={"sra-col" + (cell.ok ? "" : cell.color ? " rec" : " none")}>
