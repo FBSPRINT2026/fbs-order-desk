@@ -57,7 +57,7 @@ export function headwearOf(x: { style?: string; brand?: string; garment?: string
   const t = `${x?.garment || ""} ${x?.description || ""} ${x?.style || ""}`.toLowerCase();
   if (/\bbeanie|\bknit (cap|hat)|\btoque|\bpom\b|cuffed knit/.test(t)) return "beanie";
   if (/\bvisor/.test(t)) return "visor";
-  if (/\b(cap|caps|hat|hats|trucker|snapback|snap ?back|dad hat|flexfit|fitted|5-panel|6-panel|bucket)\b/.test(t) || /^richardson$/i.test(String(x?.brand || "").trim())) return "hat";
+  if (/\b(cap|caps|hat|hats|trucker|snapback|snap ?back|dad hat|flexfit|fitted|5-panel|6-panel|bucket)\b/.test(t) || HEADWEAR_BRAND.test(String(x?.brand || "").trim())) return "hat";
   return null;
 }
 /** the print locations for a group's garments: headwear's own spots when they're all one kind of headwear, else the usual list */
@@ -181,6 +181,8 @@ export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | u
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+  /** an embroidery specialty item (hat, bag, fleece…) set by hand; unset = from its name, style and brand (isSpecialtyItem) */
+  specialty?: boolean | null;
   /** the email didn't name the style: what they called it ("tees"); Create order asks which blank, their preferred goods
    *  first (Oct 26, Nick), and clears this once it's picked */
   called?: string;
@@ -374,6 +376,16 @@ export type PriceList = {
 };
 /** non-standard flat garments (embroidery specialty items), from the garment's name */
 export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|knit|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|vest|blanket|towel|apron)s?\b/i;
+/** brands that only make headwear: a line with just a style number ("Richardson 115", "Flexfit 110M") is still a hat
+ *  (Oct 27, Nick: the hat add-on wasn't charged on #40181, whose lines had no garment name) */
+export const HEADWEAR_BRAND = /^\s*(richardson|flexfit|yupoong|yp classics|pacific headwear|imperial|outdoor cap|legacy|infinity her|otto( cap)?|atlantis( headwear)?|kati|sportsman|decky|valucap|ahead|new era|cap america|dorfman|melin)\b/i;
+/** an embroidery specialty item (hats, beanies, bags, fleece, jackets…): from the line's name, style and brand, or its
+ *  own tick (GLine.specialty) */
+export const isSpecialtyItem = (l: { garment?: string; style?: string; brand?: string; specialty?: boolean | null }) =>
+  l.specialty != null ? !!l.specialty : SPECIALTY_ITEM.test(`${l.garment || ""} ${l.style || ""}`) || HEADWEAR_BRAND.test(l.brand || "") || !!headwearOf(l)
+    || /^(C\d{3}|CP\d{2,3}|STC\d{2})\b/i.test((l.style || "").trim()); // Port Authority / Sport-Tek caps
+/** the hat's own spots past the front (sides, back) are special locations like a sleeve (Oct 27, Nick) */
+export const HAT_SPECIAL_LOCATIONS = ["Left Side", "Right Side", "Back"];
 export const FULL_COLOR = 11;
 /** True when a garment color is on the light-garment list. */
 const normColor = (c: string) => (c || "").trim().toLowerCase().replace(/^sports /, "sport ");
@@ -770,10 +782,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
   const imps = g.imprints || [];
-  const locExtra = pl.specialLocPrice ? imps.filter((d) => (pl.specialLocations || []).some((z) => z.toLowerCase() === (d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
+  const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS].map((z) => z.toLowerCase());
+  const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
-  const embSpecial = (l: GLine) => (pl.embSpecialty?.length && SPECIALTY_ITEM.test(`${l.garment} ${l.style}`) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
+  const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
