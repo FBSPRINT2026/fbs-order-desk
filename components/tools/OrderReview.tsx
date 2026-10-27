@@ -54,13 +54,26 @@ async function pageSaves(orderId: string) {
 }
 const pageReloads = (orderId: string) => window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId } }));
 
-export default function OrderReview({ orderId, onClose, did, next, from, steps }: { orderId: string; onClose: () => void; /** made a part at a time: the next step offered here (Oct 27) */ steps?: NextSteps; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string; /** made from one of several orders in an email: the next one is offered when this one's right */ from?: { activity: string } }) {
+export default function OrderReview({ orderId, onClose, did, next, from, steps: steps0 }: { orderId: string; onClose: () => void; /** made a part at a time: the next step offered here (Oct 27) */ steps?: NextSteps; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string; /** made from one of several orders in an email: the next one is offered when this one's right */ from?: { activity: string } }) {
   const sb = useRef(createClient()).current;
   const saved0 = useRef(typeof window !== "undefined" ? readSaved(orderId) : null).current;
   const [o, setO] = useState<O | null>(null);
   // the next step of an order made a part at a time (Oct 27, Nick: "bring in the sizes, put it in there, and then… stay
   // open, ask me what to do next"): what's still to bring in comes from the order itself; a step runs right here
   const [stepRun, setStepRun] = useState<{ log: string[]; err?: string } | null>(null);
+  // opened on an order made from an email or ClickUp job that's still missing its garments or its prints (the Order chat
+  // from the order page, #40189): the same next steps, read from that job
+  const [found, setFound] = useState<NextSteps | null>(null);
+  const steps = steps0 || found;
+  useEffect(() => {
+    if (steps0 || !o) return;
+    const have = doneOf(o.groups);
+    if (have.length === 2) return;
+    void sb.from("activities").select("id").eq("order_id", o.id).in("kind", ["email", "clickup"]).order("occurred_at", { ascending: true }).limit(1).then(({ data }) => {
+      const a = (data || [])[0] as { id: string } | undefined;
+      if (a) setFound({ ctx: { activity: a.id }, done: have });
+    });
+  }, [steps0, o?.id, sb]); // eslint-disable-line react-hooks/exhaustive-deps
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [text, setText] = useState("");
