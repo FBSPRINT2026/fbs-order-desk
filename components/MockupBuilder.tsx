@@ -1731,7 +1731,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
@@ -2845,7 +2845,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
 
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
-  const ready = !!customerId && lines.some((l) => l.style.trim() && (garmentFor(l) || !!l.own));
+  // a garment not in any catalog with its look read off the customer's sheet (the Helper's Draw this blank, or Create
+  // order's reading: Oct 27, Nick on Peter Millar's Ridge Vest, "I don't have Peter Millar… I've got to draw that") is drawn
+  const ready = !!customerId && lines.some((l) => l.style.trim() && (garmentFor(l) || !!l.own || !!l.look));
   // a size bigger than the smallest size ordered can take (a 9.5" front on a 2T-4T run) is brought down to the
   // largest that fits, and the print says why (the note goes to the order with the mockup)
   useEffect(() => {

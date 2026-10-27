@@ -2,6 +2,7 @@
 // The AI's answer is treated as untrusted input: unknown sizes are dropped, numbers are clamped,
 // methods and locations are mapped onto the shop's lists. No prices or costs ever come from the AI.
 
+import type { GarmentLook, StockKind } from "@/lib/stockGarments";
 import { FULL_COLOR, LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, type Group, type Method, type Size } from "@/lib/pricing";
 
 export type ProposedOrder = {
@@ -14,7 +15,8 @@ export type ProposedOrder = {
   customer?: { company?: string; name?: string; email?: string; phone?: string };
   groups?: {
     name?: string;
-    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string; /** the email didn't name the style: what they called it ("tees") */ called?: string }[];
+    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string; /** the email didn't name the style: what they called it ("tees") */ called?: string;
+      /** what it looks like in the customer's photo, to draw it when it isn't in a catalog (rule 3d) */ look?: { kind?: string; hex?: string; trim?: string | null; heather?: boolean; stripes?: string | null; quilted?: boolean } | null }[];
     prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string }[];
   }[];
   questions?: string[];
@@ -23,7 +25,9 @@ export type ProposedOrder = {
 
 const SIZE_ALIASES: Record<string, Size> = {
   XXL: "2XL", XXXL: "3XL", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL",
-  SMALL: "S", MEDIUM: "M", LARGE: "L", "X-LARGE": "XL", XLARGE: "XL", "EXTRA LARGE": "XL", "X-SMALL": "XS",
+  SMALL: "S", MEDIUM: "M", LARGE: "L",
+  // retail size labels on a product sheet (Oct 27, Embark: "SM 4 · MD 6 · LG 6")
+  SM: "S", SML: "S", MD: "M", MED: "M", LG: "L", LRG: "L", XLG: "XL", "X-LARGE": "XL", XLARGE: "XL", "EXTRA LARGE": "XL", "X-SMALL": "XS",
   YOUTH_S: "YS", YOUTH_M: "YM", YOUTH_L: "YL", YOUTH_XL: "YXL", YOUTH_XS: "YXS", "Y-S": "YS", "Y-M": "YM", "Y-L": "YL", "Y-XL": "YXL",
   OSFA: "OS", "ONE SIZE": "OS", QTY: "OS",
   // headwear (Oct 26, Nick: Effing Gear's hat sheet, "M/L", "Adjustable", "One Size"): one quantity per hat line; a fitted
@@ -77,6 +81,18 @@ export function bareStyle(style: string, brand = ""): { style: string; brand: st
 }
 
 /** Proposed groups → real order groups (no costs, no price overrides). */
+const KINDS = ["tee", "long", "crew", "hoodie", "polo", "quarter", "vest", "puffer", "jacket", "tank", "hat", "beanie"] as const;
+const hexOk = (h: unknown) => (typeof h === "string" && /^#?[0-9a-f]{6}$/i.test(h.trim()) ? (h.trim().startsWith("#") ? h.trim() : "#" + h.trim()).toLowerCase() : undefined);
+/** a garment's look as the reader saw it in the customer's photo, checked (rule 3d) */
+export function lookOf(x: unknown): GarmentLook | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const g = x as { kind?: unknown; hex?: unknown; trim?: unknown; heather?: unknown; stripes?: unknown; quilted?: unknown };
+  const hex = hexOk(g.hex), kind = (KINDS as readonly string[]).includes(String(g.kind)) ? (g.kind as StockKind) : undefined;
+  if (!hex || !kind) return undefined;
+  const trim = hexOk(g.trim), stripes = hexOk(g.stripes);
+  return { kind, hex, ...(trim ? { trim } : {}), ...(g.heather ? { heather: true } : {}), ...(stripes ? { stripes } : {}), ...(g.quilted ? { quilted: true } : {}), from: "the customer's photo" };
+}
+
 export function proposalToGroups(p: ProposedOrder): Group[] {
   const groups: Group[] = [];
   for (const pg of (p.groups || []).slice(0, 12)) {
@@ -91,6 +107,8 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       // no style named: what they called it, for Create order to ask about (their preferred goods first, Oct 26)
       { const c = String(g.called || "").trim().slice(0, 40); if (c && !l.style) l.called = c; }
       l.color = (g.color || "").trim().slice(0, 60);
+      // what it looks like in their photo (Oct 27, Nick: Peter Millar's Ridge Vest isn't in a catalog, so it's drawn)
+      { const lk = lookOf(g.look); if (lk) l.look = lk; }
       for (const [raw, q] of Object.entries(g.sizes || {})) {
         const z = normSize(raw);
         const n = Math.max(0, Math.min(100000, Math.floor(+q || 0)));
