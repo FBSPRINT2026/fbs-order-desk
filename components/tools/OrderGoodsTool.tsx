@@ -10,7 +10,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
-import { goodsFromGroups, goodsOptions, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
+import { goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
 import { arriveOn, makePlan, shipKey, supName, whInfo, type Plan, type PlanMode, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSticky } from "@/lib/useSticky";
 import { useSeesMoney } from "@/components/RoleContext";
@@ -30,18 +30,21 @@ import { garmentsFromRows } from "@/lib/goodsGarments";
  * Listed in lib/aiTools.ts (order-goods).
  */
 export function openOrderGoods(activityId: string) { window.dispatchEvent(new CustomEvent("fbs:order-goods", { detail: { activity: activityId } })); }
+/** the same panel from an order or invoice (Oct 27, Nick: "if you click order goods from the invoice, it should pop up on
+ *  the right… we're keeping all of our AI tools the same everywhere"): its garments, already on the order */
+export function openOrderGoodsForOrder(orderId: string) { window.dispatchEvent(new CustomEvent("fbs:order-goods", { detail: { order: orderId } })); }
 
 /** mounted once (the shop layout): opens the panel when a button asks for it */
 export function OrderGoodsDock() {
-  const [st, setSt] = useState<null | { activity: string; n: number }>(null);
+  const [st, setSt] = useState<null | { activity?: string; order?: string; n: number }>(null);
   useEffect(() => {
     if (window.self !== window.top) return;
-    const on = (e: Event) => { const d = (e as CustomEvent<{ activity: string }>).detail; if (d?.activity) setSt({ activity: d.activity, n: Date.now() }); };
+    const on = (e: Event) => { const d = (e as CustomEvent<{ activity?: string; order?: string }>).detail; if (d?.activity || d?.order) setSt({ activity: d.activity, order: d.order, n: Date.now() }); };
     window.addEventListener("fbs:order-goods", on);
     return () => window.removeEventListener("fbs:order-goods", on);
   }, []);
   if (!st) return null;
-  return <OrderGoodsTool key={st.n} activityId={st.activity} onClose={() => setSt(null)} />;
+  return <OrderGoodsTool key={st.n} activityId={st.activity} orderId={st.order} onClose={() => setSt(null)} />;
 }
 
 type Step = { label: string; state: "doing" | "done" | "error" };
@@ -49,7 +52,8 @@ type Row = GoodsRow;
 
 const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
-export default function OrderGoodsTool({ activityId, onClose }: { activityId: string; onClose: () => void }) {
+export default function OrderGoodsTool({ activityId, orderId, onClose }: { activityId?: string; orderId?: string; onClose: () => void }) {
+  const [label0, setLabel0] = useState(""), [orderNo, setOrderNo] = useState<number | null>(null);
   const [steps, setSteps] = useState<Step[]>([]), [err, setErr] = useState("");
   const [who, setWho] = useState(""), [cust, setCust] = useState<{ id: string; name: string } | null>(null);
   const [runsAsk, setRunsAsk] = useState<{ runs: Run[]; prefs: PreferredGood[]; company: string; sender: string; done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void } | null>(null);
@@ -84,6 +88,22 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
     if (ran.current) return; ran.current = true;
     (async () => {
       try {
+        // from an order or invoice: its garments are already picked (style, color, sizes)
+        if (orderId) {
+          step("Loading the order's garments…");
+          const r = await goodsStart({ order: orderId });
+          if (!r.ok) throw new Error(r.error || "Couldn't load the order.");
+          if (stopped.current) return;
+          const o = "order" in r ? r.order : null, c = "customer" in r ? r.customer : null;
+          if (c) { setCust({ id: c.id, name: c.name }); setWho(o ? `#${o.number} ${c.name}` : c.name); } else if (o) setWho(`#${o.number}`);
+          if (o) setOrderNo(o.number);
+          if ("label" in r && r.label) setLabel0(String(r.label));
+          step("Checking stock and price with S&S and SanMar…");
+          setRows((r.rows || []) as Row[]);
+          finishSteps();
+          return;
+        }
+        if (!activityId) throw new Error("Nothing to order goods for.");
         step("Reading the email…");
         const g = await fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).catch(() => null) as { draft?: EODraft | null; customer?: { id: string; company?: string | null; name?: string | null } | null; error?: string } | null;
         if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
@@ -138,7 +158,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
   const blanks = [...new Map(lines.map((x) => [`${x.brand}|${x.style}|${x.color}`, x])).keys()];
   // every line with a style and a quantity: S&S's (found there) and any SanMar has
   const wanted = lines.filter((x) => x.qty > 0 && String(x.style || "").trim());
-  const label = `${who || "Goods"}`.slice(0, 50);
+  const label = `${label0 || who || "Goods"}`.slice(0, 50);
   const optKey = wanted.map((x) => `${x.key}:${x.sku}`).join(",");
   useEffect(() => {
     if (!wanted.length) { setOpts(null); return; }
@@ -168,7 +188,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
       const per = new Map<string, number>();
       for (const p of ssParts) { const x = byKey.get(p.key); if (x?.sku) per.set(x.sku, (per.get(x.sku) || 0) + p.qty); }
       const r = await placeGoods({ lines: [...per].map(([sku, qty]) => { const x = wanted.find((y) => y.sku === sku)!; return { sku, qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price }; }),
-        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, garments: garmentsLeft });
+        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr(r.error); return; }
       garmentsLeft = undefined;
       const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
@@ -180,7 +200,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
     // SanMar's part (once SanMar has switched ordering on for us)
     if (smParts.length && smOn) {
       const r = await placeSanmar({ lines: smParts.map((p) => { const x = byKey.get(p.key)!, ref = opts!.sm[p.key]; const src = (opts!.srcs[p.key] || []).find((s) => s.sup === "sm" && s.wh === p.wh); return { ...ref, qty: p.qty, whse: p.wh, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: src?.price || 0 }; }),
-        shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, garments: garmentsLeft });
+        shippingMethod: ship, test, label, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr((ssParts.length && !test ? `The S&S order went through (${out.join("; ")}), but SanMar's didn't: ` : "") + r.error); if (!test && out.length) setPlaced(out.join(" · ")); return; }
       if (test) { const c = (r as { checked?: { ok: boolean; message: string } }).checked; if (c && !c.ok) setErr("SanMar: " + (c.message || "some sizes aren't in stock")); }
       sum += (r as { total?: number }).total || smParts.reduce((a, p) => a + p.qty * p.each, 0);
@@ -294,7 +314,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
             <div className="field"><label htmlFor="og-ship">Shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
             {placed && smParts.length > 0 && !smOn && <div className="pv-err">Still to order on sanmar.com: {smParts.map((p) => { const x = byKey.get(p.key)!, r = opts?.sm[p.key]; return `${r?.style || x.style} ${r?.color || x.color} ${r?.size || x.size} × ${p.qty}`; }).join("; ")}</div>}
-            {placed && <div className="og-done">Ordered: <b>{placed}</b>. It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</div>}
+            {placed && <div className="og-done">Ordered: <b>{placed}</b>. {orderId ? <>It&apos;s linked to #{orderNo ?? ""}.</> : <>It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</>}</div>}
           </>}
         </div>}
         <div className="dla-acts og-foot">

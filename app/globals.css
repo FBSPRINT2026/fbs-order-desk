@@ -14996,3 +14996,12 @@ body:has(.dla-bg.dock.og-hidden){padding-right:0}
 .pd-edit{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
 .pd-edit label{display:inline-flex;align-items:center;gap:4px}
 .pd-edit input{width:64px;height:28px;padding:0 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px}
+/* Goods & Receiving → Settings (Oct 27) */
+.rv-set-tab{display:inline-flex;align-items:center;gap:6px}
+.rv-set-tab svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8}
+.rs-note{font-size:12.5px;margin:0}
+.rs-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:12px;align-items:end}
+.rs-on{height:36px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.rs-status{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--ink-3)}
+.rs-ok{color:var(--ok);font-weight:700}.rs-bad{color:var(--danger)}
+@media (max-width:640px){.rs-row{grid-template-columns:1fr}}

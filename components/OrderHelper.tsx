@@ -1,4 +1,5 @@
 "use client";
+import { openOrderGoodsForOrder } from "@/components/tools/OrderGoodsTool";
 import { useEffect, useRef, useState } from "react";
 import type { HelperAction, HelperMsg, HelperOrder } from "@/lib/orderHelperShared";
 
@@ -104,7 +105,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat }: 
             <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setOpen(true); }} title="Tell the AI what to do with this order, or paste a snip of the customer's email">Quick ask (or paste an email)</button>
             {/* Order goods (Oct 23, Nick: "on the order screen where it says Ask AI, you need to add the order goods tool… it's
                 all detailed out perfectly in the order itself"): the one Order Goods tool, filled from this order's garments */}
-            <a href={`/shop/order-goods?order=${orderId}`} title="Buy this order's garments from S&S: styles, colors and sizes filled in from the order and checked with S&S; you place it">Order goods</a>
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; openOrderGoodsForOrder(orderId); }} title="Buy this order's garments: the Order goods panel on the right, S&S and SanMar side by side; you place it">Order goods</button>
             {/* Create DTF gang sheet (Oct 26, Nick; first "Order DTF transfers"): the one Gang sheet builder, filled from this order's heat press prints */}
             <a href={`/shop/gang-sheet/builder?order=${orderId}`} title="Opens the Gang sheet builder with this order's heat press prints: their art (background off), sizes and how many, saved with the order (or this order's sheet if it already has one); you order it from DTF Dallas">Create DTF gang sheet</a>
           </div>

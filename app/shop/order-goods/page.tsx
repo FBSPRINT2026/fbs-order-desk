@@ -1,4 +1,5 @@
 "use client";
+import { openOrderGoods, openOrderGoodsForOrder } from "@/components/tools/OrderGoodsTool";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -67,6 +68,11 @@ function OrderGoods() {
   // opened from an email or an order: fill in who it's for and the garments
   useEffect(() => {
     if (!emailId && !orderParam) return;
+    // a link from an email, an order, a to-do or an alert opens THE Order goods panel on the right (Oct 27, Nick: "all
+    // the AI tools should work the same everywhere"); this page stays for ordering from a search
+    // (a beat later: the panel's listener in the shop layout is set up after this page's first effects)
+    if (orderParam) { const t = setTimeout(() => openOrderGoodsForOrder(orderParam), 80); return () => clearTimeout(t); }
+    if (emailId) { const t = setTimeout(() => openOrderGoods(emailId), 80); return () => clearTimeout(t); }
     setBusy("start");
     goodsStart({ email: emailId || undefined, order: orderParam || undefined }).then((r) => {
       setBusy("");

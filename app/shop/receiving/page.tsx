@@ -13,11 +13,12 @@ import type { ManifestHit, PendingShipment, PrintavoGoods } from "@/lib/manifest
 import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine } from "@/app/shop/receiving-actions";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import ReceivingSettings from "@/components/ReceivingSettings";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "today" | "fbs" | "customer" | "resolve" | "ignored";
+type View = "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
@@ -181,7 +182,7 @@ export default function GoodsReceiving() {
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
   useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string; day: string }[]).filter((x) => x.state === "ready" && x.day <= j.today).length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve" || v === "ignored") setViewState(v); }, []);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -492,6 +493,7 @@ export default function GoodsReceiving() {
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
         <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "today" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
+        <button type="button" className={"rv-set-tab" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "today" : "settings")} title="Goods & Receiving settings: the mailbox supplier manifests come to"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
         <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
@@ -512,6 +514,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
+      {view === "settings" && <ReceivingSettings />}
       {view === "ignored" && (
         <section className="rv-day">
           <div className="rv-day-h"><b>Ignored</b><span className="faint">shipments taken out of the lists by hand. Restore puts one back.</span></div>

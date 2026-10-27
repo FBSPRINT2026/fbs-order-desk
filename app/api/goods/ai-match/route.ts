@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { goodsCheck } from "@/lib/goodsTrack";
 import { resolvePending } from "@/lib/manifest";
 import { aiMatchPending } from "@/lib/goodsAi";
+import { checkManifestMail } from "@/lib/manifestMail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,8 @@ async function go(admin: ReturnType<typeof createAdminClient>, opts: { force?: b
   if (!got) return NextResponse.json({ busy: true, error: "The relink is already running. Give it a few minutes." });
   const end = Date.now() + 285000;
   try {
+    // 0. the supplier manifests in the shipping mailbox (Goods & Receiving → Settings), imported once each
+    const manifests = await checkManifestMail(admin, { deadline: Date.now() + 60000 }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const tracking = await goodsCheck(admin, Date.now() + 40000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const rules = await resolvePending(admin, Date.now() + 70000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const ai = await aiMatchPending(admin, end, { max: opts.max ?? 25, force: opts.force });

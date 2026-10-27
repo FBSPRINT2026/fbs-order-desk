@@ -20,6 +20,10 @@
   (shown in AI Workbench → Tools) with the component that IS the tool and the places it opens from. A button for a tool
   anywhere opens that component (Create order = `components/tools/CreateOrderTool.tsx`); never copy or fork a tool's flow
   into a page. Fix or change it in the tool, and add a new place to its `places` list.
+  **When a tool gets a new version, every way into the old one opens the new one in the same change** (Nick, Oct 27:
+  Order goods from an invoice still opened the old page after the new right-side panel was built for email). Search for
+  the old component, its page route and links to it (`/shop/order-goods?order=`, to-dos, alerts, Ask AI menus) and
+  point them all at the one tool; an old page left for another use opens the tool when it's given a link's params.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the
