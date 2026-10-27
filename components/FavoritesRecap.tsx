@@ -98,18 +98,22 @@ export default function FavoritesRecap({ jobs, msgs, needIds, mailMine, as, comp
       <section className="fv fv-ph" aria-label="Favorites">
         <div className="mdp-sec"><span>Favorites</span><span>{d ? cards.length : ""}</span></div>
         {err ? <div className="db-empty">{err}</div> : !d || !jobs ? <div className="mdp-quiet">Loading your favorites…</div> : !cards.length ? <div className="mdp-quiet">Star a customer on the Customers page and they show up here.</div> : (
-          <div className="mdp-card">{cards.map(({ c, js, waiting }) => {
+          <div className="fv-ph-list">{cards.map(({ c, js, waiting, s }) => {
             const j = js[0], st = j ? stepOf(j) : -1, late = js.filter((x) => x.due && x.due.slice(0, 10) < today).length;
             const nE = waiting.filter((w) => w.kind === "email").length, nT = waiting.filter((w) => w.kind === "text").length, nP = waiting.filter((w) => w.kind === "portal").length;
-            const right = late ? `${late} late` : nE ? `${nE} email${nE === 1 ? "" : "s"}` : nT ? `${nT} text${nT === 1 ? "" : "s"}` : nP ? `${nP} portal` : "";
             return (
-              <Link key={c.id} href={`/shop/customers/${c.id}`} className="mdp-row fv-ph-row">
-                <span className="mdp-av" aria-hidden>{initials(c.name)}</span>
-                <span className="mdp-m"><b data-notranslate>{c.name}</b>
-                  <small>{j ? (js.length > 1 ? `${js.length} open jobs · next #${j.number} ${label(j)}` : `#${j.number} ${j.nickname || "Untitled job"} · ${label(j)}`) : "No open jobs"}</small>
-                  {j && <span className="fv-tk" aria-hidden>{STEPS.map((x, i) => <i key={x} className={i < st ? "d" : i === st ? "c" : ""} />)}</span>}
+              <Link key={c.id} href={`/shop/customers/${c.id}`} className="fv-ph-card">
+                <span className="fv-ph-top">
+                  <span className="fv-av" aria-hidden>{initials(c.name)}</span>
+                  <span className="fv-ph-who"><b data-notranslate>{c.name}</b><small>{js.length ? `${js.length} open job${js.length === 1 ? "" : "s"}` : "No open jobs"}{late ? <em> · {late} late</em> : null}</small></span>
+                  <span className="fv-ph-money">{money0(s?.sales || 0)}<small>this year</small></span>
                 </span>
-                {right && <span className={"mdp-ago" + (late ? " w" : "")}>{right}</span>}
+                {j && <span className="fv-ph-job">
+                  <span className="fv-gt"><b className="ordno">#{j.number}</b><span className="fv-x" data-notranslate>{j.nickname || "Untitled job"}</span><span className={"fv-d" + (j.due && j.due.slice(0, 10) < today ? " late" : "")}>{j.due ? shortDue(j.due, today) : ""}</span></span>
+                  <span className="fv-tk" aria-label={`${STEPS[st]}: ${label(j)}`}>{STEPS.map((x, i) => <i key={x} className={i < st ? "d" : i === st ? "c" : ""} />)}</span>
+                  <span className="fv-tl" aria-hidden>{STEPS.map((x, i) => <span key={x} className={i === st ? "c" : ""}>{x}</span>)}</span>
+                </span>}
+                {(nE || nT || nP) ? <span className="fv-waits">{nE ? <span className="fv-wb">{nE} email{nE === 1 ? "" : "s"}</span> : null}{nT ? <span className="fv-wb">{nT} text{nT === 1 ? "" : "s"}</span> : null}{nP ? <span className="fv-wb">{nP} portal</span> : null}</span> : null}
               </Link>
             );
           })}</div>

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent } from "react";
+import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 
@@ -241,17 +242,19 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       </div>
     </div>
   );
-  // My Day on a phone → Business (Oct 26): two numbers, one chart, you and Amanda
-  if (part === "phone") return (
-    <div className="an-phone">
-      <div className="an-k4 an-k2">
-        <div className="an-side-k"><span>Sales this month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-        <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
-      </div>
-      <div className="an-phone-chart"><div className="an-ch-h"><b>Sales by month</b></div>{C}</div>
-      <OwnerBar reps={data!.reps} y={y} />
-    </div>
-  );
+  // My Day on a phone → Business (Oct 26): two numbers, then the charts side by side to swipe through (Nick: "the
+  // different sales metrics like we did earlier… you can go left or right on that screen")
+  if (part === "phone") return <PhoneSales k4={
+    <div className="an-k4 an-k2">
+      <div className="an-side-k"><span>Sales this month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
+      <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+    </div>} slides={[
+    { k: "month", label: `Sales by month · vs ${y - 1}`, body: C },
+    { k: "dept", label: "By department", body: <><Depts rows={data!.depts} y={y} bare fill /><DeptBar rows={data!.depts} y={y} /></> },
+    { k: "pace", label: `Pace · ${y} vs ${y - 1}`, body: <Pace days={data!.days} y={y} bare fill /> },
+    { k: "owner", label: "By account owner", body: <OwnerBar reps={data!.reps} y={y} /> },
+    { k: "top", label: "Top customers", body: <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact /> },
+  ]} />;
   if (part === "charts") return (
     <div className="an-charts">
       <div className="an-card">{C}</div>
@@ -392,6 +395,30 @@ function DeptBar({ rows, y }: { rows: DeptRow[]; y: number }) {
       <div className="an-split-h"><b>By department</b><span className="faint">{y} so far</span></div>
       <div className="an-split-bar" role="img" aria-label={DEPTS.map((d, j) => `${d.k} ${short(tot[j])}`).join(", ")}>{DEPTS.map((d, j) => tot[j] > 0 && <i key={d.k} className={d.c} style={{ flexGrow: tot[j] }} title={`${d.k}: ${money0(tot[j])}`} />)}</div>
       <div className="an-split-l">{DEPTS.map((d, j) => <span key={d.k}><i className={d.c} />{d.k} <b>{short(tot[j])}</b> <span className="faint">{Math.round((tot[j] / all) * 100)}%</span></span>)}</div>
+    </div>
+  );
+}
+
+/** the phone's charts: one at a time, swipe left or right, dots underneath */
+function PhoneSales({ k4, slides }: { k4: React.ReactNode; slides: { k: string; label: string; body: React.ReactNode }[] }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [at, setAt] = useSticky("sales.phone.slide", 0);
+  const go = (i: number) => { const el = ref.current; if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" }); };
+  useEffect(() => { const el = ref.current; if (el && at) el.scrollLeft = at * el.clientWidth; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="an-phone">
+      {k4}
+      <div className="an-ph-car" ref={ref} onScroll={(e) => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (i !== at) setAt(i); }}>
+        {slides.map((x) => (
+          <section key={x.k} className="an-ph-slide" aria-label={x.label}>
+            <div className="an-ph-h"><b>{x.label}</b></div>
+            <div className="an-ph-body">{x.body}</div>
+          </section>
+        ))}
+      </div>
+      <div className="an-ph-dots" role="tablist" aria-label="Sales charts">
+        {slides.map((x, i) => <button key={x.k} type="button" role="tab" aria-selected={i === at} aria-label={x.label} className={i === at ? "on" : ""} onClick={() => go(i)} />)}
+      </div>
     </div>
   );
 }

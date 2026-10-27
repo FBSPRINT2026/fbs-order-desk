@@ -14752,10 +14752,6 @@ main.main .md-calsw > button.on small{background:var(--fbs-blue);color:#fff}
 .mdp-bar em{position:absolute;top:-3px;left:calc(50% + 6px);font-style:normal;font-size:9.5px;font-weight:800;line-height:15px;min-width:15px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;text-align:center}
 .an-phone{display:flex;flex-direction:column;gap:12px}
 .an-phone .an-k2{grid-template-columns:1fr 1fr}
-.an-phone-chart{background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 10px 6px;height:230px;display:flex;flex-direction:column}
-.an-phone-chart .an-chart{flex:1;display:flex;flex-direction:column;min-height:0}
-.an-phone-chart .an-svg-wrap.an-fill{min-height:150px}
-.an-phone .an-split{background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px}
 .fv-ph .fv-tk{margin-top:5px;max-width:180px}
 .fv-ph-row{align-items:flex-start}
 
@@ -14764,3 +14760,32 @@ main.main .md-calsw > button.on small{background:var(--fbs-blue);color:#fff}
 @media (max-width:760px){ .mdp-only{display:block;height:74px} }
 html[data-phone-deep] .mdp-only{display:none}
 @media (max-width:760px){ body:has(.mdp-only .mdp-bar) .ibx2-ffab{bottom:calc(80px + env(safe-area-inset-bottom))} html[data-phone-deep] body .ibx2-ffab{bottom:calc(18px + env(safe-area-inset-bottom))} }
+
+/* Business on a phone: the sales charts one at a time, swiped left and right (Oct 26, Nick) */
+.an-ph-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:0;border-radius:12px}
+.an-ph-car::-webkit-scrollbar{display:none}
+.an-ph-slide{flex:0 0 100%;scroll-snap-align:start;box-sizing:border-box;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px 8px;height:300px;display:flex;flex-direction:column;overflow:hidden}
+.an-ph-h{font-size:13.5px;margin-bottom:6px}
+.an-ph-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.an-ph-body .an-chart{flex:1;display:flex;flex-direction:column;min-height:0}
+.an-ph-body .an-chart .an-ch-h b{display:none}
+.an-ph-body .an-svg-wrap.an-fill{min-height:170px}
+.an-ph-body .an-split{margin-top:4px}
+.an-ph-body .an-top,.an-ph-body ol{overflow-y:auto}
+.an-ph-dots{display:flex;justify-content:center;gap:8px;margin-top:-2px}
+.an-ph-dots button{all:unset;cursor:pointer;width:8px;height:8px;border-radius:50%;background:var(--line)}
+.an-ph-dots button.on{background:var(--fbs-blue);width:20px;border-radius:4px}
+/* the favorites, a card each (bigger, Oct 26) */
+.fv-ph-list{display:flex;flex-direction:column;gap:10px}
+.fv-ph-card{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:14px;padding:14px;color:var(--ink);text-decoration:none;box-shadow:0 1px 2px rgba(20,29,43,.04)}
+.fv-ph-top{display:flex;gap:12px;align-items:center}
+.fv-ph-top .fv-av{width:42px;height:42px;font-size:14px;flex:none}
+.fv-ph-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fv-ph-who b{font-size:16.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv-ph-who small{font-size:12.5px;color:var(--ink-3)}
+.fv-ph-who em{font-style:normal;color:var(--danger);font-weight:700}
+.fv-ph-money{flex:none;text-align:right;font-weight:800;font-size:15px;display:flex;flex-direction:column;white-space:nowrap}
+.fv-ph-money small{font-size:11px;font-weight:500;color:var(--ink-3)}
+.fv-ph-job{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line-2);padding-top:10px}
+.fv-ph-job .fv-tk{max-width:none}
+.fv-ph-card .fv-waits{display:flex;gap:6px;flex-wrap:wrap}
