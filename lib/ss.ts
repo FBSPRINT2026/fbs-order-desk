@@ -269,6 +269,18 @@ export async function ssOurCard(emails: string[] = []): Promise<{ ok: true; prof
  * `short` lists what no warehouse has enough of.
  */
 const WH_ORDER = ["TX", "KS", "GA", "IL", "OH", "KY", "PA", "NV", "NJ", "FL", "CA", "MA", "FO", "CC", "CN", "DS"];
+/** S&S stock by warehouse for each sku (40 at a time) */
+export async function ssStock(skus: string[]): Promise<Map<string, { warehouseAbbr: string; qty: number }[]>> {
+  const stock = new Map<string, { warehouseAbbr: string; qty: number }[]>();
+  const all = [...new Set(skus.filter(Boolean))];
+  for (let i = 0; i < all.length; i += 40) {
+    const part = all.slice(i, i + 40);
+    const rows = await ssGet<{ sku: string; warehouses?: { warehouseAbbr: string; qty: number }[] }[]>(`/products/${part.map(encodeURIComponent).join(",")}?fields=sku,warehouses`);
+    for (const p of Array.isArray(rows) ? rows : []) stock.set(p.sku, (p.warehouses || []).filter((w) => w.qty > 0));
+  }
+  return stock;
+}
+
 export async function ssAllocate(lines: { identifier: string; qty: number }[], mode: "fewest" | "fastest" = "fewest") {
   const skus = [...new Set(lines.map((l) => l.identifier))];
   const stock = new Map<string, { warehouseAbbr: string; qty: number }[]>();

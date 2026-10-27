@@ -3,7 +3,9 @@ import { getViewer } from "@/lib/supabase/server";
 import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
-import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
+import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
+import { sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
+import type { Src } from "@/lib/goodsPlan";
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { goodsPcs, goodsSizes, type GoodsGarment } from "@/lib/goodsGarments";
@@ -130,7 +132,8 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[] }) {
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[];
+  /** each sku's warehouse picked by Order goods' plan (lib/goodsPlan.ts); without it the closest that has it */ from?: { sku: string; qty: number; warehouse: string }[] }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
@@ -143,7 +146,9 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const po = (p.label || "Stock").trim().slice(0, 50);
     // paid with our saved card (ending 5488), never the account's terms
     // each line from the closest warehouse that has it (Fort Worth first)
-    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), p.warehouses === "fastest" ? "fastest" : "fewest");
+    const picked = (p.from || []).filter((f) => f.sku && f.qty > 0 && f.warehouse && lines.some((l) => l.sku === f.sku));
+    const alloc = picked.length ? { lines: picked.map((f) => ({ identifier: f.sku, qty: Math.round(f.qty), warehouseAbbr: f.warehouse })), short: [] as string[] }
+      : await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), p.warehouses === "fastest" ? "fastest" : "fewest");
     if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
@@ -297,5 +302,119 @@ export async function goodsWarehouses(lines: { sku: string; qty: number }[], mod
     if (!ls.length) return { ok: true as const, from: [], short: [] as string[] };
     const a = await ssAllocate(ls.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), mode === "fastest" ? "fastest" : "fewest");
     return { ok: true as const, from: a.lines.map((l) => ({ sku: l.identifier, qty: l.qty, warehouse: l.warehouseAbbr })), short: a.short };
+  } catch (e) { return fail(e); }
+}
+
+/* ---------- S&S and SanMar side by side (Oct 27, Nick) ---------- */
+
+/** our card fee at SanMar, in percent (Settings: data.goods.sanmarFee); S&S charges none */
+async function sanmarFeePct(admin: ReturnType<typeof createAdminClient>) {
+  const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const v = +((data?.data as { goods?: { sanmarFee?: number } } | null)?.goods?.sanmarFee ?? NaN);
+  return isFinite(v) && v >= 0 && v < 20 ? v : 3.25;
+}
+export async function setSanmarFee(pct: number) {
+  try {
+    await staff();
+    const v = Math.round(+pct * 100) / 100;
+    if (!isFinite(v) || v < 0 || v >= 20) return { ok: false as const, error: "Enter the fee as a percent, like 3.5." };
+    const admin = createAdminClient();
+    const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const d = (data?.data || {}) as Record<string, unknown>;
+    const { error } = await admin.from("settings").update({ data: { ...d, goods: { ...((d.goods as object) || {}), sanmarFee: v } } }).eq("id", 1);
+    return error ? { ok: false as const, error: error.message } : { ok: true as const, fee: v };
+  } catch (e) { return fail(e); }
+}
+
+// SanMar writes colors short ("Athletic Ht", "DkHtGray"): both sides spelled out the same way to compare
+const ABBR: [RegExp, string][] = [[/\bhthr\b|\bhtr\b|\bht\b/g, "heather"], [/\bdk\b/g, "dark"], [/\blt\b/g, "light"], [/\bgry\b|\bgy\b|\bgrey\b/g, "gray"], [/\bgrn\b/g, "green"], [/\bblu\b/g, "blue"], [/\bath\b/g, "athletic"], [/\bnvy\b|\bnv\b/g, "navy"], [/\bryl\b|\bry\b/g, "royal"], [/\bmrn\b/g, "maroon"], [/\bprpl\b|\bprp\b/g, "purple"], [/\bblk\b/g, "black"], [/\bwht\b/g, "white"], [/\borg\b|\borng\b/g, "orange"], [/\bchar\b/g, "charcoal"], [/\bslt\b/g, "slate"], [/\btr\b/g, "true"], [/\bvtg\b|\bvint\b/g, "vintage"]];
+const colorWords = (c: string) => {
+  let s = String(c || "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/[^a-z0-9/ ]+/g, " ");
+  for (const [re, w] of ABBR) s = s.replace(re, w);
+  return s.replace(/\s+/g, "");
+};
+// S&S and SanMar call a few styles differently (Next Level 6210 = NL6210, Bella+Canvas 3001CVC = BC3001CVC)
+async function sanmarStyleOf(admin: ReturnType<typeof createAdminClient>, brand: string, style: string) {
+  const st = style.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (!st) return "";
+  const { data } = await admin.from("sanmar_styles").select("style, brand").or(`style.eq.${st},style.ilike.%${st}`).eq("sellable", true).limit(12);
+  const b = brand.toLowerCase().replace(/[^a-z]/g, "").slice(0, 4);
+  const list = (data || []) as { style: string; brand: string }[];
+  const same = (x: { brand: string }) => !b || String(x.brand || "").toLowerCase().replace(/[^a-z]/g, "").startsWith(b);
+  return (list.find((x) => x.style.toUpperCase() === st && same(x)) || list.find((x) => same(x) && /^[A-Z]{1,3}$/.test(x.style.toUpperCase().slice(0, x.style.length - st.length)) && x.style.toUpperCase().endsWith(st)) || null)?.style || "";
+}
+
+export type SanMarRef = { style: string; color: string; size: string; inventoryKey?: string; sizeIndex?: string };
+/**
+ * Where each size can come from: S&S (its warehouses, our price) and SanMar (its warehouses, our price before the card
+ * fee). Order goods makes the Easiest / Cheapest / Fastest plans from these (lib/goodsPlan.ts).
+ */
+export async function goodsOptions(rows: { key: string; brand: string; style: string; color: string; size: string; qty: number; sku: string; price: number }[]) {
+  try {
+    await staff();
+    const admin = createAdminClient();
+    const srcs: Record<string, Src[]> = {}, sm: Record<string, SanMarRef> = {}, notes: string[] = [];
+    for (const r of rows) srcs[r.key] = [];
+    // S&S
+    if (ssConfigured()) {
+      const st = await ssStock(rows.map((r) => r.sku)).catch((e) => { notes.push("S&S stock: " + (e instanceof Error ? e.message : String(e))); return new Map(); });
+      for (const r of rows) for (const w of (st.get(r.sku) || []) as { warehouseAbbr: string; qty: number }[]) if (r.price > 0) srcs[r.key].push({ sup: "ss", wh: w.warehouseAbbr, stock: w.qty, price: r.price });
+    }
+    // SanMar: the same garment, color and size there
+    if (sanmarConfigured()) {
+      const styles = [...new Set(rows.map((r) => `${r.brand}|${r.style}`))];
+      await Promise.all(styles.map(async (k) => {
+        const [brand, style] = k.split("|");
+        const smStyle = await sanmarStyleOf(admin, brand, style);
+        const mine = rows.filter((r) => `${r.brand}|${r.style}` === k);
+        if (!smStyle) { notes.push(`SanMar doesn't carry ${style}`); return; }
+        const [skus, inv] = await Promise.all([sanmarSkus(smStyle).catch(() => []), sanmarInventory(smStyle).catch((e) => { notes.push(`SanMar stock for ${smStyle}: ${e instanceof Error ? e.message : String(e)}`); return new Map(); })]);
+        for (const r of mine) {
+          const want = colorWords(r.color);
+          const hit = skus.find((x) => x.size === r.size && (colorWords(x.color) === want || colorWords(x.catalogColor) === want));
+          if (!hit) { if (skus.length && !skus.some((x) => colorWords(x.color) === want || colorWords(x.catalogColor) === want)) notes.push(`SanMar ${smStyle} doesn't come in ${r.color}`); continue; }
+          const price = hit.myPrice || hit.casePrice || hit.piecePrice;
+          sm[r.key] = { style: smStyle, color: hit.catalogColor || hit.color, size: hit.rawSize, inventoryKey: hit.inventoryKey || undefined, sizeIndex: hit.sizeIndex || undefined };
+          const whs = (inv.get(sanmarStockKey(hit.catalogColor, hit.rawSize)) || inv.get(sanmarStockKey(hit.color, hit.rawSize)) || []) as { whse: string; qty: number }[];
+          if (price > 0) for (const w of whs) if (w.qty > 0) srcs[r.key].push({ sup: "sm", wh: w.whse, stock: w.qty, price });
+        }
+      }));
+    }
+    return { ok: true as const, srcs, sm, notes: [...new Set(notes)], fee: await sanmarFeePct(admin), sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode() };
+  } catch (e) { return fail(e); }
+}
+
+const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
+/** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
+export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
+  try {
+    const v = await staff();
+    if (!sanmarPOMode()) return { ok: false as const, error: "SanMar ordering isn't turned on yet (SanMar's integration team has to switch it on for our account)." };
+    const lines = p.lines.filter((l) => l.style && l.qty > 0);
+    if (!lines.length) return { ok: false as const, error: "Nothing to order from SanMar." };
+    if (p.shippingMethod === "6") return { ok: false as const, error: "Will call isn't set up for SanMar: pick a UPS method." };
+    const admin = createAdminClient();
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const from = mergeSettings(st?.data).ship.from;
+    if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (SanMar ships here)." };
+    const poNum = (p.label || "Stock").replace(/[^A-Za-z0-9 #-]/g, "").trim().slice(0, 20) + " " + new Date().toISOString().slice(5, 10).replace("-", "");
+    const order = { poNum: poNum.slice(0, 28), attention: from.name || "Receiving", shipTo: from.company || "FBS Print", address1: from.street1, address2: from.street2 || "", city: from.city, state: from.state, zip: from.zip, email: v.user?.email || "", shipMethod: SM_SHIP[p.shippingMethod] || "UPS", lines };
+    const fee = await sanmarFeePct(admin);
+    const sub = lines.reduce((a, l) => a + l.qty * (l.price || 0), 0);
+    if (p.test) {
+      const r = await sanmarPreSubmit(order);
+      return { ok: true as const, checked: r, total: Math.round(sub * (1 + fee / 100) * 100) / 100, po: order.poNum };
+    }
+    const r = await sanmarSubmitPO(order);
+    const garments = (p.garments || []).filter((g) => g && g.style && goodsPcs(g) > 0).slice(0, 60);
+    const row = {
+      order_id: p.orderId || null, customer_id: p.customerId || null, activity_id: p.activityId || null, label: order.poNum, supplier: "sanmar", supplier_order: order.poNum, po: order.poNum,
+      status: "ordered", placed_via: "api", lines: lines.map((l) => ({ sku: [l.style, l.color, l.size].join(" "), qty: l.qty, label: l.label })), total: Math.round(sub * (1 + fee / 100) * 100) / 100,
+      expected_date: null, created_by: v.user!.email || "staff", note: `SanMar: ${r.message}. Card fee ${fee}%.`, garments,
+    };
+    const ins = await admin.from("blank_orders").insert(row).select("id").single();
+    if (ins.error) return { ok: true as const, po: order.poNum, warn: `Ordered with SanMar (PO ${order.poNum}), but it couldn't be saved here: ${ins.error.message}` };
+    if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+    return { ok: true as const, po: order.poNum, id: ins.data.id };
   } catch (e) { return fail(e); }
 }

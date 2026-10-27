@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { GoodsRow } from "@/lib/ssMatch";
 import type { EODraft } from "@/lib/emailOrderShared";
@@ -10,7 +10,9 @@ import { sizeRank } from "@/lib/sizeOrder";
 import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
-import { goodsFromGroups, goodsWarehouses, placeGoods } from "@/app/shop/order-goods/actions";
+import { goodsFromGroups, goodsOptions, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
+import { arriveOn, makePlan, shipKey, supName, whInfo, type Plan, type PlanMode, type Src, type Sup } from "@/lib/goodsPlan";
+import { useSticky } from "@/lib/useSticky";
 import { garmentsFromRows } from "@/lib/goodsGarments";
 
 /**
@@ -41,10 +43,7 @@ export function OrderGoodsDock() {
 
 type Step = { label: string; state: "doing" | "done" | "error" };
 type Row = GoodsRow;
-/** S&S warehouses by their code (Fort Worth is ours, a day away) */
-const WH: Record<string, string> = { TX: "Fort Worth, TX", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };
-const WH_SHORT: Record<string, string> = { TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Penn.", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Mass.", DS: "Mill" };
-const WH_C = ["var(--fbs-blue)", "var(--fbs-salmon)", "var(--fbs-orange)", "var(--ok)", "var(--ink-2)", "var(--ink-3)"];
+
 const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 export default function OrderGoodsTool({ activityId, onClose }: { activityId: string; onClose: () => void }) {
@@ -57,7 +56,11 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
   const [placed, setPlaced] = useState<string>(""), [min, setMin] = useState(false);
   // where each size ships from, grouped by warehouse (Oct 26, Nick: "group by warehouse… Fort Worth and the sizes you're
   // getting from there and the colors"): asked of S&S as soon as the goods are shown, and again when a quantity changes
-  const [mode, setMode] = useState<"fewest" | "fastest">("fewest"), [alloc, setAlloc] = useState<{ sku: string; qty: number; warehouse: string }[] | null>(null), [short, setShort] = useState<string[]>([]);
+  // S&S and SanMar side by side (Oct 27, Nick): where each size can come from, and the plan picked (Easiest by default;
+  // the last one picked is kept)
+  const [opts, setOpts] = useState<null | { srcs: Record<string, Src[]>; sm: Record<string, SanMarRef>; notes: string[]; fee: number; sanmar: boolean; sanmarOrders: string }>(null);
+  const [planMode, setPlanMode] = useSticky<PlanMode>("goods.plan", "easy");
+  const [ssOnly, setSsOnly] = useState(false), [feeEdit, setFeeEdit] = useState(false);
   const [editing, setEditing] = useState(false), [arrive, setArrive] = useState<Record<string, string>>({});
   const stopped = useRef(false), waiting = useRef<((e: Error) => void) | null>(null), ran = useRef(false);
   const step = (label: string) => setSteps((s) => [...s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)), { label, state: "doing" }]);
@@ -128,24 +131,61 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
 
   const lines = rows || [];
   const blanks = [...new Map(lines.map((x) => [`${x.brand}|${x.style}|${x.color}`, x])).keys()];
-  const total = lines.reduce((a, x) => a + (x.found ? x.qty * (x.price || 0) : 0), 0), pcs = lines.reduce((a, x) => a + x.qty, 0);
-  const ready = lines.filter((x) => x.found && x.qty > 0);
+  // every line with a style and a quantity: S&S's (found there) and any SanMar has
+  const wanted = lines.filter((x) => x.qty > 0 && String(x.style || "").trim());
   const label = `${who || "Goods"}`.slice(0, 50);
-  const allocKey = ready.map((x) => `${x.sku}:${x.qty}`).join(",") + "|" + mode;
+  const optKey = wanted.map((x) => `${x.key}:${x.sku}`).join(",");
   useEffect(() => {
-    if (!ready.length) { setAlloc([]); return; }
+    if (!wanted.length) { setOpts(null); return; }
     let live = true;
-    const t = setTimeout(() => { goodsWarehouses(ready.map((x) => ({ sku: x.sku, qty: x.qty })), mode).then((r) => { if (!live) return; if (r.ok) { setAlloc(r.from); setShort(r.short || []); } else setAlloc(null); }); }, 350);
+    const t = setTimeout(() => { void goodsOptions(wanted.map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price }))).then((r) => { if (live && r.ok) setOpts(r); else if (live && !r.ok) setErr(r.error); }); }, 300);
     return () => { live = false; clearTimeout(t); };
-  }, [allocKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [optKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plans = useMemo(() => {
+    if (!opts) return null;
+    const items = wanted.map((x) => ({ key: x.key, qty: x.qty, srcs: (opts.srcs[x.key] || []).filter((s) => !ssOnly || s.sup === "ss") }));
+    return { easy: makePlan(items, "easy", opts.fee), cheap: makePlan(items, "cheap", opts.fee), fast: makePlan(items, "fast", opts.fee) } as Record<PlanMode, Plan>;
+  }, [opts, ssOnly, wanted.map((x) => `${x.key}:${x.qty}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = plans ? plans[planMode] || plans.easy : null;
+  const byKey = new Map(lines.map((x) => [x.key, x]));
+  const ssParts = (plan?.parts || []).filter((p) => p.sup === "ss"), smParts = (plan?.parts || []).filter((p) => p.sup === "sm");
+  const smOn = !!opts?.sanmarOrders;
+  const ready = wanted.filter((x) => plan?.parts.some((p) => p.key === x.key));
+  const total = plan ? plan.total : 0, pcs = wanted.reduce((a, x) => a + x.qty, 0);
+  const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   async function run(test: boolean) {
+    if (!plan) return;
     setBusy(test ? "check" : "place"); setErr("");
-    const r = await placeGoods({ lines: ready.map((x) => ({ sku: x.sku, qty: x.qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price })), shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, warehouses: mode, garments: test ? undefined : garmentsFromRows(ready) });
+    const out: string[] = [], dates: string[] = [], froms: string[] = [];
+    let sum = 0, garmentsLeft = test ? undefined : garmentsFromRows(ready);
+    // S&S's part, each size from the warehouse the plan picked
+    if (ssParts.length) {
+      const per = new Map<string, number>();
+      for (const p of ssParts) { const x = byKey.get(p.key); if (x?.sku) per.set(x.sku, (per.get(x.sku) || 0) + p.qty); }
+      const r = await placeGoods({ lines: [...per].map(([sku, qty]) => { const x = wanted.find((y) => y.sku === sku)!; return { sku, qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price }; }),
+        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, garments: garmentsLeft });
+      if (!r.ok) { setBusy(""); setErr(r.error); return; }
+      garmentsLeft = undefined;
+      const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
+      if (test) setArrive((a) => ({ ...a, ...Object.fromEntries(res.filter((x) => x.expected).map((x) => [`ss:${x.warehouse}`, x.expected!])) }));
+      sum += res.reduce((a, x) => a + (x.total || 0), 0); dates.push(...res.map((x) => x.expected || "").filter(Boolean)); froms.push(...res.map((x) => `S&S ${whInfo("ss", x.warehouse).short}`));
+      if (!test) out.push(`S&S ${res.map((x) => x.orderNumber).filter(Boolean).join(", ") || "placed"}`);
+      if ((r as { warn?: string }).warn) setErr((r as { warn?: string }).warn!);
+    }
+    // SanMar's part (once SanMar has switched ordering on for us)
+    if (smParts.length && smOn) {
+      const r = await placeSanmar({ lines: smParts.map((p) => { const x = byKey.get(p.key)!, ref = opts!.sm[p.key]; const src = (opts!.srcs[p.key] || []).find((s) => s.sup === "sm" && s.wh === p.wh); return { ...ref, qty: p.qty, whse: p.wh, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: src?.price || 0 }; }),
+        shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, garments: garmentsLeft });
+      if (!r.ok) { setBusy(""); setErr((ssParts.length && !test ? `The S&S order went through (${out.join("; ")}), but SanMar's didn't: ` : "") + r.error); if (!test && out.length) setPlaced(out.join(" · ")); return; }
+      if (test) { const c = (r as { checked?: { ok: boolean; message: string } }).checked; if (c && !c.ok) setErr("SanMar: " + (c.message || "some sizes aren't in stock")); }
+      sum += (r as { total?: number }).total || smParts.reduce((a, p) => a + p.qty * p.each, 0);
+      froms.push("SanMar");
+      if (!test) out.push(`SanMar PO ${(r as { po?: string }).po || ""}`.trim());
+      if ((r as { warn?: string }).warn) setErr((r as { warn?: string }).warn!);
+    }
     setBusy("");
-    if (!r.ok) { setErr(r.error); return; }
-    const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
-    if (test) { setArrive(Object.fromEntries(res.filter((x) => x.expected).map((x) => [x.warehouse, x.expected!]))); setCheck({ total: res.reduce((a, x) => a + (x.total || 0), 0), expected: res.map((x) => x.expected).filter(Boolean).sort().pop() || null, from: [...new Set(res.map((x) => x.warehouse))].join(", ") }); setSure(false); }
-    else setPlaced(res.map((x) => x.orderNumber).join(", ") || "placed");
+    if (test) { setCheck({ total: Math.round(sum * 100) / 100, expected: dates.sort().pop() || null, from: [...new Set(froms)].join(", ") }); setSure(false); }
+    else setPlaced(out.join(" · ") || "placed");
   }
 
   // tucked away, the panel stays as it was (a question half answered stays half answered) and only a bar shows
@@ -168,32 +208,34 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {rows && <div className="og-list">
           {!lines.length ? <p className="faint">Nothing to order: no garment with a style and sizes.{skipped.length ? ` Left for now: ${skipped.join(", ")}.` : ""}</p> : <>
-            {!editing && alloc && alloc.length > 0 ? (() => {
-              // by warehouse: a small table each, a row per garment and color, the sizes across
-              const whs = [...new Set(alloc.map((a) => a.warehouse))];
+            {!editing && plan && plan.parts.length > 0 ? (() => {
+              // by shipment (supplier and warehouse): a small table each, a row per garment and color, the sizes across
+              const ships = [...new Set(plan.parts.map(shipKey))].sort((x, y) => { const [sx, wx] = x.split(":"), [sy, wy] = y.split(":"); return whInfo(sx as Sup, wx).days - whInfo(sy as Sup, wy).days || (sx === sy ? 0 : sx === "ss" ? -1 : 1); });
               const sizes = [...new Set(ready.map((x) => x.size))].sort((a, b) => sizeRank(a) - sizeRank(b));
-              const bySku = new Map(ready.map((x) => [x.sku, x]));
-              const split = new Set([...new Set(alloc.map((a) => a.sku))].filter((sku) => new Set(alloc.filter((a) => a.sku === sku).map((a) => a.warehouse)).size > 1));
-              const day = (d: string) => new Date(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-              const notAt = lines.filter((x) => !x.found && x.qty > 0);
+              const split = new Set([...new Set(plan.parts.map((p) => p.key))].filter((k) => plan.parts.filter((p) => p.key === k).length > 1));
+              const none = wanted.filter((x) => !(opts?.srcs[x.key] || []).length);
               return <>
-                {whs.map((w, wi) => {
-                  const here = alloc.filter((a) => a.warehouse === w);
-                  const gks = [...new Set(here.map((a) => { const x = bySku.get(a.sku); return x ? `${x.brand}|${x.style}|${x.color}` : ""; }).filter(Boolean))];
+                {ships.map((sk) => {
+                  const [sup, wh] = sk.split(":") as [Sup, string], w = whInfo(sup, wh);
+                  const here = plan.parts.filter((p) => shipKey(p) === sk);
+                  const gks = [...new Set(here.map((p) => { const x = byKey.get(p.key); return x ? `${x.brand}|${x.style}|${x.color}` : ""; }).filter(Boolean))];
+                  const sub = here.reduce((n, p) => n + p.qty * p.each, 0);
+                  const when = arrive[sk] ? dayShort(new Date(arrive[sk])) : `about ${dayShort(arriveOn(w.days))}`;
                   return (
-                    <section key={w} className="og-wh" style={{ ["--wc" as string]: WH_C[wi % WH_C.length] }}>
-                      <div className="og-whs" aria-hidden>{WH_SHORT[w] || w}</div>
+                    <section key={sk} className={"og-wh " + sup} style={{ ["--wc" as string]: sup === "ss" ? "var(--fbs-blue)" : "var(--fbs-salmon)" }}>
+                      <div className="og-whs" aria-hidden>{supName(sup)} {w.short}</div>
                       <div className="og-whb">
-                        <div className="og-whh"><b>{WH[w] || w}</b><span>{here.reduce((a, x) => a + x.qty, 0)} pcs{arrive[w] ? ` · arrives ${day(arrive[w])}` : ""}</span></div>
+                        <div className="og-whh"><b>{supName(sup)} · {w.name}</b><span>{here.reduce((n, p) => n + p.qty, 0)} pcs · {money(sub)} · {when}</span></div>
+                        {sup === "sm" && !smOn && <div className="og-off">Not ordered here yet: SanMar has to switch on ordering for us. Order these on sanmar.com, or <button type="button" className="linkbtn" onClick={() => { setSsOnly(true); setCheck(null); }}>use S&amp;S only</button>.</div>}
                         <table className="og-wt"><thead><tr><th />{sizes.map((z) => <th key={z}>{z}</th>)}<th /></tr></thead>
                           <tbody>{gks.map((k) => {
-                            const xs = ready.filter((x) => `${x.brand}|${x.style}|${x.color}` === k), f = xs[0];
-                            const q = (z: string) => { const x = xs.find((y) => y.size === z); return x ? here.filter((a) => a.sku === x.sku).reduce((n, a) => n + a.qty, 0) : 0; };
+                            const xs = wanted.filter((x) => `${x.brand}|${x.style}|${x.color}` === k), f = xs[0];
+                            const q = (z: string) => { const x = xs.find((y) => y.size === z); return x ? here.filter((p) => p.key === x.key).reduce((n, p) => n + p.qty, 0) : 0; };
                             return (
                               <tr key={k}>
-                                <td data-notranslate><b>{f.style}</b> {f.color}</td>
-                                {sizes.map((z) => { const x = xs.find((y) => y.size === z), n = q(z); return <td key={z} className={!n ? "z" : x && split.has(x.sku) ? "p" : ""}>{n || "–"}</td>; })}
-                                <td className="t">{sizes.reduce((a, z) => a + q(z), 0)}</td>
+                                <td data-notranslate><b>{sup === "sm" && opts?.sm[xs[0].key]?.style ? opts.sm[xs[0].key].style : f.style}</b> {f.color}</td>
+                                {sizes.map((z) => { const x = xs.find((y) => y.size === z), n = q(z); return <td key={z} className={!n ? "z" : x && split.has(x.key) ? "p" : ""}>{n || "–"}</td>; })}
+                                <td className="t">{sizes.reduce((n, z) => n + q(z), 0)}</td>
                               </tr>
                             );
                           })}</tbody>
@@ -202,9 +244,10 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
                     </section>
                   );
                 })}
-                {split.size > 0 && <p className="og-note og-split">{[...split].map((sku) => { const x = bySku.get(sku)!; return `${x.style} ${x.color} ${x.size}: ${alloc.filter((a) => a.sku === sku).map((a) => `${a.qty} from ${WH_SHORT[a.warehouse] || a.warehouse}`).join(", ")}`; }).join(" · ")} (amber: split between warehouses)</p>}
-                {short.length > 0 && <p className="pv-err">S&amp;S doesn&apos;t have enough: {short.join("; ")}</p>}
-                {notAt.length > 0 && <p className="pv-err">Not at S&amp;S: {notAt.map((x) => `${x.style} ${x.color} ${x.size} (${x.note || "not found"})`).join("; ")}</p>}
+                {split.size > 0 && <p className="og-note og-split">{[...split].map((k) => { const x = byKey.get(k)!; return `${x.style} ${x.color} ${x.size}: ${plan.parts.filter((p) => p.key === k).map((p) => `${p.qty} from ${supName(p.sup)} ${whInfo(p.sup, p.wh).short}`).join(", ")}`; }).join(" · ")} (amber: split)</p>}
+                {plan.short.length > 0 && <p className="pv-err">Not enough at {ssOnly || !opts?.sanmar ? "S&S" : "S&S or SanMar"}: {plan.short.map((s) => { const x = byKey.get(s.key); return x ? `${x.style} ${x.color} ${x.size} (${s.qty} short)` : ""; }).filter(Boolean).join("; ")}</p>}
+                {none.length > 0 && <p className="pv-err">Not found: {none.map((x) => `${x.style} ${x.color} ${x.size}`).join("; ")}</p>}
+                {!!opts?.notes.length && <p className="faint og-note">{opts.notes.join(" · ")}</p>}
                 <button type="button" className="linkbtn og-edit" onClick={() => setEditing(true)}>Change quantities</button>
               </>;
             })() : <>
@@ -226,14 +269,21 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
             })}
             </>}
             {skipped.length > 0 && <p className="faint og-note">Left for now (no blank picked): {skipped.join(", ")}.</p>}
-            <div className="og-tot"><span>{pcs.toLocaleString()} pcs{alloc && alloc.length ? ` · ${new Set(alloc.map((a) => a.warehouse)).size} shipment${new Set(alloc.map((a) => a.warehouse)).size === 1 ? "" : "s"}` : ""}</span><b>{money(total)}</b></div>
-            <div className="og-mode" role="radiogroup" aria-label="How S&S splits it">
-              <button type="button" role="radio" aria-checked={mode === "fewest"} className={mode === "fewest" ? "on" : ""} onClick={() => { setMode("fewest"); setCheck(null); }} title="As much as possible from one warehouse">Fewest boxes</button>
-              <button type="button" role="radio" aria-checked={mode === "fastest"} className={mode === "fastest" ? "on" : ""} onClick={() => { setMode("fastest"); setCheck(null); }} title="The closest warehouse that has each size, even if it's more boxes">Fastest</button>
-            </div>
+            {plans && <div className="og-plans" role="radiogroup" aria-label="How to order it">
+              {([["easy", "Easiest"], ["cheap", "Cheapest"], ["fast", "Fastest"]] as [PlanMode, string][]).map(([m, l]) => { const p = plans[m]; return (
+                <button key={m} type="button" role="radio" aria-checked={planMode === m} className={"og-plan" + (planMode === m ? " on" : "")} onClick={() => { setPlanMode(m); setCheck(null); setSure(false); }}
+                  title={m === "easy" ? "Fewest shipments, then the cheapest of those" : m === "cheap" ? "Lowest cost for each size (SanMar with our card fee); a tie goes to S&S" : "The soonest warehouse for each size, then the cheapest"}>
+                  <span className="k">{l}</span><b>{money(p.total)}</b><small>{p.parts.length ? `${dayShort(arriveOn(p.days)).replace(/,.*$/, "")} · ${p.ships} shipment${p.ships === 1 ? "" : "s"}` : "—"}</small>
+                </button>); })}
+            </div>}
+            <div className="og-tot"><span>{pcs.toLocaleString()} pcs{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
+            {opts?.sanmar && <p className="faint og-note og-fee">{feeEdit
+              ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee } : o)); }); }} />%</>
+              : <>SanMar prices include our {opts.fee}% card fee; S&amp;S has none, so a tie goes to S&amp;S. <button type="button" className="linkbtn" onClick={() => setFeeEdit(true)}>Change</button>{ssOnly && <> · S&amp;S only. <button type="button" className="linkbtn" onClick={() => { setSsOnly(false); setCheck(null); }}>Show SanMar too</button></>}</>}</p>}
             <div className="field"><label htmlFor="og-ship">Shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
-            {check && <div className="og-check">Checked with S&amp;S: {money(check.total)}{check.from ? ` · ships from ${check.from}` : ""}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
-            {placed && <div className="og-done">Ordered with S&amp;S: <b>{placed}</b>. It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</div>}
+            {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
+            {placed && smParts.length > 0 && !smOn && <div className="pv-err">Still to order on sanmar.com: {smParts.map((p) => { const x = byKey.get(p.key)!, r = opts?.sm[p.key]; return `${r?.style || x.style} ${r?.color || x.color} ${r?.size || x.size} × ${p.qty}`; }).join("; ")}</div>}
+            {placed && <div className="og-done">Ordered: <b>{placed}</b>. It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</div>}
           </>}
         </div>}
         <div className="dla-acts og-foot">
@@ -241,7 +291,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
             <svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>View email
           </button>
           {rows && lines.length > 0 && !placed && (!check
-            ? <button type="button" className="btn primary" disabled={!!busy || !ready.length} onClick={() => void run(true)}>{busy === "check" ? "Checking…" : "Check with S&S"}</button>
+            ? <button type="button" className="btn primary" disabled={!!busy || !plan || !(ssParts.length || (smParts.length && smOn))} onClick={() => void run(true)}>{busy === "check" ? "Checking…" : ssParts.length && smParts.length && smOn ? "Check with S&S and SanMar" : ssParts.length ? "Check with S&S" : "Check with SanMar"}</button>
             : !sure ? <button type="button" className="btn primary" disabled={!!busy} onClick={() => setSure(true)}>Place order</button>
               : <button type="button" className="btn primary og-sure" disabled={!!busy} onClick={() => void run(false)}>{busy === "place" ? "Ordering…" : `Yes, buy it (${money(check.total)})`}</button>)}
           {placed && <button type="button" className="btn primary" onClick={onClose}>Done</button>}

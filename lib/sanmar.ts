@@ -27,11 +27,11 @@ export function blocks(xml: string, name: string): string[] {
   return out;
 }
 
-async function soap(path: string, op: string, inner: string, timeoutMs = 25000): Promise<string> {
-  const body = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:impl="http://impl.webservice.integration.sanmar.com/"><soapenv:Header/><soapenv:Body><impl:${op}>${inner}</impl:${op}></soapenv:Body></soapenv:Envelope>`;
+async function soap(path: string, op: string, inner: string, timeoutMs = 25000, ns = "http://impl.webservice.integration.sanmar.com/", base = host()): Promise<string> {
+  const body = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:impl="${ns}"><soapenv:Header/><soapenv:Body><impl:${op}>${inner}</impl:${op}></soapenv:Body></soapenv:Envelope>`;
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const r = await fetch(host() + path, { method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' }, body, cache: "no-store", signal: ctl.signal });
+    const r = await fetch(base + path, { method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' }, body, cache: "no-store", signal: ctl.signal });
     const x = await r.text();
     const fault = tag(x, "faultstring");
     if (fault) throw new Error("SanMar: " + fault);
@@ -57,7 +57,7 @@ const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUppe
 const ORDER = ["NB", "6M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0; };
 
-export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; /** the flat back and the back on a model, apart (Oct 26) */ backFlat: string; backModel: string; swatch: string; brand: string; title: string; description: string; status: string };
+export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; /** the flat back and the back on a model, apart (Oct 26) */ backFlat: string; backModel: string; swatch: string; brand: string; title: string; description: string; status: string; /** SanMar's ids for ordering (PO service) */ inventoryKey?: string; sizeIndex?: string; };
 
 /** Every SKU block SanMar has for a style (product info only, no pricing call). */
 async function sanmarInfoRows(style: string): Promise<string[]> {
@@ -87,7 +87,7 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
       piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(pkey(color, raw)) || mine.get(pkey(tag(basic, "catalogColor"), raw)) || 0,
       image: tag(img, "productImage"), // flat product shots first (like S&S), photos on a model only when there's no flat
       front: tag(img, "frontFlat") || tag(img, "colorProductImage") || tag(img, "frontModel"), back: tag(img, "backFlat") || tag(img, "backModel"), backFlat: tag(img, "backFlat"), backModel: tag(img, "backModel"), swatch: tag(img, "colorSwatchImage"),
-      brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
+      inventoryKey: tag(b, "inventoryKey"), sizeIndex: tag(b, "sizeIndex"), brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
     };
   });
 }
@@ -222,4 +222,61 @@ export async function sanmarProbe(): Promise<Record<string, string>> {
     catch (e) { out[v] = "ERR " + (e instanceof Error ? e.message : String(e)); }
   }
   return out;
+}
+
+/* ---------- stock by warehouse ---------- */
+
+/**
+ * SanMar's stock for every color and size of a style, by warehouse (Oct 27: Order goods compares it with S&S). Keyed by
+ * the catalog (mainframe) color and SanMar's own size name; quantities are capped at 3,000 a warehouse by SanMar.
+ */
+export async function sanmarInventory(style: string): Promise<Map<string, { whse: string; name: string; qty: number }[]>> {
+  const c = cred();
+  const x = await soap("/SanMarWebService/SanMarWebServicePort", "getInventoryQtyForStyleColorSize",
+    `<arg0>${esc(c.num)}</arg0><arg1>${esc(c.user)}</arg1><arg2>${esc(c.pass)}</arg2><arg3>${esc(style.trim())}</arg3><arg4></arg4><arg5></arg5>`, 30000, "http://webservice.integration.sanmar.com/");
+  const out = new Map<string, { whse: string; name: string; qty: number }[]>();
+  for (const k of blocks(x, "sku")) {
+    const color = tag(k, "color"), size = tag(k, "size");
+    if (!color) continue;
+    out.set(pkey(color, size), blocks(k, "whse").map((w) => ({ whse: tag(w, "whseID"), name: tag(w, "whseName"), qty: Math.max(0, Math.round(num(tag(w, "qty")))) })).filter((w) => w.whse));
+  }
+  return out;
+}
+export const sanmarStockKey = (color: string, size: string) => pkey(color, size);
+
+/* ---------- purchase orders (SanMarPOServicePort) ---------- */
+
+/**
+ * Ordering is switched on by SanMar's integration team (sanmarintegrations@sanmar.com), then here by Nick in Vercel:
+ * SANMAR_PO=edev (their test system) or SANMAR_PO=on (real orders). SANMAR_PO_WHSE=on once SanMar turns on Warehouse
+ * Selection (then each line names its warehouse; without it SanMar ships from its closest warehouse that has it all).
+ * Paid with the card saved on our sanmar.com account.
+ */
+export const sanmarPOMode = () => { const v = process.env.SANMAR_PO?.trim().toLowerCase() || ""; return v === "on" || v === "edev" ? v : ""; };
+export const sanmarPOWhse = () => process.env.SANMAR_PO_WHSE?.trim().toLowerCase() === "on";
+const poHost = () => (sanmarPOMode() === "edev" ? "https://edev-ws.sanmar.com:8080" : "https://ws.sanmar.com:8080");
+export type SanMarPOLine = { style: string; color: string; size: string; qty: number; inventoryKey?: string; sizeIndex?: string; whse?: string };
+export type SanMarPO = { poNum: string; attention: string; shipTo: string; address1: string; address2?: string; city: string; state: string; zip: string; email: string; shipMethod: string; lines: SanMarPOLine[] };
+// SanMar asks for no commas in any field
+const po = (s: string, n: number) => esc(String(s || "").replace(/,/g, " ").replace(/\s+/g, " ").trim().slice(0, n));
+function poXml(o: SanMarPO) {
+  const whse = sanmarPOWhse();
+  const lines = o.lines.map((l) => `<webServicePoDetailList>${l.inventoryKey && l.sizeIndex ? `<inventoryKey>${po(l.inventoryKey, 10)}</inventoryKey><sizeIndex>${po(l.sizeIndex, 11)}</sizeIndex>` : `<inventoryKey></inventoryKey><sizeIndex></sizeIndex>`}<style>${po(l.style, 60)}</style><color>${po(l.color, 50)}</color><size>${po(l.size, 50)}</size><quantity>${Math.round(l.qty)}</quantity><whseNo>${whse && l.whse ? po(l.whse, 10) : ""}</whseNo></webServicePoDetailList>`).join("");
+  return `<arg0><attention>${po(o.attention, 35)}</attention><notes></notes><poNum>${po(o.poNum, 28)}</poNum><shipTo>${po(o.shipTo, 28)}</shipTo><shipAddress1>${po(o.address1, 35)}</shipAddress1><shipAddress2>${po(o.address2 || "", 35)}</shipAddress2><shipCity>${po(o.city, 28)}</shipCity><shipState>${po(o.state, 2)}</shipState><shipZip>${po(o.zip.replace(/[^0-9-]/g, ""), 10)}</shipZip><shipMethod>${po(o.shipMethod, 15)}</shipMethod><shipEmail>${po(o.email, 105)}</shipEmail><residence>N</residence><department></department>${lines}</arg0>${auth()}`;
+}
+const PO_NS = "http://webservice.integration.sanmar.com/";
+/** Checks stock for a PO without placing it: each line's warehouse, or why it can't be had. */
+export async function sanmarPreSubmit(o: SanMarPO): Promise<{ ok: boolean; message: string; lines: { whse: string; message: string }[] }> {
+  if (!sanmarPOMode()) throw new Error("SanMar ordering isn't turned on yet.");
+  const x = await soap("/SanMarWebService/SanMarPOServicePort", "getPreSubmitInfo", poXml(o), 30000, PO_NS, poHost());
+  const lines = blocks(x, "webServicePoDetailList").map((b) => ({ whse: tag(b, "whseNo"), message: tag(b, "message") }));
+  return { ok: !lines.some((l) => /not in stock/i.test(l.message)), message: tag(x, "internalMessage") || tag(x, "message"), lines };
+}
+/** Places the PO with SanMar (charged to the card on our sanmar.com account). */
+export async function sanmarSubmitPO(o: SanMarPO): Promise<{ message: string }> {
+  if (!sanmarPOMode()) throw new Error("SanMar ordering isn't turned on yet.");
+  const x = await soap("/SanMarWebService/SanMarPOServicePort", "submitPO", poXml(o), 45000, PO_NS, poHost());
+  const message = tag(x, "message");
+  if (!/success/i.test(message)) throw new Error("SanMar: " + (message || "the order wasn't accepted"));
+  return { message };
 }
