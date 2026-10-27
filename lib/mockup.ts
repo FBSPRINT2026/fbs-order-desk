@@ -675,6 +675,11 @@ const SUPPLIER_NAMED: Record<string, string> = {
   "safety yellow": "#e7ef3c", "athletic orange": "#f47321", "pastel mint": "#a8dcc4", "pastel blue": "#a7c6ed", "light yellow": "#f6eb9a",
   graphite: "#53565a", silver: "#b1b3b3", "military green": "#5e6145", olive: "#5f6131", coral: "#f2786a", fuchsia: "#c6007e", teal: "#00808a",
   forest: "#1f3d2b", kelly: "#1f9a4f", lime: "#8cc63f", maroon: "#6a1f2d", "true navy": "#1f2a44", "true royal": "#1d4f9c", "true red": "#c8102e",
+  // Comfort Colors (Oct 26: a 1717 Blue Spruce showed gray where the catalog wasn't checked)
+  "blue spruce": "#004c45", "blue jean": "#5d7389", "pepper": "#5a5652", "ivory": "#f1ead9", "butter": "#f6e7a6", "moss": "#7a7a4e", "hemp": "#6d6a4f",
+  "sage": "#9fae8e", "light green": "#a6c7a1", "seafoam": "#8fc9b9", "chambray": "#b9cde0", "washed denim": "#8aa2bd"
+  "berry": "#7b2f4f", "terracotta": "#c1673e", "yam": "#c9693a", "mustard": "#c79b2c", "granite": "#8d8f91",
+  "espresso": "#4b3a33", "watermelon": "#e2585f", "blossom": "#f2b7c4", "bay": "#b9c4b5", "khaki": "#b4a483",
 };
 const NAMED: Record<string, string> = { ...SUPPLIER_NAMED, ...Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h]))) };
 const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);

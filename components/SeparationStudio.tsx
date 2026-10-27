@@ -7,7 +7,7 @@ import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing"
 import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, repaintLogo, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
-import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
+import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
 import { allowFolder, folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder, type DirHandle } from "@/lib/filmFolder";
@@ -412,6 +412,13 @@ export default function SeparationStudio({ id }: { id: string }) {
   const coachOn = perms.coach;
   const lessonNote = useRef("");
 
+  // the shirt's real color from the catalog (Oct 26, Nick: a Comfort Colors 1717 Blue Spruce showed gray, "supposed to be
+  // green"): the supplier's color for the order's style + color, before the names we know, before a guess
+  const catHex = useRef<Record<string, string>>({});
+  const [, setCatN] = useState(0);
+  const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const hexOfShirt = (c: string) => (c ? catHex.current[ckey(c)] || shirtHex(c) || colorHex(c) || guessHex(c) || "" : "");
+
   /* ---------- load ---------- */
   const load = useCallback(async () => {
     const { data: r } = await sb.from("separations").select("*").eq("id", id).maybeSingle();
@@ -428,6 +435,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       sb.from("production_equipment").select("*"),
     ]);
     setOrder((o as Order) || null);
+    {
+      const styles = [...new Set(orderGroups((o as Order) || ({ groups: [], lines: [] } as never)).flatMap((g) => g.lines.map((l) => (l.style || "").trim())).filter(Boolean))];
+      const { data: gz } = styles.length ? await sb.from("garments").select("style, color_images").in("style", styles) : { data: [] };
+      const cat: Record<string, string> = {};
+      for (const g of (gz || []) as { color_images: Record<string, { hex?: string }> | null }[]) for (const [c, v] of Object.entries(g.color_images || {})) { const h = garmentHex(v?.hex, c); if (h && h !== "#9aa1ab" && !cat[ckey(c)]) cat[ckey(c)] = h; }
+      catHex.current = cat; setCatN(Object.keys(cat).length);
+    }
     // the other print locations of this order group (front, back, sleeve…): a tab each at the top
     if (row0.order_id) {
       // every print of the job (Oct 22, Nick: "it should just be the jobs… when you click in, you've got the front, back"),
@@ -446,7 +460,7 @@ export default function SeparationStudio({ id }: { id: string }) {
         if (!ord) return "";
         const g = orderGroups(ord).find((y) => y.id === x.group_id);
         const c = g?.lines.find((l) => l.color && Object.values(l.sizes || {}).some((q) => +(q || 0) > 0))?.color || g?.lines.find((l) => l.color)?.color || "";
-        return c ? shirtHex(c) || colorHex(c) || guessHex(c) || "" : "";
+        return hexOfShirt(c);
       };
       const pathOf = (x: (typeof all)[number]) => (mapOf(x) && artOf(x)) || x.preview_path || artOf(x);
       const paths = [...new Set(all.map(pathOf).filter(Boolean))];
@@ -468,7 +482,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     // saved settings win; otherwise the garment from the order
     const saved = row0.settings as Partial<Studio> & { inks?: SepInk[]; order?: string[]; mesh?: Record<string, number>; names?: Record<string, string> };
     // the shirt: saved, else the order's garment color; none picked = every color prints
-    const garment = (saved.garment as string) ?? (row0.garment_color ? shirtHex(row0.garment_color) || colorHex(row0.garment_color) || guessHex(row0.garment_color) || "" : "");
+    const garment = (saved.garment as string) ?? (row0.garment_color ? hexOfShirt(row0.garment_color) : "");
     const im = orderGroups((o as Order) || { groups: [], lines: [] } as never).flatMap((g) => g.imprints).find((x) => x.id === row0.imprint_id);
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     // the inks the order names for this print (the mockup's, snapped to the customer's brand colors): a found ink close
@@ -727,7 +741,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const gs = orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)));
     const out: { name: string; hex: string }[] = [];
     for (const c of [...new Set(gs.flatMap((g) => g.lines).filter((l) => Object.values(l.sizes || {}).some((q) => +(q || 0) > 0)).map((l) => l.color).filter(Boolean))]) {
-      const hex = shirtHex(c) || colorHex(c) || guessHex(c);
+      const hex = hexOfShirt(c);
       if (hex && !out.some((o) => deltaE(o.hex, hex) < 12)) out.push({ name: c, hex });
     }
     // colors that print alike are one shirt (Violet and Purple): only really different shirts count
@@ -1188,7 +1202,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const dark = baseShirt(shirtOf(st)), noShirt = !st.garment;
   const garments = [...new Set(order ? orderGroups(order).find((g) => g.id === row.group_id)?.lines.map((l) => l.color).filter(Boolean) || [] : [])];
   // the shirt's name: from the order, the garment list, the shirt colors, or the ink picked as the shirt color
-  const shirtLabel = noShirt ? "" : [row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && (shirtHex(c) || colorHex(c) || guessHex(c)) === st.garment) || inks.find((k) => k.hex === st.garment)?.name || st.garment;
+  const shirtLabel = noShirt ? "" : [row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && hexOfShirt(c).toLowerCase() === (st.garment || "").toLowerCase()) || inks.find((k) => k.hex === st.garment)?.name || st.garment;
 
   return (
     <div className="sep">
@@ -1359,7 +1373,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <label className={"sep-shirt-sw" + (noShirt ? " none" : "")} style={noShirt ? undefined : { background: st.garment }} title={noShirt ? "No shirt picked: every color prints. Tap for any color." : `Shirt ${st.garment}. Tap for any color.`}>
                 <input type="color" value={st.garment || "#ffffff"} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
               </label>
-              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? shirtHex(v) || colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
+              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? hexOfShirt(v) : "" }); }} aria-label="Shirt color">
                 <option value="">All colors printed</option>
                 {!noShirt && <option value="_">{shirtLabel}</option>}
                 {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
