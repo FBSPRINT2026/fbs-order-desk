@@ -76,7 +76,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -99,6 +99,7 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
   /** the customer's texts from the Mac (owners only; Oct 15) */ textsPanel?: ReactNode; textsCount?: number;
   /** staff only: the customer's production files (separations, digitized files…), under Artwork; never in the portal */
   productionPanel?: ReactNode;
+  /** the customer's brands (Cedar Promos: MEI, ShipStation…), above their logos (Oct 27) */ brandsPanel?: ReactNode;
   /** projects (a conference, a season: several orders, dates, tasks, one conversation) */
   projectsPanel?: ReactNode; projectsCount?: number;
   /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
@@ -933,6 +934,7 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
       {!dcOn ? tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos") : showArch ? <div className="aa-sec-h"><h3>Archived artwork</h3></div> : null}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {mode !== "portal" && brandCardEl}
+      {mode === "shop" && !showArch && brandsPanel}
       <div className="aa-card">
         <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Archive the ones you don't need; they stay under Archive.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {showArch

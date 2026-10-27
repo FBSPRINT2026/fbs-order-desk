@@ -10,6 +10,8 @@
   --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --r:8px;
+  /* a dark garment behind a logo picture (stays dark in both themes) */
+  --swatch-dark:#2A2F38; --swatch-light:#F4F4F1; --swatch-ink:#141D2B; --swatch-ink-dark:#F4F4F1;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -8156,6 +8158,13 @@ a.pdn-tag:hover{text-decoration:underline}
 .mk-none{display:grid;place-items:center;height:170px;border:1.5px dashed var(--line);border-radius:12px;color:var(--ink-3);font-size:13px;background:var(--surface-2)}
 .imp-mock .btn{justify-content:center}
 .mk-when{font-size:12px;text-align:center}
+/* Add logo / Customer artwork: two tiles side by side under Create mockup (Oct 27, option B) */
+.mk-tiles{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mk-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:58px;padding:6px 4px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:600 12px/1.2 var(--body);text-align:center;cursor:pointer}
+.mk-tile svg{color:var(--accent);flex:none}
+.mk-tile:hover{border-color:var(--accent);background:var(--accent-soft)}
+.mk-tile:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:760px){ .mk-tiles{flex:1;min-width:200px} }
 @media (max-width:1100px){ .imp-wrap{grid-template-columns:140px minmax(0,1fr);gap:12px} }
 @media (max-width:760px){ .imp-wrap{grid-template-columns:1fr} .imp-mock{flex-direction:row;flex-wrap:wrap;align-items:center} .mk-big{width:140px} .mk-none{height:90px;flex:1} }
 /* wholesale garment rows: the settings page's own ".ws" (a stacked column, 18px apart) was also landing on a group's
@@ -13919,6 +13928,54 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ca-use{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line-2);margin-top:10px;padding-top:10px;font-size:13px}
 .ca-use .faint{font-size:12.5px}
 .ca-warn{font-size:12.5px;color:var(--warn)}
+/* Customer artwork → Brands (Oct 27): the method (lane), brand chips, the brand's rule, a lane note on each logo */
+.ba{display:flex;flex-direction:column;gap:8px}
+.ba .toolbar{margin:0}
+.ba-rule{margin:0;font-size:12.5px;color:var(--ink-3)}
+.ba-rule b{color:var(--ink);margin-right:4px}
+.ca-pic.logo{background:var(--swatch-light)}
+.ca-pic.logo.dark{background:var(--swatch-dark)}
+.ba-st{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ba-st.ok{color:var(--ok)}
+.ba-st.need{color:var(--warn)}
+.ba-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+.ba-row .field{margin:0;min-width:0}
+.ba-val{height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ba-goods{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
+.ba-g{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border:1px solid var(--line);border-radius:6px;background:var(--swatch-light);color:var(--swatch-ink);font:600 12.5px var(--body);cursor:pointer;white-space:nowrap}
+.ba-g small{font-weight:400;font-size:11.5px;opacity:.75}
+.ba-g.dk{background:var(--swatch-dark);color:var(--swatch-ink-dark);border-color:var(--swatch-dark)}
+@media (max-width:640px){ .ba-row{grid-template-columns:1fr} }
+/* a customer's brands on their Artwork page (Oct 27) */
+.cb .panel-h{flex-wrap:wrap}
+.cb-add{display:flex;gap:6px;align-items:center}
+.cb-add input{height:32px;width:180px}
+.cb .panel-b{display:flex;flex-direction:column;gap:12px}
+.cb .toolbar{margin:0;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.cb-std{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 24px;padding:12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface-2)}
+.cb-colors{display:flex;flex-wrap:wrap;gap:8px}
+.cb-sw{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--ink)}
+.cb-sw i{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);flex:none}
+.cb-sw small{font-size:12px;color:var(--ink-3)}
+.cb-rules{display:grid;grid-template-columns:auto auto;gap:2px 12px;margin:0;font-size:14px}
+.cb-rules dt{font-size:12px;color:var(--ink-3)}
+.cb-rules dd{margin:0;color:var(--ink);font-weight:700}
+.cb-notes{flex-basis:100%;margin:0;font-size:12.5px;color:var(--ink-3)}
+.cb-edit{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
+.cb-edit .field{margin:0;min-width:0}
+.cb-edit .cb-wide{grid-column:span 2}
+.cb-acts{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px}
+.cb-pic{width:76px}
+.cb-pic img{width:68px;height:44px;object-fit:contain;display:block;background:var(--swatch-light);border-radius:6px}
+.cb-sews{display:flex;flex-direction:column;gap:3px;margin-top:4px;font-size:12.5px;color:var(--ink-3)}
+.cb-sew{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cb-sew select{height:26px;font-size:12px;padding:0 4px}
+.cb-row-acts{white-space:nowrap;text-align:right}
+.cb-row-acts>*{margin-left:6px}
+.cb-row-acts select{height:32px}
+.cb-sewopts,.cb-loose{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.cb-sewopts input,.cb-sewopts select,.cb-loose select{height:32px}
+@media (max-width:900px){ .cb-edit{grid-template-columns:1fr 1fr} }
 .ca-acts{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;flex-wrap:wrap}
 .ca-acts .field{margin:0;min-width:180px}
 .rq-pick .toolbar{margin:4px 0 10px}

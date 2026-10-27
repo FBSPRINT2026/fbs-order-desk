@@ -1549,6 +1549,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} onClose={() => setCustArt(null)}
               onPick={async (p) => {
                 const gi = custArt, gid = o.groups[gi].id;
+                // a logo from their brand: the print goes on, the group's mockup (if any) stays as it is
+                if (p.keepMockup) {
+                  setGroup(gi, (x) => { x.imprints = p.imprints; delete x.mockupSkipped; });
+                  setCustArt(null);
+                  await new Promise((r) => setTimeout(r, 80));
+                  await save();
+                  void sb.from("order_events").insert({ order_id: o.id, kind: "note", detail: `Added ${p.label} to ${o.groups[gi].name || "the group"} (Customer artwork, brand rules).` });
+                  return;
+                }
                 if (!p.helperFile || p.open) setGroup(gi, (x) => {
                   x.imprints = p.imprints; x.mockupOffsets = p.offsets; delete x.mockupSkipped;
                   if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; }

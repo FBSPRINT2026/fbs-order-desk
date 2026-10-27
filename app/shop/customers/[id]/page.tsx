@@ -4,6 +4,7 @@ import { oneOfEach } from "@/lib/mockupList";
 import { logoShirtsFrom } from "@/lib/logoShirts";
 import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
+import CustomerBrands from "@/components/CustomerBrands";
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -315,6 +316,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} /> : undefined}
           productionPanel={<CustomerProductionFiles customerId={id} />}
+          brandsPanel={<CustomerBrands customerId={id} />}
           textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
           onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}

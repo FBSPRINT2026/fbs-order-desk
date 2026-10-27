@@ -722,8 +722,19 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
           {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
-          {onLogo && <button className="btn sm" type="button" title="The logo, its size, spot and thread on close-ups only: no garment pictures (backpacks, odd garments, many styles)" onClick={() => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onLogo(); }}>Add logo</button>}
-          {onCustomerArt && <button className="btn sm ghost mk-cust" type="button" onClick={onCustomerArt} title="Bring a mockup from another of their orders, or one of their logos, onto this group">Customer artwork</button>}
+          {/* Add logo and Customer artwork side by side under Create mockup (Oct 27, Nick: "three buttons… create mockup,
+              add logo, and then customer artwork" → option B). Customer artwork opens on the customer's brands when they
+              have them (Cedar Promos: MEI, ShipStation…), else their mockups and logos */}
+          {(onLogo || onCustomerArt) && (
+            <div className="mk-tiles">
+              {onLogo && <button className="mk-tile" type="button" title="The logo, its size, spot and thread on close-ups only: no garment pictures (backpacks, odd garments, many styles)" onClick={() => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onLogo(); }}>
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h11M4 5v14h16v-7M8.5 15.5l3-3 2.5 2.5 2-2 3 3M18 3v6M15 6h6" /></svg>
+                <span>Add logo</span></button>}
+              {onCustomerArt && <button className="mk-tile" type="button" onClick={onCustomerArt} title="Their brands and logos (each department's files), or a mockup from another of their orders">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7.5V18a1 1 0 0 0 1 1h13M6 5h4l2 2h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" /></svg>
+                <span>Customer artwork</span></button>}
+            </div>
+          )}
           {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup off the order (it's archived, not deleted) so you can make a new one"
             onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup?" : "Remove mockup"}</button>}
           {mockupExtra}
