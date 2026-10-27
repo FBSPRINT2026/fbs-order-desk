@@ -1,5 +1,6 @@
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
 import { lineName, threadByName } from "@/lib/embroidery";
+import { nextSewCode, sewFilesOf } from "@/lib/brands";
 
 /**
  * The Digitizer (Oct 27, Nick: "I need to add an AI tool, which is called Digitizer… for now, the only functionality of it
@@ -44,12 +45,21 @@ export function specRows(c: DigitizeCtx): [string, string][] {
     ["Thread", `${lineName(emb.line || "Polyneon 40")}${threads.length ? `: ${threads.join(", ")}` : ""}`],
     ...(emb.puff ? [["Effects", `${emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff, all of it"} (digitize for 3 mm foam)`]] : emb.metallic ? [["Effects", "Metallic thread"]] : []) as [string, string][],
     ["Files back", "Tajima DST, Wilcom EMB and the production worksheet PDF"],
+    ...(sewName(c) ? [["File name", `${sewName(c)} (please name the DST, EMB and worksheet this)`]] : []) as [string, string][],
     ["Quantity", pcs ? `${pcs} pieces` : "see the order"],
   ] as [string, string][]);
 }
 
 export const logoName = (c: DigitizeCtx) => (c.d ? designLabel(c.d) : "the logo");
-export const sheetName = (c: DigitizeCtx) => `${c.number}-${(c.company || "logo").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 30)}-digitizing.pdf`;
+/** the name their files should come back with: D{number}E{n}, the Tajima's name for the logo's next sew file (Oct 27,
+ *  Nick: "named like however we're gonna bring it back in… D10252 and D10253") */
+export const sewName = (c: DigitizeCtx) => (c.d ? `D${c.d.number}${nextSewCode(sewFilesOf(c.d))}` : "");
+/** the sheet's file name: the logos' numbers ("D10252-D10253 digitizing request #40193.pdf") */
+export const sheetName = (c: DigitizeCtx | DigitizeCtx[]) => {
+  const cs = Array.isArray(c) ? c : [c];
+  const nums = [...new Set(cs.map((x) => (x.d ? `D${x.d.number}` : "")).filter(Boolean))];
+  return `${nums.join("-") || "Logo"} digitizing request #${cs[0]?.number || ""}.pdf`;
+};
 
 /** the email: plainly a digitizing request, the specs, what's attached (the sender's Outlook signature goes under it) */
 export function digitizeEmail(c: DigitizeCtx) {

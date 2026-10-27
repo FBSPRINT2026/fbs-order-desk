@@ -236,7 +236,7 @@ export default function DigitizerTool({ orderId, imprintId: imprint0, onClose, o
     if (!parts?.length || !pdfBytes.current) return;
     setBusy(true); setErr("");
     let bin = ""; const u = pdfBytes.current; for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000));
-    const r = await fetch("/api/digitizer/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, imprintIds: parts.map((x) => x.ctx.im.id), to, subject, body, pdf: btoa(bin), pdfName: sheetName(parts[0].ctx) }) }).catch(() => null);
+    const r = await fetch("/api/digitizer/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, imprintIds: parts.map((x) => x.ctx.im.id), to, subject, body, pdf: btoa(bin), pdfName: sheetName(parts.map((x) => x.ctx)) }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setBusy(false);
     if (!r?.ok) { setErr(j.error || "The email didn't go out."); return; }
@@ -277,7 +277,7 @@ export default function DigitizerTool({ orderId, imprintId: imprint0, onClose, o
             <span className="faint">Amanda&apos;s Outlook signature goes under it.</span>
             <div className="dgt-att">
               <span className="lbl">Attached</span>
-              {pdfUrl ? <a className="dgt-file" href={pdfUrl} target="_blank" rel="noreferrer">{sheetName(parts[0].ctx)}{parts.length > 1 ? ` (${parts.length} pages)` : ""}</a> : <span className="dgt-file">Making the sheet…</span>}
+              {pdfUrl ? <a className="dgt-file" href={pdfUrl} target="_blank" rel="noreferrer">{sheetName(parts.map((x) => x.ctx))}{parts.length > 1 ? ` (${parts.length} pages)` : ""}</a> : <span className="dgt-file">Making the sheet…</span>}
               {parts.map((x) => <span key={x.ctx.im.id} className="dgt-file">{x.origName || "The logo's picture"}</span>)}
             </div>
             {pdfUrl && <iframe className="dgt-pdf" src={pdfUrl + "#toolbar=0&view=FitH"} title="Digitizing sheet" />}
