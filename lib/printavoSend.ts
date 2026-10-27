@@ -200,7 +200,7 @@ async function payloadFor(o: Order, settings: ReturnType<typeof mergeSettings>) 
   }
   const fees: PvFee[] = [...sum.values()];
   // (a card surcharge already on our order is Printavo's, brought back: the percentage one below replaces it)
-  for (const f of (o.fees || []) as { label: string; amount: number | ""; free?: boolean }[]) if (+f.amount && !f.free && !/credit card processing surcharge/i.test(f.label)) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
+  for (const f of (o.fees || []) as { label: string; amount: number | ""; free?: boolean; tbd?: boolean }[]) if (+f.amount && !f.free && !f.tbd && !/credit card processing surcharge/i.test(f.label)) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
   // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
   // no card surcharge (Oct 16, Nick): it's added in Printavo only for a customer paying by card, and comes back here then
 

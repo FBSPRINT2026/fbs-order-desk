@@ -312,7 +312,7 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
   // anything in the setup total the itemized list doesn't account for (shouldn't happen): one line, so totals agree
   if (r2(calc.setup - setupSum) !== 0) { add("Setup", "Setup", "setup_screens", 1, r2(calc.setup - setupSum), r2(calc.setup - setupSum)); warnings.push(`Setup lines didn't add up to the setup total; a ${r2(calc.setup - setupSum)} setup line was added.`); }
   if (calc.materials > 0) add("2XL+ materials charge", "2XL+ Materials Charge", "materials", 1, calc.materials, calc.materials);
-  for (const f of o.fees || []) { const a = (f as { free?: boolean }).free ? 0 : +f.amount || 0; if (a) add(f.label || "Fee", f.label || "Fee", FEE_ITEM(f.label || ""), 1, r2(a), r2(a)); }
+  for (const f of o.fees || []) { const a = (f as { free?: boolean; tbd?: boolean }).free || (f as { tbd?: boolean }).tbd ? 0 : +f.amount || 0; if (a) add(f.label || "Fee", f.label || "Fee", FEE_ITEM(f.label || ""), 1, r2(a), r2(a)); }
 
   const lineSum = r2(lines.reduce((a, l) => a + l.Amount, 0));
   const pre = r2(calc.items + calc.setup + calc.materials + calc.fees);

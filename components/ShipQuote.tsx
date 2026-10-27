@@ -25,7 +25,9 @@ const lbEach = (desc: string) => {
 };
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd, onSet, due, shipOn }: {
+export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd, onSet, due, shipOn, tbd, onTbd, onClear }: {
+  /** shipping to be decided (on the order as TBD, $0 for now) */ tbd?: boolean; onTbd?: (on: boolean) => void;
+  /** take the shipping charge off the order */ onClear?: () => void;
   pieces: number; garments: { desc: string; qty: number; /** the supplier's weight for this line (lb), when known */ lbs?: number }[]; shipTo: string; settings: ShipSettings;
   /** the order's ship method ("FedEx Ground"), highlighted */ shipMethod: string;
   /** the order's shipping fee now, if any */ current?: { label: string; amount: number } | null;
@@ -141,7 +143,12 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
             </div>
           )}
           {list.length > Math.min(4, best.length) && <button type="button" className="linkbtn sqp-more" onClick={() => setMore(!more)}>{more ? "Fewer options" : `All options (${list.length})`}</button>}
-          {current && (
+          {/* to be decided, or none (Oct 27, Nick: "you can't unselect it… check a box there that says TBD") */}
+          {(onTbd || onClear) && <div className="sqp-tbd">
+            {onTbd && <label className="check"><input type="checkbox" checked={!!tbd} onChange={(e) => onTbd(e.target.checked)} /> TBD <small className="faint">decided later: $0 for now, shows as TBD</small></label>}
+            {onClear && current && <button type="button" className="linkbtn" onClick={onClear}>Remove shipping</button>}
+          </div>}
+          {current && !tbd && (
             <label className={"sqp-inv" + (opts.some((o) => onInvoice(o.r)) ? "" : " custom")}>
               <span>On the invoice{opts.some((o) => onInvoice(o.r)) ? "" : <small> (your price)</small>}</span>
               <span className="sqp-amt">$<input type="number" step="0.01" min="0" aria-label="Shipping charge on the invoice" key={current.amount} defaultValue={current.amount.toFixed(2)}

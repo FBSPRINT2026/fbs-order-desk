@@ -297,11 +297,13 @@ export type Line = {
 };
 export type Fee = { label: string; amount: number | "";
   /** the order's shipping charge (from the Shipping quote; shown as "Shipping", not a fee) (Oct 16, Nick) */ ship?: boolean;
-  /** free shipping: the quoted price stays on the line but isn't charged */ free?: boolean };
+  /** free shipping: the quoted price stays on the line but isn't charged */ free?: boolean;
+  /** shipping to be decided later (Oct 27, Nick: backpacks, "two to a backpack, three… we're gonna have to figure that
+   *  out later"): $0 now, shown as TBD on the order, quote and invoice */ tbd?: boolean };
 /** The shipping line among an order's fees (marked, or an older "Shipping…" fee). */
 export const isShipFee = (f: { label?: string; ship?: boolean }) => !!f.ship || /^shipping\b/i.test(f.label || "");
 /** What a fee adds to the total (free shipping adds nothing). */
-export const feeAmount = (f: { amount: number | ""; free?: boolean }) => (f.free ? 0 : +f.amount || 0);
+export const feeAmount = (f: { amount: number | ""; free?: boolean; tbd?: boolean }) => (f.free || f.tbd ? 0 : +f.amount || 0);
 export type Delivery = "pickup" | "ship" | "deliver";
 
 export type Order = {
@@ -912,7 +914,7 @@ export function calcOrder(
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   const qty = groups.reduce((a, g) => a + g.qty, 0);
-  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
+  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
 }
 
 export const uid = () =>

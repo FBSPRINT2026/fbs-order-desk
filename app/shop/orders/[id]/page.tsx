@@ -1637,8 +1637,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {(calc.hasShipping || o.delivery_method === "ship") && (
                   <div className="tr"><span className="row" style={{ gap: 8 }}>Shipping
-                    {calc.hasShipping && <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={calc.freeShipping} onChange={(e) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.free = e.target.checked || undefined; })} /> Free shipping</label>}</span>
-                    <span>{!calc.hasShipping ? <span className="faint">not added</span> : calc.freeShipping ? "Free" : money(calc.shipping)}</span></div>
+                    {calc.hasShipping && !calc.shippingTbd && <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={calc.freeShipping} onChange={(e) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.free = e.target.checked || undefined; })} /> Free shipping</label>}</span>
+                    <span>{!calc.hasShipping ? <span className="faint">not added</span> : calc.shippingTbd ? <b title="Shipping to be decided: not in the total yet">TBD</b> : calc.freeShipping ? "Free" : money(calc.shipping)}</span></div>
                 )}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
                   <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
@@ -1650,7 +1650,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
-                <div className="tr big"><span>Total</span><span>{money(calc.total)}</span></div>
+                <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
                 <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
               </div>
@@ -1678,7 +1678,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
                 d.ship_method = method;
               })}
-              onSet={(amount) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.amount = amount; })} />
+              onSet={(amount) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.amount = amount; })}
+              // to be decided later, or taken off (Oct 27, Nick: "once you select a shipping thing, you can't unselect it")
+              tbd={!!o.fees.find(isShipFee)?.tbd}
+              onTbd={(on) => patch((d) => { const i = d.fees.findIndex(isShipFee); if (i >= 0) { if (on) d.fees[i].tbd = true; else delete d.fees[i].tbd; } else if (on) d.fees.push({ label: "Shipping · to be decided", amount: 0, ship: true, tbd: true }); })}
+              onClear={() => patch((d) => { d.fees = d.fees.filter((f) => !isShipFee(f)); d.ship_method = ""; })} />
           )}
           {o.price_type === "wholesale" && o.type === "invoice" && (
             <section className="panel">
@@ -1843,7 +1847,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
-                <div className="tr big"><span>Total</span><span>{money(calc.total)}</span></div>
+                <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
                 <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
               </div>

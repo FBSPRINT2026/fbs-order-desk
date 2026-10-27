@@ -705,9 +705,9 @@ export function InvoiceDoc(p: DocData) {
           </div>
         );
       })}
-      {o.fees.some((f) => +f.amount || (f as { free?: boolean }).free) && (
+      {o.fees.some((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd) && (
         <div className="others"><table className="extra"><tbody>
-          {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td className="r">{(f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
+          {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd).map((f, i) => <tr key={i}><td>{(f as { tbd?: boolean }).tbd ? "Shipping" : f.label || "Fee"}</td><td className="r">{(f as { tbd?: boolean }).tbd ? "TBD" : (f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
         </tbody></table></div>
       )}
       <div className="sumw">
@@ -719,7 +719,7 @@ export function InvoiceDoc(p: DocData) {
           <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
           {c.discount ? <div className="r"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
           <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
-          <div className="r big"><span>Total</span><span>{money(c.total)}</span></div>
+          <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
           {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
           {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
         </div>
