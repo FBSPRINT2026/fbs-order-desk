@@ -14764,12 +14764,14 @@ html[data-phone-deep] .mdp-only{display:none}
 /* Business on a phone: the sales charts one at a time, swiped left and right (Oct 26, Nick) */
 .an-ph-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:0;border-radius:12px}
 .an-ph-car::-webkit-scrollbar{display:none}
-.an-ph-slide{flex:0 0 100%;scroll-snap-align:start;box-sizing:border-box;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px 8px;height:300px;display:flex;flex-direction:column;overflow:hidden}
+.an-ph-slide{flex:0 0 100%;scroll-snap-align:start;box-sizing:border-box;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px 10px;min-height:300px;display:flex;flex-direction:column;overflow:hidden}
 .an-ph-h{font-size:13.5px;margin-bottom:6px}
-.an-ph-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.an-ph-body .an-chart{flex:1;display:flex;flex-direction:column;min-height:0}
+/* each chart gets a fixed height, so what sits under it (the department bar, the legend) never lands on its labels */
+.an-ph-body{flex:1;display:flex;flex-direction:column;gap:10px}
+.an-ph-body .an-chart{flex:none;display:flex;flex-direction:column}
 .an-ph-body .an-chart .an-ch-h b{display:none}
-.an-ph-body .an-svg-wrap.an-fill{min-height:170px}
+.an-ph-body .an-svg-wrap.an-fill{flex:none;height:200px;min-height:0}
+.an-ph-body .an-split-h b{display:none}
 .an-ph-body .an-split{margin-top:4px}
 .an-ph-body .an-top,.an-ph-body ol{overflow-y:auto}
 .an-ph-dots{display:flex;justify-content:center;gap:8px;margin-top:-2px}
