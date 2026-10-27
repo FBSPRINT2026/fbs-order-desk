@@ -26,7 +26,12 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
    *  pop-up on the right, like Claude in Chrome… so I can still click the attachments") */ dock?: boolean; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string } }) {
   // screen printing or embroidery (Oct 23, Nick: "some orders are both"): asked on each order's card, not first (Oct 24)
-  const HOW_TOLD = { screen: "Every print on this order is SCREEN PRINTED.", embroidery: "Every print on this order is EMBROIDERED (method embroidery): threads, not inks; give each print's finished size.", both: "This order has BOTH embroidery and screen printing: say which method each print is (e.g. embroidered left chest, screen printed back)." } as const;
+  // how it's decorated: any mix of screen print, embroidery and heat transfer (Oct 27, Nick: "you also need to add heat
+  // transfer"); one picked = every print is done that way, several = each print says which
+  const HOW_ONE = { screen: "Every print on this order is SCREEN PRINTED.", embroidery: "Every print on this order is EMBROIDERED (method embroidery): threads, not inks; give each print's finished size.", dtf: "Every print on this order is a HEAT TRANSFER (method dtf): pressed on, not screen printed; give each print's finished size." } as const;
+  const HOW_WORD = { screen: "screen printing", embroidery: "embroidery", dtf: "heat transfers (method dtf)" } as const;
+  const howTold = (h: (keyof typeof HOW_ONE)[]) => (!h.length ? "" : h.length === 1 ? HOW_ONE[h[0]]
+    : `This order has ${h.map((k) => HOW_WORD[k]).join(" and ")}: say which method each print is (e.g. embroidered left chest, screen printed back${h.includes("dtf") ? ", heat transfer on the sleeve" : ""}).`);
   // which emails make up the order (Oct 24, Nick: "you should first scan the email and maybe even ask me… I noticed these
   // other messages. Are we bringing in all this information… Sometimes you need three or four emails"): the conversation's
   // other emails are in (untick to leave one out), other recent emails from the customer are out (tick to bring one in)
@@ -142,7 +147,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   // ---- one card per order (Oct 24, Nick: "rethink this screen… the how's it decorated should be asked later… I don't
   // get to select new order or whatever"): each order the email holds gets a card with what the AI read, and its order
   // type, past job and decoration can be changed right there; the next one to make is open, the rest are one line each
-  type How = "" | "screen" | "embroidery" | "both"; type OT = "new" | "reorder" | "reorder_changes";
+  type M = "screen" | "embroidery" | "dtf"; type How = M[]; type OT = "new" | "reorder" | "reorder_changes";
   type Card = { type: OT; job: string | null; jobLabel: string; how: How };
   const SOLO = "_solo";
   const [over, setOver] = useState<Record<string, Partial<Card>>>({});
@@ -162,18 +167,18 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   const multi = !!plan && plan.parts.length > 1;
   const lookHit = look && look !== "wait" && look.ref ? look : null;
   const baseOf = (p: EOPart | null): Card => p
-    ? { type: p.kind === "new" ? "new" : p.changes ? "reorder_changes" : "reorder", job: p.job, jobLabel: p.jobLabel || "", how: "" }
-    : suggested?.job ? { type: "reorder", job: suggested.job, jobLabel: suggested.label.replace(/^Create (the )?reorder of\s*/i, ""), how: "" }
-    : lookHit ? { type: "reorder", job: lookHit.ref!, jobLabel: lookHit.label || "", how: "" }
-    : { type: guess === "reorder" ? "reorder" : "new", job: null, jobLabel: "", how: "" };
+    ? { type: p.kind === "new" ? "new" : p.changes ? "reorder_changes" : "reorder", job: p.job, jobLabel: p.jobLabel || "", how: [] }
+    : suggested?.job ? { type: "reorder", job: suggested.job, jobLabel: suggested.label.replace(/^Create (the )?reorder of\s*/i, ""), how: [] }
+    : lookHit ? { type: "reorder", job: lookHit.ref!, jobLabel: lookHit.label || "", how: [] }
+    : { type: guess === "reorder" ? "reorder" : "new", job: null, jobLabel: "", how: [] };
   const cardOf = (key: string, p: EOPart | null): Card => ({ ...baseOf(p), ...(over[key] || {}) });
   const setCard = (key: string, c: Partial<Card>) => setOver((o) => ({ ...o, [key]: { ...(o[key] || {}), ...c } }));
   const OT_LABEL: Record<OT, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" };
-  const HOW_LABEL: Record<Exclude<How, "">, string> = { screen: "Screen print", embroidery: "Embroidery", both: "Both" };
+  const HOW_LABEL: Record<M, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat transfer" };
   const toldOf = (c: Card) => [
     c.type === "new" ? "This is a NEW order, not a reorder of a past job." : c.job ? `This is a reorder of ${c.jobLabel || "the picked past job"}${lookHit && c.job === lookHit.ref ? ": the picture in the email is its mockup" : ""}.` : "This is a reorder of a past job: find the job it repeats.",
     c.type === "reorder_changes" ? "Some things change from the past job: take what's different from the emails." : c.type === "reorder" ? "It's an exact reprint of the past job: same prints, inks and placement." : "",
-    c.how ? HOW_TOLD[c.how] : "",
+    howTold(c.how || []),
   ].filter(Boolean).join(" ");
   const partFor = (p: EOPart): EOPart => {
     const c = cardOf(p.key, p), touched = !!over[p.key];
@@ -210,15 +215,15 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
         </div>
         <div className="osp-cb-how" role="group" aria-label="How it's decorated">
           <span className="faint">Decoration</span>
-          <div className="chips">{(Object.keys(HOW_LABEL) as Exclude<How, "">[]).map((k) => <button key={k} type="button" className={"chip" + (c.how === k ? " on" : "")} aria-pressed={c.how === k} onClick={() => setCard(key, { how: c.how === k ? "" : k })}>{HOW_LABEL[k]}</button>)}</div>
-          {!c.how && <span className="faint">from the email</span>}
+          <div className="chips">{(Object.keys(HOW_LABEL) as M[]).map((k) => { const on = (c.how || []).includes(k); return <button key={k} type="button" className={"chip" + (on ? " on" : "")} aria-pressed={on} onClick={() => setCard(key, { how: on ? (c.how || []).filter((x) => x !== k) : [...(c.how || []), k] })}>{HOW_LABEL[k]}</button>; })}</div>
+          {!(c.how || []).length && <span className="faint">from the email · pick one or more</span>}
         </div>
       </div>
     );
   };
   const summary = (p: EOPart) => {
     const c = cardOf(p.key, p);
-    return [c.type === "new" ? "New order" : `${OT_LABEL[c.type]}${c.job ? ` of ${(c.jobLabel || "").replace(/\s*\(Printavo\)$/, "")}` : ""}`, c.how ? HOW_LABEL[c.how].toLowerCase() : "", p.pieces ? `${p.pieces.toLocaleString("en-US")} pcs` : "", p.names?.length ? `${p.names.length} file${p.names.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+    return [c.type === "new" ? "New order" : `${OT_LABEL[c.type]}${c.job ? ` of ${(c.jobLabel || "").replace(/\s*\(Printavo\)$/, "")}` : ""}`, (c.how || []).map((k) => HOW_LABEL[k].toLowerCase()).join(" + "), p.pieces ? `${p.pieces.toLocaleString("en-US")} pcs` : "", p.names?.length ? `${p.names.length} file${p.names.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
   };
 
   const mailLine = mails && (() => {
