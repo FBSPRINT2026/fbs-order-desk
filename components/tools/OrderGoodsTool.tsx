@@ -70,7 +70,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   // one way picked for you by arrival day (Oct 27, Nick: "treat it by date… like UPS… arrive Thursday, this cost");
   // tap another day to switch. When the goods are needed comes from the order (the day before production)
   const [needBy, setNeedBy] = useState<string | null>(null), [prodDay, setProdDay] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<number | null>(null), [otherOpen, setOtherOpen] = useState(false);
+  const [chosen, setChosen] = useState<number | null>(null);
   const [ssOnly, setSsOnly] = useState(false), [feeEdit, setFeeEdit] = useState(false);
   const [editing, setEditing] = useState(false), [arrive, setArrive] = useState<Record<string, string>>({});
   const stopped = useRef(false), waiting = useRef<((e: Error) => void) | null>(null), ran = useRef(false);
@@ -243,30 +243,42 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             {!editing && plan && pick && options && <div className="og-rec">
               {(needBy || prodDay) && <div className="og-need"><svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>{prodDay ? <>Production <b>{dayShort(new Date(prodDay + "T12:00"))}</b> · </> : null}goods needed by <b>{needBy ? dayShort(new Date(needBy + "T12:00")) : "—"}</b></div>}
               {(() => {
-                const mine = chosen == null || chosen === pick.i;
-                const late = !!need && arriveOn(plan.kind === "early" ? plan.start : plan.days) > need;
-                return (
-                  <div className={"og-pick" + (late ? " late" : mine && pick.tone === "trade" ? " trade" : "")}>
-                    <div className="og-pk">{mine ? (pick.tone === "best" ? "👍 " : "") + pick.why : "Your pick"}</div>
-                    <div className="og-pv"><b>{money(plan.total)}</b><span>{plan.kind === "early" ? `${plan.startPcs.toLocaleString()} pcs ${dayShort(arriveOn(plan.start))}, all ${dayShort(arriveOn(plan.days))}` : `Arrives ${dayShort(arriveOn(plan.days))}`} · {plan.ships} shipment{plan.ships === 1 ? "" : "s"}</span></div>
-                    {late && <div className="og-pw">Arrives after the goods are needed.</div>}
-                  </div>
+                // Oct 27, Nick: the price is the cheapest (S&S, the same from every warehouse); the choice is only how it
+                // ships when one warehouse can't cover it: easiest (fewest boxes) at 250 pcs or less, fastest over that
+                const where = (o: DayOption) => { const ws = [...new Set(o.parts.map((p) => `${supName(p.sup)} ${whInfo(p.sup, p.wh).short}`))]; return ws.length === 1 ? `all from ${ws[0]}` : ws.join(" + "); };
+                const ship = (o: DayOption) => (o.kind === "early" && o.start < o.days ? `${o.startPcs.toLocaleString()} pcs ${dayShort(arriveOn(o.start))}, the rest ${dayShort(arriveOn(o.days))}` : `Arrives ${dayShort(arriveOn(o.days))}`) + ` · ${o.ships} shipment${o.ships === 1 ? "" : "s"}`;
+                const late = (o: DayOption) => !!need && arriveOn(o.kind === "early" ? o.start : o.days) > need;
+                const cheap = pick.cheapest;
+                // one way (or the picked one is both cheapest and soonest): no decision
+                if (options.length === 1 || (pick.tone === "best" && (chosen == null || chosen === pick.i))) return (
+                  <div className={"og-ok" + (late(plan) ? " late" : "")}><b>👍 {where(plan).replace(/^all from /, "All from ")}</b><span>{money(plan.total)} · {ship(plan)}</span>{late(plan) && <em>Arrives after the goods are needed.</em>}
+                    {options.length > 1 && <button type="button" className="linkbtn" onClick={() => setChosen(options.findIndex((o) => o !== plan))}>Other ways</button>}</div>
                 );
+                const easiest = [...options].filter((o) => o.total <= cheap.total + 0.005).sort((a, b) => a.ships - b.ships || a.days - b.days)[0] || cheap;
+                const sd = (o: DayOption) => (o.kind === "early" ? o.start : o.days);
+                const fastest = [...options].sort((a, b) => sd(a) - sd(b) || a.total - b.total || a.ships - b.ships)[0];
+                const choices: [string, DayOption][] = easiest === fastest ? [["Cheapest", easiest]] : [["Easiest", easiest], ["Fastest", fastest]];
+                for (const o of options) if (!choices.some(([, c]) => c === o)) choices.push([late(o) ? "Later" : "Another way", o]);
+                const cur = options[chosen ?? pick.i];
+                const big = (cur?.pcs || 0) > (opts?.money.bigRun || 250);
+                const reason = (o: DayOption) => (o !== pick.option ? "" : pick.late ? "Nothing gets here in time: this is the soonest." : need && options.some((x) => late(x)) && !late(o) && options.filter((x) => !late(x)).length === 1 ? `Needed by ${dayShort(need)}: this one is here in time.` : big ? `Over ${opts?.money.bigRun || 250} pcs: start running ${dayShort(arriveOn(sd(o)))}, the last box follows.` : `${opts?.money.bigRun || 250} pcs or less: one box beats a split.`);
+                const allSame = options.every((o) => o.total <= cheap.total + 0.005);
+                return <>
+                  <div className="og-price"><b>{money(plan.total)}</b><span>{allSame ? "cheapest: the same price either way" : plan.total > cheap.total + 0.005 ? `+${money(plan.total - cheap.total)} over the cheapest way` : "the cheapest way"}</span></div>
+                  <div className="og-choices" role="radiogroup" aria-label="How it ships">{choices.map(([label, o]) => {
+                    const i = options.indexOf(o), on = (chosen ?? pick.i) === i, r = reason(o);
+                    return (
+                      <div key={i}>
+                        <button type="button" role="radio" aria-checked={on} className={"og-ch" + (on ? " on" : "") + (late(o) ? " late" : "")} onClick={() => { setChosen(i); setCheck(null); setSure(false); }}>
+                          <span className="og-rd" aria-hidden />
+                          <span className="og-cb"><b>{label}: {where(o)}{i === pick.i && <i className="og-tag g">Picked</i>}{late(o) && <i className="og-tag l">late</i>}</b><small>{ship(o)}{o.total > cheap.total + 0.005 ? ` · +${money(o.total - cheap.total)}` : ""}</small></span>
+                        </button>
+                        {r && <div className="og-why">{r}</div>}
+                      </div>
+                    );
+                  })}</div>
+                </>;
               })()}
-              {options.length > 1 && <>
-                <button type="button" className="linkbtn og-other" aria-expanded={otherOpen} onClick={() => setOtherOpen((x) => !x)}>{otherOpen ? "Hide other days" : `${options.length - 1} other day${options.length === 2 ? "" : "s"}`} {otherOpen ? "▴" : "▾"}</button>
-                {otherOpen && <div className="og-days" role="radiogroup" aria-label="Arrival days">{options.map((o, i) => {
-                  const d = arriveOn(o.kind === "early" ? o.start : o.days), late = !!need && d > need, on = (chosen ?? pick.i) === i;
-                  const lateBy = late && need ? Math.max(1, Math.round((d.getTime() - new Date(needBy + "T12:00").getTime()) / 864e5)) : 0;
-                  return (
-                    <button key={i} type="button" role="radio" aria-checked={on} className={"og-day" + (on ? " on" : "") + (late ? " late" : "")} onClick={() => { setChosen(i); setCheck(null); setSure(false); }}>
-                      <span className="og-dd"><b>{o.kind === "early" ? `Most here ${dayShort(d)}` : `Arrives ${dayShort(d)}`}</b>{o === pick.cheapest && <i className="og-tag c">Cheapest</i>}{i === pick.i && <i className="og-tag g">Picked</i>}{late && <i className="og-tag l">{lateBy} day{lateBy === 1 ? "" : "s"} late</i>}
-                        <small>{o.ships} shipment{o.ships === 1 ? "" : "s"} · {[...new Set(o.parts.map((p) => `${supName(p.sup)} ${whInfo(p.sup, p.wh).short}`))].join(" + ")}{o.kind === "early" ? ` · all by ${dayShort(arriveOn(o.days))}` : ""}</small></span>
-                      <span className="og-dp"><b>{money(o.total)}</b><small>{o === pick.cheapest ? "lowest" : `+${money(o.total - pick.cheapest.total)}`}</small></span>
-                    </button>
-                  );
-                })}</div>}
-              </>}
             </div>}
             {!editing && plan && plan.parts.length > 0 ? (() => {
               // by shipment (supplier and warehouse): a small table each, a row per garment and color, the sizes across
