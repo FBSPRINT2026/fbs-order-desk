@@ -14793,3 +14793,6 @@ html[data-phone-deep] .mdp-only{display:none}
 .fv-ph-job{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line-2);padding-top:10px}
 .fv-ph-job .fv-tk{max-width:none}
 .fv-ph-card .fv-waits{display:flex;gap:6px;flex-wrap:wrap;padding:0}
+/* the order's Documents / Production menus open over what's below them, and stay on screen on a phone (Oct 26) */
+.ord .ed-head{position:relative;z-index:30}
+.ot-menu{max-width:calc(100vw - 24px)}

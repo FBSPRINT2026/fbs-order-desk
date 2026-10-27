@@ -13,7 +13,7 @@ import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
-import { type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { openOrderCheck } from "@/components/tools/OrderReview";
 import Link from "next/link";
@@ -83,6 +83,13 @@ const TAB_ICONS: Record<string, ReactNode> = {
   pay: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></>,
   act: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
 };
+
+/**
+ * A Documents / Production menu closes when you move on, but a beat later: on a phone a tapped link takes no focus, so
+ * closing on the spot pulled the menu away before the tap landed (Oct 26, Nick: "click like work order… it's not pulling
+ * it… doesn't pop up").
+ */
+const closeSoon = (e: FocusEvent<HTMLDetailsElement>) => { const d = e.currentTarget; setTimeout(() => { if (!d.contains(document.activeElement)) d.open = false; }, 250); };
 
 export default function OrderEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -1226,7 +1233,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </select>}
           <span className="ed-br" aria-hidden />
           <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }} />
-          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+          <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Documents ▾</summary>
             <div className="ot-menu">
               <a href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
@@ -1234,7 +1241,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
             </div>
           </details>
-          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+          <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">
               {prodRole && <Link href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
@@ -1247,7 +1254,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
           {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
-          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+          <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
               <button type="button" onClick={duplicate}>Duplicate</button>
