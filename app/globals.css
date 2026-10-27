@@ -13941,6 +13941,9 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ba-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
 .ba-row .field{margin:0;min-width:0}
 .ba-val{height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Mockup Creator Helper: square up pulled-off art (Oct 27) */
+.mk-help-rot{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:12.5px}
+.mk-help-rot .btn.icon{width:30px;padding:0;justify-content:center}
 /* which artboard of a multi-page logo file (Oct 27) */
 .dla.abp{max-width:720px;width:min(720px,calc(100vw - 32px))}
 .abp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:8px 0 4px}

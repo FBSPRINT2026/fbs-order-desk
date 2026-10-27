@@ -334,7 +334,7 @@ function tool(finishingIds: string[]) {
               kind: { type: "string", enum: ["tee", "long", "crew", "hoodie", "polo", "quarter", "vest", "puffer", "jacket", "tank", "hat", "beanie"] },
               hex: { type: "string", description: "#rrggbb: the body's color as it looks in the photo (not shadows or highlights)" },
               trim: { type: ["string", "null"], description: "#rrggbb of the zipper, binding, collar lining, snaps or drawstrings when they're a different color from the body; else null" },
-              heather: { type: "boolean" }, stripes: { type: ["string", "null"], description: "#rrggbb of stripes across the body; else null" }, quilted: { type: "boolean" },
+              heather: { type: "boolean" }, stripes: { type: ["string", "null"], description: "#rrggbb of stripes only when the body fabric is striped all over (a striped polo, a rugby); stripes down the sleeves, tape or piping are not (null)" }, quilted: { type: "boolean" },
             } },
           } } },
           prints: { type: "array", items: { type: "object", properties: {
@@ -407,7 +407,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-27d";
+export const READER_REV = "2026-10-27e";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {

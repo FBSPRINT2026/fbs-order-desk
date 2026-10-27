@@ -426,7 +426,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // the Helper (shop): art that came built onto a mockup, pulled off and walked through before it goes on (Oct 22)
   type HelpRow = { key: string; file: File; url: string; side: "front" | "back" | "sleeve"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean;
     /** the texture laid over it in the file, and how it's distressed here: none, the file's, or the customer's saved mask */
-    mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string };
+    mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string;
+    /** turned to square it up (degrees, clockwise) from the art as it was pulled off (`orig`) */ turn?: number; orig?: File; turning?: boolean };
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
   const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
   const [bsOpen, setBsOpen] = useSticky("mockup.brandStd", false);
@@ -2123,6 +2124,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!mask) return null;
     const dfile = await applyDistress(r.file, mask, { layers: 1, fit: how === "brand" ? "cover" : "stretch", name: r.file.name.replace(/\.png$/i, "") + " distressed.png" });
     return { distress: how, dfile, durl: URL.createObjectURL(dfile) };
+  }
+  /** the pulled-off art turned to square it up (Oct 27, Nick: "pull this off and then just say… square it up, or unrotate
+   *  the logo"): "auto" finds the turn (lib/straighten.ts), a number nudges it; always turned from the art as pulled off */
+  async function turnRow(r: HelpRow, how: "auto" | number) {
+    helpSet(r.key, { turning: true });
+    try {
+      const { rotateArt, straightAngle } = await import("@/lib/straighten");
+      const orig = r.orig || r.file;
+      const turn = how === "auto" ? Math.round(((r.turn || 0) + (await straightAngle(r.file))) * 10) / 10 : Math.round(((r.turn || 0) + how) * 10) / 10;
+      const norm = ((turn % 360) + 540) % 360 - 180;
+      const file = await rotateArt(orig, norm);
+      const bm = await createImageBitmap(file);
+      const heightIn = Math.round((r.widthIn * bm.height) / Math.max(1, bm.width) * 100) / 100;
+      bm.close();
+      const next: HelpRow = { ...r, file, url: URL.createObjectURL(file), orig, turn: norm, heightIn, turning: false };
+      const ds = r.distress !== "none" ? await distressRow(next, r.distress).catch(() => null) : null;
+      helpSet(r.key, { file, url: next.url, orig, turn: norm, heightIn, turning: false, ...(ds || {}) });
+      if (how === "auto" && norm === (r.turn || 0)) setMsg("That art already looks square. Nudge it with the turn buttons if it isn't.");
+    } catch (e) { helpSet(r.key, { turning: false }); setMsg("Couldn't turn it: " + (e instanceof Error ? e.message : String(e))); }
   }
   const helpDistress = async (r: HelpRow, how: HelpRow["distress"]) => { const ch = await distressRow(r, how).catch(() => null); if (ch) helpSet(r.key, ch); };
   /** the texture in this file saved as the customer's distress mask (brand standards), for every logo of theirs after */
@@ -4345,7 +4365,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                               <img src={stockSvg(look.kind || "tee", "front", look)} alt="" />
                               <div className="mk-help-gb">
                                 <input aria-label="Garment name" value={g.name} onChange={(e) => setName(e.target.value)} />
-                                <span className="faint"><i className="mk-gc-dot" style={{ background: g.hex }} /> {g.color} · drawn {STOCK_LABEL[look.kind || "tee"].toLowerCase()}{g.trim ? " · trim " : ""}{g.trim && <i className="mk-gc-dot" style={{ background: g.trim }} />}{g.heather ? " · heather" : ""}{g.stripes ? " · stripes" : ""}{g.quilted ? " · quilted" : ""}</span>
+                                <span className="faint"><i className="mk-gc-dot" style={{ background: g.hex }} /> {g.color} · drawn {STOCK_LABEL[look.kind || "tee"].toLowerCase()}{g.trim ? " · trim " : ""}{g.trim && <i className="mk-gc-dot" style={{ background: g.trim }} />}{g.heather ? " · heather" : ""}{g.stripes ? <> · stripes <button type="button" className="lc-link" title="Draw it plain, no stripes across the body" onClick={() => setHelper((h) => h && { ...h, garments: (h.garments || []).map((x, i) => (i === gi ? { ...x, stripes: null } : x)) })}>take off</button></> : ""}{g.quilted ? " · quilted" : ""}</span>
                                 {pcs > 0 && <span className="faint">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} = {pcs}</span>}
                                 {(g.prints || []).map((p, i) => <span key={i} className="faint">{p.location} · {p.method === "screen" ? "screen print" : p.method}{p.width_in ? ` · ${p.width_in}" wide` : ""}{p.ink ? ` · ${p.ink}` : ""}</span>)}
                                 {gd?.busy && <span className="faint">Drawing it to match their photo… (about a minute)</span>}
@@ -4380,6 +4400,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           <div className="row" style={{ gap: 6 }}>
                             <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as HelpRow["side"]; helpSet(r.key, { side, location: side === "sleeve" ? (locsFor("sleeve").includes(r.location) ? r.location : locsFor("sleeve")[0] || "Left Sleeve") : locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option><option value="sleeve">Sleeve</option></select>
                             <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{[...new Set([...locsFor(r.side), r.location])].map((l) => <option key={l}>{l}</option>)}</select>
+                          </div>
+                          <div className="mk-help-rot" role="group" aria-label="Square it up">
+                            <button type="button" className="btn sm" disabled={r.turning} title="Find the turn that sets the logo square and turn it" onClick={() => void turnRow(r, "auto")}>{r.turning ? "Turning…" : "Straighten"}</button>
+                            <button type="button" className="btn sm icon" disabled={r.turning} title="Turn 1° to the left" aria-label="Turn 1 degree left" onClick={() => void turnRow(r, -1)}>↺</button>
+                            <button type="button" className="btn sm icon" disabled={r.turning} title="Turn 1° to the right" aria-label="Turn 1 degree right" onClick={() => void turnRow(r, 1)}>↻</button>
+                            <button type="button" className="btn sm" disabled={r.turning} title="Turn a quarter turn" onClick={() => void turnRow(r, 90)}>90°</button>
+                            {!!r.turn && <span className="faint">{r.turn > 0 ? "+" : ""}{r.turn}° <button type="button" className="lc-link" onClick={() => void turnRow(r, -(r.turn || 0))}>undo</button></span>}
                           </div>
                           <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
                           {(r.mask || brandMask) && <div className="mk-help-ds">
