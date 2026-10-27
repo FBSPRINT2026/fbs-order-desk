@@ -1,12 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole } from "@/components/RoleContext";
 import { previewUrls } from "@/lib/designs";
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
-import { drawDst, readDst } from "@/lib/dst";
+import { readDst, type DstInfo } from "@/lib/dst";
+import DstPreview from "@/components/DstPreview";
+import { guessHex } from "@/lib/mockup";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { lineName, threadByName } from "@/lib/embroidery";
@@ -186,22 +188,18 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
     if (got.length) onDst(got);
   }
   const [how, setHow] = useState<string | null>(null), [swBusy, setSwBusy] = useState(false);
-  const pv = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  // the DST, read once the row is opened (drawn thread by thread: components/DstPreview.tsx)
+  const [dstInfo, setDstInfo] = useState<DstInfo | null>(null);
+  const dstColors = f?.ws?.sequence.length ? f.ws.sequence.map(sheetHex) : (it.im.inks || "").split(/\s*,\s*/).map((n) => threadByName(n)?.hex || "").filter(Boolean);
   useEffect(() => {
-    if (!open || !f || !pv.current) return;
+    if (!open || !f) return;
     let live = true;
     void (async () => {
       const sb = createClient();
       const { data } = await sb.storage.from("proofs").download(f.path);
-      if (!data || !live || !pv.current) return;
-      try {
-        const info = readDst(await data.arrayBuffer());
-        // each stop in its thread's color when the worksheet says which (else the order's threads in turn)
-        const colors = f.ws?.sequence.length ? f.ws.sequence.map(sheetHex) : (it.im.inks || "").split(/\s*,\s*/).map((n) => threadByName(n)?.hex || "").filter(Boolean);
-        const c = drawDst(info, colors, 320); c.className = "emb-dst-c";
-        pv.current.innerHTML = ""; pv.current.appendChild(c);
-      } catch { /* not readable */ }
+      if (!data || !live) return;
+      try { setDstInfo(readDst(await data.arrayBuffer())); } catch { /* not readable */ }
     })();
     return () => { live = false; };
   }, [open, f, it.im.inks]);
@@ -239,7 +237,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   {f.emb && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (edit in Hatch)</a>}
                   {f.sheet && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet PDF (how to sew it, color stops)</a>}
                 </div>
-                <div ref={pv} className="emb-dst" aria-label="The stitches in the file" />
+                {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(it.g.lines?.[0]?.color || "") || "#F4F4F1"} width={320} /> : <div className="emb-dst faint">Reading the file…</div>}
                 {f.ws && <SewSequence ws={f.ws} />}
               </div>
             )}

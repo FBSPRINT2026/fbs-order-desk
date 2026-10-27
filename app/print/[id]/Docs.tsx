@@ -12,6 +12,7 @@ import PaintedArt from "./PaintedArt";
 import WoFit from "./WoFit";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
+import DstPicture from "@/components/DstPicture";
 /** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
 const MATCH_PREV = "Printed to match your previous order";
 
@@ -70,6 +71,13 @@ function variantsOf(d: Imprint, colors: string[]): Variant[] {
 }
 const swapInk = (k: string, sw?: Record<string, string> | null) => (sw && sw[k.trim().toLowerCase()]) || k;
 
+/** each color stop's thread (the worksheet's, else the print's threads in turn), for drawing its DST */
+function dstColorsOf(d: Imprint): string[] {
+  const ws = d.emb?.file?.ws;
+  const byCode = (code: string, chart: string) => threadsAll().find((x) => x.code === code && (/classic|rayon/i.test(chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.hex;
+  if (ws?.sequence?.length) return ws.sequence.map((x) => byCode(x.code, x.chart) || "#333333");
+  return inkNames(d.inks || "").map((n) => threadByName(n)?.hex || colorHex(n) || "#333333");
+}
 function ArtPic({ d, des, pic, style, hires, swap }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string; swap?: Record<string, string> | null }) {
   const b = des?.art_box;
   const alt = des ? `D-${des.number}` : "";
@@ -394,7 +402,11 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
         </div>
       ) : <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
-        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
+        {pic && d.method === "embroidery" && emb?.file?.path
+          // embroidery with its DST: the logo as it sews, thread by thread (Oct 27, Nick), the art until it's drawn
+          ? <DstPicture path={emb.file.path} colors={dstColorsOf(d)} className="wo-dst" style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: `${top}in`, width: `${aw}in`, height: `${ah}in` }}
+              fallback={<ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} />} />
+          : pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>}

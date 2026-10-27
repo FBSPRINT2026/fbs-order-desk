@@ -15222,3 +15222,7 @@ a.dgt-file{color:var(--accent);text-decoration:none}
 .pr-dgt{margin-top:6px}
 /* embroidery not digitized yet: the visual mockup stamp, not a button (Oct 27) */
 .pr-vis-stamp.pr-dgz{cursor:default}
+/* a DST drawn thread by thread, with Remove jump stitches (components/DstPreview.tsx, Oct 27) */
+.dst-pv{display:flex;flex-direction:column;gap:6px}
+.dst-pv .emb-dst{padding:0;overflow:hidden;background:var(--surface-2,#f4f4f1)}
+.dst-pv-t{font-size:12.5px;color:var(--ink-2)}

@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
 import { mergeProduction, type ProductionSettings } from "@/lib/production";
 import { BACKINGS, THREAD_LINES, TOPPINGS, lineName, backingFor, closestThreads, coverageOf, cycleMinutes, embGarment, embMax, embWarnings, estimateStitches, findThreads, piecesPerHour, threadByName, threadLabel, type EmbSpec, type Thread } from "@/lib/embroidery";
-import { drawDst, type DstInfo } from "@/lib/dst";
+import type { DstInfo } from "@/lib/dst";
+import DstPreview from "@/components/DstPreview";
 import { takeDigitized } from "@/lib/digitizedFiles";
 import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { loadThreadStock, stockKey } from "@/lib/threadStock";
@@ -24,7 +25,8 @@ import PuffPicker from "@/components/PuffPicker";
 type Row = { hexes: string[]; cur?: { name: string; hex: string } };
 let prodCache: ProductionSettings | null = null;
 
-export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, shirtLight, onPick, onHover, setIm, designId, portal }: {
+export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, shirtLight, onPick, onHover, setIm, designId, portal, fabric }: {
+  /** the garment's own color, behind the drawn stitches */ fabric?: string;
   im: Imprint; rows: Row[];
   /** the logo as painted (for how much of it is stitched) */ artUrl: string;
   wIn: number; hIn: number;
@@ -109,13 +111,9 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
   const [dst, setDst] = useState<DstInfo | null>(null);
   const [dstErr, setDstErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const pv = useRef<HTMLDivElement>(null);
   const threadHexes = useMemo(() => sewing.map((r) => r.cur!.hex), [sewing]);
-  useEffect(() => {
-    if (!dst || !pv.current) return;
-    pv.current.innerHTML = "";
-    const c = drawDst(dst, emb.file?.ws?.sequence.length ? emb.file.ws.sequence.map(sheetHex) : threadHexes, 360); c.className = "emb-dst-c"; pv.current.appendChild(c);
-  }, [dst, threadHexes, emb.file?.ws]);
+  // each stop in its thread's color when the worksheet says which (else the print's threads in turn)
+  const dstColors = useMemo(() => (emb.file?.ws?.sequence.length ? emb.file.ws.sequence.map(sheetHex) : threadHexes), [emb.file?.ws, threadHexes]);
   // the digitizer's files (Oct 23, Nick: "the DST is the main thing that we sew from, the .EMB is for the Hatch program
   // that we can edit, the PDF shows us the details and how to sew it and the color changes"): the zip or the loose files
   async function takeFiles(list: File[]) {
@@ -201,7 +199,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
         )}
         {dstErr && <div className="err">{dstErr}</div>}
         {emb.file && wIn > 0 && Math.abs(emb.file.wIn - wIn) > 0.15 && <p className="emb-warn-1">The file sews {emb.file.wIn}&quot; wide; this print is set to {wIn.toFixed(2)}&quot;. A digitized file can&apos;t be resized much: ask the digitizer for the new size.</p>}
-        {dst && <div className="emb-dst" ref={pv} aria-label="The stitches in the file" />}
+        {dst && <DstPreview info={dst} colors={dstColors} fabric={fabric || (shirtLight ? "#F4F4F1" : "#2A2E36")} width={360} />}
         {emb.file?.ws && <SewSequence ws={emb.file.ws} />}
       </div>
     </div>

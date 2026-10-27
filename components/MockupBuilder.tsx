@@ -4027,6 +4027,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <EmbroideryPanel im={im} rows={colorRows(paints[im.id])} artUrl={artUrl(im)} wIn={p.wIn} hIn={p.hIn || 0} portal={portal} designId={p.d.id}
                           garment={(() => { const l = lines[active] || lines[0]; const g = l ? garmentFor(l) : undefined; return [l?.brand, l?.style, g?.description, l?.garment].filter(Boolean).join(" "); })()}
                           shirtLight={(() => { const l = lines[active] || lines[0]; return !!l && deltaE(shirtHex(l), "#ffffff") < 20; })()}
+                          fabric={shirtHex(lines[active] || lines[0])}
                           onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                           onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                           setIm={(patch) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, ...patch, ...(patch.emb ? { emb: { ...(x.emb || {}), ...patch.emb } } : {}) } : x)))} />
