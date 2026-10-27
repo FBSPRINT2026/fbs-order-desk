@@ -15198,9 +15198,5 @@ a.dgt-file{color:var(--accent);text-decoration:none}
 .dgt-done b{color:var(--ok)}
 .dgt-done span{font-size:12.5px;color:var(--ink-3)}
 .pr-dgt{margin-top:6px}
-/* embroidery not digitized yet: the print row's stamp (Oct 27); the row stays readable (estimates), the stamp opens the Digitizer */
-.pr{position:relative}
-.pr-dgz-stamp{position:absolute;bottom:6px;right:8px;z-index:2;pointer-events:none}
-.pr-dgz-stamp>span{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 12px 5px;border:2.5px solid var(--warn);border-radius:8px;background:rgba(255,255,255,.92);color:var(--warn);text-transform:uppercase;letter-spacing:.06em;transform:rotate(-3deg)}
-.pr-dgz-stamp b{font-size:14px;font-weight:900;line-height:1.1}
-.pr-dgz-stamp small{font-size:9.5px;font-weight:800}
+/* embroidery not digitized yet: the visual mockup stamp, not a button (Oct 27) */
+.pr-vis-stamp.pr-dgz{cursor:default}

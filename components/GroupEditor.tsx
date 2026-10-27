@@ -1334,16 +1334,17 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   // a visual-only reorder print (Oct 20, Nick): the whole row greyed under a stamp; clicking it asks before anyone goes
   // in to set the details (that's what production confirms and locks in)
   const vis = !!d.visualOnly && !d.confirmed;
+  // embroidery not digitized yet: the same stamp as a visual mockup, in the same place (Oct 27, Nick: "exactly the same
+  // font and color and size and everything")
+  const dgz = !vis && d.method === "embroidery" && !d.digitized && !d.emb?.file;
   const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false);
   return (
-    <div className={"pr" + (vis && !opened ? " pr-vis" : "")}>
+    <div className={"pr" + ((vis && !opened) || dgz ? " pr-vis" : "")}>
       {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span><b>Visual mockup</b><small>Production confirming details on print run</small></span></button>}
       {/* embroidery not digitized yet (Oct 27, Nick: "a stamp on embroidery orders that say needs digitizing… the price
           right now is not firm… until we email Volikes, get it back, sew it out, get it approved"): the stitches, size
           and price are estimates. Clicking it opens the Digitizer */}
-      {!vis && d.method === "embroidery" && !d.digitized && !d.emb?.file && (
-        <div className="pr-dgz-stamp" title="Send it from Ask AI → Send for digitizing"><span><b>Needs digitizing</b><small>Stitches and price confirmed after the sew-out</small></span></div>
-      )}
+      {dgz && <div className="pr-vis-stamp pr-dgz" title="Send it from Ask AI → Send for digitizing"><span><b>Needs digitizing</b><small>Stitches and price confirmed after sew-out</small></span></div>}
       {ask && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
