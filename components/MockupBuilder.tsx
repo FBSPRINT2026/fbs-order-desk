@@ -2094,6 +2094,24 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             img = await loadImg(url).catch(() => null); cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02 && deltaE(c.hex, sc) >= 10) : [];
           }
         }
+        // art pulled off a photo of someone wearing it sits as the garment hangs: squared up on its own (Oct 27, Nick on
+        // the Keslow jacket's back: "you should have gotten… just a straightened… measures the points and makes it
+        // straight"); its size is measured again square. Undo puts it back as it was pulled off.
+        let orig: File | undefined, turn = 0;
+        if (kind === "photos") {
+          try {
+            const { rotateArt, straightAngle } = await import("@/lib/straighten");
+            const a = await straightAngle(pc.file);
+            if (a && Math.abs(a) <= 15) {
+              const b0 = await createImageBitmap(pc.file), f3 = await rotateArt(pc.file, a), b1 = await createImageBitmap(f3);
+              const k = pc.widthIn / Math.max(1, b0.width);
+              orig = pc.file; turn = a;
+              pc = { ...pc, file: f3, widthIn: Math.round(b1.width * k * 100) / 100, heightIn: Math.round(b1.height * k * 100) / 100 };
+              b0.close(); b1.close();
+              URL.revokeObjectURL(url); url = URL.createObjectURL(f3);
+            }
+          } catch { /* left as pulled off */ }
+        }
         // each color: the nearest PMS written on the page (when it's close), else our closest ink
         const inks: string[] = [];
         for (const c of cols) {
@@ -2107,7 +2125,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // a texture over it in the file: the customer's own saved mask goes back on instead (sharp, the same on every logo
         // of theirs), else the file's; none in the file, none here
         const distress: HelpRow["distress"] = pc.mask ? (brandMask ? "brand" : "file") : "none";
-        const row: HelpRow = { key: `r${i}`, file: pc.file, url, side: pc.side, location, widthIn: pc.widthIn, heightIn: pc.heightIn, dropIn: pc.dropIn, inks, use: !taken.has(location) && (pc.widthIn >= 1 || pc.heightIn >= 1), light: lum > 0.7, mask: pc.mask, maskPpi: pc.maskPpi, distress };
+        const row: HelpRow = { key: `r${i}`, file: pc.file, url, side: pc.side, location, widthIn: pc.widthIn, heightIn: pc.heightIn, dropIn: pc.dropIn, inks, use: !taken.has(location) && (pc.widthIn >= 1 || pc.heightIn >= 1), light: lum > 0.7, mask: pc.mask, maskPpi: pc.maskPpi, distress, ...(orig ? { orig, turn } : {}) };
         if (distress !== "none") { const dd = await distressRow(row, distress).catch(() => null); if (dd) Object.assign(row, dd); else row.distress = "none"; }
         rows.push(row);
         taken.add(location);

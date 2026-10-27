@@ -793,6 +793,9 @@ const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.lengt
 export const guessHex = (color: string): string => {
   // two-tone names ("White/ Royal", "White - Kelly", "Heather/Navy"): the body is the first color, the trim the second
   // (Oct 20: a White/ Royal raglan's close-ups were drawn on royal blue)
+  // a note in brackets is set aside first ("Brown (Dark Brown/Copper)" is brown, Oct 27: its digitizing sheet showed gray)
+  const bare = (color || "").replace(/\s*\([^)]*\)?\s*$/, "").replace(/\s*\([^)]*\)/g, "").trim();
+  if (bare && bare !== (color || "").trim()) return guessHex(bare);
   const parts = (color || "").split(/\s*(?:\/|\s-\s)\s*/).filter(Boolean);
   if (parts.length > 1) return guessHex(parts[0]);
   const c = (color || "").toLowerCase().trim().replace(/([a-z])([A-Z])/g, "$1 $2");
