@@ -160,7 +160,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   }
   // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
   // any of the imprint information doesn't make sense once a mockup is created")
-  // "Continue without a mockup" only counts until a mockup is saved (Oct 27, #40189: skipped first, then a mockup made, and
+  // "Manually enter info" (Continue without a mockup) only counts until a mockup is saved (Oct 27, #40189: skipped first, then a mockup made, and
   // the prints stayed open to edit instead of showing as the mockup made them)
   const skipped = !!g.mockupSkipped && !g.mockupAt;
   const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt);
@@ -709,7 +709,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
             : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
-                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>; })()}
+                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
           {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
@@ -733,9 +733,9 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
           )}
           {locked && askSkip && (
             <div className="confirm-bar">
-              <span>You haven&apos;t created a mockup for this group yet. Are you sure you want to fill in the imprints without one?</span>
+              <span>No mockup for this group yet. Make one, or enter the prints by hand (method, location, colors, size) with a placement picture for reference.</span>
               <button className="btn sm primary" type="button" onClick={startMockup}>Create mockup</button>
-              <button className="btn sm" type="button" onClick={() => { setAskSkip(false); update((x) => { x.mockupSkipped = true; }); }}>Continue without a mockup</button>
+              <button className="btn sm" type="button" onClick={() => { setAskSkip(false); update((x) => { x.mockupSkipped = true; }); }}>Manually enter info</button>
               <button className="btn sm ghost" type="button" onClick={() => setAskSkip(false)}>Cancel</button>
             </div>
           )}
@@ -747,7 +747,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 {g.imprints.map((d, di) => <div key={d.id} className="mk-need-row"><b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method], d.method === "screen" ? `${d.colors >= 11 ? "Full color" : `${d.colors || 1} color${(d.colors || 1) > 1 ? "s" : ""}`}` : ""].filter(Boolean).join(" · ")}</span><span>Logo</span><span>Size</span></div>)}
                 <small>{needMockup}</small>
               </div>
-            : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>)}
+            : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup — or click here to manually enter info</span></button>)}
           <div inert={locked || fixed || printsFixed || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
