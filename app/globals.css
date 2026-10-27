@@ -5762,7 +5762,9 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 /* break long words only when they must: "anywhere" let table columns shrink to one letter wide in a half-screen window
    (Oct 21, Nick: the Orders and Customers lists); phones keep it */
 .main a[href^="mailto:"],.main td,.main dd{overflow-wrap:break-word}
-@media (max-width:760px){ .main a[href^="mailto:"],.main td,.main dd{overflow-wrap:anywhere} }
+/* a long email address may break anywhere; a table cell or a value only between words, so a squeezed column never
+   stacks one letter a line (Oct 27, Nick: "this is all over our website") — the table scrolls instead */
+@media (max-width:760px){ .main a[href^="mailto:"]{overflow-wrap:anywhere} .main td,.main dd{overflow-wrap:break-word} }
 .pv-dates{min-width:0}
 .pv-tbl th,.pv-tbl td{word-break:normal}
 
@@ -12030,7 +12032,7 @@ tr.cu-off td{color:var(--ink-3)}
 /* ClickUp lists fill the window, no sideways scroll (Oct 22, Nick): fixed columns, the job name wraps */
 .tbl-wrap.cu-fit{overflow-x:hidden}
 .tbl.cu-tbl{table-layout:fixed;width:100%}
-.tbl.cu-tbl td{overflow-wrap:anywhere}
+.tbl.cu-tbl td{overflow-wrap:break-word}
 .tbl.cu-tbl th.cu-w-rail{width:170px}
 .tbl.cu-tbl th.cu-w-due{width:96px}
 .tbl.cu-tbl th.cu-w-files{width:84px}

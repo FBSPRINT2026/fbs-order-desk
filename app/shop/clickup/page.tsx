@@ -124,9 +124,35 @@ export default function ClickUpJobs() {
   // shrinks it to a reasonable size"). While dragging only the headings change; widths are saved on letting go.
   const MIN_W = 44, JOB_MIN = 220;
   const isJob = (k?: string | null) => !!k && /\.job$/.test(k);
-  const saveW = (ws: Record<string, number>) => setCw((m) => { const n = { ...m }; for (const [k, v] of Object.entries(ws)) if (!isJob(k)) n[k] = v; return n; });
+  const saveW = (ws: Record<string, number>) => setCw((m) => { const n = { ...m }; for (const [k, v] of Object.entries(ws)) if (!isJob(k)) n[k] = Math.round(v / (fitKRef.current || 1)); return n; });
+  const fitKRef = useRef(1);
+  // the Job column always keeps room (Oct 27, Nick: the job names stacked one letter a line in a narrow window): when the
+  // other columns' widths don't leave it 220px, they're all scaled down together (fitK, measured after each render)
+  const DEF_W: Record<string, number> = { "cu-w-rail": 170, "cu-w-due": 96, "cu-w-files": 84, "cu-w-pv": 130, "cu-w-inv": 190, "cu-w-added": 132, "cu-w-status": 130, "cu-box-h": 92 };
+  const [fitK, setFitK] = useState(1);
+  fitKRef.current = fitK;
+  const wantW = (key: string, cls: string) => {
+    if (isJob(key)) return 0;
+    const narrow = typeof window !== "undefined" && window.innerWidth <= 1100;
+    if (narrow && cls.includes("cu-w-added")) return 0;
+    return cw[key] || (narrow && cls.includes("cu-w-rail") ? 140 : DEF_W[cls.split(" ")[0]] || 0);
+  };
+  useEffect(() => {
+    const fit = () => {
+      const t = document.querySelector<HTMLTableElement>("table.cu-tbl"); if (!t || !t.parentElement) return;
+      const ths = [...t.querySelectorAll<HTMLElement>("thead th")];
+      let sum = 0, fixed = 0;
+      for (const th of ths) { if (/\.job$/.test(th.dataset.col || "")) continue; const w = +(th.dataset.w || 0); if (w) sum += w; else fixed += parseFloat(getComputedStyle(th).width) || 0; }
+      const avail = t.parentElement.clientWidth - fixed - JOB_MIN;
+      const k = sum > 0 ? Math.max(0.3, Math.min(1, avail / sum)) : 1;
+      setFitK((k0) => (Math.abs(k0 - k) > 0.01 ? k : k0));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  });
   const rth = (key: string, label: ReactNode, cls = "", sizable = true) => (
-    <th key={key} className={cls} data-col={key} style={cw[key] && !isJob(key) ? { width: cw[key] } : undefined}>{label}
+    <th key={key} className={cls} data-col={key} data-w={wantW(key, cls) || undefined} style={wantW(key, cls) ? { width: Math.max(MIN_W, Math.round(wantW(key, cls) * fitK)) } : undefined}>{label}
       {sizable && <span className="cu-rsz" title="Drag to move this edge · double-click to fit the column to what's in it" aria-hidden
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => {
