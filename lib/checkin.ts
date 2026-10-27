@@ -35,7 +35,7 @@ function itemsFromManifest(ls: ML[]): CheckItem[] {
   const m = new Map<string, CheckItem>();
   for (const l of ls) {
     const key = `${(l.style || "").trim().toUpperCase()}|${(l.color || "").trim().toUpperCase()}`;
-    const it = m.get(key) || { key, style: l.style || "", color: l.color || "", desc: l.mill || "", sizes: {} };
+    const it = m.get(key) || { key, style: l.style || "", color: l.color || "", desc: "", brand: l.mill || "", sizes: {} };
     const z = sizeOf(l.size || "OTHER");
     it.sizes[z] = (it.sizes[z] || 0) + (l.qty_shipped || 0);
     m.set(key, it);
@@ -50,7 +50,7 @@ function itemsFromPrintavo(data: { groups?: { lines?: PvLine[] }[] } | null): Ch
     const sizes: Record<string, number> = {};
     for (const [k, q] of Object.entries(l.sizes || {})) if (+q > 0) { const z = sizeOf(k); sizes[z] = (sizes[z] || 0) + +q; }
     if (!Object.keys(sizes).length) continue;
-    out.push({ key: `${out.length}`, style: l.itemNumber || "", color: l.color || "", desc: [l.brand, l.description].filter(Boolean).join(" · ").slice(0, 80), sizes });
+    out.push({ key: `${out.length}`, style: l.itemNumber || "", color: l.color || "", desc: (l.description || "").slice(0, 80), brand: l.brand || "", sizes });
   }
   return out;
 }
@@ -60,7 +60,7 @@ function itemsFromOrder(o: Pick<Order, "groups" | "lines">): CheckItem[] {
     const sizes: Record<string, number> = {};
     for (const [k, q] of Object.entries(l.sizes || {})) if (+(q || 0) > 0) { const z = sizeOf(k); sizes[z] = (sizes[z] || 0) + +(q || 0); }
     if (!Object.keys(sizes).length) continue;
-    out.push({ key: `${out.length}`, style: l.style || "", color: l.color || "", desc: l.garment || "", sizes });
+    out.push({ key: `${out.length}`, style: l.style || "", color: l.color || "", desc: l.garment || "", brand: l.brand || "", sizes });
   }
   return out;
 }

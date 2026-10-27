@@ -1,8 +1,10 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useT } from "@/components/job/lang";
 import { garmentHex } from "@/lib/mockup";
+import GarmentShape, { garmentKind } from "@/components/GarmentShape";
+import { garmentLooks, type GarmentLook } from "@/app/shop/receiving/garment-actions";
 import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
 
 /**
@@ -65,6 +67,15 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
 
   const tone = (c: { k: string; expected: number }) => { const v = n(c.k); return v === null ? "" : extra[c.k]?.issue === "damaged" || extra[c.k]?.issue === "mispick" ? " bad" : v === c.expected ? " ok" : v < c.expected ? " short" : " over"; };
   const items = job.items.map((it) => ({ it, cs: cells.filter((c) => c.it === it) }));
+  // brand, what it is and the color's swatch for each garment (Oct 27, Nick picked "Y": the garment drawn in its color,
+  // a band of that color across the row, a solid edge, and the count bar filling in that color)
+  const [looks, setLooks] = useState<Record<string, GarmentLook>>({});
+  useEffect(() => { void garmentLooks(job.items.map((it) => ({ style: it.style, color: it.color, brand: it.brand }))).then((r) => { if (r.ok) setLooks(r.looks); }); }, [job]);
+  const lookOf = (it: CheckJob["items"][number]) => {
+    const l = looks[`${it.style.trim().toUpperCase().replace(/\s+/g, "")}|${it.color.trim().toLowerCase().replace(/[^a-z0-9]+/g, "")}`];
+    const brand = it.brand || l?.brand || "", title = it.desc || l?.title || "";
+    return { brand, title, hex: l?.hex || garmentHex(null, it.color || ""), kind: garmentKind(`${title} ${it.style}`) };
+  };
   // every size any garment has, smallest first (a garment without one gets a dot)
   const sizes = [...new Set(cells.map((c) => c.size))].sort(bySize);
   const short = cells.reduce((x, c) => { const v = n(c.k); return x + (v !== null && v < c.expected ? c.expected - v : 0); }, 0);
@@ -109,8 +120,13 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
               <tbody>{items.map(({ it, cs }) => {
                 const exp = cs.reduce((x, c) => x + c.expected, 0), cnt = cs.reduce((x, c) => x + (n(c.k) ?? 0), 0), done = cs.every((c) => n(c.k) !== null);
                 return (
-                  <tr key={it.key}>
-                    <td className="ckg-g"><i className="ckg-sw" style={{ background: garmentHex(null, it.color || "") }} aria-hidden /><b data-notranslate>{it.style || t("Item")}</b><span className="ckg-color" data-notranslate>{it.color}</span>{it.desc && <span className="faint ckg-desc" data-notranslate>{it.desc}</span>}</td>
+                  <tr key={it.key} className="ckg-row" style={{ ["--gc" as string]: lookOf(it).hex }}>
+                    <td className="ckg-g"><div className="ckg-gl">
+                      <GarmentShape kind={lookOf(it).kind} color={lookOf(it).hex} />
+                      <div><div className="ckg-cn" data-notranslate>{it.color || t("No color")}</div>
+                        <div className="ckg-bs" data-notranslate><b>{[lookOf(it).brand, it.style].filter(Boolean).join(" ") || t("Item")}</b></div>
+                        {lookOf(it).title && <div className="faint ckg-desc" data-notranslate>{lookOf(it).title}</div>}</div>
+                    </div></td>
                     {sizes.map((z) => {
                       const c = cs.find((x) => x.size === z);
                       if (!c) return <td key={z} className="ckg-na" aria-hidden><span /></td>;
