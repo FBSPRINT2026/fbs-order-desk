@@ -94,6 +94,8 @@ export default function ClickUpJobs() {
   const [pick, setPick] = useState(false);
   const [review, setReview] = useState<OrderStart | null>(null);
   const [made, setMade] = useState<{ id: string; number: number } | null>(null);
+  // Create order's text, kept once it's open: the panel stays while the job moves lists after its order is made (Oct 27)
+  const pickText = useRef("");
   const [files, setFiles] = useState<{ id: string; list: CuFile[]; busy: boolean; err?: string } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   // a customer's whole workspace (Workspaces tab → click one): every job, open and completed, by board
@@ -371,7 +373,7 @@ export default function ClickUpJobs() {
         </div>
       </div>}
       {/* Create order: the one tool (components/tools/CreateOrderTool.tsx), the same as on emails and in the AI Workbench */}
-      {pick && act && job && <CreateOrderTool activityId={act} text={`${job.name} ${job.description || ""}`.slice(0, 600)} onClose={() => setPick(false)}
+      {pick && act && (job || pickText.current) && <CreateOrderTool activityId={act} text={job ? (pickText.current = `${job.name} ${job.description || ""}`.slice(0, 600)) : pickText.current} onClose={() => setPick(false)}
         onReview={(s) => { setPick(false); setReview(s); }}
         onCreated={(id, n) => madeIt(id, n)} />}
 

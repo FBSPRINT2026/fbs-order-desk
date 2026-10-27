@@ -28,11 +28,16 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
   const [steps, setSteps] = useState<string[]>([]);
   const [made, setMade] = useState<{ id: string; number: number; url: string; note: string } | null>(null);
   const [err, setErr] = useState("");
+  // the steps done on this order so far, and the one running (Oct 27, Nick: "make that be the first step. Then I can go
+  // and say, okay, now bring in the art"): the panel stays open after each one and offers the next
+  const [did, setDid] = useState<PartKind[]>([]);
+  const [running, setRunning] = useState(true);
   const ran = useRef(false);
-  const part = start.parts?.[0] || null, mode = start.partial, m = PARTIAL[mode];
+  const part = start.parts?.[0] || null, first = start.partial;
   const step = (s: string) => setSteps((x) => [...x, s]);
-  useEffect(() => {
-    if (ran.current) return; ran.current = true;
+  const run = async (mode: PartKind, into?: { id: string; number: number }) => {
+    const m = PARTIAL[mode];
+    setRunning(true); setErr("");
     void (async () => {
       try {
         const read = async (fix = "") => {
@@ -42,7 +47,7 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
           if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
           return j.draft as EODraft;
         };
-        step(part ? `Reading the email for ${part.label}…` : "Reading the email…");
+        step(into ? `${m.label} for #${into.number}: reading the email…` : part ? `Reading the email for ${part.label}…` : "Reading the email…");
         let d = await read();
         let note = "";
         // sizes: the sheets' own total checked in code (the same check as the full Create order)
@@ -57,34 +62,63 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
         if (mode === "empty") d = { ...d, groups: d.groups.slice(0, 1).map((g) => ({ ...g, lines: [], imprints: [], name: "" })), art: {}, mockups: {}, questions: [], check: [] };
         d = { ...d, check: [], notes: [d.notes, `Made with Create order → ${m.label.toLowerCase()}${start.note ? ` ("${start.note}")` : ""}.`].filter(Boolean).join("\n").slice(0, 2000) };
         step(mode === "sizes" ? `Found ${pcsOf(d.groups).toLocaleString("en-US")} pcs on ${d.groups.reduce((n, g) => n + g.lines.length, 0)} garment lines` : mode === "empty" ? "Setting up the blank order…" : `Found ${d.groups.reduce((n, g) => n + g.imprints.length, 0)} print${d.groups.reduce((n, g) => n + g.imprints.length, 0) === 1 ? "" : "s"}`);
-        step("Creating the order…");
-        const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote" }) }).catch(() => null);
+        step(into ? `Adding it to #${into.number}…` : "Creating the order…");
+        const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote", ...(into ? { addTo: into.id } : {}) }) }).catch(() => null);
         const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
-        if (!r?.ok || !j.id) throw new Error(j.error || "Couldn't create the order.");
-        const ot = part?.orderType || start.orderType;
-        if (ot) await createClient().from("orders").update({ order_type: ot }).eq("id", j.id).then(() => null, () => null);
+        if (!r?.ok || !j.id) throw new Error(j.error || (into ? `Couldn't add it to #${into.number}.` : "Couldn't create the order."));
+        if (!into) {
+          const ot = part?.orderType || start.orderType;
+          if (ot) await createClient().from("orders").update({ order_type: ot }).eq("id", j.id).then(() => null, () => null);
+        }
         let url = `/shop/orders/${j.id}?email=${activityId}`;
         if (mode === "mockup") {
           const { data: o } = await createClient().from("orders").select("groups").eq("id", j.id).maybeSingle();
           const g = ((o?.groups || []) as Group[]).find((x) => x.imprints.some((im) => im.design_id));
           if (g) url = `/shop/artwork/mockup?order=${j.id}&group=${g.id}&auto=1&email=${activityId}`;
         }
-        onCreated?.(j.id, j.number, part?.label || d.nickname || m.label);
-        setMade({ id: j.id, number: j.number, url, note });
+        if (into) step(mode === "art" ? "Prints and art added" : "Garments and sizes added");
+        else onCreated?.(j.id, j.number, part?.label || d.nickname || m.label);
+        setMade((x) => ({ id: j.id, number: j.number, url, note: [x?.note, note].filter(Boolean).join(" ") }));
+        setDid((x) => [...x, mode]);
       } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); }
+      finally { setRunning(false); }
     })();
+  };
+  useEffect(() => {
+    if (ran.current) return; ran.current = true;
+    void run(first);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = PARTIAL[first];
+  // what's left to bring in, and the mockup once there's art and garments
+  const has = (k: PartKind) => did.includes(k) || (k === "sizes" && did.includes("mockup")) || (k === "art" && did.includes("mockup"));
+  const next: PartKind[] = made && !running ? (["sizes", "art"] as PartKind[]).filter((k) => !has(k)) : [];
+  const mockupHref = async () => {
+    if (!made) return;
+    const { data: o } = await createClient().from("orders").select("groups").eq("id", made.id).maybeSingle();
+    const g = ((o?.groups || []) as Group[]).find((x) => x.imprints.some((im) => im.design_id));
+    window.location.assign(g ? `/shop/artwork/mockup?order=${made.id}&group=${g.id}&auto=1&email=${activityId}` : made.url);
+  };
   return (
     <div className="dla-bg dock" role="dialog" aria-label="Create order">
       <div className="dla osp">
         <h3>{m.label}</h3>
         <p className="dla-sub">{part ? `${part.label}. ` : ""}{m.sub}</p>
-        <ul className="po-steps">{steps.map((s, i) => <li key={i} className={i === steps.length - 1 && !made && !err ? "on" : "done"}>{s}</li>)}</ul>
+        <ul className="po-steps">{steps.map((s, i) => <li key={i} className={i === steps.length - 1 && running && !err ? "on" : "done"}>{s}</li>)}</ul>
         {err && <p className="err">{err}</p>}
         {made && <div className="po-made">
-          <b>Order #{made.number} made.</b>
+          <b>Order #{made.number} {did.length > 1 ? "has " + did.map((k) => (k === "sizes" ? "its garments" : k === "art" ? "its prints and art" : PARTIAL[k].label.toLowerCase())).join(" and ") : "made"}.</b>
           {made.note && <span className="po-warn">{made.note}</span>}
-          <a className="btn primary" href={made.url}>{mode === "mockup" && made.url.includes("/mockup") ? "Open the Mockup Creator" : `Open #${made.number}`}</a>
+          {/* the next step, right here (Oct 27, Nick) */}
+          {next.length > 0 && <div className="po-next">
+            <span className="faint">Next</span>
+            {next.map((k) => <button key={k} type="button" className="btn" onClick={() => void run(k, { id: made.id, number: made.number })}>{k === "art" ? "Bring in the art" : "Bring in the sizes"}</button>)}
+          </div>}
+          <div className="po-next">
+            {first === "mockup" && made.url.includes("/mockup")
+              ? <a className="btn primary" href={made.url}>Open the Mockup Creator</a>
+              : <>{has("art") && has("sizes") && <button type="button" className="btn primary" disabled={running} onClick={() => void mockupHref()}>Make the mockup</button>}
+                <a className={"btn" + (has("art") && has("sizes") ? "" : " primary")} href={made.url}>Open #{made.number}</a></>}
+          </div>
         </div>}
         <div className="dla-acts"><span className="spacer" /><button type="button" className="btn ghost" onClick={onClose}>{made || err ? "Close" : "Cancel"}</button></div>
       </div>

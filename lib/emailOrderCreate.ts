@@ -44,7 +44,9 @@ function dims(b: Buffer): { w: number; h: number } | null {
 }
 
 /** activityId: the email it came from (Inbox), or customerId alone (a reorder from the Printavo archive) */
-export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved"; /** where it came from, when not an email (the AI Workbench) */ via?: string };
+export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved"; /** where it came from, when not an email (the AI Workbench) */ via?: string;
+  /** the next step on an order already made from it (Oct 27, Nick: "make that be the first step. Then I can go and say,
+   *  okay, now bring in the art"): the garments and/or prints read now go onto that order instead of a new one */ addTo?: string };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
   const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, body, meta").eq("id", input.activityId).maybeSingle() : { data: null };
@@ -130,6 +132,37 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       const cp = await admin.storage.from("proofs").copy(p, to);
       if (!cp.error) g.customerMockups = [...(g.customerMockups || []), { path: to, name: f?.name || "Mockup" }];
     }
+  }
+
+  // the next step on an order already made (Create order → Other options): its garments and prints go onto that order,
+  // each group onto the group of the same name (else by place, else the only one); a print where the order has the same
+  // location with no art yet takes its place. Nothing else on the order changes.
+  if (input.addTo) {
+    const { data: ex } = await admin.from("orders").select("id, number, customer_id, groups").eq("id", input.addTo).maybeSingle();
+    if (!ex || ex.customer_id !== custId) return { ok: false, error: "That order isn't this customer's any more." };
+    const eg = JSON.parse(JSON.stringify(ex.groups || [])) as Group[];
+    const norm = (x?: string) => (x || "").trim().toLowerCase();
+    let lines = 0, prints = 0, newGroups = 0;
+    groups.forEach((ng, i) => {
+      const at = eg.findIndex((x) => norm(x.name) && norm(x.name) === norm(ng.name));
+      const tgt = at >= 0 ? eg[at] : eg.length === groups.length ? eg[i] : eg.length === 1 ? eg[0] : null;
+      if (!tgt) { eg.push(ng); newGroups++; lines += ng.lines.length; prints += ng.imprints.length; return; }
+      const real = ng.lines.filter((l) => Object.keys(l.sizes || {}).length);
+      tgt.lines = [...(tgt.lines || []).filter((l) => (l.style || "").trim() || Object.keys(l.sizes || {}).length), ...real];
+      for (const im of ng.imprints) {
+        const k = (tgt.imprints || []).findIndex((x) => !x.design_id && norm(x.location) === norm(im.location));
+        tgt.imprints = k >= 0 ? (tgt.imprints || []).map((x, j) => (j === k ? im : x)) : [...(tgt.imprints || []), im];
+      }
+      if (ng.customerMockups?.length) tgt.customerMockups = [...(tgt.customerMockups || []), ...ng.customerMockups];
+      if (!tgt.name && ng.name) tgt.name = ng.name;
+      lines += real.length; prints += ng.imprints.length;
+    });
+    const { error: ue } = await admin.from("orders").update({ groups: eg }).eq("id", ex.id);
+    if (ue) return { ok: false, error: ue.message };
+    const what = [lines ? `${lines} garment line${lines === 1 ? "" : "s"}` : "", prints ? `${prints} print${prints === 1 ? "" : "s"} with ${prints === 1 ? "its" : "their"} art` : "", newGroups ? `${newGroups} new group${newGroups === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ");
+    await admin.from("order_events").insert({ order_id: ex.id, kind: "details", detail: `Added from ${a ? (((a.meta || {}) as { source?: string }).source === "clickup" ? "the customer's ClickUp job" : "the customer's email") : "Create order"}: ${what || "nothing new"}.`, actor: by });
+    if (a) await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: ex.id }).eq("dedupe_key", d.part ? `email:${d.part.anchor || a.id}:order:${d.part.key}` : `email:${a.id}:order`);
+    return { ok: true, id: ex.id as string, number: ex.number as number };
   }
 
   const st = STATUSES.find((x) => x.k === input.status) || STATUSES.find((x) => x.k === "quote")!;

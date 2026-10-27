@@ -102,7 +102,7 @@ export async function PUT(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.draft || typeof b.draft !== "object") return NextResponse.json({ error: "Nothing to create." }, { status: 400 });
   const draft = { ...(b.draft as EODraft), files: ((b.draft as EODraft).files || []).map(({ url: _u, ...f }) => f) } as EODraft;
-  const r = await createOrderFromDraft(createAdminClient(), v.user!.email || "staff", { activityId: String(b.activity || ""), draft, status: b.status === "approved" ? "approved" : "quote" });
+  const r = await createOrderFromDraft(createAdminClient(), v.user!.email || "staff", { activityId: String(b.activity || ""), draft, status: b.status === "approved" ? "approved" : "quote", ...(typeof b.addTo === "string" && b.addTo ? { addTo: b.addTo } : {}) });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   return NextResponse.json(r);
 }
