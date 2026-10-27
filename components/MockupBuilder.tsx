@@ -2809,6 +2809,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     g.mockupOffsets = Object.keys(offs).length ? offs : undefined;
     if (thumbs.length) g.mockupThumbs = thumbs;
     // each print's art as shown here, saved for the order's little print tiles (staff saves; the art the blow-up uses)
+    // and its proportions as it prints, so the order's size reads right (colors taken off don't count)
+    for (const im of g.imprints) { const r = ratioIm(im); if (r > 0 && isFinite(r)) im.artRatio = Math.round(r * 10000) / 10000; }
     if (!portal) await Promise.all(g.imprints.map(async (im) => {
       const u = artUrl(im);
       if (!u || !im.design_id) return;

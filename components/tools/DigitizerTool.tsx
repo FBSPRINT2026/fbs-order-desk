@@ -170,7 +170,7 @@ export default function DigitizerTool({ orderId, imprintId: imprint0, onClose, o
       const urlOf = (p?: string | null) => (p ? su?.find((x) => x.path === p)?.signedUrl || "" : "");
       const [art, mock] = await Promise.all([urlOf(d?.preview_path) ? threadArt(urlOf(d?.preview_path), im) : null, urlOf(g.mockupThumbs?.[0]) ? asJpeg(urlOf(g.mockupThumbs?.[0])) : null]);
       // the logo's own proportions (its empty edges and taken-off colors don't count)
-      const ratio = art?.ratio || (d?.art_box?.w && d.art_box.h ? d.art_box.h / d.art_box.w : d?.width_px && d.height_px ? d.height_px / d.width_px : 0);
+      const ratio = art?.ratio || im.artRatio || (d?.art_box?.w && d.art_box.h ? d.art_box.h / d.art_box.w : d?.width_px && d.height_px ? d.height_px / d.width_px : 0);
       const sz = parseSize(im.size, ratio);
       const cust = (o as { customers?: { company?: string; name?: string } }).customers;
       const ctx: DigitizeCtx = { number: o.number, company: cust?.company || cust?.name || "", nickname: o.nickname, due: o.due_date, g, im, d, wIn: sz.w || undefined, hIn: sz.h || undefined };

@@ -134,6 +134,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   emb?: import("@/lib/embroidery").EmbSpec;
   /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
    *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
+  /** the art's height ÷ width as it prints (colors taken off and empty edges don't count), saved by the Mockup Creator:
+   *  the other side of the size comes from it (#40189: a logo on a black box read 6" × 4.41" for 6" × 1.12") */ artRatio?: number;
   /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
    *  are charged by pmsInks() */ pms?: number;
   /** PMS charge per ink set by hand (lowercase ink name → charge or not): "standard, no charge" for a customer's
@@ -202,9 +204,10 @@ export type Design = { id: string; number: number; customer_id: string | null; n
   specs?: { distressed?: boolean; original?: { path: string; name: string; type: string; preview?: string }; onShirts?: { shirt: string; ink: string; path?: string; map?: Record<string, unknown> }[]; cropped?: boolean; [k: string]: unknown } | null };
 export const designLabel = (d: Pick<Design, "number" | "name">) => `D-${d.number}${d.name ? " · " + d.name : ""}`;
 /** Height for a given width (or width for a given height) from the design's proportions. */
-export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | undefined, value: number, given: "W" | "H") {
-  if (!d?.width_px || !d?.height_px || !value) return 0;
-  const r = d.height_px / d.width_px;
+export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | undefined, value: number, given: "W" | "H", /** the print's own proportions (Imprint.artRatio) when known */ ratio?: number | null) {
+  if (!value) return 0;
+  if (!(ratio && ratio > 0) && (!d?.width_px || !d?.height_px)) return 0;
+  const r = ratio && ratio > 0 ? ratio : d!.height_px! / d!.width_px!;
   return Math.round((given === "W" ? value * r : value / r) * 100) / 100;
 }
 /** One garment + color row, with its size run. */

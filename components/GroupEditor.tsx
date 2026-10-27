@@ -1321,7 +1321,7 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
-  const other = cur && val ? designOther(cur, val, given) : 0;
+  const other = cur && val ? designOther(cur, val, given, d.artRatio) : 0;
   const size = val ? (given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`) : "";
   const colors = d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
   // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
@@ -1401,12 +1401,12 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   );
 }
 
-function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string; inkMap?: Imprint["inkMap"] }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
+function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string; inkMap?: Imprint["inkMap"]; artRatio?: number }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
   const cur = designs.find((x) => x.id === imprint.design_id);
   const pic = usePainted(cur ? urls[cur.id] || "" : "", imprint);
   const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
-  const other = cur && val ? designOther(cur, val, given) : 0;
+  const other = cur && val ? designOther(cur, val, given, imprint.artRatio) : 0;
   return (
     <button type="button" className="imp-logo" onClick={onMockup} title={cur ? `${designLabel(cur)}: change it in the Mockup Creator` : "Pick the logo in the Mockup Creator"}>
       {cur && pic ? <img src={pic} alt="" /> : <span className="imp-logo-none">No logo</span>}
@@ -1417,7 +1417,7 @@ function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?:
 }
 
 function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
-  imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  imprint: { design_id?: string; size: string; artRatio?: number }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
   /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
    *  new art from the main order page") */ readOnly?: boolean; onMockup?: () => void;
   onStar?: (d: Design, starred: boolean) => void;
@@ -1428,7 +1428,7 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
   const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0;
   const given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
-  const other = cur && val ? designOther(cur, val, given) : 0;
+  const other = cur && val ? designOther(cur, val, given, imprint.artRatio) : 0;
   return (
     <div className="dp">
       <span className="dp-l">Logo</span>

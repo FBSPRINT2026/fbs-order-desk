@@ -66,7 +66,7 @@ const fmtIn = (n: number) => (n ? `${+n.toFixed(2)}"` : `?"`);
 export function printSize(d: Imprint, des?: Design | null) {
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
-  const other = des && val ? designOther(des, val, given) : 0;
+  const other = des && val ? designOther(des, val, given, d.artRatio) : 0;
   const w = given === "W" ? val : other, h = given === "W" ? other : val;
   return { w, h, label: val ? `${fmtIn(w)} × ${fmtIn(h)}` : d.size || "" };
 }
