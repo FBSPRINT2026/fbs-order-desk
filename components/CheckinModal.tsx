@@ -2,10 +2,11 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useT } from "@/components/job/lang";
+import { garmentHex } from "@/lib/mockup";
 import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
 
 /**
- * Count a job's goods in: one grid per style / color, a box per size. Tap a size's expected number (or ✓ on the row,
+ * Count a job's goods in: one grid, garments down and sizes across (Oct 27, Nick picked "B3"), a box per size. Tap a size's expected number (or ✓ on the row,
  * or "Everything's here") to take the full amount; type what you actually counted when it's different. Any
  * difference, damage or wrong item becomes a problem with a reason, and the job shows up under Problems until it's
  * resolved.
@@ -25,6 +26,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
   const [boxes, setBoxes] = useState(""), [note, setNote] = useState("");
   const [photos, setPhotos] = useState<{ path: string; name: string }[]>([]);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const [editing, setEditing] = useState("");
 
   const n = (k: string) => (got[k] === undefined || got[k] === "" ? null : Math.max(0, Math.round(+got[k] || 0)));
   const left = cells.filter((c) => n(c.k) === null).length;
@@ -63,6 +65,9 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
 
   const tone = (c: { k: string; expected: number }) => { const v = n(c.k); return v === null ? "" : extra[c.k]?.issue === "damaged" || extra[c.k]?.issue === "mispick" ? " bad" : v === c.expected ? " ok" : v < c.expected ? " short" : " over"; };
   const items = job.items.map((it) => ({ it, cs: cells.filter((c) => c.it === it) }));
+  // every size any garment has, smallest first (a garment without one gets a dot)
+  const sizes = [...new Set(cells.map((c) => c.size))].sort(bySize);
+  const short = cells.reduce((x, c) => { const v = n(c.k); return x + (v !== null && v < c.expected ? c.expected - v : 0); }, 0);
 
   return (
     <div className="mk-modal-back ck-back" role="dialog" aria-modal="true" aria-labelledby="ck-t" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
@@ -81,47 +86,58 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
 
         <div className="ck-tools">
           <button type="button" className="btn primary" onClick={() => fill(cells)}>{t("✓ Everything's here ({0})", expected)}</button>
-          <button type="button" className="btn ghost" onClick={() => { setGot({}); setExtra({}); }}>{t("Clear")}</button>
+          <button type="button" className="btn ghost" onClick={() => { setGot({}); setExtra({}); setEditing(""); }}>{t("Clear")}</button>
           <span className="spacer" />
-          <label className="ck-boxes">{t("Boxes")}<input type="number" min={0} inputMode="numeric" value={boxes} onChange={(e) => setBoxes(e.target.value)} placeholder={job.boxes ? String(job.boxes) : "—"} />{job.boxes ? <span className="faint">{t("of {0}", job.boxes)}</span> : null}</label>
+          <span className="faint ckg-hint">{t("Tap a size to take the full amount, tap it again to type the count")}</span>
         </div>
 
         <div className="ck-body">
-          {items.map(({ it, cs }) => {
-            const exp = cs.reduce((s, c) => s + c.expected, 0), cnt = cs.reduce((s, c) => s + (n(c.k) ?? 0), 0), done = cs.every((c) => n(c.k) !== null);
-            return (
-              <section key={it.key} className="ck-item">
-                <div className="ck-item-h">
-                  <b data-notranslate>{[it.style, it.color].filter(Boolean).join(" · ") || t("Item")}</b>{it.desc && <span className="faint" data-notranslate>{it.desc}</span>}
-                  <span className="spacer" />
-                  <span className={"ck-tot" + (done ? (cnt === exp ? " ok" : " off") : "")}>{done ? `${cnt} / ${exp}` : t("{0} pcs", exp)}</span>
-                  <button type="button" className="btn sm" tabIndex={-1} onClick={() => fill(cs)} title={t("Take the full amount for every size")}>{t("✓ All")}</button>
-                </div>
-                <div className="ck-grid" style={{ gridTemplateColumns: `repeat(${cs.length}, minmax(64px, 1fr))` }}>
-                  {cs.map((c) => (
-                    <div key={c.k} className={"ck-cell" + tone(c)}>
-                      <span className="ck-size">{c.size === "OTHER" ? t("Other") : c.size}</span>
-                      <button type="button" className="ck-exp" tabIndex={-1} title={t("Tap: all of them are here")} onClick={() => fill([c])}>{c.expected}</button>
-                      <input type="number" min={0} inputMode="numeric" aria-label={t("{0} received", c.size)} value={got[c.k] ?? ""} placeholder="—"
-                        data-ck={cells.indexOf(c)} autoFocus={cells.indexOf(c) === 0}
-                        onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                        onKeyDown={(e) => {
-                          // Enter works like Tab (next size, then the next item's first size); on the last size, to the Check In button
-                          if (e.key !== "Enter") return;
-                          e.preventDefault();
-                          const nx = document.querySelector<HTMLElement>(`.ck-modal input[data-ck="${cells.indexOf(c) + (e.shiftKey ? -1 : 1)}"]`) || document.querySelector<HTMLElement>(".ck-foot .ck-go");
-                          nx?.focus();
-                        }} />
-                      <span className="ck-step">
-                        <button type="button" tabIndex={-1} aria-label={t("One less {0}", c.size)} onClick={() => setGot((g) => ({ ...g, [c.k]: String(Math.max(0, (n(c.k) ?? c.expected) - 1)) }))}>−</button>
-                        <button type="button" tabIndex={-1} aria-label={t("One more {0}", c.size)} onClick={() => setGot((g) => ({ ...g, [c.k]: String((n(c.k) ?? c.expected) + 1) }))}>+</button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          {/* the count grid (Oct 27, Nick picked "B3"): garments down, sizes across, every size the same small box; what's
+              counted, what's left and what's short beside it */}
+          <div className="ckg">
+            <div className="ckg-wrap"><table className="ckg-t">
+              <thead><tr><th className="ckg-g">{t("Garment")}</th>{sizes.map((z) => <th key={z}>{z === "OTHER" ? t("Other") : z}</th>)}<th className="ckg-n">{t("Count")}</th></tr></thead>
+              <tbody>{items.map(({ it, cs }) => {
+                const exp = cs.reduce((x, c) => x + c.expected, 0), cnt = cs.reduce((x, c) => x + (n(c.k) ?? 0), 0), done = cs.every((c) => n(c.k) !== null);
+                return (
+                  <tr key={it.key}>
+                    <td className="ckg-g"><i className="ckg-sw" style={{ background: garmentHex(null, it.color || "") }} aria-hidden /><b data-notranslate>{it.style || t("Item")}</b><span className="ckg-color" data-notranslate>{it.color}</span>{it.desc && <span className="faint ckg-desc" data-notranslate>{it.desc}</span>}
+                      <button type="button" className="linkbtn ckg-all" tabIndex={-1} onClick={() => fill(cs)}>{t("✓ All")}</button></td>
+                    {sizes.map((z) => {
+                      const c = cs.find((x) => x.size === z);
+                      if (!c) return <td key={z} className="ckg-na" aria-hidden>·</td>;
+                      const v = n(c.k), on = editing === c.k;
+                      return (
+                        <td key={z}>
+                          <label className={"ckg-c" + (v === null ? "" : tone(c))} title={v === null ? t("Tap for all {0}", c.expected) : undefined}
+                            onPointerDown={(e) => { if (v === null && !on) { e.preventDefault(); fill([c]); } }}>
+                              <input type="number" min={0} inputMode="numeric" aria-label={t("{0} received", c.size)} value={got[c.k] ?? ""} placeholder="–" data-ck={cells.indexOf(c)}
+                                onFocus={(e) => { setEditing(c.k); e.target.select(); }} onBlur={() => setEditing("")} onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  // Enter works like Tab (next size, then the next garment's); on the last size, to the Check In button
+                                  if (e.key !== "Enter") return;
+                                  e.preventDefault();
+                                  const nx = document.querySelector<HTMLElement>(`.ck-modal [data-ck="${cells.indexOf(c) + (e.shiftKey ? -1 : 1)}"]`) || document.querySelector<HTMLElement>(".ck-foot .ck-go");
+                                  nx?.focus();
+                                }} />
+                              <small>{t("of {0}", c.expected)}</small>
+                          </label>
+                        </td>
+                      );
+                    })}
+                    <td className={"ckg-n" + (done ? (cnt === exp ? " ok" : " off") : "")}>{done ? `${cnt}/${exp}` : `${cnt ? cnt + "/" : ""}${exp}`}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table></div>
+            <aside className="ckg-side">
+              <div className="ckg-box"><span>{t("Counted")}</span><b>{counted.toLocaleString()} <small>/ {expected.toLocaleString()}</small></b></div>
+              <div className="ckg-box"><span>{t("Sizes left")}</span><b>{left}</b></div>
+              <div className={"ckg-box" + (short ? " warn" : "")}><span>{t("Short")}</span><b>{short}</b></div>
+              <label className="ckg-box ckg-boxes"><span>{t("Boxes")}</span><input type="number" min={0} inputMode="numeric" value={boxes} onChange={(e) => setBoxes(e.target.value)} placeholder={job.boxes ? String(job.boxes) : "—"} />{job.boxes ? <small className="faint">{t("of {0}", job.boxes)}</small> : null}</label>
+            </aside>
+          </div>
 
           <section className={"ck-probs" + (problems.length ? " has" : "")}>
             <div className="ck-item-h"><b>{problems.length ? (problems.length === 1 ? t("1 problem") : t("{0} problems", problems.length)) : t("No problems")}</b>

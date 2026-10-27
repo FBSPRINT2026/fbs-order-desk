@@ -15048,3 +15048,39 @@ body:has(.dla-bg.dock.og-hidden){padding-right:0}
 .rs-ok{color:var(--ok);font-weight:700}.rs-bad{color:var(--danger)}
 .rs-hand{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line);font-size:13px}
 @media (max-width:640px){.rs-row{grid-template-columns:1fr}}
+
+/* check-in count grid "B3" (Oct 27): garments down, sizes across, every size one small box; the totals beside it */
+.ck-modal .ck-body{display:block}
+.ckg{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:14px;align-items:start;margin-bottom:12px}
+.ckg-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.ckg-t{border-collapse:separate;border-spacing:4px;width:auto}
+.ckg-t th{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding:4px 2px 0;white-space:nowrap}
+.ckg-t th.ckg-g{text-align:left}
+.ckg-t td{padding:0;vertical-align:middle}
+td.ckg-g{min-width:170px;max-width:260px;padding:2px 8px 2px 4px;font-size:14px;line-height:1.25}
+.ckg-g b{color:var(--ink);font-weight:700;margin-right:6px}
+.ckg-sw{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid var(--line);vertical-align:-1px;margin-right:6px}
+.ckg-color{color:var(--ink-2,var(--ink))}
+.ckg-desc{display:block;font-size:12px}
+.ckg-all{font-size:12px;margin-left:6px}
+.ckg-na{text-align:center;color:var(--line);width:48px}
+.ckg-c{all:unset;box-sizing:border-box;cursor:pointer;width:48px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);font-variant-numeric:tabular-nums}
+.ckg-c b,.ckg-c input{font-size:16px;font-weight:700;color:var(--ink-3);line-height:1.1}
+.ckg-c small{font-size:11px;color:var(--ink-3);line-height:1.1;white-space:nowrap}
+.ckg-c:hover,.ckg-c:focus-within,button.ckg-c:focus-visible{border-color:var(--accent)}
+.ckg-c input{all:unset;width:100%;text-align:center;color:var(--ink);-moz-appearance:textfield}
+.ckg-c input::-webkit-outer-spin-button,.ckg-c input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.ckg-c.ok{border-color:var(--ok);background:var(--ok-soft)}.ckg-c.ok input{color:var(--ok)}
+.ckg-c.short,.ckg-c.over{border-color:var(--warn);background:var(--warn-soft)}.ckg-c.short input,.ckg-c.over input{color:var(--warn)}
+.ckg-c.bad{border-color:var(--danger);background:var(--danger-soft)}.ckg-c.bad input{color:var(--danger)}
+td.ckg-n,th.ckg-n{padding:0 8px;text-align:right;font-size:13px;font-weight:700;white-space:nowrap;color:var(--ink-3);font-variant-numeric:tabular-nums}
+td.ckg-n.ok{color:var(--ok)}td.ckg-n.off{color:var(--warn)}
+.ckg-side{display:flex;flex-direction:column;gap:8px;position:sticky;top:0}
+.ckg-box{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.ckg-box span{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.ckg-box b{font-size:20px;font-weight:700;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ckg-box b small{font-size:12.5px;color:var(--ink-3);font-weight:600}
+.ckg-box.warn{border-color:var(--warn);background:var(--warn-soft)}.ckg-box.warn b{color:var(--warn)}
+.ckg-boxes input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:14px;width:100%;box-sizing:border-box}
+.ckg-hint{font-size:12px}
+@media (max-width:760px){.ckg{grid-template-columns:minmax(0,1fr)}.ckg-side{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.ckg-hint{display:none}}
