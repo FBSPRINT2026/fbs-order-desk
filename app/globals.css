@@ -14908,3 +14908,25 @@ body:has(.dla-bg.dock.og-hidden){padding-right:0}
 .sra-menu button:hover,.sra-menu button[aria-selected=true]{background:color-mix(in srgb,var(--fbs-blue) 7%,var(--surface))}
 .sra-menu small{color:var(--ink-3)}
 .sra-rem{margin-top:10px;font-size:12.5px}
+/* the size runs: what they wrote, a toggle between their garments, the color on it (Oct 26) */
+.sra-bs{flex-direction:row!important;align-items:center;justify-content:space-between;gap:10px}
+.sra-bst{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sra-bst small{font-size:12px;color:var(--ink-3)}
+.sra-bs .sra-yn{width:120px;flex:none}
+.sra-said{font-size:12.5px;color:var(--ink-3)}
+.sra-said i{font-style:normal;color:var(--ink);font-weight:600}
+.sra-gt{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface-2);border-radius:9px;padding:3px}
+.sra-gt button{all:unset;box-sizing:border-box;cursor:pointer;text-align:center;padding:8px 4px;border-radius:7px;font-weight:700;font-size:14px;color:var(--ink-3)}
+.sra-gt button.on{background:var(--surface);color:var(--fbs-blue);box-shadow:0 1px 3px rgba(20,29,43,.14)}
+.sra-gt button.no{opacity:.45}
+.sra-gt button.no.on{opacity:1}
+.sra-other{font-size:12.5px;align-self:flex-start}
+.sra-col{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:0 10px;height:42px}
+.sra-col.rec{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 7%,var(--surface))}
+.sra-col.none{border-color:var(--danger)}
+.sra-sw{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.14);background:var(--surface-2);flex:none}
+.sra-col select{flex:1;min-width:0;height:40px;border:0;background:transparent;font:inherit;font-size:15px;color:var(--ink);appearance:auto}
+.sra-col small{font-size:11.5px;font-weight:700;color:var(--ok);white-space:nowrap}
+.sra-col.rec small{color:var(--warn)}
+.sra-col.none small{color:var(--danger)}
+.sra-all{font-size:12.5px;align-self:flex-start}

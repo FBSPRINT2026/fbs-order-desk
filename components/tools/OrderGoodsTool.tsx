@@ -3,12 +3,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import type { GoodsRow } from "@/lib/ssMatch";
-import { createClient } from "@/lib/supabase/client";
 import type { EODraft } from "@/lib/emailOrderShared";
 import type { Group } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { sizeRank } from "@/lib/sizeOrder";
-import SizeRunsAsk, { type Run, type RunPick } from "@/components/SizeRunsAsk";
+import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
 import { goodsFromGroups, placeGoods } from "@/app/shop/order-goods/actions";
@@ -81,45 +80,11 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
         }
         if (stopped.current) return;
         let groups: Group[] = d.groups || [];
-        // 2. which garment each size run is on, when the email doesn't say: one screen (SizeRunsAsk), their brand
-        // standards offered first
-        const blank = groups.flatMap((x) => x.lines).filter((l) => !String(l.style || "").trim() && (l.color || Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
-        const usual: Record<string, string[]> = {};
-        if (blank.length) {
-          step("Finding the garment…");
-          const sb = createClient();
-          const [{ data: cu }, { data: em }] = await Promise.all([
-            g.customer?.id ? sb.from("customers").select("preferred_goods, company, name").eq("id", g.customer.id).maybeSingle() : Promise.resolve({ data: null }),
-            sb.from("activities").select("from_email, meta").eq("id", activityId).maybeSingle(),
-          ]);
-          const prefs = (((cu as { preferred_goods?: PreferredGood[] } | null)?.preferred_goods) || []).filter((x) => x && x.style);
-          const company = String((cu as { company?: string } | null)?.company || (cu as { name?: string } | null)?.name || "This customer");
-          const fromName = (() => { const n = String(((em as { meta?: { from_name?: string } } | null)?.meta?.from_name) || "").replace(/["']/g, "").trim(); const m = /^([^,@]+),\s*([^,@]+)$/.exec(n); return ((m ? m[2] : n).split(/\s+/).find((w) => w && !/@/.test(w)) || ""); })();
-          const runs: Run[] = blank.map((l) => ({ id: l.id, color: l.color || "", called: l.called || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, v]) => [k, +(v || 0)])), pcs: Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0) }));
-          const out = await waitFor<{ picks: Record<string, RunPick | null>; remember: boolean } | null>((resolve) => setRunsAsk({ runs, prefs, company, sender: fromName, done: resolve }));
-          setRunsAsk(null);
-          const picks = out?.picks || {};
-          groups = groups.map((x) => ({ ...x, lines: x.lines.map((l) => {
-            if (String(l.style || "").trim()) return l;
-            const p = picks[l.id];
-            return p ? { ...l, style: p.style, brand: p.brand || l.brand, garment: l.garment || p.name, called: undefined } : l;
-          }) }));
-          setSkipped(runs.filter((r) => !picks[r.id]).map((r) => [r.called, r.color].filter(Boolean).join(" ") || "a size run"));
-          for (const p of prefs) if (p.colors?.length) usual[p.style.toUpperCase()] = p.colors;
-          // remember: each color on the garment it went on (their brand standards fill it in next time, still asked)
-          if (out?.remember && g.customer?.id) {
-            const next = prefs.map((p) => ({ ...p, colors: [...(p.colors || [])] }));
-            for (const r of runs) {
-              const p = picks[r.id]; if (!p || !r.color) continue;
-              const c = r.color.replace(/\(.*?\)/g, "").trim();
-              for (const x of next) x.colors = x.colors.filter((y) => y.toLowerCase() !== c.toLowerCase() || x.style.toUpperCase() === p.style.toUpperCase());
-              let hit = next.find((x) => x.style.toUpperCase() === p.style.toUpperCase());
-              if (!hit) { const kind = r.called || next[0]?.kind || "Garment"; hit = { id: Math.random().toString(36).slice(2, 10), kind, rank: next.filter((x) => x.kind.toLowerCase() === kind.toLowerCase()).length + 1, style: p.style, brand: p.brand, name: p.name, colors: [], notes: "" }; next.push(hit); }
-              if (!hit.colors.some((y) => y.toLowerCase() === c.toLowerCase())) hit.colors.push(c);
-            }
-            await sb.from("customers").update({ preferred_goods: next }).eq("id", g.customer.id);
-          }
-        }
+        // 2. which garment and color each size run is, when the email doesn't say (SizeRunsAsk: the same step as Create order)
+        if (groups.some((x) => x.lines.some((l) => !String(l.style || "").trim()))) step("Finding the garment…");
+        const gs = await garmentStep(groups, { customerId: g.customer?.id, activityId, ask: (a) => waitFor((resolve) => setRunsAsk({ ...a, done: resolve })).finally(() => setRunsAsk(null)) });
+        groups = gs.groups; const usual = gs.usual;
+        if (gs.asked) setSkipped(gs.skipped);
         if (stopped.current) return;
         // 3. the colors on that blank
         step("Finding the colors…");

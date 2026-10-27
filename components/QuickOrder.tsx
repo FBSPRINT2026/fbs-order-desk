@@ -11,8 +11,7 @@ import { openOrderCheck } from "@/components/tools/OrderReview";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
-import GoodsAsk, { type GoodsItem, type GoodsPick } from "@/components/GoodsAsk";
-import type { PreferredGood } from "@/lib/preferredGoods";
+import SizeRunsAsk, { garmentStep, type RunPick, type RunsAsk } from "@/components/SizeRunsAsk";
 import { rememberOrderNote } from "@/app/shop/ai-actions";
 import { cleanPrintNotes, LOCATIONS, inkNames, locationsFor } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
@@ -105,7 +104,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     return v;
   }
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
-  const [goodsAsk, setGoodsAsk] = useState<{ items: GoodsItem[]; prefs: PreferredGood[]; company: string; done: (a: Record<string, GoodsPick> | null) => void } | null>(null);
+  const [runsAsk, setRunsAsk] = useState<(RunsAsk & { done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void }) | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
   const [pause, setPause] = useState<null | { made: Made | null; i: number; resolve: (v: void) => void }>(null);
@@ -195,52 +194,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // several past jobs in one order (Hutchins T10A + T11A): all of them
     const jobs = (d.reorderJobs || []).map((ref) => (g.past || []).find((p) => p.ref === ref)).filter(Boolean) as PastJob[];
     const jobLabel = (jobs.length > 1 ? jobs.map((j) => j.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")).join(" and ") : (job?.label || part?.jobLabel || "")).replace(/\s*\(Printavo\)$/, "");
-    // the email didn't name the garment (Oct 26, Nick: "read the email cold… can't find anything, ask… we have a preferred
-    // 6210, should I try it? …then try to find the color"): asked here, their Brand standards' preferred goods first;
-    // nothing is filled in on its own. The colors are checked on the picked blank right after.
-    const blank = d.groups.flatMap((x) => x.lines).filter((l) => !String(l.style || "").trim() && (l.color || Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
-    const prefsColors: Record<string, string[]> = {};
-    if (blank.length && g.customer?.id) {
-      step(`${of}Finding the garment…`);
-      const { data: cu } = await createClient().from("customers").select("preferred_goods, company, name").eq("id", g.customer.id).maybeSingle();
-      const prefs = (((cu as { preferred_goods?: PreferredGood[] } | null)?.preferred_goods) || []).filter((x) => x && x.style);
-      const company = String((cu as { company?: string; name?: string } | null)?.company || (cu as { name?: string } | null)?.name || "This customer");
-      // one question per thing they called it ("tees", "hoodies"); a line with no word at all is its own
-      const byKey = new Map<string, GoodsItem>();
-      for (const l of blank) {
-        const k = (l.called || "").toLowerCase().trim() || `line:${l.id}`;
-        const e = byKey.get(k) || { key: k, called: l.called || l.garment || "", colors: [], pcs: 0 };
-        if (l.color && !e.colors.includes(l.color)) e.colors.push(l.color);
-        e.pcs += Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0);
-        byKey.set(k, e);
-      }
-      note(prefs.length ? "The email doesn't say which garment: asking you, with their preferred goods" : "The email doesn't say which garment: asking you");
-      const items = [...byKey.values()];
-      const ans = await askOnce<Record<string, GoodsPick> | null>(`goods:${items.map((x) => x.key).join("|")}`, (resolve) => setGoodsAsk({ items, prefs, company, done: resolve }));
-      setGoodsAsk(null);
-      const picked = ans || {};
-      const remember: PreferredGood[] = [];
-      d = { ...d, groups: d.groups.map((x) => ({ ...x, lines: x.lines.map((l) => {
-        if (String(l.style || "").trim()) return l;
-        const k = (l.called || "").toLowerCase().trim() || `line:${l.id}`;
-        const p = picked[k];
-        if (!p) return l;
-        return { ...l, style: p.style, brand: p.brand || l.brand, garment: l.garment || p.name, called: undefined };
-      }) })) };
-      for (const it of items) {
-        const p = picked[it.key];
-        if (!p) { did.push(`Left without a style: the ${it.called || "garment"} (ask the customer)`); continue; }
-        did.push(`You picked the ${[p.brand, p.style].filter(Boolean).join(" ")} for the ${it.called || "garment"}${p.preferred ? " (their preferred goods)" : ""}`);
-        const pref = prefs.find((x) => x.style.toUpperCase() === p.style.toUpperCase());
-        if (pref?.colors?.length) prefsColors[p.style.toUpperCase()] = pref.colors;
-        if (p.remember && !pref) remember.push({ id: uid(), kind: it.called || "garment", rank: prefs.filter((x) => x.kind.toLowerCase() === (it.called || "garment").toLowerCase()).length + 1, style: p.style, brand: p.brand, name: p.name, colors: it.colors, notes: "" });
-      }
-      if (remember.length) {
-        await createClient().from("customers").update({ preferred_goods: [...prefs, ...remember] }).eq("id", g.customer.id);
-        did.push(`Added to ${company}'s preferred goods: ${remember.map((x) => `${x.style} for ${x.kind}`).join(", ")}`);
-      }
-      guard();
-    }
+    // the email didn't name the garment (Oct 26, Nick: "this exact tool… should be one of the steps in the create order
+    // tool… we go into this whole same talk"): the same step as Order goods (components/SizeRunsAsk.tsx): which garment
+    // and color each size run is, their brand standards offered first; nothing filled in on its own
+    if (d.groups.some((x) => x.lines.some((l) => !String(l.style || "").trim())) && g.customer?.id) step(`${of}Finding the garment…`);
+    const gs = await garmentStep(d.groups, { customerId: g.customer?.id, activityId, ask: (a) => { note(a.prefs.length ? "The email doesn't say which garment: asking you, with their brand standards" : "The email doesn't say which garment: asking you"); return askOnce<{ picks: Record<string, RunPick | null>; remember: boolean } | null>(`runs:${a.runs.map((r) => r.id).join("|")}`, (resolve) => setRunsAsk({ ...a, done: resolve })).finally(() => setRunsAsk(null)); } });
+    guard();
+    d = { ...d, groups: gs.groups };
+    const prefsColors = gs.usual;
+    if (gs.asked) { did.push(...gs.did); if (gs.skipped.length) did.push(`Left without a garment: ${gs.skipped.join(", ")} (ask the customer)`); }
     // the shirt colors: the style's real color names (the closest one when not an exact match)
     step(`${of}Checking the shirt colors…`);
     const cc = await checkColors(d.groups, prefsColors).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
@@ -971,7 +933,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           if (many && m) { finishSteps(); await waitFor<void>((resolve) => setPause({ made: m, i, resolve })); setPause(null); }
         } catch (e) {
           if (e instanceof Cancelled || stopped.current) {
-            setConfirm(null); setHelp(null); setArtAsk(null); setSheetAsk(null);
+            setConfirm(null); setHelp(null); setArtAsk(null); setSheetAsk(null); setRunsAsk(null);
             const ids = [...made0.current]; made0.current = new Set();
             if (ids.length) await discardDraftArt(ids).catch(() => null);
             return;
@@ -1050,7 +1012,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {review && <ReviewConfirm a={review} onCancel={cancel} />}
-        {goodsAsk && <GoodsAsk items={goodsAsk.items} prefs={goodsAsk.prefs} company={goodsAsk.company} onDone={(a) => goodsAsk.done(a)} onCancel={cancel} />}
+        {runsAsk && <SizeRunsAsk runs={runsAsk.runs} prefs={runsAsk.prefs} company={runsAsk.company} sender={runsAsk.sender} onDone={(picks, remember) => runsAsk.done({ picks, remember })} onCancel={cancel} />}
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
