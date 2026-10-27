@@ -8,7 +8,7 @@ import type { EODraft } from "@/lib/emailOrderShared";
 import type { Group } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { sizeRank } from "@/lib/sizeOrder";
-import GoodsAsk, { type GoodsItem, type GoodsPick } from "@/components/GoodsAsk";
+import SizeRunsAsk, { type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
 import { goodsFromGroups, placeGoods } from "@/app/shop/order-goods/actions";
@@ -46,7 +46,7 @@ const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], 
 export default function OrderGoodsTool({ activityId, onClose }: { activityId: string; onClose: () => void }) {
   const [steps, setSteps] = useState<Step[]>([]), [err, setErr] = useState("");
   const [who, setWho] = useState(""), [cust, setCust] = useState<{ id: string; name: string } | null>(null);
-  const [goodsAsk, setGoodsAsk] = useState<{ items: GoodsItem[]; prefs: PreferredGood[]; company: string; done: (a: Record<string, GoodsPick> | null) => void } | null>(null);
+  const [runsAsk, setRunsAsk] = useState<{ runs: Run[]; prefs: PreferredGood[]; company: string; sender: string; done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void } | null>(null);
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null), [skipped, setSkipped] = useState<string[]>([]);
   const [ship, setShip] = useState("40"), [busy, setBusy] = useState(""), [check, setCheck] = useState<{ total: number; expected: string | null; from: string } | null>(null), [sure, setSure] = useState(false);
@@ -81,40 +81,44 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
         }
         if (stopped.current) return;
         let groups: Group[] = d.groups || [];
-        // 2. which blank, when the email doesn't say
+        // 2. which garment each size run is on, when the email doesn't say: one screen (SizeRunsAsk), their brand
+        // standards offered first
         const blank = groups.flatMap((x) => x.lines).filter((l) => !String(l.style || "").trim() && (l.color || Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
         const usual: Record<string, string[]> = {};
         if (blank.length) {
           step("Finding the garment…");
-          const { data: cu } = g.customer?.id ? await createClient().from("customers").select("preferred_goods, company, name").eq("id", g.customer.id).maybeSingle() : { data: null };
+          const sb = createClient();
+          const [{ data: cu }, { data: em }] = await Promise.all([
+            g.customer?.id ? sb.from("customers").select("preferred_goods, company, name").eq("id", g.customer.id).maybeSingle() : Promise.resolve({ data: null }),
+            sb.from("activities").select("from_email, meta").eq("id", activityId).maybeSingle(),
+          ]);
           const prefs = (((cu as { preferred_goods?: PreferredGood[] } | null)?.preferred_goods) || []).filter((x) => x && x.style);
           const company = String((cu as { company?: string } | null)?.company || (cu as { name?: string } | null)?.name || "This customer");
-          const byKey = new Map<string, GoodsItem>();
-          for (const l of blank) {
-            const k = (l.called || "").toLowerCase().trim() || `line:${l.id}`;
-            const e = byKey.get(k) || { key: k, called: l.called || l.garment || "", colors: [], pcs: 0 };
-            if (l.color && !e.colors.includes(l.color)) e.colors.push(l.color);
-            e.pcs += Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0);
-            byKey.set(k, e);
-          }
-          const items = [...byKey.values()];
-          const ans = (await waitFor<Record<string, GoodsPick> | null>((resolve) => setGoodsAsk({ items, prefs, company, done: resolve }))) || {};
-          setGoodsAsk(null);
-          const left: string[] = [], remember: PreferredGood[] = [];
+          const fromName = (() => { const n = String(((em as { meta?: { from_name?: string } } | null)?.meta?.from_name) || "").replace(/["']/g, "").trim(); const m = /^([^,@]+),\s*([^,@]+)$/.exec(n); return ((m ? m[2] : n).split(/\s+/).find((w) => w && !/@/.test(w)) || ""); })();
+          const runs: Run[] = blank.map((l) => ({ id: l.id, color: l.color || "", called: l.called || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, v]) => [k, +(v || 0)])), pcs: Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0) }));
+          const out = await waitFor<{ picks: Record<string, RunPick | null>; remember: boolean } | null>((resolve) => setRunsAsk({ runs, prefs, company, sender: fromName, done: resolve }));
+          setRunsAsk(null);
+          const picks = out?.picks || {};
           groups = groups.map((x) => ({ ...x, lines: x.lines.map((l) => {
             if (String(l.style || "").trim()) return l;
-            const p = ans[(l.called || "").toLowerCase().trim() || `line:${l.id}`];
+            const p = picks[l.id];
             return p ? { ...l, style: p.style, brand: p.brand || l.brand, garment: l.garment || p.name, called: undefined } : l;
           }) }));
-          for (const it of items) {
-            const p = ans[it.key];
-            if (!p) { left.push(it.called || "a garment"); continue; }
-            const pref = prefs.find((x) => x.style.toUpperCase() === p.style.toUpperCase());
-            if (pref?.colors?.length) usual[p.style.toUpperCase()] = pref.colors;
-            if (p.remember && !pref) remember.push({ id: Math.random().toString(36).slice(2, 10), kind: it.called || "garment", rank: prefs.filter((x) => x.kind.toLowerCase() === (it.called || "garment").toLowerCase()).length + 1, style: p.style, brand: p.brand, name: p.name, colors: it.colors, notes: "" });
+          setSkipped(runs.filter((r) => !picks[r.id]).map((r) => [r.called, r.color].filter(Boolean).join(" ") || "a size run"));
+          for (const p of prefs) if (p.colors?.length) usual[p.style.toUpperCase()] = p.colors;
+          // remember: each color on the garment it went on (their brand standards fill it in next time, still asked)
+          if (out?.remember && g.customer?.id) {
+            const next = prefs.map((p) => ({ ...p, colors: [...(p.colors || [])] }));
+            for (const r of runs) {
+              const p = picks[r.id]; if (!p || !r.color) continue;
+              const c = r.color.replace(/\(.*?\)/g, "").trim();
+              for (const x of next) x.colors = x.colors.filter((y) => y.toLowerCase() !== c.toLowerCase() || x.style.toUpperCase() === p.style.toUpperCase());
+              let hit = next.find((x) => x.style.toUpperCase() === p.style.toUpperCase());
+              if (!hit) { const kind = r.called || next[0]?.kind || "Garment"; hit = { id: Math.random().toString(36).slice(2, 10), kind, rank: next.filter((x) => x.kind.toLowerCase() === kind.toLowerCase()).length + 1, style: p.style, brand: p.brand, name: p.name, colors: [], notes: "" }; next.push(hit); }
+              if (!hit.colors.some((y) => y.toLowerCase() === c.toLowerCase())) hit.colors.push(c);
+            }
+            await sb.from("customers").update({ preferred_goods: next }).eq("id", g.customer.id);
           }
-          if (remember.length && g.customer?.id) await createClient().from("customers").update({ preferred_goods: [...prefs, ...remember] }).eq("id", g.customer.id);
-          setSkipped(left);
         }
         if (stopped.current) return;
         // 3. the colors on that blank
@@ -146,7 +150,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
     onTouchStart: (e: React.TouchEvent) => { touch.current = e.touches[0].clientY; },
     onTouchEnd: (e: React.TouchEvent) => { const y0 = touch.current; touch.current = null; if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; if (dir === "down" && dy > 60) setMin(true); if (dir === "up" && dy < -30) setMin(false); },
   });
-  const status = err ? "Stopped: " + err.slice(0, 60) : goodsAsk ? "Waiting for you: which blank?" : colorAsk ? "Waiting for you: which color?" : placed ? `Ordered: ${placed}` : rows ? `Ready: ${rows.reduce((a, x) => a + x.qty, 0).toLocaleString()} pcs to check and order` : steps.find((s) => s.state === "doing")?.label || "Working…";
+  const status = err ? "Stopped: " + err.slice(0, 60) : runsAsk ? "Waiting for you: which garment?" : colorAsk ? "Waiting for you: which color?" : placed ? `Ordered: ${placed}` : rows ? `Ready: ${rows.reduce((a, x) => a + x.qty, 0).toLocaleString()} pcs to check and order` : steps.find((s) => s.state === "doing")?.label || "Working…";
 
   const lines = rows || [];
   const blanks = [...new Map(lines.map((x) => [`${x.brand}|${x.style}|${x.color}`, x])).keys()];
@@ -167,7 +171,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
   return (<>
     {min && <button type="button" className="og-mini" onClick={() => setMin(false)} {...swipe("up")} aria-label="Order goods: open it again">
       <span className="og-grab" aria-hidden />
-      <span className={"og-dot" + (goodsAsk || colorAsk ? " ask" : rows ? " ok" : "")} aria-hidden />
+      <span className={"og-dot" + (runsAsk || colorAsk ? " ask" : rows ? " ok" : "")} aria-hidden />
       <span className="og-mt"><b>Order goods</b><small>{status}</small></span>
     </button>}
     <div className={"dla-bg dock og-bg" + (min ? " og-hidden" : "")} role="dialog" aria-label="Order goods" aria-hidden={min || undefined}>
@@ -179,7 +183,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
         </div>
         <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}</span></li>)}</ol>
         {err && <div className="err">{err}</div>}
-        {goodsAsk && <GoodsAsk items={goodsAsk.items} prefs={goodsAsk.prefs} company={goodsAsk.company} onDone={(a) => goodsAsk.done(a)} onCancel={cancel} />}
+        {runsAsk && <SizeRunsAsk runs={runsAsk.runs} prefs={runsAsk.prefs} company={runsAsk.company} sender={runsAsk.sender} onDone={(picks, remember) => runsAsk.done({ picks, remember })} onCancel={cancel} />}
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {rows && <div className="og-list">
           {!lines.length ? <p className="faint">Nothing to order: no garment with a style and sizes.{skipped.length ? ` Left for now: ${skipped.join(", ")}.` : ""}</p> : <>
