@@ -10031,6 +10031,13 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .mk-area.edit{pointer-events:auto;cursor:move;background:rgba(10,123,166,.05);border-color:#0a7ba6;touch-action:none}
 .mk-area.edit:hover{background:rgba(10,123,166,.1)}
 .mk-area-h{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#0a7ba6;border:2px solid #fff;cursor:nwse-resize;box-shadow:0 1px 3px rgba(0,0,0,.3);touch-action:none}
+/* a custom spot's area: dragged onto the spot and sized by its corners (Oct 27) */
+.mk-area.custom{pointer-events:auto;cursor:move;touch-action:none;background:rgba(10,123,166,.08);border:1.5px dashed var(--fbs-blue,#0a7ba6)}
+.mk-area.custom:hover{background:rgba(10,123,166,.14)}
+.mk-area-tag{position:absolute;left:0;bottom:100%;margin-bottom:3px;font-size:11px;font-weight:700;color:#fff;background:var(--fbs-blue,#0a7ba6);padding:1px 6px;border-radius:4px;white-space:nowrap;pointer-events:none}
+.mk-area-c{position:absolute;width:12px;height:12px;border-radius:3px;background:#fff;border:2px solid var(--fbs-blue,#0a7ba6);touch-action:none}
+.mk-area-c.nw{left:-7px;top:-7px;cursor:nwse-resize}.mk-area-c.ne{right:-7px;top:-7px;cursor:nesw-resize}
+.mk-area-c.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.mk-area-c.se{right:-7px;bottom:-7px;cursor:nwse-resize}
 .mk-areanote{display:block;text-align:center;font-size:12px;margin:2px 8px 0;color:var(--ink-2)}
 .mk-areanote .linkbtn{font-size:12px}
 

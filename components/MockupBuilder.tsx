@@ -1803,6 +1803,45 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
+  /** a logo dragged on the photo (photo pixels) */
+  const moveOn = (v: View, id: string, dx: number, dy: number) => {
+    const im = imprints.find((x) => x.id === id);
+    const p = im && place(im, v);
+    if (p && p.clip) {
+      // sleeve: turn the drag into along-the-sleeve moves
+      const a = (-p.rot * Math.PI) / 180;
+      [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
+    }
+    if (p) { dx /= p.k; dy /= p.k; }
+    // the first color's drag moves the logo on every color; another color's drag is its own fine-tune on top
+    // of that, kept for that color only (Oct 22, Nick: "go into each individual one… drag… it just stays there")
+    const key = !line || !anchorLine || line.id === anchorLine.id ? id : `${line.id}:${id}`;
+    setOffsets((o) => ({ ...o, [key]: { dx: (o[key]?.dx || 0) + dx, dy: (o[key]?.dy || 0) + dy } }));
+  };
+  /**
+   * A custom spot's dashed box pulled by a corner (Oct 27, Nick: "click into the dashed line… make it be the whole front
+   * pocket… automatically that's my image area… then underneath it put the logo size"). The opposite corner stays put,
+   * the area's inches fill in, and the logo moves with the box's middle so it stays centered in it.
+   */
+  const sizeArea = (v: View, id: string, c: string, dx: number, dy: number) => {
+    const im = imprints.find((x) => x.id === id); if (!im?.area) return;
+    const p = place(im, v); if (!p.wIn || !p.w) return;
+    const ppi = p.w / p.wIn, ex = c.includes("e") ? 1 : -1, sy = c.includes("s") ? 1 : -1;
+    const w = Math.min(30, Math.max(0.5, im.area.w + (ex * dx) / ppi)), h = Math.min(30, Math.max(0.5, im.area.h + (sy * dy) / ppi));
+    const mx = ((w - im.area.w) * ppi * ex) / 2, my = ((h - im.area.h) * ppi * sy) / 2;
+    if (!mx && !my) return;
+    setImprints((xs) => xs.map((x) => (x.id === id && x.area ? { ...x, area: { ...x.area, w, h } } : x)));
+    moveOn(v, id, mx, my);
+  };
+  /** a typed logo size (W or H, proportions locked), capped at the biggest print this spot takes */
+  const typeSize = (im: Imprint, v: string, dim: "wide" | "tall") => {
+    let t = v.replace(/[^\d.]/g, "");
+    // cap at the biggest print this side of the shirt takes (sleeves: 3.5" x 3.5"); the location follows when you leave the box
+    const r = ratioIm(im) || 0;
+    const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
+    if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
+    guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "", sizeFrom: "staff" as const } : x))));
+  };
   // imprint tabs: front, back, sleeves
   const sideOf = (loc: string): Side => (viewsFor(loc).length > 1 ? "sleeve" : spotFor(loc).view);
   const curTab: Side = tab || (["front", "back", "sleeve"] as Side[]).find((t) => imprints.some((im) => sideOf(im.location) === t)) || "front";
@@ -3678,21 +3717,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   ); })()}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : stockSvg("tee", v)} label={v}
-                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
-                onMove={(id, dx, dy) => {
-                  const im = imprints.find((x) => x.id === id);
-                  const p = im && place(im, v);
-                  if (p && p.clip) {
-                    // sleeve: turn the drag into along-the-sleeve moves
-                    const a = (-p.rot * Math.PI) / 180;
-                    [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
-                  }
-                  if (p) { dx /= p.k; dy /= p.k; }
-                  // the first color's drag moves the logo on every color; another color's drag is its own fine-tune on top
-                  // of that, kept for that color only (Oct 22, Nick: "go into each individual one… drag… it just stays there")
-                  const key = !line || !anchorLine || line.id === anchorLine.id ? id : `${line.id}:${id}`;
-                  setOffsets((o) => ({ ...o, [key]: { dx: (o[key]?.dx || 0) + dx, dy: (o[key]?.dy || 0) + dy } }));
-                }}
+                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust, custom: im.area && isCustomSpot(im.location) ? `${im.location} · ${+im.area.w.toFixed(2)}" × ${+im.area.h.toFixed(2)}"` : undefined }))}
+                onMove={(id, dx, dy) => moveOn(v, id, dx, dy)}
+                onCustomArea={(id, c, dx, dy) => sizeArea(v, id, c, dx, dy)}
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im, v);
@@ -3939,11 +3966,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     {im.area && <div className="mk-custom">
                       <label><span className="lbl">Custom location</span><input type="text" value={im.location} placeholder="Front pocket" onChange={(e) => { const v = e.target.value.slice(0, 40); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: v } : x))); }} /></label>
                       <div className="mk-custom-r">
-                        <label><span className="lbl">Area W&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={im.area.w} onChange={(e) => { const w = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, w } } : x))); }} /></label>
-                        <label><span className="lbl">Area H&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={im.area.h} onChange={(e) => { const h = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, h } } : x))); }} /></label>
+                        <label><span className="lbl">Area W&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={+im.area.w.toFixed(2)} onChange={(e) => { const w = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, w } } : x))); }} /></label>
+                        <label><span className="lbl">Area H&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={+im.area.h.toFixed(2)} onChange={(e) => { const h = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, h } } : x))); }} /></label>
                         <label><span className="lbl">Side</span><select value={im.area.view || "front"} onChange={(e) => { const view = e.target.value as "front" | "back"; setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, view } } : x))); setTab(view); }}><option value="front">Front</option><option value="back">Back</option></select></label>
                       </div>
-                      <span className="faint">The area is the dashed box: drag the logo onto the spot on the picture, and set the logo&apos;s size below.</span>
+                      <span className="faint">Drag the dashed box on the picture onto the spot and pull its corners to fit it: the area fills in here.</span>
+                      {(() => { const tall = /tall/i.test(im.size), typed = (im.size.match(/^([\d.]+)/) || [])[1] || ""; return (
+                        <div className="mk-custom-r">
+                          <label><span className="lbl">Logo W&quot;</span><input type="text" inputMode="decimal" placeholder={p.wIn ? p.wIn.toFixed(2) : ""} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => typeSize(im, e.target.value, "wide")} onBlur={() => settleTyped(im)} /></label>
+                          <label><span className="lbl">Logo H&quot;</span><input type="text" inputMode="decimal" placeholder={p.hIn ? p.hIn.toFixed(2) : ""} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => typeSize(im, e.target.value, "tall")} onBlur={() => settleTyped(im)} /></label>
+                          <span />
+                        </div>
+                      ); })()}
+                      {p.wIn > im.area.w + 0.01 || (p.hIn || 0) > im.area.h + 0.01 ? <span className="err">The logo is bigger than the area ({im.area.w.toFixed(2)}&quot; × {im.area.h.toFixed(2)}&quot;).</span> : null}
                     </div>}
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
                     <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
@@ -4042,14 +4077,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         {(() => {
                           const tall = /tall/i.test(im.size);
                           const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
-                          const set = (v: string, dim: "wide" | "tall") => {
-                            let t = v.replace(/[^\d.]/g, "");
-                            // cap at the biggest print this side of the shirt takes (sleeves: 3.5" x 3.5"); the location follows when you leave the box
-                            const r = ratioIm(im) || 0;
-                            const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
-                            if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
-                            guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "", sizeFrom: "staff" as const } : x))));
-                          };
+                          const set = (v: string, dim: "wide" | "tall") => typeSize(im, v, dim);
                           return (
                             <>
                               <label title="Width (proportions locked)">W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} onBlur={() => settleTyped(im)} />&quot;</label>
@@ -4380,7 +4408,9 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, onSelect, areaEdit, onArea, areaNote, neckLine }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, onSelect, areaEdit, onArea, areaNote, neckLine, onCustomArea }: {
+  /** a custom spot's dashed box pulled by a corner (photo pixels); dragging the box itself moves its logo (onMove) */
+  onCustomArea?: (id: string, corner: string, dx: number, dy: number) => void;
   /** the bottom of the sewn neckline on this photo (shown with the print areas; drag it to fix it, saved for this photo) */
   neckLine?: { y: number; tag: string; onSet: (y: number) => void };
   /** the dashed print areas can be dragged (moves this style's prints) and resized from the corner */ areaEdit?: boolean;
@@ -4388,14 +4418,14 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
   /** zoom and shift that make this photo's shirt fill the frame like the reference tee (normOf) */ norm?: { z: number; tx: number; ty: number };
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
-  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string; /** can't be dragged or sized (a visual-only reorder until "Adjust") */ locked?: boolean }[];
+  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string; /** can't be dragged or sized (a visual-only reorder until "Adjust") */ locked?: boolean; /** a custom spot: its label; its box is dragged and sized on the photo */ custom?: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
   /** a logo was clicked: the Imprints panel shows it */ onSelect?: (id: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize" | "neck"; w: number; el?: HTMLElement } | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize" | "neck" | "cArea" | "cCorner"; w: number; el?: HTMLElement; c?: string } | null>(null);
   const [neckDy, setNeckDy] = useState(0);
   const [sel, setSel] = useState("");
   const [tip, setTip] = useState("");
@@ -4441,6 +4471,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           const d = drag.current; if (!d) return;
           const f = k();
           if (d.mode === "neck") { setNeckDy((e.clientY - d.sy) / f); return; }
+          if (d.mode === "cArea") { onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
+          if (d.mode === "cCorner") { onCustomArea?.(d.id, d.c || "se", (e.clientX - d.x) / f, (e.clientY - d.y) / f); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "area") { onArea?.((e.clientX - d.x) / f, (e.clientY - d.y) / f, 1); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "areaSize") { const dw = (e.clientX - d.x) / f; if (d.w + dw > 40) { onArea?.(0, 0, (d.w + dw) / d.w); d.w += dw; } drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
@@ -4461,7 +4493,15 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
         onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg") || (e.target as HTMLElement).classList.contains("mk-norm")) setSel(""); }}>
         <div className="mk-norm" style={norm && (norm.z !== 1 || norm.tx || norm.ty) ? { transform: `translate(${(norm.tx / PHOTO_W) * 100}%, ${(norm.ty / PHOTO_H) * 100}%) scale(${norm.z})` } : undefined}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
-        {grid && items.map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit && !it.p.clip ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
+        {items.filter((it) => it.custom && !it.p.clip).map((it) => (
+          <div key={"c" + it.id} className="mk-area custom" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%` }}
+            title="Drag the box onto the spot; pull a corner to size the area"
+            onPointerDown={(e) => { if (it.locked) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "cArea", w: 0 }; }}>
+            <span className="mk-area-tag">{it.custom}</span>
+            {!it.locked && ["nw", "ne", "sw", "se"].map((c) => <span key={c} className={"mk-area-c " + c} onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "cCorner", w: 0, c }; }} />)}
+          </div>
+        ))}
+        {grid && items.filter((it) => !it.custom || it.p.clip).map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit && !it.p.clip ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
           title={areaEdit && !it.p.clip ? "Drag to line the print area up on this shirt (saved for this style). Drag the corner to size it." : undefined}
           onPointerDown={areaEdit && !it.p.clip ? (e) => { if ((e.target as HTMLElement).closest(".mk-art")) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "area", w: 0 }; } : undefined}>
           {areaEdit && !it.p.clip && <span className="mk-area-h" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "areaSize", w: it.p.area.w }; }} />}
