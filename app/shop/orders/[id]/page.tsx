@@ -287,7 +287,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
   }
   // signed links for the saved mockup thumbnails on each group
-  const thumbKey = (o?.groups || []).flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path), ...g.imprints.map((d) => d.shownArt || "").filter(Boolean), ...g.imprints.map((d) => d.supplied?.picture?.path || "").filter(Boolean)]).join("|");
+  const thumbKey = (o?.groups || []).flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path), ...g.imprints.map((d) => d.shownArt || "").filter(Boolean), ...g.imprints.map((d) => d.supplied?.picture?.path || "").filter(Boolean), ...g.imprints.map((d) => d.placeRef?.path || "").filter(Boolean)]).join("|");
   useEffect(() => {
     const paths = thumbKey ? thumbKey.split("|").filter((p) => !thumbUrls[p]) : [];
     if (!paths.length) return;
@@ -1561,7 +1561,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? () => setCustArt(gi) : undefined}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onRemoveMockup={() => void removeMockup(gi)}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

@@ -192,6 +192,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Inbox → Create order: build and save this group's mockup by itself (the art at the size and place the AI read from
    *  the customer's mockup, one-color prints in their ink), then go on to the next group, then the order */
   const auto = sp.get("auto") === "1";
+  // Add logo (Oct 27, Nick: "the same exact thing like we do create a mockup, except it'll just be the close-ups… you
+  // won't see the garment… this works great for backpacks"): the logo, its size, spot and threads, on the close-ups only;
+  // the saved pictures are the close-ups on each thread's garment color, one per thread (not one per garment)
+  const logoOnly = sp.get("logo") === "1";
   // made again out of sight after the order check changed the art (OrderReview): save, tell the page, stay put
   const quiet = auto && sp.get("quiet") === "1";
   /** opened from an email (Inbox → Edit details): carried on to the order, which offers "Save & back to email" */
@@ -1599,6 +1603,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const neckSize = curGroup ? mainSize([curGroup]) : "M";
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
   /** The colors printed at a location: each logo color with the ink it's set to (or as uploaded), else the imprint's typed inks. */
+  /** a garment color's threads / inks across the prints, in words (Add logo's picture titles) */
+  const inkListFor = (l: Line) => [...new Set(imprints.flatMap((im) => { const m = Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {}; return inkList(im).map((t) => m[t.name] || t.name); }))].join(", ");
   const inkList = (im: Imprint): { hex: string; name: string }[] => {
     const pt = paints[im.id];
     if (pt && pt.design === im.design_id && pt.sources.length) {
@@ -2204,7 +2210,52 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   /** Draw one garment color with every imprint, plus a spec strip, as a PNG. */
   /** bare = just the shirt photos with the art (the thumbnail on the order), no title or spec lines. */
+  /** the logo on its spot with no garment (Add logo): a square of the garment's color per print, the logo at its real
+   *  size inside the spot's max area, its size and threads written under it */
+  async function renderLogo(l: Line, bare = false): Promise<Blob> {
+    const darkHex = (h: string) => { const n = parseInt((h || "#999999").replace("#", ""), 16); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 < 0.45; };
+    const ims = imprints.filter((im) => designOf(im));
+    const cell = 560, pad = bare ? 10 : 24, top = bare ? pad : 70, foot = bare ? 0 : 58;
+    const W = pad * 2 + Math.max(1, ims.length) * cell + Math.max(0, ims.length - 1) * pad, H = top + cell + foot + pad;
+    const S = 2, c = document.createElement("canvas"); c.width = W * S; c.height = H * S;
+    const x = c.getContext("2d")!; x.scale(S, S);
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
+    if (!bare) {
+      x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
+      x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Logo"}`, pad, 36);
+      x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
+      x.fillText(`Logo mockup · ${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? ` — ${l.color}` : ""}`, pad, 60);
+    }
+    const hex = shirtHex(l);
+    for (const [i, im] of ims.entries()) {
+      const x0 = pad + i * (cell + pad), y0 = top;
+      x.fillStyle = hex; x.fillRect(x0, y0, cell, cell);
+      const sp0 = spotFor(im.location), r = ratioIm(im) || 0.6, wIn = printWidth(im, im.location, ratioIm(im)), hIn = wIn * r;
+      const boxIn = Math.max(sp0.maxW || 4, sp0.maxH || 4, wIn, hIn) * 1.25, ppi = cell / boxIn;
+      // the spot's max area, dashed
+      const aw = (sp0.maxW || wIn) * ppi, ah = (sp0.maxH || hIn) * ppi;
+      x.setLineDash([8, 6]); x.lineWidth = 2; x.strokeStyle = darkHex(hex) ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.35)";
+      x.strokeRect(x0 + (cell - aw) / 2, y0 + (cell - ah) / 2, aw, ah); x.setLineDash([]);
+      const u = artUrl(im, l);
+      if (u) {
+        const img = await loadImg(u).catch(() => null);
+        if (img) { const w = wIn * ppi, h = hIn * ppi; x.drawImage(img, x0 + (cell - w) / 2, y0 + (cell - h) / 2, w, h); }
+      }
+      x.font = "700 14px Helvetica, Arial, sans-serif"; x.fillStyle = darkHex(hex) ? "#ffffff" : "#141D2B";
+      x.fillText(im.location.toUpperCase(), x0 + 12, y0 + 24);
+      x.font = "13px Helvetica, Arial, sans-serif";
+      x.fillText(`max ${sp0.maxW}" × ${sp0.maxH}"`, x0 + 12, y0 + cell - 14);
+      if (!bare) {
+        x.fillStyle = "#141D2B"; x.font = "700 15px Helvetica, Arial, sans-serif";
+        x.fillText(`${wIn.toFixed(2)}" W × ${hIn.toFixed(2)}" H · ${im.drop ? `${im.drop}" drop` : "standard drop"}`, x0, y0 + cell + 24);
+        x.font = "14px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
+        x.fillText(inkList(im).map((t) => t.name).join(", ").slice(0, 80), x0, y0 + cell + 46);
+      }
+    }
+    return await new Promise<Blob>((res) => c.toBlob((b) => res(b!), bare ? "image/jpeg" : "image/png", 0.9));
+  }
   async function render(l: Line, bare = false): Promise<Blob> {
+    if (logoOnly) return renderLogo(l, bare);
     // the bare picture (order screen, work order, invoice, review page) is as big as the proof (Oct 16, Nick: "we need
     // good resolution, high quality"): about 1,240 px wide per view, saved as a JPEG so it stays light (~250 KB)
     const k = 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
@@ -2894,9 +2945,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // a mockup saved to a draft order makes it an order (Oct 24: saving commits; the mockup needs an order to belong to)
       if (orderId) { const c = await sb.rpc("order_commit", { p_id: orderId }); if (c.error) throw new Error(c.error.message); }
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
-      for (const l of lines.filter((z) => z.style || z.color)) {
+      // Add logo: one picture per thread (the lines whose color changes the same way share it), not one per garment
+      const threadKey = (l: Line) => imprints.map((im) => JSON.stringify(Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {})).join("|");
+      const toSave = lines.filter((z) => z.style || z.color).filter((l, i, all) => !logoOnly || all.findIndex((y) => threadKey(y) === threadKey(l)) === i);
+      for (const l of toSave) {
         const blob = await render(l);
-        const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
+        const title = `${groupName || "Mockup"} — ${logoOnly ? `Logo · ${inkListFor(l)}` : `${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`}`.trim();
         const path = orderId ? `${orderId}/mockup-${Date.now()}-${uid().slice(0, 6)}.png` : `mockups/${customerId}/${Date.now()}-${uid().slice(0, 6)}.png`;
         const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
         if (up.error) throw new Error(up.error.message);
@@ -2945,7 +2999,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
   // a garment not in any catalog with its look read off the customer's sheet (the Helper's Draw this blank, or Create
   // order's reading: Oct 27, Nick on Peter Millar's Ridge Vest, "I don't have Peter Millar… I've got to draw that") is drawn
-  const ready = !!customerId && lines.some((l) => l.style.trim() && (garmentFor(l) || !!l.own || !!l.look));
+  const ready = !!customerId && (logoOnly ? lines.some((l) => (l.style || l.color || "").trim()) : lines.some((l) => l.style.trim() && (garmentFor(l) || !!l.own || !!l.look)));
   // a size bigger than the smallest size ordered can take (a 9.5" front on a 2T-4T run) is brought down to the
   // largest that fits, and the print says why (the note goes to the order with the mockup)
   useEffect(() => {
@@ -3372,7 +3426,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         );
       })()}
       <div className="page-head mk-head">
-        <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
+        <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `${logoOnly ? "Logo" : "Mockup"} · ${groupName}` : "Mockup Creator"}</h1></div>
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) { baseSig.current = sigNowRef.current(); setMsg("Order updated."); } }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{<span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
           {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
           <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && !lock && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
@@ -3562,7 +3616,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             );
           })}
-      <div className={"mk mk-" + mode} ref={mkRef}>
+      <div className={"mk mk-" + mode + (logoOnly ? " mk-logo" : "")} ref={mkRef}>
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           {runSizes.length > 1 && (
@@ -3655,7 +3709,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
                 const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
                 return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
-              }).map(({ im }, i) => closeUp(im, cuSize, i === 0))}
+              }).map(({ im }, i) => closeUp(im, logoOnly ? Math.max(cuSize, 340) : cuSize, i === 0 && !logoOnly))}
             </div>
           </div>
           {designerFor && (

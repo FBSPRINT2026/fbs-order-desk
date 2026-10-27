@@ -41,6 +41,7 @@ type Props = {
   onLookup?: (style: string, styleID?: number, supplier?: string) => Promise<Garment | null>;
   designs?: Design[];
   onMockup?: () => void;
+  /** Add logo: the Mockup Creator with only the close-ups (Oct 27) */ onLogo?: () => void;
   /** take the group's mockup off the order to make a new one (archived, not deleted; Oct 21, Nick: #40091) */
   onRemoveMockup?: () => void;
   /** why a mockup can't be made yet (no customer / no garment) */
@@ -82,7 +83,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -703,10 +704,12 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
             // group five screens long)
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
-            : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture; const u = pr ? thumbUrls?.[pr.path] : "";
-                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>Placement reference · customer supplied transfers</small></div> : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>; })()}
+            : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
+                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+          {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
+          {onLogo && <button className="btn sm" type="button" title="The logo, its size, spot and thread on close-ups only: no garment pictures (backpacks, odd garments, many styles)" onClick={() => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onLogo(); }}>Add logo</button>}
           {onCustomerArt && <button className="btn sm ghost mk-cust" type="button" onClick={onCustomerArt} title="Bring a mockup from another of their orders, or one of their logos, onto this group">Customer artwork</button>}
           {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup off the order (it's archived, not deleted) so you can make a new one"
             onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup?" : "Remove mockup"}</button>}
@@ -802,6 +805,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                     <span><b>{confirmTitle(d.confirm.why)}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks">{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}
                 </div>}
+                {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 <div className="imp-art" hidden={!!d.supplied}>
                       {!(onMockup && !g.mockupSkipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
@@ -1547,6 +1551,48 @@ function TagTile({ set, size, shirtHex }: { set: NeckLabelSet; size: string; shi
  * in there where it came from, like DTF Dallas… the order number"): who made them, their order number, and the
  * placement reference (their mockup). A PDF's first page is made into the picture the order and the work order show.
  */
+/** a placement reference picked from a file: stored as it is, a PDF also made into a picture of its first page */
+async function putPlacement(file: Blob, name: string, keepFile?: string): Promise<{ path: string; name: string; file: string }> {
+  const sb = createClient(), key = `designs/placement-${crypto.randomUUID().slice(0, 8)}`;
+  const safe = name.replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, "_").slice(-90) || "placement";
+  const pdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
+  let file0 = keepFile || "";
+  if (!keepFile) { const up = await sb.storage.from("proofs").upload(`${key}/${safe}`, file, { contentType: file.type || undefined }); if (up.error) throw new Error(up.error.message); file0 = `${key}/${safe}`; }
+  let pic = pdf ? "" : file0;
+  if (pdf) {
+    const { pdfPicture } = await import("@/lib/printavoArt");
+    const c = await pdfPicture(await file.arrayBuffer(), 1600);
+    const png = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+    if (png) { const to = `${key}/${safe.replace(/\.[^.]+$/, "")}.png`; const up = await sb.storage.from("proofs").upload(to, png, { contentType: "image/png" }); if (!up.error) pic = to; }
+  }
+  return { path: pic, name, file: file0 };
+}
+
+/** the customer's picture of where the logo goes, on any print (Oct 27, Nick) */
+function PlaceRefRow({ d, onChange, url }: { d: Imprint; onChange: (fn: (im: Imprint) => void) => void; url: (path: string) => string }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const inRef = useRef<HTMLInputElement>(null);
+  const pic = d.placeRef?.path ? url(d.placeRef.path) : "";
+  const pick = async (f: File) => {
+    setBusy(true); setErr("");
+    try { const r = await putPlacement(f, f.name); onChange((im) => { im.placeRef = r; }); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Couldn't upload it."); }
+    setBusy(false);
+  };
+  return (
+    <div className="imp-pref">
+      <span className="imp-l">Placement reference</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {pic && <img src={pic} alt="Placement reference" />}
+      {d.placeRef && <span className="faint imp-pref-n">{d.placeRef.name}</span>}
+      <button type="button" className="btn sm ghost" disabled={busy} onClick={() => inRef.current?.click()}>{busy ? "Uploading…" : d.placeRef ? "Replace" : "Add their placement picture"}</button>
+      {d.placeRef && <button type="button" className="btn sm ghost" onClick={() => onChange((im) => { im.placeRef = undefined; })}>Remove</button>}
+      <input ref={inRef} type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pick(f); }} />
+      {err && <span className="err">{err}</span>}
+    </div>
+  );
+}
+
 function SuppliedBox({ d, onChange, url }: { d: Imprint; onChange: (fn: (im: Imprint) => void) => void; url: (path: string) => string }) {
   const sup = d.supplied || {};
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");

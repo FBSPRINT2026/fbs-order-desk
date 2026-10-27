@@ -39,7 +39,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     // ours first; the customer's own mockup only when we haven't made one
     // customer supplied transfers: their placement reference is the mockup (Oct 27, Nick: "that's what they should see on
     // top of the work order")
-    const placed = g.imprints.map((d) => d.supplied?.picture?.path || "").filter(Boolean);
+    const placed = g.imprints.map((d) => d.supplied?.picture?.path || d.placeRef?.path || "").filter(Boolean);
     const all = g.mockupThumbs?.length ? g.mockupThumbs : placed.length ? placed : (g.customerMockups || []).map((m) => m.path);
     return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, 1);
   });
