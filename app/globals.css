@@ -12228,6 +12228,14 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-help.closed .panel-h{border-bottom:0}
 .mk-help-t{margin:0 0 8px;font-size:12.5px;line-height:1.45}
 .mk-help-d{font-size:12px;margin-left:8px}
+/* the Helper's features list (Oct 27) */
+.mk-help-feats-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.mk-help-feats{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:10px}
+.mk-help-feats li{display:flex;gap:10px;align-items:flex-start}
+.mk-help-feats svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mk-help-feats span{display:flex;flex-direction:column;min-width:0}
+.mk-help-feats b{font-size:14px;font-weight:700;color:var(--ink)}
+.mk-help-feats small{font-size:12.5px;color:var(--ink-3)}
 .mk-help-f{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;font-size:13px;min-width:0}
 .mk-help-f b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .mk-help-f .lc-link{margin-left:auto;flex:none}

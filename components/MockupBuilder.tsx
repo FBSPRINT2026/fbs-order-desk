@@ -131,6 +131,15 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** the Helper's features, listed before a file is dropped in (staff-only ones hidden in the portal) */
+const HELP_FEATS: { t: string; d: string; icon: string; staff?: boolean }[] = [
+  { t: "Remove art from a t-shirt", d: "Front, back and sleeves, with size and drop", icon: "M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.1 7.9 20 18M8.1 16.1 20 6" },
+  { t: "Draw a blank garment", d: "Any garment we don't stock, from their photo", icon: "M9 3 4 6l2 5 2-1v11h8V10l2 1 2-5-5-3a3 3 0 0 1-6 0Z", staff: true },
+  { t: "Read the inks", d: "PMS colors written on the sheet", icon: "M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1 3.7c.6.6.3 2.3-3 2.3ZM7.5 11h.01M12 7.5h.01M16.5 11h.01" },
+  { t: "Take out the shirt color", d: "So the garment shows through the art", icon: "M19 20H8.5l-4.2-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5 5a1 1 0 0 1 0 1.4L12 20M18 13.3 11.7 7" },
+  { t: "Keep their file", d: "Saved to Production files on the order", icon: "M14 3v4a1 1 0 0 0 1 1h4M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2ZM9 15l2 2 4-4", staff: true },
+];
+
 /** a picture as a JPEG data URL, at most `max` pixels on its long side (a cut of it when `box` is given, as fractions) */
 async function jpegOf(src: string, max = 1400, box?: number[]) {
   const im = await loadImg(src);
@@ -4152,9 +4161,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               <div className="panel-h"><h2>Helper</h2><button type="button" className="lc-link" onClick={() => setHelpOpen(!helpOpen)}>{helpOpen ? "Hide" : "Show"}</button></div>
               {helpOpen && <div className="panel-b">
                 {!helper && <>
-                  <p className="faint mk-help-t">Art that came already on a mockup (ours, the customer&apos;s, or a design sheet)? I&apos;ll take the art off the shirts, show you what I found, and put it on this mockup.</p>
+                  {/* what it can do (Oct 27, Nick: "put a little features list, like draw images and remove art from t-shirt") */}
+                  <div className="mk-help-feats-k">What it can do</div>
+                  <ul className="mk-help-feats">
+                    {HELP_FEATS.filter((x) => !portal || !x.staff).map((x) => (
+                      <li key={x.t}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={x.icon} /></svg><span><b>{x.t}</b><small>{x.d}</small></span></li>
+                    ))}
+                  </ul>
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
-                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drop the PDF / AI file (or a picture of the garment) here"}</span>
+                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drop a PDF, AI or picture here"}</span>
                 </>}
                 <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
