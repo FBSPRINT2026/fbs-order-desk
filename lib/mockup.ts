@@ -583,13 +583,34 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
 const CUSTOM_SPOTS: Record<string, Loc> = {};
 export function registerAreas(imps: { location: string; area?: { w: number; h: number; view?: View } | null }[]) {
   for (const im of imps) {
-    if (!im.area || !im.location || LOCATION_SPOTS[im.location]) continue;
+    if (!im.area || !im.location || LOCATION_SPOTS[im.location] || HEAD_SPOTS[im.location]) continue;
     const w = Math.max(0.5, Math.min(30, +im.area.w || 4)), h = Math.max(0.5, Math.min(30, +im.area.h || 4));
     CUSTOM_SPOTS[im.location] = { view: im.area.view === "back" ? "back" : "front", dx: 0, drop: 1.5, defW: Math.min(4, w), maxW: w, maxH: h };
   }
 }
-export const isCustomSpot = (location: string) => !!CUSTOM_SPOTS[location] && !LOCATION_SPOTS[location];
+export const isCustomSpot = (location: string) => !!CUSTOM_SPOTS[location] && !LOCATION_SPOTS[location] && !HEAD_SPOTS[location];
+/**
+ * Headwear's own spots (Oct 26 / Oct 27, Nick: "a Richardson 112… the locations override to… front, back, left side,
+ * right side… when we're making the mockup creator or if we're just making logo placement"). Max print areas on a
+ * structured cap: front 4.5" × 2.25", each side 2.25" × 1.75", the back above the closure 3.5" × 1.5"; a visor's front
+ * 4" × 1.75"; a beanie's cuff 4" × 2". These never scale with a shirt body. "Full Front" means the cap's front while the
+ * page holding the order says it's headwear (setHeadwearSpots), else the shirt's.
+ */
+const HEAD_SPOTS: Record<string, Loc> = {
+  "Left Side": { view: "front", dx: 3.5, drop: 2, defW: 2, maxW: 2.25, maxH: 1.75 },
+  "Right Side": { view: "front", dx: -3.5, drop: 2, defW: 2, maxW: 2.25, maxH: 1.75 },
+  Back: { view: "back", dx: 0, drop: 3, defW: 2.5, maxW: 3.5, maxH: 1.5 },
+  Front: { view: "front", dx: 0, drop: 1.5, defW: 3.5, maxW: 4, maxH: 1.75 },
+  Cuff: { view: "front", dx: 0, drop: 2, defW: 3, maxW: 4, maxH: 2 },
+};
+const HAT_FRONT: Loc = { view: "front", dx: 0, drop: 1.5, defW: 4, maxW: 4.5, maxH: 2.25 };
+let headwearOn = false;
+/** the page holding a group of caps says so, so "Full Front" is the cap's front (call with false when it's done) */
+export function setHeadwearSpots(on: boolean) { headwearOn = on; }
+export const isHeadSpot = (location: string) => !!HEAD_SPOTS[location] || (headwearOn && location === "Full Front");
 export const spotFor = (location: string, b?: Body | null): Loc => {
+  if (HEAD_SPOTS[location]) return HEAD_SPOTS[location];
+  if (headwearOn && location === "Full Front") return HAT_FRONT;
   const s = fitSpot(LOCATION_SPOTS[location] || CUSTOM_SPOTS[location] || { view: "front", dx: 0, drop: 1.5, defW: 4, maxW: 12, maxH: 14 }, b);
   // a bag or tote: never past its own print area, and centered on it (no collar to hang from)
   if (!b?.cap || s.wrap) return s;
@@ -639,6 +660,7 @@ const fits = (z: string, wIn: number, hIn: number) => { const s = LOCATION_SPOTS
  * The current location is kept whenever it's the same kind of spot and the print still fits it (a Full Front stays a Full Front).
  */
 export function autoSpot(current: string, view: View, dxIn: number, topIn: number, wIn: number, hIn: number, b?: Body | null): string {
+  if (isHeadSpot(current)) return current;
   const cur = LOCATION_SPOTS[current];
   if (!cur || cur.wrap) return current;
   // judged in adult inches: on a toddler tee a 3" logo off to the side is still a left chest
@@ -669,7 +691,8 @@ export function autoSpot(current: string, view: View, dxIn: number, topIn: numbe
 /** The biggest a print can go on this side of the shirt (any location there), for a design of this height/width ratio. */
 export function sideMaxWidth(location: string, ratio: number, b?: Body | null) {
   const s = spotFor(location, b);
-  if (s.wrap) return maxWidthFor(location, ratio, b);
+  // a sleeve, a cap's spot or a custom spot: only its own area
+  if (s.wrap || isHeadSpot(location) || isCustomSpot(location)) return maxWidthFor(location, ratio, b);
   return Math.max(...Object.keys(LOCATION_SPOTS).filter((z) => !LOCATION_SPOTS[z].wrap && LOCATION_SPOTS[z].view === s.view).map((z) => maxWidthFor(z, ratio, b)));
 }
 

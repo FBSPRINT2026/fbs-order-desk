@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { locationsFor, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -52,7 +52,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { registerAreas, isCustomSpot } from "@/lib/mockup";
+import { registerAreas, isCustomSpot, setHeadwearSpots } from "@/lib/mockup";
 import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -1777,6 +1777,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
   // custom spots (a typed location with its own area) are known to every size and placement below
   registerAreas(imprints);
+  // a group of caps: "Full Front" is the cap's front (4.5" × 2.25"), not a shirt's
+  setHeadwearSpots(locationsFor(lines.map((l) => ({ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description }))) === HAT_LOCATIONS);
+  useEffect(() => () => setHeadwearSpots(false), []);
   const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
     const r = ratioIm(im) || 0.6;
@@ -1849,7 +1852,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const shownView: View = curTab === "back" ? "back" : "front";
   // the garment's own spots: a long sleeve has upper arms and cuffs where a tee has its sleeves (Oct 27, Nick)
   const spotList = locationsFor(lines.map((l) => ({ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description })));
-  const locsFor = (t: Side) => (spotList.length > 4 ? spotList : LOCATIONS).filter((z) => sideOf(z) === t);
+  // caps, visors and beanies list their own spots, in the full mockup and in Add logo (Oct 27, Nick: "a Richardson 112…
+  // the locations override to… front, back, left side, right side")
+  const locsFor = (t: Side) => (spotList.length ? spotList : LOCATIONS).filter((z) => sideOf(z) === t);
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
