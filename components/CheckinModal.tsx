@@ -87,25 +87,33 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
         <div className="ck-tools">
           <button type="button" className="btn primary" onClick={() => fill(cells)}>{t("✓ Everything's here ({0})", expected)}</button>
           <button type="button" className="btn ghost" onClick={() => { setGot({}); setExtra({}); setEditing(""); }}>{t("Clear")}</button>
-          <span className="spacer" />
           <span className="faint ckg-hint">{t("Tap a size to take the full amount, tap it again to type the count")}</span>
+          <span className="spacer" />
+          <label className="ckg-boxes">{t("Boxes")}<input type="number" min={0} inputMode="numeric" value={boxes} onChange={(e) => setBoxes(e.target.value)} placeholder={job.boxes ? String(job.boxes) : "—"} />{job.boxes ? <small className="faint">{t("of {0}", job.boxes)}</small> : null}</label>
         </div>
 
         <div className="ck-body">
           {/* the count grid (Oct 27, Nick picked "B3"): garments down, sizes across, every size the same small box; what's
               counted, what's left and what's short beside it */}
+          {/* the totals as the shop's summary card, across the top; the grid gets the full width (Oct 27, Nick: "make this
+              fill up the space… move the All to the right side") */}
+          <div className="stats ckg-stats">
+            <div className="stat"><span className="v">{counted.toLocaleString()}<small> / {expected.toLocaleString()}</small></span><span className="k">{t("Counted")}</span></div>
+            <div className="stat"><span className="v">{left}</span><span className="k">{left === 1 ? t("Size left to count") : t("Sizes left to count")}</span></div>
+            <div className="stat"><span className={"v" + (short ? " alert" : "")}>{short}</span><span className="k">{t("Short")}</span></div>
+            <div className="stat"><span className="v">{expected ? Math.round((counted / expected) * 100) : 0}%</span><span className="k">{t("Done")}</span><i className="ckg-bar"><b style={{ width: `${expected ? Math.min(100, (counted / expected) * 100) : 0}%` }} /></i></div>
+          </div>
           <div className="ckg">
             <div className="ckg-wrap"><table className="ckg-t">
-              <thead><tr><th className="ckg-g">{t("Garment")}</th>{sizes.map((z) => <th key={z}>{z === "OTHER" ? t("Other") : z}</th>)}<th className="ckg-n">{t("Count")}</th></tr></thead>
+              <thead><tr><th className="ckg-g">{t("Garment")}</th>{sizes.map((z) => <th key={z}>{z === "OTHER" ? t("Other") : z}</th>)}<th className="ckg-n">{t("Count")}</th><th className="ckg-a" /></tr></thead>
               <tbody>{items.map(({ it, cs }) => {
                 const exp = cs.reduce((x, c) => x + c.expected, 0), cnt = cs.reduce((x, c) => x + (n(c.k) ?? 0), 0), done = cs.every((c) => n(c.k) !== null);
                 return (
                   <tr key={it.key}>
-                    <td className="ckg-g"><i className="ckg-sw" style={{ background: garmentHex(null, it.color || "") }} aria-hidden /><b data-notranslate>{it.style || t("Item")}</b><span className="ckg-color" data-notranslate>{it.color}</span>{it.desc && <span className="faint ckg-desc" data-notranslate>{it.desc}</span>}
-                      <button type="button" className="linkbtn ckg-all" tabIndex={-1} onClick={() => fill(cs)}>{t("✓ All")}</button></td>
+                    <td className="ckg-g"><i className="ckg-sw" style={{ background: garmentHex(null, it.color || "") }} aria-hidden /><b data-notranslate>{it.style || t("Item")}</b><span className="ckg-color" data-notranslate>{it.color}</span>{it.desc && <span className="faint ckg-desc" data-notranslate>{it.desc}</span>}</td>
                     {sizes.map((z) => {
                       const c = cs.find((x) => x.size === z);
-                      if (!c) return <td key={z} className="ckg-na" aria-hidden>·</td>;
+                      if (!c) return <td key={z} className="ckg-na" aria-hidden><span /></td>;
                       const v = n(c.k), on = editing === c.k;
                       return (
                         <td key={z}>
@@ -126,17 +134,12 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                         </td>
                       );
                     })}
-                    <td className={"ckg-n" + (done ? (cnt === exp ? " ok" : " off") : "")}>{done ? `${cnt}/${exp}` : `${cnt ? cnt + "/" : ""}${exp}`}</td>
+                    <td className={"ckg-n" + (done ? (cnt === exp ? " ok" : " off") : "")}><b>{cnt.toLocaleString()}</b><small>{t("of {0}", exp.toLocaleString())}</small><i className="ckg-bar"><b style={{ width: `${exp ? Math.min(100, (cnt / exp) * 100) : 0}%` }} /></i></td>
+                    <td className="ckg-a"><button type="button" className={"btn sm" + (done && cnt === exp ? " ckg-done" : "")} tabIndex={-1} onClick={() => fill(cs)}>{done && cnt === exp ? t("✓ All here") : t("✓ All")}</button></td>
                   </tr>
                 );
               })}</tbody>
             </table></div>
-            <aside className="ckg-side">
-              <div className="ckg-box"><span>{t("Counted")}</span><b>{counted.toLocaleString()} <small>/ {expected.toLocaleString()}</small></b></div>
-              <div className="ckg-box"><span>{t("Sizes left")}</span><b>{left}</b></div>
-              <div className={"ckg-box" + (short ? " warn" : "")}><span>{t("Short")}</span><b>{short}</b></div>
-              <label className="ckg-box ckg-boxes"><span>{t("Boxes")}</span><input type="number" min={0} inputMode="numeric" value={boxes} onChange={(e) => setBoxes(e.target.value)} placeholder={job.boxes ? String(job.boxes) : "—"} />{job.boxes ? <small className="faint">{t("of {0}", job.boxes)}</small> : null}</label>
-            </aside>
           </div>
 
           <section className={"ck-probs" + (problems.length ? " has" : "")}>
