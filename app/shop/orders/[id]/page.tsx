@@ -1250,8 +1250,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
             </div>
           </details>
-          {o.number >= 40000 && o.number < 50000 && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
-            <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
+          {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
+              40,000-series number */}
+          {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
+            <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
           {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <details className="ot-more" onBlur={closeSoon}>
