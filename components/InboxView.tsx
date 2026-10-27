@@ -11,7 +11,7 @@ import MailContextMenu, { type CtxItem } from "@/components/MailContextMenu";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useSaneBox } from "@/components/RoleContext";
+import { useRole, useSaneBox } from "@/components/RoleContext";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { convoKeys, groupConvos } from "@/lib/mail/convo";
@@ -273,6 +273,37 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setCusts(new Map(((cs || []) as Cust[]).map((c) => [c.id, c])));
     setOrders((os || []) as Ord[]);
   }, []);
+  // the last list shows the moment Email opens, then the fresh one replaces it (Oct 26, Nick: "every time I open the email
+  // app… it has to load… keep the previous load up… then add new email… like the Apple Mail app"). Kept in this browser
+  // only, per person (viewing as someone keeps theirs apart), and only as a starting picture: everything is re-read.
+  const role = useRole();
+  const cacheKey = `fbs:mailcache:v1:${mode}:${(role.viewAs || role.email || "me").toLowerCase()}`;
+  const cacheRead = useRef(false);
+  if (!cacheRead.current && typeof window !== "undefined") {
+    cacheRead.current = true;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      const c = raw ? JSON.parse(raw) as { at: number; st?: Status; acts?: Act[]; sugs?: Sug[]; custs?: Cust[]; orders?: Ord[]; ol?: InboxItem[] | null } : null;
+      if (c && Date.now() - c.at < 7 * 864e5) {
+        // set straight into the first render's state (no blank screen while the first read runs)
+        queueMicrotask(() => {
+          setSt((x) => x || c.st || null); setActs((x) => x || c.acts || null); setSugs((x) => (x.length ? x : c.sugs || []));
+          setCusts((x) => (x.size ? x : new Map((c.custs || []).map((y) => [y.id, y])))); setOrders((x) => (x.length ? x : c.orders || []));
+          setOl((x) => x || (c.ol ?? null));
+        });
+      }
+    } catch { /* private window or a bad copy: just load */ }
+  }
+  useEffect(() => {
+    if (!st || !acts) return;
+    const t = setTimeout(() => {
+      try {
+        const slim = (acts || []).slice(0, 200).map((x) => ({ ...x, body: String(x.body || "").slice(0, 4000) }));
+        localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), st, acts: slim, sugs: sugs.slice(0, 400), custs: [...custs.values()], orders: orders.slice(0, 500), ol }));
+      } catch { /* full or blocked: the next open just loads */ }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [st, acts, sugs, custs, orders, ol, cacheKey]);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
   // the Outlook Inbox close to live (Oct 23, Nick: "if I archive an email in my Outlook, it takes a really long time to
   // update… 3 or 4 minutes"): while this page is on screen, what's in the Inbox is read straight from Exchange every
