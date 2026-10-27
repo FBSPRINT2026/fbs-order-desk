@@ -17,7 +17,10 @@ export type View = "front" | "back";
 type Half = { x: number; y: number; rot: number; show: "left" | "right" };
 type Loc = { view: View; dx?: number; drop?: number; /** art starts at the top of the print area instead of the middle */ top?: boolean; abs?: { x: number; y: number }; rot?: number; defW: number; maxW: number; maxH: number;
   /** sleeve prints wrap over the sleeve: part shows on the front photo, the rest on the back photo */
-  wrap?: { front: Half; back: Half } };
+  wrap?: { front: Half; back: Half };
+  /** a long sleeve's spots (Oct 27, Nick): "upper" = where a tee's sleeve print goes (centered, from the shoulder),
+   *  "cuff" = down by the wrist, its bottom SLEEVE_HEM_GAP above the cuff hem. Unset on a sleeve = the tee sleeve */
+  arm?: "upper" | "cuff" };
 
 /** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the bottom of the front neckline seam / the back collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
@@ -36,6 +39,14 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   // x/y is the center of the 3.5" x 3.5" max print area: right on the fold, with the bottom of the area ~0.5" above the sleeve hem.
   "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 912, y: 343, rot: -35, show: "left" }, back: { x: 92, y: 343, rot: 35, show: "right" } } },
   "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 88, y: 343, rot: 35, show: "right" }, back: { x: 908, y: 343, rot: -35, show: "left" } } },
+  // long sleeves (Oct 27, Nick: "when you have a long sleeve, you can have several locations… down by the hemline,
+  // around your wrist… and then the upper right arm or the upper left arm… where you would normally put the imprint if
+  // it was a t-shirt"): measured on each photo from the sleeve's cuff (lib/mockup measureGarment); these x/y are only
+  // the fallback for a photo not measured
+  "Left Upper Arm": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, arm: "upper", wrap: { front: { x: 912, y: 343, rot: -35, show: "left" }, back: { x: 92, y: 343, rot: 35, show: "right" } } },
+  "Right Upper Arm": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, arm: "upper", wrap: { front: { x: 88, y: 343, rot: 35, show: "right" }, back: { x: 908, y: 343, rot: -35, show: "left" } } },
+  "Left Cuff": { view: "front", defW: 3, maxW: 3.5, maxH: 2, arm: "cuff", wrap: { front: { x: 912, y: 343, rot: -35, show: "left" }, back: { x: 92, y: 343, rot: 35, show: "right" } } },
+  "Right Cuff": { view: "front", defW: 3, maxW: 3.5, maxH: 2, arm: "cuff", wrap: { front: { x: 88, y: 343, rot: 35, show: "right" }, back: { x: 908, y: 343, rot: -35, show: "left" } } },
   "Left Vertical": { view: "front", dx: 4.5, drop: 2.5, defW: 4, maxW: 5, maxH: 14 },
   "Right Vertical": { view: "front", dx: -4.5, drop: 2.5, defW: 4, maxW: 5, maxH: 14 },
   "Front Bottom Left": { view: "front", dx: 4.5, drop: 20, defW: 4.5, maxW: 5, maxH: 6 },
@@ -52,7 +63,7 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
  */
 export type Fit = { /** how big prints are drawn on this photo, against the reference */ s: number;
   /** how big the photo itself is, against the reference, when that differs from `s` (a boxy tee: shown at its height,
-   *  printed by its chest); photo pixels ↔ reference pixels use this */ zs?: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } };
+   *  printed by its chest); photo pixels ↔ reference pixels use this */ zs?: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: SleevePt; right: SleevePt };
   /** a bag or tote (flat, no collar): its body on the photo (px) and pixels per inch from its real width */
   flat?: { cx: number; top: number; w: number; h: number; ppi: number };
   /** a shirt: its side seams across the body (px) and the bottom of the hem, as found on this photo */
@@ -64,6 +75,8 @@ export type Fit = { /** how big prints are drawn on this photo, against the refe
   neckLines?: number[];
   /** the shirt's color on the photo (the middle of its body), when the supplier gives no color code */
   hex?: string };
+/** where a sleeve print sits on a photo; a long sleeve's is at its cuff, with its upper arm spot too */
+export type SleevePt = { x: number; y: number; rot: number; /** measured to a long sleeve's cuff */ long?: boolean; upper?: { x: number; y: number; rot: number } };
 /** the same points on the reference Gildan 5000 photos (bottom of the front collar rib; top of the back collar) */
 export const REF_NECK = { front: 186, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
@@ -71,6 +84,9 @@ export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, 
 const SLEEVE_UP = 76.5;
 /** a sleeve print's bottom sits this far (inches) above its area's bottom, the hemline on the close-up (Oct 27, Nick: ¼") */
 export const SLEEVE_HEM_GAP = 0.25;
+/** on a long sleeve, the upper arm print's center is this far (inches, adult Large) up the sleeve from the cuff print's:
+ *  about 6" below the shoulder seam on a 25" sleeve, where a tee's sleeve print would be */
+const UPPER_FROM_CUFF = 16.5;
 
 /**
  * Draw a photo the way the page shows it (object-fit: contain, centered on white): S&S photos are already 4:5 and fill
@@ -368,7 +384,7 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   const cuff = (side: "left" | "right", fromY: number) => {
     const edge = side === "right" ? R : L, inward = (a: number, b: number) => (side === "right" ? a - b : b - a);
     let hem = -1;
-    for (let y = Math.round(fromY + 40 * s); y < Math.round(T + 0.85 * (B - T)); y++) {
+    for (let y = Math.round(fromY + 40 * s); y < Math.round(T + 0.9 * (B - T)); y++) {
       if (edge[y] < 0 || edge[y + 3] < 0) continue;
       if (inward(edge[y], edge[y + 3]) > 25 * s) { hem = y; break; }
     }
@@ -386,14 +402,49 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
     const b = n2 > 5 ? (sxy - (mx * my) / n2) / (syy - (my * my) / n2) : 0;
     const len = Math.hypot(b, 1), u = { x: b / len, y: 1 / len };
     const out = side === "right" ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
-    return { tipY: by, pt: { x: best - SLEEVE_UP * s * u.x + 2 * out.x, y: by - SLEEVE_UP * s * u.y + 2 * out.y, rot: (-Math.atan(b) * 180) / Math.PI } };
+    // the art turns to the cuff's own hemline (Oct 27, Nick: "the angle of the art should always match the angle of the
+    // hemline in the photo… where the gray meets the black"): the bottom edge of the sleeve, read column by column
+    // inward from the outer corner, fit to a line; the fold's square only when the hem can't be read
+    let hemRot: number | null = null;
+    {
+      const pts: [number, number][] = [], dir = side === "right" ? -1 : 1;
+      for (let i = 2; i < Math.round(70 * s); i += 2) {
+        const X = Math.round(best + dir * i); if (X < 0 || X >= W) break;
+        let yb = -1;
+        for (let y = Math.max(0, Math.round(by - 40 * s)); y < Math.min(H - 1, Math.round(by + 90 * s)); y++) if (!bg[y * W + X] && bg[(y + 1) * W + X]) { yb = y; break; }
+        if (yb >= 0) pts.push([X, yb]);
+      }
+      // a line through the points, then again without the strays (a seam or the corner)
+      const fitLine = (q: [number, number][]) => {
+        const n = q.length, mx2 = q.reduce((a, v) => a + v[0], 0) / n, my2 = q.reduce((a, v) => a + v[1], 0) / n;
+        const sxx = q.reduce((a, v) => a + (v[0] - mx2) ** 2, 0), sxy2 = q.reduce((a, v) => a + (v[0] - mx2) * (v[1] - my2), 0);
+        const m = sxx ? sxy2 / sxx : 0, r = (v: [number, number]) => Math.abs(v[1] - (my2 + m * (v[0] - mx2)));
+        return { m, r, res: Math.sqrt(q.reduce((a, v) => a + r(v) ** 2, 0) / n) };
+      };
+      if (pts.length >= 8) {
+        let f1 = fitLine(pts);
+        const keep = pts.filter((v) => f1.r(v) <= Math.max(2, 1.5 * f1.res));
+        if (keep.length >= 8) f1 = fitLine(keep);
+        const deg = (Math.atan(f1.m) * 180) / Math.PI;
+        if (f1.res < 6 * s && Math.abs(deg) < 40) hemRot = deg;
+      }
+    }
+    return { tipY: by, pt: { x: best - SLEEVE_UP * s * u.x + 2 * out.x, y: by - SLEEVE_UP * s * u.y + 2 * out.y, rot: hemRot ?? (-Math.atan(b) * 180) / Math.PI } };
   };
   let left = sleeve("left"), right = sleeve("right");
   const lc = cuff("left", left.y), rc = cuff("right", right.y);
   // a long hanging sleeve: its cuff is far below the short-sleeve "tip"
   const longL = !!lc && lc.tipY > left.y + 120 * s, longR = !!rc && rc.tipY > right.y + 120 * s;
-  if (longL) left = lc!.pt;
-  if (longR) right = rc!.pt;
+  // a long sleeve's upper arm (Oct 27, Nick: "where you would normally put the imprint if it was a t-shirt"): on the
+  // fold about 7" below the top of the shoulders, turned like the cuff's hemline
+  const upper = (side: "left" | "right", rot: number) => {
+    const edge = side === "right" ? R : L, ppi = PX_PER_IN * s, y = Math.round(T + 7.2 * ppi);
+    if (y < 0 || y >= H || edge[y] < 0) return undefined;
+    const a = (rot * Math.PI) / 180, out = side === "right" ? { x: Math.cos(a), y: Math.sin(a) } : { x: -Math.cos(a), y: -Math.sin(a) };
+    return { x: edge[y] + 2 * out.x, y: y + 2 * out.y, rot };
+  };
+  if (longL) left = { ...lc!.pt, long: true, upper: upper("left", lc!.pt.rot) } as typeof left;
+  if (longR) right = { ...rc!.pt, long: true, upper: upper("right", rc!.pt.rot) } as typeof right;
   // sanity: a sleeve fold runs ~25-45° (a hanging sleeve can be nearly straight down); if one side reads wrong, mirror the other side's angle
   const ok = (r: number) => (longL || longR ? Math.abs(r) <= 48 : Math.abs(r) >= 22 && Math.abs(r) <= 48);
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
@@ -634,9 +685,18 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
     // the art starts down by the hem, not in the middle of the area (Oct 27, Nick: "by default close to the hemline…
     // 1/4 inch looks right… make sure it is centered"): its bottom SLEEVE_HEM_GAP above the area's bottom (the close-up's
     // hemline), still centered across the fold; moved along the sleeve toward the hem, at the sleeve's angle
-    const a = (pt.rot * Math.PI) / 180, d = Math.max(0, b0 / 2 - h0 / 2 - SLEEVE_HEM_GAP * ppi0);
-    const cx = pt.x - d * Math.sin(a), cy = pt.y + d * Math.cos(a);
-    return { view: view || "front", x: cx - w0 / 2, y: cy - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: pt.x - a0 / 2, y: pt.y - b0 / 2, w: a0, h: b0 }, k };
+    const a = (pt.rot * Math.PI) / 180;
+    // an upper arm print on a long sleeve: up the sleeve from the cuff spot, centered in its area (a short sleeve's spot is
+    // already the upper arm); a cuff or a tee sleeve: down by the hem
+    const sp = pt as SleevePt, long = !!sp.long;
+    // the upper arm: measured on the photo; else up the sleeve from the cuff
+    const up = spot.arm === "upper" && long && !sp.upper ? UPPER_FROM_CUFF * ppi0 : 0;
+    const ax = spot.arm === "upper" && sp.upper ? sp.upper.x : pt.x + up * Math.sin(a), ay = spot.arm === "upper" && sp.upper ? sp.upper.y : pt.y - up * Math.cos(a);
+    const d = spot.arm === "upper" ? 0 : Math.max(0, b0 / 2 - h0 / 2 - SLEEVE_HEM_GAP * ppi0) + (spot.arm === "cuff" ? (3.5 * ppi0 - b0) / 2 : 0);
+    const cx = ax - d * Math.sin(a), cy = ay + d * Math.cos(a);
+    // the area: a cuff's shorter area sits down at the hem (its bottom where a sleeve area's bottom is)
+    const ac = spot.arm === "cuff" ? { x: pt.x - ((3.5 * ppi0 - b0) / 2) * Math.sin(a), y: pt.y + ((3.5 * ppi0 - b0) / 2) * Math.cos(a) } : { x: ax, y: ay };
+    return { view: view || "front", x: cx - w0 / 2, y: cy - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: ac.x - a0 / 2, y: ac.y - b0 / 2, w: a0, h: b0 }, k };
   }
   if (fit?.flat) {
     // a bag: centered on its body (or the set drop below the body's top), at real size from the bag's width

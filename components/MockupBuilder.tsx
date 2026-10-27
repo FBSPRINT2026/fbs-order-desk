@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
+import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook } from "@/lib/stockGarments";
+import { locationsFor, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -50,7 +51,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
@@ -61,7 +62,8 @@ import { bareStyle } from "@/lib/ai/normalize";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string;
   /** a garment that isn't in the catalog: the photos they uploaded (storage paths; Oct 24, Nick: "LA Apparel isn't offered at either of those two suppliers") */ own?: { front: string; back?: string };
-  /** the shirt's color picked off the photo with the eyedropper (close-ups and logo tiles; Oct 24, Nick) */ hex?: string };
+  /** the shirt's color picked off the photo with the eyedropper (close-ups and logo tiles; Oct 24, Nick) */ hex?: string;
+  /** a garment we have no photo of, drawn (Oct 27): what it looks like, read off the customer's mockup (trim, stripes, quilted…) */ look?: GarmentLook };
 type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
@@ -1088,9 +1090,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [lines, catalog]);
 
+  // a garment we have no photo of, drawn in its color (Oct 27, Nick: "better stock graphics for when we don't have the
+  // actual garment"): a tee, long sleeve, hoodie, vest… from its name, painted with the look read off their mockup
+  const drawnKind = (l: Line) => l.look?.kind || stockKind(`${garmentFor(l)?.description || ""} ${l.garment || ""} ${l.style || ""} ${l.brand || ""}`);
+  const drawn = (l: Line, view: View, hex = "") => stockSvg(drawnKind(l), view, { heather: isHeather(l.color), ...(l.look || {}), hex: hex || l.look?.hex || l.hex || guessHex(l.color) });
   const photo = (l: Line, view: View) => {
     // their own photos (a garment not in the catalog): the side they uploaded, else a drawn tee of its color
-    if (l.own) { const p = view === "front" ? l.own.front : l.own.back || ""; const u = p ? ownUrls[p] : ""; if (u) return u; const fu = l.own.front ? ownUrls[l.own.front] : ""; return teeSvg(l.hex || (fu && fits[fu]?.hex) || guessHex(l.color), view, isHeather(l.color)); }
+    if (l.own) { const p = view === "front" ? l.own.front : l.own.back || ""; const u = p ? ownUrls[p] : ""; if (u) return u; const fu = l.own.front ? ownUrls[l.own.front] : ""; return drawn(l, view, l.hex || (fu && fits[fu]?.hex) || ""); }
     const g = garmentFor(l);
     // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
@@ -1099,7 +1105,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (p) { const u = ssImg(p); return view === "back" ? leveled[u] || u : u; }
     // no photo of this color: the style's own photo dyed to it, once it's made (below), not a drawn tee
     const t = g && l.color ? tinted[`${g.style}|${colorKey(l.color)}|${view}`] : "";
-    return t || teeSvg(guessHex(l.color), view, isHeather(l.color));
+    return t || drawn(l, view);
   };
   // SanMar's tall photos (2:3, the shirt in the top two thirds: a K500 polo showed small and high next to S&S shirts;
   // Oct 23, Nick: "those K500 images are extremely small… they need to be much bigger"): the whole picture, photo and
@@ -1714,7 +1720,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const curTab: Side = tab || (["front", "back", "sleeve"] as Side[]).find((t) => imprints.some((im) => sideOf(im.location) === t)) || "front";
   // one-photo layouts show the side you're working on (sleeves show on the front)
   const shownView: View = curTab === "back" ? "back" : "front";
-  const locsFor = (t: Side) => LOCATIONS.filter((z) => sideOf(z) === t);
+  // the garment's own spots: a long sleeve has upper arms and cuffs where a tee has its sleeves (Oct 27, Nick)
+  const spotList = locationsFor(lines.map((l) => ({ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description })));
+  const locsFor = (t: Side) => (spotList.length > 4 ? spotList : LOCATIONS).filter((z) => sideOf(z) === t);
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
@@ -1792,7 +1800,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
-                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} arm={sp.arm} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
                     onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
                     onEnd={() => {}} />
@@ -2034,7 +2042,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (crop) main.translate(-crop.x * k, -crop.y * k);
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
-      const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
+      const bg = await loadImg(photo(l, v)).catch(() => loadImg(drawn(l, v)));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
       const nm = frameOf(l, v);
@@ -2122,7 +2130,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   async function closeUpCanvas(l: Line, im: Imprint, size: number): Promise<HTMLCanvasElement | null> {
     const v = viewsFor(im.location)[0]; if (!v) return null;
     const u = photo(l, v);
-    const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
+    const bg = await loadImg(u).catch(() => loadImg(drawn(l, v)));
     const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
@@ -2982,7 +2990,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     try {
       const W = PHOTO_W * BD_K, H = PHOTO_H * BD_K;
       const u = photo(l, v);
-      const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
+      const bg = await loadImg(u).catch(() => loadImg(drawn(l, v)));
       const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       const nm = frameOf(l, v);
       const c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -3318,7 +3326,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             onType={(v) => setLines((ls) => ls.map((x) => (ids.includes(x.id) ? { ...x, style: v, brand: "", garment: "" } : x)))}
                             onPick={(gg) => pickStyle(ids, gg)}
                             onPickSS={async (h) => { const gg = await lookupStyle(h.style, h.styleID || undefined, h.supplier); if (gg) pickStyle(ids, gg); }} />
-                          <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l0.style.trim() ? "Pick a style from the list" : "Type a style #, e.g. 6210, 5000, PC54"}</small>
+                          <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l0.style.trim() ? `Not in a catalog: shown as a drawn ${STOCK_LABEL[drawnKind(l0)].toLowerCase()} (or pick a style from the list)` : "Type a style #, e.g. 6210, 5000, PC54"}</small>
                         </div>}
                         <div className="mk-gar-colors">
                           {gr.idx.filter((i) => lines[i].color).map((i) => {
@@ -3463,7 +3471,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <span className="faint">S&amp;S and SanMar don&apos;t have one. Pick what to use for the back:</span>
                       <div className="mk-noback-pics">
                         {q.others.map((o) => <button key={o.path} type="button" disabled={!!backBusy} onClick={() => void pickBack(line, o.path, /model/i.test(o.label) ? "model" : /side/i.test(o.label) ? "side" : "picked")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={ssImg(o.path)} alt="" /><span>{o.label}</span></button>)}
-                        <button type="button" disabled={!!backBusy} onClick={() => void pickBack(line, "drawn", "drawn")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={teeSvg(guessHex(line.color), "back", isHeather(line.color))} alt="" /><span>Drawn back</span></button>
+                        <button type="button" disabled={!!backBusy} onClick={() => void pickBack(line, "drawn", "drawn")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={drawn(line, "back")} alt="" /><span>Drawn back</span></button>
                       </div>
                       <label className={"btn sm" + (backBusy ? " off" : "")}>{backBusy === "upload" ? "Uploading…" : "Upload a back photo"}<input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={!!backBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void uploadBack(line, f); }} /></label>
                       {backErr && <span className="err">{backErr}</span>}
@@ -3471,7 +3479,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     </div>
                   ); })()}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
-                </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : stockSvg("tee", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -3722,7 +3730,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   <div key={im.id} className="mk-imp" data-imp={im.id}>
                     <div className="mk-imp-top">
-                      <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
+                      <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!locsFor(curTab).includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x)));
                         // heat press: the art back to its own colors (knock-outs stay)
                         if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -4068,8 +4076,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <div className={"mk-help-pic" + (r.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
                         <div className="mk-help-b">
                           <div className="row" style={{ gap: 6 }}>
-                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as HelpRow["side"]; helpSet(r.key, { side, location: side === "sleeve" ? (r.location.endsWith("Sleeve") ? r.location : "Left Sleeve") : locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option><option value="sleeve">Sleeve</option></select>
-                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
+                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as HelpRow["side"]; helpSet(r.key, { side, location: side === "sleeve" ? (locsFor("sleeve").includes(r.location) ? r.location : locsFor("sleeve")[0] || "Left Sleeve") : locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option><option value="sleeve">Sleeve</option></select>
+                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{[...new Set([...locsFor(r.side), r.location])].map((l) => <option key={l}>{l}</option>)}</select>
                           </div>
                           <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
                           {(r.mask || brandMask) && <div className="mk-help-ds">
@@ -4397,9 +4405,10 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex }: {
   /** pick the shirt's color off the photo (Oct 24, Nick: "an eyedropper to select the color in the shirt") */ onEyedrop?: () => void; picked?: boolean; onResetHex?: () => void;
   size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
+  /** a long sleeve's spot: "upper" (the shoulder seam above, the art centered) or "cuff" (the cuff hemline below) */ arm?: "upper" | "cuff";
   colors: { hex: string; name: string }[];
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void; onEnd?: () => void;
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -4420,7 +4429,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number; moved?: boolean } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
   // same spot as on the photos: top of the area for full front/back, a sleeve ¼" above the hemline, else centered
-  const cy = (topAlign ? top0 + (hIn * PX) / 2 : fold ? top0 + maxH * PX - Math.min(maxH, hIn + SLEEVE_HEM_GAP) * PX + (hIn * PX) / 2 : H / 2) + offIn.y * PX;
+  const cy = (topAlign ? top0 + (hIn * PX) / 2 : fold && arm !== "upper" ? top0 + maxH * PX - Math.min(maxH, hIn + SLEEVE_HEM_GAP) * PX + (hIn * PX) / 2 : H / 2) + offIn.y * PX;
   return (
     <div className="mk-sleeve" style={{ width: BOX }}>
       <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span>
@@ -4443,7 +4452,8 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
         <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
         {fold && <div className="mk-sleeve-seam" />}
         {fold && <><span className="mk-side-l">FRONT</span><span className="mk-side-r">BACK</span></>}
-        {fold && <div className="mk-hem" style={{ top: top0 + maxH * PX, left: 0, right: 0 }}><span>HEMLINE</span></div>}
+        {fold && arm !== "upper" && <div className="mk-hem" style={{ top: top0 + maxH * PX, left: 0, right: 0 }}><span>{arm === "cuff" ? "CUFF HEMLINE" : "HEMLINE"}</span></div>}
+        {fold && arm === "upper" && <div className="mk-hem mk-seam" style={{ top: Math.max(0, top0 - 0.5 * PX), left: 0, right: 0 }}><span>SHOULDER SEAM</span></div>}
         <div ref={artRef} className={"mk-art" + (sel ? " sel" : "") + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
           onPointerDown={(e) => {
             // double-click opens the color menu, same as on the photos

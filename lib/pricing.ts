@@ -64,6 +64,9 @@ export function headwearOf(x: { style?: string; brand?: string; garment?: string
 export function locationsFor(lines: { style?: string; brand?: string; garment?: string; description?: string }[] | null | undefined): string[] {
   const kinds = new Set((lines || []).filter((l) => l && (l.style || l.garment || l.description)).map((l) => headwearOf(l)));
   if (kinds.size === 1) { const k = [...kinds][0]; if (k === "hat") return HAT_LOCATIONS; if (k === "visor") return VISOR_LOCATIONS; if (k === "beanie") return BEANIE_LOCATIONS; }
+  // long sleeves: the upper arms and cuffs where a tee has its sleeves (every garment in the group long-sleeved)
+  const ls = (lines || []).filter((l) => l && (l.style || l.garment || l.description));
+  if (ls.length && ls.every((l) => longSleeved(l))) return LOCATIONS.flatMap((z) => (z === "Left Sleeve" ? ["Left Upper Arm", "Left Cuff"] : z === "Right Sleeve" ? ["Right Upper Arm", "Right Cuff"] : [z]));
   return LOCATIONS;
 }
 /** a location read for a shirt, moved to the headwear spot it means on a hat, visor or beanie (front stays front, a back
@@ -71,6 +74,12 @@ export function locationsFor(lines: { style?: string; brand?: string; garment?: 
 export function fitLocation(loc: string, lines: { style?: string; brand?: string; garment?: string; description?: string }[] | null | undefined): string {
   const list = locationsFor(lines);
   if (list === LOCATIONS || list.includes(loc)) return loc;
+  // long sleeves: a sleeve or arm read in goes to the upper arm (a tee's sleeve spot), a wrist or cuff to the cuff
+  if (list.includes("Left Upper Arm")) {
+    const k0 = (loc || "").toLowerCase(), side = /right/.test(k0) ? "Right" : "Left";
+    if (/sleeve|arm|cuff|wrist/.test(k0)) return `${side} ${/cuff|wrist/.test(k0) ? "Cuff" : "Upper Arm"}`;
+    return loc;
+  }
   if (list === VISOR_LOCATIONS) return "Front";
   if (list === BEANIE_LOCATIONS) return "Cuff";
   const k = (loc || "").toLowerCase();
@@ -80,7 +89,15 @@ export function fitLocation(loc: string, lines: { style?: string; brand?: string
   return "Full Front";
 }
 /** every location name there is (shirts and headwear), for checking a location typed or read in */
-export const ALL_LOCATIONS = [...new Set([...LOCATIONS, ...HAT_LOCATIONS, ...VISOR_LOCATIONS, ...BEANIE_LOCATIONS])];
+/** long sleeves get these in place of Left / Right Sleeve (Oct 27, Nick): the upper arm (a tee's sleeve spot) and the cuff */
+export const LONG_SLEEVE_LOCATIONS = ["Left Upper Arm", "Right Upper Arm", "Left Cuff", "Right Cuff"];
+/** a garment with sleeves to the wrist: long sleeve tees, hoodies, crewnecks, quarter-zips, jackets */
+export const longSleeved = (x: { style?: string; brand?: string; garment?: string; description?: string } | null | undefined) => {
+  const t = `${x?.garment || ""} ${x?.description || ""} ${x?.style || ""}`.toLowerCase();
+  if (/short sleeve|\bs\/s\b|\bvest\b|tank|sleeveless|\btee\b(?!.*long)/.test(t) && !/long sleeve|\bl\/s\b/.test(t)) return false;
+  return /long sleeve|\bl\/s\b|\bls\b|hood|sweatshirt|crew ?neck sweat|fleece|quarter|1\/4|half[- ]?zip|jacket|soft ?shell|windbreaker|coat|anorak|pullover/.test(t);
+};
+export const ALL_LOCATIONS = [...new Set([...LOCATIONS, ...LONG_SLEEVE_LOCATIONS, ...HAT_LOCATIONS, ...VISOR_LOCATIONS, ...BEANIE_LOCATIONS])];
 export const SHIP_METHODS = [
   "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS 2nd Day Air A.M.", "UPS Next Day Air Saver", "UPS Next Day Air", "UPS Next Day Air Early A.M.",
   "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx 2Day A.M.", "FedEx Standard Overnight", "FedEx Priority Overnight", "FedEx First Overnight",
@@ -782,7 +799,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
   const imps = g.imprints || [];
-  const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS].map((z) => z.toLowerCase());
+  const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS, ...((pl.specialLocations || []).some((z) => /sleeve/i.test(z)) ? LONG_SLEEVE_LOCATIONS : [])].map((z) => z.toLowerCase());
   const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
