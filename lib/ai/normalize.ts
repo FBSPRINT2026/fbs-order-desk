@@ -14,7 +14,7 @@ export type ProposedOrder = {
   customer?: { company?: string; name?: string; email?: string; phone?: string };
   groups?: {
     name?: string;
-    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string }[];
+    garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string; /** the email didn't name the style: what they called it ("tees") */ called?: string }[];
     prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string }[];
   }[];
   questions?: string[];
@@ -88,6 +88,8 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       // found (Oct 23, Logotology #40109: "Gildan 64000" found no garment and the mockup never got made)
       { const b = bareStyle(l.style, l.brand); l.style = b.style; if (!l.brand && b.brand) l.brand = b.brand; }
       l.garment = (g.description || "").trim().slice(0, 120);
+      // no style named: what they called it, for Create order to ask about (their preferred goods first, Oct 26)
+      { const c = String(g.called || "").trim().slice(0, 40); if (c && !l.style) l.called = c; }
       l.color = (g.color || "").trim().slice(0, 60);
       for (const [raw, q] of Object.entries(g.sizes || {})) {
         const z = normSize(raw);

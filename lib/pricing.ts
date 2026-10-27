@@ -176,6 +176,9 @@ export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | u
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+  /** the email didn't name the style: what they called it ("tees"); Create order asks which blank, their preferred goods
+   *  first (Oct 26, Nick), and clears this once it's picked */
+  called?: string;
   /** a note for this line only (Oct 22, Nick: "add line item description… for each specific line"): under the line
    *  on the order, the invoice and the work order */
   note?: string;

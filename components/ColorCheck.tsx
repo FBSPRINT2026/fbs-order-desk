@@ -11,7 +11,7 @@ import type { Group } from "@/lib/pricing";
  */
 export type ColorRow = { gi: number; li: number; style: string; brand: string; asked: string; options: string[]; pick: string; exact: boolean };
 
-export async function checkColors(groups: Group[]): Promise<{ rows: ColorRow[]; ask: ColorRow[] }> {
+export async function checkColors(groups: Group[], /** a customer's usual colors per style (their preferred goods): the first pick when what they wrote isn't exact ("the gray" → their Heather Gray), still asked (Oct 26) */ usual: Record<string, string[]> = {}): Promise<{ rows: ColorRow[]; ask: ColorRow[] }> {
   const styles = groups.flatMap((g) => g.lines.map((l) => ({ style: l.style, brand: l.brand }))).filter((x) => x.style);
   if (!styles.length) return { rows: [], ask: [] };
   const r = await fetch("/api/garments/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ styles }) }).catch(() => null);
@@ -22,7 +22,9 @@ export async function checkColors(groups: Group[]): Promise<{ rows: ColorRow[]; 
     if (!gm || !gm.colors.length) return;
     const m = l.color ? matchColor(l.color, gm.colors) : null;
     const exact = !!l.color && gm.colors.includes(l.color);
-    rows.push({ gi, li, style: gm.style, brand: gm.brand, asked: l.color || "", options: gm.colors, pick: exact ? l.color : m?.color || "", exact });
+    const words = (x: string) => x.toLowerCase().replace(/^the\s+/, "").replace(/gr[ae]y/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
+    const theirs = (usual[String(gm.style).toUpperCase()] || []).filter((c) => gm.colors.includes(c)).find((c) => l.color && words(l.color).every((w) => words(c).includes(w)));
+    rows.push({ gi, li, style: gm.style, brand: gm.brand, asked: l.color || "", options: gm.colors, pick: exact ? l.color : theirs || m?.color || "", exact });
   }));
   return { rows, ask: rows.filter((x) => !x.exact) };
 }
