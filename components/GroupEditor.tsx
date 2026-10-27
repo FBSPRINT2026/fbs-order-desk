@@ -10,6 +10,8 @@ import type { Imprint } from "@/lib/pricing";
 import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
+import ColorChange, { versionOfColor, versionsOf } from "@/components/ColorChange";
+import { colorChanges } from "@/lib/pricing";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
 import { labelFor } from "@/components/NeckLabelView";
@@ -106,6 +108,8 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   // you want to change all the items on this group to 2.25?")
   const [askAll, setAskAll] = useState<null | { li: number; v: number }>(null);
   const [blockMsg, setBlockMsg] = useState("");
+  // the color change pop-up for a print (its index), Oct 27
+  const [ccAt, setCcAt] = useState<number | null>(null);
   /**
    * "+ Add youth" (Oct 21, Nick: "1717… the corresponding youth is the 9018… Gildan 5000 → 5000B… if you don't know,
    * ask me and I can key it in and you can remember it"): the adult garment's youth style goes on a new line in the
@@ -201,6 +205,12 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
       return { color, hex: hexOfColor(color), swap };
     }).filter((x) => Object.keys(x.swap).length);
   };
+  // color changes across the group's prints: each garment color's version (A as printed, B… a change), for grouping lines
+  const ccImps = g.imprints.filter((x) => versionsOf(x).length > 0);
+  const verKey = (color: string) => ccImps.map((x) => versionOfColor(x, color)).join(".");
+  const inkOfVer = (x: Imprint, color: string) => { const v = versionOfColor(x, color); return v ? versionsOf(x)[v - 1].to : (x.inks || "").split(/\s*,\s*/)[0] || "as printed"; };
+  const verLabel = (color: string) => ccImps.map((x) => `${ccImps.length > 1 ? `${x.location}: ` : ""}${String.fromCharCode(65 + versionOfColor(x, color))} · ${inkOfVer(x, color)}`).join("  /  ");
+  const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
@@ -409,7 +419,9 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   registerAreas(g.imprints);
-  const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length && !g.imprints.some((x) => x.supplied);
+  // a logo added from the customer's brand (Customer artwork → Brands) is set up by the brand's rules: no mockup needed
+  // (Oct 27, Nick: "it added this grayed out box when it should say like imprint, left chest embroidery, this thread")
+  const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length && !g.imprints.some((x) => x.supplied || x.fromBrand || x.sizeFrom === "brand");
   // wholesale (contract) jobs use the contract's own finishing list and prices
   const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   // embroidery extras (specialty thread, 3D puff…): only on a group with embroidery
@@ -548,6 +560,8 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
           </div>
           {g.lines.map((l, li) => {
             const lc = gc.lines[li];
+            // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
+            const vk = verKey(l.color), vHead = ccImps.length > 0 && (li === 0 || verKey(g.lines[li - 1].color) !== vk);
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
@@ -555,8 +569,11 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             const prev = li > 0 ? g.lines[li - 1] : null;
             const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
-              <div key={l.id} className={"gl" + (same ? " same" : "")}>
-                {!same && <div className="gl-sty" inert={fixed || undefined}>
+              <div key={l.id} className={"gl" + (same && !vHead ? " same" : "") + (ccImps.length ? " ver" : "")} style={ccImps.length ? { ["--ver" as string]: verHex(l.color) } : undefined}>
+                {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (
+                  <div className="gl-ver"><i style={{ background: verHex(l.color) }} /><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+                ); })()}
+                {(!same || vHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
                       onType={(v) => onStyle(li, v)}
@@ -568,7 +585,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   <div className="a-de"><input type="text" tabIndex={-1} className="pre" title={(l.garment ? l.garment + "\n" : "") + "Filled from the catalog. Click to change."} aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div></div>
                 </div>}
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
-                {same && <div className="gl-ditto" aria-hidden>{l.style}</div>}
+                {same && !vHead && <div className="gl-ditto" aria-hidden>{l.style}</div>}
                 <div className="gl-row gl-r2">
                   <div className="a-co" inert={fixed || undefined}>
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
@@ -718,7 +735,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
             : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
-                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
+                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : g.imprints.some((x) => x.fromBrand) ? `From ${g.imprints.find((x) => x.fromBrand)!.fromBrand} · no mockup needed` : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
           {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
@@ -829,6 +846,23 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                     <span><b>{confirmTitle(d.confirm.why)}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks">{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}
                 </div>}
+                {/* color change (Oct 27, Nick: "a color change button… change the navy to white… check which ones") */}
+                {!d.supplied && new Set(g.lines.map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1 && (d.inks || "").trim() && (
+                  <div className="imp-cc">
+                    <span className="imp-l">Color change</span>
+                    {versionsOf(d).length ? <span className="imp-cc-v">{versionsOf(d).map((v, i) => { const on = [...new Set(g.lines.filter((x) => versionOfColor(d, x.color) === i + 1).map((x) => x.color))]; return <span key={i}><b>{String.fromCharCode(66 + i)}</b> {v.from} → {v.to} on {on.join(", ")}</span>; })}</span> : <span className="faint">Same {d.method === "embroidery" ? "thread" : "inks"} on every color</span>}
+                    <button type="button" className="btn sm ghost" onClick={() => setCcAt(di)}>{versionsOf(d).length ? "Change" : "Add color change"}</button>
+                  </div>
+                )}
+                {ccAt === di && <ColorChange im={d} lines={g.lines} onClose={() => setCcAt(null)} onSave={(inkBy) => { setCcAt(null); update((x) => {
+                  const im = x.imprints[di];
+                  im.inkBy = inkBy;
+                  if (im.method === "screen") im.inkChanges = colorChanges(im);
+                  // the group's lines grouped by version: A's together, then B's (the order otherwise kept)
+                  const cc = x.imprints.filter((y) => versionsOf(y).length > 0);
+                  const key = (c: string) => cc.map((y) => versionOfColor(y, c)).join(".");
+                  x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => key(a.ln.color).localeCompare(key(b.ln.color)) || a.i - b.i).map((v) => v.ln);
+                }); }} />}
                 {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 <div className="imp-art" hidden={!!d.supplied}>
                       {!(onMockup && !skipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}

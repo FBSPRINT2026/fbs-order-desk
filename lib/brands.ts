@@ -129,6 +129,7 @@ export function brandPrint(o: { design: Design; brand: Brand | null; method: Lan
     } else if (d.inks) { im.inks = d.inks; im.colors = d.colors || 1; }
     if (o.size) im.size = o.size;
   }
+  im.fromBrand = brand?.name || "their logos";
   if (o.sew) im.sizeFrom = "brand";
   else if (o.size) im.sizeFrom = "staff";
   return im;

@@ -132,6 +132,7 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** embroidery only (Oct 23, Nick: "a whole different process"): where the stitch count came from, backing, topping,
    *  3D puff / metallic, the thread line and the digitized file (lib/embroidery.ts). Screen prints never have it */
   emb?: import("@/lib/embroidery").EmbSpec;
+  /** added from the customer's brand (Customer artwork → Brands): the brand's name. Set up by its rules, no mockup needed */ fromBrand?: string;
   /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
    *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
   /** the art's height ÷ width as it prints (colors taken off and empty edges don't count), saved by the Mockup Creator:
