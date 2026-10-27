@@ -460,14 +460,10 @@ export function FrameZoom({ frame, fit, doc }: { frame: React.RefObject<HTMLIFra
     hook(); f.addEventListener("load", hook);
     return () => { f.removeEventListener("load", hook); d?.removeEventListener("touchstart", startOne); d?.removeEventListener("touchmove", moveOne); d?.removeEventListener("touchstart", start); d?.removeEventListener("touchmove", move); d?.removeEventListener("touchend", end); d?.removeEventListener("touchcancel", end); };
   }, [frame, doc]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!seen) return null;
-  return (
-    <div className="mfz" role="group" aria-label="Zoom the email">
-      <button type="button" onClick={() => apply(k - 0.25)} disabled={k <= 1} aria-label="Zoom out">−</button>
-      <button type="button" className="mfz-v" onClick={() => apply(1)} title="Fit to the screen">{k === 1 ? "Fit" : `${Math.round(k * 100)}%`}</button>
-      <button type="button" onClick={() => apply(k + 0.25)} disabled={k >= 3} aria-label="Zoom in">+</button>
-    </div>
-  );
+  // no − Fit + buttons (Oct 26, Nick: "just gone completely… pinch or double tap to zoom"): pinching and double-tapping
+  // the email still zoom it
+  void seen;
+  return null;
 }
 
 export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back, ai, aiCount }: { /** the AI section's button(s), e.g. Assistant (Oct 14) */ ai?: React.ReactNode;
