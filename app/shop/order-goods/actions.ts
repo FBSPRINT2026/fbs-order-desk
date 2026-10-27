@@ -308,23 +308,33 @@ export async function goodsWarehouses(lines: { sku: string; qty: number }[], mod
 /* ---------- S&S and SanMar side by side (Oct 27, Nick) ---------- */
 
 /** our card fee at SanMar, in percent (Settings: data.goods.sanmarFee); S&S charges none */
-async function sanmarFeePct(admin: ReturnType<typeof createAdminClient>) {
+async function sanmarFeePct(admin: ReturnType<typeof createAdminClient>) { return (await goodsMoney(admin)).fee; }
+/**
+ * Paying by card (Oct 27, Nick: "every dollar is 2 points… a cent per point… there's a 20% tax on that"): SanMar's card
+ * fee, points a dollar, a point's value and the tax rate, for the Points decision (owners only). Settings data.goods.
+ */
+export type GoodsMoney = { fee: number; ppd: number; pointValue: number; tax: number };
+async function goodsMoney(admin: ReturnType<typeof createAdminClient>): Promise<GoodsMoney> {
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-  const v = +((data?.data as { goods?: { sanmarFee?: number } } | null)?.goods?.sanmarFee ?? NaN);
-  return isFinite(v) && v >= 0 && v < 20 ? v : 3.25;
+  const g = ((data?.data as { goods?: Partial<Record<"sanmarFee" | "pointsPerDollar" | "pointValue" | "taxRate", number>> } | null)?.goods) || {};
+  const ok = (v: unknown, lo: number, hi: number, d: number) => { const n = +(v ?? NaN); return isFinite(n) && n >= lo && n < hi ? n : d; };
+  return { fee: ok(g.sanmarFee, 0, 20, 3.25), ppd: ok(g.pointsPerDollar, 0, 20, 2), pointValue: ok(g.pointValue, 0, 1, 0.01), tax: ok(g.taxRate, 0, 90, 20) };
 }
-export async function setSanmarFee(pct: number) {
+export async function setGoodsMoney(p: Partial<GoodsMoney>) {
   try {
     await staff();
-    const v = Math.round(+pct * 100) / 100;
-    if (!isFinite(v) || v < 0 || v >= 20) return { ok: false as const, error: "Enter the fee as a percent, like 3.5." };
     const admin = createAdminClient();
+    const cur = await goodsMoney(admin);
+    const num = (v: unknown) => Math.round(+(v as number) * 10000) / 10000;
+    const next = { ...cur, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v != null && isFinite(+v)).map(([k, v]) => [k, num(v)])) } as GoodsMoney;
+    if (next.fee < 0 || next.fee >= 20 || next.ppd < 0 || next.ppd >= 20 || next.pointValue < 0 || next.pointValue >= 1 || next.tax < 0 || next.tax >= 90) return { ok: false as const, error: "One of those numbers is out of range." };
     const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const d = (data?.data || {}) as Record<string, unknown>;
-    const { error } = await admin.from("settings").update({ data: { ...d, goods: { ...((d.goods as object) || {}), sanmarFee: v } } }).eq("id", 1);
-    return error ? { ok: false as const, error: error.message } : { ok: true as const, fee: v };
+    const { error } = await admin.from("settings").update({ data: { ...d, goods: { ...((d.goods as object) || {}), sanmarFee: next.fee, pointsPerDollar: next.ppd, pointValue: next.pointValue, taxRate: next.tax } } }).eq("id", 1);
+    return error ? { ok: false as const, error: error.message } : { ok: true as const, money: next, fee: next.fee };
   } catch (e) { return fail(e); }
 }
+export async function setSanmarFee(pct: number) { return setGoodsMoney({ fee: pct }); }
 
 // SanMar writes colors short ("Athletic Ht", "DkHtGray"): both sides spelled out the same way to compare
 const ABBR: [RegExp, string][] = [[/\bhthr\b|\bhtr\b|\bht\b/g, "heather"], [/\bdk\b/g, "dark"], [/\blt\b/g, "light"], [/\bgry\b|\bgy\b|\bgrey\b/g, "gray"], [/\bgrn\b/g, "green"], [/\bblu\b/g, "blue"], [/\bath\b/g, "athletic"], [/\bnvy\b|\bnv\b/g, "navy"], [/\bryl\b|\bry\b/g, "royal"], [/\bmrn\b/g, "maroon"], [/\bprpl\b|\bprp\b/g, "purple"], [/\bblk\b/g, "black"], [/\bwht\b/g, "white"], [/\borg\b|\borng\b/g, "orange"], [/\bchar\b/g, "charcoal"], [/\bslt\b/g, "slate"], [/\btr\b/g, "true"], [/\bvtg\b|\bvint\b/g, "vintage"]];
@@ -380,7 +390,8 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
         }
       }));
     }
-    return { ok: true as const, srcs, sm, notes: [...new Set(notes)], fee: await sanmarFeePct(admin), sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode() };
+    const money = await goodsMoney(admin);
+    return { ok: true as const, srcs, sm, notes: [...new Set(notes)], fee: money.fee, money, sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode() };
   } catch (e) { return fail(e); }
 }
 

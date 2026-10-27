@@ -13,6 +13,9 @@ import type { PreferredGood } from "@/lib/preferredGoods";
 import { goodsFromGroups, goodsOptions, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
 import { arriveOn, makePlan, shipKey, supName, whInfo, type Plan, type PlanMode, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSticky } from "@/lib/useSticky";
+import { useSeesMoney } from "@/components/RoleContext";
+import PointsDecision from "@/components/PointsDecision";
+import type { GoodsMoney } from "@/app/shop/order-goods/actions";
 import { garmentsFromRows } from "@/lib/goodsGarments";
 
 /**
@@ -58,7 +61,9 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
   // getting from there and the colors"): asked of S&S as soon as the goods are shown, and again when a quantity changes
   // S&S and SanMar side by side (Oct 27, Nick): where each size can come from, and the plan picked (Easiest by default;
   // the last one picked is kept)
-  const [opts, setOpts] = useState<null | { srcs: Record<string, Src[]>; sm: Record<string, SanMarRef>; notes: string[]; fee: number; sanmar: boolean; sanmarOrders: string }>(null);
+  const [opts, setOpts] = useState<null | { srcs: Record<string, Src[]>; sm: Record<string, SanMarRef>; notes: string[]; fee: number; money: GoodsMoney; sanmar: boolean; sanmarOrders: string }>(null);
+  // the Points decision: owners only (Oct 27, Nick: "my employees don't need to see this")
+  const owner = useSeesMoney(), [pointsOpen, setPointsOpen] = useState(false);
   const [planMode, setPlanMode] = useSticky<PlanMode>("goods.plan", "easy");
   const [ssOnly, setSsOnly] = useState(false), [feeEdit, setFeeEdit] = useState(false);
   const [editing, setEditing] = useState(false), [arrive, setArrive] = useState<Record<string, string>>({});
@@ -277,8 +282,14 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
                 </button>); })}
             </div>}
             <div className="og-tot"><span>{pcs.toLocaleString()} pcs{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
+            {owner && plan && opts && plan.parts.length > 0 && <>
+              <button type="button" className="og-pts" aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
+                <svg viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="9" r="6" /><path d="M15.5 9.5a6 6 0 1 1-6 6" /></svg>Points decision<span aria-hidden>{pointsOpen ? "▴" : "▾"}</span>
+              </button>
+              {pointsOpen && <PointsDecision plan={plan} items={wanted} srcs={opts.srcs} money={opts.money} onMoney={(m) => setOpts((o) => (o ? { ...o, money: m, fee: m.fee } : o))} />}
+            </>}
             {opts?.sanmar && <p className="faint og-note og-fee">{feeEdit
-              ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee } : o)); }); }} />%</>
+              ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee, money: r.money } : o)); }); }} />%</>
               : <>SanMar prices include our {opts.fee}% card fee; S&amp;S has none, so a tie goes to S&amp;S. <button type="button" className="linkbtn" onClick={() => setFeeEdit(true)}>Change</button>{ssOnly && <> · S&amp;S only. <button type="button" className="linkbtn" onClick={() => { setSsOnly(false); setCheck(null); }}>Show SanMar too</button></>}</>}</p>}
             <div className="field"><label htmlFor="og-ship">Shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
