@@ -1,6 +1,6 @@
 "use client";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -93,6 +93,15 @@ export default function GroupEditor({ onLogo, onDigitize, printsFixed = false, o
   // the Ink Room's PMS formulas for the ink swatches (2178 C and the rest the old chart doesn't have)
   const [, setFormulas] = useState(0);
   useEffect(() => { loadInkFormulas(createClient()).then(setFormulas).catch(() => {}); }, []);
+  // embroidery on a backpack, hat, fleece… is a specialty item (Oct 27, Nick on #40189: "a backpack at 20 pieces… $5…
+  // you have to add the specialty item… hats, backpacks, fleece, anything that's not just a flat garment"): a line known
+  // only by its style number (CT89241804) is marked from the catalog's name for it ("Carhartt Canvas Backpack")
+  const specFromCatalog = g.imprints.some((d) => d.method === "embroidery") ? g.lines.map((l, i) => ({ l, i })).filter(({ l }) => {
+    if (l.specialty != null || isSpecialtyItem(l) || !(l.style || "").trim()) return false;
+    const gar = catalog.find((x) => x.style.toLowerCase() === l.style.trim().toLowerCase());
+    return !!gar && SPECIALTY_ITEM.test(gar.description || "");
+  }).map((x) => x.i) : [];
+  useEffect(() => { if (specFromCatalog.length) update((x) => { for (const i of specFromCatalog) if (x.lines[i]) x.lines[i].specialty = true; }); }, [specFromCatalog.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const [askSkip, setAskSkip] = useState(false);
   // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
   // you want to change all the items on this group to 2.25?")
@@ -754,7 +763,7 @@ export default function GroupEditor({ onLogo, onDigitize, printsFixed = false, o
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={firstColor} changes={changesOf(d)} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{onDigitize && d.method === "embroidery" && d.design_id && <button type="button" className="btn sm pr-dgt" title="Send this logo to be digitized: the email, the digitizing sheet and the original art" onClick={() => onDigitize(d.id)}>Digitize</button>}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={firstColor} changes={changesOf(d)} inksLine={inkCtl(d)} extra={screenCtl(d)} onDigitize={onDigitize && d.design_id ? () => onDigitize(d.id) : undefined} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -928,8 +937,17 @@ export default function GroupEditor({ onLogo, onDigitize, printsFixed = false, o
                 {embImps.length > 0 && <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Digitizing</span></div>
                   {embImps.map((d) => (
-                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches</span> : null}{!hidePrices && <b className="num">{money(wpl.digitizing)}</b>}</div>
+                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches{d.emb?.file ? "" : " (estimate)"}</span> : null}{!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")}>{money(d.digitized ? 0 : wpl.digitizing)}</b>}
+                      {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
+                      <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
                   ))}
+                  {(wpl.embSpecialty?.length || 0) > 0 && g.lines.some((l) => (l.style || "").trim()) && (() => {
+                    const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
+                    return (
+                      <div className="sbx-r"><span className="sbx-loc">Specialty item</span><span className="faint">hats, bags, fleece, jackets</span>{!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? rate * embImps.length : 0)}/pc</b>}
+                        <label className="check sbx-end"><input type="checkbox" checked={on} onChange={(e) => update((x) => { for (const l of x.lines) l.specialty = e.target.checked; })} />Specialty</label></div>
+                    );
+                  })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
                 </div>}
               </div>
@@ -1298,7 +1316,7 @@ function ChangeTile({ d, url, color, hex, swap }: { d: Group["imprints"][number]
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes }: { /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, onDigitize }: { /** the Digitizer for this print */ onDigitize?: () => void; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string> }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
@@ -1321,6 +1339,12 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   return (
     <div className={"pr" + (vis && !opened ? " pr-vis" : "")}>
       {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span><b>Visual mockup</b><small>Production confirming details on print run</small></span></button>}
+      {/* embroidery not digitized yet (Oct 27, Nick: "a stamp on embroidery orders that say needs digitizing… the price
+          right now is not firm… until we email Volikes, get it back, sew it out, get it approved"): the stitches, size
+          and price are estimates. Clicking it opens the Digitizer */}
+      {!vis && d.method === "embroidery" && !d.digitized && !d.emb?.file && (
+        <button type="button" className="pr-dgz-stamp" disabled={!onDigitize} onClick={onDigitize} title={onDigitize ? "Send it to be digitized (the Digitizer)" : "Upload the logo first"}><span><b>Needs digitizing</b><small>Stitches and price confirmed after the sew-out</small></span></button>
+      )}
       {ask && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>

@@ -302,6 +302,7 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
   const changes = d.visualOnly ? [] : Object.entries(d.inkBy || {}).map(([k, m]) => [k, Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())] as const).filter(([, ch]) => ch.length);
   const warns = [
     d.visualOnly ? "VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS" : "",
+    d.method === "embroidery" && !d.digitized && !d.emb?.file ? "NEEDS DIGITIZING: STITCHES AND SIZE CONFIRMED AFTER THE SEW-OUT" : "",
     Object.keys(d.byColor?.skip || {}).length ? `BY SHIRT COLOR: ${Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}` : "",
     !d.visualOnly && (d.confirm?.size || d.confirm?.ink) ? `CONFIRM ${[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING` : "",
   ].filter(Boolean);

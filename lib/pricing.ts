@@ -132,6 +132,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** embroidery only (Oct 23, Nick: "a whole different process"): where the stitch count came from, backing, topping,
    *  3D puff / metallic, the thread line and the digitized file (lib/embroidery.ts). Screen prints never have it */
   emb?: import("@/lib/embroidery").EmbSpec;
+  /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
+   *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
   /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
    *  are charged by pmsInks() */ pms?: number;
   /** PMS charge per ink set by hand (lowercase ink name → charge or not): "standard, no charge" for a customer's
@@ -751,7 +753,8 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
   if (d.method === "embroidery") {
     const eti = x.eti ?? ti;
     const extra = s.embPer1k && num(d.stitches) > num(s.embStitches) ? Math.ceil((num(d.stitches) - num(s.embStitches)) / 1000) * num(s.embPer1k) : 0;
-    return { each: r2(num(s.embroidery[eti]) + extra), setup: num(s.digitizing), inkFee };
+    // the logo digitized before (its DST on file): no digitizing charge (Imprint.digitized, like repeat screens)
+    return { each: r2(num(s.embroidery[eti]) + extra), setup: d.digitized ? 0 : num(s.digitizing), inkFee };
   }
   if (d.method === "dtf") return d.supplied ? { each: 0, setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
@@ -881,7 +884,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, qty, ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
