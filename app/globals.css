@@ -15283,6 +15283,8 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 a.dgt-file{color:var(--accent);text-decoration:none}
 .dgt-pdf{width:100%;height:520px;border:1px solid var(--line);border-radius:6px;background:#fff}
 .dgt-was{margin:0;font-size:12.5px;color:var(--warn)}
+.dgt-pick{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;font-size:14px}
+.dgt-pick .lbl{flex-basis:100%}
 .dgt-done{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2,var(--surface))}
 .dgt-done b{color:var(--ok)}
 .dgt-done span{font-size:12.5px;color:var(--ink-3)}

@@ -168,7 +168,7 @@ export type Outcome = "customer" | "lead" | "sent" | "skipped" | "duplicate" | "
  */
 async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, acct: Acct): Promise<Outcome | null> {
   const ids = [...new Set([m.inReplyTo, ...m.references].filter(Boolean))].slice(-20);
-  let req: { id: string; order_id: string | null; meta: { digitize?: { order_id: string; imprint_id: string; design_id: string | null } } } | null = null;
+  let req: { id: string; order_id: string | null; meta: { digitize?: { order_id: string; imprint_id: string; design_id: string | null; /** a request for several logos at once (Oct 27) */ items?: { imprint_id: string; design_id: string | null }[] } } } | null = null;
   if (ids.length) {
     const { data } = await admin.from("activities").select("id, order_id, meta").in("external_id", ids).not("meta->digitize", "is", null).order("occurred_at", { ascending: false }).limit(1);
     req = (data?.[0] as typeof req) || null;
@@ -193,11 +193,14 @@ async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, a
     meta: { from_name: m.from.name.slice(0, 200), match: "digitizer", references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "inbox", account_id: acct.id, account: acct.email, digitizer_reply: { ...dz, request: req.id } },
   }).select("id").single();
   if (error) throw new Error(error.message);
-  if (dz.design_id) {
-    const { data: d } = await admin.from("designs").select("specs").eq("id", dz.design_id).maybeSingle();
+  // each logo the request was for waits with their files on Digitizing (one request can be for several logos)
+  const items = dz.items?.length ? dz.items : [{ imprint_id: dz.imprint_id, design_id: dz.design_id }];
+  const files = attachments.filter((a) => /\.(zip|dst|emb|pdf)$/i.test(a.name));
+  for (const it of items) {
+    if (!it.design_id) continue;
+    const { data: d } = await admin.from("designs").select("specs").eq("id", it.design_id).maybeSingle();
     const sp = (d?.specs || {}) as Record<string, unknown>, emb = (sp.embroidery || {}) as Record<string, unknown>;
-    const files = attachments.filter((a) => /\.(zip|dst|emb|pdf)$/i.test(a.name));
-    await admin.from("designs").update({ specs: { ...sp, embroidery: { ...emb, reply: { at: m.date.toISOString(), activity: ins.id, from, subject: m.subject.slice(0, 200), files, order_id: dz.order_id, imprint_id: dz.imprint_id } } } }).eq("id", dz.design_id);
+    await admin.from("designs").update({ specs: { ...sp, embroidery: { ...emb, reply: { at: m.date.toISOString(), activity: ins.id, from, subject: m.subject.slice(0, 200), files, order_id: dz.order_id, imprint_id: it.imprint_id } } } }).eq("id", it.design_id);
   }
   return "digitizer";
 }

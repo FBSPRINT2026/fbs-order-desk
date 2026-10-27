@@ -69,3 +69,36 @@ export function digitizeEmail(c: DigitizeCtx) {
   ].join("\n");
   return { subject, body };
 }
+
+/**
+ * A request for every logo on the order that needs digitizing (Oct 27, Nick on #40193: "It should ask for both files…
+ * the left chest and then the back… this PDF only asks for one, and so does the email"): one block per logo, what
+ * they share said once. One logo is the one-logo email.
+ */
+export function digitizeEmailMany(cs: DigitizeCtx[]) {
+  if (cs.length <= 1) return digitizeEmail(cs[0]);
+  const c0 = cs[0];
+  const sizeOf = (c: DigitizeCtx) => (c.wIn ? `${c.wIn.toFixed(2)}"` : c.im.size || "");
+  const subject = `FOR DIGITIZING: ${cs.length} logos (${cs.map((c) => [c.im.location, sizeOf(c)].filter(Boolean).join(" ")).join(", ")}) · FBS #${c0.number}`;
+  const rows = cs.map(specRows);
+  // what's the same for every logo (the garment, the quantity) is said once, after them
+  const shared = (k: string) => rows.every((r) => (r.find((x) => x[0] === k) || [])[1] === (rows[0].find((x) => x[0] === k) || [])[1]);
+  const once = ["Garment", "Quantity", "Files back"].filter(shared);
+  const body = [
+    `Hi ${DIGITIZER.name.split(" ")[0]} team,`,
+    "",
+    `This is a digitizing request for ${cs.length} logos. Please digitize each one for embroidery at the size below.`,
+    "",
+    ...cs.flatMap((c, i) => [
+      `Logo ${i + 1}: ${c.im.location} (${logoName(c)})`,
+      ...rows[i].filter(([k]) => !once.includes(k)).map(([k, v]) => `${k}: ${v}`),
+      "",
+    ]),
+    ...once.map((k) => { const v = (rows[0].find((x) => x[0] === k) || [])[1] || ""; return k === "Files back" ? `Files back for each logo: ${v}` : `${k}: ${v}`; }),
+    "",
+    "Attached: our digitizing sheet (one page per logo, each shown large with its dimensions and where it goes) and the original art for each.",
+    "",
+    "Thank you,",
+  ].join("\n");
+  return { subject, body };
+}
