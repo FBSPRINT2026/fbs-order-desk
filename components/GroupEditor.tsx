@@ -755,7 +755,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
-                <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
+                <div className={"imp-body" + (!!onMockup && !g.mockupSkipped && !d.supplied ? " has-logo" : "")}>
                 {!!onMockup && !g.mockupSkipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
                 <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
