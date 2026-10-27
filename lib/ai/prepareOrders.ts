@@ -31,46 +31,92 @@ export async function prepareOrders(admin: SupabaseClient, deadline: number): Pr
   const doneConvos = new Set<string>();
   for (const a of (data || []) as A[]) {
     if (Date.now() > deadline - 70_000) break;
-    const cv = await emailConversation(admin, a.id).catch(() => null);
-    if (!cv) continue;
-    const anchor = anchorOf(cv.convo);
-    if (doneConvos.has(anchor)) continue;
-    doneConvos.add(anchor);
-    // an order already made from this conversation: nothing to do
-    const ids = cv.convo.map((e) => e.id);
-    const { data: made } = await admin.from("ai_suggestions").select("id").in("activity_id", ids).in("kind", ["draft_order", "draft_order_part"]).eq("status", "done").limit(1);
-    if (made?.length || cv.convo.some((e) => (e as { order_id?: string | null }).order_id)) continue;
-    const r = await planEmail(admin, a.id, "assistant").catch(() => null);
-    if (!r?.ok) { out.push(`${a.id}: no plan`); continue; }
-    const plan: EmailPlan = r.plan;
-    const newest = cv.convo.find((e) => e.direction === "in") || cv.convo[0];
-    // safety (Oct 22: one email was read 2,100 times in two days, about $100): an email the assistant has already read
-    // in the last 12 hours is left alone, whatever the checks below say
-    const { count: recent } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("task", "order_from_email").eq("created_by", "assistant")
-      .eq("activity_id", newest.id).gte("created_at", new Date(Date.now() - 12 * 3600_000).toISOString());
-    if ((recent || 0) >= Math.max(1, plan.parts.length)) continue;
-    if (plan.parts.length > 1) {
-      // several orders: each read on its own, those not read yet (or read before the conversation grew). A part is
-      // saved under the email it was read from (newest), so look there as well as under the conversation's first email:
-      // looking only under the first one never found it, and every part was read again every run (the Oct 22 bill)
-      for (const p of plan.parts) {
-        if (Date.now() > deadline - 60_000) break;
-        const { data: hads } = await admin.from("ai_suggestions").select("status, payload").in("dedupe_key", [...new Set([`email:${anchor}:order:${p.key}`, `email:${newest.id}:order:${p.key}`])]);
-        const later = (a?: string | null, b?: string | null) => !!a && !!b && Date.parse(a) >= Date.parse(b);
-        if ((hads || []).some((had) => had.status === "done" || later((had.payload as { seen?: string } | null)?.seen, plan.seen))) continue;
-        const x = await suggestEmailOrder(admin, newest.id, "assistant", { jobRef: p.job, reorderOk: !!p.job, part: p }).catch(() => null);
-        out.push(`${p.label}: ${x?.ok ? "ready" : "failed"}`);
-      }
-    } else {
-      // one order: read in full as the email's order, with the past order it repeats
-      const p = plan.parts[0];
-      const { data: had } = await admin.from("ai_suggestions").select("status, payload").eq("dedupe_key", `email:${newest.id}:order`).maybeSingle();
-      const pl = had?.payload as { v?: number; seen?: string } | null;
-      if (had?.status === "done" || (pl?.v === 2 && !!pl.seen && Date.parse(pl.seen) >= Date.parse(plan.seen))) continue;
-      const told = p ? [p.kind === "reorder" && p.jobLabel ? `This is a reorder of ${p.jobLabel}.` : p.kind === "new" ? "This is a new order." : "", p.changes ? `What's different: ${p.changes}` : ""].filter(Boolean).join(" ") : "";
-      const x = await suggestEmailOrder(admin, newest.id, "assistant", { told, jobRef: p?.job || null, reorderOk: !!p?.job }).catch(() => null);
-      out.push(`${p?.label || newest.id}: ${x?.ok ? "ready" : "failed"}`);
+    await readAhead(admin, a.id, deadline, out, doneConvos);
+  }
+  return { prepared: out };
+}
+
+/** one conversation (an email's, or a ClickUp job's) worked out in full: its plan, then each order in it read (the
+ *  reading Create order opens on). Skipped when it's already read and nothing new came in, or an order was made. */
+async function readAhead(admin: SupabaseClient, activityId: string, deadline: number, out: string[], doneConvos: Set<string>) {
+  const a = { id: activityId };
+  const cv = await emailConversation(admin, a.id).catch(() => null);
+  if (!cv) return;
+  const anchor = anchorOf(cv.convo);
+  if (doneConvos.has(anchor)) return;
+  doneConvos.add(anchor);
+  // an order already made from this conversation: nothing to do
+  const ids = cv.convo.map((e) => e.id);
+  const { data: made } = await admin.from("ai_suggestions").select("id").in("activity_id", ids).in("kind", ["draft_order", "draft_order_part"]).eq("status", "done").limit(1);
+  if (made?.length || cv.convo.some((e) => (e as { order_id?: string | null }).order_id)) return;
+  const r = await planEmail(admin, a.id, "assistant").catch(() => null);
+  if (!r?.ok) { out.push(`${a.id}: no plan`); return; }
+  const plan: EmailPlan = r.plan;
+  const newest = cv.convo.find((e) => e.direction === "in") || cv.convo[0];
+  // safety (Oct 22: one email was read 2,100 times in two days, about $100): an email the assistant has already read
+  // in the last 12 hours is left alone, whatever the checks below say
+  const { count: recent } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("task", "order_from_email").eq("created_by", "assistant")
+    .eq("activity_id", newest.id).gte("created_at", new Date(Date.now() - 12 * 3600_000).toISOString());
+  if ((recent || 0) >= Math.max(1, plan.parts.length)) return;
+  if (plan.parts.length > 1) {
+    // several orders: each read on its own, those not read yet (or read before the conversation grew). A part is
+    // saved under the email it was read from (newest), so look there as well as under the conversation's first email:
+    // looking only under the first one never found it, and every part was read again every run (the Oct 22 bill)
+    for (const p of plan.parts) {
+      if (Date.now() > deadline - 60_000) break;
+      const { data: hads } = await admin.from("ai_suggestions").select("status, payload").in("dedupe_key", [...new Set([`email:${anchor}:order:${p.key}`, `email:${newest.id}:order:${p.key}`])]);
+      const later = (a?: string | null, b?: string | null) => !!a && !!b && Date.parse(a) >= Date.parse(b);
+      if ((hads || []).some((had) => had.status === "done" || later((had.payload as { seen?: string } | null)?.seen, plan.seen))) continue;
+      const x = await suggestEmailOrder(admin, newest.id, "assistant", { jobRef: p.job, reorderOk: !!p.job, part: p }).catch(() => null);
+      out.push(`${p.label}: ${x?.ok ? "ready" : "failed"}`);
     }
+  } else {
+    // one order: read in full as the email's order, with the past order it repeats
+    const p = plan.parts[0];
+    const { data: had } = await admin.from("ai_suggestions").select("status, payload").eq("dedupe_key", `email:${newest.id}:order`).maybeSingle();
+    const pl = had?.payload as { v?: number; seen?: string } | null;
+    if (had?.status === "done" || (pl?.v === 2 && !!pl.seen && Date.parse(pl.seen) >= Date.parse(plan.seen))) return;
+    const told = p ? [p.kind === "reorder" && p.jobLabel ? `This is a reorder of ${p.jobLabel}.` : p.kind === "new" ? "This is a new order." : "", p.changes ? `What's different: ${p.changes}` : ""].filter(Boolean).join(" ") : "";
+    const x = await suggestEmailOrder(admin, newest.id, "assistant", { told, jobRef: p?.job || null, reorderOk: !!p?.job }).catch(() => null);
+    out.push(`${p?.label || newest.id}: ${x?.ok ? "ready" : "failed"}`);
+  }
+}
+
+/**
+ * ClickUp jobs read ahead too (Oct 27, Nick: "you know how we did the pre-read the email so the create order tool works
+ * faster… Can you do the same thing with ClickUp orders?"): a new job on a customer's board (waiting on ClickUp Jobs,
+ * made in the last 2 weeks, its workspace matched to a customer) is brought in like Process does (lib/clickup.ts
+ * importClickUpTask: the task, its notes and its files) and read like an order email, so Process opens on the reading.
+ * Shares the assistant's daily limit with the emails. At most 3 jobs a run.
+ */
+export async function prepareClickUpOrders(admin: SupabaseClient, deadline: number): Promise<Record<string, unknown>> {
+  const st = await aiState(admin);
+  if (!st.ready) return { off: st.reason };
+  const { count: today } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("created_by", "assistant")
+    .in("task", ["order_from_email", "email_plan"]).gte("created_at", new Date(Date.now() - 24 * 3600_000).toISOString());
+  if ((today || 0) >= 60) return { off: `daily limit: ${today} background reads in the last 24 hours` };
+  const { importClickUpTask } = await import("@/lib/clickup");
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString();
+  const { data } = await admin.from("clickup_tasks").select("id, team_id, activity_id, name").eq("waiting", true).is("parent", null).is("order_id", null)
+    .gte("created_at_cu", since).order("created_at_cu", { ascending: false }).limit(12);
+  const { data: teams } = await admin.from("clickup_teams").select("id, customer_id, hidden");
+  const ok = new Set(((teams || []) as { id: string; customer_id: string | null; hidden: boolean }[]).filter((t) => t.customer_id && !t.hidden).map((t) => t.id));
+  const out: string[] = [], done = new Set<string>();
+  let n = 0;
+  for (const t of (data || []) as { id: string; team_id: string; activity_id: string | null; name: string }[]) {
+    if (Date.now() > deadline - 100_000 || n >= 3) break;
+    if (!ok.has(t.team_id)) continue;
+    // already brought in and read (or an order made from it): nothing to do
+    if (t.activity_id) {
+      const { data: had } = await admin.from("ai_suggestions").select("id").eq("activity_id", t.activity_id).in("kind", ["draft_order", "draft_order_part"]).limit(1);
+      if (had?.length) continue;
+    }
+    n++;
+    const im = await importClickUpTask(admin, t.id, "assistant").catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    if (!im.ok) { out.push(`${t.name}: ${im.error}`); continue; }
+    const before = out.length;
+    await readAhead(admin, im.activityId, deadline, out, done);
+    if (out.length === before) out.push(`${t.name}: already read`);
   }
   return { prepared: out };
 }
