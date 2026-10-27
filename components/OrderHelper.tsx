@@ -1,4 +1,5 @@
 "use client";
+import MenuItem from "@/components/MenuItem";
 import { openOrderGoodsForOrder } from "@/components/tools/OrderGoodsTool";
 import { useEffect, useRef, useState } from "react";
 import type { HelperAction, HelperMsg, HelperOrder } from "@/lib/orderHelperShared";
@@ -102,14 +103,14 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
         <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
           <summary className="btn oh-btn">✦ Ask AI ▾</summary>
           <div className="ot-menu">
-            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onChat(); }} title="The chat on the right: did I get everything right? Say what to change (the order or the art); it stays open while you look around, and it's kept with the order">Order chat</button>
-            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setOpen(true); }} title="Tell the AI what to do with this order, or paste a snip of the customer's email">Quick ask (or paste an email)</button>
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onChat(); }} title="The chat on the right: did I get everything right? Say what to change (the order or the art); it stays open while you look around, and it's kept with the order"><MenuItem icon="chat" tone="blue" title="Order chat" sub="Check the order, say what to change" /></button>
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setOpen(true); }} title="Tell the AI what to do with this order, or paste a snip of the customer's email"><MenuItem icon="bolt" tone="salmon" title="Quick ask" sub="Paste an email or tell it what to do" /></button>
             {/* Order goods (Oct 23, Nick: "on the order screen where it says Ask AI, you need to add the order goods tool… it's
                 all detailed out perfectly in the order itself"): the one Order Goods tool, filled from this order's garments */}
-            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; openOrderGoodsForOrder(orderId); }} title="Buy this order's garments: the Order goods panel on the right, S&S and SanMar side by side; you place it">Order goods</button>
+            <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; openOrderGoodsForOrder(orderId); }} title="Buy this order's garments: the Order goods panel on the right, S&S and SanMar side by side; you place it"><MenuItem icon="shirt" tone="orange" title="Order goods" sub="S&amp;S and SanMar side by side" /></button>
             {/* Create DTF gang sheet (Oct 26, Nick; first "Order DTF transfers"): the one Gang sheet builder, filled from this order's heat press prints */}
-            {onDigitize && <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onDigitize(); }} title="Send an embroidered logo to Volikes to be digitized: the email, the digitizing sheet and the original art; you press Send">Send for digitizing</button>}
-            <a href={`/shop/gang-sheet/builder?order=${orderId}`} title="Opens the Gang sheet builder with this order's heat press prints: their art (background off), sizes and how many, saved with the order (or this order's sheet if it already has one); you order it from DTF Dallas">Create DTF gang sheet</a>
+            {onDigitize && <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; onDigitize(); }} title="Send an embroidered logo to Volikes to be digitized: the email, the digitizing sheet and the original art; you press Send"><MenuItem icon="needle" tone="violet" title="Send for digitizing" sub="Email the logo to Volikes" /></button>}
+            <a href={`/shop/gang-sheet/builder?order=${orderId}`} title="Opens the Gang sheet builder with this order's heat press prints: their art (background off), sizes and how many, saved with the order (or this order's sheet if it already has one); you order it from DTF Dallas"><MenuItem icon="grid" tone="green" title="Create DTF gang sheet" sub="The heat press prints on one sheet" /></a>
           </div>
         </details>
       ) : <button type="button" className="btn oh-btn" onClick={() => setOpen(true)} title="Tell the AI what to do with this order, or paste a snip of the customer's email">✦ Ask AI</button>}

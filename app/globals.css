@@ -11120,6 +11120,28 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .aa-shop .aa-age.late b{color:var(--warn)}
 .aa-shop .aa-age.bad b{color:var(--danger)}
 
+/* menu items with a tinted icon and a one-line description (components/MenuItem.tsx, Oct 27 "option A"): every
+   dropdown on the order page. --fbs-violet joins the kit for the embroidery tools */
+:root{--fbs-violet:#5b4fd1}
+.ot-menu:has(.mi){min-width:260px;padding:6px}
+.ot-menu :is(a,button):has(.mi){padding:6px 8px}
+.ot-menu :is(a,button):has(.mi):hover{background:color-mix(in srgb,var(--fbs-blue) 9%,transparent)}
+.mi{display:flex;align-items:center;gap:10px}
+.mi-ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+.mi-ic.blue{color:var(--fbs-blue);background:color-mix(in srgb,var(--fbs-blue) 13%,transparent)}
+.mi-ic.salmon{color:var(--fbs-salmon);background:color-mix(in srgb,var(--fbs-salmon) 13%,transparent)}
+.mi-ic.orange{color:#c98a07;background:color-mix(in srgb,var(--fbs-orange) 18%,transparent)}
+.mi-ic.violet{color:var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 12%,transparent)}
+.mi-ic.green{color:var(--ok);background:color-mix(in srgb,var(--ok) 13%,transparent)}
+.mi-ic.gray{color:var(--ink-2);background:var(--surface-2)}
+.mi-ic.danger{color:var(--danger);background:color-mix(in srgb,var(--danger) 11%,transparent)}
+.mi-t{display:flex;flex-direction:column;min-width:0}
+.mi-1{font-size:14px;font-weight:600;color:var(--ink);line-height:1.25}
+.mi-2{font-size:12px;color:var(--ink-3);line-height:1.3}
+.ot-menu .danger:has(.mi) .mi-1{color:var(--danger)}
+.ot-menu .danger.armed:has(.mi) :is(.mi-1,.mi-2){color:#fff}
+.ot-menu .danger.armed:has(.mi) .mi-ic{background:rgba(255,255,255,.2);color:#fff}
+
 /* ===== One look across the shop (Oct 21, Nick: "unify everything… I meant the top of this page [the order page]…
    I liked these toolbars"): the order page's top is the kit. Tab bars and filter chips are its tab bar (white bar, the
    picked tab tinted blue with a blue underline, counts in little pills); number cards are its summary card (the color

@@ -41,6 +41,7 @@ import { Pill, pvStatusOf } from "@/components/bits";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import DigitizerTool from "@/components/tools/DigitizerTool";
+import MenuItem from "@/components/MenuItem";
 import ChargeOnFile from "@/components/ChargeOnFile";
 import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
@@ -1241,18 +1242,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Documents ▾</summary>
             <div className="ot-menu">
-              <a href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
-              <a href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks">Proof PDF</a>
-              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
+              <a href={`/print/${o.id}`} target="_blank" rel="noreferrer"><MenuItem icon="invoice" tone="blue" title={o.type === "quote" ? "Quote PDF" : "Invoice PDF"} sub="Prices, totals and balance" /></a>
+              <a href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks"><MenuItem icon="proof" tone="salmon" title="Proof PDF" sub="Mockups for the customer to approve" /></a>
+              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
             </div>
           </details>
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">
-              {prodRole && <Link href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time">Production mockup</Link>}
-              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
-              <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
-              <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
+              {prodRole && <Link href={`/shop/orders/${o.id}/production`} title="The mockup as production prints it: confirm the real size, placement, inks and screens, and see what we did last time"><MenuItem icon="press" tone="violet" title="Production mockup" sub="Confirm size, placement and inks" /></Link>}
+              <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
+              <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer"><MenuItem icon="label" tone="green" title="Box labels" sub="Print the labels for the boxes" /></a>
+              <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)"><MenuItem icon="phone" tone="blue" title="Phone menu" sub="What scanning the QR code opens" /></a>
             </div>
           </details>
           {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
@@ -1264,8 +1265,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
-              <button type="button" onClick={duplicate}>Duplicate</button>
-              <button type="button" className="danger" onClick={del}>Delete order</button>
+              <button type="button" onClick={duplicate}><MenuItem icon="copy" tone="gray" title="Duplicate" sub="A new order just like this one" /></button>
+              <button type="button" className="danger" onClick={del}><MenuItem icon="trash" tone="danger" title="Delete order" sub="Asks first, with what goes with it" /></button>
             </div>
           </details>
           {/* only while saving or when a save failed (Oct 21, Nick: "I really don't like that invoice saved created button") */}
