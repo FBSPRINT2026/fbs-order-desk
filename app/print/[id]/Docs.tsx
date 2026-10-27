@@ -167,7 +167,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         const countTable = (ls: typeof lines) => (
           <table className={"cnt" + (ls.length > 2 ? " tight" : "")}>
             <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz" style={{ width: ".85in" }}>Total</th></tr></thead>
-            <tbody>{ls.map((l) => <LineRows key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} />)}</tbody>
+            <tbody>{ls.map((l) => <LineRows key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} />)}</tbody>
           </table>
         );
         return (
@@ -196,7 +196,8 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                 {mk.length ? mk.slice(0, 4).map((u, i) => (
                   <div className="wo-m" key={u}>
                     <img src={u} alt="Mockup" />
-                    <span>{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>
+                    {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
+                    <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>
                   </div>
                 )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
               </div>
@@ -308,7 +309,10 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
   );
 }
 
-function LineRows({ l, sizes, hex, single }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean }) {
+function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string> }) {
+  // the line's own garment color (Oct 27, Nick: the F260 Mauve swatch showed the Blue Spruce green): the order's garment
+  // colors first (what the mockups use), then the name; never another line's color
+  const own = colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
   const q = lineQty(l);
   const boxes = (
     <>{sizes.map((z) => <td key={z} className="sz"><div /></td>)}<td className="sz"><div /></td></>
@@ -316,7 +320,7 @@ function LineRows({ l, sizes, hex, single }: { l: Group["lines"][number]; sizes:
   return (
     <>
       <tr>
-        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : colorHex(l.color) || hex} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
+        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
         {sizes.map((z) => <td key={z} className="sz">{l.sizes?.[z as keyof typeof l.sizes] ? <b>{l.sizes[z as keyof typeof l.sizes]}</b> : ""}</td>)}
         <td className="tot"><b>{q}</b></td>
       </tr>

@@ -273,6 +273,7 @@ export const DOC_CSS = `
 .pdoc .wo-m{min-height:0;display:flex;flex-direction:column;align-items:center;background:#f4f5f7;border-radius:12px;padding:8px}
 .pdoc .wo-m img{flex:1 1 0;min-height:0;width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
 .pdoc .wo-m span{font-size:9pt;color:var(--ink3);margin-top:3px}
+.pdoc .wo-m span .wo-st{font-weight:800;color:var(--ink);border:1px solid currentColor;border-radius:3px;padding:0 4px;margin-right:5px;font-size:9.5pt}
 .pdoc .wo-m.none{display:grid;place-items:center;font-size:12pt;color:#fff}
 .pdoc .wo-prints{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .pdoc .wo-prints>.lbl{flex-basis:100%}
