@@ -15103,3 +15103,14 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 
 /* My Day → Calendar → Jobs: My accounts / Everyone (Oct 27) */
 .md-jobwho{margin:6px 0 4px;padding:0;border:0;background:none}
+
+/* Mockup Creator: "Center on the circle?" asked when it's found (Oct 27) */
+.mk-ctr-on{font-size:12.5px;flex-basis:100%}
+.mk-ctr-ask{max-width:460px}
+.mk-ctr-pic{position:relative;margin:4px auto 6px;max-width:320px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:0}
+.mk-ctr-pic img{display:block;width:100%;height:auto;max-height:220px;object-fit:contain}
+.mk-ctr-mid,.mk-ctr-dot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--ink-3)}
+.mk-ctr-mid{left:50%;top:50%;background:var(--ink-3)}
+.mk-ctr-dot{background:var(--accent)}
+.mk-ctr-key{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink-3);vertical-align:-1px;margin-right:4px}
+.mk-ctr-key.blue{background:var(--accent)}

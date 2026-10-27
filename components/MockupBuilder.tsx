@@ -1658,9 +1658,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const d = designOf(im), u = d ? artUrl(im) : "";
       if (!d || !u || isQuick(d.id) || im.center?.d === d.id || centerAsked.current[im.id] === d.id) continue;
       centerAsked.current[im.id] = d.id;
-      void detectCenter(u).then((c) => setImprints((xs) => xs.map((x) => (x.id === im.id && x.design_id === d.id && x.center?.d !== d.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on: !!c, by: "auto" } } : x)))).catch(() => null);
+      // found one: ask (Oct 27, Nick: "that is something you should detect and ask us… I detected this circle with an
+      // offset, do I center on the circle?"), the answer is kept on the print (by "you")
+      void detectCenter(u).then((c) => setImprints((xs) => xs.map((x) => (x.id === im.id && x.design_id === d.id && x.center?.d !== d.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on: false, by: "auto" } } : x)))).catch(() => null);
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
+  /** a print whose logo has a circle off its middle that nobody has answered yet: asked in a pop-up, one at a time */
+  const [centerSkip, setCenterSkip] = useState<Record<string, boolean>>({});
+  const centerAsk = auto ? undefined : imprints.find((x) => x.center && x.center.d === x.design_id && x.center.by === "auto" && !x.center.on && (Math.abs(x.center.x - 0.5) > 0.02 || Math.abs(x.center.y - 0.5) > 0.02) && !spotFor(x.location).wrap && !centerSkip[x.id + x.design_id]);
+  const answerCenter = (im: Imprint, on: boolean) => setImprints((xs) => xs.map((x) => (x.id === im.id && x.center ? { ...x, center: { ...x.center, on, by: "you" } } : x)));
   async function toggleCenter(im: Imprint, on: boolean) {
     const d = designOf(im); if (!d) return;
     let c = im.center?.d === d.id && (im.center.x !== 0.5 || im.center.y !== 0.5) ? { x: im.center.x, y: im.center.y } : null;
@@ -2606,6 +2612,26 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } catch (e) { setMsg("Couldn't make the separations: " + (e instanceof Error ? e.message : String(e))); setSaving(false); }
   }
   saveRef.current = (f?: boolean) => { saveAll(!!f); };
+  const baseSig = useRef<string | null>(null);
+  const [leave, setLeave] = useState<string | null>(null);
+  useEffect(() => {
+    // the first click or key press: what's there now is the starting point for "changed"
+    const take = () => { if (baseSig.current === null) baseSig.current = sigNowRef.current(); };
+    // leaving by a link (the order, the sidebar) with changes not saved: ask first
+    const onClick = (e: MouseEvent) => {
+      if (!dirtyRefOut.current() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.hasAttribute("download") || (a.getAttribute("href") || "").startsWith("#")) return;
+      if (a.origin === location.origin && a.pathname === location.pathname && a.search === location.search) return;
+      e.preventDefault(); e.stopPropagation(); setLeave(a.href);
+    };
+    const onUnload = (e: BeforeUnloadEvent) => { if (dirtyRefOut.current()) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("pointerdown", take, true); window.addEventListener("keydown", take, true);
+    document.addEventListener("click", onClick, true); window.addEventListener("beforeunload", onUnload);
+    return () => { window.removeEventListener("pointerdown", take, true); window.removeEventListener("keydown", take, true); document.removeEventListener("click", onClick, true); window.removeEventListener("beforeunload", onUnload); };
+  }, []);
+  const sigNowRef = useRef<() => string>(() => "");
+  const dirtyRefOut = useRef<() => boolean>(() => false);
   const autoSave = useRef<() => Promise<boolean>>(async () => false);
   autoSave.current = async () => { saveOk.current = false; await saveAll(true); return saveOk.current; };
   // after Save mockups to order: seconds left before going back to the order (null: not counting)
@@ -2758,6 +2784,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (sg) await sb.from("mockups").update({ snapshot: { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } }).in("id", newMockups);
       }
       saveOk.current = true;
+      baseSig.current = sigNowRef.current();
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order. Send it to the customer from the order's Art & production tab.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
@@ -3119,8 +3146,38 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }, 1800);
   }, [auto, order, ready, saving, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
+  // unsaved changes (Oct 27, Nick: "we're exiting a lot of times without saving… if you make changes and you go back to
+  // an order, a pop-up that says are you sure you want to discard changes"). What's on screen at the first click or key
+  // press is the starting point (the art, inks and circle finding all load by themselves before that); a save resets it.
+  const editSig = JSON.stringify({
+    i: imprints.map((x) => { const { shownArt: _a, center, ...rest } = x; void _a; return { ...rest, c: center?.by === "you" ? center : null }; }),
+    o: offsets, l: lines, p: Object.fromEntries(Object.entries(paints).map(([k, v]) => [k, [v.map, v.unite ?? null]])),
+  });
+  const sigNow = useRef(editSig); sigNow.current = editSig;
+  const dirty = !portal && !viewId && !auto && baseSig.current !== null && baseSig.current !== editSig;
+  const dirtyRef = useRef(false); dirtyRef.current = dirty;
+  const markSaved = () => { baseSig.current = sigNow.current; };
+  sigNowRef.current = () => sigNow.current; dirtyRefOut.current = () => dirtyRef.current;
   return (
     <BrandCtx.Provider value={brand}>
+      {leave && (
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="lv-t">
+          <div className="mk-modal">
+            <h2 id="lv-t">Discard your changes?</h2>
+            <p>You changed this mockup and it isn&apos;t saved to the order yet. If you leave now, the changes are lost.</p>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button type="button" className="btn ghost" onClick={() => setLeave(null)}>Keep editing</button>
+              <button type="button" className="btn danger" onClick={() => { const to = leave; markSaved(); dirtyRef.current = false; setLeave(null); location.assign(to); }}>Discard changes</button>
+              {orderId && !lock && <button type="button" className="btn primary" disabled={saving || !ready} onClick={async () => {
+                const to = leave, vis = imprints.length > 0 && imprints.every((im) => im.visualOnly && !im.confirmed);
+                setLeave(null); saveOk.current = false;
+                await saveAll(vis);
+                if (saveOk.current) { dirtyRef.current = false; location.assign(to); }
+              }}>{saving ? "Saving…" : "Save and leave"}</button>}
+            </div>
+          </div>
+        </div>
+      )}
       {/* a logo's colors came up for a customer with brand standards: which set, or not now (Oct 16, Nick) */}
       {brandAsk && paints[brandAsk] && (() => {
         const im = imprints.find((x) => x.id === brandAsk);
@@ -3161,7 +3218,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       })()}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{<span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) { baseSig.current = sigNowRef.current(); setMsg("Order updated."); } }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}{<span className="mk-sales"><button className={"btn" + (salesOpen ? " on" : "")} type="button" disabled={!ready} aria-haspopup="menu" aria-expanded={salesOpen} title={ready ? "Sales sheets and other things to sell from" : notReady} onClick={() => setSalesOpen((o) => !o)}>Sales tools ▾</button>
           {salesOpen && <div className="mk-sales-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setSalesOpen(false); void openSheet(); }}><b>Sales sheet creator</b><span>Every color on one page: lay it out, add text and pictures, download a picture or PDF</span></button></div>}</span>}
           <button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && !lock && <button className={"btn primary" + (backIn != null ? " mk-back-cd" : "")} type="button" disabled={(saving && backIn == null) || !ready} title={backIn != null ? "Click to stay here" : ready ? undefined : notReady} style={backIn != null ? { ["--cd" as string]: `${backIn / 3}` } : undefined} onClick={async () => {
           // counting down back to the order: a click stays here
@@ -3485,6 +3542,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             );
           })()}
+          {centerAsk && !sizeAsk && !sizer && (() => {
+            const im = centerAsk, d = designOf(im), u = artUrl(im), c = im.center!;
+            return (
+              <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="ctr-t">
+                <div className="mk-modal mk-ctr-ask">
+                  <h2 id="ctr-t">Center on the circle?</h2>
+                  <p>The {(im.location || "print").toLowerCase()} logo{d?.name ? <> ({d.name})</> : null} has a circle with something sticking out to the side. Should the circle be centered on the shirt, with the rest hanging off to the side?</p>
+                  {u && <div className="mk-ctr-pic">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u} alt="" />
+                    <i className="mk-ctr-mid" aria-hidden title="the middle of the logo" />
+                    <i className="mk-ctr-dot" aria-hidden style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }} title="the circle's middle" />
+                  </div>}
+                  <p className="faint" style={{ fontSize: 12.5 }}><span className="mk-ctr-key blue" /> the circle&apos;s middle &nbsp; <span className="mk-ctr-key" /> the middle of the whole logo</p>
+                  <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                    <button type="button" className="btn ghost" onClick={() => setCenterSkip((o) => ({ ...o, [im.id + im.design_id]: true }))}>Ask me later</button>
+                    <button type="button" className="btn" onClick={() => answerCenter(im, false)}>Center the whole logo</button>
+                    <button type="button" className="btn primary" onClick={() => answerCenter(im, true)}>Center on the circle</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           {sizer && (() => {
             const im = imprints.find((x) => x.id === sizer.ids[sizer.i]);
             if (!im) return null;
@@ -3748,15 +3828,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           );
                         })()}
                       </div>
-                      {designOf(im) && !spotFor(im.location).wrap && (() => {
-                        const c = im.center?.d === im.design_id ? im.center : undefined;
-                        return (
-                          <label className="mk-ctr" title="A round badge with something sticking out (a tail, a wing): the circle is centered on the shirt and the film, the rest hangs off to the side">
-                            <input type="checkbox" checked={!!c?.on} onChange={(e) => void toggleCenter(im, e.target.checked)} />
-                            Center on the circle{c?.on && c.by === "auto" ? <span className="faint"> · found it</span> : null}
-                          </label>
-                        );
-                      })()}
+                      {/* "Center on the circle" isn't a checkbox any more (Oct 27, Nick): it's found and asked in a pop-up; once
+                          it's on, a note says so with a way back */}
+                      {designOf(im) && im.center?.on && im.center.d === im.design_id && (
+                        <span className="mk-ctr-on faint">Centered on the circle · <button type="button" className="linkbtn" onClick={() => void toggleCenter(im, false)}>undo</button></span>
+                      )}
                       {/* Color change (Oct 24, Nick: "when you click on… the second garment… another one right there that says color
                           change… confirm you're changing the color on this garment only… select the color"): this garment's ink(s) */}
                       {designOf(im) && im.method !== "dtf" && line && (() => {
