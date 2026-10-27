@@ -10,6 +10,7 @@ import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders
 import { aiOrderFix, applyOrderFixChanges, loadOrderThread, markOrderChecked, noteArtChange, saveOrderLesson, saveOrderThread } from "@/app/shop/ai-actions";
 import type { OrderChange } from "@/lib/ai/orderFix";
 import type { EOPart } from "@/lib/emailOrderShared";
+import { doneOf, partialStep, type PartialCtx, type PartKind } from "@/components/tools/PartialOrder";
 
 /**
  * THE order check after it's made (Oct 23, Nick: "the right panel opens. That never closes until I say, yes, we've got
@@ -53,10 +54,13 @@ async function pageSaves(orderId: string) {
 }
 const pageReloads = (orderId: string) => window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId } }));
 
-export default function OrderReview({ orderId, onClose, did, next, from }: { orderId: string; onClose: () => void; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string; /** made from one of several orders in an email: the next one is offered when this one's right */ from?: { activity: string } }) {
+export default function OrderReview({ orderId, onClose, did, next, from, steps }: { orderId: string; onClose: () => void; /** made a part at a time: the next step offered here (Oct 27) */ steps?: NextSteps; /** what Create order did, folded */ did?: string[]; /** Create order's own link to the Mockup Creator (keeps the email) */ next?: string; /** made from one of several orders in an email: the next one is offered when this one's right */ from?: { activity: string } }) {
   const sb = useRef(createClient()).current;
   const saved0 = useRef(typeof window !== "undefined" ? readSaved(orderId) : null).current;
   const [o, setO] = useState<O | null>(null);
+  // the next step of an order made a part at a time (Oct 27, Nick: "bring in the sizes, put it in there, and then… stay
+  // open, ask me what to do next"): what's still to bring in comes from the order itself; a step runs right here
+  const [stepRun, setStepRun] = useState<{ log: string[]; err?: string } | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -301,8 +305,28 @@ export default function OrderReview({ orderId, onClose, did, next, from }: { ord
 
       <div className="orv-thread" aria-live="polite">
         <div className="bub them">
-          <p>#{o.number} is made. Did I get everything right?</p>
-          <p className="bub-sub">Click around the order and the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. Nothing goes to the customer.</p>
+          {steps ? (() => {
+            const have = doneOf(o.groups), left = (["sizes", "art"] as PartKind[]).filter((k) => !have.includes(k));
+            const run = async (k: PartKind) => {
+              setStepRun({ log: [] });
+              try {
+                await partialStep(steps.ctx, k, { id: o.id, number: o.number }, (x) => setStepRun((r) => ({ log: [...(r?.log || []), x] })));
+                await load(); pageReloads(o.id);
+                setDidKept((d) => [...(d || []), k === "art" ? "Brought in the prints and art" : "Brought in the garments and sizes"]);
+                setStepRun(null);
+              } catch (e) { setStepRun((r) => ({ log: r?.log || [], err: e instanceof Error ? e.message : "Something went wrong." })); }
+            };
+            return <>
+              <p>#{o.number} has {have.length === 2 ? "its garments and its prints" : have.includes("sizes") ? "its garments" : have.includes("art") ? "its prints" : "the customer"}. What do you want to do next?</p>
+              {stepRun ? <ul className="po-steps">{stepRun.log.map((x, i) => <li key={i} className={i === stepRun.log.length - 1 && !stepRun.err ? "on" : "done"}>{x}</li>)}{stepRun.err && <li className="err">{stepRun.err} <button type="button" className="ap-link" onClick={() => setStepRun(null)}>OK</button></li>}</ul>
+                : <div className="po-next">
+                  {left.map((k) => <button key={k} type="button" className="btn sm" onClick={() => void run(k)}>{k === "art" ? "Bring in the art" : "Bring in the sizes"}</button>)}
+                  {have.length === 2 && o.groups.some((g) => !(g.mockupThumbs || []).length && g.imprints.some((im) => im.design_id)) && !onMockupPage && <a className="btn sm primary" href={mockHref(o.groups.find((g) => !(g.mockupThumbs || []).length && g.imprints.some((im) => im.design_id))!)}>Make the mockup</a>}
+                </div>}
+              <p className="bub-sub">Or tell me what to change, and I&apos;ll do it. Nothing goes to the customer.</p>
+            </>;
+          })() : <p>#{o.number} is made. Did I get everything right?</p>}
+          {!steps && <p className="bub-sub">Click around the order and the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. Nothing goes to the customer.</p>}
           {didKept && didKept.length > 0 && <details className="orv-did"><summary>What I did ({didKept.length})</summary><ul>{didKept.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
         </div>
         {rounds.map((r, ri) => {
@@ -366,9 +390,11 @@ export default function OrderReview({ orderId, onClose, did, next, from }: { ord
 /** the order check, open on the right of every shop page until it's closed (the end of Create order, an order's
  *  Ask AI → "Order chat"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
 const DOCK_KEY = "fbs:orderCheck";
-type DockState = { orderId: string; did?: string[]; /** made from one of several orders in this email */ from?: { activity: string } };
-export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }) {
-  const st: DockState = { orderId, did, ...(from ? { from } : {}) };
+/** the next steps of an order made a part at a time (Create order → Other options): how to read the job again, what's in */
+export type NextSteps = { ctx: PartialCtx; done: PartKind[] };
+type DockState = { orderId: string; did?: string[]; /** made from one of several orders in this email */ from?: { activity: string }; steps?: NextSteps };
+export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }, steps?: NextSteps) {
+  const st: DockState = { orderId, did, ...(from ? { from } : {}), ...(steps ? { steps } : {}) };
   try { sessionStorage.setItem(DOCK_KEY, JSON.stringify(st)); } catch { /* */ }
   window.dispatchEvent(new CustomEvent("fbs:order-check", { detail: st }));
 }
@@ -391,7 +417,7 @@ export function OrderCheckDock() {
   const close = () => { try { sessionStorage.removeItem(DOCK_KEY); } catch { /* */ } setSt(null); };
   return (
     <div className="dla-bg dock wide" role="dialog" aria-label="Check the order">
-      <div className="dla qo wide"><OrderReview key={st.orderId} orderId={st.orderId} did={st.did} from={st.from} onClose={close} /></div>
+      <div className="dla qo wide"><OrderReview key={st.orderId} orderId={st.orderId} did={st.did} from={st.from} steps={st.steps} onClose={close} /></div>
     </div>
   );
 }
