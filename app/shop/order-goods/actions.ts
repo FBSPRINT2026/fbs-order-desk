@@ -6,6 +6,7 @@ import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricin
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
+import { goodsPcs, goodsSizes, type GoodsGarment } from "@/lib/goodsGarments";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 
@@ -129,7 +130,7 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[] }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
@@ -166,10 +167,26 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
         lines: lines.map((l) => ({ sku: l.sku, qty: l.qty, label: l.label })), total: results.reduce((a, r) => a + r.total, 0) || null,
         expected_date: expected ? expected.slice(0, 10) : null, created_by: v.user!.email || "staff", note: p.quote?.trim() ? `S&S quote ${p.quote.trim()}` : "",
       };
-      const { error } = await admin.from("blank_orders").insert(row);
+      // what was bought, per garment and color (Oct 26, Nick: bought from an email before there's an order, Create order
+      // uses these later instead of asking again what the customer meant)
+      const garments = (p.garments || []).filter((g) => g && g.style && goodsPcs(g) > 0).slice(0, 60);
+      let ins = await admin.from("blank_orders").insert({ ...row, garments }).select("id").single();
+      if (ins.error && /garments/.test(ins.error.message)) ins = await admin.from("blank_orders").insert(row).select("id").single();
+      const { error } = ins;
       // bought already: say so plainly if it couldn't be recorded (the migration isn't run yet)
       if (error) return { ok: true as const, results, warn: `Ordered with S&S (${row.supplier_order}), but it couldn't be saved here: ${/order_id|customer_id|activity_id|label/.test(error.message) ? "run supabase/migrations/117_goods_orders_without_order.sql in Supabase" : error.message}.` };
       if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+      // no order yet: a to-do on the email, so it isn't forgotten (closed when Create order uses these goods)
+      else if (p.activityId && ins.data?.id) {
+        const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+        const what = garments.map((g) => `${[g.brand, g.style].filter(Boolean).join(" ")} ${g.color}: ${goodsSizes(g)}`).join("\n");
+        await admin.from("tasks").insert({
+          owner: (v.user!.email || "").toLowerCase(), title: `Make the order for ${po}: goods ordered (S&S #${row.supplier_order})`.slice(0, 200),
+          notes: `Goods were ordered from this email before there was an order. Create order on the email uses them.\n${what}`.slice(0, 1000),
+          area: "customer", due: tomorrow, status: "open", source: "email", activity_id: p.activityId, url: `/shop/inbox?show=${p.activityId}`,
+          ref: `goods:${ins.data.id}`, created_by: v.user!.email || "staff",
+        }).then(() => null, () => null);
+      }
     }
     return { ok: true as const, results };
   } catch (e) { return fail(e); }
@@ -189,6 +206,34 @@ export async function recentGoods() {
   } catch (e) { return fail(e); }
 }
 
+/**
+ * Goods bought ahead with no order yet (Oct 26, Nick: "when I create order later… hey I noticed we placed an order on
+ * Thursday for these goods. Are we completing this order"): from this email, or for this customer lately. Newest first.
+ */
+export async function goodsWaiting(p: { activityId?: string | null; customerId?: string | null }) {
+  try {
+    await staff();
+    if (!p.activityId && !p.customerId) return { ok: true as const, list: [] };
+    const admin = createAdminClient();
+    const since = new Date(Date.now() - 45 * 864e5).toISOString();
+    const id = (x?: string | null) => (x && /^[0-9a-f-]{36}$/i.test(x) ? x : "");
+    const or = [id(p.activityId) ? `activity_id.eq.${id(p.activityId)}` : "", id(p.customerId) ? `customer_id.eq.${id(p.customerId)}` : ""].filter(Boolean).join(",");
+    if (!or) return { ok: true as const, list: [] };
+    const { data, error } = await admin.from("blank_orders").select("id, activity_id, customer_id, label, supplier_order, status, expected_date, created_at, created_by, garments")
+      .is("order_id", null).eq("placed_via", "api").neq("status", "cancelled").gte("created_at", since).or(or).order("created_at", { ascending: false }).limit(6);
+    if (error) return { ok: true as const, list: [] };
+    const list = (data || []).filter((b) => Array.isArray(b.garments) && b.garments.length) as { id: string; activity_id: string | null; customer_id: string | null; label: string; supplier_order: string; status: string; expected_date: string | null; created_at: string; created_by: string; garments: GoodsGarment[] }[];
+    // each garment's name from our catalog ("Unisex CVC Tee"), for the order's lines
+    const styles = [...new Set(list.flatMap((b) => b.garments.map((g) => g.style)))];
+    if (styles.length) {
+      const { data: gs } = await admin.from("garments").select("style, description").in("style", styles);
+      const name = new Map((gs || []).map((g) => [String(g.style).toUpperCase(), String(g.description || "")]));
+      for (const b of list) b.garments = b.garments.map((g) => ({ ...g, name: g.name || name.get(g.style.toUpperCase()) || "" }));
+    }
+    return { ok: true as const, list };
+  } catch (e) { return fail(e); }
+}
+
 /** Link goods bought ahead to their order once it exists. */
 export async function linkGoods(goodsId: string, orderId: string) {
   try {
@@ -196,6 +241,8 @@ export async function linkGoods(goodsId: string, orderId: string) {
     const admin = createAdminClient();
     const { error } = await admin.from("blank_orders").update({ order_id: orderId }).eq("id", goodsId);
     if (error) return { ok: false as const, error: error.message };
+    // its reminder to-do is done now
+    await admin.from("tasks").update({ status: "done", done_at: new Date().toISOString(), done_by: "Create order: used the goods" }).eq("ref", `goods:${goodsId}`).eq("status", "open");
     await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
     return { ok: true as const };
   } catch (e) { return fail(e); }

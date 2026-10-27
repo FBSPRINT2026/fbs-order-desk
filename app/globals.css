@@ -14817,6 +14817,20 @@ html[data-phone-deep] .mdp-only{display:none}
 .ga-opt.first b{color:var(--fbs-blue)}
 .ga-opt:hover,.ga-opt:focus-visible{border-color:var(--fbs-blue)}
 .ga-opt.other{border-style:dashed}
+/* Create order: goods already ordered for this (Oct 26, Nick): what was bought, then use it or read the email */
+.gb-card{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin:2px 0 10px;overflow:hidden}
+.gb-h{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink)}
+.gb-list{list-style:none;margin:0;padding:0}
+.gb-list li{display:grid;grid-template-columns:1fr auto;gap:0 10px;padding:7px 12px;border-top:1px solid var(--line-2,var(--line))}
+.gb-list li:first-child{border-top:0}
+.gb-list li b{font-size:14px;font-weight:700;color:var(--ink)}
+.gb-list li small{grid-column:1/-1;font-size:12px;color:var(--ink-3)}
+.gb-n{white-space:nowrap;font-size:12.5px;color:var(--ink-3)}
+.gb-opt .gb-list{margin-top:6px;border-top:1px solid var(--line)}
+.gb-opt .gb-list li{padding:5px 0}
+/* the email's tag: goods ordered from it, no order yet */
+.eh-tag.bought{background:color-mix(in srgb,var(--fbs-salmon) 16%,var(--surface));color:var(--ink)}
+.eh-tag.bought:hover{background:color-mix(in srgb,var(--fbs-salmon) 26%,var(--surface))}
 .ga-type{display:flex;flex-direction:column;gap:10px}
 .ga-row{display:flex;gap:8px}
 .ga-row input{flex:1;min-width:0;height:44px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:0 12px;font:inherit;font-size:16px;text-transform:uppercase}

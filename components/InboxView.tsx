@@ -22,6 +22,7 @@ import { onPullRefresh } from "@/components/PullRefresh";
 import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { pieceCount } from "@/lib/pieces";
 import { openOrderGoods } from "@/components/tools/OrderGoodsTool";
+import { GoodsBoughtTag } from "@/components/GoodsBoughtAsk";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
 import { FileTray, FrameZoom, msgFiles, type MailFile, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
@@ -1390,6 +1391,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
             {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
+            <GoodsBoughtTag activityId={x.id} />
             {answered && <span className="eh-tag ok">Answered</span>}
             {ccOnly && <span className="eh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
           </>}

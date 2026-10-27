@@ -11,6 +11,7 @@ import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/S
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
 import { goodsFromGroups, goodsWarehouses, placeGoods } from "@/app/shop/order-goods/actions";
+import { garmentsFromRows } from "@/lib/goodsGarments";
 
 /**
  * THE Order goods tool from an email (Oct 26, Nick: "it has to be the right side… pop-up just like you do with create an
@@ -139,7 +140,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
   }, [allocKey]); // eslint-disable-line react-hooks/exhaustive-deps
   async function run(test: boolean) {
     setBusy(test ? "check" : "place"); setErr("");
-    const r = await placeGoods({ lines: ready.map((x) => ({ sku: x.sku, qty: x.qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price })), shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, warehouses: mode });
+    const r = await placeGoods({ lines: ready.map((x) => ({ sku: x.sku, qty: x.qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price })), shippingMethod: ship, test, label, customerId: cust?.id || null, activityId, warehouses: mode, garments: test ? undefined : garmentsFromRows(ready) });
     setBusy("");
     if (!r.ok) { setErr(r.error); return; }
     const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
@@ -232,7 +233,7 @@ export default function OrderGoodsTool({ activityId, onClose }: { activityId: st
             </div>
             <div className="field"><label htmlFor="og-ship">Shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
             {check && <div className="og-check">Checked with S&amp;S: {money(check.total)}{check.from ? ` · ships from ${check.from}` : ""}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
-            {placed && <div className="og-done">Ordered with S&amp;S: <b>{placed}</b>. It&apos;s on <Link href="/shop/order-goods">Order goods</Link> to link to its order.</div>}
+            {placed && <div className="og-done">Ordered with S&amp;S: <b>{placed}</b>. It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</div>}
           </>}
         </div>}
         <div className="dla-acts og-foot">

@@ -12,6 +12,9 @@ import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import SizeRunsAsk, { garmentStep, type RunPick, type RunsAsk } from "@/components/SizeRunsAsk";
+import GoodsBoughtAsk, { dayWord, type GoodsBought } from "@/components/GoodsBoughtAsk";
+import { applyGoods } from "@/lib/goodsGarments";
+import { goodsWaiting, linkGoods } from "@/app/shop/order-goods/actions";
 import { rememberOrderNote } from "@/app/shop/ai-actions";
 import { cleanPrintNotes, LOCATIONS, inkNames, locationsFor } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
@@ -104,6 +107,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     return v;
   }
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
+  // goods already bought for this (Order goods from the email, no order yet): use them? and which order of this run took them
+  const [goodsAsk, setGoodsAsk] = useState<{ list: GoodsBought[]; done: (id: string | null) => void } | null>(null);
+  const goodsUsed = useRef(new Map<string, string>());
   const [runsAsk, setRunsAsk] = useState<(RunsAsk & { done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void }) | null>(null);
   // several orders: which one is being made, and the stop after each one
   const [cur, setCur] = useState(0);
@@ -194,6 +200,29 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // several past jobs in one order (Hutchins T10A + T11A): all of them
     const jobs = (d.reorderJobs || []).map((ref) => (g.past || []).find((p) => p.ref === ref)).filter(Boolean) as PastJob[];
     const jobLabel = (jobs.length > 1 ? jobs.map((j) => j.label.replace(/\s*\(Printavo\)$/, "").replace(/^(#\d+).*/, "$1")).join(" and ") : (job?.label || part?.jobLabel || "")).replace(/\s*\(Printavo\)$/, "");
+    // goods were bought ahead for this (Oct 26, Nick: "hey I noticed we placed an order on Thursday for these goods. Are we
+    // completing this order and adding in the art… pull in the sizes and what it is"): on yes the order's garments,
+    // colors and sizes are what was bought, and nothing about the garment is asked again
+    let goodsId = "";
+    {
+      const w = await goodsWaiting({ activityId, customerId: g.customer?.id || null }).catch(() => null);
+      const list = ((w?.ok ? w.list : []) as GoodsBought[]).filter((b) => !goodsUsed.current.has(b.id) || goodsUsed.current.get(b.id) === of);
+      guard();
+      if (list.length) {
+        note("Goods were already ordered for this: asking you");
+        const pick = await askOnce<string | null>(`goods:${of}:${list.map((b) => b.id).join(",")}`, (resolve) => setGoodsAsk({ list, done: resolve }));
+        setGoodsAsk(null);
+        guard();
+        const b = pick ? list.find((x) => x.id === pick) : null;
+        if (b) {
+          const ap = applyGoods(d.groups, b.garments);
+          d = { ...d, groups: ap.groups };
+          goodsId = b.id; goodsUsed.current.set(b.id, of);
+          did.push(`Garments and sizes from the goods ordered ${dayWord(b.created_at)} (S&S #${b.supplier_order})`);
+          if (ap.kept.length) did.push(`No goods were ordered for: ${ap.kept.join(", ")} (kept as read from the email)`);
+        }
+      }
+    }
     // the email didn't name the garment (Oct 26, Nick: "this exact tool… should be one of the steps in the create order
     // tool… we go into this whole same talk"): the same step as Order goods (components/SizeRunsAsk.tsx): which garment
     // and color each size run is, their brand standards offered first; nothing filled in on its own
@@ -893,6 +922,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote" }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setCommitting(false); throw new Error(j.error || "Couldn't create the order."); }
+    // the goods bought ahead are this order's now (its reminder to-do closes)
+    if (goodsId) { const lk = await linkGoods(goodsId, j.id).catch(() => null); if (!lk?.ok) did.push(`The goods order couldn't be linked to #${j.number}: link it on Order goods`); }
     // the order type picked on Create order's card (New order / Reorder / Reorder with changes): the order's Job details → Order type
     { const ot = part?.orderType || start.orderType; if (ot) await createClient().from("orders").update({ order_type: ot }).eq("id", j.id).then(() => null, () => null); }
     // its logos are the order's now; art you replaced in the Resolution Center is taken off (if on no order)
@@ -933,7 +964,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           if (many && m) { finishSteps(); await waitFor<void>((resolve) => setPause({ made: m, i, resolve })); setPause(null); }
         } catch (e) {
           if (e instanceof Cancelled || stopped.current) {
-            setConfirm(null); setHelp(null); setArtAsk(null); setSheetAsk(null); setRunsAsk(null);
+            setConfirm(null); setHelp(null); setArtAsk(null); setSheetAsk(null); setRunsAsk(null); setGoodsAsk(null);
             const ids = [...made0.current]; made0.current = new Set();
             if (ids.length) await discardDraftArt(ids).catch(() => null);
             return;
@@ -1012,6 +1043,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {sheetAsk && <SheetConfirm a={sheetAsk} onCancel={cancel} />}
         {review && <ReviewConfirm a={review} onCancel={cancel} />}
+        {goodsAsk && <GoodsBoughtAsk list={goodsAsk.list} activityId={activityId} onDone={(id) => goodsAsk.done(id)} onCancel={cancel} />}
         {runsAsk && <SizeRunsAsk runs={runsAsk.runs} prefs={runsAsk.prefs} company={runsAsk.company} sender={runsAsk.sender} onDone={(picks, remember) => runsAsk.done({ picks, remember })} onCancel={cancel} />}
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
