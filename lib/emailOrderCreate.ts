@@ -210,9 +210,12 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // the customer's own words for the job and who sends the garments do go there (Oct 23, Nick on #40113: "Customer
   // supplies their own PC330 Black tees… and the 'NOT A REPEAT ORDER - NEW LEFT CHEST LOGO…' should have gone under
   // customer notes")
-  const goodsLine = d.goods?.supplied ? `Customer supplies the garments${d.goods.supplier ? ` (${d.goods.supplier})` : ""}${[d.goods.expected, d.goods.note].filter(Boolean).length ? `: ${[d.goods.expected, d.goods.note].filter(Boolean).join(". ")}` : ""}.` : "";
+  // just the fact (Oct 27, Nick: "way too much information in the customer notes… that's what they're going to see"): the
+  // supplier, tracking and reference numbers are on the order's goods (order_goods) and in the production notes
+  const goodsLine = d.goods?.supplied ? "Customer supplies the garments." : "";
+  const goodsMore = d.goods?.supplied ? [d.goods.supplier ? `Garments from ${d.goods.supplier}` : "", d.goods.expected, d.goods.note].filter(Boolean).join(". ") : "";
   const notes = [(d.customerNotes || "").trim(), goodsLine].filter(Boolean).join("\n").slice(0, 2000);
-  const shopNote = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
+  const shopNote = [d.notes, goodsMore ? `${goodsMore}.` : "", reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity
   const useProgram = await customerUsesProgram(admin, custId);
