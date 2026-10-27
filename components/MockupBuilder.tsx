@@ -268,9 +268,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const el = cuRef.current; if (!el) return;
     const ro = new ResizeObserver(() => {
       // two across, each exactly as wide as the front / back photo above it
-      const cols = el.clientWidth < 460 ? 1 : 2;
+      // Add logo: only the close-ups, as big squares; one per location, two across when there are several (Oct 27, Nick:
+      // "the close-ups can take up a little more space… as you create them, they'll just add more squares")
+      const cols = logoOnly ? (imprints.length > 1 && el.clientWidth >= 820 ? 2 : 1) : el.clientWidth < 460 ? 1 : 2;
       setCuCols(cols);
-      setCuSize(Math.max(120, Math.min(cols === 1 ? 420 : 9999, Math.floor((el.clientWidth - 14 * (cols - 1)) / cols))));
+      setCuSize(Math.max(120, Math.min(logoOnly ? 640 : cols === 1 ? 420 : 9999, Math.floor((el.clientWidth - 14 * (cols - 1)) / cols))));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -3709,7 +3711,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
                 const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
                 return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
-              }).map(({ im }, i) => closeUp(im, logoOnly ? Math.max(cuSize, 340) : cuSize, i === 0 && !logoOnly))}
+              }).map(({ im }, i) => closeUp(im, cuSize, i === 0 && !logoOnly))}
             </div>
           </div>
           {designerFor && (
@@ -3878,7 +3880,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           )}
         </div>
 
-        {mode === "wide" && <div className="mk-mini" ref={miniRef}>
+        {mode === "wide" && !logoOnly && <div className="mk-mini" ref={miniRef}>
           <div className="lbl">{curTab === "sleeve" ? "SLEEVE" : curTab.toUpperCase()} CLOSE-UP</div>
           {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => closeUp(im, miniSize))}
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}

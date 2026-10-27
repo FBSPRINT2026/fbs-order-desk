@@ -15160,7 +15160,8 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 .mk-help-gb .mk-gc-dot{display:inline-block;vertical-align:-1px}
 /* Add logo (Oct 27): the Mockup Creator with only the close-ups, no garment pictures */
 .mk.mk-logo .mk-views,.mk.mk-logo .mk-sizes,.mk.mk-logo .mk-neck-card{display:none}
-.mk.mk-logo .mk-closeups{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))!important;margin-top:0}
+.mk.mk-logo .mk-closeups{margin-top:0}
+.mk.mk-wide.mk-logo{grid-template-columns:minmax(0,1fr) 340px}
 /* a print's placement reference (Oct 27) */
 .imp-pref{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 14px 0}
 .imp-pref img{height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:var(--surface-2)}
