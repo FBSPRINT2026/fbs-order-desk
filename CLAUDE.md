@@ -5,7 +5,10 @@
   `lib/useSticky.ts` instead of `useState` for these. It saves to this browser's localStorage under `fbs:<key>`.
   Don't use it for data, drafts in progress, pop-ups being open, or search boxes.
   In the customer portal, choices reset to the defaults after an hour away (Nick, Oct 24 2026); `useSticky` does this itself.
-- The portal only ever reads from Printavo. Never write, edit or delete anything in Printavo.
+- The portal only ever reads from Printavo. Never write, edit or delete anything in Printavo. The only exceptions are
+  the staff-pressed buttons for 40,000-series orders during the move, each behind its own guard in `lib/printavo.ts`:
+  Send to Printavo, Add mockups & art, Resync details, and Reset in Printavo (Nick, Oct 27 2026: clears that order's
+  lines, fees and files in Printavo and sends ours again; `transitionReset`). Never run them yourself.
 - Secrets live in Vercel env vars, added by Nicholas. Never put keys or passwords in code, chat or the database.
 - **Spanish toggle.** Every shop page has "Translate to Spanish" at the top right (not the customer portal: removed Oct 15 2026, Nicholas) (`components/Translate.tsx`).
   It swaps the page's text in place and saves each phrase's Spanish in `ui_translations`. Put `data-notranslate` on

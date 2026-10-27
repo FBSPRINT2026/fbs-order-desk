@@ -70,6 +70,27 @@ export async function transitionWrite<T = Record<string, unknown>>(query: string
   return request<T>(query, variables, false);
 }
 
+/**
+ * "Reset in Printavo" (Oct 27, Nick: "a reset in Printavo… completely delete the order how it is in Printavo and
+ * completely resend it like it's the first time"): staff press it on one order. Clears that order's product lines,
+ * prints, fees and files in Printavo and puts ours back, in place: its number, status, customer and payments stay.
+ * Only these mutations, only on a 40,000-series order, one mutation per call; nothing else in Printavo can be changed
+ * or deleted through here (lib/printavoSend.ts resetPrintavo is the only caller).
+ */
+const RESET_WRITES = new Set(["lineItemGroupDelete", "feeDelete", "productionFileDelete", "lineItemGroupCreate", "feeCreate", "quoteUpdate", "invoiceUpdate"]);
+const RESET_ORDER_KEYS = ["nickname", "visualPoNumber", "customerDueAt", "dueAt", "productionNote", "customerNote", "salesTax", "discount", "discountAsPercentage", "tags", "billingAddress", "shippingAddress"];
+export async function transitionReset<T = Record<string, unknown>>(query: string, variables: Record<string, unknown>, orderNumber: number): Promise<T> {
+  if (!(orderNumber >= 40000 && orderNumber < 50000)) throw new PrintavoError("Blocked: only orders #40000-#49999 can be reset in Printavo.");
+  const body = query.replace(/#[^\n]*/g, " ").replace(/"(?:[^"\\]|\\.)*"/g, '""').trim();
+  const m = body.match(/^mutation\b[^{]*\{\s*(\w+)\s*[(:{]/);
+  const fields = [...body.matchAll(/(?:^|[{\s])(\w+)\s*\(/g)].map((x) => x[1]);
+  if (!m || !RESET_WRITES.has(m[1]) || (body.match(/\bmutation\b/g) || []).length !== 1 || /\bsubscription\b/.test(body) || fields.some((f) => /(Create|Update|Delete|Duplicate|Creates|Updates|Deletes)$/.test(f) && !RESET_WRITES.has(f)))
+    throw new PrintavoError("Blocked: a reset only clears and re-adds the order's lines, fees and files.");
+  if (/^(quote|invoice)Update$/.test(m[1]) && Object.keys((variables.input || {}) as object).some((k) => !RESET_ORDER_KEYS.includes(k)))
+    throw new PrintavoError("Blocked: a reset only sets the order's details we send.");
+  return request<T>(query, variables, false);
+}
+
 async function request<T>(query: string, variables: Record<string, unknown>, retry: boolean): Promise<T> {
   const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();
   if (!email || !token) throw new PrintavoError("Printavo isn't connected (PRINTAVO_EMAIL / PRINTAVO_TOKEN missing in Vercel).");

@@ -154,6 +154,25 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
     setFresh(j.pv);
   }
   const applyAll = () => take(changes);
+  // Reset in Printavo (Oct 27, Nick: "make it resync like from scratch… delete the order how it is in Printavo and
+  // completely resend it like it's the first time"): a preview of what changes, then the reset
+  type ResetPre = { visualId: string; status: string; printavo: { groups: number; lines: number; fees: number; files: number; total: number; payments: number; paid: number }; ours: { groups: number; lines: number; pieces: number; total: number } };
+  const [reset, setReset] = useState<null | "loading" | ResetPre>(null), [resetMsg, setResetMsg] = useState("");
+  const post = async (action: string) => { const r = await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: o.id, action }) }).catch(() => null); const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." }; return { ok: !!r?.ok, j }; };
+  async function askReset() {
+    setErr(""); setResetMsg(""); setReset("loading");
+    const { ok, j } = await post("resetPreview");
+    if (!ok) { setReset(null); return setErr(j.error || "Couldn't read the order from Printavo."); }
+    setReset(j as ResetPre);
+  }
+  async function doReset() {
+    setBusy(true); setErr("");
+    const { ok, j } = await post("reset");
+    setBusy(false); setReset(null);
+    if (!ok) return setErr(j.error || "The reset didn't finish.");
+    if (j.pv) setFresh(j.pv);
+    setResetMsg(`Reset in Printavo: ${j.added.groups} group${j.added.groups === 1 ? "" : "s"} and ${j.added.fees} fee${j.added.fees === 1 ? "" : "s"} sent fresh${j.filesAdded ? `, ${j.filesAdded} mockup${j.filesAdded === 1 ? "" : "s"} / file${j.filesAdded === 1 ? "" : "s"}` : ""}.${j.warnings ? " " + j.warnings : ""}`);
+  }
   // "Ignore": keep ours; it stays hidden until Printavo changes that thing again
   async function ignore(c: (typeof changes)[number]) {
     const sb = createClient();
@@ -171,9 +190,33 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
           <span className="faint" style={{ fontSize: 12 }}>{snap ? `Checked ${new Date(snap.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · Printavo total $${snap.total.toFixed(2)}` : "Not checked yet"}</span>
           <button type="button" className="btn sm" disabled={busy} onClick={check}>{busy ? "Checking…" : "Check Printavo now"}</button>
           {changes.length > 1 && <button type="button" className="btn primary sm" onClick={applyAll}>Accept all</button>}
+          <button type="button" className="btn sm" disabled={busy || reset === "loading"} title="Clear the order in Printavo and send it again from here, like the first time" onClick={askReset}>{reset === "loading" ? "Reading Printavo…" : "Reset in Printavo"}</button>
         </span>
       </div>
       {err && <div className="err">{err}</div>}
+      {resetMsg && <div className="banner">{resetMsg}</div>}
+      {reset && reset !== "loading" && (
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pvr-t">
+          <div className="mk-modal">
+            <h2 id="pvr-t">Reset #{reset.visualId} in Printavo?</h2>
+            <p>Printavo&apos;s copy is cleared and this order is sent again, the same as the first time. Its number, status ({reset.status}), customer{reset.printavo.payments ? ", payments" : ""} and tasks stay.</p>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th /><th>In Printavo now</th><th>After the reset</th></tr></thead>
+              <tbody>
+                <tr><td>Groups · product lines</td><td className="nw">{reset.printavo.groups} · {reset.printavo.lines}</td><td className="nw">{reset.ours.groups} · {reset.ours.lines}</td></tr>
+                <tr><td>Fees</td><td className="nw">{reset.printavo.fees}</td><td className="nw">ours (screens, color changes, PMS…)</td></tr>
+                <tr><td>Production files</td><td className="nw">{reset.printavo.files}</td><td className="nw">our mockups and art</td></tr>
+                <tr><td>Total</td><td className="nw">${reset.printavo.total.toFixed(2)}</td><td className="nw">${reset.ours.total.toFixed(2)} · {reset.ours.pieces.toLocaleString()} pcs</td></tr>
+              </tbody>
+            </table></div>
+            <p className="faint" style={{ fontSize: 12.5 }}>It sends the order as it&apos;s saved here: save your changes and the mockups first. Anything added by hand in Printavo (a fee, a file, a line) is deleted with the rest.{reset.printavo.payments ? ` The ${reset.printavo.payments} payment${reset.printavo.payments === 1 ? "" : "s"} ($${reset.printavo.paid.toFixed(2)}) stay.` : ""}</p>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" className="btn ghost" disabled={busy} onClick={() => setReset(null)}>Cancel</button>
+              <button type="button" className="btn danger" disabled={busy} onClick={doReset}>{busy ? "Resetting…" : "Reset in Printavo"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add mockups &amp; art</button></div>}
       {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><span className="row" style={{ gap: 6 }}><button type="button" className="btn ghost sm" title="Keep ours; hidden until Printavo changes this again" onClick={() => ignore(c)}>Ignore</button>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</span></li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}

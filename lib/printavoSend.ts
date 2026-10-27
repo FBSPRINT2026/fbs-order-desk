@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
+import { getOrder, pv, transitionReset, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { CARD, htmlText } from "@/lib/printavoChanges";
 import { calcOrder, FULL_COLOR, imprintLabel, shopNotes, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
@@ -130,24 +130,11 @@ export async function sendPreview(admin: SupabaseClient, orderId: string): Promi
 export type SendInput = { orderId: string; statusId: string; customerDue: string; productionDue: string; nickname: string; po: string; productionNote: string; by: string };
 
 /** Makes the quote in Printavo, sets its status and links it to our order. Refuses if the order was already sent. */
-export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
-  const pre = await sendPreview(admin, inp.orderId);
-  if (pre.problem) throw new PrintavoError(pre.problem);
-  if (pre.sent) throw new PrintavoError(`Already in Printavo as #${pre.sent.visualId}. It isn't sent twice.`);
-  if (!pre.contact) throw new PrintavoError("No Printavo contact for this customer.");
-  const status = pre.statuses.find((s) => s.id === inp.statusId);
-  if (!status) throw new PrintavoError("Pick a Printavo status.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.customerDue) || !/^\d{4}-\d{2}-\d{2}$/.test(inp.productionDue)) throw new PrintavoError("Pick the production date and the customer's due date.");
-
-  const { o, cust, settings } = await load(admin, inp.orderId);
-  const number = o.number as number;
-  // one send at a time: a second click while the first is still working is turned away
-  const was = (o.printavo_state || {}) as { sending?: string | null };
-  if (was.sending && Date.now() - new Date(was.sending).getTime() < 120_000) throw new PrintavoError("It's being sent right now. Give it a minute, then refresh.");
-  const claim = await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: new Date().toISOString(), by: inp.by, error: null } }).eq("id", inp.orderId).is("printavo_id", null).select("id");
-  if (!claim.data?.length) throw new PrintavoError("Already in Printavo.");
-
-  const started = Date.now();
+/**
+ * What goes to Printavo for an order: its line item groups (garments, sizes, prices, prints) and its fees, as the
+ * first send makes them. Used by the send and by "Reset in Printavo" (Oct 27), so both send exactly the same thing.
+ */
+async function payloadFor(o: Order, settings: ReturnType<typeof mergeSettings>) {
   const calc = calcOrder(o, settings);
   const groups = orderGroups(o);
   const taxed = !o.tax_exempt;
@@ -160,8 +147,6 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const towFor = (m: string) => tow.find((t) => methodRe(m).test(t.name));
   const catFor = (m: string) => cats.find((c) => methodRe(m).test(c.name.trim()));
   const missingCat = groups.map((g) => g.imprints[0]?.method).filter((m) => !!m && !catFor(m));
-  if (missingCat.length) await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: null } }).eq("id", inp.orderId);
-  if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
 
   const lineItemGroups = groups.map((g, gi) => {
     const c = calc.groups[gi];
@@ -219,6 +204,30 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
   // no card surcharge (Oct 16, Nick): it's added in Printavo only for a customer paying by card, and comes back here then
 
+  return { calc, groups, taxed, lineItemGroups, fees, missingCat };
+}
+
+export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
+  const pre = await sendPreview(admin, inp.orderId);
+  if (pre.problem) throw new PrintavoError(pre.problem);
+  if (pre.sent) throw new PrintavoError(`Already in Printavo as #${pre.sent.visualId}. It isn't sent twice.`);
+  if (!pre.contact) throw new PrintavoError("No Printavo contact for this customer.");
+  const status = pre.statuses.find((s) => s.id === inp.statusId);
+  if (!status) throw new PrintavoError("Pick a Printavo status.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.customerDue) || !/^\d{4}-\d{2}-\d{2}$/.test(inp.productionDue)) throw new PrintavoError("Pick the production date and the customer's due date.");
+
+  const { o, cust, settings } = await load(admin, inp.orderId);
+  const number = o.number as number;
+  // one send at a time: a second click while the first is still working is turned away
+  const was = (o.printavo_state || {}) as { sending?: string | null };
+  if (was.sending && Date.now() - new Date(was.sending).getTime() < 120_000) throw new PrintavoError("It's being sent right now. Give it a minute, then refresh.");
+  const claim = await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: new Date().toISOString(), by: inp.by, error: null } }).eq("id", inp.orderId).is("printavo_id", null).select("id");
+  if (!claim.data?.length) throw new PrintavoError("Already in Printavo.");
+
+  const started = Date.now();
+  const { calc, groups, taxed, lineItemGroups, fees, missingCat } = await payloadFor(o as Order, settings);
+  if (missingCat.length) await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: null } }).eq("id", inp.orderId);
+  if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
   const { billingAddress, shippingAddress } = orderAddresses(o, cust);
   const discount = o.discount_type === "amt" ? +(o.discount_amt || 0) : +(o.discount_pct || 0);
   const input = {
@@ -580,4 +589,92 @@ export async function resyncDetails(admin: SupabaseClient, orderId: string) {
   }
   await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Resynced to Printavo: ${lines} line description${lines === 1 ? "" : "s"}${addresses ? ", billing and shipping addresses" : ""}${link ? ", the link to this order" : ""}` });
   return { lines, addresses, link };
+}
+
+
+/* ---------- Reset in Printavo (Oct 27) ---------- */
+/**
+ * "Reset in Printavo" (Oct 27, Nick: "we're going to put in orders and then we're going to have to go back in and change
+ * like mockups and stuff… a reset in Printavo… completely delete the order how it is in Printavo and completely resend
+ * it like it's the first time we're sending it"). Done in place, so Printavo's number, status, customer, payments and
+ * tasks stay: its product lines (with their prints and mockups), fees and production files are deleted, the order's
+ * details are set again (nickname, PO, dates, notes, tax, discount, addresses), and ours go on exactly as the first
+ * send makes them, then the mockups and art. Staff press it; the preview says what changes first.
+ */
+export async function resetPreview(admin: SupabaseClient, orderId: string) {
+  const { o, settings } = await load(admin, orderId);
+  if (!o.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo yet: use Send to Printavo.");
+  const number = o.number as number;
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 can be reset in Printavo.");
+  const p = await getOrder(String(o.printavo_id));
+  const calc = calcOrder(o, settings), groups = orderGroups(o).filter((g) => sentLines(g).length);
+  const pays = p.transactions.filter((t) => t.kind === "Payment");
+  return {
+    visualId: p.visualId, status: p.status.name, kind: p.kind,
+    printavo: { groups: p.groups.length, lines: p.groups.reduce((a, g) => a + g.lines.length, 0), fees: p.fees.length, files: p.files.length, total: p.total, payments: pays.length, paid: pays.reduce((a, t) => a + t.amount, 0) },
+    ours: { groups: groups.length, lines: groups.reduce((a, g) => a + sentLines(g).length, 0), pieces: calc.qty, total: calc.total },
+  };
+}
+
+export async function resetPrintavo(admin: SupabaseClient, orderId: string, by: string) {
+  const { o, cust, settings } = await load(admin, orderId);
+  if (!o.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo yet: use Send to Printavo.");
+  const number = o.number as number, pid = String(o.printavo_id);
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 can be reset in Printavo.");
+  // one at a time, like the send
+  const was = (o.printavo_state || {}) as { sending?: string | null };
+  if (was.sending && Date.now() - new Date(was.sending).getTime() < 120_000) throw new PrintavoError("It's being sent right now. Give it a minute, then refresh.");
+  await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: new Date().toISOString(), by, error: null } }).eq("id", orderId);
+  const started = Date.now();
+  const done = { deleted: { groups: 0, fees: 0, files: 0 }, added: { groups: 0, fees: 0 } };
+  const release = async (error?: string) => {
+    const { data: cur } = await admin.from("orders").select("printavo_state").eq("id", orderId).maybeSingle();
+    await admin.from("orders").update({ printavo_state: { ...((cur?.printavo_state as object) || {}), sending: null, ...(error ? { error: error.slice(0, 500) } : {}) } }).eq("id", orderId);
+  };
+  try {
+    const { calc, groups, taxed, lineItemGroups, fees, missingCat } = await payloadFor(o as Order, settings);
+    if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
+    const pre = await sendPreview(admin, orderId);
+    const p = await getOrder(pid);
+    const inv = p.kind === "invoice" || (await pv<{ order: { __typename: string } | null }>(`query($id:ID!){ order(id:$id){ __typename } }`, { id: pid })).order?.__typename === "Invoice";
+    // 1. clear what's there: the product lines (their prints and mockups go with them), the fees, the files
+    for (const g of p.groups) { await transitionReset(`mutation($id:ID!){ lineItemGroupDelete(id:$id){ id } }`, { id: g.id }, number); done.deleted.groups++; }
+    for (const f of p.fees) { await transitionReset(`mutation($id:ID!){ feeDelete(id:$id){ id } }`, { id: f.id }, number); done.deleted.fees++; }
+    for (const f of p.files) { if (!f.id) continue; await transitionReset(`mutation($id:ID!){ productionFileDelete(id:$id){ id } }`, { id: f.id }, number); done.deleted.files++; }
+    // 2. the order's details, as the send sets them
+    const { billingAddress, shippingAddress } = orderAddresses(o, cust);
+    const discount = o.discount_type === "amt" ? +(o.discount_amt || 0) : +(o.discount_pct || 0);
+    const input = {
+      nickname: (pre.nickname || "").slice(0, 200),
+      visualPoNumber: pre.po || undefined,
+      ...(pre.customerDue ? { customerDueAt: pre.customerDue } : {}),
+      ...(pre.productionDue ? { dueAt: `${pre.productionDue}T17:00:00-05:00` } : {}),
+      productionNote: [
+        groups.some((g) => g.imprints.some((d) => d.confirm && (d.confirm.size || d.confirm.ink))) ? `REORDER: confirm the print specs (size, placement, inks) before printing: ${SITE_URL}/shop/details?order=${orderId}` : "",
+        pre.productionNote, `Entered in the new FBS system as order #${number}.`,
+      ].filter(Boolean).join("\n\n"),
+      customerNote: String(o.notes || "").trim() || undefined,
+      salesTax: taxed ? calc.rate : 0,
+      discount: discount || 0, discountAsPercentage: o.discount_type !== "amt",
+      tags: [`#FBS${number}`],
+      ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}),
+    };
+    const kind = inv ? "invoiceUpdate" : "quoteUpdate", type = inv ? "InvoiceInput" : "QuoteInput";
+    await transitionReset(`mutation($id:ID!,$input:${type}!){ ${kind}(id:$id, input:$input){ id } }`, { id: pid, input }, number);
+    // 3. ours, as the first send makes them
+    for (const g of lineItemGroups) { await transitionReset(`mutation($p:ID!,$input:LineItemGroupCreateInput!){ lineItemGroupCreate(parentId:$p, input:$input){ id } }`, { p: pid, input: g }, number); done.added.groups++; }
+    for (const f of fees) { await transitionReset(`mutation($p:ID!,$input:FeeInput!){ feeCreate(parentId:$p, input:$input){ id } }`, { p: pid, input: f }, number); done.added.fees++; }
+    await transitionWrite(`mutation($p:ID!,$u:String!){ productionFileCreate(parentId:$p, publicFileUrl:$u){ id } }`, { p: pid, u: orderLink(number) }, number).catch(() => null);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await release(`Reset stopped: ${msg}`);
+    await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Reset in Printavo stopped after deleting ${done.deleted.groups} group(s), ${done.deleted.fees} fee(s), ${done.deleted.files} file(s) and adding ${done.added.groups} group(s): ${msg}`.slice(0, 500), actor: by });
+    throw new PrintavoError(`The reset stopped partway (${done.deleted.groups} groups and ${done.deleted.fees} fees cleared, ${done.added.groups} of ours added): ${msg}. Press Reset in Printavo again to finish it.`);
+  }
+  await release();
+  // 4. the mockups and the art, one at a time (a slow picture doesn't undo the reset)
+  let files: Awaited<ReturnType<typeof attachFiles>> | null = null, filesError = "";
+  try { files = await attachFiles(admin, orderId, started + 95_000); } catch (e) { filesError = e instanceof Error ? e.message : String(e); }
+  await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Reset in Printavo: cleared ${done.deleted.groups} group(s), ${done.deleted.fees} fee(s), ${done.deleted.files} file(s); sent ${done.added.groups} group(s), ${done.added.fees} fee(s)${files ? `, ${files.added} mockup(s) / file(s)` : ""}`, actor: by });
+  return { ...done, filesAdded: files?.added || 0, warnings: filesError ? `Mockups and art weren't added (${filesError}). Use "Add mockups & art" to try again.` : files && (files.failed.length || files.left) ? `${files.failed.length + files.left} mockup(s) / file(s) didn't go on. Use "Add mockups & art" to try again.` : "" };
 }

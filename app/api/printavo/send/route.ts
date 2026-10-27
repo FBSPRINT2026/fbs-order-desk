@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { attachFiles, matchPrintavoNumber, refreshFromPrintavo, resyncDetails, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
+import { attachFiles, matchPrintavoNumber, refreshFromPrintavo, resetPreview, resetPrintavo, resyncDetails, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
 import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,9 @@ export async function POST(req: Request) {
     // an order sent before the send included them: the prints in the line descriptions and the addresses
     if (b.action === "resync") return NextResponse.json({ ...(await resyncDetails(createAdminClient(), orderId)), pv: await refreshFromPrintavo(createAdminClient(), orderId) });
     if (b.action === "refresh") return NextResponse.json({ pv: await refreshFromPrintavo(createAdminClient(), orderId) });
+    // Reset in Printavo (Oct 27): what it would change, then (pressed again) clear Printavo's lines, fees and files and send ours
+    if (b.action === "resetPreview") return NextResponse.json(await resetPreview(createAdminClient(), orderId));
+    if (b.action === "reset") return NextResponse.json({ ...(await resetPrintavo(createAdminClient(), orderId, g.email)), pv: await refreshFromPrintavo(createAdminClient(), orderId).catch(() => null) });
     const r = await sendToPrintavo(createAdminClient(), { orderId, statusId: s(b.statusId, 64), customerDue: s(b.customerDue, 10), productionDue: s(b.productionDue, 10), nickname: s(b.nickname, 200), po: s(b.po, 100), productionNote: s(b.productionNote, 4000), by: g.email });
     return NextResponse.json(r);
   } catch (e) { return fail(e); }
