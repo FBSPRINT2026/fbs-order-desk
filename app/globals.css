@@ -14930,3 +14930,22 @@ body:has(.dla-bg.dock.og-hidden){padding-right:0}
 .sra-col.rec small{color:var(--warn)}
 .sra-col.none small{color:var(--danger)}
 .sra-all{font-size:12.5px;align-self:flex-start}
+/* Order goods: the goods by warehouse (Oct 26): a strip down the left, a small table of garments by size */
+.og-wh{display:flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden}
+.og-whs{writing-mode:vertical-rl;transform:rotate(180deg);flex:none;width:22px;display:flex;align-items:center;justify-content:center;text-align:center;padding:6px 0;background:var(--wc);color:#fff;font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+.og-whb{flex:1;min-width:0}
+.og-whh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-2)}
+.og-whh b{font-size:13.5px}
+.og-whh span{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.og-wt{width:100%;border-collapse:collapse;font-size:12.5px}
+.og-wt th{font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:4px 2px}
+.og-wt td{text-align:center;padding:5px 2px;border-top:1px solid var(--line-2);white-space:nowrap}
+.og-wt td:first-child{text-align:left;padding-left:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.og-wt td.z{color:var(--line)}
+.og-wt td.p{color:var(--warn);font-weight:700}
+.og-wt td.t{font-weight:800;padding-right:10px}
+.og-split{font-size:12px;color:var(--warn)}
+.og-edit{align-self:flex-start;font-size:12.5px}
+.og-mode{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border-radius:9px;padding:3px}
+.og-mode button{all:unset;box-sizing:border-box;cursor:pointer;text-align:center;padding:7px 0;border-radius:7px;font-weight:700;font-size:13px;color:var(--ink-3)}
+.og-mode button.on{background:var(--surface);color:var(--fbs-blue);box-shadow:0 1px 3px rgba(20,29,43,.14)}
