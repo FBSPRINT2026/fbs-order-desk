@@ -584,7 +584,9 @@ const CUSTOM_SPOTS: Record<string, Loc> = {};
 export function registerAreas(imps: { location: string; area?: { w: number; h: number; view?: View } | null }[]) {
   for (const im of imps) {
     if (!im.area || !im.location || LOCATION_SPOTS[im.location] || HEAD_SPOTS[im.location]) continue;
-    const w = Math.max(0.5, Math.min(30, +im.area.w || 4)), h = Math.max(0.5, Math.min(30, +im.area.h || 4));
+    // to the hundredth of an inch (a dragged box is any size: 9.890235420568244")
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    const w = r2(Math.max(0.5, Math.min(30, +im.area.w || 4))), h = r2(Math.max(0.5, Math.min(30, +im.area.h || 4)));
     CUSTOM_SPOTS[im.location] = { view: im.area.view === "back" ? "back" : "front", dx: 0, drop: 1.5, defW: Math.min(4, w), maxW: w, maxH: h };
   }
 }

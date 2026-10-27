@@ -123,7 +123,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     // for placement"): one placement page, no press sheets
     const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
     const mk = (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
-    const notesPage = longNotes && !mk.length;
+    // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
+    const veryLong = noteText.length + extra * 120 > 650 || noteText.split("\n").length + extra > 9;
+    const notesPage = longNotes && (!mk.length || veryLong);
     const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
     // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
@@ -220,7 +222,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {countTable(lines.slice(0, 4))}
               {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
-                <h2>Notes {longNotes && <span>continued on page {mk.length ? pgMk : pgNotes}</span>}</h2>
+                <h2>Notes {longNotes && <span>continued on page {notesPage ? pgNotes : pgMk}</span>}</h2>
                 <div className={"notes" + (longNotes ? " clip" : "")}>{notesBlock}</div>
               </>}
               <div className="foot"><span>{footL}</span><span>Page {pg} of {total} · printed {p.printed}</span></div>
@@ -263,7 +265,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                     </div>
                   )}
                   {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} />)}</div>}
-                  {i === 0 && longNotes && <><h2>Notes</h2><div className="notes">{notesBlock}</div></>}
+                  {i === 0 && longNotes && !notesPage && <><h2>Notes</h2><div className="notes wo-mk-notes">{notesBlock}</div></>}
                   <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
                 </section>
               );

@@ -290,6 +290,7 @@ export const DOC_CSS = `
 .pdoc .cnt.tight tr.counted td:first-child .by{margin-top:2px}
 .pdoc .notes.clip{max-height:1.05in;overflow:hidden}
 .pdoc .wo-big{flex:1 1 0;min-height:3in;display:flex;align-items:center;justify-content:center;background:#f4f5f7;border-radius:14px;padding:12px;margin-top:10px}
+.pdoc .wo-mk-notes{font-size:10pt;max-height:2.2in;overflow:hidden;flex:none}
 .pdoc .wo-big img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
 .pdoc .wo-place{display:flex;flex-direction:column;align-items:center;gap:2px;margin:10px 0 8px;text-align:center}
 .pdoc .wo-place b{font-size:20pt}

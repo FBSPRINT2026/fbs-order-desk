@@ -141,7 +141,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
  * order"), and "From reading the email:" loses its preamble. The order page keeps the full notes.
  */
 function woNotes(t: string) {
-  const drop = /^(clickup task made by|task made by|task name:|from .{0,40}clickup board|staff (instructed|want)|made with create order|this is a new order|this is a reorder)/i;
+  const drop = /^(clickup task made by|task made by|task name:|from .{0,40}clickup board|staff (instructed|want|flagged)|made with create order|this is a new order|this is a reorder)|printavo field|at (the )?time of writing|backlog of|clickup submissions|^new order \(not a reorder\)/i;
   return t.split(/\n{2,}/).filter((p) => !/^what we told the ai:/i.test(p.trim()))
     .map((p) => p.replace(/^from reading the email:\s*/i, "").split("\n").map((ln) => ln.split(/(?<=[.!?])\s+(?=[A-Z"])/).filter((x) => !drop.test(x.trim())).join(" ")).filter((ln) => ln.trim()).join("\n"))
     .filter((p) => p.trim()).join("\n\n").trim();

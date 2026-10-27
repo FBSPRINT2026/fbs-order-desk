@@ -1830,7 +1830,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const im = imprints.find((x) => x.id === id); if (!im?.area) return;
     const p = place(im, v); if (!p.wIn || !p.w) return;
     const ppi = p.w / p.wIn, ex = c.includes("e") ? 1 : -1, sy = c.includes("s") ? 1 : -1;
-    const w = Math.min(30, Math.max(0.5, im.area.w + (ex * dx) / ppi)), h = Math.min(30, Math.max(0.5, im.area.h + (sy * dy) / ppi));
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    const w = r2(Math.min(30, Math.max(0.5, im.area.w + (ex * dx) / ppi))), h = r2(Math.min(30, Math.max(0.5, im.area.h + (sy * dy) / ppi)));
     const mx = ((w - im.area.w) * ppi * ex) / 2, my = ((h - im.area.h) * ppi * sy) / 2;
     if (!mx && !my) return;
     setImprints((xs) => xs.map((x) => (x.id === id && x.area ? { ...x, area: { ...x.area, w, h } } : x)));
