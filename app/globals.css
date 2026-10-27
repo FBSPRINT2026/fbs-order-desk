@@ -15084,3 +15084,6 @@ td.ckg-n.ok{color:var(--ok)}td.ckg-n.off{color:var(--warn)}
 .ckg-boxes input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:14px;width:100%;box-sizing:border-box}
 .ckg-hint{font-size:12px}
 @media (max-width:760px){.ckg{grid-template-columns:minmax(0,1fr)}.ckg-side{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.ckg-hint{display:none}}
+
+/* My Day → Calendar → Jobs: My accounts / Everyone (Oct 27) */
+.md-jobwho{margin:6px 0 4px;padding:0;border:0;background:none}

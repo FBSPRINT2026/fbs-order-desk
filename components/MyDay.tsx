@@ -234,9 +234,13 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
   // Appointments or Jobs, the same switch as the Calendar page (Oct 26, Nick: "add the toggle for appointments and jobs
   // to the My Day view"): appointments are yours (and go to your phone), jobs are what's due by day, ours and Printavo's
   const [mode, setMode] = useSticky<"appts" | "jobs">("calendar.tab", "appts");
-  const [jobs, setJobs] = useState<CalJob[] | null>(null), [lateOpen, setLateOpen] = useState(false);
-  useEffect(() => { if (mode === "jobs" && !jobs) jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) setJobs(r.jobs); }); }, [mode, jobs, today]);
+  const [allJobs, setJobs] = useState<CalJob[] | null>(null), [lateOpen, setLateOpen] = useState(false), [hasAcc, setHasAcc] = useState(false);
+  // just your accounts by default (Oct 27, Nick: "the list is just extremely long… by default make it just your jobs… as
+  // the account manager"); Everyone shows the whole shop's. Someone with no accounts (production) always sees everyone's.
+  const [jobsMine, setJobsMine] = useSticky("calendar.jobsMine", true);
+  useEffect(() => { if (mode === "jobs" && !allJobs) jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) { setJobs(r.jobs); setHasAcc(r.hasAccounts); } }); }, [mode, allJobs, today]);
   void shop;
+  const jobs = allJobs && hasAcc && jobsMine ? allJobs.filter((j) => j.mine) : allJobs;
   const jobsOn = (day: string) => (jobs || []).filter((j) => j.day === day);
   const late = (jobs || []).filter((j) => j.day < today);
   const evs = (d?.events || []);
@@ -255,6 +259,10 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
         <button type="button" role="tab" aria-selected={mode === "appts"} className={mode === "appts" ? "on" : ""} onClick={() => setMode("appts")}>Appointments</button>
         <button type="button" role="tab" aria-selected={mode === "jobs"} className={mode === "jobs" ? "on" : ""} onClick={() => { setMode("jobs"); setAdding(false); }}>Jobs{jobs ? <small>{jobsOn(today).length}</small> : null}</button>
       </div>
+      {mode === "jobs" && hasAcc && <div className="toolbar md-jobwho"><div className="chips" role="group" aria-label="Whose jobs">
+        <button type="button" className={"chip" + (jobsMine ? " on" : "")} aria-pressed={jobsMine} onClick={() => setJobsMine(true)}>My accounts</button>
+        <button type="button" className={"chip" + (!jobsMine ? " on" : "")} aria-pressed={!jobsMine} onClick={() => setJobsMine(false)}>Everyone</button>
+      </div></div>}
       <div className="md-week" role="group" aria-label="This week">{days.map((day) => {
         const n = mode === "appts" ? on(day).length : 0, o = dueOn(day).length;
         return (

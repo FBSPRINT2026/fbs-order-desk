@@ -33,8 +33,11 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
   const [tab, setTab] = useSticky<Tab>("myday.phone", "today");
   const [calMode, setCalMode] = useSticky<"appts" | "jobs">("calendar.tab", "appts");
   const today = d?.today || new Date().toLocaleDateString("en-CA", { timeZone: TZ });
-  const [jobs, setJobs] = useState<CalJob[] | null>(null);
-  useEffect(() => { jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) setJobs(r.jobs); }); }, [today]);
+  const [allJobs, setJobs] = useState<CalJob[] | null>(null), [hasAcc, setHasAcc] = useState(false);
+  // just your accounts by default, same switch as the desktop My Day (Oct 27, Nick)
+  const [jobsMine, setJobsMine] = useSticky("calendar.jobsMine", true);
+  useEffect(() => { jobDates(today, addDays(today, 6), today).then((r) => { if (r.ok) { setJobs(r.jobs); setHasAcc(r.hasAccounts); } }); }, [today]);
+  const jobs = allJobs && hasAcc && jobsMine ? allJobs.filter((j) => j.mine) : allJobs;
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
   const open = (d?.tasks || []).filter((t) => t.status === "open" && (!t.snooze_until || t.snooze_until <= today));
   const dueTasks = open.filter((t) => t.due && t.due <= today);
@@ -60,7 +63,7 @@ export default function MyDayPhone({ d, setD, err, hello, name, groups, emailsLo
       {tab === "today" && <TodayTab d={d} err={err} hello={hello} name={name} today={today} cheer={cheer} apptsToday={apptsToday.length} jobsToday={jobs ? jobsToday : null} mails={emailsLoading ? null : mails} dueTasks={dueTasks}
         next={added.filter((e) => (e.day || "") > today || (e.day === today && (!e.starts_at || minsOf(e.starts_at) >= minsOf(new Date().toISOString()) - 30))).sort((a, b) => (a.day || "").localeCompare(b.day || "") || (a.starts_at || "").localeCompare(b.starts_at || "")).slice(0, 2)}
         reply={groups ? [...groups.back, ...groups.fresh, ...groups.web].slice(0, 2) : []} go={go} finish={finish} />}
-      {tab === "cal" && <CalTab d={d} setD={setD} today={today} mode={calMode} setMode={setCalMode} jobs={jobs} />}
+      {tab === "cal" && <CalTab d={d} setD={setD} today={today} mode={calMode} setMode={setCalMode} jobs={jobs} who={hasAcc ? { mine: jobsMine, set: setJobsMine } : null} />}
       {tab === "email" && <EmailTab groups={groups} loading={emailsLoading} />}
       {/* (a remembered "email" tab from before still shows the list; the tab bar's Email goes to the inbox) */}
       {tab === "todo" && <TodoTab d={d} setD={setD} today={today} finish={finish} reopen={reopen} />}
@@ -184,7 +187,7 @@ function TaskRow({ t, today, onDone, done }: { t: Task; today: string; onDone: (
 
 /* ───────────── Calendar ───────────── */
 
-function CalTab({ d, setD, today, mode, setMode, jobs }: { d: Day | null; setD: (f: (x: Day | null) => Day | null) => void; today: string; mode: "appts" | "jobs"; setMode: (m: "appts" | "jobs") => void; jobs: CalJob[] | null }) {
+function CalTab({ d, setD, today, mode, setMode, jobs, who }: { d: Day | null; setD: (f: (x: Day | null) => Day | null) => void; today: string; mode: "appts" | "jobs"; setMode: (m: "appts" | "jobs") => void; jobs: CalJob[] | null; who: { mine: boolean; set: (v: boolean) => void } | null }) {
   const [sel, setSel] = useState(today), [adding, setAdding] = useState(false), [phone, setPhone] = useState(false);
   const [lateOpen, setLateOpen] = useState(false), [more, setMore] = useState<Record<string, boolean>>({});
   const evs = d?.events || [];
@@ -202,6 +205,10 @@ function CalTab({ d, setD, today, mode, setMode, jobs }: { d: Day | null; setD: 
         <button type="button" role="tab" aria-selected={mode === "appts"} className={mode === "appts" ? "on" : ""} onClick={() => setMode("appts")}>Appointments</button>
         <button type="button" role="tab" aria-selected={mode === "jobs"} className={mode === "jobs" ? "on" : ""} onClick={() => setMode("jobs")}>Jobs</button>
       </div>
+      {mode === "jobs" && who && <div className="toolbar md-jobwho"><div className="chips" role="group" aria-label="Whose jobs">
+        <button type="button" className={"chip" + (who.mine ? " on" : "")} aria-pressed={who.mine} onClick={() => who.set(true)}>My accounts</button>
+        <button type="button" className={"chip" + (!who.mine ? " on" : "")} aria-pressed={!who.mine} onClick={() => who.set(false)}>Everyone</button>
+      </div></div>}
       {mode === "appts" ? <>
         <div className="mdp-week" role="group" aria-label="This week">{week.map((x) => (
           <button key={x} type="button" className={(sel === x ? "on" : "") + (x === today ? " today" : "")} onClick={() => setSel(x)} aria-label={dayLabel(x, today)}>

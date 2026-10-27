@@ -233,10 +233,10 @@ export async function updateEvent(id: string, p: { title?: string; place?: strin
  * tomorrow"): every open job due in the window, ours and the ones still in Printavo, plus the late ones (due before
  * today and not done). by = "due" (the in-hands date) or "print" (the production date).
  */
-export type CalJob = { id: string; href: string; number: string; customer: string; nickname: string; day: string; qty: number; status: string; statusLabel: string; methods: string[]; printavo: boolean };
+export type CalJob = { id: string; href: string; number: string; customer: string; nickname: string; day: string; qty: number; status: string; statusLabel: string; methods: string[]; printavo: boolean; /** the account manager's first name (lowercase) */ owner: string; /** one of the signed-in person's (or the viewed-as person's) accounts */ mine: boolean };
 export async function jobDates(fromDay: string, toDay: string, today: string, by: "due" | "print" = "due") {
   try {
-    const { admin } = await me();
+    const { admin, name: myName, owner: myEmail } = await me();
     const f = ymd(fromDay), t = ymd(toDay), td = ymd(today);
     if (!f || !t || !td) return { ok: false as const, error: "Those days don't look right." };
     const col = by === "print" ? "production_date" : "due_date";
@@ -244,13 +244,29 @@ export async function jobDates(fromDay: string, toDay: string, today: string, by
     const lo = f < td ? f : lateFrom;
     const OPEN_PV = '("Job Completed","Quote - Closed","Quote")';
     const [{ data: ours }, { data: pv }] = await Promise.all([
-      admin.from("orders").select(`id, number, nickname, ${col}, qty, status, groups, customers(company, name)`).gte(col, lo).lte(col, t).eq("draft", false).is("discarded_at", null)
+      admin.from("orders").select(`id, number, nickname, ${col}, qty, status, groups, customer_id, customers(company, name)`).gte(col, lo).lte(col, t).eq("draft", false).is("discarded_at", null)
         .not("status", "in", "(quote,quote_sent,request,completed)").order(col).limit(1000),
-      by === "print" ? Promise.resolve({ data: [] }) : admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, kind, customer_id, imps:data->groups").eq("kind", "invoice").gte("due_date", lo).lte("due_date", t)
+      by === "print" ? Promise.resolve({ data: [] }) : admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, kind, customer_id, imps:data->groups, owner:data->>owner").eq("kind", "invoice").gte("due_date", lo).lte("due_date", t)
         .not("status_name", "in", OPEN_PV).order("due_date").limit(1000),
     ]);
     const kindOf = (w: string) => (/emb/i.test(w) ? "embroidery" : /dtf|transfer|heat/i.test(w) ? "dtf" : /screen/i.test(w) ? "screen" : "");
     const custIds = [...new Set(((pv || []) as { customer_id: string | null }[]).map((r) => r.customer_id).filter(Boolean))] as string[];
+    // whose account each job is (Oct 27, Nick: "by default make it just your jobs… as the account manager"): the account
+    // owner set on the customer (Settings → Staff → Account owners), else the owner on the customer's latest Printavo
+    // order, the same rule as the dashboard's "My accounts"
+    const allCust = [...new Set([...custIds, ...((ours || []) as { customer_id: string | null }[]).map((r) => r.customer_id).filter(Boolean) as string[]])];
+    const first = (x: string | null | undefined) => String(x || "").trim().split(/[\s._@-]+/)[0].toLowerCase();
+    const acct = new Map<string, string>();
+    for (let i = 0; i < allCust.length; i += 200) {
+      const ids = allCust.slice(i, i + 200);
+      const [{ data: last }, { data: ao }] = await Promise.all([
+        admin.from("archived_orders").select("customer_id, owner:data->>owner").in("customer_id", ids).not("data->>owner", "is", null).order("order_date", { ascending: false }).limit(4000),
+        admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
+      ]);
+      for (const r of (last || []) as { customer_id: string; owner: string | null }[]) if (r.owner && !acct.has(r.customer_id)) acct.set(r.customer_id, first(r.owner));
+      for (const r of (ao || []) as { customer_id: string; account_owner: string }[]) acct.set(r.customer_id, first(r.account_owner));
+    }
+    const meFirst = first(myName) || first(myEmail);
     const names = new Map<string, string>();
     for (let i = 0; i < custIds.length; i += 200) {
       const { data: cs } = await admin.from("customers").select("id, company, name").in("id", custIds.slice(i, i + 200));
@@ -259,16 +275,19 @@ export async function jobDates(fromDay: string, toDay: string, today: string, by
     const { STATUSES } = await import("@/lib/pricing");
     const label = (k: string) => STATUSES.find((x) => x.k === k)?.label || k;
     const jobs: CalJob[] = [
-      ...((ours || []) as unknown as { id: string; number: number; nickname: string | null; qty: number | null; status: string; groups: { imprints?: { method?: string }[] }[] | null; customers: { company: string | null; name: string | null } | null; [k: string]: unknown }[]).map((o) => ({
+      ...((ours || []) as unknown as { id: string; number: number; nickname: string | null; qty: number | null; status: string; groups: { imprints?: { method?: string }[] }[] | null; customer_id: string | null; customers: { company: string | null; name: string | null } | null; [k: string]: unknown }[]).map((o) => ({
         id: o.id, href: `/shop/orders/${o.id}`, number: String(o.number), customer: o.customers?.company || o.customers?.name || "", nickname: o.nickname || "", day: String(o[col] || ""), qty: o.qty || 0,
         status: o.status, statusLabel: label(o.status), methods: [...new Set((o.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.method || "")).filter(Boolean))], printavo: false,
+        owner: acct.get(String(o.customer_id || "")) || "", mine: false,
       })),
-      ...((pv || []) as { id: string; visual_id: string; nickname: string | null; due_date: string; qty: number | null; status_name: string; customer_id: string | null; imps: { imprints?: { typeOfWork?: string }[] }[] | null }[]).map((o) => ({
+      ...((pv || []) as { id: string; visual_id: string; nickname: string | null; due_date: string; qty: number | null; status_name: string; customer_id: string | null; imps: { imprints?: { typeOfWork?: string }[] }[] | null; owner: string | null }[]).map((o) => ({
         id: o.id, href: `/shop/archive/${o.id}`, number: o.visual_id, customer: (o.customer_id && names.get(o.customer_id)) || "", nickname: o.nickname || "", day: o.due_date, qty: o.qty || 0,
         status: "printavo", statusLabel: o.status_name, methods: [...new Set((o.imps || []).flatMap((g) => (g.imprints || []).map((i) => kindOf(i.typeOfWork || ""))).filter(Boolean))], printavo: true,
+        owner: (o.customer_id && acct.get(o.customer_id)) || first(o.owner), mine: false,
       })),
-    ].filter((j) => j.day);
-    return { ok: true as const, jobs };
+    ].filter((j) => j.day).map((j) => ({ ...j, mine: !!meFirst && j.owner === meFirst }));
+    // hasAccounts: whether this person manages any of these (production crew don't: they keep seeing everyone's)
+    return { ok: true as const, jobs, hasAccounts: jobs.some((j) => j.mine) };
   } catch (e) { return fail(e); }
 }
 
