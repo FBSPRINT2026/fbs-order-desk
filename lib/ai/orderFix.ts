@@ -5,7 +5,7 @@ import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { colorHex } from "@/lib/inkColors";
-import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, type Group, type Order, type Settings } from "@/lib/pricing";
+import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, uid, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
  * "Did I get everything right?" (Oct 23, Nick: "the right panel… never closes until I say, yes, we've got everything
@@ -46,7 +46,7 @@ const EXTRAS = ["printed_free", "not_printed_free", "printed_charged", "not_prin
 
 /** the order's garment lines with their ids, so a change can point at one */
 const sizeRun = (l: Group["lines"][number]) => SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${z} ${l.sizes?.[z]}`).join(", ");
-const linesText = (groups: Group[]) => groups.map((g, gi) => g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs (${sizeRun(l) || "no sizes"})${l.priceOverride != null && (l.priceOverride as unknown) !== "" ? `, priced $${l.priceOverride} each` : ""}${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
+const linesText = (groups: Group[]) => groups.map((g, gi) => `Group ${gi + 1}${g.name ? ` "${g.name}"` : ""}: prints ${g.imprints.length ? g.imprints.map((d) => `${d.location} (${d.method})`).join(", ") : "none"}\n` + g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs (${sizeRun(l) || "no sizes"})${l.priceOverride != null && (l.priceOverride as unknown) !== "" ? `, priced $${l.priceOverride} each` : ""}${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
 
 export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, mode: "review" | "change", earlier = ""): Promise<{ ok: true; r: FixResult } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, 2000);
@@ -81,8 +81,8 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
       changes: { type: "array", description: "Each change, one field each.", items: { type: "object", properties: {
         what: { type: "string", enum: ["print", "line", "art", "order"] },
         id: { type: "string", description: "The print id (print and art), the line id (line), or \"order\"" },
-        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price. order: ${Object.keys(ORDER_FIELDS).join(", ")}` },
-        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; confirm (production confirms the print's details on the run, the Reorder Details screen): "both", "size", "ink" or "none" (take it off); art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
+        field: { type: "string", description: `print: ${PRINT_FIELDS.join(", ")}. art: ${ART_ACTIONS.join(", ")}. line: extras, sizes, color, price, group. order: ${Object.keys(ORDER_FIELDS).join(", ")}` },
+        value: { type: "string", description: `size like 11" wide; location one of: ${LOCATIONS.join(", ")}; inks comma separated; colors a number; drop inches below the collar ("" = our standard spot); underbase yes/no; confirm (production confirms the print's details on the run, the Reorder Details screen): "both", "size", "ink" or "none" (take it off); art: "yes"; line extras: ${EXTRAS.join(", ")}; line sizes: the line's WHOLE size run after the change, like "S:10, M:12, L:8" (sizes from ${SIZES.join(" ")}; one left out = 0); line color: the garment color name; line price: the price per piece in dollars like 1.50 ("" = back to the shop's price); line group: the id of another line whose group this line joins, or "new" for a group of its own; order fields: ${Object.entries(ORDER_FIELDS).map(([k, f]) => `${k} ${f.say}`).join("; ")}` },
         say: { type: "string", description: "One plain sentence saying the change, past tense. An art change goes on the customer's proof, so say what we changed and why, in their words: \"Flattened the art to two colors, black and white (there was shading in the black)\", \"Removed the thin white outline around the hawk (too thin to print)\"" },
       }, required: ["what", "id", "field", "value", "say"] } },
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
@@ -92,7 +92,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
 
 You're checking an order with the shop's account manager right after it was made, like a careful order-entry person. ${mode === "review" ? "Look at what the customer sent (their mockup, PO, art) next to the order and our mockup, and list only real differences: a print in the wrong spot or far too low, a wrong size, wrong inks, garments or quantities off, extras, the date. If it all matches, say so and change nothing; never list something that stays the same as a change. A white underbase under the inks on a colored (not white) shirt is our standard, not a difference: a customer's 3 colors for 2 named inks on a colored shirt is those 2 plus the white underbase. Changes you list here are SUGGESTIONS staff will approve." : "Staff are telling you what's wrong. Make exactly those changes, nothing else. If you can't tell which print or line they mean, ask in the reply and change nothing."}
 
-Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; a print's size, location, inks, number of colors, drop and white underbase; a print's details sent to production to confirm on the run (Reorder Details: "production needs to confirm the details" on a reorder → confirm "both", or just "size" / "ink"; "they confirmed it" / "take it off Reorder Details" → "none"; when staff ask for it without naming one print ("have production confirm these", "the mockups", "this order", "it's a reorder, please confirm"), send a confirm change for EVERY print on the order, not just one. It keeps the details already entered as our best guess and never changes the mockup); extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
+Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; which group a line is in (field group: the id of a line in the group it joins, or "new"): this is how groups are combined or split ("put all the left chest ones together, the sleeve ones together" → move every left-chest line into one left-chest line's group and every sleeve line into one sleeve line's group). A line that joins a group takes that group's prints; a group left with no lines goes away; a print's size, location, inks, number of colors, drop and white underbase; a print's details sent to production to confirm on the run (Reorder Details: "production needs to confirm the details" on a reorder → confirm "both", or just "size" / "ink"; "they confirmed it" / "take it off Reorder Details" → "none"; when staff ask for it without naming one print ("have production confirm these", "the mockups", "this order", "it's a reorder, please confirm"), send a confirm change for EVERY print on the order, not just one. It keeps the details already entered as our best guess and never changes the mockup); extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
 - one_black: two or more blacks in the art (a gray-black next to pure black) become one solid black.
@@ -108,8 +108,8 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
   const changes = (Array.isArray(r.data.changes) ? r.data.changes : []).filter((c) =>
     (c.what === "print" && printIds.has(c.id) && PRINT_FIELDS.includes(c.field)) ||
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
-    (c.what === "line" && lineIds.has(c.id) && ((c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
-    (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 12);
+    (c.what === "line" && lineIds.has(c.id) && ((c.field === "group" && (c.value === "new" || (lineIds.has(c.value) && c.value !== c.id))) || (c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
+    (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 40);
   const res: FixResult = { reply: String(r.data.reply || "").slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
@@ -159,6 +159,7 @@ function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "
     if (!l) return true;
     if (c.field === "sizes") { const run = parseRun(v); return !!run && SIZES.every((z) => +(run[z] || 0) === +(l.sizes?.[z] || 0)); }
     if (c.field === "color") return v.toLowerCase() === String(l.color || "").toLowerCase();
+    if (c.field === "group") { const gOf = (id: string) => groups.findIndex((g) => g.lines.some((x) => x.id === id)); return v === "new" ? groups[gOf(c.id)]?.lines.length === 1 : gOf(v) === gOf(c.id); }
     if (c.field === "price") { const n = parseFloat(v.replace(/[$,]/g, "")); return l.priceOverride != null && (l.priceOverride as unknown) !== "" && Math.abs(+l.priceOverride - n) < 0.005; }
   }
   if (c.what === "order" && c.field === "firm") return /^y|true|on/i.test(v) === !!(o as { firm?: boolean }).firm;
@@ -202,7 +203,18 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
     } else if (c.what === "line") {
       const l = groups.flatMap((g) => g.lines).find((x) => x.id === c.id);
       if (!l) continue;
-      if (c.field === "sizes") { const run = parseRun(v); if (!run) continue; l.sizes = run; }
+      if (c.field === "group") {
+        // combine / split groups (Oct 27, Nick on #40191: "there just should be two groups, the ones that get the left chest
+        // and the ones that get the sleeve"): the line leaves its group for the other line's (or a new one with its prints)
+        const from = groups.find((g) => g.lines.some((x) => x.id === l.id));
+        const to = v === "new" ? null : groups.find((g) => g.lines.some((x) => x.id === v));
+        if (!from || from === to || (v !== "new" && !to)) continue;
+        from.lines = from.lines.filter((x) => x.id !== l.id);
+        if (to) to.lines.push(l);
+        else { const ng = JSON.parse(JSON.stringify(from)) as Group; ng.id = uid(); ng.name = ""; ng.lines = [l]; ng.imprints = ng.imprints.map((d) => ({ ...d, id: uid() })); delete (ng as { mockupAt?: unknown }).mockupAt; delete (ng as { mockupThumbs?: unknown }).mockupThumbs; groups.splice(groups.indexOf(from) + 1, 0, ng); }
+        if (!from.lines.length) groups.splice(groups.indexOf(from), 1);
+      }
+      else if (c.field === "sizes") { const run = parseRun(v); if (!run) continue; l.sizes = run; }
       else if (c.field === "color") { if (!v) continue; l.color = v; }
       else if (c.field === "price") { const n = parseFloat(v.replace(/[$,]/g, "")); if (v && !(n >= 0 && n < 10000)) continue; l.priceOverride = v ? Math.round(n * 100) / 100 : null; }
       else if (v === "not_extras") { delete l.extras; delete l.extrasPrint; delete l.extrasFree; if (l.priceOverride === 0) l.priceOverride = null; }
