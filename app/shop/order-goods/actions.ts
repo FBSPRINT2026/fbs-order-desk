@@ -51,6 +51,27 @@ export async function goodsStyle(styleID: number) {
 }
 
 /** Where the goods are for: an email (its customer and the garments the AI read from it), an order, or a customer. */
+/**
+ * The Order goods panel (Oct 26, Nick: "the right side… pop-up just like you do with create an order"): the garments it
+ * read from the email, after staff said which blank and which colors, as S&S lines (sku, stock, price) by size.
+ */
+export async function goodsFromGroups(groups: Group[]) {
+  try {
+    await staff();
+    const rows: GoodsRow[] = [];
+    for (const g of groups || []) for (const l of g.lines || []) for (const [z, q] of Object.entries(l.sizes || {})) {
+      const qty = +(q || 0); if (!qty || !String(l.style || "").trim()) continue;
+      const key = `${l.brand}|${l.style}|${l.color}|${z}`.toLowerCase();
+      const have = rows.find((r) => r.key === key);
+      if (have) have.qty += qty;
+      else rows.push({ key, brand: l.brand || "", style: l.style || "", color: l.color || "", size: z, qty, sku: "", price: 0, stock: 0, found: false, note: "" });
+    }
+    rows.sort((a, b) => `${a.brand}|${a.style}|${a.color}`.localeCompare(`${b.brand}|${b.style}|${b.color}`) || sizeRank(a.size) - sizeRank(b.size));
+    if (rows.length && ssConfigured()) await matchToSS(createAdminClient(), rows);
+    return { ok: true as const, rows, ss: ssConfigured() };
+  } catch (e) { return fail(e); }
+}
+
 export async function goodsStart(p: { email?: string; order?: string }) {
   try {
     await staff();

@@ -14825,3 +14825,48 @@ html[data-phone-deep] .mdp-only{display:none}
 .ga-found b{font-size:15px}
 .ga-found .btn{height:44px}
 @media (max-width:760px){ .ga-opt{padding:14px 16px} .ga-opt b{font-size:16px} .ga .ap-foot .btn{height:44px} }
+
+/* ===== Order goods panel (Oct 26, Nick: "the right side… pop-up just like… create an order… a good mobile version") ===== */
+.og{display:flex;flex-direction:column}
+.og-h{display:flex;align-items:flex-start;gap:10px;position:relative;padding-top:2px}
+.og-ht{flex:1;min-width:0}
+.og-ht h3{margin:0;font-family:var(--display);font-size:20px}
+.og-h .qo-x{position:static}
+.og-grab{display:none}
+.og-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.og-g{border:1px solid var(--line-2);border-radius:10px;overflow:hidden}
+.og-gh{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;background:var(--surface-2);font-size:14px}
+.og-gh span{font-weight:800;white-space:nowrap}
+.og-sz{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr))}
+.og-sz label{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px;border-top:1px solid var(--line-2);border-left:1px solid var(--line-2);font-size:12px;color:var(--ink-3)}
+.og-sz input{width:54px;height:36px;box-sizing:border-box;text-align:center;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:15px;color:var(--ink)}
+.og-sz small{font-size:10.5px;color:var(--ok);white-space:nowrap}
+.og-sz .low small{color:var(--warn)}
+.og-sz .bad small{color:var(--danger)}
+.og-tot{display:flex;justify-content:space-between;font-size:15px;padding:2px 2px 4px}
+.og-tot b{font-size:17px}
+.og-check{font-size:13px;padding:9px 12px;border-radius:9px;background:color-mix(in srgb,var(--ok) 9%,var(--surface));color:var(--ink)}
+.og-done{font-size:13.5px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,var(--fbs-blue) 9%,var(--surface))}
+.og-note{font-size:12.5px;margin:0}
+.og-foot{position:sticky;bottom:0;background:var(--surface);display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line-2)}
+.og-view{display:inline-flex;align-items:center;gap:6px}
+.og-view svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.og-sure{background:var(--danger)!important;border-color:var(--danger)!important}
+/* tucked away: only a bar at the bottom, like a draft in the iPhone's Mail app; tap or slide it up to go back */
+.dla-bg.dock.og-hidden{display:none}
+body:has(.dla-bg.dock.og-hidden){padding-right:0}
+.og-mini{all:unset;box-sizing:border-box;position:fixed;z-index:3001;right:16px;bottom:16px;width:min(360px,calc(100vw - 20px));display:flex;align-items:center;gap:10px;padding:14px 16px 12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(20,29,43,.25);cursor:pointer}
+.og-mini .og-grab{display:block;position:absolute;top:5px;left:50%;transform:translateX(-50%);width:34px;height:4px;border-radius:2px;background:var(--line)}
+.og-dot{width:10px;height:10px;border-radius:50%;background:var(--fbs-blue);flex:none}
+.og-dot.ask{background:var(--warn)}
+.og-dot.ok{background:var(--ok)}
+.og-mt{display:flex;flex-direction:column;min-width:0}
+.og-mt b{font-size:14.5px;color:var(--ink)}
+.og-mt small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){
+  .og-mini{left:10px;right:10px;width:auto;bottom:calc(10px + env(safe-area-inset-bottom))}
+  .og .og-h{padding-top:12px}
+  .og .og-grab{display:block;position:absolute;top:0;left:50%;transform:translateX(-50%);width:38px;height:5px;border-radius:3px;background:var(--line)}
+  .og-foot .btn{height:44px}
+  body:has(.og-mini) .mdp-bar,body:has(.og-mini) .mdp-only{display:none}
+}

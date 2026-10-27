@@ -20,7 +20,8 @@ import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTask
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
 import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
-import { orderGoodsHref, pieceCount } from "@/lib/pieces";
+import { pieceCount } from "@/lib/pieces";
+import { openOrderGoods } from "@/components/tools/OrderGoodsTool";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
 import { FileTray, FrameZoom, msgFiles, type MailFile, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
@@ -480,7 +481,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     else if (w === "talk") { if (kept) { pickRow(k); setAutoGo((p) => ({ id: k, what: "ai", n: (p?.n || 0) + 1 })); } else void keepAndOpen(i, "ai"); }
     else if (w === "order") { if (kept) { setAutoOrder(k); pickRow(k); } else void keepAndOpen(i, "order"); }
     else if (w === "reorder") { if (kept) { pickRow(k); setAutoGo((p) => ({ id: k, what: "reorder", n: (p?.n || 0) + 1 })); } else void keepAndOpen(i, "reorder"); }
-    else if (w === "goods") { if (kept) window.location.href = orderGoodsHref(k); else void keepAndOpen(i, "goods"); }
+    else if (w === "goods") { if (kept) openOrderGoods(k); else void keepAndOpen(i, "goods"); }
     else if (w === "blackhole!") {
       // a customer, after the menu asked
       try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to: "blackhole", confirmed: true }); setOl((l) => (l || []).filter((y) => y.id !== i.id)); if (g.some((y) => open === olKey(y))) setOpen(null); if (g.length > 1) await moveRest(i, "blackhole"); flash(MOVED.blackhole || "Black Hole."); }
@@ -561,7 +562,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (!r.ok) { flash(r.error); return; }
     setOl((l) => (l || []).map((y) => (y.id === it.id ? { ...y, activity_id: r.activityId } : y)));
     await load();
-    if (then === "goods") { window.location.href = `/shop/order-goods?email=${r.activityId}`; return; }
+    if (then === "goods") { openOrderGoods(r.activityId); return; }
     if (then === "order") setAutoOrder(r.activityId);
     if (then === "ai" || then === "reorder") setAutoGo((p) => ({ id: r.activityId, what: then, n: (p?.n || 0) + 1 }));
     if (then === "reply") setFocus(r.activityId);
@@ -1236,7 +1237,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
     else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); write(); }
     else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs reply list.");
-    else if (a.kind === "order_goods") window.open(`/shop/order-goods?email=${x.id}`, "_blank");
+    else if (a.kind === "order_goods") openOrderGoods(x.id);
   }
   // anywhere in a customer conversation (Oct 12, Nick: replied "got it, thanks" and Create order was gone): the order
   // comes from the customer's latest email in it, and it reads as an order when any email in it did
@@ -1329,7 +1330,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <PSec label="Actions">
                 {view === "order" ? <PTile icon={TbIcon.back} label="Back to the email" onClick={() => { close(); setView("mail"); }} />
                   : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); if (ordering) startOrder(); else setPickOpen(true); }} />}
-                <PTile icon={TbIcon.goods} label="Order goods" href={orderGoodsHref(x.id)} onClick={close} />
+                <PTile icon={TbIcon.goods} label="Order goods" onClick={() => { close(); openOrderGoods(x.id); }} />
                 {x.customer_id ? <PTile icon={TbIcon.person} label="Customer" href={`/shop/customers/${x.customer_id}`} onClick={close} />
                   : <PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer({ email: x.direction === "in" ? x.from_email : (x.to_email || "").split(",")[0].trim(), name: x.direction === "in" ? x.meta?.from_name : "" }); }} />}
                 {x.direction === "in" && !x.customer_id && <PTile icon={TbIcon.ban} label="Not a customer" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }} />}
@@ -1351,7 +1352,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <button type="button" className={"tb-b eh-ai-go" + (!reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(reorder ? { told: "This is a new order, not a reorder of a past job." } : undefined)}>{TbIcon.order}<span className="tb-l">New order</span></button>
               <button type="button" className={"tb-b eh-ai-go" + (reorder ? " primary" : "")} disabled={!!busy} onClick={() => setPickOpen(true)}>{TbIcon.repeat}<span className="tb-l">Reorder</span></button>
             </>)}
-            {view !== "order" && <a className="tb-b eh-ai-go" href={orderGoodsHref(x.id)}>{TbIcon.goods}<span className="tb-l">Order goods</span></a>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
+            {view !== "order" && <button type="button" className="tb-b eh-ai-go" onClick={() => openOrderGoods(x.id)}>{TbIcon.goods}<span className="tb-l">Order goods</span></button>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
           fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
@@ -1389,7 +1390,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {/* Actions */}
             <TbGroup label="Actions">
               {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => (ordering ? startOrder() : setPickOpen(true))} title="New order or reorder: pick, then the AI reads the email and its attachments and fills in the order for you to check" />}
-              <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
+              <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => openOrderGoods(x.id)} />
               {x.customer_id
                 ? <TbBtn icon={TbIcon.person} label="Customer" title="Customer profile: open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
                 : <TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer({ email: x.direction === "in" ? x.from_email : (x.to_email || "").split(",")[0].trim(), name: x.direction === "in" ? x.meta?.from_name : "" })} />}

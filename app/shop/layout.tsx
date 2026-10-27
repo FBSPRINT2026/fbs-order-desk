@@ -12,6 +12,7 @@ import { RoleProvider } from "@/components/RoleContext";
 import CrewGuard from "@/components/CrewGuard";
 import { OrderCheckDock } from "@/components/tools/OrderReview";
 import { CreateOrderDock } from "@/components/tools/CreateOrderDock";
+import { OrderGoodsDock } from "@/components/tools/OrderGoodsTool";
 import SameArtPrompt from "@/components/SameArtPrompt";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <MobileTables />
         <OrderCheckDock />
         <CreateOrderDock />
+        <OrderGoodsDock />
         <SameArtPrompt />
       </div>
     </RoleProvider>
