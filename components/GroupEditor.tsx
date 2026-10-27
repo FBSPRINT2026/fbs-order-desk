@@ -2,7 +2,7 @@
 import { threadByName } from "@/lib/embroidery";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { guessHex, garmentHex, smallerSpot } from "@/lib/mockup";
+import { guessHex, garmentHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
@@ -396,6 +396,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
     return () => { live = false; ro?.disconnect(); probe.remove(); };
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
+  registerAreas(g.imprints);
   const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length && !g.imprints.some((x) => x.supplied);
   // wholesale (contract) jobs use the contract's own finishing list and prices
   const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;

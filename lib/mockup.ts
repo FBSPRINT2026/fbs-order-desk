@@ -575,8 +575,22 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   const dropK = b?.kind === "infant" ? k.kw * 0.75 : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
   return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
+/**
+ * Custom spots (Oct 27, Nick: "custom location… type a name… front pocket… set the artboard size, and then the actual logo
+ * size"): a print's own area (Imprint.area) under the name typed, known to every size and placement here once the page
+ * holding the order has registered it (registerAreas). A standard location's name always means the standard spot.
+ */
+const CUSTOM_SPOTS: Record<string, Loc> = {};
+export function registerAreas(imps: { location: string; area?: { w: number; h: number; view?: View } | null }[]) {
+  for (const im of imps) {
+    if (!im.area || !im.location || LOCATION_SPOTS[im.location]) continue;
+    const w = Math.max(0.5, Math.min(30, +im.area.w || 4)), h = Math.max(0.5, Math.min(30, +im.area.h || 4));
+    CUSTOM_SPOTS[im.location] = { view: im.area.view === "back" ? "back" : "front", dx: 0, drop: 1.5, defW: Math.min(4, w), maxW: w, maxH: h };
+  }
+}
+export const isCustomSpot = (location: string) => !!CUSTOM_SPOTS[location] && !LOCATION_SPOTS[location];
 export const spotFor = (location: string, b?: Body | null): Loc => {
-  const s = fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 1.5, defW: 4, maxW: 12, maxH: 14 }, b);
+  const s = fitSpot(LOCATION_SPOTS[location] || CUSTOM_SPOTS[location] || { view: "front", dx: 0, drop: 1.5, defW: 4, maxW: 12, maxH: 14 }, b);
   // a bag or tote: never past its own print area, and centered on it (no collar to hang from)
   if (!b?.cap || s.wrap) return s;
   const maxW = Math.min(s.maxW, b.cap.maxW), maxH = Math.min(s.maxH, b.cap.maxH);

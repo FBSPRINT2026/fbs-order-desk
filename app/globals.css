@@ -15166,3 +15166,11 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 .imp-pref{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 14px 0}
 .imp-pref img{height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:var(--surface-2)}
 .imp-pref-n{font-size:12px}
+/* a custom location in the Mockup Creator (Oct 27): its name, area and side */
+.mk-custom{display:flex;flex-direction:column;gap:6px;margin:6px 0 8px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;background:var(--surface-2)}
+.mk-custom label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mk-custom input,.mk-custom select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:0;width:100%;box-sizing:border-box}
+.mk-custom-r{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.mk-custom .faint{font-size:12px}
+/* a single photo is never taller than the window (Oct 27, Nick: the backpack "is huge… at 100% zoom") */
+.mk-stage .mk-photo{max-width:calc(78vh * 0.8);margin-left:auto;margin-right:auto}

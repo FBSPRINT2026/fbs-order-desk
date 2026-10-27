@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { designOther, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
-import { guessHex, garmentHex, spotFor } from "@/lib/mockup";
+import { guessHex, garmentHex, registerAreas, spotFor } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
 
 /**
@@ -12,6 +12,8 @@ export type MaxArea = { w: number; h: number; on: string } | null;
 type Cat = Pick<Garment, "style" | "sizes" | "specs" | "color_images">;
 
 export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
+  // custom spots (a typed location with its own area) sized like any other (lib/mockup.ts registerAreas)
+  registerAreas(groups.flatMap((g) => g.imprints || []));
   const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean) as string[]))];
   const styles = [...new Set(groups.flatMap((g) => g.lines.map((l) => (l.style || "").trim()).filter(Boolean)))];
   const [{ data: dz }, { data: gz }] = await Promise.all([

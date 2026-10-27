@@ -172,6 +172,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** the customer's picture of where this logo goes (Oct 27, Nick: "just like you did with Heat Press… a customer placement
    *  PDF, we need to have that exact same thing there"): shown on the order and the work order */
   placeRef?: { path: string; name: string; file?: string };
+  /** a custom spot's area (Oct 27, Nick: "front pocket… set the artboard size… 5x4"): inches, and which side; the
+   *  location is the name typed (lib/mockup.ts registerAreas) */
+  area?: { w: number; h: number; view?: "front" | "back" };
   supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string } };
   /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
    *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.

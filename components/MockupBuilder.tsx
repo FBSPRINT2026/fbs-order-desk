@@ -52,6 +52,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
+import { registerAreas, isCustomSpot } from "@/lib/mockup";
 import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -1774,6 +1775,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on, by: "you" } } : x)));
   }
   /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
+  // custom spots (a typed location with its own area) are known to every size and placement below
+  registerAreas(imprints);
   const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
     const r = ratioIm(im) || 0.6;
@@ -1792,6 +1795,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
       return { ...b, x: b.x + o.dx * Math.cos(a) - o.dy * Math.sin(a), y: b.y + o.dx * Math.sin(a) + o.dy * Math.cos(a), wIn, hIn: wIn * r, d };
+    }
+    // a custom spot's area goes where the logo is dragged (Oct 27, Nick: "drag it and then we can figure it out")
+    if (im.area && isCustomSpot(im.location) && wIn > 0) {
+      const ppi = b.w / wIn, aw = im.area.w * ppi, ah = im.area.h * ppi, cx = b.x + o.dx + b.w / 2, cy = b.y + o.dy + b.h / 2;
+      return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d, area: { ...b.area, x: cx - aw / 2, y: cy - ah / 2, w: aw, h: ah } };
     }
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
@@ -3638,7 +3646,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} norm={frameOf(line, v)}
+              <Stage key={v} grid={grid || imprints.some((x) => x.area && isCustomSpot(x.location))} norm={frameOf(line, v)}
                 neckLine={USE_HAND_AREAS && v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={fitFor(line, v)?.cx}
                 areaEdit={false}
                 onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
@@ -3920,11 +3928,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   <div key={im.id} className="mk-imp" data-imp={im.id}>
                     <div className="mk-imp-top">
-                      <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!locsFor(curTab).includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
+                      <select aria-label="Location" className="mk-loc" value={im.area && isCustomSpot(im.location) ? "__custom" : im.location} onChange={(e) => { const v = e.target.value;
+                        // Custom: a name and the spot's area, shown on the picture to drag into place (Oct 27, Nick)
+                        setImprints((xs) => xs.map((x) => (x.id !== im.id ? x : v === "__custom" ? { ...x, location: x.area ? x.location : "Custom spot", area: x.area || { w: 5, h: 4, view: curTab === "back" ? "back" : "front" } } : { ...x, location: v, area: undefined })));
+                        if (v === "__custom") setGrid(true); }}>{!locsFor(curTab).includes(im.location) && !(im.area && isCustomSpot(im.location)) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
                       <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x)));
                         // heat press: the art back to its own colors (knock-outs stay)
                         if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
+                    {im.area && <div className="mk-custom">
+                      <label><span className="lbl">Custom location</span><input type="text" value={im.location} placeholder="Front pocket" onChange={(e) => { const v = e.target.value.slice(0, 40); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: v } : x))); }} /></label>
+                      <div className="mk-custom-r">
+                        <label><span className="lbl">Area W&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={im.area.w} onChange={(e) => { const w = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, w } } : x))); }} /></label>
+                        <label><span className="lbl">Area H&quot;</span><input type="number" min={0.5} max={30} step={0.25} value={im.area.h} onChange={(e) => { const h = Math.max(0.5, +e.target.value || 0.5); setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, h } } : x))); }} /></label>
+                        <label><span className="lbl">Side</span><select value={im.area.view || "front"} onChange={(e) => { const view = e.target.value as "front" | "back"; setImprints((xs) => xs.map((x) => (x.id === im.id && x.area ? { ...x, area: { ...x.area, view } } : x))); setTab(view); }}><option value="front">Front</option><option value="back">Back</option></select></label>
+                      </div>
+                      <span className="faint">The area is the dashed box: drag the logo onto the spot on the picture, and set the logo&apos;s size below.</span>
+                    </div>}
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
                     <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
                     {canvaReady && (designOf(im) as (Design & { canva_design_id?: string | null }) | undefined)?.canva_design_id && <button type="button" className="btn sm ghost" disabled={!!canvaWait} title="Opens this design in Canva; press Return in Canva to bring the changes back (saved as a new design)" onClick={() => designInCanva(designOf(im), im)}>Edit in Canva</button>}
