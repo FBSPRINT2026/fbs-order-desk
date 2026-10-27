@@ -71,6 +71,13 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
   const [cells, setCells] = useState<Record<string, Cell>>(() => Object.fromEntries(runs.map((r) => [r.id, empty()])));
   const [remember, setRemember] = useState(true);
   const [typing, setTyping] = useState<Record<string, boolean>>({});
+  // a picked color (or garment) keeps the screen where it was (Oct 26, Nick: "whenever you select a color… it goes back to
+  // the top of the screen… have it just stay where it's at"): the phone's picker closing scrolled the panel back to the
+  // top; where it was is put back right after
+  const rootRef = useRef<HTMLDivElement | null>(null), keepAt = useRef<{ el: HTMLElement; top: number } | null>(null);
+  const scroller = () => { let el: HTMLElement | null = rootRef.current; while (el && !(el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY))) el = el.parentElement; return el || (document.scrollingElement as HTMLElement | null); };
+  const hold = () => { const el = scroller(); if (el) keepAt.current = { el, top: el.scrollTop }; };
+  const putBack = () => { const k = keepAt.current; if (!k) return; for (const ms of [0, 50, 200, 450]) setTimeout(() => { if (Math.abs(k.el.scrollTop - k.top) > 4) k.el.scrollTop = k.top; }, ms); };
 
   /** a run on a garment: its color found (exact), or the closest recommended */
   const onGarment = (r: Run, g: Gar | undefined, pick: { style: string; brand: string; name: string }, why = "", usual?: string[]): Cell => {
@@ -102,7 +109,7 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
   const someEmpty = runs.some((r) => !cells[r.id]?.style);
 
   return (
-    <div className="ap sra" role="group" aria-label="Which garment and color">
+    <div className="ap sra" role="group" aria-label="Which garment and color" ref={rootRef}>
       <p className="ap-q">{runs.length > 1 ? `We found ${runs.length} size runs in ${sender ? `${sender}'s` : "the"} email.` : "The email doesn't say which garment."}</p>
       {ranked.length > 0 && (
         <div className={"sra-bs" + (applied === false ? " off" : "")}>
@@ -128,17 +135,17 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
                 {ranked.map((p) => { const fits = colorOn(known(p.style), r.color, p.colors || []).kind; return (
                   <button key={p.id} type="button" role="radio" aria-checked={cell.style.toUpperCase() === p.style.toUpperCase()} className={(cell.style.toUpperCase() === p.style.toUpperCase() ? "on" : "") + (known(p.style) && fits === "none" ? " no" : "")}
                     title={known(p.style) && fits !== "exact" ? `The ${p.style} doesn't come in ${clean(r.color)} exactly` : `${p.brand} ${p.style}`}
-                    onClick={() => void setGarment(r, { style: p.style, brand: p.brand, name: p.name })}>{p.style}</button>
+                    onClick={() => { hold(); void setGarment(r, { style: p.style, brand: p.brand, name: p.name }).then(putBack); }}>{p.style}</button>
                 ); })}
               </div>
             )}
             {(!toggle || typing[r.id] || (cell.style && !ranked.some((p) => p.style.toUpperCase() === cell.style.toUpperCase()))) &&
-              <StyleBox value={cell.style && !typing[r.id] ? cell : null} prefs={applied ? ranked : []} said={r.color} known={known} loadStyles={loadStyles} onPick={(p) => { setTyping((x) => ({ ...x, [r.id]: false })); void setGarment(r, p); }} />}
+              <StyleBox value={cell.style && !typing[r.id] ? cell : null} prefs={applied ? ranked : []} said={r.color} known={known} loadStyles={loadStyles} onPick={(p) => { hold(); setTyping((x) => ({ ...x, [r.id]: false })); void setGarment(r, p).then(putBack); }} />}
             {toggle && !typing[r.id] && <button type="button" className="linkbtn sra-other" onClick={() => setTyping((x) => ({ ...x, [r.id]: true }))}>Another style…</button>}
             {cell.style && g && (
               <div className={"sra-col" + (cell.ok ? "" : cell.color ? " rec" : " none")}>
                 <i className="sra-sw" style={sw ? { background: sw } : undefined} aria-hidden />
-                <select value={cell.color} aria-label={`Color on the ${cell.style}`} onChange={(e) => setCells((x) => ({ ...x, [r.id]: { ...cell, color: e.target.value, ok: true } }))}>
+                <select value={cell.color} aria-label={`Color on the ${cell.style}`} onFocus={hold} onBlur={putBack} onChange={(e) => { if (!keepAt.current) hold(); setCells((x) => ({ ...x, [r.id]: { ...cell, color: e.target.value, ok: true } })); putBack(); }}>
                   {!cell.color && <option value="">Pick the color…</option>}
                   {col && col.closest.length > 0 && <optgroup label="Closest">{col.closest.map((c) => <option key={"c" + c} value={c}>{c}{usualFor(cell.style).includes(c) ? " (their usual)" : ""}</option>)}</optgroup>}
                   <optgroup label={`All ${g.colors.length} colors`}>{g.colors.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
