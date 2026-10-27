@@ -50,7 +50,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { garmentHex, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
+import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
@@ -4419,7 +4419,8 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
   const W = spanW * PX, H = spanH * PX;
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number; moved?: boolean } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
-  const cy = (topAlign ? top0 + (hIn * PX) / 2 : H / 2) + offIn.y * PX; // same spot as on the photos: top of the area for full front/back, else centered
+  // same spot as on the photos: top of the area for full front/back, a sleeve ¼" above the hemline, else centered
+  const cy = (topAlign ? top0 + (hIn * PX) / 2 : fold ? top0 + maxH * PX - Math.min(maxH, hIn + SLEEVE_HEM_GAP) * PX + (hIn * PX) / 2 : H / 2) + offIn.y * PX;
   return (
     <div className="mk-sleeve" style={{ width: BOX }}>
       <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span>

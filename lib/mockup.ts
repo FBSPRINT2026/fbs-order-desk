@@ -69,6 +69,8 @@ export const REF_NECK = { front: 186, back: 95 } as const;
 export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
+/** a sleeve print's bottom sits this far (inches) above its area's bottom, the hemline on the close-up (Oct 27, Nick: ¼") */
+export const SLEEVE_HEM_GAP = 0.25;
 
 /**
  * Draw a photo the way the page shows it (object-fit: contain, centered on white): S&S photos are already 4:5 and fill
@@ -629,7 +631,12 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
     const hf = spot.wrap[view || "front"];
     const pt = fit ? fit.sleeve[hf.x > PHOTO_W / 2 ? "right" : "left"] : hf;
     const ppi0 = PX_PER_IN * scale * k, w0 = wIn * ppi0, h0 = ratio ? w0 * ratio : w0, a0 = spot.maxW * ppi0, b0 = spot.maxH * ppi0;
-    return { view: view || "front", x: pt.x - w0 / 2, y: pt.y - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: pt.x - a0 / 2, y: pt.y - b0 / 2, w: a0, h: b0 }, k };
+    // the art starts down by the hem, not in the middle of the area (Oct 27, Nick: "by default close to the hemline…
+    // 1/4 inch looks right… make sure it is centered"): its bottom SLEEVE_HEM_GAP above the area's bottom (the close-up's
+    // hemline), still centered across the fold; moved along the sleeve toward the hem, at the sleeve's angle
+    const a = (pt.rot * Math.PI) / 180, d = Math.max(0, b0 / 2 - h0 / 2 - SLEEVE_HEM_GAP * ppi0);
+    const cx = pt.x - d * Math.sin(a), cy = pt.y + d * Math.cos(a);
+    return { view: view || "front", x: cx - w0 / 2, y: cy - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: pt.x - a0 / 2, y: pt.y - b0 / 2, w: a0, h: b0 }, k };
   }
   if (fit?.flat) {
     // a bag: centered on its body (or the set drop below the body's top), at real size from the bag's width
