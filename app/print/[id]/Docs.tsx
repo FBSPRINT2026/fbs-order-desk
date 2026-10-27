@@ -392,6 +392,12 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       {!d.visualOnly && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())) && (
         <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `on ${k}, ${b} instead of ${a}`)).join("; ")}</div>
       )}
+      {/* a color change across variations (Oct 27): the same screens as a print in another group */}
+      {!d.visualOnly && d.changeOf && (() => {
+        const g = p.groups.find((x) => (x.imprints || []).some((y) => y.id === d.changeOf!.imprint));
+        const ch = Object.entries(d.changeOf.inks || {});
+        return <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> same screens as {g?.name || "another group"}{g?.lines?.[0]?.color ? ` (${g.lines[0].color})` : ""}. {ch.map(([a, b]) => (!b.trim() ? `${a} not printed` : b.trim().toLowerCase() === a.trim().toLowerCase() ? `${a} stays` : `${b} instead of ${a}`)).join("; ")}.</div>;
+      })()}
       {/* prints differently by shirt color (Oct 21, Nick): the screens left off on some colors */}
       {Object.keys(d.byColor?.skip || {}).length > 0 && <div className="n2 warn">BY SHIRT COLOR: {Object.entries(d.byColor!.skip).map(([c, n]) => `${c} shirts: skip ${n.join(" + ")} (pull the screen or don't flood it)`).join(". ")}</div>}
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}

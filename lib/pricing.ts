@@ -148,6 +148,11 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
    *  Each changed ink is a screen's ink change (inkChanges, the Ink change fee) */ inkBy?: Record<string, Record<string, string>>;
+  /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
+   *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.
+   *  inks: that print's ink → the ink here ("" = that color isn't printed here). It prints from the same screens:
+   *  setup is charged once for the pair (calcOrder), each changed ink is an ink change, and a screen the other print
+   *  doesn't have is charged as setup */ changeOf?: { imprint: string; group?: string; inks: Record<string, string> };
   /** full color art, printed as simulated process (seps made in Separo); set in the Mockup Creator (Oct 26) */ fullColor?: boolean;
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
   /** changes made to the customer's art for this print (Oct 23, Nick: "here's your proof, here are the two changes we
@@ -657,7 +662,8 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
 /** what a color change is called (Oct 26, Nick: "on embroidery orders, you'd call it thread change and not color
  * change… It should operate exactly the same as color change") */
 export const changeWord = (method?: string | null) => (method === "embroidery" ? "Thread change" : "Color change");
-export const colorChanges = (d: Pick<Imprint, "inkBy">) => Object.values(d.inkBy || {}).reduce((n, m) => n + Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length, 0);
+const changed = (m: Record<string, string> | undefined) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length;
+export const colorChanges = (d: Pick<Imprint, "inkBy"> & { changeOf?: Imprint["changeOf"] }) => Object.values(d.inkBy || {}).reduce((n, m) => n + changed(m), 0) + changed(d.changeOf?.inks);
 export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m ? m[1] : n.trim().toLowerCase().replace(/\s+/g, " "); };
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
   return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);
@@ -715,7 +721,10 @@ export type GroupCalc = ReturnType<typeof calcGroup>;
  * earlier group of the order prints from the same screens, so its setup is charged once.
  */
 const screenKey = (d: Imprint, n: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${n}` : "");
-export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: Set<string>) {
+/** the order's screens charged so far, plus the color-change pairs across variations (Imprint.changeOf): print id → pair
+ *  key, and the screens the pair's first print paid for */
+export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number> };
+export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
   const ti = tierIndex(qty, pl);
@@ -789,6 +798,16 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, true, true, ix) }));
   const setups = setups0.map((d, i) => {
     const im = (g.imprints || [])[i], k = im ? screenKey(im, num((d as { screens?: number }).screens)) : "";
+    // a color change across variations: the pair prints from one set of screens. The first of the two pays its setup;
+    // the other pays only for screens beyond those (a color the first doesn't have)
+    const lk = im && im.method === "screen" ? seen?.links?.get(im.id) : undefined;
+    if (lk && seen) {
+      const n = num((d as { screens?: number }).screens), had = seen.linkScreens?.get(lk);
+      if (had == null) { (seen.linkScreens ||= new Map()).set(lk, n); if (k) seen.add(k); return d; }
+      if (k) seen.add(k);
+      const extra = Math.max(0, n - had), per = n ? d.setup / Math.min(n, 15) : 0;
+      return { ...d, setup: r2(extra * per), shared: true };
+    }
     if (!k || !seen) return d;
     if (seen.has(k)) return { ...d, setup: 0, shared: true };
     seen.add(k); return d;
@@ -826,8 +845,15 @@ export function calcOrder(
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
-  const seen = new Set<string>();
-  const groups = orderGroups(o).map((g) => calcGroup(g, o, s, seen));
+  const seen: SeenScreens = new Set<string>();
+  // color changes across variations (Imprint.changeOf): both prints of a pair share one key
+  const gs0 = orderGroups(o), ids = new Set(gs0.flatMap((g) => (g.imprints || []).map((d) => d.id)));
+  for (const g of gs0) for (const d of g.imprints || []) if (d.changeOf?.imprint && ids.has(d.changeOf.imprint) && d.changeOf.imprint !== d.id) {
+    const key = [d.id, d.changeOf.imprint].sort().join("~");
+    (seen.links ||= new Map()).set(d.id, key);
+    if (!seen.links.has(d.changeOf.imprint)) seen.links.set(d.changeOf.imprint, key);
+  }
+  const groups = gs0.map((g) => calcGroup(g, o, s, seen));
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
   const setup = r2(groups.reduce((a, g) => a + g.setup, 0));

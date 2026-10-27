@@ -3794,6 +3794,53 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           </>
                         );
                       })()}
+                      {/* Color change across variations (Oct 27, Nick: #40111, the Section Stack on the Charcoal tee and the
+                          Neon Blue long sleeve are two groups, and neither showed the button): the same art at the same spot
+                          in another group of the order. Ticked, the two print from one set of screens (setup once) and each
+                          changed ink is an ink change (calcOrder, Imprint.changeOf) */}
+                      {designOf(im) && im.method === "screen" && order && curGroup && (() => {
+                        const nameOf = (id?: string) => (designs.find((d) => d.id === id)?.name || "").trim().toLowerCase();
+                        const mine = nameOf(im.design_id), loc = (im.location || "").toLowerCase();
+                        const others = orderGroups(order).filter((g) => g.id !== curGroup.id).flatMap((g) => (g.imprints || []).map((x) => ({ g, x })))
+                          .filter(({ x }) => x.method === "screen" && x.id !== im.id && (x.location || "").toLowerCase() === loc && (x.design_id === im.design_id || (!!mine && nameOf(x.design_id) === mine)));
+                        if (!others.length) return null;
+                        const gName = (g: { name?: string }, i?: number) => g.name || `Group ${(i ?? 0) + 1}`;
+                        // the other side already points here: say so instead of offering it twice
+                        const back = others.find(({ x }) => x.changeOf?.imprint === im.id);
+                        if (back && !im.changeOf) return <div className="mk-cchg"><span className="mk-cchg-n">{gName(back.g)} prints this art as a color change of this print, from the same screens.</span></div>;
+                        const cur = im.changeOf, base = others.find(({ x }) => x.id === cur?.imprint) || others[0];
+                        const baseInks = (base.x.inks || "").split(",").map((v) => v.trim()).filter(Boolean);
+                        const myInks = (im.inks || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+                        const put = (next: Imprint["changeOf"] | null) => setImprints((xs) => xs.map((x) => {
+                          if (x.id !== im.id) return x;
+                          const y = { ...x, changeOf: next || undefined };
+                          return { ...y, inkChanges: colorChanges(y) };
+                        }));
+                        const start = (b: typeof base) => put({ imprint: b.x.id, group: b.g.id, inks: Object.fromEntries((b.x.inks || "").split(",").map((v) => v.trim()).filter(Boolean).map((nm) => [nm, myInks.includes(nm.toLowerCase()) ? nm : ""])) });
+                        const n = colorChanges({ changeOf: cur });
+                        return (
+                          <>
+                            <label className="mk-ctr" title={`The same art as ${gName(base.g)}: print it from the same screens, in other inks on this garment`}>
+                              <input type="checkbox" checked={!!cur} disabled={!baseInks.length} onChange={(e) => (e.target.checked ? start(base) : put(null))} />
+                              {changeWord(im.method)} from {gName(base.g)}
+                            </label>
+                            {cur && (
+                              <div className="mk-cchg">
+                                <span className="mk-cchg-n">Same art and screens as {gName(base.g)}{base.g.lines?.[0]?.color ? ` (${base.g.lines[0].color})` : ""}. Setup is charged once; type each ink as it prints here, blank if that color isn&apos;t printed here.</span>
+                                {others.length > 1 && <select aria-label="Which print it changes" value={base.x.id} onChange={(e) => { const b = others.find(({ x }) => x.id === e.target.value); if (b) start(b); }}>{others.map(({ g, x }) => <option key={x.id} value={x.id}>{gName(g)} · {x.inks || x.location}</option>)}</select>}
+                                {baseInks.map((nm) => (
+                                  <div key={nm} className="mk-cchg-r">
+                                    <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
+                                    <input type="text" list="mk-ink-names" aria-label={`${nm} here`} placeholder="not printed here" value={cur.inks[nm] ?? ""} onChange={(e) => put({ ...cur, inks: { ...cur.inks, [nm]: e.target.value } })} />
+                                    {cur.inks[nm] && colorHex(cur.inks[nm]) ? <i style={{ background: colorHex(cur.inks[nm])! }} /> : null}
+                                  </div>
+                                ))}
+                                <span className="faint">{n ? `${n} color change${n === 1 ? "" : "s"}: charged as ${n === 1 ? "an ink change" : "ink changes"}` : "No ink changes: the same screens and inks"}{(() => { const extra = myInks.filter((x) => !Object.values(cur.inks).some((v) => v.trim().toLowerCase() === x)).length; return extra ? ` · ${extra} ink${extra === 1 ? "" : "s"} not on ${gName(base.g)}: a new screen` : ""; })()}</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
