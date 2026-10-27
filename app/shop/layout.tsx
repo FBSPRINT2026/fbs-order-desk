@@ -14,6 +14,7 @@ import { OrderCheckDock } from "@/components/tools/OrderReview";
 import { CreateOrderDock } from "@/components/tools/CreateOrderDock";
 import { OrderGoodsDock } from "@/components/tools/OrderGoodsTool";
 import SameArtPrompt from "@/components/SameArtPrompt";
+import ArtboardPrompt from "@/components/ArtboardPrompt";
 
 export const dynamic = "force-dynamic";
 // the shop's server actions (the Order chat reading a big PDF and making many edits) get up to 5 minutes
@@ -62,6 +63,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <CreateOrderDock />
         <OrderGoodsDock />
         <SameArtPrompt />
+        <ArtboardPrompt />
       </div>
     </RoleProvider>
   );

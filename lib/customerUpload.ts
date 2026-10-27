@@ -1,4 +1,5 @@
 "use client";
+import { pickArtboard } from "@/lib/artboards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PREVIEWABLE_TYPES, type Design } from "@/lib/pricing";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
@@ -20,6 +21,8 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
  * files a browser can't show (PDF, AI, HEIC…) get a PNG preview made and uploaded too, then the server records it.
  */
 export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string; /** made for an order or a mockup, not the logo library */ draft?: boolean } = {}): Promise<{ design: Design; url: string }> {
+  // a file with several artboards: which logo is it? (lib/artboards.ts; Oct 27, Nick)
+  if (!opts.preview && !opts.layers) f = await pickArtboard(f);
   // a see-through logo with empty space around it is saved cropped to the art (not designer saves, which bring a preview)
   if (!opts.preview && !opts.layers) f = (await cropFileToArt(f)) || f;
   // the same logo already on their account? ask before making another art number (lib/sameArt.ts; Oct 24, Nick)

@@ -24,7 +24,9 @@ export default function BrandArtwork({ customerId, group, brands, onAdd }: Props
   const [laneHere, setLaneHere] = useState<Lane | null>(used || null);
   const lane = laneHere || laneSaved;
   const setLane = (l: Lane) => { setLaneHere(l); setLaneSaved(l); };
-  const [tab, setTab] = useSticky<string>(`custart.brand.${customerId}`, brands[0]?.id || ALL);
+  const [tabSaved, setTab] = useSticky<string>(`custart.brand.${customerId}`, brands[0]?.id || ALL);
+  // a remembered brand that's gone: their first brand
+  const tab = tabSaved === ALL || tabSaved === OTHER || brands.some((b) => b.id === tabSaved) ? tabSaved : brands[0]?.id || ALL;
   const [q, setQ] = useState("");
   const [ds, setDs] = useState<Design[] | null>(null);
   const [pics, setPics] = useState<Record<string, string>>({});

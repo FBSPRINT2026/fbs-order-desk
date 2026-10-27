@@ -2212,7 +2212,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
       askRaster(im.id, d);
       setMsg(`Saved ${designLabel(d)} to the customer's account.`);
-    } catch (e) { setMsg("Upload failed: " + (e instanceof Error ? e.message : String(e))); }
+    } catch (e) { const m = e instanceof Error ? e.message : String(e); setMsg(m === "Upload canceled." ? "" : "Upload failed: " + m); }
   }
 
   /** The shirt photos (front, then back) side by side with the art on them, each `k` × the photo size, `gap` px apart. */

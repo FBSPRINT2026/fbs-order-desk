@@ -27,6 +27,8 @@ async function openDoc(buf: ArrayBuffer): Promise<Doc> {
   return pdfjs.getDocument({ data: buf }).promise;
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
+/** how many pages (artboards, for an Illustrator file) a PDF has */
+export const pdfPageCount = async (buf: ArrayBuffer) => (await openDoc(buf)).numPages;
 /** a PDF's words, page after page (the digitizer's worksheet: lib/worksheet.ts) */
 export async function pdfText(buf: ArrayBuffer, maxPages = 6): Promise<string> {
   const doc = await openDoc(buf);
