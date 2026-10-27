@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook } from "@/lib/stockGarments";
+import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
+import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
 import { locationsFor, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -9,7 +10,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
-import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
+import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
@@ -25,7 +26,7 @@ import { mySheetBrand } from "@/app/portal/settings-actions";
 import { garmentPhotoUploadUrl, garmentPhotoUrls } from "@/app/garment-photo-actions";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
-import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pmsOnPage, proofNotes } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pdfPicture, pmsOnPage, proofNotes } from "@/lib/printavoArt";
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
@@ -401,7 +402,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (su?.signedUrl) setBrandMask({ path: d.path, url: su.signedUrl, name: d.name || "their mask", layers: d.layers || 3 });
     });
   }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
+  const [helper, setHelper] = useState<null | { name: string; busy: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[];
+    /** the garments the sheet shows, read by the AI (Oct 27): drawn as the blank when they're not in a catalog */ garments?: SheetGarment[]; gBusy?: boolean; gErr?: string; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   // opened as the Mockup Helper tool (AI Workbench → Tools, lib/aiTools.ts): the Helper open and in view
@@ -546,7 +548,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // one mockup per garment: the same style and color twice (their extras line under it) is one shirt, not two
           // identical mockups (Oct 22: #40104 and #40106 each got the same Red / Charcoal mockup twice)
           const seenSC = new Set<string>();
-          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
+          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
@@ -1886,6 +1888,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const buf = await f.arrayBuffer();
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
       const pms = await pmsOnPage(buf.slice(0));
+      // what garments the sheet shows (Oct 27, Nick: "pull art off and then draw blank"): read by the AI from a picture of
+      // the page while the art is pulled; shown as "The garments on this sheet" with Draw this blank
+      if (!portal) void (async () => {
+        setHelper((h) => h && { ...h, gBusy: true });
+        try {
+          const c = await pdfPicture(buf.slice(0), 1400);
+          const r = await fetch("/api/mockup/garment-look", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: c.toDataURL("image/jpeg", 0.82), name: f.name }) });
+          const j = await r.json().catch(() => ({})) as { garments?: SheetGarment[]; error?: string };
+          setHelper((h) => h && h.name === f.name ? { ...h, gBusy: false, garments: j.garments || [], gErr: r.ok ? "" : j.error || "Couldn't read the garments." } : h);
+        } catch { setHelper((h) => h && { ...h, gBusy: false }); }
+      })();
       setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
       type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number; shirtHex?: string };
       let kind: "photos" | "drawn" | "art" = "photos";
@@ -1896,7 +1909,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const a = await artFromArtPdf(buf.slice(0), base).catch(() => null);
         if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0, ...(a.mask ? { mask: a.mask } : {}) }];
       }
-      if (!got.length) { setHelper({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on." }); return; }
+      if (!got.length) { setHelper((h) => ({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on.", ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr } : {}) })); return; }
       setHelper((h) => h && { ...h, busy: "Reading the colors…" });
       // the biggest print on each side first; a second one at a spot that's taken waits unchecked
       got.sort((x, y) => Number(x.side === "back") - Number(y.side === "back") || y.widthIn * y.heightIn - x.widthIn * x.heightIn);
@@ -1939,7 +1952,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         taken.add(location);
       }
       const notes = await proofNotes(buf.slice(0)).catch(() => []);
-      setHelper({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked });
+      setHelper((h) => ({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked, ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr } : {}) }));
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
@@ -2566,6 +2579,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const same = Math.abs(aw - sw) < 0.13 && (lesson.ai_drop ?? -1) === (lesson.staff_drop ?? -1);
       sb.from("ai_suggestions").upsert({ dedupe_key: `mockup-lesson:${order.id}:${im.id}`, kind: LESSON_KIND, source: "staff", status: "done", customer_id: order.customer_id || null, order_id: order.id, title: `${im.location} on ${ai.garment}: AI ${ai.size}${ai.drop ? `, ${ai.drop}" down` : ""} → ${im.size}${im.drop ? `, ${im.drop}" down` : ""}`.slice(0, 300), body: same ? "Kept as the AI read it" : "Changed by staff in the Mockup Creator", payload: lesson, decided_at: new Date().toISOString() }, { onConflict: "dedupe_key" }).then(() => {});
     }
+    // a garment drawn here from the customer's sheet (Oct 27): its look goes on the order's line, and its name and color
+    // when the order's line had none
+    for (const l of lines) {
+      const ol = g.lines.find((x) => x.id === l.id); if (!ol) continue;
+      if (l.look) ol.look = l.look;
+      if (l.look && !(ol.style || "").trim()) { ol.style = l.style; ol.brand = l.brand; if (!(ol.color || "").trim()) ol.color = l.color; }
+    }
     if (mockupSaved) g.mockupAt = new Date().toISOString();
     g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
     // the hand moves on the shirt pictures, kept for the next time it's opened (only this group's prints)
@@ -2710,7 +2730,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mockup keeps its setup so it can be opened to edit and ordered; every color saved together is one set and
         // one number (Oct 24, Nick). A proof being changed isn't a library mockup.
         const set = changeId ? "" : (mockSet.current ||= crypto.randomUUID());
-        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
+        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
         for (const l of lines.filter((z) => z.style || z.color)) {
           const blob = await render(l), thumb = await render(l, true);
           const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -2729,7 +2749,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (changeId) {
           // their version goes to the shop with the proof; we check it and send a new proof
           const r2 = await submitOwnChange(changeId, {
-            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })),
+            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })),
             imprints: imprints.map((d) => ({ ...d })),
             mockupPaths: paths, note: "",
           });
@@ -2785,7 +2805,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!orderId && newMockups.length) {
         const set = mockSet.current || crypto.randomUUID();
         mockSet.current = set;
-        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
+        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
         await sb.from("mockups").update({ snapshot: snap }).in("id", newMockups);
         const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
         const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
@@ -4056,6 +4076,48 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                       );
                     })()}
+                    {/* the garments on the sheet (Oct 27, Nick: "pull art off and then draw blank… you can name it"): read by the
+                        AI; Draw this blank puts it on as the garment, drawn in its color, with its print where the sheet says */}
+                    {(helper.gBusy || (helper.garments || []).length > 0 || helper.gErr) && (
+                      <div className="mk-help-gar">
+                        <div className="mk-help-gar-h"><b>The garments on this sheet</b>{helper.gBusy && <span className="faint"> · reading them…</span>}</div>
+                        {helper.gErr && <p className="faint">{helper.gErr}</p>}
+                        {(helper.garments || []).map((g, gi) => {
+                          const look: GarmentLook = { kind: g.kind as StockKind, hex: g.hex, ...(g.trim ? { trim: g.trim } : {}), heather: g.heather, ...(g.stripes ? { stripes: g.stripes } : {}), quilted: g.quilted, from: helper.name };
+                          const sizes = Object.entries(g.sizes || {}), pcs = sizes.reduce((a, [, n]) => a + n, 0);
+                          const setName = (name: string) => setHelper((h) => h && { ...h, garments: (h.garments || []).map((x, i) => (i === gi ? { ...x, name } : x)) });
+                          const draw = () => {
+                            // the line being shown (or the first empty one) becomes this garment, drawn; a second garment is a new line
+                            const cur = lines[active] || lines[0];
+                            const free = !cur || !(cur.style || "").trim() || !garmentFor(cur);
+                            const nl: Line = { id: free && cur ? cur.id : uid(), style: g.name, brand: g.brand || "", garment: "", color: g.color, look };
+                            setLines((ls) => (free && cur ? ls.map((x) => (x.id === cur.id ? { ...x, ...nl } : x)) : [...ls, nl]));
+                            // its print where the sheet says, on the art pulled off (one print and one piece of art)
+                            const pr = g.prints || [], use = helper.rows.filter((r) => r.use);
+                            if (pr.length === 1 && use.length === 1) {
+                              const want = fitLocation(pr[0].location, [{ style: g.name, garment: STOCK_LABEL[look.kind || "tee"] }]);
+                              const side: HelpRow["side"] = sideOf(want) === "sleeve" ? "sleeve" : sideOf(want) === "back" ? "back" : "front";
+                              const w = pr[0].width_in && pr[0].width_in > 0 ? pr[0].width_in : use[0].widthIn;
+                              helpSet(use[0].key, { side, location: want, widthIn: w, heightIn: Math.round((use[0].heightIn / (use[0].widthIn || 1)) * w * 100) / 100 });
+                            }
+                            setMsg(`${g.name} in ${g.color}: drawn, since it isn't in a catalog. Check the color and the print, then Put on.`);
+                          };
+                          return (
+                            <div key={gi} className="mk-help-gr">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={stockSvg(look.kind || "tee", "front", look)} alt="" />
+                              <div className="mk-help-gb">
+                                <input aria-label="Garment name" value={g.name} onChange={(e) => setName(e.target.value)} />
+                                <span className="faint"><i className="mk-gc-dot" style={{ background: g.hex }} /> {g.color} · drawn {STOCK_LABEL[look.kind || "tee"].toLowerCase()}{g.trim ? " · trim " : ""}{g.trim && <i className="mk-gc-dot" style={{ background: g.trim }} />}{g.heather ? " · heather" : ""}{g.stripes ? " · stripes" : ""}{g.quilted ? " · quilted" : ""}</span>
+                                {pcs > 0 && <span className="faint">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} = {pcs}</span>}
+                                {(g.prints || []).map((p, i) => <span key={i} className="faint">{p.location} · {p.method === "screen" ? "screen print" : p.method}{p.width_in ? ` · ${p.width_in}" wide` : ""}{p.ink ? ` · ${p.ink}` : ""}</span>)}
+                              </div>
+                              <button type="button" className="btn sm" onClick={draw}>Draw this blank</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {(helper.notes || []).length > 0 && <p className="faint mk-help-t">The proof says: {helper.notes!.map((n) => `${n.where}${n.w ? ` ${n.w}" × ${n.h}"` : ""}${n.colors.length ? ` (${n.colors.join(", ")})` : ""}`).join("; ")}.</p>}
                     {/* the customer we know (Oct 22, Nick: "hey, I learned about Peticolas already… strip the mask out. Do you
                         want me to apply the mask to this mockup?") */}

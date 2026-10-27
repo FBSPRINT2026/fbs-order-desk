@@ -15114,3 +15114,14 @@ td.ckg-a,th.ckg-a{width:1%;text-align:right;padding-right:4px;white-space:nowrap
 .mk-ctr-dot{background:var(--accent)}
 .mk-ctr-key{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink-3);vertical-align:-1px;margin-right:4px}
 .mk-ctr-key.blue{background:var(--accent)}
+
+/* Mockup Creator → Helper: the garments on the customer's sheet, drawn (Oct 27) */
+.mk-help-gar{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;margin:8px 0;background:var(--surface)}
+.mk-help-gar-h{font-size:13px;margin-bottom:6px}
+.mk-help-gr{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line-2)}
+.mk-help-gr:first-of-type{border-top:0}
+.mk-help-gr img{width:64px;height:80px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid var(--line-2)}
+.mk-help-gb{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mk-help-gb input{height:30px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13px;font-weight:700;color:var(--ink)}
+.mk-help-gb .faint{font-size:12px}
+.mk-help-gb .mk-gc-dot{display:inline-block;vertical-align:-1px}

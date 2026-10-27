@@ -200,6 +200,8 @@ export type GLine = {
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
   /** an embroidery specialty item (hat, bag, fleece…) set by hand; unset = from its name, style and brand (isSpecialtyItem) */
   specialty?: boolean | null;
+  /** a garment we have no photo of, drawn in the Mockup Creator: its look read off the customer's sheet (Oct 27) */
+  look?: import("@/lib/stockGarments").GarmentLook;
   /** the email didn't name the style: what they called it ("tees"); Create order asks which blank, their preferred goods
    *  first (Oct 26, Nick), and clears this once it's picked */
   called?: string;
