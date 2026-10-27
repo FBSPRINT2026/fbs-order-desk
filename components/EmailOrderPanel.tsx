@@ -152,7 +152,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
       const first = gs.find((g) => g.imprints.some((x) => x.design_id) && !(g.mockupThumbs || []).some(Boolean));
       if (first) url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`;
     } catch { /* the order page stamps them when it opens */ }
-    url = `${url}${url.includes("?") ? "&" : "?"}email=${activityId}`;
+    url = `${url}${url.includes("?") ? "&" : "?"}email=${activityId}&chat=${j.id}`;
     if (mode === "edit") { setStep("Opening the order…"); location.assign(url); return; }
     setBusy(""); setStep("");
     if (w) w.location.href = url; else window.open(url, "_blank");

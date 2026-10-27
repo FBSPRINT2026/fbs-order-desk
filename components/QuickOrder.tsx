@@ -1014,7 +1014,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         })()}
         {pause ? (() => {
           const m = pause.made, last = pause.i === parts.length - 1, nx = parts[pause.i + 1];
-          const go = () => { if (m) window.open(m.url, "_blank", "noopener"); if (last) onClose(); else pause.resolve(); };
+          const go = () => { if (m) window.open(`${m.url}${m.url.includes("?") ? "&" : "?"}chat=${m.id}`, "_blank", "noopener"); if (last) onClose(); else pause.resolve(); };
           return (
             <div className="qo-pause">
               {m ? <>
@@ -1057,7 +1057,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
             {m.did.length > 0 && <ul className="qo-did">{m.did.map((x, i) => <li key={i}>{x}</li>)}</ul>}
             {m.ask.length > 0 && <details className="qo-ask"><summary>{m.ask.length} question{m.ask.length === 1 ? "" : "s"} for the customer (saved in the order&apos;s notes)</summary><ul>{m.ask.map((q, i) => <li key={i}>{q}</li>)}</ul></details>}
-            {done && made.length > 1 && <a className="qo-open" href={m.url} target="_blank" rel="noreferrer">{m.mockup ? "Make the mockup & open #" : "Open #"}{m.number} ›</a>}
+            {done && made.length > 1 && <a className="qo-open" href={`${m.url}${m.url.includes("?") ? "&" : "?"}chat=${m.id}`} target="_blank" rel="noreferrer">{m.mockup ? "Make the mockup & open #" : "Open #"}{m.number} ›</a>}
           </div>
         ))}
         {err && <div className="err">{err}</div>}

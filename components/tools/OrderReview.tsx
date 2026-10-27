@@ -417,6 +417,15 @@ export function OrderCheckDock() {
   useEffect(() => {
     if (window.self !== window.top) return; // the Mockup Creator made out of sight (remakeMockups): no second check in it
     try { const x = sessionStorage.getItem(DOCK_KEY); if (x) setSt(JSON.parse(x) as DockState); } catch { /* */ }
+    // opened in a new tab by Create order's full form (?chat=<order>): the Order chat comes up there too (Oct 27, Nick:
+    // "anytime we go through the create orders tool… I still want to leave that panel open so we can talk to it")
+    try {
+      const q = new URLSearchParams(window.location.search), id = q.get("chat") || "", em = q.get("email") || "";
+      if (/^[0-9a-f-]{36}$/i.test(id)) {
+        const st0: DockState = { orderId: id, ...(/^[0-9a-f-]{36}$/i.test(em) ? { from: { activity: em } } : {}) };
+        sessionStorage.setItem(DOCK_KEY, JSON.stringify(st0)); setSt(st0);
+      }
+    } catch { /* */ }
     const on = (e: Event) => setSt((e as CustomEvent<DockState | null>).detail);
     window.addEventListener("fbs:order-check", on);
     return () => window.removeEventListener("fbs:order-check", on);
