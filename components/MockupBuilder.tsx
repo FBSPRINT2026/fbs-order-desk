@@ -382,7 +382,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [portal]); // eslint-disable-line react-hooks/exhaustive-deps
   // the Helper (shop): art that came built onto a mockup, pulled off and walked through before it goes on (Oct 22)
-  type HelpRow = { key: string; file: File; url: string; side: "front" | "back"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean;
+  type HelpRow = { key: string; file: File; url: string; side: "front" | "back" | "sleeve"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean;
     /** the texture laid over it in the file, and how it's distressed here: none, the file's, or the customer's saved mask */
     mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string };
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
@@ -4018,7 +4018,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {helper.err && <p className="err mk-help-t">{helper.err}</p>}
                   {!helper.busy && helper.rows.length > 0 && <>
                     <p className="mk-help-q">
-                      {(() => { const f = helper.rows.filter((r) => r.side === "front").length, b = helper.rows.filter((r) => r.side === "back").length; const say = (n: number, w: string) => (n ? `${n === 1 ? "a" : n} ${w} print${n === 1 ? "" : "s"}` : ""); return `I found ${[say(f, "front"), say(b, "back")].filter(Boolean).join(" and ")}${helper.kind === "drawn" ? " on drawn shirts" : helper.kind === "art" ? " (just the art, no shirt)" : ""}.`; })()}
+                      {(() => { const f = helper.rows.filter((r) => r.side === "front").length, b = helper.rows.filter((r) => r.side === "back").length, sl = helper.rows.filter((r) => r.side === "sleeve").length; const say = (n: number, w: string) => (n ? `${n === 1 ? "a" : n} ${w} print${n === 1 ? "" : "s"}` : ""); return `I found ${[say(f, "front"), say(b, "back"), say(sl, "sleeve")].filter(Boolean).join(" and ")}${helper.kind === "drawn" ? " on drawn shirts" : helper.kind === "art" ? " (just the art, no shirt)" : ""}.`; })()}
                       {helper.pms.length > 0 && <> The colors written on it: <b>{helper.pms.join(", ")}</b>.</>}
                       {" "}Check where each goes, its size and inks.
                     </p>
@@ -4055,7 +4055,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <div className={"mk-help-pic" + (r.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={r.durl || r.url} alt={`${r.side} art`} /></div>
                         <div className="mk-help-b">
                           <div className="row" style={{ gap: 6 }}>
-                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as "front" | "back"; helpSet(r.key, { side, location: locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option></select>
+                            <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as HelpRow["side"]; helpSet(r.key, { side, location: side === "sleeve" ? (r.location.endsWith("Sleeve") ? r.location : "Left Sleeve") : locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option><option value="sleeve">Sleeve</option></select>
                             <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{LOCATIONS.filter((l) => sideOf(l) === r.side || l === r.location).map((l) => <option key={l}>{l}</option>)}</select>
                           </div>
                           <label className="mk-help-w"><input type="number" min="0.5" step="0.25" value={r.widthIn} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0); helpSet(r.key, { widthIn: w, heightIn: Math.round((r.heightIn / (r.widthIn || 1)) * w * 100) / 100 }); }} />&quot; wide <span className="faint">× {r.heightIn}&quot;</span></label>
