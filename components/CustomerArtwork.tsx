@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, LOCATIONS, newImprint, uid, type Group, type Imprint } from "@/lib/pricing";
-import { useSticky } from "@/lib/useSticky";
 import type { Brand } from "@/lib/brands";
 import BrandArtwork from "@/components/BrandArtwork";
 
@@ -32,8 +31,8 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   // their brands first when they have them (Oct 27, Nick: Cedar Promos' MEI, ShipStation…; "customer artwork… it's going
   // to be more complicated for some people than others. But I also don't want to have to design this for every client")
   const [brands, setBrands] = useState<Brand[] | null>(null);
-  const [tabSaved, setTab] = useSticky<"brands" | "mockups" | "logos">("custart.tab", "brands");
-  const tab = tabSaved === "brands" && brands !== null && !brands.length ? "mockups" : tabSaved;
+  // the brands (or their logos) first, then a brand's logos; mockups and old jobs are a card there (Oct 27, option 3)
+  const [tab, setTab] = useState<"brands" | "mockups" | "logos">("brands");
   const [q, setQ] = useState("");
   const [saves, setSaves] = useState<Save[] | null>(null);
   const [logos, setLogos] = useState<{ id: string; number: number; name: string; preview_path: string | null }[] | null>(null);
@@ -222,14 +221,12 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Customer artwork" onClick={onClose}>
       <div className="dla ca" onClick={(e) => e.stopPropagation()}>
         <div className="ca-h"><h3>Customer artwork</h3><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>×</button></div>
-        <p className="dla-sub">{tab === "brands" ? "Pick a logo from their brands: the spot, size and colors come from the brand's rules." : "Bring a mockup from another of their orders, or one of their logos, onto this group."}</p>
-        <div className="toolbar" data-toolbar><div className="chips">
-          {!!brands?.length && <button type="button" className={"chip" + (tab === "brands" ? " on" : "")} onClick={() => { setTab("brands"); setPick(null); setLogo(null); }}>Brands<span className="chip-n">{brands.length}</span></button>}
-          <button type="button" className={"chip" + (tab === "mockups" ? " on" : "")} onClick={() => { setTab("mockups"); setLogo(null); }}>Mockups</button>
-          <button type="button" className={"chip" + (tab === "logos" ? " on" : "")} onClick={() => { setTab("logos"); setPick(null); }}>Logos</button>
-        </div>{tab !== "brands" && <input type="search" className="ca-q" placeholder="Find: name or order #" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find their artwork" />}</div>
+        {tab === "brands" ? <p className="dla-sub">{brands?.length ? "Pick the brand, then the logo: its size and colors come from the brand's rules." : "Pick a logo, or bring in a mockup or an old job's files."}</p> : (
+          <div className="ba-crumb"><button type="button" className="linkbtn" onClick={() => { setTab("brands"); setPick(null); setLogo(null); }}>← All artwork</button><b>Mockups and old jobs</b>
+            <input type="search" className="ca-q" placeholder="Find: name or order #" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find their mockups" /></div>
+        )}
         {tab === "brands" ? (brands === null ? <p className="faint">Loading their brands…</p> : (
-          <BrandArtwork customerId={customerId} group={group} brands={brands}
+          <BrandArtwork customerId={customerId} group={group} brands={brands} onMockups={() => { setTab("mockups"); setLogo(null); }}
             onAdd={(im, label) => onPick({ imprints: [...group.imprints, im], offsets: group.mockupOffsets || {}, thumbs: group.mockupThumbs || null, remake: false, label, keepMockup: true })} />
         )) : tab === "mockups" ? (saves === null ? <p className="faint">Loading their mockups…</p> : !shown.length ? <p className="faint">{q ? "Nothing matches." : "No saved mockups on their account yet."}</p> : (
           <div className="ca-grid">

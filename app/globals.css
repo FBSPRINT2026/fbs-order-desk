@@ -13932,6 +13932,26 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .ba{display:flex;flex-direction:column;gap:8px}
 .ba .toolbar{margin:0}
 .ba-rule{margin:0;font-size:12.5px;color:var(--ink-3)}
+.ba-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);width:100%}
+/* the first screen: brand cards (option 3) */
+.ba-brands{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.ba-bc{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer;min-width:0}
+.ba-bc:hover,.ba-bc:focus-visible{border-color:var(--accent);background:var(--accent-soft);outline:none}
+.ba-bc-pic{width:86px;height:60px;flex:none;border-radius:6px;background:var(--swatch-light);display:flex;align-items:center;justify-content:center;overflow:hidden;font:800 15px var(--display);color:var(--ink-3)}
+.ba-bc-pic.dark{background:var(--swatch-dark)}
+.ba-bc-pic.ic{background:var(--surface-2);color:var(--accent)}
+.ba-bc-pic img{width:100%;height:100%;object-fit:contain;padding:6px}
+.ba-bc-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ba-bc-t b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ba-bc-t span{font-size:12px;color:var(--ink-3)}
+.ba-crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
+.ba-crumb .faint{font-size:12.5px}
+.ba-crumb .ca-q{margin-left:auto}
+.ba-addh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ba-seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-left:auto}
+.ba-seg button{border:0;background:var(--surface);padding:6px 10px;font:600 12.5px var(--body);color:var(--ink-2);cursor:pointer}
+.ba-seg button+button{border-left:1px solid var(--line)}
+.ba-seg button.on{background:var(--accent-soft);color:var(--accent)}
 .ba-rule b{color:var(--ink);margin-right:4px}
 .ca-pic.logo{background:var(--swatch-light)}
 .ca-pic.logo.dark{background:var(--swatch-dark)}

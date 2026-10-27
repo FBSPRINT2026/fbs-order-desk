@@ -13,20 +13,21 @@ import { brandPrint, colorwayFor, colorwaysOf, isDarkGarment, LANES, laneState, 
  * goods, and for embroidery the sew file (digitized; Needs digitizing when there is none). No mockup needed.
  * A logo is one record every department shares: screen print can grab a logo that only has sew files so far.
  */
-type Props = { customerId: string; group: Group; brands: Brand[]; onAdd: (im: Imprint, label: string) => Promise<void> | void };
+type Props = { customerId: string; group: Group; brands: Brand[]; onAdd: (im: Imprint, label: string) => Promise<void> | void;
+  /** their saved mockups and old jobs (Customer artwork's other view), as a card on the first screen */ onMockups?: () => void };
 const OTHER = "other", ALL = "all";
 const SIZE_GUESS: Record<string, string> = { "Left Chest": '3.5" wide', "Right Chest": '3.5" wide', "Full Front": '11" wide', "Full Back": '11" wide', "Left Sleeve": '3" wide', "Right Sleeve": '3" wide', "Upper Back (Yoke)": '10" wide' };
 
-export default function BrandArtwork({ customerId, group, brands, onAdd }: Props) {
+export default function BrandArtwork({ customerId, group, brands, onAdd, onMockups }: Props) {
   const sb = useMemo(() => createClient(), []);
   const used = group.imprints.find((x) => x.method)?.method as Lane | undefined;
   const [laneSaved, setLaneSaved] = useSticky<Lane>("custart.lane", "embroidery");
   const [laneHere, setLaneHere] = useState<Lane | null>(used || null);
   const lane = laneHere || laneSaved;
   const setLane = (l: Lane) => { setLaneHere(l); setLaneSaved(l); };
-  const [tabSaved, setTab] = useSticky<string>(`custart.brand.${customerId}`, brands[0]?.id || ALL);
-  // a remembered brand that's gone: their first brand
-  const tab = tabSaved === ALL || tabSaved === OTHER || brands.some((b) => b.id === tabSaved) ? tabSaved : brands[0]?.id || ALL;
+  // the brand first, then its logos (Oct 27, Nick: "click the brand first… you go Peter, and then… MEI, ShipStation, then
+  // go into there" → option 3). null = the brands; a pop-up's place isn't remembered
+  const [tab, setTab] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [ds, setDs] = useState<Design[] | null>(null);
   const [pics, setPics] = useState<Record<string, string>>({});
@@ -61,7 +62,8 @@ export default function BrandArtwork({ customerId, group, brands, onAdd }: Props
   const dark = lines.length > 0 && lines.every((l) => darkOf(l.color));
   const mixed = lines.some((l) => darkOf(l.color)) && !dark;
   const others = (ds || []).filter((d) => !bOf(d));
-  const shown = (ds || []).filter((d) => (tab === ALL || (tab === OTHER ? !bOf(d) : bOf(d) === tab)) && (!t || `d-${d.number} ${d.number} ${d.name}`.toLowerCase().includes(t)));
+  // a search looks through all of their logos (and brand names); else the brand picked
+  const shown = (ds || []).filter((d) => (t ? `d-${d.number} ${d.number} ${d.name} ${brandById(bOf(d))?.name || ""}`.toLowerCase().includes(t) : tab === ALL || (tab === OTHER ? !bOf(d) : bOf(d) === tab)));
   // a brand's logos first in the lane they're ready in
   const sorted = [...shown].sort((a, b) => Number(laneState(b, lane).ready) - Number(laneState(a, lane).ready));
   const picOf = (d: Design) => { const cw = colorwayFor(d, brandById(bOf(d)), dark); return (cw?.preview && pics[cw.preview]) || (d.preview_path && pics[d.preview_path]) || ""; };
@@ -93,40 +95,74 @@ export default function BrandArtwork({ customerId, group, brands, onAdd }: Props
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't add it."); setBusy(false); }
   }
 
+  const cover = (list: Design[]) => list.map((d) => picOf(d)).find(Boolean) || "";
+  const ruleOf = (b: Brand) => {
+    const r = b.rules, e = b.embroidery;
+    return (lane === "embroidery" && (e.light?.length || e.dark?.length) ? [e.light?.length ? `Light goods: ${e.light.join(", ")}` : "", e.dark?.length ? `Dark goods: ${e.dark.join(", ")}` : ""]
+      : [r.light ? `Light goods: ${r.light}` : "", r.dark ? `Dark goods: ${r.dark}` : "", r.one_light || r.one_dark ? `One color: ${[r.one_light, r.one_dark].filter(Boolean).join(" / ")}` : ""]).filter(Boolean).join(" · ");
+  };
+  const open = (id: string) => { setTab(id); setPick(null); };
+  const cur = tab && tab !== ALL && tab !== OTHER ? brandById(tab) : null;
+
   return (
     <div className="ba">
-      {/* the method picks the lane: each department sees its own files first */}
-      <div className="toolbar ba-lane" data-toolbar>
-        <div className="chips" role="group" aria-label="How it's decorated">
-          {LANES.map((l) => <button key={l.id} type="button" className={"chip" + (lane === l.id ? " on" : "")} aria-pressed={lane === l.id} onClick={() => setLane(l.id)}>{l.label}</button>)}
-        </div>
-      </div>
-      <div className="toolbar" data-toolbar>
-        <div className="chips" role="group" aria-label="Brand">
-          {brands.map((b) => { const n = (ds || []).filter((d) => bOf(d) === b.id).length; return <button key={b.id} type="button" className={"chip" + (tab === b.id ? " on" : "")} onClick={() => { setTab(b.id); setPick(null); }}>{b.name}{ds ? <span className="chip-n">{n}</span> : null}</button>; })}
-          {others.length > 0 && <button type="button" className={"chip" + (tab === OTHER ? " on" : "")} onClick={() => { setTab(OTHER); setPick(null); }}>Other<span className="chip-n">{others.length}</span></button>}
-          <button type="button" className={"chip" + (tab === ALL ? " on" : "")} onClick={() => { setTab(ALL); setPick(null); }}>All</button>
-        </div>
-        <input type="search" className="ca-q" placeholder="Find: name or D-number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a logo" />
-      </div>
-      {(() => { const b = brandById(tab); if (!b) return null; const r = b.rules; const e = b.embroidery;
-        const rule = lane === "embroidery" ? [e.light?.length ? `Light goods: ${e.light.join(", ")}` : "", e.dark?.length ? `Dark goods: ${e.dark.join(", ")}` : ""] : [r.light ? `Light goods: ${r.light}` : "", r.dark ? `Dark goods: ${r.dark}` : "", r.one_light || r.one_dark ? `One color: ${[r.one_light, r.one_dark].filter(Boolean).join(" / ")}` : ""];
-        return rule.some(Boolean) ? <p className="ba-rule"><b>{b.name} rule</b> {rule.filter(Boolean).join(" · ")}</p> : null; })()}
-      {ds === null ? <p className="faint">Loading their logos…</p> : !sorted.length ? <p className="faint">{q ? "Nothing matches." : tab === ALL ? "No logos on their account yet." : "No logos in this brand yet. Add them on the customer's Artwork page."}</p> : (
-        <div className="ca-grid">
-          {sorted.map((d) => { const st = laneState(d, lane); const u = picOf(d); return (
-            <button key={d.id} type="button" className={"ca-card" + (pick?.id === d.id ? " on" : "")} onClick={() => setPick(d)}>
-              <span className={"ca-pic logo" + (dark ? " dark" : "")}>{u ? <img src={u} alt="" /> : null}</span>
-              <b>{d.name || "Logo"}</b>
-              <span className="faint">D-{d.number}{tab === ALL && bOf(d) ? ` · ${brandById(bOf(d))?.name || ""}` : ""}</span>
-              <span className={"ba-st" + (st.ready ? " ok" : " need")}>{st.note}</span>
-            </button>
-          ); })}
-        </div>
+      <input type="search" className="ba-q" placeholder={brands.length ? "Find a logo: name, brand or D-number" : "Find a logo: name or D-number"} value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} aria-label="Find a logo" />
+      {!t && tab === null ? (
+        // the first screen: their brands as cards, then their other logos, mockups and old jobs
+        ds === null ? <p className="faint">Loading their brands…</p> : (
+          <div className="ba-brands">
+            {brands.map((b) => { const list = (ds || []).filter((d) => bOf(d) === b.id), u = cover(list), cw = list.reduce((n, d) => n + colorwaysOf(d).length, 0), sw = list.reduce((n, d) => n + sewFilesOf(d).length, 0); return (
+              <button key={b.id} type="button" className="ba-bc" onClick={() => open(b.id)}>
+                <span className={"ba-bc-pic" + (dark ? " dark" : "")}>{u ? <img src={u} alt="" /> : <span>{b.name.slice(0, 2).toUpperCase()}</span>}</span>
+                <span className="ba-bc-t"><b>{b.name}</b><span>{list.length ? `${list.length} logo${list.length === 1 ? "" : "s"}` : "No logos yet"}{cw ? ` · ${cw} colorways` : ""}{sw ? ` · ${sw} sew file${sw === 1 ? "" : "s"}` : ""}</span></span>
+              </button>
+            ); })}
+            {others.length > 0 && (
+              <button type="button" className="ba-bc" onClick={() => open(OTHER)}>
+                <span className={"ba-bc-pic" + (dark ? " dark" : "")}>{cover(others) ? <img src={cover(others)} alt="" /> : <span>···</span>}</span>
+                <span className="ba-bc-t"><b>{brands.length ? "Other logos" : "Their logos"}</b><span>{others.length} logo{others.length === 1 ? "" : "s"}{brands.length ? ", no brand" : ""}</span></span>
+              </button>
+            )}
+            {onMockups && (
+              <button type="button" className="ba-bc" onClick={onMockups}>
+                <span className="ba-bc-pic ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.5 4 3 7l2.2 4 2.8-1.2V20h8V9.8l2.8 1.2L21 7l-5.5-3c-.8 1.6-2 2.5-3.5 2.5S9.3 5.6 8.5 4z" /></svg></span>
+                <span className="ba-bc-t"><b>Mockups and old jobs</b><span>A mockup from another order, or an old job&apos;s files</span></span>
+              </button>
+            )}
+          </div>
+        )
+      ) : (
+        <>
+          {!t && (
+            <div className="ba-crumb">
+              <button type="button" className="linkbtn" onClick={() => { setTab(null); setPick(null); }}>{brands.length ? "← All brands" : "← Back"}</button>
+              <b>{cur ? cur.name : tab === OTHER ? (brands.length ? "Other logos" : "Their logos") : "All logos"}</b>
+              {cur && ruleOf(cur) && <span className="faint">{ruleOf(cur)}</span>}
+            </div>
+          )}
+          {ds === null ? <p className="faint">Loading their logos…</p> : !sorted.length ? <p className="faint">{q ? "Nothing matches." : tab === ALL ? "No logos on their account yet." : "No logos in this brand yet. Add them on the customer's Artwork page."}</p> : (
+            <div className="ca-grid">
+              {sorted.map((d) => { const st = laneState(d, lane); const u = picOf(d); return (
+                <button key={d.id} type="button" className={"ca-card" + (pick?.id === d.id ? " on" : "")} onClick={() => setPick(d)}>
+                  <span className={"ca-pic logo" + (dark ? " dark" : "")}>{u ? <img src={u} alt="" /> : null}</span>
+                  <b>{d.name || "Logo"}</b>
+                  <span className="faint">D-{d.number}{(t || tab === ALL) && bOf(d) ? ` · ${brandById(bOf(d))?.name || ""}` : ""}</span>
+                  <span className={"ba-st" + (st.ready ? " ok" : " need")}>{st.note}</span>
+                </button>
+              ); })}
+            </div>
+          )}
+        </>
       )}
       {pick && (
         <div className="ca-use">
-          <b>Add D-{pick.number} {pick.name} as {LANES.find((l) => l.id === lane)?.label.toLowerCase()}</b>
+          <div className="ba-addh">
+            <b>Add D-{pick.number} {pick.name}</b>
+            {/* how it's decorated: picks the department's files (sew file, colorways) */}
+            <span className="ba-seg" role="group" aria-label="How it's decorated">
+              {LANES.map((l) => <button key={l.id} type="button" className={lane === l.id ? "on" : ""} aria-pressed={lane === l.id} onClick={() => setLane(l.id)}>{l.label}</button>)}
+            </span>
+          </div>
           <div className="ba-row">
             <div className="field"><label htmlFor="ba-loc">Location</label>
               <select id="ba-loc" value={loc} onChange={(e) => { setLoc(e.target.value); if (lane !== "embroidery" && (!size || Object.values(SIZE_GUESS).includes(size))) setSize(SIZE_GUESS[e.target.value] || ""); }}>
