@@ -287,7 +287,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
   }
   // signed links for the saved mockup thumbnails on each group
-  const thumbKey = (o?.groups || []).flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path), ...g.imprints.map((d) => d.shownArt || "").filter(Boolean)]).join("|");
+  const thumbKey = (o?.groups || []).flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path), ...g.imprints.map((d) => d.shownArt || "").filter(Boolean), ...g.imprints.map((d) => d.supplied?.picture?.path || "").filter(Boolean)]).join("|");
   useEffect(() => {
     const paths = thumbKey ? thumbKey.split("|").filter((p) => !thumbUrls[p]) : [];
     if (!paths.length) return;
@@ -1122,7 +1122,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     } else if (!isQuote) out.push(["blanks", "production", "ready", "completed"].includes(o.status) ? { tone: "ok", text: "Garments ordered" } : { tone: "wait", text: "Garments not ordered yet" });
     // art
     const ap = proofs.filter((p) => p.status === "approved").length, ch = proofs.filter((p) => p.status === "changes").length;
-    const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length);
+    const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length || g.imprints.some((d) => d.supplied?.picture));
     // approved by staff another way (a call, an email: Request separations' "approved another way"), or a Printavo job past art
     const staffArt = events.find((e) => e.kind === "art_approved");
     const pvPast = !!pvStatusOf(o as never) && ["blanks", "production", "ready", "completed"].includes(o.status);

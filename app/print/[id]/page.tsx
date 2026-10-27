@@ -37,7 +37,10 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const proof0 = !!proof && !work0;
   const mkPaths = groups.map((g) => {
     // ours first; the customer's own mockup only when we haven't made one
-    const all = g.mockupThumbs?.length ? g.mockupThumbs : (g.customerMockups || []).map((m) => m.path);
+    // customer supplied transfers: their placement reference is the mockup (Oct 27, Nick: "that's what they should see on
+    // top of the work order")
+    const placed = g.imprints.map((d) => d.supplied?.picture?.path || "").filter(Boolean);
+    const all = g.mockupThumbs?.length ? g.mockupThumbs : placed.length ? placed : (g.customerMockups || []).map((m) => m.path);
     return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, 1);
   });
   const dPaths = work0 || proof0 ? Object.values(designs).filter((d) => d.preview_path) : [];

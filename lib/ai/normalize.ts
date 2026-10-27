@@ -17,7 +17,7 @@ export type ProposedOrder = {
     name?: string;
     garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string; /** the email didn't name the style: what they called it ("tees") */ called?: string;
       /** what it looks like in the customer's photo, to draw it when it isn't in a catalog (rule 3d) */ look?: { kind?: string; hex?: string; trim?: string | null; heather?: boolean; stripes?: string | null; quilted?: boolean } | null }[];
-    prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string }[];
+    prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string; /** rule 4f: their own heat transfers */ supplied_transfers?: { by?: string; order?: string } | null }[];
   }[];
   questions?: string[];
   confidence?: "high" | "medium" | "low";
@@ -134,6 +134,8 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       const m = sz.match(/^(\d+(?:\.\d+)?)\s*(?:"|”|''|in\.?|inch(?:es)?)?\s*(w|wide|width|t|tall|h|high|height)?\.?$/i);
       im.size = (m ? `${m[1]}" ${/^(t|tall|h|high|height)$/i.test(m[2] || "") ? "tall" : "wide"}` : sz).slice(0, 40);
       im.notes = (d.notes || "").slice(0, 300);
+      // the customer's own heat transfers (rule 4f): pressed where their placement reference shows, not priced
+      if (d.supplied_transfers && im.method === "dtf") { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.location = ""; im.size = ""; }
       return im;
     });
     if (!lines.length && !imprints.length) continue;

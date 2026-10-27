@@ -151,6 +151,8 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         // a mockup's garment color: one mockup per color, in the order of the lines
         const mkColor = (i: number) => (mk.length === colorList.length ? colorList[i] : "");
         const mkHex = (i: number) => (mkColor(i) && colorHex(mkColor(i))) || hex;
+        // customer supplied transfers: the mockup is their placement reference
+        const sup = g.imprints.find((d) => d.supplied)?.supplied || null;
         const pg = starts[gi];
         const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
         // each print's press sheet, then one more for each color change
@@ -183,6 +185,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                     {o.rush && <span className="flag rush">RUSH</span>}
                     {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
                     {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
+                    {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}
                     {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
                   </div>
                   {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
@@ -197,7 +200,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                   <div className="wo-m" key={u}>
                     <img src={u} alt="Mockup" />
                     {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
-                    <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>
+                    {sup && !(g.mockupThumbs || []).length ? <span>Placement reference · customer supplied transfers{mk.length > 1 || i === 0 ? ` · big on page ${pgMk + i}` : ""}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
                   </div>
                 )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
               </div>
@@ -292,6 +295,17 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
     Object.keys(d.byColor?.skip || {}).length ? `BY SHIRT COLOR: ${Object.entries(d.byColor!.skip).map(([c, n]) => `${c.toUpperCase()} SKIPS ${n.join(" + ").toUpperCase()}`).join(" · ")}` : "",
     !d.visualOnly && (d.confirm?.size || d.confirm?.ink) ? `CONFIRM ${[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING` : "",
   ].filter(Boolean);
+  // their own transfers: who made them and where they go, nothing to set up (Oct 27, Nick)
+  if (d.supplied) return (
+    <div className="wo-pc">
+      <div className="h"><b className="disp">HEAT PRESS</b><span>customer supplied · p. {page}</span></div>
+      <div className="kv">
+        <i>Method</i><span>Heat press · <b>customer supplied transfers</b></span>
+        <i>Transfers</i><span>{[d.supplied.by, d.supplied.ref ? `order ${d.supplied.ref}` : ""].filter(Boolean).join(" · ") || "From the customer"}</span>
+        <i>Placement</i><span>As shown in the placement reference</span>
+      </div>
+    </div>
+  );
   return (
     <div className="wo-pc">
       <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
@@ -349,6 +363,8 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       ...(emb?.backing ? [["Backing", `${emb.backing}${emb.topping && emb.topping !== "None" ? ` + ${emb.topping.replace(/ \(.*\)$/, "")}` : ""}`] as [string, string]] : []),
       ...(emb?.file ? [["File", emb.file.name] as [string, string]] : []),
       ...(emb?.puff || emb?.metallic ? [["Effects", [emb.puff && (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff"), emb.metallic && "Metallic"].filter(Boolean).join(", ")] as [string, string]] : [])]
+    : d.supplied
+      ? [["Transfers", "Customer supplied"], ["Made by", d.supplied.by || "—"], ["Their order", d.supplied.ref || "—"], ["Pieces", String(qty)]]
     : d.method === "dtf"
       ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
@@ -357,12 +373,18 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
     <section className="sheet">
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
       <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
-      <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
+      {d.supplied ? (
+        // their placement reference, big: the press follows it (Oct 27, Nick)
+        <div className="art" style={{ background: "#fff" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {(p.mockups[gi] || [])[0] ? <img src={p.mockups[gi][0]} alt="Placement reference" style={{ position: "absolute", inset: "0.1in", width: "calc(100% - 0.2in)", height: "calc(100% - 0.2in)", objectFit: "contain" }} /> : <div className="none">No placement reference uploaded</div>}
+        </div>
+      ) : <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
         {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
-      </div>
+      </div>}
       <div className="specs">
         {specs.map(([k, v]) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v">{v}</div></div>)}
         {fills.map((k) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v fill" /></div>)}

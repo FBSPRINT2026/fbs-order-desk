@@ -165,6 +165,11 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
    *  Each changed ink is a screen's ink change (inkChanges, the Ink change fee) */ inkBy?: Record<string, Record<string, string>>;
+  /** customer supplied transfers (Oct 27, Nick: "there should be a click box that says customer supplied… you should be
+   *  able to just upload the placement reference"): heat press only; they send the transfers (DTF Dallas, their order
+   *  number) and we press them where their placement reference shows. Not priced; nothing else on the print to fill in.
+   *  picture = the placement reference as a picture (a PDF's first page), file = what was uploaded */
+  supplied?: { by?: string; ref?: string; picture?: { path: string; name: string; file?: string } };
   /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
    *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.
    *  inks: that print's ink → the ink here ("" = that color isn't printed here). It prints from the same screens:
@@ -740,7 +745,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const extra = s.embPer1k && num(d.stitches) > num(s.embStitches) ? Math.ceil((num(d.stitches) - num(s.embStitches)) / 1000) * num(s.embPer1k) : 0;
     return { each: r2(num(s.embroidery[eti]) + extra), setup: num(s.digitizing), inkFee };
   }
-  if (d.method === "dtf") return { each: num(s.dtf[ti]), setup: 0, inkFee };
+  if (d.method === "dtf") return d.supplied ? { each: 0, setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
 

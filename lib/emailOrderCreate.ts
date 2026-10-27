@@ -81,6 +81,15 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   for (const g of groups) for (const im of g.imprints) {
     const path = d.art?.[im.id];
     if (!path || im.design_id) continue;
+    // their own transfers (rule 4f): the file is the placement reference, not art for the customer's library. A picture
+    // is used as it is; a PDF's first page is made into the picture when the order is opened (GroupEditor)
+    if (im.supplied) {
+      const f = d.files.find((x) => x.path === path);
+      const name = f?.name || path.split("/").pop() || "placement reference";
+      const to = `designs/placement-${crypto.randomUUID().slice(0, 8)}/${safe(name)}`;
+      if (!(await admin.storage.from("proofs").copy(path, to)).error) im.supplied = { ...im.supplied, ...(f && isPicture(f) ? { picture: { path: to, name, file: to } } : { picture: { path: "", name, file: to } }) };
+      continue;
+    }
     if (!madeFor.has(path)) {
       const f = d.files.find((x) => x.path === path);
       const name = f?.name || path.split("/").pop() || "art";

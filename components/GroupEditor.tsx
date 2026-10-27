@@ -395,7 +395,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
     return () => { live = false; ro?.disconnect(); probe.remove(); };
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
-  const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
+  const locked = (!!onMockup || !!needMockup) && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length && !g.imprints.some((x) => x.supplied);
   // wholesale (contract) jobs use the contract's own finishing list and prices
   const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   // embroidery extras (specialty thread, 3D puff…): only on a group with embroidery
@@ -703,7 +703,8 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
             // group five screens long)
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
-            : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>}
+            : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture; const u = pr ? thumbUrls?.[pr.path] : "";
+                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>Placement reference · customer supplied transfers</small></div> : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
           {onCustomerArt && <button className="btn sm ghost mk-cust" type="button" onClick={onCustomerArt} title="Bring a mockup from another of their orders, or one of their logos, onto this group">Customer artwork</button>}
@@ -749,15 +750,15 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
-                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>
+                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
                 <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
-                {!!onMockup && !g.mockupSkipped && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
+                {!!onMockup && !g.mockupSkipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
-                <div className="imp-grid">
+                <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{(locs.includes(d.location) || (!d.location && locs !== LOCATIONS))
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; frontFirst(x.imprints); })}>{!d.location && <option value="">Pick a spot…</option>}{locs.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
@@ -784,8 +785,12 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                 </div>
                 )}
                 </div>
-                {screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
-                {inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
+                {/* customer supplied transfers (Oct 27, Nick): heat press only; ticked, the rest is grayed out and only who made
+                    them, their order number and the placement reference are filled in */}
+                {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
+                {d.supplied && <SuppliedBox d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
+                {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
+                {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
                 {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (
                   <div className="imp-hit">
@@ -797,7 +802,7 @@ export default function GroupEditor({ printsFixed = false, onUploadTag, sizesBel
                     <span><b>{confirmTitle(d.confirm.why)}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks">{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}
                 </div>}
-                <div className="imp-art">
+                <div className="imp-art" hidden={!!d.supplied}>
                       {!(onMockup && !g.mockupSkipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
@@ -1535,4 +1540,72 @@ function TagTile({ set, size, shirtHex }: { set: NeckLabelSet; size: string; shi
       </div>
     )}
   </>;
+}
+
+/**
+ * Customer supplied transfers (Oct 27, Nick: "you should be able to just upload the placement reference… you can even put
+ * in there where it came from, like DTF Dallas… the order number"): who made them, their order number, and the
+ * placement reference (their mockup). A PDF's first page is made into the picture the order and the work order show.
+ */
+function SuppliedBox({ d, onChange, url }: { d: Imprint; onChange: (fn: (im: Imprint) => void) => void; url: (path: string) => string }) {
+  const sup = d.supplied || {};
+  const [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const inRef = useRef<HTMLInputElement>(null);
+  const made = useRef(false);
+  async function put(file: Blob, name: string, pdf: boolean, keepFile?: string) {
+    const sb = createClient(), key = `designs/placement-${crypto.randomUUID().slice(0, 8)}`;
+    const safe = name.replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, "_").slice(-90) || "placement";
+    let file0 = keepFile || "";
+    if (!keepFile) { const up = await sb.storage.from("proofs").upload(`${key}/${safe}`, file, { contentType: file.type || undefined }); if (up.error) throw new Error(up.error.message); file0 = `${key}/${safe}`; }
+    let pic = pdf ? "" : file0;
+    if (pdf) {
+      const { pdfPicture } = await import("@/lib/printavoArt");
+      const c = await pdfPicture(await file.arrayBuffer(), 1600);
+      const png = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+      if (png) { const up = await sb.storage.from("proofs").upload(`${key}/${safe.replace(/\.[^.]+$/, "")}.png`, png, { contentType: "image/png" }); if (!up.error) pic = `${key}/${safe.replace(/\.[^.]+$/, "")}.png`; }
+    }
+    onChange((im) => { im.supplied = { ...(im.supplied || {}), picture: { path: pic, name, file: file0 } }; });
+  }
+  async function upload(f: File) {
+    setBusy("Uploading the placement reference…"); setErr("");
+    try { await put(f, f.name, /\.pdf$/i.test(f.name) || f.type === "application/pdf"); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Couldn't upload it."); }
+    finally { setBusy(""); }
+  }
+  // made by Create order from their PDF: its first page made into the picture, once
+  useEffect(() => {
+    const pr = sup.picture;
+    if (made.current || !pr?.file || pr.path) return;
+    made.current = true;
+    void (async () => {
+      setBusy("Making a picture of their placement reference…");
+      try {
+        const { data } = await createClient().storage.from("proofs").download(pr.file!);
+        if (data) await put(data, pr.name, true, pr.file);
+      } catch { /* the PDF stays; upload a picture by hand */ }
+      setBusy("");
+    })();
+  }, [sup.picture?.file, sup.picture?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pic = sup.picture?.path ? url(sup.picture.path) : "";
+  return (
+    <div className="imp-sup">
+      <div className="imp-sup-f">
+        <label><span className="imp-l">Supplied by</span><input type="text" placeholder="DTF Dallas" value={sup.by || ""} onChange={(e) => onChange((im) => { im.supplied = { ...(im.supplied || {}), by: e.target.value.slice(0, 60) }; })} /></label>
+        <label><span className="imp-l">Their order #</span><input type="text" placeholder="182715" value={sup.ref || ""} onChange={(e) => onChange((im) => { im.supplied = { ...(im.supplied || {}), ref: e.target.value.slice(0, 60) }; })} /></label>
+      </div>
+      <span className="imp-l">Placement reference</span>
+      <div className="imp-sup-ref">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {pic ? <img src={pic} alt="Placement reference" /> : <div className="imp-sup-none">{sup.picture?.file ? "Their PDF" : "None yet"}</div>}
+        <div>
+          {sup.picture?.name && <div className="imp-sup-n">{sup.picture.name}</div>}
+          <div className="faint">Their mockup of where the transfers go. Shown on the order and the work order; not priced.</div>
+          <button type="button" className="btn sm" disabled={!!busy} onClick={() => inRef.current?.click()}>{sup.picture ? "Replace" : "Upload the placement reference"}</button>
+          <input ref={inRef} type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
+          {busy && <div className="faint">{busy}</div>}
+          {err && <div className="err">{err}</div>}
+        </div>
+      </div>
+    </div>
+  );
 }

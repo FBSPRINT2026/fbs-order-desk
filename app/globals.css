@@ -13853,6 +13853,21 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .po-made{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:8px 0}
 .po-warn{font-size:12.5px;color:var(--warn)}
 .po-next{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* customer supplied transfers on a heat press print (Oct 27) */
+.imp-grid.sup>:not(.f-method){opacity:.35;pointer-events:none}
+.imp-sup-tag{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);white-space:nowrap}
+.imp-sup-chk{margin:8px 0 2px;font-size:14px}
+.imp-sup-chk .faint{font-size:12px;margin-left:6px}
+.imp-sup{border-top:1px dashed var(--line);margin-top:8px;padding-top:10px}
+.imp-sup-f{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.imp-sup-f label{display:flex;flex-direction:column;gap:4px}
+.imp-sup-f input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink)}
+.imp-sup-ref{display:flex;gap:12px;align-items:flex-start;margin-top:4px}
+.imp-sup-ref img,.imp-sup-none{width:150px;max-height:110px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);flex:none}
+.imp-sup-none{height:84px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-3)}
+.imp-sup-ref .faint{font-size:12.5px;margin:2px 0 6px}
+.imp-sup-n{font-size:13px;color:var(--ink);word-break:break-all}
+.mk-pref small{display:block;font-size:12px;color:var(--ink-3);margin-top:4px;text-align:center}
 .po-next .faint{font-size:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
 /* Customer artwork (Oct 24): their mockups from other orders and their logos, brought onto a group */
 .mk-cust{width:100%}
