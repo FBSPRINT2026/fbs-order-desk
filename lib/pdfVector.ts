@@ -119,7 +119,8 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
   const picAt = (m: M) => {
     const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]], ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]];
     const w = Math.min(urx, Math.max(...xs)) - Math.max(llx, Math.min(...xs)), h = Math.min(ury, Math.max(...ys)) - Math.max(lly, Math.min(...ys));
-    pics.push({ at: shapes.length, cover: Math.max(0, w) * Math.max(0, h) / pageArea });
+    // a picture off the page box isn't on the art (a guide's color swatches beside a logo cut out of it)
+    if (w > 0 && h > 0) pics.push({ at: shapes.length, cover: (w * h) / pageArea });
   };
   // ICC profiles that hold Lab (by their header), cached
   const labIcc = new Map<Obj, boolean>();
@@ -218,7 +219,14 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
           } else if (isStream(xo)) { picAt(ctm); imgs.push({ at: shapes.length, m: ctm, xo }); }
           break;
         }
-        case "BT": note("has live text (outline it: Type → Create Outlines)"); { const e = code.indexOf("ET", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
+        case "BT": {
+          const e = code.indexOf("ET", lx.i), blk = code.slice(lx.i, e < 0 ? code.length : e);
+          // text set off the page box (a guide's titles and labels around a logo cut out of it) isn't part of the art
+          const at = [...blk.matchAll(/(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm/g)].map((m) => [+m[5], +m[6]]);
+          const off = at.length > 0 && at.every(([x, y]) => { const X = ctm[0] * x + ctm[2] * y + ctm[4], Y = ctm[1] * x + ctm[3] * y + ctm[5]; return Y < lly - 2 || Y > ury + 2 || X > urx; });
+          if (!off) note("has live text (outline it: Type → Create Outlines)");
+          lx.i = e < 0 ? code.length : e + 2;
+        } break;
         case "BI": picAt(ctm); { const e = code.indexOf("EI", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
         case "sh": note("has gradients"); break;
         default: break; // gs, w, d, J, j, M, i, ri, CS/SC/SCN/G/RG/K (stroke colors), BDC/BMC/EMC/MP/DP…
@@ -251,6 +259,15 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
       mockup = `It's a mockup on a shirt: the shirt picture${hidden ? ` and ${hidden} shape${hidden === 1 ? "" : "s"} under it` : ""} left out, the art kept as shapes`;
     } else note("has a placed image");
   }
+  // shapes wholly off the page box aren't part of the art: a page cut down to one logo keeps the rest of the sheet out
+  // of sight, and it mustn't come back as extra colors (Oct 27: MEI's guide cut into one file per logo)
+  art = art.filter((s) => {
+    const n = (s.ops.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    if (n.length < 2) return true;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i + 1 < n.length; i += 2) { x0 = Math.min(x0, n[i]); x1 = Math.max(x1, n[i]); y0 = Math.min(y0, n[i + 1]); y1 = Math.max(y1, n[i + 1]); }
+    return !(x1 < 0 || y1 < 0 || x0 > W || y0 > H);
+  });
   if (!art.length) return fail(why || "has no filled shapes");
   return { ok: !why, ...(why ? { why } : {}), x: 0, y: 0, w: W, h: H, shapes: art, ...(mockup ? { mockup } : {}), ...(distress.length ? { distress } : {}) };
 }
