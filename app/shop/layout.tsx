@@ -15,6 +15,7 @@ import { CreateOrderDock } from "@/components/tools/CreateOrderDock";
 import { OrderGoodsDock } from "@/components/tools/OrderGoodsTool";
 import SameArtPrompt from "@/components/SameArtPrompt";
 import ArtboardPrompt from "@/components/ArtboardPrompt";
+import StockInkSeed from "@/components/StockInkSeed";
 
 export const dynamic = "force-dynamic";
 // the shop's server actions (the Order chat reading a big PDF and making many edits) get up to 5 minutes
@@ -28,9 +29,10 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts, cheer, sanebox");
   if (!user) redirect("/login?next=/shop");
   if (!isStaff) redirect("/portal");
-  const [{ data: st }, { data: team }] = await Promise.all([
+  const [{ data: st }, { data: team }, { data: stockInks }] = await Promise.all([
     settingsQ,
     realRole === "owner" ? supabase.from("staff").select("email, name, role").order("name") : Promise.resolve({ data: [] as { email: string; name: string; role: string }[] }),
+    supabase.from("stock_inks").select("name, hex, line").eq("stocked", true).is("archived_at", null),
   ]);
   // "View as" (owner only): a staff member (their name and role) or just a role
   let role = realRole, viewAs = "", viewName = "";
@@ -54,6 +56,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const people = (team || []).map((t) => ({ email: (t.email as string).toLowerCase(), name: (t.name as string) || "", role: (t.role as string) || "" }));
   return (
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "", sanebox: (me as { sanebox?: boolean } | null)?.sanebox !== false }}>
+      <StockInkSeed rows={(stockInks || []) as { name: string; hex: string; line: string }[]} />
       <div className="app">
         <ShopNav email={email} firstName={firstName} fullName={full} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
