@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
@@ -856,9 +856,10 @@ export default function GangSheet() {
                     <button type="button" className="btn icon ghost" aria-label="Remove this art" title="Remove this art" onClick={() => { setLogos((xs) => xs.filter((x) => x.id !== lg.id)); setJobs((js) => js.map((j) => ({ ...j, logos: j.logos.filter((x) => x !== lg.id) }))); }}>×</button>
                   </div>
                   <table className="gang-vt">
-                    <thead><tr><th>Size (W × H in)</th>{lg.vers.length > 1 && <th>Qty</th>}<th>For</th><th>{lg.src && lg.colors.length ? "Knock out" : ""}</th><th /></tr></thead>
+                    <thead><tr><th>Size (W × H in)</th>{lg.vers.length > 1 && <th>Qty</th>}<th>For</th><th /></tr></thead>
                     <tbody>{lg.vers.map((v) => (
-                      <tr key={v.id}>
+                      <Fragment key={v.id}>
+                      <tr>
                         <td><span className="gang-wh">
                           <input type="number" min="0.25" step="0.05" value={r2(v.wIn)} aria-label="Width in inches" onChange={(e) => setW(lg, v, Math.max(0.25, +e.target.value || 0))} />
                           <span className="faint">×</span>
@@ -866,9 +867,16 @@ export default function GangSheet() {
                         </span></td>
                         {lg.vers.length > 1 && <td><input className="gang-q" type="number" min="1" step="1" value={v.qty} aria-label="How many" onChange={(e) => patchVer(lg.id, v.id, { qty: Math.max(1, Math.round(+e.target.value || 1)) })} /></td>}
                         <td><input type="text" value={v.label} placeholder="Youth, red…" aria-label="What it's for" onChange={(e) => patchVer(lg.id, v.id, { label: e.target.value })} /></td>
-                        <td>{lg.src && lg.colors.length > 0 && <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>}</td>
                         <td>{lg.vers.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this size" title="Remove this size" onClick={() => patchLogo(lg.id, { vers: lg.vers.filter((x) => x.id !== v.id) })}>×</button>}</td>
                       </tr>
+                      {/* the colors to knock out on their own line under the size (Oct 28, Nick: with a lot of colors they
+                          squeezed the size boxes so the numbers couldn't be read) */}
+                      {lg.src && lg.colors.length > 0 && <tr className="gang-kor"><td colSpan={lg.vers.length > 1 ? 4 : 3}><div className="gang-korow">
+                        <span className="gang-kol">Knock out</span>
+                        <span className="gang-ko">{lg.colors.map((h) => <button key={h} type="button" className={"gang-dot" + (v.knock.includes(h) ? " off" : "")} style={{ background: h }} aria-pressed={v.knock.includes(h)} title={v.knock.includes(h) ? `${h} knocked out: click to print it again` : `Knock out ${h} on these`} onClick={() => toggleKnock(lg, v, h)} />)}</span>
+                        {v.knock.length > 0 && <span className="faint">{v.knock.length} off</span>}
+                      </div></td></tr>}
+                      </Fragment>
                     ))}</tbody>
                   </table>
                   <button type="button" className="lc-link gang-add" onClick={() => addVer(lg)}>+ Add a size</button>

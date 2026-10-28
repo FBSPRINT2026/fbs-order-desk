@@ -14431,6 +14431,10 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .gang-h{display:inline-block;width:46px;font-size:14px;color:var(--ink-2)}
 .gang-q{width:58px!important}
 .gang-ko{display:flex;flex-wrap:wrap;gap:4px}
+.gang-kor td{padding:0 4px 8px}
+.gang-korow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gang-kol{font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.gang-wh input{min-width:64px}
 .gang-dot{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);padding:0;cursor:pointer;position:relative}
 .gang-dot.off::after{content:"";position:absolute;inset:-2px;border-radius:50%;background:linear-gradient(45deg,transparent 44%,var(--danger) 44% 56%,transparent 56%)}
 .gang-dot:hover{box-shadow:0 0 0 2px var(--accent-soft)}
