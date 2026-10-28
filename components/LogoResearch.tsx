@@ -48,7 +48,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
       // a logo under a brand is looked for in that brand's jobs only: its own words ("flag") are too common across the
       // client's other stores (Oct 28: "flag" pulled in 40 MEI store carts); they rank the brand's jobs instead
       const terms = (words.brand ? [words.brand] : words.own).filter((x) => x && x.length > 2).map((x) => x.replace(/[%,()*]/g, " ").trim());
-      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", d.customer_id).gt("files_total", 0).order("order_date", { ascending: false }).limit(80);
+      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", d.customer_id).gt("files_total", 0).order("order_date", { ascending: false }).limit(words.brand ? 150 : 80);
       if (terms.length) r = r.or(terms.flatMap((t) => [`nickname.ilike.%${t}%`, `search_text.ilike.%${t}%`]).join(","));
       const { data, error } = await r;
       if (!on) return;
@@ -77,7 +77,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
         if (words.brand && new RegExp(words.brand, "i").test(blob)) { score += 1; if (!why.length) why.push(`a ${words.brand} job`); }
         if (!score) continue;
         const mock = list.find((i) => i.kind === "art" && /^(pdf|ai|png|jpe?g)$/.test(i.ext));
-        out.push({ j, list, score, why, pms: pmsIn(blob), locs: locsIn(blob), dsts: score >= 3 ? dsts : [], mock });
+        out.push({ j, list, score, why, pms: pmsIn(blob), locs: locsIn(blob), dsts, mock });
       }
       out.sort((a, b) => b.score - a.score || (b.j.order_date || "").localeCompare(a.j.order_date || ""));
       setFound(out);
@@ -97,6 +97,9 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
     const g: { key: string; f: Facts; items: Item[]; onLogo?: Sew; jobs: Found[] }[] = [];
     for (const fd of found || []) for (const it of fd.dsts) {
       const f = facts[it.path]; if (!f) continue;
+      // a job only of the brand (no logo word, not the same DST) offers its DSTs only when they're this logo's shape:
+      // another size of it, most likely
+      if (fd.score < 3 && (!shape || offShape(f))) continue;
       const k = g.find((x) => sameDst(f, x.f));
       if (k) { k.items.push(it); if (!k.jobs.includes(fd)) k.jobs.push(fd); } else g.push({ key: it.path, f, items: [it], onLogo: have.find((h) => sameDst(f, h)), jobs: [fd] });
     }
