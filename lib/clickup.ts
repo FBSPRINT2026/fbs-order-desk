@@ -73,7 +73,7 @@ export type ClickUpTaskRow = {
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string;
   /** the workspace's fields that aren't kept or shown (Oct 27, Nick: McKenna's "PO RECEIVED", "we don't need to sync that column") */ hidden_fields?: string[] };
-export type ClickUpRun = { ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
+export type ClickUpRun = { /** open jobs whose boxes or fields were put right (a tick in ClickUp doesn't change a task's updated time) */ boxes?: number; ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
 
 /** ClickUp calls per token this run (ClickUp allows 100 a minute per token) */
 const calls = new Map<string, number>();
@@ -333,6 +333,34 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         cur = Math.max(cur, upd);
       }
       cursors[team.id] = cur || now;
+      // a box ticked or unticked in ClickUp doesn't change the task's "updated" time (Oct 28, Nick: AMS 43164 RALEIGH's
+      // Embroidery box was unticked in ClickUp and stayed ticked here), so the open jobs' boxes and fields are compared
+      // every run from the task list (one or two calls, no task read): any that changed are put right
+      if (!hidden && Date.now() < deadline - 10000 && used(tok) < 60) {
+        const open: CuTask[] = [];
+        for (let page = 0; page < 2; page++) {
+          const qs = new URLSearchParams({ page: String(page), subtasks: "true", include_closed: "false", order_by: "updated" });
+          const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(tok, `/team/${team.id}/task?${qs}`).catch(() => ({ tasks: [] as CuTask[], last_page: true }));
+          open.push(...(r.tasks || []));
+          if (r.last_page === true || (r.tasks || []).length < 100) break;
+        }
+        for (let i = 0; i < open.length; i += 200) {
+          const part = open.slice(i, i + 200).filter((x) => Array.isArray(x.custom_fields));
+          if (!part.length) continue;
+          const { data: rows } = await admin.from("clickup_tasks").select("id, fields, in_printavo, parent, status_type, order_id, dismissed_at, pv_number, where_text, created_at_cu").in("id", part.map((x) => x.id));
+          const have = new Map(((rows || []) as Record<string, unknown>[]).map((r) => [r.id as string, r]));
+          for (const x of part) {
+            const r = have.get(x.id); if (!r) continue;
+            const fresh = rowOf(x, team.id, [], me || myEmail, teamRow.get(team.id)?.hidden_fields || []);
+            const was = (r.fields || {}) as Record<string, string>;
+            const same = JSON.stringify(Object.entries(fresh.fields).sort()) === JSON.stringify(Object.entries(was).sort()) && fresh.in_printavo === !!r.in_printavo;
+            if (same) continue;
+            await admin.from("clickup_tasks").update({ fields: fresh.fields, field_ids: fresh.field_ids, in_printavo: fresh.in_printavo, printavo_field: fresh.printavo_field,
+              waiting: waitingOf({ parent: r.parent as string | null, status_type: String(r.status_type), in_printavo: fresh.in_printavo, order_id: r.order_id as string | null, dismissed_at: r.dismissed_at as string | null, pv_number: r.pv_number as string | null, where_text: String(r.where_text || ""), created_at_cu: r.created_at_cu as string | null }, hidden) }).eq("id", x.id);
+            out.boxes = (out.boxes || 0) + 1;
+          }
+        }
+      }
       // the workspace view: completed jobs of the last 3 years read in, 2 pages (200 jobs) a run, job info only (files
       // open from ClickUp when one is opened); open ones are the reader's above
       if (!teamRow.get(team.id)?.hidden && Date.now() < deadline - 10000) {

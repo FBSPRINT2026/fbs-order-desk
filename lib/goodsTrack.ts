@@ -76,7 +76,8 @@ async function tell(ctx: Ctx, o: { id: string; number: number; customer_id: stri
   // automated contact with customers is off (lib/customerContact.ts): the order's history and the shop email instead
   if (!AUTO_CUSTOMER_CONTACT) {
     await ctx.admin.from("order_events").insert({ order_id: o.id, kind: "goods_alert", detail: `${subject} (not sent to the customer: automatic customer contact is off). ${body}`.slice(0, 1000), actor: "tracking" });
-    if ((opts.shop || opts.customer) && SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `[Goods] ${subject}`, html: emailLayout(ctx.shop, subject, `${body}\n\nNot sent to the customer (automatic customer contact is off). Tell them yourself if needed.`, "Open order", `${siteUrl()}/shop/orders/${o.id}`) }).catch(() => false);
+    // no email to the shop either (Oct 28, Nick: "I'm getting emails from the portal… tracking needed for the goods… I
+    // thought you turned all that off"): the alert stays in the order's history only
     return;
   }
   await ctx.admin.from("messages").insert({ order_id: o.id, topic: "goods", author_type: "staff", author_email: "", author_name: ctx.shop, body });
