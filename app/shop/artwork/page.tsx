@@ -249,9 +249,13 @@ export default function ArtworkPage() {
             return (
               <div key={c.id} className="as-row">
                 <div className="as-who">
-                  <Link href={`/shop/customers/${c.id}`} className="as-name">{custLabel(c)}</Link>
-                  <div className="as-mini"><span><b>{ds.length}</b> logo{ds.length === 1 ? "" : "s"}</span>{last && <span><b>{shortDate(last)}</b> last added</span>}</div>
+                  <div className="as-box">
+                    <Link href={`/shop/customers/${c.id}`} className="as-name">{custLabel(c)}</Link>
+                    <div className="as-mini"><span><b>{ds.length}</b> logo{ds.length === 1 ? "" : "s"}</span>{last && <span><b>{shortDate(last)}</b> last added</span>}</div>
+                  </div>
                   {bs.length > 0 && <>
+                    {/* back to all of the client's logos after picking a brand (Oct 28, Nick) */}
+                    <button type="button" className={"btn sm as-all" + (brandPick[c.id] ? "" : " on")} aria-pressed={!brandPick[c.id]} onClick={() => setBrandPick({ ...brandPick, [c.id]: "" })}><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1" /><rect x="9.5" y="1.5" width="5" height="5" rx="1" /><rect x="1.5" y="9.5" width="5" height="5" rx="1" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /></svg> All artwork</button>
                     <div className="as-sec">Brands</div>
                     {bs.map((b) => { const on = brandPick[c.id] === b.id; const sw = (b.colors || []).slice(0, 2); const dropHere = drag?.c === c.id; return (
                       <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "") + (dropHere ? " drop" : "") + (over === b.id && dropHere ? " over" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}
