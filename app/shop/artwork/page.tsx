@@ -44,7 +44,8 @@ export default function ArtworkPage() {
   const [orders, setOrders] = useState<Ord[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [openOrders, setOpenOrders] = useState<Set<string>>(new Set());
-  const [hot, setHot] = useState<Set<string> | null>(null);
+  /** the logos of the active order under the mouse, on its client's shelf only */
+  const [hot, setHot] = useState<{ c: string; ids: Set<string> } | null>(null);
   const [nC, setNC] = useState(20);
   const [archived, setArchived] = useSticky("artwork.archived", false);
   const [nM, setNM] = useState(STEP);
@@ -237,8 +238,8 @@ export default function ArtworkPage() {
                   </>}
                   {act.length > 0 && <>
                     <div className="as-sec">Active orders</div>
-                    {(ordersOpen ? act : act.slice(0, 3)).map((o) => { const ids = new Set((o.groups || []).flatMap((g) => (g.imprints || []).map((im) => im.design_id || "")).filter(Boolean)); return (
-                      <Link key={o.id} href={`/shop/orders/${o.id}`} className="as-ord" onMouseEnter={() => setHot(ids)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(ids)} onBlur={() => setHot(null)}>
+                    {(ordersOpen ? act : act.slice(0, 3)).map((o) => { const ids = new Set<string>((o.groups || []).flatMap((g) => (g.imprints || []).map((im) => im.design_id || "")).filter(Boolean)); return (
+                      <Link key={o.id} href={`/shop/orders/${o.id}`} className="as-ord" onMouseEnter={() => setHot({ c: c.id, ids })} onMouseLeave={() => setHot(null)} onFocus={() => setHot({ c: c.id, ids })} onBlur={() => setHot(null)}>
                         <span className="ordno">#{o.number}</span><span className="as-ord-n">{o.nickname || "Order"}</span>
                       </Link>
                     ); })}
@@ -247,7 +248,7 @@ export default function ArtworkPage() {
                 </div>
                 <div className="as-logos">
                   {more.map((d) => { const n = used.get(d.id) || 0; return (
-                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot ? (hot.has(d.id) ? " hot" : " dim") : "")} title={`D-${d.number} ${d.name || ""}`.trim()}>
+                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "")} title={`D-${d.number} ${d.name || ""}`.trim()}>
                       <span className="as-pic">{urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
                       <span className="as-lanes">{LANE_TAGS.map(([lane, short, label]) => { const st = laneState(d, lane); return <span key={lane} className={"as-ln" + (st.ready ? " has" : "")} title={`${label}: ${st.ready ? st.note : "no file yet"}`}>{short}</span>; })}</span>
                       <span className="as-lab"><span>D-{d.number}</span>{view === "used" && n > 0 && <b>{n}×</b>}</span>
