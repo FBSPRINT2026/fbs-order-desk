@@ -116,6 +116,18 @@ export default function Digitizing() {
     ].filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");
   };
 
+  const [checking, setChecking] = useState(false);
+  async function checkNow() {
+    setChecking(true); setMsg("");
+    try {
+      const r = await fetch("/api/mail/sync", { cache: "no-store" });
+      const j = await r.json().catch(() => ({})) as { mailboxes?: { digitizer?: number | string } };
+      const n = j.mailboxes?.digitizer;
+      setMsg(typeof n === "number" ? (n ? `Added the digitizer's files on ${n} logo${n === 1 ? "" : "s"}.` : "Checked: nothing new from the digitizer.") : r.ok ? "Checked the mail." : "Couldn't check the mail right now.");
+    } catch { setMsg("Couldn't check the mail right now."); }
+    setChecking(false);
+    void load();
+  }
   async function markAsked(it: Item) {
     if (!it.d) return;
     setBusy(it.key);
@@ -151,6 +163,9 @@ export default function Digitizing() {
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
+            {/* read Amanda's mailbox now and add any digitizer files that came in (Oct 28, Nick: "add a check now button…
+                if it comes in, you just check") */}
+            <button type="button" className="btn sm" disabled={checking} title="Read the mail now and add the digitizer's files that came in" onClick={() => void checkNow()}>{checking ? "Checking the mail…" : "Check now"}</button>
             <div className="chips" role="tablist">
               {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved or sewn before"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
                 <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
