@@ -107,8 +107,14 @@ function factsOf(sb: ReturnType<typeof createClient>, path: string): Promise<Fac
     const buf = await data.arrayBuffer();
     if (extOf(path) === "dst") { const { readDst } = await import("@/lib/dst"); const i = readDst(buf); return { stitches: i.stitches, wIn: i.wIn, hIn: i.hIn, colors: i.colors }; }
     const [{ pdfText }, { parseWorksheet }] = await Promise.all([import("@/lib/printavoArt"), import("@/lib/worksheet")]);
-    const w = parseWorksheet(await pdfText(buf, 3));
-    return w ? { stitches: w.stitches, wIn: w.wIn, hIn: w.hIn, colors: w.colors } : null;
+    const t = await pdfText(buf, 3), w = parseWorksheet(t);
+    if (w) return { stitches: w.stitches, wIn: w.wIn, hIn: w.hIn, colors: w.colors };
+    // other digitizing programs' sheets (Oct 28, Nick on #34724: Hatch's "Design Worksheet… Color Sequence" goes with
+    // its DST): a sheet with a stitch count and a size
+    const n = (re: RegExp) => +(re.exec(t.replace(/\s+/g, " "))?.[1] || "0").replace(/,/g, "");
+    const st = n(/Stitches\s*:?\s*([\d,]+)/i);
+    if (st && (/worksheet|color sequence|stop sequence|digitiz|embroidery/i.test(t))) return { stitches: st, wIn: n(/Width\s*:?\s*([\d.]+)\s*(?:in|")/i), hIn: n(/Height\s*:?\s*([\d.]+)\s*(?:in|")/i), colors: n(/Colors\s*:?\s*(\d+)/i) || 1 };
+    return null;
   })().catch(() => null));
   return FACTS.get(path)!;
 }
@@ -141,6 +147,9 @@ function arrange(list: Item[], facts: Record<string, Facts | null | undefined>):
     const m = sheets.find((x) => { const w = facts[x.path]!; return !taken.has(x.path) && ((f.stitches && Math.abs(w.stitches - f.stitches) / f.stitches <= 0.03) || (Math.abs(w.wIn - f.wIn) < 0.06 && Math.abs(w.hIn - f.hIn) < 0.06)); });
     if (m) { d.sheet = m.path; taken.add(m.path); }
   }
+  // one DST and one sewing sheet left on the job: they go together even when the numbers don't line up
+  const lone = out.filter((i) => i.kind === "sew" && !i.sheet), left = sheets.filter((x) => !taken.has(x.path));
+  if (lone.length === 1 && left.length === 1) { lone[0].sheet = left[0].path; taken.add(left[0].path); }
   return out.filter((i) => !taken.has(i.path)).map((i) => (i.kind === "art" && i.ext === "pdf" && facts[i.path] ? { ...i, kind: "sheet" as const } : i));
 }
 function DstInfo({ sb, path }: { sb: ReturnType<typeof createClient>; path: string }) {
