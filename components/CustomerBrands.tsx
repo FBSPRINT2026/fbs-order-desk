@@ -21,7 +21,7 @@ const colorsText = (cs: BrandColor[]) => cs.map((c) => [c.name, c.pms || "", c.h
 const parseColors = (t: string): BrandColor[] => t.split("\n").map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[0]).map(([name, pms, hex, thread]) => ({ name, ...(pms ? { pms } : {}), hex: /^#?[0-9a-f]{6}$/i.test(hex || "") ? (hex.startsWith("#") ? hex : "#" + hex) : "#888888", ...(thread ? { thread } : {}) }));
 
 /** a DST renamed for the Tajima: the file name and its LA header both say D{number}E{n} */
-async function tajimaFile(f: File, code: string): Promise<File> {
+export async function tajimaFile(f: File, code: string): Promise<File> {
   const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toUpperCase();
   const buf = new Uint8Array(await f.arrayBuffer());
   if (ext === ".DST" && String.fromCharCode(buf[0], buf[1], buf[2]) === "LA:") buf.set(new TextEncoder().encode(code.padEnd(16, " ").slice(0, 16)), 3);

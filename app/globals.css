@@ -15427,3 +15427,28 @@ html body .as .as-all.on{background:var(--accent-soft);color:var(--accent);borde
 .md-who{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:1px;background:var(--surface)}
 .md-who button{border:0;background:none;font-size:11px;font-weight:600;line-height:18px;padding:0 8px;border-radius:999px;color:var(--ink-3);cursor:pointer}
 .md-who button.on{background:var(--accent-soft);color:var(--accent)}
+
+/* Bring in art (app/shop/artwork/bring-in): a client's Printavo jobs with every file, to tick and bring in */
+.bi-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bi-brand{display:flex;align-items:center;gap:8px;font-size:13px}
+.bi-brand select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;background:var(--surface)}
+.bi-log{margin-bottom:12px}
+.bi-log .panel-b{font-size:13px;line-height:1.7}
+.bi-job{margin-bottom:12px}
+.bi-job h2 .ordno{color:var(--accent);margin-right:4px}
+.bi-files{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.bi-f{width:190px;display:flex;flex-direction:column;gap:5px;border:1px solid var(--line);border-radius:var(--r);padding:6px;background:var(--surface);color:var(--ink)}
+.bi-f.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.bi-f.had{border-style:dashed}
+.bi-f.other{opacity:.7;text-decoration:none}
+.bi-top{display:flex;flex-direction:column;gap:5px;cursor:pointer}
+.bi-pic{height:130px;border-radius:6px;background:#fff;border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
+.bi-pic img{max-width:100%;max-height:100%;object-fit:contain}
+.bi-ext{font-size:13px;font-weight:700;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;background:var(--surface-2)}
+.bi-ext.sm{font-size:10.5px;font-weight:600;color:var(--ink-3)}
+.bi-n{font-size:12.5px;display:flex;align-items:center;gap:6px;word-break:break-all;line-height:1.3}
+.bi-f .faint{font-size:12px}
+.bi-had{font-size:12px;color:var(--ok)}
+.bi-f select,.bi-f input[type=text]{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;width:100%;background:var(--surface)}
+/* a logo drawn in one ink (ShirtView) fills its shelf tile, like the order page's (Oct 28: ShipStation / Terrible Toddler showed in half the tile) */
+html body .as .as-pic .lv.main{position:absolute;inset:0;width:100%;height:100%;border-radius:0;border:0;display:block}
