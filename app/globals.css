@@ -15600,4 +15600,7 @@ a.dgz-chip:hover{border-color:var(--accent);color:var(--accent)}
 .dgz-ask summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--ink-3);flex-wrap:wrap}
 .dgz-chgnote{font-size:13px;margin:8px 0 0}
 @media (max-width:900px){.dgz-grid{grid-template-columns:minmax(0,1fr)}.dgz-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.dgz-mail{border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--ink)}
+.dgz-mail p{margin:0}
+.dgz-mail-h{font-size:12px;color:var(--ink-3)}
 

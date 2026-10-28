@@ -200,7 +200,7 @@ export default function Digitizing() {
   );
 }
 
-const CHANGE_KINDS = ["Size", "Stitch count", "Small text", "Thread colors", "Underlay / pull", "Shape"];
+const CHG_OUTRO = "Please send back the updated DST, EMB and worksheet. Thank you!";
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
@@ -218,20 +218,18 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   }
   const [how, setHow] = useState<string | null>(null), [swBusy, setSwBusy] = useState(false);
   // Send back for changes (Oct 28, Nick): what needs to change, written up as Amanda's reply on their last email
-  const [chg, setChg] = useState<string | null>(null), [chgKinds, setChgKinds] = useState<string[]>([]), [chgNote, setChgNote] = useState(""), [chgBusy, setChgBusy] = useState(false);
-  const draftChanges = (kinds = chgKinds, note = chgNote) => {
-    const lines = note.split(/\n+|(?<=\.)\s+(?=[A-Z])/).map((x) => x.trim()).filter(Boolean);
-    const pts = [...lines, ...kinds.filter((k) => !lines.some((l) => l.toLowerCase().includes(k.toLowerCase().split(" ")[0]))).map((k) => `${k}: please take another look.`)];
-    return [`Hi team, thanks for sending this over. On the ${it.im.location || "logo"}${it.d ? ` (D-${it.d.number})` : ""} for FBS #${it.o.number} we need a couple of changes:`, ...pts.map((x) => `• ${x}`), "", "Please send back the updated DST, EMB and worksheet. Thank you!"].join("\n");
-  };
+  const [chg, setChg] = useState<string | null>(null), [chgNote, setChgNote] = useState(""), [chgBusy, setChgBusy] = useState(false);
+  const chgIntro = `Hi team, thanks for sending this over. On the ${it.im.location || "logo"}${it.d ? ` (D-${it.d.number}${it.d.name ? ` ${it.d.name}` : ""})` : ""} for FBS #${it.o.number}, we need the following changes:`;
+  const draftChanges = () => "";
   async function sendChanges() {
-    if (!it.d || chg === null) return;
+    if (!it.d || chg === null || !chgNote.trim()) return;
     setChgBusy(true);
-    const r = await fetch("/api/digitizer/changes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ designId: it.d.id, body: chg, changes: [chgKinds.join(", "), chgNote.trim()].filter(Boolean).join(": ") }) });
+    const body = [chgIntro, "", chgNote.trim(), "", CHG_OUTRO].join("\n");
+    const r = await fetch("/api/digitizer/changes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ designId: it.d.id, body, changes: chgNote.trim() }) });
     const j = await r.json().catch(() => ({})) as { error?: string };
     setChgBusy(false);
     if (!r.ok) { onSew(j.error || "Couldn't send it."); return; }
-    setChg(null); setChgKinds([]); setChgNote("");
+    setChg(null); setChgNote("");
     onSew(`Sent back to ${DIGITIZER.name.split(" ")[0]} for changes. Their fixed file comes in here by itself.`);
   }
   // the steps it goes through, with when each happened
@@ -300,15 +298,19 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   {f.sheet && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet</a>}
                 </div>
                 {chg !== null && <div className="dgz-chg">
+                  {/* only what needs to change is typed; the thanks before it and the ask after it are always the same
+                      (Oct 28, Nick: "just put what we need to change… the middle part would only be changeable") */}
                   <div className="imp-l">What needs to change</div>
-                  <div className="chips">{CHANGE_KINDS.map((k) => <button key={k} type="button" className={"chip" + (chgKinds.includes(k) ? " on" : "")} onClick={() => { const on = chgKinds.includes(k); const next = on ? chgKinds.filter((x) => x !== k) : [...chgKinds, k]; setChgKinds(next); setChg(draftChanges(next, chgNote)); }}>{k}</button>)}</div>
-                  <textarea rows={3} placeholder={`Make it 3" wide, not ${f.wIn}". The small letters are too thin to sew clean.`} value={chgNote} onChange={(e) => { setChgNote(e.target.value); setChg(draftChanges(chgKinds, e.target.value)); }} />
-                  <div className="imp-l">The reply Amanda sends, on {DIGITIZER.name.split(" ")[0]}&apos;s last email (edit it if you like)</div>
-                  <textarea rows={7} value={chg} onChange={(e) => setChg(e.target.value)} />
+                  <div className="dgz-mail">
+                    <div className="dgz-mail-h">To {DIGITIZER.name.split(" ")[0]}, as a reply on their last email, from Amanda&apos;s mailbox</div>
+                    <p>{chgIntro}</p>
+                    <textarea rows={4} autoFocus placeholder={`Make it 3" wide, not ${f.wIn}".\nThe small letters are too thin to sew clean.`} value={chgNote} onChange={(e) => setChgNote(e.target.value)} />
+                    <p>{CHG_OUTRO}</p>
+                  </div>
                   <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                     <span className="faint" style={{ fontSize: 12 }}>Their file goes with it for reference. Nothing is sent until Send.</span>
                     <button type="button" className="btn" onClick={() => setChg(null)}>Cancel</button>
-                    <button type="button" className="btn primary" disabled={chgBusy || !chgNote.trim() && !chgKinds.length} onClick={() => void sendChanges()}>{chgBusy ? "Sending…" : "Send"}</button>
+                    <button type="button" className="btn primary" disabled={chgBusy || !chgNote.trim()} onClick={() => void sendChanges()}>{chgBusy ? "Sending…" : "Send"}</button>
                   </div>
                 </div>}
               </div>}
