@@ -1,3 +1,4 @@
+import { fillFromLogo, logosOnFile } from "@/lib/ai/logosOnFile";
 import "server-only";
 import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
@@ -253,7 +254,9 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
   const listing: string[] = [], confirms: string[] = [];
-  let budget = 18 * 1024 * 1024;
+  // a customer's pre-production sheet full of photos runs big (Oct 27: Cedar's SSG SO73417 PDF is 18.6 MB): up to 22 MB
+  // is read (the API takes 32 MB with the base64); one too big still has its words read
+  let budget = 22 * 1024 * 1024;
   for (const [i, a] of atts.slice(0, 12).entries()) {
     const fromLink = (a as { from_link?: string; source?: string }).from_link, prev = (a as { source?: string }).source === "canva-preview";
     const byName = kindByName(a.name);
@@ -262,7 +265,14 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
     const pic = isPicture(a), pdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
     const text = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(a.name) || /spreadsheetml|wordprocessingml|^text\//i.test(a.type);
     if (!pic && !pdf && !text) { listing.push(`${tag} (${a.type || "file"}, can't be opened here; judge it by its name)`); continue; }
-    if ((pic && (a.size > 3.7 * 1024 * 1024 || images.length >= 8)) || (pdf && a.size > 15 * 1024 * 1024) || a.size > budget) { listing.push(`${tag} (too big to look at here)`); continue; }
+    if ((pic && (a.size > 3.7 * 1024 * 1024 || images.length >= 8)) || (pdf && a.size > 22 * 1024 * 1024) || a.size > budget) {
+      if (pdf && a.size < 60 * 1024 * 1024) {
+        const { data: big } = await admin.storage.from("proofs").download(a.path).catch(() => ({ data: null }));
+        const tx = big ? await pdfTextServer(new Uint8Array(await big.arrayBuffer())).catch(() => "") : "";
+        if (tx.trim()) { listing.push(`${tag} (too big to look at here; its words, read by code):\n"""\n${tx.slice(0, 6000)}\n"""`); continue; }
+      }
+      listing.push(`${tag} (too big to look at here)`); continue;
+    }
     const { data } = await admin.storage.from("proofs").download(a.path);
     if (!data) { listing.push(`${tag} (couldn't be opened)`); continue; }
     const buf = Buffer.from(await data.arrayBuffer());
@@ -349,6 +359,8 @@ function tool(finishingIds: string[]) {
             width_in: { type: ["number", "null"], description: "Width of the print in inches, judged from the customer's mockup against the garment (see the sizing note). Null when there is no mockup showing it." },
             drop_in: { type: ["number", "null"], description: "Only when the customer states how far below the collar the print goes; otherwise null (we use our standard placement)." },
             supplied_transfers: { type: ["object", "null"], description: "Rule 4f: the customer bought their own heat transfers and sends them to us to press: who made them and their order number. Null otherwise.", properties: { by: { type: "string", description: "Who made the transfers (\"DTF Dallas\")" }, order: { type: "string", description: "Their transfer order number (\"182715\")" } } },
+            logo_on_file: { type: ["string", "null"], description: "Rule 4g: the D-number of THEIR LOGO ON FILE printed here (\"D-10251\") when the files show one of their logos on file (same name, same look). Then art_file can be null. Null when it's new art" },
+            thread_changes: { type: ["array", "null"], description: "Rule 4g: a color change: the garment colors of THIS group whose logo sews (or prints) in a different thread or ink than this print's inks, as the files show it or the brand's standards say (a logo white on the navy and black polos, blue on the rest). Null or empty when every garment gets the same", items: { type: "object", properties: { garment_colors: { type: "array", items: { type: "string" }, description: "Garment colors exactly as in garments" }, inks: { type: "string", description: "The thread or ink on those garments, full name (\"Madeira 1801 Super White\")" } }, required: ["garment_colors", "inks"] } },
             same_as_job: { type: ["integer", "null"], description: "A NEW order that says this print is done like a past job ('same process as order 85254', 'back same as last time'): the J number of that past job. Its print at the same location gives the colors, inks and size; the art still comes from art_file. Null otherwise." },
           } } },
           mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
@@ -407,7 +419,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-27e";
+export const READER_REV = "2026-10-27f";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -461,6 +473,8 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     loadMemories(admin, (a.customer_id as string) || null).catch(() => []),
   ]);
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
+  // their logos on file and brand standards (rule 4g)
+  const onFile = a.customer_id ? await logosOnFile(admin, a.customer_id as string).catch(() => null) : null;
   const memText = [memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
@@ -488,6 +502,12 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   ].filter(Boolean).join("\n");
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts, convo.map((e) => e.id as string)).catch(() => new Set<string>());
   const { images, documents, listing, confirms } = await readFiles(admin, atts, sigs);
+  // the brands' logos on file as small pictures, to match a logo in their photos by how it looks
+  for (const pic of onFile?.pictures || []) {
+    if (images.length >= 8) break;
+    const { data } = await admin.storage.from("proofs").download(pic.path).catch(() => ({ data: null }));
+    if (data && data.size < 1.5 * 1024 * 1024) images.push({ media_type: /\.png$/i.test(pic.path) ? "image/png" : "image/jpeg", data: Buffer.from(await data.arrayBuffer()).toString("base64"), label: pic.label });
+  }
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
   const fin = (settings.finishing || []).map((f) => `${f.id} = ${f.name}`).join("; ");
@@ -507,6 +527,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 4e. A decoration order sheet (Oct 26, Nick on Effing Gear's hat spreadsheet: "it's not even getting close… I want you to ask and not just make assumptions… what are the columns?"): a spreadsheet with ONE ROW PER LINE and columns like Finished hat, Supplier, Supplier order, Blank style, Blank color, Size, Qty, Method, Artwork, Thread instruction, Placement. Read its header row first and use each column for what it says: the blank style + blank color are the garment (style = the brand and style number as written, "Richardson 115", "Flexfit 110M"; color = the blank color exactly, two-tone colors like "Black/Neon Pink" kept whole), Qty is the quantity, Size is the size (hats: "M/L", "S/M", "Adjustable", "One Size", "OSFA" are one-size: sizes {"OS": qty}, and a fitted size like M/L goes in the line's note as "Size M/L"). Every row is its own garment line: never merge two rows, never drop one; the lines must add up to the sheet's own total ("154 hats"). Group by what's printed: rows with the same artwork, method and placement are one group; a different artwork or placement is another group. A thread or ink instruction that changes per row ("Match Neon Pink", "White", "Match Teal") is that row's thread: when the rows of one group need different threads, split the group by thread (name the group by the artwork and thread, e.g. "Effing Bird · Neon Pink") and put the thread in the print's inks. Supplier and supplier order columns (S&S #77242977, OpenTip #6479673) are where the blanks come from: put them in goods (supplier, note with the order numbers), not in the garments. When a column's meaning isn't clear, or a value doesn't fit (a size you don't know, a quantity that doesn't add up, a placement you can't place, a thread that's ambiguous), ask in check_with_staff with your best guess: don't assume.
 4d. A product sheet (Oct 26, Nick on Cedar Promo's Embark sheets: "he is expecting us to pull sizing, make a mock-up, and then use that to create the art also… that is your production file"): ONE page (or a few) with several products, each a title in caps (the product: brand, product name and color, e.g. "RHONE LONG GAME JACKET PURE BLACK"), a photo of the product (their mockup), the logo drawn beside it over a width line ("3” W" = 3" wide), the method and location ("SCREEN PRINT ON LEFT ARM", "EMBROIDERY ON LEFT ARM"), the ink or thread ("PMS COOL GRAY 4C", "TO MATCH THE BUTTON SNAPS OF THE JACKET": the thread matches that part, so name the color that part is in the photo with the instruction, e.g. inks "Gold (match the snaps)", never a guess like "Tan"), the color, and the sizes with a TOTAL. Each product is its own group: the product title is the garment (brand = the brand in it, style = the product name as written, color = the color line), the sizes from its own list (SM = S, MD = M, LG = L; check them against its TOTAL), one print with the method, location, width ("3\" wide") and inks as written. The logo on these sheets is often drawn in black or on a panel just to show it: the inks are only what the spec names ("PMS COOL GRAY 4C" alone is 1 color: colors 1, inks "PMS Cool Gray 4 C"); never add the color the logo happens to be drawn in. The sheet is the art: art_file = the sheet's File number, mockup_files = [the sheet], file role setup_sheet, and cut_from = where that product's photo and logo are on the page. These are retail brand garments (Rhone, Peter Millar, Little Sleepies…), not in our catalog: the customer supplies them unless the email says we buy them; ask if unsure.
 4f. CUSTOMER SUPPLIED TRANSFERS (Oct 27, Nick on Cedar's This and That Hospitality: "customers ordering transfers, there's nothing we have to do except see the mockup"): when the customer ordered their own heat transfers (DTF transfers from DTF Dallas or another maker, "transfer submitted for pickup", a transfer order number) and we only press them, make ONE print per group: method dtf, location empty, supplied_transfers = who made them and their order number, and art_file = their mockup showing where the transfers go (it's the placement reference). Don't make a print per location and don't ask about sizes or colors.
+4g. THEIR LOGOS ON FILE AND BRAND STANDARDS (Oct 27, Nick on Cedar Promos' ShipStation SO#73417: "I see the customer… I see their logo on file, I see he has polos… I know the brand standards, it's navy on one and white on another"): when THEIR LOGOS ON FILE are listed and the files, the subject or the job name show one of them (the same name, the same look in their photos), that's the art: set logo_on_file to its D-number and leave art_file null; the logo's sew file gives the size and stitches, so leave size empty. Decoration: "DECORATION: EMBROIDERY" on a sheet is method embroidery; a page or garment marked with another spot ("DECORATION: LEFT ARM/SLEEVE") prints there instead (a quarter-zip or long sleeve's left arm is Left Sleeve). Groups go by WHERE the logo goes: every garment with the logo at the same spot is ONE group, even when the thread differs by garment color; a different spot (the sleeve) is its own group. Threads: look at each garment's photo: the logo's color there is its thread; else the brand's standards (light goods get the light thread, dark goods the dark one: navy, black and charcoal are dark). The print's inks are the thread most of the group gets; the garments whose logo is another thread go in thread_changes with that thread's full name. When you can't tell which thread a garment gets (the photo is too small or unclear and the brand has no rule for it), check with staff (rule 11): one question, the brand's threads as the choices.
 13. WHERE THINGS GO (Oct 27, Nick: "you're putting the customer notes in the group description… and way too much information in the customer notes. Remember, that's what they're going to see"): how to decorate it (the logo's size and placement, "match the thread to the bag straps", "same size and placement as the flag from the Invitational job") goes on the print it's about (its size, inks and notes); when there are no prints yet, in notes (for staff). The supplier, tracking, SKU, reference and order numbers go in goods or notes. A group's description is only how it's packed or labeled. customer_notes is what the customer reads on their quote: one or two short lines at most, only a request of theirs nothing else on the order shows, and usually empty.
 5. Garments that share the same prints are one group, with the mockup files for them. Instructions for a whole group (rolled and rubber-banded, tagged with UPCs, boxed by location) go in that group's description.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
@@ -523,7 +544,7 @@ When staff tell you something about this email (which past job it is, that it's 
   const prompt = `${custText}
 
 ${past.length ? `This customer's past jobs (newest first):\n${jobsText(past)}` : "No past jobs on file for this customer."}
-
+${onFile?.text ? `\n${onFile.text}\n` : ""}
 Attached files:
 ${listing.join("\n") || "(none)"}
 
@@ -793,6 +814,13 @@ ${staffSays}` : ""}`;
       const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
       (pg.prints || []).slice(0, 10).forEach((pr, k) => {
         const im = g.imprints[k]; if (!im) return;
+        // their logo on file (rule 4g): the print is filled from the logo itself, no art to upload
+        const lf = String((pr as { logo_on_file?: string | null }).logo_on_file || "").match(/(\d{4,6})/)?.[1];
+        const lfd = lf ? onFile?.designs.find((x) => String(x.number) === lf) : undefined;
+        if (lfd && onFile) {
+          fillFromLogo(im, { design: lfd, brands: onFile.brands, lines: g.lines, changes: (pr as { thread_changes?: { garment_colors?: string[]; inks?: string }[] | null }).thread_changes });
+          return;
+        }
         const f = fileAt(pr.art_file); if (f) art[im.id] = f;
         // embroidery: a stitch count they gave (a digitizer's sheet, the email) is kept as stated
         const stc = Math.round(+((pr as { stitches?: number | null }).stitches || 0));
