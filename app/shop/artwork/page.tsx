@@ -334,7 +334,7 @@ export default function ArtworkPage() {
                   <div className="dc-b"><b>{mockName(m)}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""} · {fmtDateLong(m.created_at.slice(0, 10))}</span>
                     {g.length > 1 || mockColor(m) ? <ul className="mk-colors-list">{g.map((x) => <li key={x.id}><a href={mUrls[x.id]?.full} target="_blank" rel="noreferrer" title="Open this color's picture">{mockColor(x) || "Picture"}</a></li>)}</ul> : null}
                     {/* edit it again in the Mockup Creator, like an order's (Oct 22, Nick); an order's mockup is edited from its order */}
-                    {m.order_id ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}`}>Edit on the order</a>
+                    {m.order_id ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}${/ — Logo · /.test(String(m.title || "")) ? "&logo=1" : ""}`}>Edit on the order</a>
                       : m.set ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div>
                 </div>
               ); })}

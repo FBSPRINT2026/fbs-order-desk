@@ -1,4 +1,5 @@
 "use client";
+import { mockupHref } from "@/lib/mockupFresh";
 import { paintPrint } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -114,7 +115,7 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="jv-h-a">
           <Link className="btn sm" href={`/shop/orders/${id}?tab=prod`}>‹ Back to the order</Link>
-          <Link className="btn sm" href={`/shop/artwork/mockup?order=${id}${group ? `&group=${group.id}` : ""}`}>Open in Mockup Creator</Link>
+          <Link className="btn sm" href={group ? mockupHref(id, group) : `/shop/artwork/mockup?order=${id}`}>Open in Mockup Creator</Link>
         </div>
       </header>
 

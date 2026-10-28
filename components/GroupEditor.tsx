@@ -22,8 +22,11 @@ import { mainSize, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
   fetch("/api/settings/finishing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...f, wholesale }) }).then((r) => r.ok).catch(() => false);
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { digitizeStamp, digitizeState, digitizingHref, type DgzSewout } from "@/lib/digitizeStatus";
 
 type Props = {
+  /** the order (staff): its prints' digitizing stamps open them on the Digitizing page */ orderId?: string;
+  /** the order's sew-outs, photos signed (the stamps: Waiting on customer, Sew-out approved) */ sewouts?: (DgzSewout & { url?: string })[];
   /** where finishing is picked: in this group (default), or once for the whole order below the groups */
   finishingAt?: "group" | "order";
   /** the customer's neck label sets (Private Label prints one) and who they are */
@@ -86,7 +89,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
+export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts }: Props) {
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -839,7 +842,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1406,7 +1409,7 @@ function ChangeTile({ d, url, color, hex, swap, sym, own }: { d: Group["imprints
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym }: { /** color change tiles show the symbol */ sym?: boolean; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout }: { /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string>; url?: string; to?: string }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
@@ -1430,15 +1433,28 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   const vis = !!d.visualOnly && !d.confirmed;
   // embroidery not digitized yet: the same stamp as a visual mockup, in the same place (Oct 27, Nick: "exactly the same
   // font and color and size and everything")
-  const dgz = !vis && d.method === "embroidery" && !d.digitized && !d.emb?.file;
-  const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false);
+  // where the print is in digitizing, the same answer as the Digitizing page (lib/digitizeStatus.ts; Oct 28, Nick): grayed
+  // out until the digitizer's files come back, then a stamp over the details that are now real; clicking it opens the
+  // print on the Digitizing page, and an approved one shows the sew-out photo
+  const dgz = !vis && d.method === "embroidery" ? digitizeStamp(digitizeState(d, cur, sewout)) : null;
+  const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false), [sewPic, setSewPic] = useState(false);
+  const dgzGo = () => { if (dgz?.tone === "ok" && sewout?.url) setSewPic(true); else if (orderId) window.location.href = digitizingHref(orderId, d.id); };
   return (
-    <div className={"pr" + ((vis && !opened) || dgz ? " pr-vis" : "")}>
+    <div className={"pr" + ((vis && !opened) || dgz?.gray ? " pr-vis" : "")}>
       {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span><b>Visual mockup</b><small>Production confirming details on print run</small></span></button>}
       {/* embroidery not digitized yet (Oct 27, Nick: "a stamp on embroidery orders that say needs digitizing… the price
           right now is not firm… until we email Volikes, get it back, sew it out, get it approved"): the stitches, size
           and price are estimates. Clicking it opens the Digitizer */}
-      {dgz && <div className="pr-vis-stamp pr-dgz" title="Send it from Ask AI → Send for digitizing"><span><b>Needs digitizing</b><small>Stitches and price confirmed after sew-out</small></span></div>}
+      {dgz?.gray && (orderId
+        ? <button type="button" className="pr-vis-stamp pr-dgz" title="Open it on the Digitizing page" onClick={dgzGo}><span><b>{dgz.title}</b><small>{dgz.sub}</small></span></button>
+        : <div className="pr-vis-stamp pr-dgz"><span><b>{dgz.title}</b><small>{dgz.sub}</small></span></div>)}
+      {sewPic && sewout?.url && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label="The sew-out" onClick={() => setSewPic(false)} onKeyDown={(e) => { if (e.key === "Escape") setSewPic(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
+        <figure onClick={(e) => e.stopPropagation()}>
+          <img src={sewout.url} alt="The sew-out" />
+          <figcaption><span><b>Sew-out approved</b>{sewout.decided_at ? ` · ${new Date(sewout.decided_at).toLocaleDateString()}` : ""}{d.location ? ` · ${d.location}` : ""}</span>
+            <span className="row" style={{ gap: 6 }}>{orderId && <a className="btn sm" href={digitizingHref(orderId, d.id)}>Open in Digitizing</a>}<button type="button" className="btn sm" onClick={() => setSewPic(false)}>Close</button></span></figcaption>
+        </figure>
+      </div>}
       {ask && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Edit the print details" onClick={() => setAsk(false)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
@@ -1478,12 +1494,15 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           <span className="pr-how">{METHODS[d.method]}</span>
           {each && <span className="pr-each" title={listed ? "The price list's price for this print. The garment prices were typed, so it's not charged separately." : undefined}>{listed ? "list" : "each"} <b>{each}</b></span>}
         </div>
+        {dgz && !dgz.gray && (orderId || (dgz.tone === "ok" && sewout?.url)
+          ? <button type="button" className={"dgz-st dgz-st-" + dgz.tone} onClick={dgzGo} title={dgz.tone === "ok" && sewout?.url ? "See the sew-out" : "Open it on the Digitizing page"}><b>{dgz.title}</b><small>{dgz.tone === "ok" && !sewout?.url ? "On file" : dgz.sub}</small></button>
+          : <span className={"dgz-st dgz-st-" + dgz.tone}><b>{dgz.title}</b><small>{dgz.sub}</small></span>)}
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
           {size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
-          {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
+          {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {!(d.visualOnly && !d.confirmed) && inksLine}

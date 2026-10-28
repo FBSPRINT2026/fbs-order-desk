@@ -48,6 +48,7 @@ import { PMS_COATED } from "@/lib/pms";
 import { closestThread, isThreadName, threadLabel } from "@/lib/embroidery";
 import { loadThreadStock } from "@/lib/threadStock";
 import { stitchLook } from "@/lib/stitchLook";
+import { mockupArtStamp } from "@/lib/mockupFresh";
 import EmbroideryPanel from "@/components/EmbroideryPanel";
 import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -2840,6 +2841,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (!up.error) im.shownArt = path;
       } catch { /* the tile falls back to the logo itself */ }
     }));
+    // which builder made it (Edit mockup opens that one again) and what the pictures were drawn from (drawn again by
+    // themselves when it changes: lib/mockupFresh.ts)
+    if (mockupSaved) {
+      if (logoOnly) g.mockupKind = "logo"; else delete g.mockupKind;
+      g.mockupArt = mockupArtStamp(g, designs);
+    }
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
     loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));

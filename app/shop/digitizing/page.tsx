@@ -1,7 +1,8 @@
 "use client";
 import LogoThumb from "@/components/LogoThumb";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { digitizeState } from "@/lib/digitizeStatus";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole } from "@/components/RoleContext";
@@ -68,11 +69,10 @@ export default function Digitizing() {
     const ids = [...new Set(os.flatMap((o) => (o.groups || []).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => im.design_id!))))];
     const { data: ds } = ids.length ? await sb.from("designs").select("*").in("id", ids) : { data: [] };
     const map = Object.fromEntries(((ds || []) as Design[]).map((d) => [d.id, d]));
-    setDesigns(map); setOrders(os);
-    // the sew-outs on these orders, newest first, with their photos
+    // the sew-outs on these orders, newest first, with their photos (read before the list shows, so each print's state is right)
     const { data: sw } = os.length ? await sb.from("sewouts").select("*").in("order_id", os.map((o) => o.id)).order("version", { ascending: false }) : { data: [] };
     const list = (sw || []) as Sw[];
-    setSws(list);
+    setSws(list); setDesigns(map); setOrders(os);
     if (list.length) { const { data: su } = await sb.storage.from("proofs").createSignedUrls(list.map((x) => x.photo_path), 3600); setSwUrls(Object.fromEntries(list.map((x, i) => [x.id, su?.[i]?.signedUrl || ""]))); }
     void previewUrls(sb, Object.values(map)).then(setUrls).catch(() => null);
   }
@@ -80,19 +80,17 @@ export default function Digitizing() {
 
   const items: Item[] = useMemo(() => (orders || []).flatMap((o) => (o.groups || []).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery").map((im) => ({ key: `${o.id}:${im.id}`, o, g, im, d: im.design_id ? designs[im.design_id] || null : null })))), [orders, designs]);
   const swOf = (it: Item) => sws.filter((x) => x.order_id === it.o.id && x.imprint_id === it.im.id);
-  const stateOf = (it: Item): State => {
-    const live = swOf(it).find((x) => !x.archived_at);
-    if (live) return live.status === "approved" ? "ok" : live.status === "pending" ? "sent" : "done";
-    const e = embOf(it.d);
-    // a repeat: the file has sewn before (marked Already digitized, or it ran on an earlier job), so no new sew-out
-    // (Oct 28, Nick: "#40195… that's a repeat. We don't need to resew it out")
-    const file = (it.im.emb?.file || e.files?.[0]) as (EmbFile & { lastUsed?: unknown }) | undefined;
-    if (file && (it.im.digitized || file.lastUsed || (e.files || []).some((x) => (x as { lastUsed?: unknown }).lastUsed))) return "ok";
-    // sent back for changes: Requested again until the fixed file comes in
-    const lastAt = [...(e.files || []).map((x) => x.at || ""), (it.im.emb?.file as EmbFile | undefined)?.at || ""].sort().pop() || "";
-    if (e.request?.changes && e.request.at > lastAt) return "asked";
-    return e.files?.length || it.im.emb?.file ? "done" : e.request ? "asked" : "need";
-  };
+  // the one answer for where a print is (lib/digitizeStatus.ts): the order's print stamps use the same
+  const stateOf = (it: Item): State => digitizeState(it.im, it.d, swOf(it).find((x) => !x.archived_at)).state;
+  // opened from an order's print stamp (?open=<order>:<print>): that print's tab, opened and scrolled to
+  const openParam = useRef(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("open") || "" : "");
+  useEffect(() => {
+    const k = openParam.current; if (!k || !orders) return;
+    const it = items.find((x) => x.key === k); if (!it) return;
+    openParam.current = "";
+    setFilter(stateOf(it)); setOpen(k);
+    setTimeout(() => document.querySelector(`[data-dgz="${CSS.escape(k)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
+  }, [orders, items, sws]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = items.filter((it) => filter === "all" || stateOf(it) === filter);
   const count = (f: Filter) => items.filter((it) => f === "all" || stateOf(it) === f).length;
 
@@ -259,7 +257,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   }, [open, f, it.im.inks]);
   return (
     <>
-      <tr className={open ? "on" : ""} onClick={toggle} style={{ cursor: "pointer" }}>
+      <tr className={open ? "on" : ""} data-dgz={it.key} onClick={toggle} style={{ cursor: "pointer" }}>
         <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><LogoThumb d={it.d} url={pic} shirt={(it.g.lines || [])[0]?.color} inkMap={it.im.inkMap?.map} /></span> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>

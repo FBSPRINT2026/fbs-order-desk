@@ -34,7 +34,12 @@
   change. If they don't already share one piece, make one and point every place at it, so it can't drift again:
   - a logo's small picture anywhere: `components/LogoThumb.tsx` (never a bare `<img>` of a logo's preview);
   - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
-    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`).
+    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`);
+  - a group's saved mockup pictures: `lib/mockupFresh.ts` (`mockupHref` for every link into a group's mockup, so a logo
+    mockup opens the logo builder; the save stamps `mockupArt`, and the order page redraws stale pictures by itself;
+    anything that swaps a group's pictures for others clears `mockupArt`);
+  - where an embroidered print is in digitizing: `digitizeState` / `digitizeStamp` in `lib/digitizeStatus.ts` (the
+    Digitizing page's tabs and the order's print stamps).
   When you tell Nick it's fixed, say where else it was fixed.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).

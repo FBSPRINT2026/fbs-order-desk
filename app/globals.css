@@ -15355,6 +15355,16 @@ a.dgt-file{color:var(--accent);text-decoration:none}
 .pr-dgt{margin-top:6px}
 /* embroidery not digitized yet: the visual mockup stamp, not a button (Oct 27) */
 .pr-vis-stamp.pr-dgz{cursor:default}
+button.pr-vis-stamp.pr-dgz{cursor:pointer}
+/* the print's digitizing stamp once the files are in (lib/digitizeStatus.ts): the same look as the stamps, small, in its color */
+.dgz-st{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;margin:4px 0 6px;padding:4px 12px 5px;border:2px solid var(--fbs-blue);border-radius:6px;background:var(--accent-soft);color:var(--fbs-blue);font:inherit;text-align:left;text-transform:uppercase;letter-spacing:.05em;transform:rotate(-1.5deg);white-space:nowrap}
+button.dgz-st{cursor:pointer}
+.dgz-st b{font-size:13px;font-weight:800;line-height:1.15}
+.dgz-st small{font-size:11px;font-weight:700;text-transform:none;letter-spacing:0;opacity:.85}
+.dgz-st-warn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.dgz-st-ok{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+button.dgz-st:hover{filter:brightness(.95)}
+.pr-fromfile{font-style:normal;font-size:11px;font-weight:600;margin-left:6px;padding:1px 6px;border-radius:4px;background:var(--ok-soft);color:var(--ok)}
 /* a DST drawn thread by thread, with Remove jump stitches (components/DstPreview.tsx, Oct 27) */
 .dst-pv{display:flex;flex-direction:column;gap:6px}
 .dst-pv .emb-dst{padding:0;overflow:hidden;background:var(--surface-2,#f4f4f1)}

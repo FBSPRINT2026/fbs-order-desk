@@ -65,6 +65,8 @@ import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type A
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
+import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
+import type { DgzSewout } from "@/lib/digitizeStatus";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -285,6 +287,41 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDesignUrls(await previewUrls(sb, list));
   }, [sb, custId]);
   useEffect(() => { loadDesigns(); }, [loadDesigns]);
+  // the order's sew-outs (each print's digitizing stamp: Waiting on customer, Sew-out approved with its photo)
+  const [sewouts, setSewouts] = useState<(DgzSewout & { url?: string })[]>([]);
+  const loadSewouts = useCallback(async () => {
+    const { data } = await sb.from("sewouts").select("order_id, imprint_id, status, archived_at, photo_path, sent_at, decided_at, created_at, version").eq("order_id", id).is("archived_at", null);
+    const list = (data || []) as (DgzSewout & { photo_path: string })[];
+    const paths = list.map((x) => x.photo_path).filter(Boolean);
+    const { data: su } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
+    setSewouts(list.map((x) => ({ ...x, url: su?.find((u) => u.path === x.photo_path)?.signedUrl || "" })));
+  }, [sb, id]);
+  useEffect(() => { void loadSewouts(); }, [loadSewouts, designs]);
+  // the saved mockup pictures drawn again by themselves when what they show changed since (lib/mockupFresh.ts; Oct 28,
+  // Nick: "the little boxes aren't updating… what's a permanent fix"): saved first, then each group out of sight, then
+  // the order read again. Once a session per change, so a picture that can't be drawn doesn't loop
+  const [redrawing, setRedrawing] = useState<string[]>([]);
+  const redrawBusy = useRef(false);
+  // checked each time the order is read (its logos are read with it), not on every edit here
+  useEffect(() => {
+    const o = latest.current;
+    if (!o || !designs.length || redrawBusy.current || ["request", "completed"].includes(o.status)) return;
+    const due = o.groups.filter((g) => {
+      if (!mockupStale(g, designs)) return false;
+      const k = `fbs:redrawn:${g.id}:${g.mockupAt}`;
+      try { if (sessionStorage.getItem(k)) return false; sessionStorage.setItem(k, "1"); } catch { /* */ }
+      return true;
+    });
+    if (!due.length) return;
+    redrawBusy.current = true;
+    void (async () => {
+      setRedrawing(due.map((g) => g.id));
+      try { await save(); } catch { /* */ }
+      for (const g of due) await remakeMockup(o.id, g);
+      setRedrawing([]); redrawBusy.current = false;
+      window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId: o.id } }));
+    })();
+  }, [designs]); // eslint-disable-line react-hooks/exhaustive-deps
   async function starDesign(d: Design, starred: boolean) {
     setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
     const { error } = await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
@@ -817,7 +854,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const st = ("status" in r && r.status ? r.status : "approved") as Order["status"];
     setO((p) => (p ? { ...p, status: st, type: "invoice" } : p));
     // with changes: straight to the mockup to change it, then send the proof from the order
-    if (acceptMode === "changes") { const g = o.groups.find((x) => x.fromMockup || x.mockupAt) || o.groups[0]; if (g) { router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); return; } }
+    if (acceptMode === "changes") { const g = o.groups.find((x) => x.fromMockup || x.mockupAt) || o.groups[0]; if (g) { router.push(mockupHref(o.id, g)); return; } }
     say(r.warn ? `Accepted. The message didn't send: ${r.warn}` : st === "production" ? "Accepted: In production (their goods are here)." : st === "blanks" ? "Accepted: Waiting on goods." : "Accepted.");
     loadSide();
   }
@@ -1560,7 +1597,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 }
                 if (!p.helperFile || p.open) setGroup(gi, (x) => {
                   x.imprints = p.imprints; x.mockupOffsets = p.offsets; delete x.mockupSkipped;
-                  if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; }
+                  if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; } delete x.mockupArt; // the picture brought in is kept as it is (lib/mockupFresh.ts)
                 });
                 setCustArt(null);
                 await new Promise((r) => setTimeout(r, 80)); // the change lands in latest.current before saving
@@ -1569,14 +1606,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 // made again on this group's garments: the Mockup Creator builds it and saves, then comes back here
                 if (p.remake) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&auto=1`);
                 // an old job's mockup PDF: the Mockup Creator opens with the Helper reading it
-                else if (p.open) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}${p.helperFile ? `&helper=1&helperFile=${encodeURIComponent(p.helperFile)}` : ""}`);
+                else if (p.open) router.push(mockupHref(o.id, { id: gid, mockupKind: o.groups.find((x) => x.id === gid)?.mockupKind }, p.helperFile ? `&helper=1&helperFile=${encodeURIComponent(p.helperFile)}` : ""));
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? () => setCustArt(gi) : undefined}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

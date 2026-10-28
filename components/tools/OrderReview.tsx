@@ -1,4 +1,5 @@
 "use client";
+import { mockupHref, remakeMockup } from "@/lib/mockupFresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
@@ -151,7 +152,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   }, [thumbKey, sb]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const who = o?.customers?.company || o?.customers?.name || "this customer";
-  const mockHref = (g: Group) => `/shop/artwork/mockup?order=${orderId}&group=${g.id}${(g.mockupThumbs || []).length ? "" : "&auto=1"}`;
+  const mockHref = (g: Group) => mockupHref(orderId, g, (g.mockupThumbs || []).length ? "" : "&auto=1");
   const onMockupPage = typeof window !== "undefined" && window.location.pathname.startsWith("/shop/artwork/mockup");
   const last = rounds[rounds.length - 1];
   const changed = rounds.some((r) => r.applied.length || r.art.length);
@@ -165,17 +166,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     if (!groupIds.length) return;
     setRemaking(true);
     for (const gid of groupIds) {
-      await new Promise<void>((res) => {
-        const f = document.createElement("iframe");
-        f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
-        f.style.cssText = "position:fixed;left:-12000px;top:0;width:1400px;height:900px;border:0;opacity:0;pointer-events:none";
-        const end = () => { window.removeEventListener("message", on); clearTimeout(t); f.remove(); res(); };
-        const on = (e: MessageEvent) => { if (e.origin === location.origin && e.data?.type === "fbs:mockup-saved" && e.data.group === gid) end(); };
-        const t = setTimeout(end, 60_000);
-        window.addEventListener("message", on);
-        f.src = `/shop/artwork/mockup?order=${orderId}&group=${gid}&auto=1&quiet=1`;
-        document.body.appendChild(f);
-      });
+      // the one out-of-sight redraw (lib/mockupFresh.ts), in the builder it was made in
+      await remakeMockup(orderId, o?.groups.find((x) => x.id === gid) || { id: gid });
     }
     setRemaking(false); setStale(false);
     void load(); pageReloads(orderId);

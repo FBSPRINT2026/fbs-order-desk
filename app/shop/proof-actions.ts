@@ -1,4 +1,5 @@
 "use server";
+import { mockupHref } from "@/lib/mockupFresh";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, type GLine, type Imprint, type Order } from "@/lib/pricing";
@@ -47,7 +48,7 @@ export async function restoreVersion(proofId: string, which: "ours" | "theirs", 
 
     if (which === "ours") {
       if (!mk) return { ok: false, error: "This proof has no saved mockup." };
-      ng = { ...ng, mockupSize: snap.mockupSize || g.mockupSize, mockupThumbs: snap.mockupThumbs?.length ? snap.mockupThumbs : [String(mk.file_path).replace(/\.png$/, "-thumb.png")], mockupAt: at };
+      ng = { ...ng, mockupSize: snap.mockupSize || g.mockupSize, mockupThumbs: snap.mockupThumbs?.length ? snap.mockupThumbs : [String(mk.file_path).replace(/\.png$/, "-thumb.png")], mockupAt: at, mockupArt: undefined };
       // the newer versions step aside (archived, not deleted)
       const { data: live } = await admin.from("mockups").select("id, proof_id").eq("order_id", o.id).eq("group_id", g.id).is("archived_at", null);
       const ids = ((live || []) as { id: string; proof_id: string | null }[]);
@@ -63,7 +64,7 @@ export async function restoreVersion(proofId: string, which: "ours" | "theirs", 
     const { error } = await admin.from("orders").update({ groups: all, updated_at: at }).eq("id", o.id);
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: o.id, kind: "proof_restored", detail: which === "ours" ? `Went back to an earlier mockup: ${pf.title}` : `Used the customer's own version: ${pf.title}`, actor: email });
-    return which === "theirs" ? { ok: true, open: `/shop/artwork/mockup?order=${o.id}&group=${g.id}` } : { ok: true };
+    return which === "theirs" ? { ok: true, open: mockupHref(o.id, g) } : { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }
 
