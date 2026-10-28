@@ -499,10 +499,13 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
     const di = g.imprints.indexOf(d), inks = pmsInks(d), isScr = scrImps.includes(d);
     const pms = isScr ? inks.filter((x) => x.auto) : [];
     const typed = isScr && !inks.length && !!wpl.pmsFee;
-    if (!(chips && inks.length) && !pms.length && !typed) return null;
+    // a color change to a PMS is charged as a PMS match too (lib/pricing.ts calcGroup: pmsChange)
+    const ci = gc.imprints[di] as { pmsShared?: string[]; pmsChange?: string[]; pmsN?: number } | undefined;
+    const toPms = isScr ? ci?.pmsChange || [] : [];
+    if (!(chips && inks.length) && !pms.length && !typed && !toPms.length) return null;
     // the same PMS on another print of this order is matched once (Oct 24 rule): it shows here as "charged once"
-    const shared = (gc.imprints[di] as { pmsShared?: string[] } | undefined)?.pmsShared || [];
-    const n = typed ? num0(d.pms) : pms.filter((x) => x.charge).length - shared.length;
+    const shared = ci?.pmsShared || [];
+    const n = typed ? num0(d.pms) : ci?.pmsN ?? pms.filter((x) => x.charge).length - shared.length;
     const fee = n * (+(wpl.pmsFee || 0));
     // shown like the screens line's "remake" tag: the second location isn't charged for the same PMS
     const firstOn = (name: string) => g.imprints.slice(0, di).find((o) => pmsInks(o).some((x) => x.charge && pmsKey(x.name) === pmsKey(name)))?.location;
@@ -517,7 +520,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
     const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
     return (
       <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} groups={ccShow && versionsOf(d).length ? versionsOf(d).map((v) => v.to) : undefined} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
-        summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
+        summary={pms.length || typed || toPms.length || shared.length ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
           : pms.map((x) => <label key={x.name} className="check" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />{x.name}: standard, no charge</label>)}

@@ -790,7 +790,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}`) || 0 : 0; return n > qty ? n : qty; };
   const tiOf = (d: Imprint) => (dq(d) === qty ? ti : tierIndex(dq(d), pl));
   const ixOf = (d: Imprint) => (dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
-  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[] })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) }));
+  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[]; /** PMS inks a color change prints in, charged as matches */ pmsChange?: string[]; /** PMS matches charged on this print */ pmsN?: number })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) }));
   // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
   // another group of the same order) is matched once, so only its first print pays. `seen` is shared by calcOrder.
   // A typed count (inks not named) can't be compared and is charged as typed.
@@ -800,7 +800,15 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const charged = pmsInks(d).filter((x) => x.charge).map((x) => x.name);
     const dup = charged.filter((n) => { const k = "pms:" + pmsKey(n); if (pmsSeen.has(k)) return true; pmsSeen.add(k); return false; });
     if (dup.length) imprints[i] = { ...imprints[i], inkFee: r2(imprints[i].inkFee - dup.length * num(pl.pmsFee)), pmsShared: dup };
-    return charged.length - dup.length;
+    // a color change to a PMS is a PMS match too (Oct 28, Nick: #40175's White → 7640 on Mauve had no $15 PMS fee),
+    // once per order like any PMS; "standard, no charge" on that ink (pmsCharge) leaves it out
+    const to = [...new Set(Object.values(d.inkBy || {}).flatMap((m) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([, b]) => b.trim())))]
+      .filter((n) => isPmsInk(n) && (d.pmsCharge?.[n.toLowerCase()] ?? true) && !charged.some((c) => pmsKey(c) === pmsKey(n)));
+    const fresh = to.filter((n) => { const k = "pms:" + pmsKey(n); if (pmsSeen.has(k)) return false; pmsSeen.add(k); return true; });
+    const sharedTo = to.filter((n) => !fresh.includes(n));
+    if (fresh.length || sharedTo.length) imprints[i] = { ...imprints[i], inkFee: r2(imprints[i].inkFee + fresh.length * num(pl.pmsFee)), pmsChange: fresh, pmsShared: [...(imprints[i].pmsShared || []), ...sharedTo] };
+    imprints[i] = { ...imprints[i], pmsN: charged.length - dup.length + fresh.length };
+    return charged.length - dup.length + fresh.length;
   });
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
