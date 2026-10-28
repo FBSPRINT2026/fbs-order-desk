@@ -133,6 +133,7 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  3D puff / metallic, the thread line and the digitized file (lib/embroidery.ts). Screen prints never have it */
   emb?: import("@/lib/embroidery").EmbSpec;
   /** added from the customer's brand (Customer artwork → Brands): the brand's name. Set up by its rules, no mockup needed */ fromBrand?: string;
+  /** embroidery: a digitizing fee set by hand for a complex logo (overrides the base + stitches fee; digitizingFee) */ digitizeFee?: number;
   /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
    *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
   /** the art's height ÷ width as it prints (colors taken off and empty edges don't count), saved by the Mockup Creator:
@@ -410,6 +411,9 @@ export type PriceList = {
   /** embroidery's own quantity breaks (embroidery[] is per these), stitches included, each extra 1,000, and the
    *  specialty-item add-on (fleece, hats, beanies, bags, backpacks: any non-standard flat garment) per break */
   embTiers?: number[]; embStitches?: number; embPer1k?: number; embSpecialty?: number[];
+  /** digitizing (Oct 28, Nick: "the digitizing fee is $40… then $1 for every 1,000 stitches after 6,000… unless we
+   *  override it… super complex"): the stitches the base fee covers, and each extra 1,000 (started) after them */
+  digStitches?: number; digPer1k?: number;
   /** embroidery extras per piece (specialty thread, 3D puff, personalization…), ticked on a group with embroidery */
   embExtras?: Finishing[];
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
@@ -761,7 +765,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const eti = x.eti ?? ti;
     const extra = s.embPer1k && num(d.stitches) > num(s.embStitches) ? Math.ceil((num(d.stitches) - num(s.embStitches)) / 1000) * num(s.embPer1k) : 0;
     // the logo digitized before (its DST on file): no digitizing charge (Imprint.digitized, like repeat screens)
-    return { each: r2(num(s.embroidery[eti]) + extra), setup: d.digitized ? 0 : num(s.digitizing), inkFee };
+    return { each: r2(num(s.embroidery[eti]) + extra), setup: digitizingFee(d, s), inkFee };
   }
   if (d.method === "dtf") return d.supplied ? { each: 0, setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
@@ -1058,3 +1062,13 @@ export const cleanPrintNotes = (s: string | null | undefined) => String(s || "")
   .map((x) => x.trim()).filter((x) => x && !MACHINE_NOTE.test(x)).join(" ").trim();
 
 export const shopNotes = (s: string | null | undefined) => String(s || "").replace(/\*\*\*\s*REORDER[^*]*\*\*\*[^\n]*\n?/gi, "").replace(/^\s*Specs confirmed by production[^\n]*\n?/gim, "").trim();
+
+/** THE digitizing fee for an embroidered print, everywhere it's charged or shown (Oct 28, Nick): nothing when the logo
+ *  was digitized before; the price set by hand for a complex logo; else the list's base ($40) plus $1 for each started
+ *  1,000 stitches past 6,000 (23,847 stitches: $40 + 18 = $58) */
+export function digitizingFee(d: Pick<Imprint, "digitized" | "digitizeFee" | "stitches">, s: Pick<PriceList, "digitizing" | "digStitches" | "digPer1k">): number {
+  if (d.digitized) return 0;
+  if (d.digitizeFee != null && isFinite(+d.digitizeFee)) return r2(Math.max(0, +d.digitizeFee));
+  const inc = s.digStitches ?? 6000, per = s.digPer1k ?? 1, st = +(d.stitches || 0) || 0;
+  return r2((+s.digitizing || 0) + (st > inc && per ? Math.ceil((st - inc) / 1000) * per : 0));
+}

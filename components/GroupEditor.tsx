@@ -1,7 +1,7 @@
 "use client";
 import LogoThumb from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -1024,7 +1024,12 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 {embImps.length > 0 && <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Digitizing</span></div>
                   {embImps.map((d) => (
-                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches{d.emb?.file ? "" : " (estimate)"}</span> : null}{!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")}>{money(d.digitized ? 0 : wpl.digitizing)}</b>}
+                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches{d.emb?.file ? "" : " (estimate)"}</span> : null}{!hidePrices && !d.digitized && (d.digitizeFee != null
+                        ? <span className="sbx-ov"><input type="number" min={0} step={1} value={d.digitizeFee} aria-label={`Digitizing price for the ${d.location || "logo"}`} onChange={(e) => { const di = g.imprints.indexOf(d), v = e.target.value; update((x) => { x.imprints[di].digitizeFee = v === "" ? 0 : Math.max(0, +v || 0); }); }} />
+                            <button type="button" className="linkbtn" onClick={() => { const di = g.imprints.indexOf(d); update((x) => { delete x.imprints[di].digitizeFee; }); }}>Use the stitch price</button></span>
+                        : <button type="button" className="linkbtn" title="A complex logo: set its digitizing price by hand" onClick={() => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitizeFee = digitizingFee({ ...d, digitizeFee: undefined }, wpl); }); }}>Complex: set the price</button>)}
+                      {/* the one digitizing fee (lib/pricing.ts digitizingFee): $40, plus $1 a started 1,000 past 6,000 (Oct 28, Nick) */}
+                      {!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")} title={d.digitized ? "Digitized before: no charge" : d.digitizeFee != null ? "Set by hand" : `${money(wpl.digitizing)} base${(d.stitches || 0) > (wpl.digStitches ?? 6000) ? ` + ${Math.ceil(((d.stitches || 0) - (wpl.digStitches ?? 6000)) / 1000)} × ${money(wpl.digPer1k ?? 1)} for the stitches past ${(wpl.digStitches ?? 6000).toLocaleString()}` : ""}`}>{money(digitizingFee(d, wpl))}</b>}
                       {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
                       <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
                   ))}

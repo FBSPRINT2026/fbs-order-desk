@@ -85,7 +85,9 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
         <div className="ws-fees">
           <div className="field"><label htmlFor="ws-st">Stitches included</label><input id="ws-st" type="number" step="500" value={pl.embStitches ?? 6000} onChange={(e) => upd((d) => { d.embStitches = n(e.target.value); })} /></div>
           <div className="field"><label htmlFor="ws-1k">Each extra 1,000 stitches</label><input id="ws-1k" type="number" step="0.05" value={pl.embPer1k ?? 0} onChange={(e) => upd((d) => { d.embPer1k = n(e.target.value); })} /></div>
-          <div className="field"><label htmlFor="ws-dig">Digitizing, per design</label><input id="ws-dig" type="number" step="1" value={pl.digitizing} onChange={(e) => upd((d) => { d.digitizing = n(e.target.value); })} /><small className="faint">Basic $40-$60; complex / puff $80+ (set on the job).</small></div>
+          <div className="field"><label htmlFor="ws-dig">Digitizing, per design</label><input id="ws-dig" type="number" step="1" value={pl.digitizing} onChange={(e) => upd((d) => { d.digitizing = n(e.target.value); })} /><small className="faint">Basic $40-$60; complex / puff $80+ (set on the job).</small></div>          <div className="field"><label htmlFor="ws-dig-st">Digitizing: stitches included</label><input id="ws-dig-st" type="number" step="500" value={pl.digStitches ?? 6000} onChange={(e) => upd((d) => { d.digStitches = n(e.target.value); })} /></div>
+          <div className="field"><label htmlFor="ws-dig-k">Digitizing: each 1,000 more</label><input id="ws-dig-k" type="number" step="0.5" value={pl.digPer1k ?? 1} onChange={(e) => upd((d) => { d.digPer1k = n(e.target.value); })} /><small className="faint">A complex logo&apos;s price is set on the job.</small></div>
+
         </div>
         <div className="lbl">EMBROIDERY EXTRAS, PER PIECE</div>
         <ExtrasList list={pl.embExtras || []} placeholder="Specialty thread" onChange={(fn) => upd((d) => { d.embExtras = fn(d.embExtras || []); })} />

@@ -5613,6 +5613,8 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .sbx-ovr button{border:0;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:0 3px}
 .sbx-num{width:48px;padding:2px 5px;font-size:12.5px}
 .sbx-loc{min-width:84px;font-weight:500}
+.sbx-ov{display:inline-flex;align-items:center;gap:8px}
+.sbx-ov input{width:84px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink)}
 .fin-panel{margin-bottom:14px}
 .fin-panel .panel-h{flex-wrap:wrap}
 .fin-panel label.check{display:inline-flex;gap:6px;align-items:center}
