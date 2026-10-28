@@ -12,7 +12,11 @@ export type VShape = { fill: string; evenodd: boolean; ops: string; /** the spot
   /** filled with a gradient (then `fill` is its middle color, for anything that only knows flat colors) */
   grad?: VGrad;
   /** only shows inside these outlines, all of them (Illustrator clipping masks, nested; Oct 20: a ribbon drawn as a green box clipped to the ribbon shape) */
-  clip?: { ops: string; evenodd: boolean }[] };
+  clip?: { ops: string; evenodd: boolean }[];
+  /** an outline drawn as a line (only when asked for: the Customer artwork builder's picks keep a logo's strokes, Oct 28,
+   *  Nick: "if it has strokes… you have to scale the strokes"). Its width is in the art's own units, so the SVG scales it
+   *  with everything else, like Illustrator's Scale Strokes & Effects */
+  stroke?: { hex: string; w: number; cap?: number; join?: number } };
 export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[];
   /** a customer mockup: what was left out to get the art off the shirt (PDF / .ai) */
   mockup?: string;

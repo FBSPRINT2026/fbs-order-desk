@@ -28,7 +28,7 @@ type DbxEntry = { id: string; name: string; folder: boolean; path: string; size?
 type Item = { key: string; job: Job; path: string; name: string; ext: string; kind: "art" | "sew" | "sheet" | "other"; emb?: string; sheet?: string };
 type Box = [number, number, number, number];
 /** a piece cut off a file (a logo off a proof or product sheet): its page and box (0–1 of the page, y down), and a picture */
-type Cut = { page: number; box: Box; pic: string; /** where it prints ("Front", "Left Chest") */ loc?: string };
+type Cut = { page: number; box: Box; pic: string; /** where it prints ("Front", "Left Chest") */ loc?: string; /** how wide it prints, inches: the logo is saved at this size */ wIn?: number };
 type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string; /** a sew file: where it goes ("Left Chest, Left Sleeve") */ where?: string; /** a cut off this file (the pick's key is "<file>#<n>") */ src?: string; cut?: Cut };
 type D = Design & { brand_id?: string | null };
 
@@ -207,7 +207,8 @@ function opsBox(ops: string): [number, number, number, number] | null {
 async function vectorCut(buf: ArrayBuffer, cut: Cut, name: string): Promise<File | null> {
   if (cut.page !== 1) return null; // the vector reader reads the first page
   const [{ parsePdf, browserInflate }, { vartSvg }] = await Promise.all([import("@/lib/pdfVector"), import("@/lib/epsVector")]);
-  const v = await parsePdf(new Uint8Array(buf.slice(0)), browserInflate);
+  // strokes kept as strokes: the SVG scales their width with the art (Illustrator's Scale Strokes & Effects)
+  const v = await parsePdf(new Uint8Array(buf.slice(0)), browserInflate, { strokes: true });
   if (!v.shapes.length) return null;
   const [bx0, by0, bx1, by1] = [cut.box[0] * v.w, cut.box[1] * v.h, cut.box[2] * v.w, cut.box[3] * v.h];
   const bw = bx1 - bx0, bh = by1 - by0;
@@ -219,8 +220,13 @@ async function vectorCut(buf: ArrayBuffer, cut: Cut, name: string): Promise<File
   });
   if (!inside.length) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const sh of inside) { const b = opsBox(sh.ops)!; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
-  const svg = vartSvg({ ok: true, x: x0, y: y0, w: Math.max(0.1, x1 - x0), h: Math.max(0.1, y1 - y0), shapes: inside });
+  for (const sh of inside) { const b = opsBox(sh.ops)!, e = (sh.stroke?.w || 0) / 2; x0 = Math.min(x0, b[0] - e); y0 = Math.min(y0, b[1] - e); x1 = Math.max(x1, b[2] + e); y1 = Math.max(y1, b[3] + e); }
+  const w = Math.max(0.1, x1 - x0), h = Math.max(0.1, y1 - y0);
+  // saved at the size it prints (Oct 28, Nick: "he put it really small… we need to normalize it… it was a 2-inch flag"):
+  // the SVG's width and height in inches; the art inside scales to it, strokes and all
+  const svg0 = vartSvg({ ok: true, x: x0, y: y0, w, h, shapes: inside });
+  const wIn = cut.wIn && cut.wIn > 0 ? cut.wIn : 0;
+  const svg = wIn ? svg0.replace(/(<svg[^>]*?) width="[^"]*" height="[^"]*"/, `$1 width="${wIn.toFixed(3)}in" height="${((wIn * h) / w).toFixed(3)}in"`) : svg0.replace(/(<svg[^>]*?) width="[^"]*" height="[^"]*"/, `$1 width="1000" height="${Math.round((1000 * h) / w)}"`);
   return new File([svg], `${name.replace(/[^\w .-]+/g, "").trim() || "logo"}.svg`, { type: "image/svg+xml" });
 }
 
@@ -245,9 +251,30 @@ async function cutToFile(buf: ArrayBuffer, ext: string, cut: Cut, name: string):
   return blob ? new File([blob], `${name.replace(/[^\w .-]+/g, "").trim() || "logo"}.png`, { type: "image/png" }) : null;
 }
 
+/** a usual print width for a location when the page doesn't say */
+const usualWidth = (loc: string) => (!loc ? 3.5 : /nape|hat side/i.test(loc) ? 2.5 : /sleeve/i.test(loc) ? 3 : /chest/i.test(loc) ? 3.5 : /hat/i.test(loc) ? 4 : /upper back/i.test(loc) ? 10 : /full|^front$|^back$/i.test(loc) ? 11 : 3.5);
+/** what the page says next to the box: a width ("2 inch wide", 3.5") and a location ("left sleeve") */
+async function nearBox(buf: ArrayBuffer, ext: string, page: number, box: Box): Promise<{ wIn?: number; loc?: string }> {
+  if (!/^(pdf|ai)$/.test(ext)) return {};
+  const { PDFJS, PDFJS_WORKER } = await import("@/lib/artPrep");
+  const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; getTextContent: () => Promise<{ items: { str?: string; transform?: number[] }[] }> }> }> } };
+  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise, pg = await doc.getPage(page), vp = pg.getViewport({ scale: 1 });
+  const tc = await pg.getTextContent();
+  const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
+  const near = tc.items.filter((it) => it.str?.trim() && it.transform).map((it) => ({ t: it.str!, d: Math.hypot(it.transform![4] / vp.width - cx, 1 - it.transform![5] / vp.height - cy) })).sort((a, b) => a.d - b.d).slice(0, 12);
+  const text = near.filter((x) => x.d < 0.35).map((x) => x.t).join(" ");
+  const m = /(\d+(?:\.\d+)?)\s*(?:"|”|''|in\b|inch(?:es)?)\s*(?:wide|w\b|width)?/i.exec(text);
+  const wIn = m ? +m[1] : undefined;
+  const loc = LOCS.find(([re]) => re.test(text))?.[1];
+  return { ...(wIn && wIn >= 0.5 && wIn <= 16 ? { wIn } : {}), ...(loc ? { loc } : {}) };
+}
 const LOC_OPTS = ["Front", "Back", "Left Chest", "Right Chest", "Center Chest", "Full Front", "Full Back", "Upper Back", "Nape", "Left Sleeve", "Right Sleeve", "Hat Front", "Hat Side", "Hat Back", "Other"];
-function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: ReturnType<typeof createClient>; it: Item; cuts: { name: string; pic: string; loc?: string }[]; onWhole: () => void; onCut: (c: Cut, name: string) => void; onClose: () => void; defName: string }) {
-  const [nm, setNm] = useState(defName), [loc, setLoc] = useState(cuts.length ? "Back" : "Front");
+function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: ReturnType<typeof createClient>; it: Item; cuts: { name: string; pic: string; loc?: string; wIn?: number }[]; onWhole: () => void; onCut: (c: Cut, name: string) => void; onClose: () => void; defName: string }) {
+  // the location is optional (Oct 28, Nick: "sometimes… it's just a regular logo"; other times "2 inches… left sleeve and
+  // left chest"): typed or picked, several allowed
+  const [nm, setNm] = useState(defName), [loc, setLoc] = useState("");
+  const [wIn, setWIn] = useState(""), [wFrom, setWFrom] = useState("");
   const [page, setPage] = useState(1), [pages, setPages] = useState(1);
   const [pic, setPic] = useState(""), [err, setErr] = useState("");
   const [box, setBox] = useState<Box | null>(null);
@@ -264,6 +291,17 @@ function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: Return
     })().catch((e) => setErr(e instanceof Error ? e.message : "Couldn't draw the file."));
     return () => { on = false; };
   }, [sb, it, page]);
+  useEffect(() => {
+    if (!box || !buf.current) return;
+    let on = true;
+    nearBox(buf.current, it.ext, page, box).then((r) => {
+      if (!on) return;
+      if (r.loc && !loc) setLoc(r.loc);
+      if (r.wIn) { setWIn(String(r.wIn)); setWFrom("from the page"); } else { const l = r.loc || loc; setWIn(String(usualWidth(l))); setWFrom(l ? `usual for ${l.toLowerCase()}` : "a usual logo size: set it"); }
+    }).catch(() => { if (on) { setWIn(String(usualWidth(loc))); setWFrom(loc ? `usual for ${loc.toLowerCase()}` : "a usual logo size: set it"); } });
+    return () => { on = false; };
+  }, [box]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ratio = box ? ((box[3] - box[1]) * (can.current?.height || 1)) / Math.max(1e-6, (box[2] - box[0]) * (can.current?.width || 1)) : 1;
   const at = (e: React.PointerEvent) => { const r = wrap.current!.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
   return (
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="What are you bringing in?" onClick={onClose}>
@@ -282,10 +320,13 @@ function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: Return
         {err && pic && <p className="warnline">{err}</p>}
         {box && <div className="bi-cutform">
           <label className="field"><span>Logo name</span><input type="text" value={nm} onChange={(e) => setNm(e.target.value)} placeholder="Embark E" /></label>
-          <label className="field"><span>Location</span><select value={loc} onChange={(e) => setLoc(e.target.value)}>{LOC_OPTS.map((o) => <option key={o}>{o}</option>)}</select></label>
-          <button type="button" className="btn primary" disabled={!can.current || !nm.trim()} onClick={() => { if (box && can.current) { onCut({ page, box, pic: boxPic(can.current, box), loc }, nm.trim()); setBox(null); setNm(""); setLoc("Back"); } }}>Add this logo</button>
+          <label className="field"><span>Location (optional)</span><input type="text" list="bi-locs" value={loc} placeholder="None: just the logo" onChange={(e) => { setLoc(e.target.value); if (wFrom.startsWith("usual") && e.target.value) { setWIn(String(usualWidth(e.target.value))); setWFrom(`usual for ${e.target.value.toLowerCase()}`); } }} />
+            <datalist id="bi-locs">{LOC_OPTS.map((o) => <option key={o} value={o} />)}{["Left Chest, Left Sleeve", "Front, Back"].map((o) => <option key={o} value={o} />)}</datalist></label>
+          <label className="field bi-w"><span>Prints at (width, in)</span><input type="number" min="0.5" max="16" step="0.25" value={wIn} onChange={(e) => { setWIn(e.target.value); setWFrom(""); }} /></label>
+          <button type="button" className="btn primary" disabled={!can.current || !nm.trim()} onClick={() => { if (box && can.current) { onCut({ page, box, pic: boxPic(can.current, box), ...(loc.trim() ? { loc: loc.trim() } : {}), ...(+wIn > 0 ? { wIn: +wIn } : {}) }, nm.trim()); setBox(null); setNm(""); setLoc(""); setWIn(""); } }}>Add this logo</button>
+          {+wIn > 0 && <span className="faint bi-wnote">{(+wIn).toFixed(2).replace(/\.?0+$/, "")}&quot; × {(+wIn * ratio).toFixed(2).replace(/\.?0+$/, "")}&quot;{wFrom ? ` · ${wFrom}` : ""}</span>}
         </div>}
-        {cuts.length > 0 && <div className="bi-cuts"><span className="faint">Picked off this file:</span>{cuts.map((c, i) => <span key={i} className="bi-cutitem"><span className="bi-cutpic dark" title={c.name}><img src={c.pic} alt={c.name} /></span><span><b>{c.name}</b><span className="faint">{c.loc || ""}</span></span></span>)}</div>}
+        {cuts.length > 0 && <div className="bi-cuts"><span className="faint">Picked off this file:</span>{cuts.map((c, i) => <span key={i} className="bi-cutitem"><span className="bi-cutpic dark" title={c.name}><img src={c.pic} alt={c.name} /></span><span><b>{c.name}</b><span className="faint">{[c.loc, c.wIn ? `${c.wIn}" wide` : ""].filter(Boolean).join(" · ")}</span></span></span>)}</div>}
         <div className="dla-acts">
           <button type="button" className="btn ghost" onClick={() => { onWhole(); onClose(); }}>Bring in the whole file</button>
           <span className="spacer" />
@@ -445,8 +486,12 @@ function BringInArt() {
       try {
         let f = await file(it.path);
         if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error("couldn't cut that logo off the page"); f = c; }
-        const d = (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: [it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `Pulled from order #${it.job.visual_id} (${it.job.nickname})`, p.cut?.loc ? `Location: ${p.cut.loc}` : ""].filter(Boolean).join(" · ") })) as D;
-        const specs = { ...((d.specs || {}) as object), source: { ...(it.job.dbx ? { dropbox: it.job.dbx } : { printavo: it.job.visual_id }), path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box, ...(p.cut.loc ? { where: p.cut.loc } : {}) } : {}) } };
+        const d = (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: [it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `Pulled from order #${it.job.visual_id} (${it.job.nickname})`, p.cut?.loc ? `Location: ${p.cut.loc}` : "", p.cut?.wIn ? `Prints ${p.cut.wIn}" wide` : ""].filter(Boolean).join(" · ") })) as D;
+        // a white / very light logo shows on a dark background (Oct 28, Nick: "if it's a white logo, you'll put it on a
+        // background so you can see it"): its first background is charcoal, in its own colors
+        const light = f.type === "image/svg+xml" && await (async () => { const t = await f.text(); const fills = [...t.matchAll(/(?:fill|stroke)="(#[0-9a-f]{6})"/gi)].map((m) => m[1]); return fills.length > 0 && fills.every((h) => { const v = parseInt(h.slice(1), 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 205; }); })();
+        const specs = { ...((d.specs || {}) as object), ...(light ? { onShirts: [{ shirt: "Charcoal", ink: "Original colors" }] } : {}), source: { ...(it.job.dbx ? { dropbox: it.job.dbx } : { printavo: it.job.visual_id }), path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box, ...(p.cut.loc ? { where: p.cut.loc } : {}) } : {}) },
+          ...(p.cut?.wIn ? { printSize: { wIn: p.cut.wIn, ...(d.width_px && d.height_px ? { hIn: Math.round((p.cut.wIn * d.height_px / d.width_px) * 100) / 100 } : {}), ...(p.cut.loc ? { location: p.cut.loc } : {}) } } : {}) };
         await sb.from("designs").update({ specs, ...(brand ? { brand_id: brand } : {}) }).eq("id", d.id);
         made.set(key, { ...d, specs, brand_id: brand || null } as D);
         out.push(`D-${d.number} ${p.name || it.name}${p.cut?.loc ? ` (${p.cut.loc})` : ""}${brand ? ` · ${brands.find((b) => b.id === brand)?.name}` : ""}${f.type === "image/svg+xml" ? " · vector" : ""}`);
@@ -549,7 +594,7 @@ function BringInArt() {
           {items.length > n && <button type="button" className="btn" style={{ display: "block", margin: "8px auto" }} onClick={() => setN(n + 15)}>Show more jobs ({items.length - n} more)</button>}
         </>
       )}
-      {cutting && <CutPop sb={sb} it={cutting} defName={brandName ? `${brandName} logo` : ""} cuts={cutsOf(cutting.key).map(([, v]) => ({ name: v.name, pic: v.cut!.pic, loc: v.cut!.loc }))} onWhole={() => set(cutting.key, { on: true }, cutting)} onCut={(c, nm) => addCut(cutting, c, nm)} onClose={() => setCutting(null)} />}
+      {cutting && <CutPop sb={sb} it={cutting} defName={brandName ? `${brandName} logo` : ""} cuts={cutsOf(cutting.key).map(([, v]) => ({ name: v.name, pic: v.cut!.pic, loc: v.cut!.loc, wIn: v.cut!.wIn }))} onWhole={() => set(cutting.key, { on: true }, cutting)} onCut={(c, nm) => addCut(cutting, c, nm)} onClose={() => setCutting(null)} />}
     </>
   );
 }

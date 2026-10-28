@@ -176,7 +176,8 @@ export function vartSvg(v: VArt): string {
     let cp = "";
     // nested masks: each clipPath is itself clipped by the one before it, so the shape shows only where all overlap
     (s.clip || []).forEach((c, k) => { defs += `<clipPath id="c${i}_${k}"${k ? ` clip-path="url(#c${i}_${k - 1})"` : ""}><path${c.evenodd ? ' clip-rule="evenodd"' : ""} d="${d(c.ops)}"/></clipPath>`; cp = ` clip-path="url(#c${i}_${k})"`; });
-    return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""}${cp} d="${d(s.ops)}"/>`;
+    const st = s.stroke ? ` stroke="${s.stroke.hex}" stroke-width="${f(s.stroke.w)}" stroke-linecap="${["butt", "round", "square"][s.stroke.cap || 0] || "butt"}" stroke-linejoin="${["miter", "round", "bevel"][s.stroke.join || 0] || "miter"}"` : "";
+    return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""}${st}${cp} d="${d(s.ops)}"/>`;
   }).join("");
   // a distress layer knocks the art out where it's solid (the shirt shows through)
   if (v.distress?.length) {

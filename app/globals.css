@@ -15486,3 +15486,5 @@ html body .as .as-brand.on::before{background:var(--accent)}
 .bi-cutpic.dark{background:#5b6472}
 .bi-cutitem{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
 .bi-cutitem>span:last-child{display:flex;flex-direction:column}
+.bi-cutform .bi-w{min-width:120px;width:140px}
+.bi-wnote{align-self:center;font-size:12.5px}

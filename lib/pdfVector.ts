@@ -62,7 +62,7 @@ class Lexer {
 }
 const latin1 = (u8: Uint8Array) => { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return s; };
 
-export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VArt> {
+export async function parsePdf(bytes: Uint8Array, inflate: Inflate, opts: { /** keep stroked outlines as stroke shapes (VShape.stroke) */ strokes?: boolean } = {}): Promise<VArt> {
   const fail = (why: string): VArt => ({ ok: false, why, x: 0, y: 0, w: 1, h: 1, shapes: [] });
   const src = latin1(bytes);
   if (!src.startsWith("%PDF")) return fail(src.startsWith("%!PS") ? "is an old PostScript-style Illustrator file (save it with PDF compatibility, or as EPS)" : "isn't a PDF");
@@ -169,7 +169,10 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
     if (depth > 12) return;
     const csRes = (get(res?.ColorSpace ?? null) as Dict | null) || {}, xoRes = (get(res?.XObject ?? null) as Dict | null) || {};
     let ctm: M = ctm0, fillCS: Obj = { n: "DeviceGray" }, fill: Col = { hex: "#000000" };
-    const stack: { ctm: M; fillCS: Obj; fill: Col }[] = [];
+    let strokeCS: Obj = { n: "DeviceGray" }, strokeC: Col = { hex: "#000000" }, lw = 1, cap = 0, join = 0;
+    const stack: { ctm: M; fillCS: Obj; fill: Col; strokeCS: Obj; strokeC: Col; lw: number; cap: number; join: number }[] = [];
+    /** a stroked path kept as a stroke shape, its width in page units (the CTM's scale) */
+    const pushStroke = () => { if (!opts.strokes || !path || !strokeC) return; const k = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2])) || 1; shapes.push({ fill: "none", evenodd: false, ops: path, stroke: { hex: strokeC.hex, w: Math.max(0.05, lw * k), cap, join }, ...(strokeC.ink ? { ink: strokeC.ink } : {}) }); };
     let path = "", cx = 0, cy = 0, sx = 0, sy = 0;
     const P = (x: number, y: number) => { const X = ctm[0] * x + ctm[2] * y + ctm[4], Y = ctm[1] * x + ctm[3] * y + ctm[5]; return `${(X - llx).toFixed(3)} ${(ury - Y).toFixed(3)}`; };
     const lx = new Lexer(code); const ops: Obj[] = [];
@@ -183,8 +186,8 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
       let j = lx.i; while (j < code.length && !/[\s/[\]<>(){}%]/.test(code[j])) j++;
       const op = code.slice(lx.i, j); lx.i = j === lx.i ? j + 1 : j;
       switch (op) {
-        case "q": stack.push({ ctm, fillCS, fill }); break;
-        case "Q": { const s = stack.pop(); if (s) ({ ctm, fillCS, fill } = s); break; }
+        case "q": stack.push({ ctm, fillCS, fill, strokeCS, strokeC, lw, cap, join }); break;
+        case "Q": { const s = stack.pop(); if (s) ({ ctm, fillCS, fill, strokeCS, strokeC, lw, cap, join } = s); break; }
         case "cm": ctm = mul(nums(6) as M, ctm); break;
         case "m": { const [x, y] = nums(2); cx = sx = x; cy = sy = y; path += `${P(x, y)} m\n`; break; }
         case "l": { const [x, y] = nums(2); cx = x; cy = y; path += `${P(x, y)} l\n`; break; }
@@ -194,10 +197,25 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
         case "h": path += "h\n"; cx = sx; cy = sy; break;
         case "re": { const [x, y, w, h] = nums(4); path += `${P(x, y)} m\n${P(x + w, y)} l\n${P(x + w, y + h)} l\n${P(x, y + h)} l\nh\n`; break; }
         case "f": case "F": case "f*": case "B": case "B*": case "b": case "b*":
-          if (/[Bb]/.test(op)) note("has strokes (outline them in Illustrator: Object → Path → Outline Stroke)");
+          if (/[Bb]/.test(op) && !opts.strokes) note("has strokes (outline them in Illustrator: Object → Path → Outline Stroke)");
           if (path && fill) shapes.push({ fill: fill.hex, evenodd: op.includes("*"), ops: path, ...(fill.ink ? { ink: fill.ink } : {}) });
+          if (/[Bb]/.test(op)) { if (op[0] === "b") path += "h\n"; pushStroke(); }
           path = ""; break;
-        case "S": case "s": note("has strokes (outline them in Illustrator: Object → Path → Outline Stroke)"); path = ""; break;
+        case "S": case "s": if (!opts.strokes) note("has strokes (outline them in Illustrator: Object → Path → Outline Stroke)"); if (op === "s") path += "h\n"; pushStroke(); path = ""; break;
+        case "w": lw = nums(1)[0]; break;
+        case "J": cap = nums(1)[0]; break;
+        case "j": join = nums(1)[0]; break;
+        case "G": strokeCS = { n: "DeviceGray" }; strokeC = await colorOf(strokeCS, nums(1)); break;
+        case "RG": strokeCS = { n: "DeviceRGB" }; strokeC = await colorOf(strokeCS, nums(3)); break;
+        case "K": strokeCS = { n: "DeviceCMYK" }; strokeC = await colorOf(strokeCS, nums(4)); break;
+        case "CS": { const n = ops[ops.length - 1]; strokeCS = isName(n) ? (csRes[n.n] ?? n) : n; const c = get(strokeCS); const nm = isName(c) ? c.n : Array.isArray(c) && isName(c[0]) ? c[0].n : "";
+          strokeC = await colorOf(strokeCS, nm === "DeviceCMYK" ? [0, 0, 0, 1] : nm === "DeviceRGB" ? [0, 0, 0] : [nm === "Separation" ? 1 : 0]); break; }
+        case "SC": case "SCN": {
+          const last = ops[ops.length - 1];
+          if (isName(last)) { strokeC = null; break; }
+          const vals: number[] = []; for (let k = ops.length - 1; k >= 0 && typeof ops[k] === "number"; k--) vals.unshift(ops[k] as number);
+          strokeC = await colorOf(strokeCS, vals); break;
+        }
         case "n": path = ""; break;
         case "W": case "W*": break;
         case "g": fillCS = { n: "DeviceGray" }; fill = await colorOf(fillCS, nums(1)); break;
@@ -229,7 +247,7 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
         } break;
         case "BI": picAt(ctm); { const e = code.indexOf("EI", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
         case "sh": note("has gradients"); break;
-        default: break; // gs, w, d, J, j, M, i, ri, CS/SC/SCN/G/RG/K (stroke colors), BDC/BMC/EMC/MP/DP…
+        default: break; // gs, d, M, i, ri, BDC/BMC/EMC/MP/DP…
       }
       ops.length = 0;
     }
