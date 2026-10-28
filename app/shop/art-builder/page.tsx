@@ -26,7 +26,7 @@ import { PREVIEW, DstInfo, Pic, arrange, extOf, factLine, factsOf, fmtDay, items
 type DbxEntry = { id: string; name: string; folder: boolean; path: string; size?: number };
 type Box = [number, number, number, number];
 /** a piece cut off a file (a logo off a proof or product sheet): its page and box (0–1 of the page, y down), and a picture */
-type Cut = { page: number; box: Box; pic: string; /** where it prints ("Front", "Left Chest") */ loc?: string; /** how wide it prints, inches: the logo is saved at this size */ wIn?: number };
+type Cut = { page: number; box: Box; pic: string; /** where it prints ("Front", "Left Chest") */ loc?: string; /** how wide it prints, inches: the logo is saved at this size */ wIn?: number; /** degrees it is turned to sit square (clockwise): the logo was rotated on the mockup */ turn?: number };
 type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string; /** a logo already on file this becomes the art of (D-10251 had only its DST) */ into?: string; /** a sew file: where it goes ("Left Chest, Left Sleeve") */ where?: string; /** a cut off this file (the pick's key is "<file>#<n>") */ src?: string; cut?: Cut };
 type D = Design & { brand_id?: string | null };
 
@@ -68,12 +68,46 @@ function elementAt(c: HTMLCanvasElement, x: number, y: number): Box | null {
   void n;
   return [Math.max(0, x0 - r) / W, Math.max(0, y0 - r) / H, Math.min(W, x1 + r) / W, Math.min(H, y1 + r) / H];
 }
-function boxPic(c: HTMLCanvasElement, b: Box): string {
+function boxPic(c: HTMLCanvasElement, b: Box, turn = 0): string {
   const [x0, y0, x1, y1] = [b[0] * c.width, b[1] * c.height, b[2] * c.width, b[3] * c.height];
   const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0), k = Math.min(1, 240 / Math.max(w, h));
-  const o = document.createElement("canvas"); o.width = Math.round(w * k); o.height = Math.round(h * k);
-  o.getContext("2d")!.drawImage(c, x0, y0, w, h, 0, 0, o.width, o.height);
+  const t = (turn * Math.PI) / 180, cos = Math.abs(Math.cos(t)), sin = Math.abs(Math.sin(t));
+  const o = document.createElement("canvas"); o.width = Math.round((w * cos + h * sin) * k); o.height = Math.round((w * sin + h * cos) * k);
+  const g = o.getContext("2d")!;
+  g.translate(o.width / 2, o.height / 2); g.rotate(t);
+  g.drawImage(c, x0, y0, w, h, (-w * k) / 2, (-h * k) / 2, w * k, h * k);
   return o.toDataURL("image/png");
+}
+/** a point turned about (cx, cy), clockwise on screen (SVG's rotate) */
+const turnPt = (x: number, y: number, cx: number, cy: number, deg: number): [number, number] => {
+  const t = (deg * Math.PI) / 180, dx = x - cx, dy = y - cy;
+  return [cx + dx * Math.cos(t) - dy * Math.sin(t), cy + dx * Math.sin(t) + dy * Math.cos(t)];
+};
+/**
+ * How far a logo in the box is turned off square (Oct 28, Nick: "this logo is rotated for the mock-up. You need to
+ * square it… the junk.com off the front [of the vest], rotate it square"): the turn that fits its ink in the smallest
+ * upright box. The ink is what isn't the box's most common color (the garment).
+ */
+function squareTurn(c: HTMLCanvasElement, b: Box): number {
+  const [x0, y0, x1, y1] = [Math.round(b[0] * c.width), Math.round(b[1] * c.height), Math.round(b[2] * c.width), Math.round(b[3] * c.height)];
+  const w = x1 - x0, h = y1 - y0; if (w < 4 || h < 4) return 0;
+  const px = c.getContext("2d", { willReadFrequently: true })!.getImageData(x0, y0, w, h).data;
+  const tally = new Map<number, number>();
+  for (let i = 0; i < px.length; i += 16) { const q = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4); tally.set(q, (tally.get(q) || 0) + 1); }
+  const bg = [...tally.entries()].sort((a, z) => z[1] - a[1])[0][0];
+  const [br, bgG, bb] = [((bg >> 8) & 15) * 16 + 8, ((bg >> 4) & 15) * 16 + 8, (bg & 15) * 16 + 8];
+  const step = Math.max(1, Math.round(Math.sqrt((w * h) / 6000)));
+  const pts: [number, number][] = [];
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) { const i = (y * w + x) * 4; if (Math.hypot(px[i] - br, px[i + 1] - bgG, px[i + 2] - bb) > 70) pts.push([x, y]); }
+  if (pts.length < 20) return 0;
+  let best = 0, bestA = Infinity;
+  for (let a = -45; a <= 45; a += 0.5) {
+    let mx0 = Infinity, my0 = Infinity, mx1 = -Infinity, my1 = -Infinity;
+    for (const [x, y] of pts) { const [u, v] = turnPt(x, y, w / 2, h / 2, a); if (u < mx0) mx0 = u; if (u > mx1) mx1 = u; if (v < my0) my0 = v; if (v > my1) my1 = v; }
+    const area = (mx1 - mx0) * (my1 - my0);
+    if (area < bestA - 1e-6 || (Math.abs(area - bestA) < 1e-6 && Math.abs(a) < Math.abs(best))) { bestA = area; best = a; }
+  }
+  return Math.abs(best) < 0.5 ? 0 : best;
 }
 /** a cut made into the logo file: PDFs and Illustrator files at print resolution (lib/setupSheet cutProduct: the white
  *  page and the spec text around it come off); a photo's piece as it is, its white taken off */
@@ -102,34 +136,38 @@ async function vectorCut(buf: ArrayBuffer, cut: Cut, name: string): Promise<File
   if (!inside.length) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const sh of inside) { const b = opsBox(sh.ops)!, e = (sh.stroke?.w || 0) / 2; x0 = Math.min(x0, b[0] - e); y0 = Math.min(y0, b[1] - e); x1 = Math.max(x1, b[2] + e); y1 = Math.max(y1, b[3] + e); }
+  // turned square: the art is drawn turned about its middle, and its box is where the turned outlines land
+  const turn = cut.turn || 0, tcx = (x0 + x1) / 2, tcy = (y0 + y1) / 2;
+  if (turn) {
+    let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
+    for (const sh of inside) {
+      const e = (sh.stroke?.w || 0) / 2;
+      for (const l of sh.ops.split("\n")) { const n = l.trim().split(/\s+/).slice(0, -1).map(Number); for (let i = 0; i + 1 < n.length; i += 2) { const [u, v] = turnPt(n[i], n[i + 1], tcx, tcy, turn); u0 = Math.min(u0, u - e); u1 = Math.max(u1, u + e); v0 = Math.min(v0, v - e); v1 = Math.max(v1, v + e); } }
+    }
+    if (isFinite(u0)) { x0 = u0; y0 = v0; x1 = u1; y1 = v1; }
+  }
   const w = Math.max(0.1, x1 - x0), h = Math.max(0.1, y1 - y0);
   // saved at the size it prints (Oct 28, Nick: "he put it really small… we need to normalize it… it was a 2-inch flag"):
   // the SVG's width and height in inches; the art inside scales to it, strokes and all
-  const svg0 = vartSvg({ ok: true, x: x0, y: y0, w, h, shapes: inside });
+  const flat = vartSvg({ ok: true, x: x0, y: y0, w, h, shapes: inside });
+  const svg0 = turn ? flat.replace(/^(<svg[^>]*>)([\s\S]*)(<\/svg>)$/, `$1<g transform="rotate(${turn} ${tcx.toFixed(3)} ${tcy.toFixed(3)})">$2</g>$3`) : flat;
   const wIn = cut.wIn && cut.wIn > 0 ? cut.wIn : 0;
   const svg = wIn ? svg0.replace(/(<svg[^>]*?) width="[^"]*" height="[^"]*"/, `$1 width="${wIn.toFixed(3)}in" height="${((wIn * h) / w).toFixed(3)}in"`) : svg0.replace(/(<svg[^>]*?) width="[^"]*" height="[^"]*"/, `$1 width="1000" height="${Math.round((1000 * h) / w)}"`);
   return new File([svg], `${name.replace(/[^\w .-]+/g, "").trim() || "logo"}.svg`, { type: "image/svg+xml" });
 }
 
+/** a logo picked off a file is its vector art, or nothing (Oct 28, Nick on D-10266 Junk.com: "it looked like a vector
+ *  file, but it wasn't… make a rule… I can't pull the vector off of this, so I'm not adding it"): no picture fallback */
 async function cutToFile(buf: ArrayBuffer, ext: string, cut: Cut, name: string): Promise<File | null> {
-  if (!/^(png|jpe?g|webp)$/.test(ext)) {
-    // the vector art itself when the box holds shapes; else a print-resolution picture of it
-    const vec = await vectorCut(buf, cut, name).catch(() => null);
-    if (vec) return vec;
-    const { cutProduct } = await import("@/lib/setupSheet");
-    const r = await cutProduct(buf.slice(0), { page: cut.page, logo: cut.box, name });
-    return r.art;
-  }
-  const url = URL.createObjectURL(new Blob([buf]));
-  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-  const [x0, y0, x1, y1] = [cut.box[0] * img.naturalWidth, cut.box[1] * img.naturalHeight, cut.box[2] * img.naturalWidth, cut.box[3] * img.naturalHeight];
-  const c = document.createElement("canvas"); c.width = Math.round(x1 - x0); c.height = Math.round(y1 - y0);
-  const g = c.getContext("2d", { willReadFrequently: true })!; g.drawImage(img, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
-  const id = g.getImageData(0, 0, c.width, c.height);
-  for (let i = 0; i < id.data.length; i += 4) if (id.data[i] > 245 && id.data[i + 1] > 245 && id.data[i + 2] > 245) id.data[i + 3] = 0;
-  g.putImageData(id, 0, 0);
-  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
-  return blob ? new File([blob], `${name.replace(/[^\w .-]+/g, "").trim() || "logo"}.png`, { type: "image/png" }) : null;
+  if (RASTER.test(ext)) return null;
+  return vectorCut(buf, cut, name).catch(() => null);
+}
+const RASTER = /^(png|jpe?g|webp|gif|bmp|tiff?|heic)$/i;
+/** why a pick has no vector to pull, for the pop-up */
+function noVectorWhy(ext: string, page: number): string {
+  if (RASTER.test(ext)) return `This file is a picture (${ext.toUpperCase()}): a photo or a flat image, so there's no vector art in it to pull.`;
+  if (page !== 1) return "The vector reader only reads the first page of a file, and this logo is on another page.";
+  return "The logo here is a picture placed inside the file, not vector shapes, so there's nothing to pull (it can look like a vector on screen).";
 }
 
 /** a usual print width for a location when the page doesn't say */
@@ -159,6 +197,8 @@ function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: Return
   const [page, setPage] = useState(1), [pages, setPages] = useState(1);
   const [pic, setPic] = useState(""), [err, setErr] = useState("");
   const [box, setBox] = useState<Box | null>(null);
+  const [checking, setChecking] = useState(false), [noVec, setNoVec] = useState<string | null>(null);
+  const [turn, setTurn] = useState(0);
   const can = useRef<HTMLCanvasElement | null>(null), buf = useRef<ArrayBuffer | null>(null), drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -174,6 +214,7 @@ function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: Return
   }, [sb, it, page]);
   useEffect(() => {
     if (!box || !buf.current) return;
+    setTurn(0);
     let on = true;
     nearBox(buf.current, it.ext, page, box).then((r) => {
       if (!on) return;
@@ -203,11 +244,36 @@ function CutPop({ sb, it, cuts, onWhole, onCut, onClose, defName }: { sb: Return
           <label className="field"><span>Logo name</span><input type="text" value={nm} onChange={(e) => setNm(e.target.value)} placeholder="Embark E" /></label>
           <label className="field"><span>Location (optional)</span><input type="text" list="bi-locs" value={loc} placeholder="None: just the logo" onChange={(e) => { setLoc(e.target.value); if (wFrom.startsWith("usual") && e.target.value) { setWIn(String(usualWidth(e.target.value))); setWFrom(`usual for ${e.target.value.toLowerCase()}`); } }} />
             <datalist id="bi-locs">{LOC_OPTS.map((o) => <option key={o} value={o} />)}{["Left Chest, Left Sleeve", "Front, Back"].map((o) => <option key={o} value={o} />)}</datalist></label>
+          <div className="field bi-turn"><span>Rotated on the mockup?</span>
+            <div className="bi-turnrow">
+              <button type="button" className="btn" title="Find how far it's turned and turn it back square" onClick={() => { if (box && can.current) setTurn(squareTurn(can.current, box)); }}>Square it</button>
+              <button type="button" className="btn icon" aria-label="Turn left half a degree" onClick={() => setTurn((t) => Math.round((t - 0.5) * 2) / 2)}>⟲</button>
+              <input type="number" step="0.5" min="-90" max="90" aria-label="Turn, degrees" value={turn} onChange={(e) => setTurn(+e.target.value || 0)} />
+              <button type="button" className="btn icon" aria-label="Turn right half a degree" onClick={() => setTurn((t) => Math.round((t + 0.5) * 2) / 2)}>⟳</button>
+            </div></div>
+          {turn !== 0 && can.current && <span className="bi-cutpic dark bi-turnpic" title={`Turned ${turn}° to sit square`}><img src={boxPic(can.current, box, turn)} alt="Turned square" /></span>}
           <label className="field bi-w"><span>Prints at (width, in)</span><input type="number" min="0.5" max="16" step="0.25" value={wIn} onChange={(e) => { setWIn(e.target.value); setWFrom(""); }} /></label>
-          <button type="button" className="btn primary" disabled={!can.current || !nm.trim()} onClick={() => { if (box && can.current) { onCut({ page, box, pic: boxPic(can.current, box), ...(loc.trim() ? { loc: loc.trim() } : {}), ...(+wIn > 0 ? { wIn: +wIn } : {}) }, nm.trim()); setBox(null); setNm(""); setLoc(""); setWIn(""); } }}>Add this logo</button>
+          <button type="button" className="btn primary" disabled={!can.current || !nm.trim() || checking} onClick={() => void (async () => {
+            if (!box || !can.current || !buf.current) return;
+            const c: Cut = { page, box, pic: boxPic(can.current, box, turn), ...(loc.trim() ? { loc: loc.trim() } : {}), ...(+wIn > 0 ? { wIn: +wIn } : {}), ...(turn ? { turn } : {}) };
+            // the vector has to come off it, or it isn't added
+            setChecking(true);
+            const vec = await cutToFile(buf.current, it.ext, c, nm.trim());
+            setChecking(false);
+            if (!vec) { setNoVec(noVectorWhy(it.ext, page)); return; }
+            onCut(c, nm.trim()); setBox(null); setNm(""); setLoc(""); setWIn(""); setTurn(0);
+          })()}>{checking ? "Pulling the vector…" : "Add this logo"}</button>
           {+wIn > 0 && <span className="faint bi-wnote">{(+wIn).toFixed(2).replace(/\.?0+$/, "")}&quot; × {(+wIn * ratio).toFixed(2).replace(/\.?0+$/, "")}&quot;{wFrom ? ` · ${wFrom}` : ""}</span>}
         </div>}
         {cuts.length > 0 && <div className="bi-cuts"><span className="faint">Picked off this file:</span>{cuts.map((c, i) => <span key={i} className="bi-cutitem"><span className="bi-cutpic dark" title={c.name}><img src={c.pic} alt={c.name} /></span><span><b>{c.name}</b><span className="faint">{[c.loc, c.wIn ? `${c.wIn}" wide` : ""].filter(Boolean).join(" · ")}</span></span></span>)}</div>}
+        {noVec && <div className="dla-bg" role="alertdialog" aria-modal="true" aria-label="Couldn't import the vector" onClick={(e) => { e.stopPropagation(); setNoVec(null); }}>
+          <div className="dla bi-novec" onClick={(e) => e.stopPropagation()}>
+            <h3>Couldn&apos;t import the vector for this logo</h3>
+            <p className="dla-sub">{noVec}</p>
+            <p className="dla-sub"><b>It wasn&apos;t added.</b> Find the logo&apos;s original art (an AI, EPS, PDF or SVG in another job, the customer&apos;s email or Dropbox) and pull it from there.</p>
+            <div className="dla-acts"><span className="spacer" /><button type="button" className="btn primary" autoFocus onClick={() => setNoVec(null)}>OK</button></div>
+          </div>
+        </div>}
         <div className="dla-acts">
           <button type="button" className="btn ghost" onClick={() => { onWhole(); onClose(); }}>Bring in the whole file</button>
           <span className="spacer" />
@@ -351,12 +417,15 @@ function BringInArt() {
   );
   const brandName = brands.find((b) => b.id === brand)?.name || "";
 
-  async function makeBrand() {
+  async function makeBrand(): Promise<string | null> {
     const name = (newBrand || "").trim();
-    if (!name || !cust) return;
+    if (!name || !cust) return null;
+    const have = brands.find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
+    if (have) { setBrand(have.id); setNewBrand(null); return have.id; }
     const { data, error } = await sb.from("brands").insert({ customer_id: cust, name, sort: brands.length + 1 }).select("*").single();
-    if (error) return setLog([`Couldn't make the brand: ${error.message}`]);
+    if (error) { setLog([`Couldn't make the brand: ${error.message}`]); return null; }
     setBrands([...brands, data as Brand]); setBrand((data as Brand).id); setNewBrand(null);
+    return (data as Brand).id;
   }
   async function file(path: string): Promise<File> {
     const { data, error } = await sb.storage.from("proofs").download(path);
@@ -367,6 +436,11 @@ function BringInArt() {
     const missing = picked.filter(([, p]) => p.as === "sew" && !p.target);
     if (missing.length) return setLog([`Say which logo each sew file goes with (${missing.length} not set).`]);
     setBusy(true);
+    // a brand typed but not made yet is made now (Oct 28, Nick: "I said add new group junk.com, and it didn't add the
+    // new group"): Bring in was pressed with the name still in the box
+    let brandId = brand;
+    if (newBrand !== null && newBrand.trim()) { const id = await makeBrand(); if (!id) { setBusy(false); return; } brandId = id; }
+    const brandLabel = brands.find((b) => b.id === brandId)?.name || (newBrand || "").trim();
     const out: string[] = [];
     const made = new Map<string, D>();
     const { data: u } = await sb.auth.getUser();
@@ -375,7 +449,7 @@ function BringInArt() {
       const it = itemByKey.get(p.src || key); if (!it) continue;
       try {
         let f = await file(it.path);
-        if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error("couldn't cut that logo off the page"); f = c; }
+        if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error(`no vector to pull, not added. ${noVectorWhy(it.ext, p.cut.page)}`); f = c; }
         const onto = p.into ? designs.find((x) => x.id === p.into) : undefined;
         const d = onto ? (await setLogoArt(sb, onto, f)) as D : (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: [it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `Pulled from order #${it.job.visual_id} (${it.job.nickname})`, p.cut?.loc ? `Location: ${p.cut.loc}` : "", p.cut?.wIn ? `Prints ${p.cut.wIn}" wide` : ""].filter(Boolean).join(" · ") })) as D;
         // a white / very light logo shows on a dark background (Oct 28, Nick: "if it's a white logo, you'll put it on a
@@ -383,10 +457,10 @@ function BringInArt() {
         const light = f.type === "image/svg+xml" && await (async () => { const t = await f.text(); const fills = [...t.matchAll(/(?:fill|stroke)="(#[0-9a-f]{6})"/gi)].map((m) => m[1]); return fills.length > 0 && fills.every((h) => { const v = parseInt(h.slice(1), 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 205; }); })();
         const specs = { ...((d.specs || {}) as object), ...(light ? { onShirts: [{ shirt: "Charcoal", ink: "Original colors" }] } : {}), source: { ...(it.job.dbx ? { dropbox: it.job.dbx } : { printavo: it.job.visual_id }), path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box, ...(p.cut.loc ? { where: p.cut.loc } : {}) } : {}) },
           ...(p.cut?.wIn ? { printSize: { wIn: p.cut.wIn, ...(d.width_px && d.height_px ? { hIn: Math.round((p.cut.wIn * d.height_px / d.width_px) * 100) / 100 } : {}), ...(p.cut.loc ? { location: p.cut.loc } : {}) } } : {}) };
-        await sb.from("designs").update({ specs, ...(brand && !onto ? { brand_id: brand } : {}) }).eq("id", d.id);
-        made.set(key, { ...d, specs, brand_id: brand || null } as D);
+        await sb.from("designs").update({ specs, ...(brandId && !onto ? { brand_id: brandId } : {}) }).eq("id", d.id);
+        made.set(key, { ...d, specs, brand_id: brandId || null } as D);
         if (onto && !(d.notes || "").includes(`#${it.job.visual_id}`)) await sb.from("designs").update({ notes: [d.notes, it.job.dbx ? `Art from Dropbox: ${it.job.dbx}` : `Art pulled from order #${it.job.visual_id}`].filter(Boolean).join(" · ") }).eq("id", d.id);
-        out.push(`${onto ? "New art on " : ""}D-${d.number} ${onto ? d.name : p.name || it.name}${p.cut?.loc ? ` (${p.cut.loc})` : ""}${brand && !onto ? ` · ${brands.find((b) => b.id === brand)?.name}` : ""}${f.type === "image/svg+xml" ? " · vector" : ""}`);
+        out.push(`${onto ? "New art on " : ""}D-${d.number} ${onto ? d.name : p.name || it.name}${p.cut?.loc ? ` (${p.cut.loc})` : ""}${brandId && !onto ? ` · ${brandLabel}` : ""}${f.type === "image/svg+xml" ? " · vector" : ""}`);
       } catch (e) { out.push(`${it.name}: ${e instanceof Error ? e.message : "couldn't bring it in"}`); }
     }
     for (const [key, p] of picked.filter(([, x]) => x.as === "sew")) {

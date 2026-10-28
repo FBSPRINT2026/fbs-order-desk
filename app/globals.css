@@ -15482,6 +15482,13 @@ html body .as .as-brand.on::before{background:var(--accent)}
 .bi-cutform{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:6px 0}
 .bi-cutform .field{display:flex;flex-direction:column;gap:4px;min-width:180px}
 .bi-cutform .field span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.bi-cutform .field.bi-turn{min-width:0}
+.bi-turnrow{display:flex;gap:4px;align-items:center}
+.bi-turnrow input{width:64px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 6px;font:14px var(--body);color:var(--ink)}
+.bi-turnrow .btn{height:36px}
+.bi-turnrow .btn.icon{width:36px;padding:0;justify-content:center}
+.bi-cutpic.bi-turnpic{width:72px;height:56px}
+.bi-novec{max-width:460px}
 .bi-cutform input,.bi-cutform select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;background:var(--surface)}
 .bi-cutpic.dark{background:#5b6472}
 .bi-cutitem{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
