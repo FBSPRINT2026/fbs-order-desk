@@ -2087,24 +2087,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             img = await loadImg(url).catch(() => null); cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02 && deltaE(c.hex, sc) >= 10) : [];
           }
         }
-        // art pulled off a photo of someone wearing it sits as the garment hangs: squared up on its own (Oct 27, Nick on
-        // the Keslow jacket's back: "you should have gotten… just a straightened… measures the points and makes it
-        // straight"); its size is measured again square. Undo puts it back as it was pulled off.
-        let orig: File | undefined, turn = 0;
-        if (kind === "photos") {
-          try {
-            const { rotateArt, straightAngle } = await import("@/lib/straighten");
-            const a = await straightAngle(pc.file);
-            if (a && Math.abs(a) <= 15) {
-              const b0 = await createImageBitmap(pc.file), f3 = await rotateArt(pc.file, a), b1 = await createImageBitmap(f3);
-              const k = pc.widthIn / Math.max(1, b0.width);
-              orig = pc.file; turn = a;
-              pc = { ...pc, file: f3, widthIn: Math.round(b1.width * k * 100) / 100, heightIn: Math.round(b1.height * k * 100) / 100 };
-              b0.close(); b1.close();
-              URL.revokeObjectURL(url); url = URL.createObjectURL(f3);
-            }
-          } catch { /* left as pulled off */ }
-        }
+        // never turned on its own (Oct 28, Nick: "I use the mock-up helper tool to bring in this art, and it got rotated
+        // when I didn't need it to… the straighten should only happen if we select it"): art comes in exactly as pulled
+        // off; the row's Straighten button squares it up when asked (turnRow)
+        const orig: File | undefined = undefined, turn = 0;
         // each color: the nearest PMS written on the page (when it's close), else our closest ink
         const inks: string[] = [];
         for (const c of cols) {
