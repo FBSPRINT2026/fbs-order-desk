@@ -4,6 +4,7 @@ import type { GLine, Imprint } from "@/lib/pricing";
 import { guessHex } from "@/lib/mockup";
 import { threadByName } from "@/lib/embroidery";
 import { colorHex } from "@/lib/inkColors";
+import { InkSelect, ThreadSelect } from "@/components/InkSelect";
 
 /**
  * Color change on a print (Oct 27, Nick on #40192's ShipStation polos: "you click a color change button and you go, okay,
@@ -68,8 +69,10 @@ export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprin
               <span className="cc-tag">{String.fromCharCode(66 + i)}</span>
               <span className="cc-chg">Change
                 {inks.length > 1 ? <select aria-label={`The ${word} that changes`} value={v.from} onChange={(e) => setVers(vers.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))}>{inks.map((n) => <option key={n}>{n}</option>)}</select> : <b>{v.from || inks[0]}</b>}
-                to <span className="cc-sw" style={{ background: swatch(v.to) }} />
-                <input type="text" value={v.to} autoFocus={!v.to} placeholder={thread ? "Madeira 1801 Super White" : "White"} aria-label={`The new ${word}`} onChange={(e) => setVers(vers.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} />
+                to
+                <span className="cc-pick">{thread
+                  ? <ThreadSelect value={v.to} suggest={inks} line={im.emb?.line || "Polyneon 40"} onChange={(name) => setVers(vers.map((x, j) => (j === i ? { ...x, to: name } : x)))} />
+                  : <InkSelect value={v.to ? { name: v.to, hex: swatch(v.to) } : undefined} onChange={(o) => { if (o && o.name && o.name !== "none") setVers(vers.map((x, j) => (j === i ? { ...x, to: o.name } : x))); }} />}</span>
               </span>
               {vers.length > 1 && <button type="button" className="linkbtn" onClick={() => { setVers(vers.filter((_, j) => j !== i)); setPick(Object.fromEntries((Object.entries(pick) as [string, number][]).map(([k, n]) => [k, n === i + 1 ? 0 : n > i + 1 ? n - 1 : n]))); }}>Remove</button>}
             </div>
