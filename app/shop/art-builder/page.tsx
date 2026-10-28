@@ -12,7 +12,9 @@ import { nextSewCode, sewFilesOf, tajimaName, type Brand, type SewFile } from "@
 import { tajimaFile } from "@/components/CustomerBrands";
 
 /**
- * Bring in art (Oct 28, Nick: "how can we quickly bring in art… I want to be able to quickly look at all the artwork for
+ * Customer artwork builder, in Shop Tools (Oct 28, Nick: "call it customer artwork builder… select a customer from a
+ * dropdown, have a search… once you check it, you would drop down all the files… then you can create their brand… the
+ * easiest way for me to get clients onboarded"). First asked as (Oct 28, Nick: "how can we quickly bring in art… I want to be able to quickly look at all the artwork for
  * Embark… click the jobs… I select them and say, these are the arts I want you to bring in… name what type of file it is,
  * digitizing or whatever… without me having to go through and download and upload everything"). A client's Printavo jobs
  * with every attachment; tick a file, say what it is, and Bring in makes the logos (with a D-number, under the picked
@@ -122,6 +124,9 @@ function BringInArt() {
   const [picks, setPicks] = useState<Record<string, Pick>>({} as Record<string, Pick>);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  /** the jobs ticked open to show their files */
+  const [openJobs, setOpenJobs] = useState<Set<string>>(new Set());
+  const [newBrand, setNewBrand] = useState<string | null>(null);
 
   useEffect(() => { sb.from("customers").select("*").then(({ data }) => setCustomers(((data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))))); }, [sb]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
@@ -130,7 +135,7 @@ function BringInArt() {
     setDesigns((data || []) as D[]);
   }
   useEffect(() => {
-    setJobs(null); setPicks({}); setN(15);
+    setJobs(null); setPicks({}); setN(15); setOpenJobs(new Set());
     if (!cust) { setBrands([]); setDesigns([]); return; }
     sb.from("brands").select("*").eq("customer_id", cust).is("archived_at", null).order("sort").then(({ data }) => { const bs = (data || []) as Brand[]; setBrands(bs); if (!bs.some((b) => b.id === brand)) setBrand(bs.find((b) => q && b.name.toLowerCase().includes(q.toLowerCase().trim()))?.id || ""); });
     void loadDesigns(cust);
@@ -139,7 +144,9 @@ function BringInArt() {
     if (!cust) return;
     const t = setTimeout(async () => {
       let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files").eq("customer_id", cust).gt("files_total", 0).order("order_date", { ascending: false }).limit(300);
-      if (q.trim()) r = r.ilike("nickname", `%${q.trim()}%`);
+      // anything in the job: its name, PO, line items, notes (archived_orders.search_text)
+      const w = q.trim().replace(/[%,()*]/g, " ").trim();
+      if (w) r = r.or(`nickname.ilike.%${w}%,search_text.ilike.%${w}%`);
       const { data } = await r;
       setJobs((data || []) as Job[]); setN(15);
     }, 300);
@@ -163,6 +170,13 @@ function BringInArt() {
   const set = (key: string, p: Partial<Pick>, it?: Item) => setPicks((x) => ({ ...x, [key]: { on: true, as: it?.kind === "sew" ? "sew" : "logo", name: it ? realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 60) || it.name : "", target: "", ...x[key], ...p } }));
   const itemByKey = useMemo(() => new Map(items.flatMap((x) => x.list.map((i) => [i.key, i] as const))), [items]);
 
+  async function makeBrand() {
+    const name = (newBrand || "").trim();
+    if (!name || !cust) return;
+    const { data, error } = await sb.from("brands").insert({ customer_id: cust, name, sort: brands.length + 1 }).select("*").single();
+    if (error) return setLog([`Couldn't make the brand: ${error.message}`]);
+    setBrands([...brands, data as Brand]); setBrand((data as Brand).id); setNewBrand(null);
+  }
   async function file(path: string): Promise<File> {
     const { data, error } = await sb.storage.from("proofs").download(path);
     if (!data) throw new Error(`Couldn't open ${nameOf(path)}: ${error?.message || "not found"}`);
@@ -214,13 +228,15 @@ function BringInArt() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Bring in art</h1><div className="eyebrow">A client&apos;s Printavo jobs with every file. Tick what to keep, say what it is, bring it in.</div></div>
+        <div><h1>Customer artwork builder</h1><div className="eyebrow">A client&apos;s Printavo jobs and their files. Tick a job, say what each file is, bring it in.</div></div>
         <div className="row"><Link className="btn" href="/shop/artwork">Artwork</Link><button type="button" className="btn primary" disabled={!picked.length || busy} onClick={() => void bringIn()}>{busy ? "Bringing in…" : `Bring in ${picked.length || ""}`.trim()}</button></div>
       </div>
       <div className="toolbar bi-tools">
         <CustomerPick compact value={cust || null} options={custOpts} placeholder="Client: type one" ariaLabel="Client" onPick={(v) => setCust(v || "")} />
         <label className="aa-search"><SearchInput placeholder="Jobs named… (embark)" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-        {brands.length > 0 && <label className="bi-brand"><span className="faint">Logos go under</span><select value={brand} onChange={(e) => setBrand(e.target.value)}><option value="">No brand</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
+        {cust && (newBrand === null
+          ? <label className="bi-brand"><span className="faint">Logos go under</span><select value={brand} onChange={(e) => (e.target.value === "+" ? setNewBrand("") : setBrand(e.target.value))}><option value="">No brand (the client itself)</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}<option value="+">+ New brand…</option></select></label>
+          : <span className="bi-brand"><input type="text" autoFocus placeholder="Brand name (Embark)" value={newBrand} onChange={(e) => setNewBrand(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void makeBrand(); if (e.key === "Escape") setNewBrand(null); }} /><button type="button" className="btn sm" disabled={!newBrand.trim()} onClick={() => void makeBrand()}>Make brand</button><button type="button" className="btn sm ghost" onClick={() => setNewBrand(null)}>Cancel</button></span>)}
       </div>
       {log.length > 0 && <div className="panel bi-log"><div className="panel-b">{log.map((l, i) => <div key={i}>{l}</div>)}</div></div>}
       {!cust ? <div className="aa-empty">Pick a client to see their Printavo jobs.</div> : !jobs ? <div className="aa-empty">Loading their jobs…</div> : !items.length ? <div className="aa-empty">No jobs with files{q ? ` named "${q}"` : ""}.</div> : (
@@ -228,8 +244,10 @@ function BringInArt() {
           <p className="faint" style={{ margin: "4px 0 10px" }}>{items.length} job{items.length === 1 ? "" : "s"} with files, newest first.</p>
           {items.slice(0, n).map(({ j, list }) => (
             <section key={j.id} className="panel bi-job">
-              <div className="panel-h"><h2><span className="ordno">#{j.visual_id}</span> {j.nickname}</h2><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}</span></div>
-              <div className="panel-b bi-files">
+              <label className="panel-h bi-jh"><input type="checkbox" checked={openJobs.has(j.id)} onChange={() => setOpenJobs((x) => { const m = new Set(x); if (m.has(j.id)) m.delete(j.id); else m.add(j.id); return m; })} />
+                <h2><span className="ordno">#{j.visual_id}</span> {j.nickname}</h2><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
+                {list.filter((i) => picks[i.key]?.on).length > 0 && <span className="bi-cnt">{list.filter((i) => picks[i.key]?.on).length} picked</span>}</label>
+              {openJobs.has(j.id) && <div className="panel-b bi-files">
                 {list.map((it) => {
                   const p = picks[it.key], had = done.get(it.path);
                   if (it.kind === "other") return <a key={it.key} className="bi-f other" href={`/api/files/open?${new URLSearchParams({ p: it.path })}`} target="_blank" rel="noreferrer"><span className="bi-pic"><span className="bi-ext">{it.ext.toUpperCase() || "FILE"}</span></span><span className="bi-n">{it.name}</span></a>;
@@ -253,7 +271,7 @@ function BringInArt() {
                     </div>
                   );
                 })}
-              </div>
+              </div>}
             </section>
           ))}
           {items.length > n && <button type="button" className="btn" style={{ display: "block", margin: "8px auto" }} onClick={() => setN(n + 15)}>Show more jobs ({items.length - n} more)</button>}

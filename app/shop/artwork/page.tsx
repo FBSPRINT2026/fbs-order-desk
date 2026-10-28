@@ -205,7 +205,7 @@ export default function ArtworkPage() {
       <div className="page-head">
         <div><div className="eyebrow">{liveLogos} logo{liveLogos === 1 ? "" : "s"} · {mockups.length} mockup{mockups.length === 1 ? "" : "s"}</div><h1>Artwork</h1></div>
         <div className="row">
-          <Link className="btn" href="/shop/artwork/bring-in">Bring in art</Link>
+          <Link className="btn" href="/shop/art-builder">Customer artwork builder</Link>
           <Link className="btn" href="/shop/artwork/mockup">Mockup Creator</Link>
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload logo"}</button>
         </div>
@@ -260,19 +260,15 @@ export default function ArtworkPage() {
                   </div>
                   {bs.length > 0 && <>
                     {/* back to all of the client's logos after picking a brand (Oct 28, Nick) */}
-                    <button type="button" className={"btn sm as-all" + (brandPick[c.id] ? "" : " on")} aria-pressed={!brandPick[c.id]} onClick={() => setBrandPick({ ...brandPick, [c.id]: "" })}><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1" /><rect x="9.5" y="1.5" width="5" height="5" rx="1" /><rect x="1.5" y="9.5" width="5" height="5" rx="1" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /></svg> All artwork</button>
+                    <button type="button" className={"btn sm as-all" + (brandPick[c.id] ? "" : " on") + (over === "none" && drag?.c === c.id ? " over" : "")} aria-pressed={!brandPick[c.id]} title="All their logos (drop a logo here to take it off its brand)" onClick={() => setBrandPick({ ...brandPick, [c.id]: "" })}
+                      onDragOver={(e) => { if (drag?.c !== c.id) return; e.preventDefault(); setOver("none"); }} onDragLeave={() => setOver((x) => (x === "none" ? "" : x))} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, null); }}><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1" /><rect x="9.5" y="1.5" width="5" height="5" rx="1" /><rect x="1.5" y="9.5" width="5" height="5" rx="1" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /></svg> All artwork</button>
                     <div className="as-sec">Brands</div>
                     {bs.map((b) => { const on = brandPick[c.id] === b.id; const sw = (b.colors || []).slice(0, 2); const dropHere = drag?.c === c.id; return (
-                      <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "") + (dropHere ? " drop" : "") + (over === b.id && dropHere ? " over" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}
+                      <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "") + (over === b.id && dropHere ? " over" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}
                         onDragOver={(e) => { if (!dropHere) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(b.id); }} onDragLeave={() => setOver((x) => (x === b.id ? "" : x))} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, b.id); }}>
-                        {[0, 1].map((i) => <i key={i} className={"as-sw" + (sw[i]?.hex ? "" : " none")} style={sw[i]?.hex ? { background: sw[i].hex } : undefined} />)}<span>{b.name}</span>{dropHere && <span className="as-drop-n">Drop here</span>}
+                        {[0, 1].map((i) => <i key={i} className={"as-sw" + (sw[i]?.hex ? "" : " none")} style={sw[i]?.hex ? { background: sw[i].hex } : undefined} />)}<span>{b.name}</span>
                       </button>
                     ); })}
-                    {drag?.c === c.id && (designs.find((x) => x.id === drag.id) as (Design & { brand_id?: string | null }) | undefined)?.brand_id && (
-                      <button type="button" className={"as-brand drop" + (over === "none" ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver("none"); }} onDragLeave={() => setOver("")} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, null); }}>
-                        <i className="as-sw none" /><i className="as-sw none" /><span>No brand</span><span className="as-drop-n">Drop here</span>
-                      </button>
-                    )}
                   </>}
                   {act.length > 0 && <>
                     <div className="as-sec">Active orders</div>

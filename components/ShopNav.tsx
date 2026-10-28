@@ -52,6 +52,7 @@ const ICONS: Record<string, React.ReactNode> = {
   shipping: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>,
   artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
   spool: <svg viewBox="0 0 24 24"><path d="M6 3h12M6 21h12" /><path d="M8 3v18M16 3v18" /><path d="M8 7l8 2M8 11l8 2M8 15l8 2" /></svg>,
+  artbuild: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="13" rx="2" /><path d="M6 14l3-4 3 3 2-2" /><path d="M19 8v8M15 12h8" /></svg>,
   gang: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><rect x="6" y="6" width="5" height="4" /><rect x="13" y="6" width="5" height="4" /><rect x="6" y="13" width="5" height="4" /><rect x="13" y="13" width="5" height="4" /></svg>,
   needle: <svg viewBox="0 0 24 24"><path d="M19 3 6.5 15.5" /><path d="M17.5 4.5l2 2" /><path d="M6.5 15.5 4 20l4.5-2.5" /><path d="M14 8c-3 1-6 2-7 6s4 5 7 2" /></svg>,
   ink: <svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.2 6 7.6 6 10.6A6 6 0 0 1 6 13.6C6 10.6 8.5 7.2 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" /></svg>,
@@ -255,7 +256,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
-    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/clickup", "clickup", "ClickUp Jobs"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"]] },
+    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/clickup", "clickup", "ClickUp Jobs"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
