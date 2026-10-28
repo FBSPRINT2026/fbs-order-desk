@@ -45,7 +45,10 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
     groups.forEach((g, gi) => {
       const ours = g.lines.filter((l) => lineQty(l) > 0), theirs = snap.groups[gi]?.lines || [];
       ours.forEach((l, li) => {
-        const t = theirs[li]; if (!t) return;
+        const t0 = theirs[li]; if (!t0) return;
+        // Printavo keeps a one-size item's count under "Other" (OTHER); ours is OS (Oct 28, Nick: #40189's 20 Carhartt
+        // backpacks showed "OS 20 → 0")
+        const t = t0.sizes.OTHER != null && t0.sizes.OS == null ? { ...t0, sizes: Object.fromEntries(Object.entries(t0.sizes).map(([k, v]) => [k === "OTHER" ? "OS" : k, v])) } : t0;
         const name = `${[l.style, l.color].filter(Boolean).join(" ")}`;
         const keys = [...new Set([...Object.keys(l.sizes || {}), ...Object.keys(t.sizes)])].filter((z) => (SIZES as readonly string[]).includes(z));
         const diff = keys.filter((z) => (+(l.sizes?.[z as Size] || 0)) !== (+(t.sizes[z] || 0)));
