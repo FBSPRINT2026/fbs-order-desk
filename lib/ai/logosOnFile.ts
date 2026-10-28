@@ -107,6 +107,13 @@ export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups
   const out: Group[] = [];
   const done = new Set<Group>();
   let merged = false;
+  // a group of one garment named for it ("Perth Performance Quarter-Zip - Navy") keeps that name on its line once the
+  // group is renamed for its spot (the line's garment, so a quarter-zip's sleeve goes to its upper arm)
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const g of groups) if (isLogo(g) && g.lines.length === 1 && !(g.lines[0].garment || "").trim() && (g.name || "").trim()) {
+    const l = g.lines[0];
+    g.lines[0] = { ...l, garment: g.name!.replace(new RegExp(`\\s*[-–—·,]\\s*${esc(l.color || "")}\\s*$`, "i"), "").replace(new RegExp(`^${esc(l.brand || "")}\\s+`, "i"), "").trim().slice(0, 120) };
+  }
   for (const g of groups) {
     if (done.has(g)) continue;
     const set = isLogo(g) ? bySig.get(sig(g)) || [g] : [g];
