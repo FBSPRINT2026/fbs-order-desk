@@ -140,15 +140,83 @@ export function LogoPic({ url, alt, shirt }: { url: string; alt: string; shirt?:
   );
 }
 
+/* ---------- the logo painted in the inks it printed in (Imprint.inkMap): each file color → its ink, "none" left off ---------- */
+const PAINTED = new Map<string, Promise<string | null>>();
+const rgbOf = (h: string) => { const v = parseInt((h || "").replace("#", "").slice(0, 6), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+function paint(url: string, map: Record<string, { hex: string; name: string }>): Promise<string | null> {
+  return new Promise((res) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onerror = () => res(null);
+    img.onload = () => {
+      try {
+        const k = Math.min(1, 500 / Math.max(img.naturalWidth, img.naturalHeight));
+        const W = Math.max(1, Math.round(img.naturalWidth * k)), H = Math.max(1, Math.round(img.naturalHeight * k));
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const g = c.getContext("2d", { willReadFrequently: true })!;
+        g.drawImage(img, 0, 0, W, H);
+        const px = g.getImageData(0, 0, W, H), p = px.data;
+        const keys = Object.entries(map).map(([from, to]) => ({ f: rgbOf(from), t: to.name === "none" || !to.hex ? null : rgbOf(to.hex) }));
+        // a picture on a solid square: that square isn't printed (unless the map prints it)
+        const edge: number[] = [];
+        for (let x = 0; x < W; x += 2) edge.push(x, (H - 1) * W + x);
+        for (let y = 0; y < H; y += 2) edge.push(y * W, y * W + W - 1);
+        const solid = edge.filter((i) => p[i * 4 + 3] > 200);
+        let bg: number[] | null = null;
+        if (solid.length / edge.length > 0.6) {
+          const mid = (j: number) => solid.map((i) => p[i * 4 + j]).sort((a, b) => a - b)[Math.floor(solid.length / 2)];
+          bg = [mid(0), mid(1), mid(2)];
+          const kept = keys.find((x) => Math.hypot(x.f[0] - bg![0], x.f[1] - bg![1], x.f[2] - bg![2]) < 30);
+          if (kept?.t) bg = null;
+        }
+        for (let i = 0; i < p.length; i += 4) {
+          if (p[i + 3] < 8) continue;
+          const r = p[i], gg = p[i + 1], b = p[i + 2];
+          if (bg && Math.hypot(r - bg[0], gg - bg[1], b - bg[2]) < 40) { p[i + 3] = 0; continue; }
+          let best = keys[0], bd = Infinity;
+          for (const x of keys) { const d = Math.hypot(r - x.f[0], gg - x.f[1], b - x.f[2]); if (d < bd) { bd = d; best = x; } }
+          if (!best?.t) { p[i + 3] = 0; continue; }
+          p[i] = best.t[0]; p[i + 1] = best.t[1]; p[i + 2] = best.t[2];
+        }
+        g.putImageData(px, 0, 0);
+        res(c.toDataURL("image/png"));
+      } catch { res(null); }
+    };
+    img.src = url;
+  });
+}
+function usePainted(url: string, map?: Record<string, { hex: string; name: string }> | null): string | null | undefined {
+  const [v, setV] = useState<string | null | undefined>(undefined);
+  const key = url && map ? keyOf(url) + "|" + JSON.stringify(map) : "";
+  useEffect(() => {
+    let on = true;
+    if (!key || !map) { setV(null); return; }
+    if (!PAINTED.has(key)) PAINTED.set(key, paint(url, map));
+    PAINTED.get(key)!.then((r) => { if (on) setV(r); });
+    return () => { on = false; };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return v;
+}
+/** the logo in the inks it printed in, on its shirt */
+export function PaintedPic({ url, map, shirt, alt }: { url: string; map: Record<string, { hex: string; name: string }>; shirt: string; alt: string }) {
+  const src = usePainted(url, map), bg = useShirtBg(shirt);
+  if (src === null) return <LogoPic url={url} alt={alt} shirt={shirt} />;
+  return <span className="lp" style={{ background: bg }}>{src ? <img src={src} alt={alt} /> : null}</span>;
+}
+
 /**
  * A logo's face on a tile, the same everywhere: its own first background (Edit logo → Backgrounds) when it has one;
  * else how it last printed (Imprint.shownArt, the art as the mockup showed it: inks painted, background off) on that
  * order's shirt; else the logo itself on the shirt it was printed on (Oct 28, Nick: "the Keslow camera D10252 has the red
  * square still instead of how we actually did it").
  */
-export function LogoFace({ d, urls, shirt, shown }: { d: Pick<Design, "id" | "name" | "specs">; urls: Record<string, string>; shirt?: string; shown?: { url: string; shirt: string } | null }) {
+export function LogoFace({ d, urls, shirt, shown, printed }: { d: Pick<Design, "id" | "name" | "specs">; urls: Record<string, string>; shirt?: string; shown?: { url: string; shirt: string } | null;
+  /** how it last printed when there's no mockup picture: the ink map, or its one ink, on that shirt (lib/logoShirts.ts logoPrintFrom) */
+  printed?: { shirt: string; map?: Record<string, { hex: string; name: string }>; ink?: string } | null }) {
   const v = onShirtsOf(d)[0], own = v?.path ? urls[v.path] : "";
   if (v && urls[d.id]) return <ShirtView className="main" url={own || urls[d.id]} shirt={v.shirt} ink={own ? AS_IS : v.ink} />;
   if (shown?.url) return <LogoPic url={shown.url} alt={d.name} shirt={shown.shirt || shirt} />;
-  return urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={shirt} /> : null;
+  if (urls[d.id] && printed?.map && printed.shirt) return <PaintedPic url={urls[d.id]} map={printed.map} shirt={printed.shirt} alt={d.name} />;
+  if (urls[d.id] && printed?.ink && printed.shirt) return <ShirtView className="main" url={urls[d.id]} shirt={printed.shirt} ink={printed.ink} />;
+  return urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={printed?.shirt || shirt} /> : null;
 }

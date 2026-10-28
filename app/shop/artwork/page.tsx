@@ -10,7 +10,9 @@ import SearchInput from "@/components/SearchInput";
 import CustomerPick from "@/components/CustomerPick";
 import { LogoFace, LogoPic } from "@/components/LogoOnShirts";
 import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
-import { logoShirtsFrom, logoShownFrom } from "@/lib/logoShirts";
+import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
+import { guessHex } from "@/lib/mockup";
+import { colorHex, deltaE } from "@/lib/inkColors";
 import { useSticky } from "@/lib/useSticky";
 import { laneState, type Brand } from "@/lib/brands";
 
@@ -56,6 +58,7 @@ export default function ArtworkPage() {
   // the shirt each logo was printed on, for its card (Oct 17, Nick: "MH Elem final should be on a blue background")
   const [logoShirts, setLogoShirts] = useState<Record<string, string>>({});
   const [shown, setShown] = useState<Record<string, { url: string; shirt: string }>>({});
+  const [printed, setPrinted] = useState<Record<string, LogoPrint>>({});
   /** a logo being dragged onto one of its client's brands (Oct 28, Nick: "drag logos over into like MEI, ShipStation") */
   const [drag, setDrag] = useState<{ c: string; id: string } | null>(null);
   const [over, setOver] = useState("");
@@ -63,6 +66,7 @@ export default function ArtworkPage() {
     sb.from("orders").select("id, number, nickname, status, customer_id, total, created_at, discarded_at, draft, groups, lines").order("created_at", { ascending: false }).limit(3000)
       .then(async ({ data }) => {
         setLogoShirts(logoShirtsFrom((data || []) as never[])); setOrders(((data || []) as Ord[]).filter((o) => !o.discarded_at && !o.draft));
+        setPrinted(logoPrintFrom((data || []) as never[], (c) => colorHex(c) || guessHex(c), deltaE));
         // how each logo last printed (the mockup's art), signed for the tiles
         const sh = logoShownFrom((data || []) as never[]), paths = [...new Set(Object.values(sh).map((x) => x.path))];
         if (!paths.length) return;
@@ -283,7 +287,7 @@ export default function ArtworkPage() {
                   {more.map((d) => { const n = used.get(d.id) || 0; return (
                     <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "") + (drag?.id === d.id ? " drag" : "")} title={`D-${d.number} ${d.name || ""}${bs.length ? " · drag onto a brand to file it there" : ""}`.trim()}
                       draggable={bs.length > 0} onDragStart={(e) => { if (!bs.length) return; e.dataTransfer.setData("text/plain", d.id); e.dataTransfer.effectAllowed = "move"; setDrag({ c: c.id, id: d.id }); }} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                      <span className="as-pic">{urls[d.id] || shown[d.id] ? <LogoFace d={d} urls={urls} shirt={logoShirts[d.id]} shown={shown[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
+                      <span className="as-pic">{urls[d.id] || shown[d.id] ? <LogoFace d={d} urls={urls} shirt={logoShirts[d.id]} shown={shown[d.id] ? { ...shown[d.id], shirt: printed[d.id]?.shirt || shown[d.id].shirt } : null} printed={printed[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
                       <span className="as-lanes">{LANE_TAGS.map(([lane, short, label]) => { const st = laneState(d, lane); return <span key={lane} className={"as-ln" + (st.ready ? " has" : "")} title={`${label}: ${st.ready ? st.note : "no file yet"}`}>{short}</span>; })}</span>
                       <span className="as-lab"><span>D-{d.number}</span>{view === "used" && n > 0 && <b>{n}×</b>}</span>
                     </Link>
