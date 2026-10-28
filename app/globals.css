@@ -15404,3 +15404,12 @@ html body .as .as-pic .lp img{position:static;width:auto;height:auto;max-width:8
 html body .as .as-ord .ordno{font-size:12.5px}
 html body .as a,html body .as a *{text-decoration:none}
 html body .as .as-ord:hover .as-ord-n,html body .as .as-name:hover{text-decoration:underline}
+/* the client's block stands out from its logos (Oct 28, Nick: "the company names aren't stand out enough… add like a border") */
+html body .as .as-who{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;align-self:start;position:relative;overflow:hidden}
+html body .as .as-who::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+html body .as .as-name{font-family:var(--display);font-size:16px;font-weight:700;line-height:1.25}
+/* dragging a logo onto a brand */
+html body .as .as-t.drag{opacity:.4}
+html body .as .as-brand.drop{outline:1px dashed var(--accent);outline-offset:-1px;margin:2px 0 2px -4px}
+html body .as .as-brand.over{background:var(--accent-soft);color:var(--accent);outline-style:solid}
+.as-drop-n{margin-left:auto;font-size:11px;color:var(--accent)}

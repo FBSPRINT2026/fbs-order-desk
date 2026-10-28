@@ -129,10 +129,26 @@ export function ShirtView({ url, shirt, ink, size, title, className }: { url: st
  * on the shirt color it was printed on when known, else white, or a dark tile for a light (white) logo.
  */
 export function LogoPic({ url, alt, shirt }: { url: string; alt: string; shirt?: string }) {
-  const art = useArt(shirt ? "" : url), bg = useShirtBg(shirt || "");
+  const art = useArt(url), bg = useShirtBg(shirt || "");
+  // on its shirt: the art with its background and white fill taken off, so a logo saved on a white square doesn't show a
+  // white box on the shirt (Oct 28, Nick on the Artwork page: "He Makes a Way with white box… The Lord is my shepherd
+  // doesn't have the white knocked out")
   return (
     <span className="lp" style={{ background: shirt ? bg : art?.light ? "#2b3140" : "#fff" }}>
-      <img src={url} alt={alt} />
+      {shirt && art === undefined ? null : <img src={shirt && art ? art.cut : url} alt={alt} />}
     </span>
   );
+}
+
+/**
+ * A logo's face on a tile, the same everywhere: its own first background (Edit logo → Backgrounds) when it has one;
+ * else how it last printed (Imprint.shownArt, the art as the mockup showed it: inks painted, background off) on that
+ * order's shirt; else the logo itself on the shirt it was printed on (Oct 28, Nick: "the Keslow camera D10252 has the red
+ * square still instead of how we actually did it").
+ */
+export function LogoFace({ d, urls, shirt, shown }: { d: Pick<Design, "id" | "name" | "specs">; urls: Record<string, string>; shirt?: string; shown?: { url: string; shirt: string } | null }) {
+  const v = onShirtsOf(d)[0], own = v?.path ? urls[v.path] : "";
+  if (v && urls[d.id]) return <ShirtView className="main" url={own || urls[d.id]} shirt={v.shirt} ink={own ? AS_IS : v.ink} />;
+  if (shown?.url) return <LogoPic url={shown.url} alt={d.name} shirt={shown.shirt || shirt} />;
+  return urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={shirt} /> : null;
 }

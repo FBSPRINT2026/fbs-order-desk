@@ -8,9 +8,9 @@ import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
 import CustomerPick from "@/components/CustomerPick";
-import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
+import { LogoFace, LogoPic } from "@/components/LogoOnShirts";
 import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
-import { logoShirtsFrom } from "@/lib/logoShirts";
+import { logoShirtsFrom, logoShownFrom } from "@/lib/logoShirts";
 import { useSticky } from "@/lib/useSticky";
 import { laneState, type Brand } from "@/lib/brands";
 
@@ -55,9 +55,21 @@ export default function ArtworkPage() {
 
   // the shirt each logo was printed on, for its card (Oct 17, Nick: "MH Elem final should be on a blue background")
   const [logoShirts, setLogoShirts] = useState<Record<string, string>>({});
+  const [shown, setShown] = useState<Record<string, { url: string; shirt: string }>>({});
+  /** a logo being dragged onto one of its client's brands (Oct 28, Nick: "drag logos over into like MEI, ShipStation") */
+  const [drag, setDrag] = useState<{ c: string; id: string } | null>(null);
+  const [over, setOver] = useState("");
   useEffect(() => {
     sb.from("orders").select("id, number, nickname, status, customer_id, total, created_at, discarded_at, draft, groups, lines").order("created_at", { ascending: false }).limit(3000)
-      .then(({ data }) => { setLogoShirts(logoShirtsFrom((data || []) as never[])); setOrders(((data || []) as Ord[]).filter((o) => !o.discarded_at && !o.draft)); });
+      .then(async ({ data }) => {
+        setLogoShirts(logoShirtsFrom((data || []) as never[])); setOrders(((data || []) as Ord[]).filter((o) => !o.discarded_at && !o.draft));
+        // how each logo last printed (the mockup's art), signed for the tiles
+        const sh = logoShownFrom((data || []) as never[]), paths = [...new Set(Object.values(sh).map((x) => x.path))];
+        if (!paths.length) return;
+        const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
+        const at = Object.fromEntries((sg || []).map((x, i) => [paths[i], x.signedUrl || ""]));
+        setShown(Object.fromEntries(Object.entries(sh).filter(([, v]) => at[v.path]).map(([k, v]) => [k, { url: at[v.path], shirt: v.shirt }])));
+      });
     sb.from("brands").select("*").is("archived_at", null).order("sort").then(({ data }) => setBrands((data || []) as Brand[]));
   }, [sb]);
   async function load() {
@@ -159,6 +171,17 @@ export default function ArtworkPage() {
     }
     for (const g of mockSets) g.sort((a, b) => a.created_at.localeCompare(b.created_at)); }
 
+  /** a logo filed under one of its client's brands (or none), from a drag onto the brand */
+  async function fileUnder(id: string, brandId: string | null) {
+    const was = designs.find((x) => x.id === id) as (Design & { brand_id?: string | null }) | undefined;
+    if (!was || (was.brand_id || null) === brandId) return;
+    setDesigns((ds) => ds.map((x) => (x.id === id ? ({ ...x, brand_id: brandId } as Design) : x)));
+    const { error } = await sb.from("designs").update({ brand_id: brandId }).eq("id", id);
+    const name = brandId ? brands.find((b) => b.id === brandId)?.name || "the brand" : "no brand";
+    if (error) { setDesigns((ds) => ds.map((x) => (x.id === id ? ({ ...x, brand_id: was.brand_id ?? null } as Design) : x))); setMsg(`Couldn't file D-${was.number}: ${error.message}`); return; }
+    setMsg(`D-${was.number} is under ${name} now.`);
+  }
+
   async function save() {
     if (!form?.file) return setMsg("Choose a file to upload.");
     if (!form.customer_id) return setMsg("Pick the customer this logo belongs to.");
@@ -230,11 +253,17 @@ export default function ArtworkPage() {
                   <div className="as-mini"><span><b>{ds.length}</b> logo{ds.length === 1 ? "" : "s"}</span>{last && <span><b>{shortDate(last)}</b> last added</span>}</div>
                   {bs.length > 0 && <>
                     <div className="as-sec">Brands</div>
-                    {bs.map((b) => { const on = brandPick[c.id] === b.id; const sw = (b.colors || []).slice(0, 2); return (
-                      <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}>
-                        {[0, 1].map((i) => <i key={i} className={"as-sw" + (sw[i]?.hex ? "" : " none")} style={sw[i]?.hex ? { background: sw[i].hex } : undefined} />)}<span>{b.name}</span>
+                    {bs.map((b) => { const on = brandPick[c.id] === b.id; const sw = (b.colors || []).slice(0, 2); const dropHere = drag?.c === c.id; return (
+                      <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "") + (dropHere ? " drop" : "") + (over === b.id && dropHere ? " over" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}
+                        onDragOver={(e) => { if (!dropHere) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(b.id); }} onDragLeave={() => setOver((x) => (x === b.id ? "" : x))} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, b.id); }}>
+                        {[0, 1].map((i) => <i key={i} className={"as-sw" + (sw[i]?.hex ? "" : " none")} style={sw[i]?.hex ? { background: sw[i].hex } : undefined} />)}<span>{b.name}</span>{dropHere && <span className="as-drop-n">Drop here</span>}
                       </button>
                     ); })}
+                    {drag?.c === c.id && (designs.find((x) => x.id === drag.id) as (Design & { brand_id?: string | null }) | undefined)?.brand_id && (
+                      <button type="button" className={"as-brand drop" + (over === "none" ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver("none"); }} onDragLeave={() => setOver("")} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, null); }}>
+                        <i className="as-sw none" /><i className="as-sw none" /><span>No brand</span><span className="as-drop-n">Drop here</span>
+                      </button>
+                    )}
                   </>}
                   {act.length > 0 && <>
                     <div className="as-sec">Active orders</div>
@@ -248,8 +277,9 @@ export default function ArtworkPage() {
                 </div>
                 <div className="as-logos">
                   {more.map((d) => { const n = used.get(d.id) || 0; return (
-                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "")} title={`D-${d.number} ${d.name || ""}`.trim()}>
-                      <span className="as-pic">{urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
+                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "") + (drag?.id === d.id ? " drag" : "")} title={`D-${d.number} ${d.name || ""}${bs.length ? " · drag onto a brand to file it there" : ""}`.trim()}
+                      draggable={bs.length > 0} onDragStart={(e) => { if (!bs.length) return; e.dataTransfer.setData("text/plain", d.id); e.dataTransfer.effectAllowed = "move"; setDrag({ c: c.id, id: d.id }); }} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                      <span className="as-pic">{urls[d.id] || shown[d.id] ? <LogoFace d={d} urls={urls} shirt={logoShirts[d.id]} shown={shown[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
                       <span className="as-lanes">{LANE_TAGS.map(([lane, short, label]) => { const st = laneState(d, lane); return <span key={lane} className={"as-ln" + (st.ready ? " has" : "")} title={`${label}: ${st.ready ? st.note : "no file yet"}`}>{short}</span>; })}</span>
                       <span className="as-lab"><span>D-{d.number}</span>{view === "used" && n > 0 && <b>{n}×</b>}</span>
                     </Link>
