@@ -230,6 +230,9 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const ccRow = (d: Group["imprints"][number], di: number) => {
     if (fixed || printsFixed || d.supplied || !(d.inks || "").trim() || new Set(g.lines.map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size < 2) return null;
     const n = versionsOf(d).length;
+    // a screen print's color change already has its own line with the screens (count and fee), and is set in the Mockup
+    // Creator: only a brand print without one gets the button here
+    if (d.method === "screen" && (n > 0 || !d.fromBrand)) return null;
     return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{n ? `${n}` : "None"} <button type="button" className="linkbtn" onClick={() => setCcAt(di)}>{n ? "Change" : "Add color change"}</button></span></div>;
   };
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
