@@ -9,7 +9,8 @@ export const maxDuration = 60;
 
 /**
  * uAttend → our time clock (read-only from uAttend; nothing is ever written back to it).
- *   GET  (the database's schedule, every 2 minutes in shop hours, with the sync token): yesterday and today's punches.
+ *   GET  (the database's schedule, every 2 minutes in shop hours, with the sync token): the last 3 weeks of punches
+ *        (fixes made in uAttend to earlier days come over too).
  *   POST (an owner/admin on Time Clock → Import): { from, to } brings history over, a month at a time; {} = the same
  *        quick sync now.
  * Employees are matched by uAttend user ID, then by name (the ID is saved on the match). Anyone uAttend has who isn't on
@@ -127,8 +128,10 @@ export async function GET(req: Request) {
   // the employee list once every 6 hours (and whenever a punch comes from someone we don't know)
   const usersDue = !st?.users_at || Date.now() - Date.parse(st.users_at as string) > 6 * 3600000;
   try {
-    // ?back=N (up to 120 days) catches up history; the schedule itself always asks for yesterday and today
-    const back = Math.max(1, Math.min(120, Math.round(+(new URL(req.url).searchParams.get("back") || 1)) || 1));
+    // ?back=N (up to 120 days) catches up history; the schedule itself reads the last 3 weeks every run, so a punch
+    // fixed in uAttend after the day (Oct 28, Nick: "Jose went in and fixed them… they're not taking them off the list":
+    // Juan's missing clock-out on Oct 19, added in uAttend later) comes over and the issue clears
+    const back = Math.max(1, Math.min(120, Math.round(+(new URL(req.url).searchParams.get("back") || 21)) || 21));
     const s = await run(admin, addDays(today, -back), today, usersDue);
     await record(admin, true, s);
     if (usersDue) await admin.from("uattend_sync").update({ users_at: new Date().toISOString() }).eq("id", 1);
