@@ -204,6 +204,15 @@ export async function vartFile(v: import("./svgVector").VArt, maxPx: number, nam
 export async function makePreview(file: File, maxPx = 2400): Promise<File | null> {
   const base = file.name.replace(/\.[^.]+$/, "") || "logo";
   try {
+    // an embroidery file (Oct 28, Nick: "When I upload the EMB or the DST to the logo mockup creator… it's just giving a
+    // blank screen"): the DST drawn thread by thread (lib/dstRender.ts) on a clear background, so the logo has a picture
+    // everywhere it shows. Each color stop gets its own thread color until the real threads are set.
+    if (/\.dst$/i.test(file.name)) {
+      const [{ readDst }, { renderThreads }] = await Promise.all([import("./dst"), import("./dstRender")]);
+      const info = readDst(await file.arrayBuffer());
+      const c = renderThreads(info, ["#1F2A44", "#C8102E", "#00843D", "#F2A900", "#5F259F", "#E87722", "#0072CE", "#54585A"], { width: Math.min(maxPx, 1600), fabric: "" });
+      return c.width > 1 ? canvasToFile(c, `${base}.png`) : null;
+    }
     if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)) {
       const heic2any = (await loadScript(HEIC, "heic2any")) as (o: { blob: Blob; toType: string }) => Promise<Blob | Blob[]>;
       const out = await heic2any({ blob: file, toType: "image/png" });

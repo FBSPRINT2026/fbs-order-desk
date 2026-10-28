@@ -24,6 +24,8 @@ const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
 export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
   /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
+  // an EMB alone can't be read here (Wilcom's own format): say so, not a blank logo (Oct 28, Nick)
+  if (/\.emb$/i.test(opts.file.name)) throw new Error("An EMB file can't be shown here (it's Wilcom's own format). Upload the DST that came with it; the EMB and the worksheet go on the logo on Digitizing.");
   // a file with several artboards: which logo is it? (lib/artboards.ts; Oct 27, Nick)
   if (!opts.preview && !opts.clean) opts = { ...opts, file: await pickArtboard(opts.file) };
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
@@ -84,6 +86,15 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}), ...(opts.distress ? { distress: opts.distress } : {}) } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);
+  // a DST uploaded as the logo is its sew file too: read (size, stitches) and kept on the logo like a digitizer's file
+  if (/\.dst$/i.test(opts.file.name)) {
+    try {
+      const { takeDigitized } = await import("@/lib/digitizedFiles");
+      await takeDigitized(sb, (data as Design).id, [opts.file]);
+      const { data: again } = await sb.from("designs").select("*").eq("id", (data as Design).id).single();
+      if (again) return again as Design;
+    } catch { /* the logo is saved; the sew file can be added on Digitizing */ }
+  }
   return data as Design;
 }
 

@@ -162,15 +162,17 @@ export default function Digitizing() {
     <>
       <div className="page-head">
         <div><h1>Digitizing</h1><div className="eyebrow">Embroidered logos on open orders: ask the digitizer, then bring the DST in</div></div>
+        <div className="row">
+          {/* read Amanda's mailbox now and add any digitizer files that came in (Oct 28, Nick: "add a check now button…";
+              then "move the check now button all the way to the right… of the top panel") */}
+          <button type="button" className="btn" disabled={checking} title="Read the mail now and add the digitizer's files that came in" onClick={() => void checkNow()}>{checking ? "Checking the mail…" : "Check now"}</button>
+        </div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
-            {/* read Amanda's mailbox now and add any digitizer files that came in (Oct 28, Nick: "add a check now button…
-                if it comes in, you just check") */}
-            <button type="button" className="btn sm" disabled={checking} title="Read the mail now and add the digitizer's files that came in" onClick={() => void checkNow()}>{checking ? "Checking the mail…" : "Check now"}</button>
             <div className="chips" role="tablist">
               {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved or sewn before"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
                 <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
