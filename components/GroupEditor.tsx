@@ -20,7 +20,7 @@ import { mainSize, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 /** save a custom finishing to the sometimes-used list (retail, or the wholesale contract list for a wholesale job) */
 export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
   fetch("/api/settings/finishing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...f, wholesale }) }).then((r) => r.ok).catch(() => false);
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   /** where finishing is picked: in this group (default), or once for the whole order below the groups */
@@ -558,21 +558,23 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
-          {g.lines.map((l, li) => {
+          {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
+          {(ccImps.length ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
-            const vk = verKey(l.color), vHead = ccImps.length > 0 && (li === 0 || verKey(g.lines[li - 1].color) !== vk);
+            const vk = verKey(l.color), vHead = ccImps.length > 0 && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
             // the style once, then a row per color with its sizes on the same line (Oct 21, Nick: order page cleanup)
-            const prev = li > 0 ? g.lines[li - 1] : null;
+            const prev = pos > 0 ? order[pos - 1].l : null;
             const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
-              <div key={l.id} className={"gl" + (same && !vHead ? " same" : "") + (ccImps.length ? " ver" : "")} style={ccImps.length ? { ["--ver" as string]: verHex(l.color) } : undefined}>
-                {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (
-                  <div className="gl-ver"><i style={{ background: verHex(l.color) }} /><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
-                ); })()}
+              <Fragment key={l.id}>
+              {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (
+                <div className="gl-ver"><i style={{ background: verHex(l.color) }} /><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+              ); })()}
+              <div className={"gl" + (same && !vHead ? " same" : "") + (ccImps.length ? " ver" : "")} style={ccImps.length ? { ["--ver" as string]: verHex(l.color) } : undefined}>
                 {(!same || vHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
@@ -645,6 +647,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   </div>
                 )}
               </div>
+              </Fragment>
             );
           })}
         </div>
