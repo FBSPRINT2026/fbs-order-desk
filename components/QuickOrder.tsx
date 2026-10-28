@@ -352,7 +352,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const file = picked.file;
         if (pdfLike(file) && !pulledOf.has(file)) {
           note(`Is the art in ${file.name} on a shirt? Checking with the Helper…`);
-          pulledOf.set(file, await pullOffMockup(file, file.name, { drawn: mockupNamed(file.name) }).catch(() => null));
+          // shirts drawn flat are looked for in every PDF / Illustrator file, not only ones named "mockup" (Oct 28, Nick: McKenna's
+          // LYL 102326.ai, a front and a back tee drawn side by side, became the logo with the shirts in it); a shape is only
+          // a shirt when it has sleeves (lib/printavoArt.ts drawnPage), and staff confirm what was pulled
+          pulledOf.set(file, await pullOffMockup(file, file.name, { drawn: true }).catch(() => null));
           guard();
         }
         const pl = pulledOf.get(file) || null;
@@ -589,7 +592,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const { data: blob } = await sb0.storage.from("proofs").download(f.path);
         if (!blob) continue;
         step(`${of}Is the art in ${f.name} on a shirt? Checking with the Helper…`);
-        const got: Pulled | null = await pullOffMockup(blob, f.name, { drawn: f.role === "mockup" || mockupNamed(f.name) || Object.values(d.mockups || {}).flat().includes(f.path) }).catch(() => null);
+        const got: Pulled | null = await pullOffMockup(blob, f.name, { drawn: true }).catch(() => null);
         guard();
         if (!got) continue;
         const used = new Set<ArtPiece>();

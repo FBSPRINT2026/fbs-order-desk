@@ -321,6 +321,27 @@ function mergeRects(rs: Rect[], gap: number): Rect[] {
   return out;
 }
 
+/**
+ * Lines of one design stacked over each other are one print (Oct 28, Nick: McKenna's LYL 102326 back, three crossed-out
+ * names one under the other, came off as two lines and the third was left behind): pieces that share their middle
+ * (centered over each other) and sit within `gap` of each other top to bottom are joined. A left chest beside a full
+ * front isn't joined: their middles are apart.
+ */
+function mergeStacked(rs: Rect[], gap: number): Rect[] {
+  const out = rs.map((r) => ({ ...r }));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < out.length && !changed; i++) for (let j = i + 1; j < out.length; j++) {
+      const a = out[i], b = out[j];
+      const wa = a.x1 - a.x0, wb = b.x1 - b.x0, ov = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+      const dy = Math.max(0, Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
+      const centered = Math.abs((a.x0 + a.x1) / 2 - (b.x0 + b.x1) / 2) <= 0.25 * Math.max(wa, wb);
+      if (ov >= 0.4 * Math.min(wa, wb) && centered && dy <= gap) { out[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) }; out.splice(j, 1); changed = true; break; }
+    }
+  }
+  return out;
+}
+
 export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /** join bits closer than this many inches into one print */ mergeIn?: number } = {}): Promise<ArtPiece[]> {
   const page = await openPage(buf);
   // one of our blank templates filled in (the sized proof, the race sheet): read as drawn shirts, not photos
@@ -339,7 +360,7 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
       const pi = photos.findIndex((p) => cx > p.x0 && cx < p.x1 && cy > p.y0 && cy < p.y1);
       if (pi < 0) off.push(r); else byPhoto.set(pi, [...(byPhoto.get(pi) || []), r]);
     }
-    found = [...off, ...[...byPhoto.entries()].flatMap(([pi, rs]) => { const p = photos[pi]; return mergeRects(rs, opt.mergeIn! * PX_PER_IN * ((p.x1 - p.x0) / PHOTO_W)); })];
+    found = [...off, ...[...byPhoto.entries()].flatMap(([pi, rs]) => { const p = photos[pi]; const inch = PX_PER_IN * ((p.x1 - p.x0) / PHOTO_W); return mergeStacked(mergeRects(rs, opt.mergeIn! * inch), 2.5 * inch); })];
   }
   // the page as it looks (photos in), to read the shirt's color around each print
   const vpF = page.getViewport({ scale: s1 }), full = document.createElement("canvas");
@@ -653,7 +674,7 @@ async function drawnPage(page: Page, name: string, tpl: Page | null = null, page
       if (w < 0.15 * ppi && h < 0.15 * ppi) return false;
       return !(Math.max(w, h) > 1.5 * ppi && count(r) / (w * h) < 0.035);
     });
-    for (const r of mergeRects(bits, 1 * ppi)) {
+    for (const r of mergeStacked(mergeRects(bits, 1 * ppi), 2.5 * ppi)) {
       const w = r.x1 - r.x0, h = r.y1 - r.y0;
       if (w < 0.5 * ppi && h < 0.5 * ppi) continue;
       const widthIn = w / ppi, heightIn = h / ppi;
