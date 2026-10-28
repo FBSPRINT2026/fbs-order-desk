@@ -84,8 +84,9 @@ export async function addReplyFiles(admin: SupabaseClient, designId: string, opt
 /** replies that came in but were never added (before this existed, or a hiccup): added now. Run by the mail check. */
 export async function sweepDigitizerReplies(admin: SupabaseClient): Promise<number> {
   const { data } = await admin.from("designs").select("id, specs").not("specs->embroidery->reply", "is", null).limit(200);
-  const due = ((data || []) as { id: string; specs: { embroidery?: { reply?: Reply; files?: unknown[] } } }[])
-    .filter((x) => { const r = x.specs?.embroidery?.reply; return r?.files?.length && !r.added_at && !r.add_error && !(x.specs.embroidery?.files || []).length; });
+  // not added yet: a first file, or the fixed one after "Send back for changes" (request.changes)
+  const due = ((data || []) as { id: string; specs: { embroidery?: { reply?: Reply; files?: unknown[]; request?: { changes?: string } | null } } }[])
+    .filter((x) => { const e = x.specs?.embroidery, r = e?.reply; return r?.files?.length && !r.added_at && !r.add_error && (!(e?.files || []).length || !!e?.request?.changes); });
   // how many logos share each reply (one reply for several logos is split by name)
   const per = new Map<string, number>();
   for (const x of due) { const k = x.specs.embroidery?.reply?.activity || x.id; per.set(k, (per.get(k) || 0) + 1); }

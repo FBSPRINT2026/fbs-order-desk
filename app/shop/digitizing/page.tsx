@@ -13,6 +13,7 @@ import { guessHex } from "@/lib/mockup";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence, { sheetHex } from "@/components/SewSequence";
 import { lineName, threadByName } from "@/lib/embroidery";
+import { tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
 import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import { approveSewoutAnother, remindSewoutAction } from "@/app/shop/sewout-actions";
@@ -35,7 +36,7 @@ import { DIGITIZER } from "@/lib/digitizer";
  */
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
 type EmbFile = DigitizedSet;
-type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string; via?: string } | null;
+type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string; via?: string; /** sent back for these changes (app/api/digitizer/changes) */ changes?: string } | null;
   /** the digitizer's answer, caught by the mail check (lib/mail/process.ts digitizerReply): its files are added on their
    *  own (lib/digitizerAuto.ts); `add_error` when they couldn't be (then Add their files does it by hand) */
   reply?: { at: string; from: string; subject: string; files: { name: string; path: string; type: string; size: number }[]; added_at?: string; add_error?: string } | null };
@@ -87,6 +88,9 @@ export default function Digitizing() {
     // (Oct 28, Nick: "#40195… that's a repeat. We don't need to resew it out")
     const file = (it.im.emb?.file || e.files?.[0]) as (EmbFile & { lastUsed?: unknown }) | undefined;
     if (file && (it.im.digitized || file.lastUsed || (e.files || []).some((x) => (x as { lastUsed?: unknown }).lastUsed))) return "ok";
+    // sent back for changes: Requested again until the fixed file comes in
+    const lastAt = [...(e.files || []).map((x) => x.at || ""), (it.im.emb?.file as EmbFile | undefined)?.at || ""].sort().pop() || "";
+    if (e.request?.changes && e.request.at > lastAt) return "asked";
     return e.files?.length || it.im.emb?.file ? "done" : e.request ? "asked" : "need";
   };
   const shown = items.filter((it) => filter === "all" || stateOf(it) === filter);
@@ -186,7 +190,7 @@ export default function Digitizing() {
               })}</tbody>
             </table></div>
           )}
-          <p className="faint" style={{ fontSize: 12.5 }}>Send to {DIGITIZER.name} opens the Digitizer: the email, the digitizing sheet and the original art, sent from Amanda&apos;s mailbox when you press Send. Their reply with the files waits on the logo here to be added.</p>
+          <p className="faint" style={{ fontSize: 12.5 }}>Send to {DIGITIZER.name} opens the Digitizer: the email, the digitizing sheet and the original art, sent from Amanda&apos;s mailbox when you press Send. Their reply's files are added here on their own (Check now reads the mail right away).</p>
           {tool && <DigitizerTool orderId={tool.orderId} imprintId={tool.imprintId} onClose={() => setTool(null)} onSent={() => void load()} />}
         </div>
       </section>
@@ -194,6 +198,7 @@ export default function Digitizing() {
   );
 }
 
+const CHANGE_KINDS = ["Size", "Stitch count", "Small text", "Thread colors", "Underlay / pull", "Shape"];
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
@@ -210,6 +215,33 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
     if (got.length) onDst(got);
   }
   const [how, setHow] = useState<string | null>(null), [swBusy, setSwBusy] = useState(false);
+  // Send back for changes (Oct 28, Nick): what needs to change, written up as Amanda's reply on their last email
+  const [chg, setChg] = useState<string | null>(null), [chgKinds, setChgKinds] = useState<string[]>([]), [chgNote, setChgNote] = useState(""), [chgBusy, setChgBusy] = useState(false);
+  const draftChanges = (kinds = chgKinds, note = chgNote) => {
+    const lines = note.split(/\n+|(?<=\.)\s+(?=[A-Z])/).map((x) => x.trim()).filter(Boolean);
+    const pts = [...lines, ...kinds.filter((k) => !lines.some((l) => l.toLowerCase().includes(k.toLowerCase().split(" ")[0]))).map((k) => `${k}: please take another look.`)];
+    return [`Hi team, thanks for sending this over. On the ${it.im.location || "logo"}${it.d ? ` (D-${it.d.number})` : ""} for FBS #${it.o.number} we need a couple of changes:`, ...pts.map((x) => `• ${x}`), "", "Please send back the updated DST, EMB and worksheet. Thank you!"].join("\n");
+  };
+  async function sendChanges() {
+    if (!it.d || chg === null) return;
+    setChgBusy(true);
+    const r = await fetch("/api/digitizer/changes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ designId: it.d.id, body: chg, changes: [chgKinds.join(", "), chgNote.trim()].filter(Boolean).join(": ") }) });
+    const j = await r.json().catch(() => ({})) as { error?: string };
+    setChgBusy(false);
+    if (!r.ok) { onSew(j.error || "Couldn't send it."); return; }
+    setChg(null); setChgKinds([]); setChgNote("");
+    onSew(`Sent back to ${DIGITIZER.name.split(" ")[0]} for changes. Their fixed file comes in here by itself.`);
+  }
+  // the steps it goes through, with when each happened
+  const live = sws.find((x) => !x.archived_at);
+  const steps: { k: string; label: string; sub?: string; state: "" | "d" | "n" }[] = (() => {
+    const fAt = (f as EmbFile | undefined)?.at;
+    const done = [!!req || !!f, !!f && !(req?.changes && req.at > (fAt || "")), !!live, live?.status === "approved", st === "ok"];
+    const subs = [req ? `${req.changes ? "Changes asked" : "Asked"} ${day(req.at)}` : f ? "On file" : "", fAt ? `${day(fAt)}${reply ? " · from " + DIGITIZER.name.split(" ")[0] : ""}` : "", live ? day(live.created_at) : "", live?.decided_at ? day(live.decided_at) : live?.sent_at ? `Sent ${day(live.sent_at)}` : "", st === "ok" ? "Kept for reorders" : ""];
+    const labels = [req?.changes && req.at > (fAt || "") ? "Changes asked" : "Requested", "Files in", "Sew-out", "Customer approval", "On file"];
+    const next = done.findIndex((x) => !x);
+    return labels.map((label, i) => ({ k: label, label, sub: subs[i], state: done[i] ? "d" : i === next ? "n" : "" }));
+  })();
   const [copied, setCopied] = useState(false);
   // the DST, read once the row is opened (drawn thread by thread: components/DstPreview.tsx)
   const [dstInfo, setDstInfo] = useState<DstInfo | null>(null);
@@ -237,60 +269,89 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
       </tr>
       {open && (
         <tr className="dgz-more"><td colSpan={6}>
-          <div className="dgz-box">
-            <div className="dgz-req">
-              <div className="imp-l">Request for the digitizer</div>
-              <pre className="dgz-text">{text}</pre>
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? "Copied" : "Copy the request"}</button>
-                {canEdit && it.d && <button type="button" className={"btn sm" + (st === "need" ? " primary" : "")} onClick={onSend}>{st === "need" ? `Send to ${DIGITIZER.name.split(" ")[0]}` : "Send again"}</button>}
-                {canEdit && st === "need" && it.d && <button type="button" className="btn sm ghost" disabled={busy} title="Sent some other way" onClick={onAsked}>Mark requested</button>}
-                {canEdit && reply && !f && reply.files.length > 0 && <button type="button" className="btn sm primary" disabled={busy || taking} title={`${reply.subject} (${reply.files.map((x) => x.name).join(", ")})`} onClick={() => void takeReply()}>{taking ? "Getting them…" : `Add their files (${reply.files.length})`}</button>}
-                {canEdit && it.d && <label className="btn sm" style={{ cursor: "pointer" }} title="The zip they send back, or the DST with the EMB and the PDF">{busy ? "Reading…" : f ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const x = [...(e.target.files || [])]; e.target.value = ""; if (x.length) onDst(x); }} /></label>}
-              </div>
-            </div>
-            {f && (
-              <div className="dgz-file">
-                <div className="imp-l">The digitized files</div>
-                <div><b>{f.name}</b></div>
-                <div className="faint">{f.stitches.toLocaleString()} stitches · {f.colors} color{f.colors === 1 ? "" : "s"} · {f.wIn}&quot; × {f.hIn}&quot;</div>
-                <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                  {f.path && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer">DST (sew)</a>}
-                  {f.emb && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (edit in Hatch)</a>}
-                  {f.sheet && <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet PDF (how to sew it, color stops)</a>}
+          {/* the logo's way through digitizing (Oct 28, Nick: "rethink the layout of this and make it look a little nicer") */}
+          <div className="dgz-steps">{steps.map((x) => <div key={x.k} className={x.state}><b>{x.label}</b><small>{x.sub || "\u00a0"}</small></div>)}</div>
+          <div className={"dgz-grid" + (f ? "" : " nofile")}>
+            {f && <div className="dgz-card dgz-pic-big">
+              {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(it.g.lines?.[0]?.color || "") || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
+              <div className="sub">On {it.g.lines?.[0]?.color || "the garment"}</div>
+            </div>}
+            <div className="stack" style={{ gap: 12, minWidth: 0 }}>
+              {f && <div className="dgz-card">
+                <div className="dgz-head">
+                  <div><div className="imp-l">Sew file</div><b className="dgz-code">{it.d ? tajimaName(it.d.number, Number(((f as EmbFile & { code?: string }).code || "E1").slice(1)) || 1) : f.name}{it.im.location ? ` · ${it.im.location}` : ""}</b><div className="sub">{f.name}</div></div>
+                  <span className="spacer" />
+                  {canEdit && it.d && <button type="button" className="btn" onClick={() => setChg(chg === null ? draftChanges() : null)}>Send back to {DIGITIZER.name.split(" ")[0]} for changes</button>}
+                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} />}
                 </div>
-                {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(it.g.lines?.[0]?.color || "") || "#F4F4F1"} width={320} /> : <div className="emb-dst faint">Reading the file…</div>}
-                {f.ws && <SewSequence ws={f.ws} />}
-              </div>
-            )}
-            <div className="dgz-file">
-              <div className="imp-l">Sew-out</div>
-              <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it{SEWOUT_EMAILS ? ": it's emailed to the customer to approve" : ". It gets an approval page in the customer's portal and a PDF (customer emails are off, so nothing is sent)"}. Once approved it&apos;s kept with the logo for reorders.</div>
-              {canEdit && <div><SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : undefined} onDone={onSew} /></div>}
-              {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
-                <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
-                  {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
-                  <div className="stack" style={{ gap: 4, minWidth: 0 }}>
-                    <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>
-                    <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not emailed`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
-                    {x.decided_at && <div className="sub">{x.decided_name} · {day(x.decided_at)}</div>}
-                    {x.customer_comment && <div style={{ fontSize: 13 }}>“{x.customer_comment}”</div>}
-                    <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                      <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Approval PDF</a>
-                      {canEdit && !x.archived_at && x.status === "pending" && <>
-                        {SEWOUT_EMAILS && x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
-                        <button type="button" className="lc-link" onClick={() => setHow(how === x.id ? null : x.id)}>Approved another way…</button>
-                      </>}
-                    </div>
-                    {how === x.id && <div className="row" style={{ gap: 6 }}>
-                      <input type="text" autoFocus placeholder="How they approved it (a call, an email…)" onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; setSwBusy(true); void approveSewoutAnother(x.id, v).then((r) => { setSwBusy(false); setHow(null); onSew(r.ok ? "Marked approved." : r.error || "Couldn't save it."); }); } }} />
-                      <span className="faint" style={{ fontSize: 12 }}>Enter to save</span>
-                    </div>}
+                <div className="dgz-facts">
+                  <div><span className="imp-l">Size</span><b>{f.wIn}&quot; × {f.hIn}&quot;</b>{it.im.size && <small>asked {it.im.size}</small>}</div>
+                  <div><span className="imp-l">Stitches</span><b>{f.stitches.toLocaleString()}</b><small>from the DST</small></div>
+                  <div><span className="imp-l">Threads</span><b>{f.ws?.threads.length || f.colors}</b>{f.ws && <small>{f.ws.stops} stop{f.ws.stops === 1 ? "" : "s"} · {f.ws.trims} trim{f.ws.trims === 1 ? "" : "s"}</small>}</div>
+                  <div><span className="imp-l">Price</span><b>{st === "ok" ? "Firm" : "Firm after sew-out"}</b></div>
+                </div>
+                <div className="dgz-chips">
+                  {(f.ws?.threads.length ? f.ws.threads.map((t) => ({ k: `${t.needle}${t.code}`, hex: sheetHex(t), label: `${t.chart && t.chart !== "Default" ? t.chart.replace(/ ?(PolyNeon|Classic) ?40/i, "") + " " : ""}${t.code} ${t.name} · needle ${t.needle}` })) : (it.im.inks || "").split(/\s*,\s*/).filter(Boolean).map((n) => ({ k: n, hex: threadByName(n)?.hex || "#ccc", label: n }))).map((t) => <span key={t.k} className="dgz-chip"><i style={{ background: t.hex }} />{t.label}</span>)}
+                  <span className="spacer" />
+                  {f.path && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer">DST</a>}
+                  {f.emb && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (Hatch)</a>}
+                  {f.sheet && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet</a>}
+                </div>
+                {chg !== null && <div className="dgz-chg">
+                  <div className="imp-l">What needs to change</div>
+                  <div className="chips">{CHANGE_KINDS.map((k) => <button key={k} type="button" className={"chip" + (chgKinds.includes(k) ? " on" : "")} onClick={() => { const on = chgKinds.includes(k); const next = on ? chgKinds.filter((x) => x !== k) : [...chgKinds, k]; setChgKinds(next); setChg(draftChanges(next, chgNote)); }}>{k}</button>)}</div>
+                  <textarea rows={3} placeholder={`Make it 3" wide, not ${f.wIn}". The small letters are too thin to sew clean.`} value={chgNote} onChange={(e) => { setChgNote(e.target.value); setChg(draftChanges(chgKinds, e.target.value)); }} />
+                  <div className="imp-l">The reply Amanda sends, on {DIGITIZER.name.split(" ")[0]}&apos;s last email (edit it if you like)</div>
+                  <textarea rows={7} value={chg} onChange={(e) => setChg(e.target.value)} />
+                  <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                    <span className="faint" style={{ fontSize: 12 }}>Their file goes with it for reference. Nothing is sent until Send.</span>
+                    <button type="button" className="btn" onClick={() => setChg(null)}>Cancel</button>
+                    <button type="button" className="btn primary" disabled={chgBusy || !chgNote.trim() && !chgKinds.length} onClick={() => void sendChanges()}>{chgBusy ? "Sending…" : "Send"}</button>
                   </div>
-                </div>
-              ))}</div>}
+                </div>}
+              </div>}
+              {f?.ws && <div className="dgz-card"><SewSequence ws={f.ws} open /></div>}
+              {(sws.length > 0 || (!f && st !== "need")) && <div className="dgz-card">
+                <div className="imp-l">Sew-out</div>
+                {!sws.length && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it{SEWOUT_EMAILS ? ": it's emailed to the customer to approve" : ". It gets an approval page in the customer's portal and a PDF (customer emails are off, so nothing is sent)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
+                {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
+                  <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
+                    {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
+                    <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+                      <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>
+                      <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not emailed`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
+                      {x.decided_at && <div className="sub">{x.decided_name} · {day(x.decided_at)}</div>}
+                      {x.customer_comment && <div style={{ fontSize: 13 }}>“{x.customer_comment}”</div>}
+                      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                        <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Approval PDF</a>
+                        {canEdit && !x.archived_at && x.status === "pending" && <>
+                          {SEWOUT_EMAILS && x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
+                          <button type="button" className="lc-link" onClick={() => setHow(how === x.id ? null : x.id)}>Approved another way…</button>
+                        </>}
+                      </div>
+                      {how === x.id && <div className="row" style={{ gap: 6 }}>
+                        <input type="text" autoFocus placeholder="How they approved it (a call, an email…)" onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; setSwBusy(true); void approveSewoutAnother(x.id, v).then((r) => { setSwBusy(false); setHow(null); onSew(r.ok ? "Marked approved." : r.error || "Couldn't save it."); }); } }} />
+                        <span className="faint" style={{ fontSize: 12 }}>Enter to save</span>
+                      </div>}
+                    </div>
+                  </div>
+                ))}</div>}
+              </div>}
             </div>
           </div>
+          <details className="dgz-ask" open={!f}>
+            <summary><span>{req?.changes ? `Sent back for changes · ${day(req.at)}` : req ? `What we asked ${DIGITIZER.name.split(" ")[0]} for · ${day(req.at)}` : "The request for the digitizer"}</span>
+              <span className="row" style={{ gap: 6, marginLeft: "auto" }} onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="btn sm" onClick={(e) => { e.preventDefault(); void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? "Copied" : "Copy"}</button>
+                {canEdit && it.d && <button type="button" className={"btn sm" + (st === "need" ? " primary" : "")} onClick={(e) => { e.preventDefault(); onSend(); }}>{st === "need" ? `Send to ${DIGITIZER.name.split(" ")[0]}` : "Send again"}</button>}
+                {canEdit && st === "need" && it.d && <button type="button" className="btn sm ghost" disabled={busy} title="Sent some other way" onClick={(e) => { e.preventDefault(); onAsked(); }}>Mark requested</button>}
+                {canEdit && reply && !f && reply.files.length > 0 && <button type="button" className="btn sm primary" disabled={busy || taking} title={`${reply.subject} (${reply.files.map((x) => x.name).join(", ")})`} onClick={(e) => { e.preventDefault(); void takeReply(); }}>{taking ? "Getting them…" : `Add their files (${reply.files.length})`}</button>}
+                {canEdit && it.d && <label className="btn sm" style={{ cursor: "pointer" }} title="The zip they send back, or the DST with the EMB and the PDF">{busy ? "Reading…" : f ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const x = [...(e.target.files || [])]; e.target.value = ""; if (x.length) onDst(x); }} /></label>}
+              </span>
+            </summary>
+            {req?.changes && <div className="dgz-chgnote"><b>Changes asked:</b> {req.changes}</div>}
+            <pre className="dgz-text">{text}</pre>
+          </details>
         </td></tr>
       )}
     </>
