@@ -40,7 +40,7 @@ export function resolveInk(text: string, brand: Brand): { name: string; hex: str
  * its swatch. "Keep as uploaded" and "Remove" sit at the top of the list.
  */
 type InkOpt = { name: string; hex: string; sub?: string; act?: "keep" | "none" | "typed" };
-export function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
+export function InkSelect({ value, onChange, adder }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void; /** a picker that adds inks to a list (Logo details): this placeholder, no "Keep as uploaded" / "Remove" */ adder?: string }) {
   const brand = useContext(BrandCtx);
   const box = useRef<HTMLSpanElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -58,7 +58,7 @@ export function InkSelect({ value, onChange }: { value?: { name: string; hex: st
     const seen = new Set<string>();
     const add = (label: string, opts: InkOpt[]) => { const o = opts.filter((x) => !seen.has(x.name) && has(x.name, x.sub)); o.forEach((x) => seen.add(x.name)); if (o.length) out.push({ label, opts: o }); };
     if (hit) { out.push({ label: "", opts: [hit] }); seen.add(hit.name); }
-    if (!q) out.push({ label: "", opts: [{ name: "Keep as uploaded", hex: "", act: "keep" }, { name: "Remove (shirt shows through)", hex: "", act: "none" }] });
+    if (!q && !adder) out.push({ label: "", opts: [{ name: "Keep as uploaded", hex: "", act: "keep" }, { name: "Remove (shirt shows through)", hex: "", act: "none" }] });
     for (const g of brand.groups) if (g.colors.length) add(g.label, g.colors.map((b) => ({ name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888", sub: b.name !== b.ink ? b.name : undefined })));
     add("Our stock inks (Wilflex RFU)", Object.keys(WILFLEX_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
     add("Our other stock inks (Ink Room)", Object.keys(STOCK_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
@@ -99,7 +99,7 @@ export function InkSelect({ value, onChange }: { value?: { name: string; hex: st
   return (
     <span className="ink-dd" ref={box}>
       <input ref={inp} type="text" aria-label="Ink color" role="combobox" aria-expanded={open} autoComplete="off" spellCheck={false}
-        placeholder="Keep as uploaded" value={text ?? shown}
+        placeholder={adder || "Keep as uploaded"} value={text ?? shown}
         onFocus={(e) => { e.currentTarget.select(); show(); }}
         onClick={() => { if (!open) show(); }}
         onChange={(e) => { setText(e.target.value); setActive(0); if (!open) show(); }}

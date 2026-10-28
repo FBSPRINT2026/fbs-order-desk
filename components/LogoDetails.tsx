@@ -56,12 +56,12 @@ export default function LogoDetails({ d, onClose, onSaved }: { d: Design; onClos
         <div className="ld-q">
           <div className="ld-k">What does it print in?<span className="faint">Inks and PMS: white, PMS 452…</span></div>
           {chips(inks, setInks, "inks")}
-          <InkSelect key={inkKey} onChange={(v) => { if (v && v.name !== "none") setInks((l) => add(l, v)); setInkKey((k) => k + 1); }} />
+          <InkSelect key={inkKey} adder="Add an ink: white, PMS 452, black…" onChange={(v) => { if (v && v.name !== "none") setInks((l) => add(l, v)); setInkKey((k) => k + 1); }} />
         </div>
         <div className="ld-q">
           <div className="ld-k">What thread does it sew in?<span className="faint">1973, white…</span></div>
           {chips(threads, setThreads, "threads")}
-          <ThreadSelect key={thKey} value="" line="Polyneon 40" onChange={(name, hex) => { setThreads((l) => add(l, { name, hex })); setThKey((k) => k + 1); }} />
+          <ThreadSelect key={thKey} value="" line="Polyneon 40" placeholder="Add a thread: number, name or PMS" onChange={(name, hex) => { setThreads((l) => add(l, { name, hex })); setThKey((k) => k + 1); }} />
         </div>
         <div className="ld-q">
           <div className="ld-k">Where does it go?<span className="faint">Optional: leave blank if it goes anywhere</span></div>
