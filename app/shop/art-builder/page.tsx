@@ -22,8 +22,11 @@ import { tajimaFile } from "@/components/CustomerBrands";
  * other two files… within the art you would store that").
  */
 type Job = { id: string; visual_id: string; nickname: string; order_date: string; files: Record<string, string> | null };
-type Item = { key: string; job: Job; path: string; name: string; ext: string; kind: "art" | "sew" | "other"; emb?: string; sheet?: string };
-type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string };
+type Item = { key: string; job: Job; path: string; name: string; ext: string; kind: "art" | "sew" | "sheet" | "other"; emb?: string; sheet?: string };
+type Box = [number, number, number, number];
+/** a piece cut off a file (a logo off a proof or product sheet): its page and box (0–1 of the page, y down), and a picture */
+type Cut = { page: number; box: Box; pic: string };
+type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string; /** a cut off this file (the pick's key is "<file>#<n>") */ src?: string; cut?: Cut };
 type D = Design & { brand_id?: string | null };
 
 const ART = /^(pdf|ai|png|jpe?g|svg|eps|psd|tiff?|webp)$/;
@@ -90,20 +93,149 @@ function Pic({ sb, path }: { sb: ReturnType<typeof createClient>; path: string }
   }, [sb, path]);
   return <span className="bi-pic" ref={el}>{src ? <img src={src} alt="" /> : <span className="faint">{src === "" ? "No picture" : "Loading…"}</span>}</span>;
 }
+/* what a DST and a sewing sheet say, read once each: to put a job's sewing sheet with its DST when the names differ
+   (Oct 28, Nick on #33064: "the PDF isn't going with the DST") */
+type Facts = { stitches: number; wIn: number; hIn: number; colors: number };
+const FACTS = new Map<string, Promise<Facts | null>>();
+function factsOf(sb: ReturnType<typeof createClient>, path: string): Promise<Facts | null> {
+  if (!FACTS.has(path)) FACTS.set(path, (async () => {
+    const { data } = await sb.storage.from("proofs").download(path);
+    if (!data) return null;
+    const buf = await data.arrayBuffer();
+    if (extOf(path) === "dst") { const { readDst } = await import("@/lib/dst"); const i = readDst(buf); return { stitches: i.stitches, wIn: i.wIn, hIn: i.hIn, colors: i.colors }; }
+    const [{ pdfText }, { parseWorksheet }] = await Promise.all([import("@/lib/printavoArt"), import("@/lib/worksheet")]);
+    const w = parseWorksheet(await pdfText(buf, 3));
+    return w ? { stitches: w.stitches, wIn: w.wIn, hIn: w.hIn, colors: w.colors } : null;
+  })().catch(() => null));
+  return FACTS.get(path)!;
+}
+const factLine = (f: Facts) => `${f.wIn}" × ${f.hIn}" · ${f.stitches.toLocaleString()} st · ${f.colors} color${f.colors === 1 ? "" : "s"}`;
+/** a job's files with each sewing sheet put with the DST it was made for (same stitches or size) */
+function arrange(list: Item[], facts: Record<string, Facts | null | undefined>): Item[] {
+  const sheets = list.filter((i) => i.kind === "art" && i.ext === "pdf" && facts[i.path]);
+  if (!sheets.length) return list;
+  const out = list.map((i) => ({ ...i })), taken = new Set<string>();
+  for (const d of out.filter((i) => i.kind === "sew" && !i.sheet)) {
+    const f = facts[d.path]; if (!f) continue;
+    const m = sheets.find((x) => { const w = facts[x.path]!; return !taken.has(x.path) && ((f.stitches && Math.abs(w.stitches - f.stitches) / f.stitches <= 0.03) || (Math.abs(w.wIn - f.wIn) < 0.06 && Math.abs(w.hIn - f.hIn) < 0.06)); });
+    if (m) { d.sheet = m.path; taken.add(m.path); }
+  }
+  return out.filter((i) => !taken.has(i.path)).map((i) => (i.kind === "art" && i.ext === "pdf" && facts[i.path] ? { ...i, kind: "sheet" as const } : i));
+}
 function DstInfo({ sb, path }: { sb: ReturnType<typeof createClient>; path: string }) {
   const [t, setT] = useState("");
+  useEffect(() => { let on = true; factsOf(sb, path).then((f) => { if (on) setT(f ? factLine(f) : "Couldn't read the DST"); }); return () => { on = false; }; }, [sb, path]);
+  return <span className="faint">{t || "Reading the DST…"}</span>;
+}
+
+/* ---------- picking the logo off a proof, a product sheet or a photo (Oct 28, Nick: "if it's not a direct file… pop up
+   and say, what am I bringing in?… click on the element and just bring in the parts you need… on 34218 I just need the
+   Embark logo") ---------- */
+const VIEW_W = 1100;
+async function pageCanvas(buf: ArrayBuffer, ext: string, page: number): Promise<{ c: HTMLCanvasElement; pages: number }> {
+  if (/^(png|jpe?g|webp)$/.test(ext)) {
+    const url = URL.createObjectURL(new Blob([buf]));
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, VIEW_W / img.naturalWidth), c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    return { c, pages: 1 };
+  }
+  const { pdfPicture, pdfPageCount } = await import("@/lib/printavoArt");
+  const [c, pages] = await Promise.all([pdfPicture(buf.slice(0), VIEW_W, page), pdfPageCount(buf.slice(0))]);
+  return { c, pages };
+}
+/** the element under a click: the inked shapes around it (gaps of a few pixels bridged), as a box on the page */
+function elementAt(c: HTMLCanvasElement, x: number, y: number): Box | null {
+  const W = c.width, H = c.height, d = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, W, H).data;
+  const ink = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) ink[i] = d[i * 4] < 238 || d[i * 4 + 1] < 238 || d[i * 4 + 2] < 238 ? 1 : 0;
+  // bridge small gaps (letters of a word, a logo's parts): dilate by r
+  const r = 5, row = new Uint8Array(W * H), dil = new Uint8Array(W * H);
+  for (let yy = 0; yy < H; yy++) { let last = -1e9; for (let xx = 0; xx < W; xx++) { if (ink[yy * W + xx]) last = xx; if (xx - last <= r) row[yy * W + xx] = 1; } last = 1e9; for (let xx = W - 1; xx >= 0; xx--) { if (ink[yy * W + xx]) last = xx; if (last - xx <= r) row[yy * W + xx] = 1; } }
+  for (let xx = 0; xx < W; xx++) { let last = -1e9; for (let yy = 0; yy < H; yy++) { if (row[yy * W + xx]) last = yy; if (yy - last <= r) dil[yy * W + xx] = 1; } last = 1e9; for (let yy = H - 1; yy >= 0; yy--) { if (row[yy * W + xx]) last = yy; if (last - yy <= r) dil[yy * W + xx] = 1; } }
+  const s0 = Math.round(y) * W + Math.round(x);
+  if (!dil[s0]) return null;
+  const seen = new Uint8Array(W * H), st = [s0]; seen[s0] = 1;
+  let x0 = W, y0 = H, x1 = 0, y1 = 0, n = 0;
+  while (st.length) {
+    const q = st.pop()!, qx = q % W, qy = (q / W) | 0; n++;
+    if (qx < x0) x0 = qx; if (qx > x1) x1 = qx; if (qy < y0) y0 = qy; if (qy > y1) y1 = qy;
+    for (const nb of [q - 1, q + 1, q - W, q + W]) if (nb >= 0 && nb < W * H && !seen[nb] && dil[nb] && Math.abs((nb % W) - qx) <= 1) { seen[nb] = 1; st.push(nb); }
+  }
+  void n;
+  return [Math.max(0, x0 - r) / W, Math.max(0, y0 - r) / H, Math.min(W, x1 + r) / W, Math.min(H, y1 + r) / H];
+}
+function boxPic(c: HTMLCanvasElement, b: Box): string {
+  const [x0, y0, x1, y1] = [b[0] * c.width, b[1] * c.height, b[2] * c.width, b[3] * c.height];
+  const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0), k = Math.min(1, 240 / Math.max(w, h));
+  const o = document.createElement("canvas"); o.width = Math.round(w * k); o.height = Math.round(h * k);
+  o.getContext("2d")!.drawImage(c, x0, y0, w, h, 0, 0, o.width, o.height);
+  return o.toDataURL("image/png");
+}
+/** a cut made into the logo file: PDFs and Illustrator files at print resolution (lib/setupSheet cutProduct: the white
+ *  page and the spec text around it come off); a photo's piece as it is, its white taken off */
+async function cutToFile(buf: ArrayBuffer, ext: string, cut: Cut, name: string): Promise<File | null> {
+  if (!/^(png|jpe?g|webp)$/.test(ext)) {
+    const { cutProduct } = await import("@/lib/setupSheet");
+    const r = await cutProduct(buf.slice(0), { page: cut.page, logo: cut.box, name });
+    return r.art;
+  }
+  const url = URL.createObjectURL(new Blob([buf]));
+  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  const [x0, y0, x1, y1] = [cut.box[0] * img.naturalWidth, cut.box[1] * img.naturalHeight, cut.box[2] * img.naturalWidth, cut.box[3] * img.naturalHeight];
+  const c = document.createElement("canvas"); c.width = Math.round(x1 - x0); c.height = Math.round(y1 - y0);
+  const g = c.getContext("2d", { willReadFrequently: true })!; g.drawImage(img, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+  const id = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < id.data.length; i += 4) if (id.data[i] > 245 && id.data[i + 1] > 245 && id.data[i + 2] > 245) id.data[i + 3] = 0;
+  g.putImageData(id, 0, 0);
+  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+  return blob ? new File([blob], `${name.replace(/[^\w .-]+/g, "").trim() || "logo"}.png`, { type: "image/png" }) : null;
+}
+
+function CutPop({ sb, it, cuts, onWhole, onCut, onClose }: { sb: ReturnType<typeof createClient>; it: Item; cuts: { name: string; pic: string }[]; onWhole: () => void; onCut: (c: Cut) => void; onClose: () => void }) {
+  const [page, setPage] = useState(1), [pages, setPages] = useState(1);
+  const [pic, setPic] = useState(""), [err, setErr] = useState("");
+  const [box, setBox] = useState<Box | null>(null);
+  const can = useRef<HTMLCanvasElement | null>(null), buf = useRef<ArrayBuffer | null>(null), drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let on = true;
     (async () => {
-      const { data } = await sb.storage.from("proofs").download(path);
-      if (!data) return;
-      const { readDst } = await import("@/lib/dst");
-      const i = readDst(await data.arrayBuffer());
-      if (on) setT(`${i.wIn}" × ${i.hIn}" · ${i.stitches.toLocaleString()} st · ${i.colors} color${i.colors === 1 ? "" : "s"}`);
-    })().catch(() => null);
+      setPic(""); setBox(null); setErr("");
+      if (!buf.current) { const { data } = await sb.storage.from("proofs").download(it.path); if (!data) throw new Error("Couldn't open the file."); buf.current = await data.arrayBuffer(); }
+      const r = await pageCanvas(buf.current, it.ext, page);
+      if (!on) return;
+      can.current = r.c; setPages(r.pages); setPic(r.c.toDataURL("image/jpeg", 0.9));
+    })().catch((e) => setErr(e instanceof Error ? e.message : "Couldn't draw the file."));
     return () => { on = false; };
-  }, [sb, path]);
-  return <span className="faint">{t || "Reading the DST…"}</span>;
+  }, [sb, it, page]);
+  const at = (e: React.PointerEvent) => { const r = wrap.current!.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
+  return (
+    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="What are you bringing in?" onClick={onClose}>
+      <div className="dla bi-cut" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="dla-x" aria-label="Close" onClick={onClose}>×</button>
+        <h3>What are you bringing in? · {it.name}</h3>
+        <p className="dla-sub">Click the logo on the page to pick it, or drag a box around it. Add each logo you want; the whole file can come in as it is too.</p>
+        {pages > 1 && <div className="toolbar" data-toolbar><div className="chips">{Array.from({ length: Math.min(pages, 12) }, (_, i) => <button key={i} type="button" className={"chip" + (page === i + 1 ? " on" : "")} onClick={() => setPage(i + 1)}>Page {i + 1}</button>)}</div></div>}
+        <div className="bi-cut-page" ref={wrap}
+          onPointerDown={(e) => { if (!pic) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); const p = at(e); drag.current = { ...p, moved: false }; }}
+          onPointerMove={(e) => { const d0 = drag.current; if (!d0) return; const p = at(e); if (Math.abs(p.x - d0.x) + Math.abs(p.y - d0.y) > 0.01) { d0.moved = true; setBox([Math.min(d0.x, p.x), Math.min(d0.y, p.y), Math.max(d0.x, p.x), Math.max(d0.y, p.y)]); } }}
+          onPointerUp={(e) => { const d0 = drag.current; drag.current = null; if (!d0 || d0.moved || !can.current) return; const p = at(e); const b = elementAt(can.current, p.x * can.current.width, p.y * can.current.height); if (b && (b[2] - b[0]) * (b[3] - b[1]) < 0.5) { setBox(b); setErr(""); } else setErr(b ? "That's most of the page: drag a box around just the logo." : "Nothing there: click the logo itself."); }}>
+          {pic ? <img src={pic} alt="" draggable={false} /> : <div className="aa-empty">{err || "Drawing the file…"}</div>}
+          {box && <span className="bi-box" style={{ left: `${box[0] * 100}%`, top: `${box[1] * 100}%`, width: `${(box[2] - box[0]) * 100}%`, height: `${(box[3] - box[1]) * 100}%` }} />}
+        </div>
+        {err && pic && <p className="warnline">{err}</p>}
+        {cuts.length > 0 && <div className="bi-cuts"><span className="faint">Picked off this file:</span>{cuts.map((c, i) => <span key={i} className="bi-cutpic" title={c.name}><img src={c.pic} alt={c.name} /></span>)}</div>}
+        <div className="dla-acts">
+          <button type="button" className="btn ghost" onClick={() => { onWhole(); onClose(); }}>Bring in the whole file</button>
+          <span className="spacer" />
+          <button type="button" className="btn" onClick={onClose}>Done</button>
+          <button type="button" className="btn primary" disabled={!box || !can.current} onClick={() => { if (box && can.current) { onCut({ page, box, pic: boxPic(can.current, box) }); setBox(null); } }}>Add this logo</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function BringInArtPage() {
@@ -127,6 +259,8 @@ function BringInArt() {
   /** the jobs ticked open to show their files */
   const [openJobs, setOpenJobs] = useState<Set<string>>(new Set());
   const [newBrand, setNewBrand] = useState<string | null>(null);
+  /** the file whose logos are being picked off it */
+  const [cutting, setCutting] = useState<Item | null>(null);
 
   useEffect(() => { sb.from("customers").select("*").then(({ data }) => setCustomers(((data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))))); }, [sb]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
@@ -164,11 +298,21 @@ function BringInArt() {
     return m;
   }, [designs]);
 
-  const items = useMemo(() => (jobs || []).map((j) => ({ j, list: itemsOf(j) })).filter((x) => x.list.some((i) => i.kind !== "other")), [jobs]);
+  // a ticked job's PDFs are read: a sewing sheet goes with its DST, or shows as a sewing sheet
+  const [facts, setFacts] = useState<Record<string, Facts | null>>({});
+  const items = useMemo(() => (jobs || []).map((j) => ({ j, list: arrange(itemsOf(j), facts) })).filter((x) => x.list.some((i) => i.kind !== "other")), [jobs, facts]);
+  useEffect(() => {
+    for (const { j, list } of items) {
+      if (!openJobs.has(j.id) || !list.some((i) => i.kind === "sew")) continue;
+      for (const i of list) if ((i.kind === "sew" || (i.kind === "art" && i.ext === "pdf")) && !(i.path in facts)) factsOf(sb, i.path).then((f) => setFacts((x) => (i.path in x ? x : { ...x, [i.path]: f })));
+    }
+  }, [items, openJobs, sb]); // eslint-disable-line react-hooks/exhaustive-deps
   const picked = (Object.entries(picks) as [string, Pick][]).filter(([, p]) => p.on);
   const newLogos = picked.filter(([, p]) => p.as === "logo");
   const set = (key: string, p: Partial<Pick>, it?: Item) => setPicks((x) => ({ ...x, [key]: { on: true, as: it?.kind === "sew" ? "sew" : "logo", name: it ? realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 60) || it.name : "", target: "", ...x[key], ...p } }));
   const itemByKey = useMemo(() => new Map(items.flatMap((x) => x.list.map((i) => [i.key, i] as const))), [items]);
+  const cutsOf = (key: string) => (Object.entries(picks) as [string, Pick][]).filter(([, v]) => v.on && v.src === key && v.cut);
+  const addCut = (it: Item, c: Cut) => { const k = `${it.key}#${Date.now().toString(36)}`; const nm = realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 50) || "Logo"; setPicks((x) => ({ ...x, [k]: { on: true, as: "logo", name: `${nm}${cutsOf(it.key).length ? ` ${cutsOf(it.key).length + 1}` : ""}`, target: "", src: it.key, cut: c } })); };
 
   async function makeBrand() {
     const name = (newBrand || "").trim();
@@ -191,10 +335,12 @@ function BringInArt() {
     const { data: u } = await sb.auth.getUser();
     // the logos first, so a sew file can go on one made just now
     for (const [key, p] of newLogos) {
-      const it = itemByKey.get(key); if (!it) continue;
+      const it = itemByKey.get(p.src || key); if (!it) continue;
       try {
-        const d = (await uploadDesign(sb, { file: await file(it.path), customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: `From Printavo #${it.job.visual_id} (${it.job.nickname})` })) as D;
-        const specs = { ...((d.specs || {}) as object), source: { printavo: it.job.visual_id, path: it.path } };
+        let f = await file(it.path);
+        if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error("couldn't cut that logo off the page"); f = c; }
+        const d = (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: `From Printavo #${it.job.visual_id} (${it.job.nickname})` })) as D;
+        const specs = { ...((d.specs || {}) as object), source: { printavo: it.job.visual_id, path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box } : {}) } };
         await sb.from("designs").update({ specs, ...(brand ? { brand_id: brand } : {}) }).eq("id", d.id);
         made.set(key, { ...d, specs, brand_id: brand || null } as D);
         out.push(`D-${d.number} ${p.name || it.name}${brand ? ` · ${brands.find((b) => b.id === brand)?.name}` : ""}`);
@@ -223,7 +369,7 @@ function BringInArt() {
     void loadDesigns(cust);
   }
 
-  const targets = [...newLogos.map(([k, p]) => ({ id: k, label: `New: ${p.name || itemByKey.get(k)?.name || "logo"}` })), ...designs.map((d) => ({ id: d.id, label: `D-${d.number} ${d.name || ""}`.trim() }))];
+  const targets = [...newLogos.map(([k, p]) => ({ id: k, label: `New: ${p.name || itemByKey.get(p.src || k)?.name || "logo"}` })), ...designs.map((d) => ({ id: d.id, label: `D-${d.number} ${d.name || ""}`.trim() }))];
 
   return (
     <>
@@ -246,20 +392,25 @@ function BringInArt() {
             <section key={j.id} className="panel bi-job">
               <label className="panel-h bi-jh"><input type="checkbox" checked={openJobs.has(j.id)} onChange={() => setOpenJobs((x) => { const m = new Set(x); if (m.has(j.id)) m.delete(j.id); else m.add(j.id); return m; })} />
                 <span className="bi-jt"><span className="ordno">#{j.visual_id}</span> {j.nickname}</span><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
-                {list.filter((i) => picks[i.key]?.on).length > 0 && <span className="bi-cnt">{list.filter((i) => picks[i.key]?.on).length} picked</span>}</label>
+                {(() => { const k = new Set(list.map((i) => i.key)); const c = picked.filter(([key, v]) => k.has(v.src || key)).length; return c > 0 ? <span className="bi-cnt">{c} picked</span> : null; })()}</label>
               {openJobs.has(j.id) && <div className="panel-b bi-files">
                 {list.map((it) => {
                   const p = picks[it.key], had = done.get(it.path);
+                  if (it.kind === "sheet") return <a key={it.key} className="bi-f other" href={`/api/files/open?${new URLSearchParams({ p: it.path })}`} target="_blank" rel="noreferrer"><Pic sb={sb} path={it.path} /><span className="bi-n">{it.name}</span><span className="faint">Sewing sheet{facts[it.path] ? `: ${factLine(facts[it.path]!)}` : ""}. Its DST isn&apos;t on this job.</span></a>;
                   if (it.kind === "other") return <a key={it.key} className="bi-f other" href={`/api/files/open?${new URLSearchParams({ p: it.path })}`} target="_blank" rel="noreferrer"><span className="bi-pic"><span className="bi-ext">{it.ext.toUpperCase() || "FILE"}</span></span><span className="bi-n">{it.name}</span></a>;
                   return (
                     <div key={it.key} className={"bi-f" + (p?.on ? " on" : "") + (had ? " had" : "")}>
                       <label className="bi-top">
                         {it.kind === "sew" ? <span className="bi-pic"><span className="bi-ext">DST</span>{it.emb && <span className="bi-ext sm">EMB</span>}{it.sheet && <span className="bi-ext sm">PDF</span>}</span> : PREVIEW.test(it.ext) ? <Pic sb={sb} path={it.path} /> : <span className="bi-pic"><span className="bi-ext">{it.ext.toUpperCase()}</span></span>}
-                        <span className="bi-n"><input type="checkbox" checked={!!p?.on} onChange={(e) => (e.target.checked ? set(it.key, { on: true }, it) : setPicks((x) => ({ ...x, [it.key]: { ...x[it.key], on: false } })))} /> {it.name}</span>
+                        <span className="bi-n"><input type="checkbox" checked={!!p?.on || cutsOf(it.key).length > 0} onChange={(e) => (e.target.checked ? (it.kind === "art" && PREVIEW.test(it.ext) && it.ext !== "svg" ? setCutting(it) : set(it.key, { on: true }, it)) : setPicks((x) => Object.fromEntries((Object.entries(x) as [string, Pick][]).map(([k, v]) => [k, k === it.key || v.src === it.key ? { ...v, on: false } : v]))))} /> {it.name}</span>
                       </label>
                       {it.kind === "sew" && <DstInfo sb={sb} path={it.path} />}
                       {it.kind === "sew" && (it.emb || it.sheet) && <span className="faint">with {[it.emb && nameOf(it.emb), it.sheet && nameOf(it.sheet)].filter(Boolean).join(" and ")}</span>}
                       {had && !p?.on && <span className="bi-had">Brought in: {had}</span>}
+                      {it.kind === "art" && PREVIEW.test(it.ext) && it.ext !== "svg" && <button type="button" className="linkbtn bi-pickoff" onClick={() => setCutting(it)}>{cutsOf(it.key).length ? "Pick another logo off it" : "Pick the logo off it"}</button>}
+                      {cutsOf(it.key).map(([k, c]) => (
+                        <span key={k} className="bi-cutrow"><span className="bi-cutpic"><img src={c.cut!.pic} alt="" /></span><input type="text" aria-label="Logo name" placeholder="Logo name" value={c.name} onChange={(e) => set(k, { name: e.target.value })} /><button type="button" className="linkbtn" aria-label="Take this logo off" onClick={() => setPicks((x) => { const m = { ...x }; delete m[k]; return m; })}>×</button></span>
+                      ))}
                       {p?.on && (it.kind === "sew" ? (
                         <select aria-label="Sew file for" value={p.target} onChange={(e) => set(it.key, { target: e.target.value })}>
                           <option value="">Sew file for which logo?</option>
@@ -277,6 +428,7 @@ function BringInArt() {
           {items.length > n && <button type="button" className="btn" style={{ display: "block", margin: "8px auto" }} onClick={() => setN(n + 15)}>Show more jobs ({items.length - n} more)</button>}
         </>
       )}
+      {cutting && <CutPop sb={sb} it={cutting} cuts={cutsOf(cutting.key).map(([, v]) => ({ name: v.name, pic: v.cut!.pic }))} onWhole={() => set(cutting.key, { on: true }, cutting)} onCut={(c) => addCut(cutting, c)} onClose={() => setCutting(null)} />}
     </>
   );
 }

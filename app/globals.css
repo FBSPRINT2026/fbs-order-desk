@@ -15464,3 +15464,14 @@ html body .as .as-brand.over,html body .as .as-all.over{background:var(--accent-
 /* brands as a plain bulleted list (Oct 28, Nick: no swatches) */
 html body .as .as-brand::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--ink-3);flex:none;margin:0 3px 0 2px}
 html body .as .as-brand.on::before{background:var(--accent)}
+/* picking a logo off a proof / product sheet (Customer artwork builder) */
+.dla.bi-cut{width:min(1000px,96vw);max-height:94vh;overflow:auto}
+.bi-cut-page{position:relative;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:crosshair;user-select:none;touch-action:none;margin:8px 0;min-height:200px}
+.bi-cut-page img{display:block;width:100%;height:auto;pointer-events:none}
+.bi-box{position:absolute;border:2px solid var(--accent);background:rgba(14,155,216,.12);border-radius:3px;pointer-events:none}
+.bi-cuts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
+.bi-cutpic{width:52px;height:40px;border:1px solid var(--line);border-radius:6px;background:#fff;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+.bi-cutpic img{max-width:100%;max-height:100%;object-fit:contain}
+.bi-cutrow{display:flex;align-items:center;gap:6px}
+.bi-cutrow input[type=text]{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);padding:0 8px;min-width:0;flex:1}
+.bi-pickoff{font-size:12.5px;align-self:flex-start}
