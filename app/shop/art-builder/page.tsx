@@ -245,7 +245,7 @@ function BringInArt() {
           {items.slice(0, n).map(({ j, list }) => (
             <section key={j.id} className="panel bi-job">
               <label className="panel-h bi-jh"><input type="checkbox" checked={openJobs.has(j.id)} onChange={() => setOpenJobs((x) => { const m = new Set(x); if (m.has(j.id)) m.delete(j.id); else m.add(j.id); return m; })} />
-                <h2><span className="ordno">#{j.visual_id}</span> {j.nickname}</h2><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
+                <span className="bi-jt"><span className="ordno">#{j.visual_id}</span> {j.nickname}</span><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
                 {list.filter((i) => picks[i.key]?.on).length > 0 && <span className="bi-cnt">{list.filter((i) => picks[i.key]?.on).length} picked</span>}</label>
               {openJobs.has(j.id) && <div className="panel-b bi-files">
                 {list.map((it) => {

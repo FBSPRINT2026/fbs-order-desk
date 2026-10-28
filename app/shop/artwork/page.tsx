@@ -263,10 +263,10 @@ export default function ArtworkPage() {
                     <button type="button" className={"btn sm as-all" + (brandPick[c.id] ? "" : " on") + (over === "none" && drag?.c === c.id ? " over" : "")} aria-pressed={!brandPick[c.id]} title="All their logos (drop a logo here to take it off its brand)" onClick={() => setBrandPick({ ...brandPick, [c.id]: "" })}
                       onDragOver={(e) => { if (drag?.c !== c.id) return; e.preventDefault(); setOver("none"); }} onDragLeave={() => setOver((x) => (x === "none" ? "" : x))} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, null); }}><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1" /><rect x="9.5" y="1.5" width="5" height="5" rx="1" /><rect x="1.5" y="9.5" width="5" height="5" rx="1" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /></svg> All artwork</button>
                     <div className="as-sec">Brands</div>
-                    {bs.map((b) => { const on = brandPick[c.id] === b.id; const sw = (b.colors || []).slice(0, 2); const dropHere = drag?.c === c.id; return (
+                    {bs.map((b) => { const on = brandPick[c.id] === b.id; const dropHere = drag?.c === c.id; return (
                       <button key={b.id} type="button" className={"as-brand" + (on ? " on" : "") + (over === b.id && dropHere ? " over" : "")} aria-pressed={on} title={on ? "Show every logo" : `Show ${b.name}'s logos`} onClick={() => setBrandPick({ ...brandPick, [c.id]: on ? "" : b.id })}
                         onDragOver={(e) => { if (!dropHere) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(b.id); }} onDragLeave={() => setOver((x) => (x === b.id ? "" : x))} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || drag?.id || ""; setDrag(null); setOver(""); if (id) void fileUnder(id, b.id); }}>
-                        {[0, 1].map((i) => <i key={i} className={"as-sw" + (sw[i]?.hex ? "" : " none")} style={sw[i]?.hex ? { background: sw[i].hex } : undefined} />)}<span>{b.name}</span>
+                        <span>{b.name}</span>
                       </button>
                     ); })}
                   </>}
