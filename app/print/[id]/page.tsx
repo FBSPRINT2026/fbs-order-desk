@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
 import { loadGroupLook } from "@/lib/groupLook";
+import { addStockInks } from "@/lib/inkColors";
 import PrintButton from "./PrintButton";
 import { DOC_CSS } from "./docCss";
 import { InvoiceDoc, ProofDoc, SewoutDoc, WorkOrderDoc, type DocData, type SewoutRow } from "./Docs";
@@ -26,6 +27,10 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     db.from("payments").select("*").eq("order_id", id),
   ]);
   const settings = mergeSettings(s?.data);
+  // the Ink Room's stock inks (Dark Brown, Bora Bora Sand…) so their swatches show their color, not gray (Oct 28, Nick:
+  // #40200's proof showed Dark Brown as a gray dot)
+  const { data: stockInks } = await admin.from("stock_inks").select("name, hex, line").eq("stocked", true).is("archived_at", null);
+  addStockInks((stockInks || []) as { name: string; hex: string; line: string }[]);
   const groups = orderGroups(o);
   const c = calcOrder(o, settings, (pays || []) as Payment[]);
   const cust = (cu || {}) as Partial<Customer>;
