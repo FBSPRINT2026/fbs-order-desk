@@ -3,7 +3,7 @@ import "server-only";
 import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
+import { aiState, askClaude, imageTypeOf, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
@@ -278,7 +278,9 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
     const buf = Buffer.from(await data.arrayBuffer());
     budget -= buf.length;
     if (pic) {
-      const t = /png/i.test(a.type) || /\.png$/i.test(a.name) ? "image/png" : /gif/i.test(a.type) ? "image/gif" : /webp/i.test(a.type) ? "image/webp" : "image/jpeg";
+      // its type from its bytes, not its name (a .png that's really a JPEG, or an SVG, makes the whole reading fail)
+      const t = imageTypeOf(buf);
+      if (!t) { listing.push(`${tag} (a picture that can't be opened here; judge it by its name)`); continue; }
       images.push({ media_type: t, data: buf.toString("base64"), label: `${tag} (picture):` });
       listing.push(`${tag} (picture, shown above)`);
     } else if (pdf) {
@@ -506,7 +508,11 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   for (const pic of onFile?.pictures || []) {
     if (images.length >= 8) break;
     const { data } = await admin.storage.from("proofs").download(pic.path).catch(() => ({ data: null }));
-    if (data && data.size < 1.5 * 1024 * 1024) images.push({ media_type: /\.png$/i.test(pic.path) ? "image/png" : "image/jpeg", data: Buffer.from(await data.arrayBuffer()).toString("base64"), label: pic.label });
+    if (!data || data.size >= 1.5 * 1024 * 1024) continue;
+    // a vector logo's picture is an SVG, which can't be sent as a picture (Oct 28: Cedar's D-10251 made Claudia's ClickUp
+    // order fail with "Could not process image"): those are left out
+    const buf = Buffer.from(await data.arrayBuffer()), t = imageTypeOf(buf);
+    if (t) images.push({ media_type: t, data: buf.toString("base64"), label: pic.label });
   }
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });

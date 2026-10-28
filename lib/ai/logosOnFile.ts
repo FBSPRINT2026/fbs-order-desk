@@ -40,7 +40,9 @@ export async function logosOnFile(admin: SupabaseClient, customerId: string): Pr
   const text = [brands.length ? `THIS CUSTOMER'S BRANDS (they order for these companies; each has its standards):\n${brandLines.join("\n")}` : "",
     `THEIR LOGOS ON FILE (rule 4g: when the files show one of these, name it in logo_on_file):\n${lines.join("\n")}`].filter(Boolean).join("\n\n");
   // the brands' logos as pictures, so a logo in their photos can be matched by how it looks (a few, small)
-  const pictures = designs.filter((d) => d.brand_id && d.preview_path).slice(0, 4).map((d) => ({ path: d.preview_path, label: `Logo on file D-${d.number} "${d.name}" (${bName(d.brand_id)}):` }));
+  // (a vector logo's picture is an SVG, which can't be shown to the reader: its first colorway's picture is used instead)
+  const picOf = (d: Design) => { if (d.preview_path && !/\.svg$/i.test(d.preview_path)) return d.preview_path; const cw = ((d.specs as { colorways?: { preview?: string }[] } | null)?.colorways || []).find((c) => c.preview && !/\.svg$/i.test(c.preview)); return cw?.preview || ""; };
+  const pictures = designs.filter((d) => d.brand_id && picOf(d)).slice(0, 4).map((d) => ({ path: picOf(d), label: `Logo on file D-${d.number} "${d.name}" (${bName(d.brand_id)}):` }));
   return { designs, brands, text, pictures };
 }
 
