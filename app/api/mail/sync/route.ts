@@ -26,5 +26,7 @@ export async function GET(req: Request) {
     if (Date.now() > deadline - 8000) break;
     out[a.email] = await runAccount(admin, a, Math.min(deadline, Date.now() + 30000));
   }
+  // digitizer replies whose files weren't added yet (lib/digitizerAuto.ts): added now
+  if (Date.now() < deadline - 6000) { const { sweepDigitizerReplies } = await import("@/lib/digitizerAuto"); out.digitizer = await sweepDigitizerReplies(admin).catch((e) => String(e)); }
   return NextResponse.json({ ok: true, mailboxes: out });
 }

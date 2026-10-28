@@ -35,8 +35,9 @@ import { DIGITIZER } from "@/lib/digitizer";
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
 type EmbFile = DigitizedSet;
 type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: string; via?: string } | null;
-  /** the digitizer's answer, caught by the mail check (lib/mail/process.ts digitizerReply): its files wait here to be added */
-  reply?: { at: string; from: string; subject: string; files: { name: string; path: string; type: string; size: number }[] } | null };
+  /** the digitizer's answer, caught by the mail check (lib/mail/process.ts digitizerReply): its files are added on their
+   *  own (lib/digitizerAuto.ts); `add_error` when they couldn't be (then Add their files does it by hand) */
+  reply?: { at: string; from: string; subject: string; files: { name: string; path: string; type: string; size: number }[]; added_at?: string; add_error?: string } | null };
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
 type State = Exclude<Filter, "all">;
@@ -80,7 +81,12 @@ export default function Digitizing() {
   const stateOf = (it: Item): State => {
     const live = swOf(it).find((x) => !x.archived_at);
     if (live) return live.status === "approved" ? "ok" : live.status === "pending" ? "sent" : "done";
-    const e = embOf(it.d); return e.files?.length || it.im.emb?.file ? "done" : e.request ? "asked" : "need";
+    const e = embOf(it.d);
+    // a repeat: the file has sewn before (marked Already digitized, or it ran on an earlier job), so no new sew-out
+    // (Oct 28, Nick: "#40195… that's a repeat. We don't need to resew it out")
+    const file = (it.im.emb?.file || e.files?.[0]) as (EmbFile & { lastUsed?: unknown }) | undefined;
+    if (file && (it.im.digitized || file.lastUsed || (e.files || []).some((x) => (x as { lastUsed?: unknown }).lastUsed))) return "ok";
+    return e.files?.length || it.im.emb?.file ? "done" : e.request ? "asked" : "need";
   };
   const shown = items.filter((it) => filter === "all" || stateOf(it) === filter);
   const count = (f: Filter) => items.filter((it) => f === "all" || stateOf(it) === f).length;
@@ -146,7 +152,7 @@ export default function Digitizing() {
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
             <div className="chips" role="tablist">
-              {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
+              {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved or sewn before"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
                 <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
               ))}
             </div>

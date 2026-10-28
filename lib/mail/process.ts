@@ -202,6 +202,11 @@ async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, a
     const sp = (d?.specs || {}) as Record<string, unknown>, emb = (sp.embroidery || {}) as Record<string, unknown>;
     await admin.from("designs").update({ specs: { ...sp, embroidery: { ...emb, reply: { at: m.date.toISOString(), activity: ins.id, from, subject: m.subject.slice(0, 200), files, order_id: dz.order_id, imprint_id: it.imprint_id } } } }).eq("id", it.design_id);
   }
+  // their files go on each logo by themselves, which moves it to Needs sew-out (Oct 28, Nick; lib/digitizerAuto.ts)
+  if (files.some((f) => /\.(dst|zip)$/i.test(f.name))) {
+    const { addReplyFiles } = await import("@/lib/digitizerAuto");
+    for (const it of items) if (it.design_id) await addReplyFiles(admin, it.design_id, { others: items.length }).catch(() => null);
+  }
   return "digitizer";
 }
 
