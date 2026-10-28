@@ -176,7 +176,11 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   // "Manually enter info" (Continue without a mockup) only counts until a mockup is saved (Oct 27, #40189: skipped first, then a mockup made, and
   // the prints stayed open to edit instead of showing as the mockup made them)
   const skipped = !!g.mockupSkipped && !g.mockupAt;
-  const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt);
+  // prints added from the customer's brand show like a mockup order's (Oct 27, Nick: "the same imprint thing that we have
+  // on all other orders"), until someone opens them to edit
+  const [editBrand, setEditBrand] = useState(false);
+  const brandOnly = !!onMockup && !g.mockupAt && g.imprints.length > 0 && g.imprints.every((x) => x.fromBrand || x.sizeFrom === "brand");
+  const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt) || (brandOnly && !editBrand);
   // the group's shirt color (first garment): behind each print's logo, like the Mockup Creator's close-ups (Oct 15, Nick)
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
@@ -209,8 +213,25 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const ccImps = g.imprints.filter((x) => versionsOf(x).length > 0);
   const verKey = (color: string) => ccImps.map((x) => versionOfColor(x, color)).join(".");
   const inkOfVer = (x: Imprint, color: string) => { const v = versionOfColor(x, color); return v ? versionsOf(x)[v - 1].to : (x.inks || "").split(/\s*,\s*/)[0] || "as printed"; };
-  const verLabel = (color: string) => ccImps.map((x) => `${ccImps.length > 1 ? `${x.location}: ` : ""}${String.fromCharCode(65 + versionOfColor(x, color))} · ${inkOfVer(x, color)}`).join("  /  ");
+  const verLabel = (color: string) => ccImps.map((x) => `${ccImps.length > 1 ? `${x.location}: ` : ""}${inkOfVer(x, color)}`).join("  /  ");
+  // the sections only show when a version has more than one line (Oct 27: a Dear Heart order with one line per color
+  // looked broken with them)
+  const ccShow = ccImps.length > 0 && (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(l.color); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })();
+  const verLetter = (color: string) => ccImps.map((x) => String.fromCharCode(65 + versionOfColor(x, color))).join("");
   const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
+  /** a print's close-ups by section when the lines are grouped: Group B, C… each on its first garment color */
+  const groupTiles = (d: Group["imprints"][number]) => versionsOf(d).map((v, i) => {
+    const l = g.lines.find((x) => versionOfColor(d, x.color) === i + 1);
+    // a brand logo has its own picture in that thread (its colorway): shown as it is
+    const own = d.design_id ? designUrls?.[`${d.design_id}:ink:${v.to.trim().toLowerCase()}`] : "";
+    return { color: `Group ${String.fromCharCode(66 + i)}`, hex: l ? hexOfColor(l.color) : "#9aa1ab", swap: { [v.from.trim().toLowerCase()]: v.to.trim() }, ...(own ? { url: own, to: v.to.trim() } : {}) };
+  });
+  /** the print's color change count and its Change button (in the read-out and the form) */
+  const ccRow = (d: Group["imprints"][number], di: number) => {
+    if (fixed || printsFixed || d.supplied || !(d.inks || "").trim() || new Set(g.lines.map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size < 2) return null;
+    const n = versionsOf(d).length;
+    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{n ? `${n}` : "None"} <button type="button" className="linkbtn" onClick={() => setCcAt(di)}>{n ? "Change" : "Add color change"}</button></span></div>;
+  };
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
@@ -491,7 +512,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
     }
     const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
     return (
-      <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
+      <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} groups={ccShow && versionsOf(d).length ? versionsOf(d).map((v) => v.to) : undefined} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
         summary={pms.length || typed ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
         editable={pms.length > 0 || typed}>
         {typed ? <label className="check">PMS matches <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
@@ -559,10 +580,10 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
-          {(ccImps.length ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
+          {(ccShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
-            const vk = verKey(l.color), vHead = ccImps.length > 0 && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
+            const vk = verKey(l.color), vHead = ccShow && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
@@ -571,10 +592,12 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
               <Fragment key={l.id}>
-              {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (
-                <div className="gl-ver"><i style={{ background: verHex(l.color) }} /><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
-              ); })()}
-              <div className={"gl" + (same && !vHead ? " same" : "") + (ccImps.length ? " ver" : "")} style={ccImps.length ? { ["--ver" as string]: verHex(l.color) } : undefined}>
+              {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
+                {/* a color change between the sections: its own divider line, so B lines up with A (Oct 27, Nick) */}
+                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Color change</span></div>}
+                <div className="gl-ver"><span className="gl-vt" style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+              </>); })()}
+              <div className={"gl" + (same && !vHead ? " same" : "") + (ccShow ? " ver" : "")} style={ccShow ? { ["--ver" as string]: verHex(l.color) } : undefined}>
                 {(!same || vHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
@@ -737,8 +760,11 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             // group five screens long)
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
-            : (() => { const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
-                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : g.imprints.some((x) => x.fromBrand) ? `From ${g.imprints.find((x) => x.fromBrand)!.fromBrand} · no mockup needed` : "No mockup yet"}</div>; })()}
+            : (() => { const bp = g.imprints.find((x) => (x.fromBrand || x.sizeFrom === "brand") && x.design_id && designUrls?.[x.design_id]);
+                // a logo added from their brand: the logo itself, large, where the mockup goes (Oct 27, Nick)
+                if (bp) return <div className="mk-pref mk-brandlogo"><MockGallery urls={[designUrls![bp.design_id!]]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
+                const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
+                return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
           {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
@@ -789,11 +815,23 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
               </div>
             : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup — or click here to manually enter info</span></button>)}
           <div inert={locked || fixed || printsFixed || undefined} className="mk-body">
+          {brandOnly && <div className="imp-brand-ed">{editBrand ? <button type="button" className="linkbtn" onClick={() => setEditBrand(false)}>Done editing</button> : <button type="button" className="linkbtn" onClick={() => setEditBrand(true)}>Edit the print details</button>}</div>}
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
+                {ccAt != null && g.imprints[ccAt] && <ColorChange im={g.imprints[ccAt]} lines={g.lines} onClose={() => setCcAt(null)} onSave={(inkBy) => { setCcAt(null); update((x) => {
+                  const im = x.imprints[ccAt!];
+                  if (!im) return;
+                  im.inkBy = inkBy;
+                  if (im.method === "screen") im.inkChanges = colorChanges(im);
+                  // the group's lines grouped by version: A's together, then B's (the order otherwise kept)
+                  const cc = x.imprints.filter((y) => versionsOf(y).length > 0);
+                  const key = (c: string) => cc.map((y) => versionOfColor(y, c)).join(".");
+                  x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => key(a.ln.color).localeCompare(key(b.ln.color)) || a.i - b.i).map((v) => v.ln);
+                }); }} />}
+
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={firstColor} changes={changesOf(d)} inksLine={inkCtl(d)} extra={screenCtl(d)} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -857,15 +895,6 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                     <button type="button" className="btn sm ghost" onClick={() => setCcAt(di)}>{versionsOf(d).length ? "Change" : "Add color change"}</button>
                   </div>
                 )}
-                {ccAt === di && <ColorChange im={d} lines={g.lines} onClose={() => setCcAt(null)} onSave={(inkBy) => { setCcAt(null); update((x) => {
-                  const im = x.imprints[di];
-                  im.inkBy = inkBy;
-                  if (im.method === "screen") im.inkChanges = colorChanges(im);
-                  // the group's lines grouped by version: A's together, then B's (the order otherwise kept)
-                  const cc = x.imprints.filter((y) => versionsOf(y).length > 0);
-                  const key = (c: string) => cc.map((y) => versionOfColor(y, c)).join(".");
-                  x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => key(a.ln.color).localeCompare(key(b.ln.color)) || a.i - b.i).map((v) => v.ln);
-                }); }} />}
                 {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 <div className="imp-art" hidden={!!d.supplied}>
                       {!(onMockup && !skipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
@@ -1227,7 +1256,7 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 const printNotes = (s: string | null | undefined) => cleanPrintNotes(shopNotes(s));
 
 /** A print's inks: a swatch chip each (PMS matches marked), then the PMS charge; the pencil opens "standard, no charge". */
-function InkLine({ inks, charged, summary, editable, children, thread, changes }: { inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode; /** an embroidered print: its threads (Madeira, Isacord) */ thread?: boolean;
+function InkLine({ inks, charged, summary, editable, children, thread, changes, groups }: { /** the lines are grouped by color change: "A 1743 Oxford Blue changes to B 1801 Super White" (Oct 27) */ groups?: string[]; inks: { name: string }[]; charged: (name: string) => boolean; summary: React.ReactNode; editable: boolean; children: React.ReactNode; /** an embroidered print: its threads (Madeira, Isacord) */ thread?: boolean;
   /** color changes by ink (lower case): what it changes to and on which garment color */ changes?: Record<string, { to: string; on: string }[]> }) {
   const [edit, setEdit] = useState(false);
   const chip = (name: string, cls = "") => { const t = thread ? threadByName(name) : null; return <span key={name + cls} className={"ink-chip" + cls + (charged(name) ? " pms" : "")} title={charged(name) ? "PMS match: charged" : t?.pms.length ? `PMS ${t.pms[0]}` : undefined}><i style={{ background: t?.hex || colorHex(name) || "#d6d6d6" }} />{name}</span>; };
@@ -1236,9 +1265,10 @@ function InkLine({ inks, charged, summary, editable, children, thread, changes }
     <div className="pr-scr pr-inkl">
       <span className="pr-scr-l">{thread ? "Threads" : "Inks"}</span>
       <span className="pr-scr-v">
-        {inks.length > 0 && !anyChange && <span className="ink-chips">{inks.map((k) => chip(k.name))}</span>}
+        {inks.length > 0 && groups?.length ? <span className="ink-chips ink-grp"><span className="ink-gl">A</span>{inks.map((k) => chip(k.name))}{groups.map((to, i) => <span key={i} className="ink-gw"><span className="ink-to">changes to</span><span className="ink-gl">{String.fromCharCode(66 + i)}</span>{chip(to, " chg")}</span>)}</span> : null}
+        {inks.length > 0 && !groups?.length && !anyChange && <span className="ink-chips">{inks.map((k) => chip(k.name))}</span>}
         {/* a color change: each ink on its own line, the ones that change followed by what they change to (Oct 26, Nick) */}
-        {inks.length > 0 && anyChange && <span className="ink-lines">{inks.map((k) => {
+        {inks.length > 0 && !groups?.length && anyChange && <span className="ink-lines">{inks.map((k) => {
           const ch = changes![k.name.trim().toLowerCase()] || [];
           return <span key={k.name} className="ink-ln">{chip(k.name)}{ch.length > 0 && <><span className="ink-to">change to</span>{ch.map((c) => <span key={c.on} className="ink-tw">{chip(c.to, " chg")}<span className="ink-on">on {c.on}</span></span>)}</>}</span>;
         })}</span>}
@@ -1345,14 +1375,19 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
 }
 
 /** a print's close-up on another garment color with a color change: the color's name over it, "Color change" under it (Oct 26) */
-function ChangeTile({ d, url, color, hex, swap }: { d: Group["imprints"][number]; url: string; color: string; hex: string; swap: Record<string, string> }) {
-  const pic = usePainted(url, d, swap);
+/** the color change symbol: two arrows going around a dot (Oct 27, Nick: "a couple arrows flopping around it") */
+function CcIcon() {
+  return <svg className="cc-ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 9a8 8 0 0 0-14.3-3.6L4 7" /><path d="M4 3v4h4" /><path d="M4 15a8 8 0 0 0 14.3 3.6L20 17" /><path d="M20 21v-4h-4" /><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" /></svg>;
+}
+function ChangeTile({ d, url, color, hex, swap, sym, own }: { d: Group["imprints"][number]; url: string; color: string; hex: string; swap: Record<string, string>; /** the color change symbol instead of the word */ sym?: boolean;
+  /** the logo's own picture in the new thread (a brand colorway): drawn as it is, not repainted */ own?: { url: string; to: string } }) {
+  const pic = usePainted(own ? own.url : url, own ? { ...d, inkMap: undefined, inks: own.to } : d, own ? undefined : swap);
   const [zoom, setZoom] = useState(false);
   return (
     <div className="pr-tw">
       <span className="pr-tc">{color}</span>
       <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => pic && setZoom(true)} title="See it bigger">{pic ? <img src={pic} alt="" /> : <span>No logo</span>}</button>
-      <span className="pr-cc">{changeWord(d.method)}</span>
+      {sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : <span className="pr-cc">{changeWord(d.method)}</span>}
       {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={`On ${color}`} onClick={() => setZoom(false)} tabIndex={-1} ref={(el) => el?.focus()} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={pic} alt="" style={{ background: hex }} />
@@ -1363,8 +1398,8 @@ function ChangeTile({ d, url, color, hex, swap }: { d: Group["imprints"][number]
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes }: { /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
-  /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string> }[];
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym }: { /** color change tiles show the symbol */ sym?: boolean; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+  /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string>; url?: string; to?: string }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
@@ -1413,7 +1448,7 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
         return (
           <div className="pr-tiles">
             <div className="pr-tw"><span className="pr-tc">{color || "As printed"}</span>{main}</div>
-            {changes.map((c) => <ChangeTile key={c.color} d={d} url={urls[cur.id] || ""} color={c.color} hex={c.hex} swap={c.swap} />)}
+            {changes.map((c) => <ChangeTile key={c.color} d={d} url={urls[cur.id] || ""} color={c.color} hex={c.hex} swap={c.swap} sym={sym} own={c.url && c.to ? { url: c.url, to: c.to } : undefined} />)}
           </div>
         );
       })()}

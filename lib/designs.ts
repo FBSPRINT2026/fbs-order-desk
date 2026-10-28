@@ -109,6 +109,13 @@ export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<R
   const out: Record<string, string> = {};
   (data || []).forEach((r, i) => { if (r.signedUrl) out[i < withPv.length ? withPv[i].id : bgPaths[i - withPv.length]] = r.signedUrl; });
   for (const d of list) { const cp = d.specs?.cleanPreview as string | undefined; if (cp && out[cp]) out[d.id + ":clean"] = out[cp]; }
+  // a brand logo's colorways (lib/brands.ts): each version's own picture, keyed "<id>:ink:<its inks>" (a color change
+  // tile shows the logo in the thread it changes to, Oct 27)
+  const cws = list.flatMap((d) => (((d.specs as { colorways?: { inks?: string[]; preview?: string }[] } | null)?.colorways) || []).filter((c) => c.preview && c.inks?.length).map((c) => ({ id: d.id, key: c.inks!.join(", ").toLowerCase(), path: c.preview! })));
+  if (cws.length) {
+    const { data: cu } = await sb.storage.from("proofs").createSignedUrls(cws.map((c) => c.path), 3600);
+    cws.forEach((c, i) => { const u = cu?.[i]?.signedUrl; if (u) out[`${c.id}:ink:${c.key}`] = u; });
+  }
   return out;
 }
 
