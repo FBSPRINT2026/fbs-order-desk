@@ -54,13 +54,11 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
   const brandById = (id: string | null) => brands.find((b) => b.id === id) || null;
   const t = q.trim().toLowerCase();
   const lines = group.lines.filter((l) => (l.color || "").trim());
-  // light or dark goods: read off the color's name, and a click flips one (a color we don't know reads as light)
-  const ck = (c: string) => c.trim().toLowerCase();
-  const [flip, setFlip] = useState<Record<string, boolean>>({});
-  const darkOf = (c: string) => (ck(c) in flip ? flip[ck(c)] : isDarkGarment({ color: c }));
-  const colors = [...new Map(lines.map((l) => [ck(l.color), l.color.trim()])).values()];
-  const dark = lines.length > 0 && lines.every((l) => darkOf(l.color));
-  const mixed = lines.some((l) => darkOf(l.color)) && !dark;
+  // one thread (or colorway) for the print, picked here from the brand's two; a color change is made on the order after,
+  // with its Color change button (Oct 27, Nick: "just add location and thread… drop down between their two brand
+  // standards… then you should click a button that says color change")
+  const dark = lines.length > 0 && lines.every((l) => isDarkGarment(l));
+  const [side, setSide] = useState<"light" | "dark">("light");
   const others = (ds || []).filter((d) => !bOf(d));
   // a search looks through all of their logos (and brand names); else the brand picked
   const shown = (ds || []).filter((d) => (t ? `d-${d.number} ${d.number} ${d.name} ${brandById(bOf(d))?.name || ""}`.toLowerCase().includes(t) : tab === ALL || (tab === OTHER ? !bOf(d) : bOf(d) === tab)));
@@ -75,11 +73,11 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
     const fs = sewFilesOf(pick), best = pickSewFile(fs, kind);
     setSewIx(Math.max(0, best ? fs.indexOf(best) : 0));
     setCwName(colorwayFor(pick, brandById(bOf(pick)), dark)?.name || "");
+    setSide(dark ? "dark" : "light");
     setSize(lane === "embroidery" ? "" : SIZE_GUESS[loc] || "");
     setErr("");
   }, [pick?.id, lane]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { if (pick) setCwName(colorwayFor(pick, brandById(bOf(pick)), dark)?.name || ""); }, [dark]); // eslint-disable-line react-hooks/exhaustive-deps
   const brand = pick ? brandById(bOf(pick)) : null;
   const sews = pick ? sewFilesOf(pick) : [];
   const sew = lane === "embroidery" ? sews[sewIx] || null : null;
@@ -90,7 +88,7 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
     if (!pick) return;
     setBusy(true); setErr("");
     try {
-      const im = brandPrint({ design: pick, brand, method: lane, location: loc, lines: group.lines, size: size.trim(), sew, colorway: cws.find((c) => c.name === cwName) || null, darkOf });
+      const im = brandPrint({ design: pick, brand, method: lane, location: loc, lines: group.lines, size: size.trim(), sew, colorway: cws.find((c) => c.name === cwName) || null, darkOf: () => (lane === "embroidery" ? side === "dark" : false) });
       await onAdd(im, `D-${pick.number} ${pick.name}${brand ? ` (${brand.name})` : ""}`);
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't add it."); setBusy(false); }
   }
@@ -177,7 +175,11 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
               <div className="field"><label htmlFor="ba-size">Size</label><input id="ba-size" type="text" value={size} placeholder={'3.5" wide'} onChange={(e) => setSize(e.target.value)} /></div>
             )}
             {lane === "embroidery" ? (
-              <div className="field ba-ro"><label>Threads</label><div className="ba-val" title={mixed ? `Dark goods: ${threads("dark").join(", ")}` : undefined}>{(dark ? threads("dark") : threads("light")).join(", ") || "Not set for this brand"}</div></div>
+              (() => { const opts = (["light", "dark"] as const).filter((k) => threads(k).length).filter((k, i, a) => i === 0 || threads(k).join() !== threads(a[0]).join());
+                return opts.length ? (
+                  <div className="field"><label htmlFor="ba-th">Thread</label>
+                    <select id="ba-th" value={opts.includes(side) ? side : opts[0]} onChange={(e) => setSide(e.target.value as "light" | "dark")}>{opts.map((k) => <option key={k} value={k}>{threads(k).join(", ")}</option>)}</select></div>
+                ) : <div className="field"><label>Thread</label><div className="ba-val">{pick.inks || "Not set for this brand"}</div></div>; })()
             ) : (
               <div className="field"><label htmlFor="ba-cw">Colorway</label>
                 {cws.length ? <select id="ba-cw" value={cwName} onChange={(e) => setCwName(e.target.value)}>{cws.map((c) => <option key={c.name} value={c.name}>{c.name} ({c.inks.join(", ")})</option>)}</select>
@@ -185,15 +187,7 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
               </div>
             )}
           </div>
-          {colors.length > 0 && (
-            <div className="ba-goods"><span className="faint">Goods (click to switch):</span>
-              {colors.map((c) => <button key={c} type="button" className={"ba-g" + (darkOf(c) ? " dk" : "")} title={darkOf(c) ? "Dark goods: gets the dark version. Click if it's light." : "Light goods: gets the light version. Click if it's dark."} onClick={() => setFlip((f) => ({ ...f, [ck(c)]: !darkOf(c) }))}>{c}<small>{darkOf(c) ? "dark" : "light"}</small></button>)}
-            </div>
-          )}
-          {mixed && (() => {
-            const other = lane === "embroidery" ? threads("dark").join(", ") : colorwayFor(pick, brand, true)?.name;
-            return other ? <span className="faint">This group has light and dark goods: the dark ones ({[...new Set(lines.filter((l) => darkOf(l.color)).map((l) => l.color))].join(", ")}) get {other}.</span> : null;
-          })()}
+          <span className="faint">Garments that take another {lane === "embroidery" ? "thread" : "color"}: add a color change on the print after.</span>
           {lane === "embroidery" && !sews.length && <span className="ca-warn">No sew file for this logo yet: it goes on stamped Needs digitizing (stitches and price confirmed after the sew-out).</span>}
           {lane === "screen" && !laneState(pick, "screen").ready && <span className="ca-warn">No vector art for screen printing yet: it goes on as the art on file, for separations.</span>}
           {err && <span className="err">{err}</span>}
