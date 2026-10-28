@@ -22,11 +22,11 @@ export async function GET(req: Request) {
   const deadline = Date.now() + 48000, cutoff = new Date(Date.now() - 15 * 60000).toISOString();
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true).or(`last_error_at.is.null,last_error_at.lt.${cutoff}`).order("last_run_at", { ascending: true, nullsFirst: true });
   const out: Record<string, unknown> = {};
+  // digitizer replies whose files weren't added yet (lib/digitizerAuto.ts): added first, before the mailboxes use the minute
+  { const { sweepDigitizerReplies } = await import("@/lib/digitizerAuto"); out.digitizer = await sweepDigitizerReplies(admin).catch((e) => String(e)); }
   for (const a of (data || []) as MailAccount[]) {
     if (Date.now() > deadline - 8000) break;
     out[a.email] = await runAccount(admin, a, Math.min(deadline, Date.now() + 30000));
   }
-  // digitizer replies whose files weren't added yet (lib/digitizerAuto.ts): added now
-  if (Date.now() < deadline - 6000) { const { sweepDigitizerReplies } = await import("@/lib/digitizerAuto"); out.digitizer = await sweepDigitizerReplies(admin).catch((e) => String(e)); }
   return NextResponse.json({ ok: true, mailboxes: out });
 }

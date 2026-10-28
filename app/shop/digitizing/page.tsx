@@ -120,9 +120,9 @@ export default function Digitizing() {
   async function checkNow() {
     setChecking(true); setMsg("");
     try {
-      const r = await fetch("/api/mail/sync", { cache: "no-store" });
-      const j = await r.json().catch(() => ({})) as { mailboxes?: { digitizer?: number | string } };
-      const n = j.mailboxes?.digitizer;
+      const r = await fetch("/api/digitizer/check", { method: "POST", cache: "no-store" });
+      const j = await r.json().catch(() => ({})) as { added?: number };
+      const n = j.added;
       setMsg(typeof n === "number" ? (n ? `Added the digitizer's files on ${n} logo${n === 1 ? "" : "s"}.` : "Checked: nothing new from the digitizer.") : r.ok ? "Checked the mail." : "Couldn't check the mail right now.");
     } catch { setMsg("Couldn't check the mail right now."); }
     setChecking(false);
