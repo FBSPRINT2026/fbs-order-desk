@@ -9,6 +9,11 @@ import { designLabel, orderGroups, type Customer, type Design, type Order } from
 import { custLabel, fmtDate } from "@/lib/format";
 import { setDesignPreview } from "@/lib/designs";
 import LogoEditor from "@/components/LogoEditor";
+import { nextSewCode, SEW_KINDS, sewFilesOf, tajimaName, type SewFile } from "@/lib/brands";
+import { tajimaFile } from "@/components/CustomerBrands";
+
+type Sew = SewFile & { lastUsed?: { job?: string; date?: string; name?: string; where?: string; dropbox?: string }; source?: string };
+const fileLink = (p: string, n?: string) => `/api/files/open?${new URLSearchParams({ p, ...(n ? { n } : {}) })}`;
 
 /** One design: preview, details, original file, and every order it's been used on. */
 export default function DesignPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +29,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [armed, setArmed] = useState(false);
   // the logo editor (remove the white, change colors, crop): opened from here or a logo card's ✎ (?edit=1)
   const [editing, setEditing] = useState(false);
+  const [sewBusy, setSewBusy] = useState(false);
   useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
 
   async function load() {
@@ -58,7 +64,33 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     router.push("/shop/artwork");
   }
 
+  /** a sew file for this logo: the digitizer's DST with its EMB and sewing sheet, named D{number}E{n} for the Tajima */
+  async function addSew(files: FileList | null) {
+    if (!d || !files?.length) return;
+    setSewBusy(true); setMsg("");
+    try {
+      const { expandFiles, takeDigitized } = await import("@/lib/digitizedFiles");
+      const have = sewFilesOf(d), code = nextSewCode(have), name = tajimaName(d.number, Number(code.slice(1)));
+      const named = await Promise.all((await expandFiles([...files])).map((f) => tajimaFile(f, name)));
+      const { set } = await takeDigitized(sb, d.id, named);
+      const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+      const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
+      const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), { ...set, code, kind: "flat" }] } };
+      const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
+      if (error) throw new Error(error.message);
+      setD({ ...d, specs: specs as Design["specs"] }); setMsg(`${name} added`);
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Couldn't add the sew file."); }
+    setSewBusy(false);
+  }
+  async function setSew(i: number, p: Partial<Sew>) {
+    if (!d) return;
+    const fs = sewFilesOf(d).map((f, j) => (j === i ? { ...f, ...p } : f));
+    await patch({ specs: { ...((d.specs || {}) as object), embroidery: { ...(((d.specs as { embroidery?: object } | null)?.embroidery) || {}), files: fs } } as Design["specs"] });
+  }
+
   if (!d) return <div className="empty">{msg || "Loading…"}</div>;
+  const sews = sewFilesOf(d) as Sew[];
+  const ps = (d.specs as { printSize?: { wIn?: number; hIn?: number; location?: string } } | null)?.printSize;
   const ratio = d.width_px && d.height_px ? d.height_px / d.width_px : 0;
   return (
     <>
@@ -74,6 +106,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
             <div className="dc-img" style={{ aspectRatio: "1 / 1", borderRadius: 6 }}>{pv ? <img src={pv} alt={d.name} /> : <span>No preview</span>}</div>
             <label className="btn" style={{ cursor: "pointer", alignSelf: "flex-start" }}>{pv ? "Replace preview image" : "Add preview image"}<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { setD(await setDesignPreview(sb, d, f)); setMsg("Preview updated"); load(); } catch (er) { setMsg(String(er)); } }} /></label>
             <div className="sub">Original: {d.file_name || "—"}{ratio ? ` · proportions ${(1).toFixed(0)} : ${ratio.toFixed(2)} (width : height)` : ""}</div>
+            {ps?.wIn ? <div className="sub"><b>Prints {ps.wIn}&quot;{ps.hIn ? ` × ${ps.hIn}"` : " wide"}</b>{ps.location ? ` · ${ps.location}` : ""}</div> : null}
           </div>
         </section>
         <div className="stack">
@@ -88,6 +121,26 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
               <label className="check" style={{ gridColumn: "1 / -1" }} title="Worn / cracked texture in the art. A customer's brand standard can print distressed logos as a fashion hit (no underbase)."><input type="checkbox" checked={!!(d.specs as { distressed?: boolean } | null)?.distressed} onChange={(e) => patch({ specs: { ...((d.specs || {}) as object), distressed: e.target.checked || undefined } as Design["specs"] })} /> Distressed logo</label>
               <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
             </div>
+          </section>
+          {/* the logo's embroidery files (Oct 28, Nick: "once you click on a logo, if it has DSTs, there's got to be somewhere…
+              the DST files… different versions… a 2-inch version, a 1-inch version") */}
+          <section className="panel">
+            <div className="panel-h"><h2>Embroidery</h2><span className="faint">{sews.length ? `${sews.length} sew file${sews.length === 1 ? "" : "s"}: the DST with its EMB and sewing sheet` : "No sew files yet"}</span>
+              <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(e.target.files); e.target.value = ""; }} /></label></div>
+            {sews.length > 0 && <div className="tbl-wrap"><table className="tbl lg-sew">
+              <thead><tr><th>Sew file</th><th>Size</th><th>Stitches</th><th>Kind</th><th>Where it goes</th><th>Last used</th><th>Files</th></tr></thead>
+              <tbody>{[...sews].map((f, i) => ({ f, i })).sort((a, b) => (b.f.wIn || 0) - (a.f.wIn || 0)).map(({ f, i }) => (
+                <tr key={i}>
+                  <td><b className="ordno">{tajimaName(d.number, Number((f.code || "E1").slice(1)) || i + 1)}</b></td>
+                  <td style={{ whiteSpace: "nowrap" }}>{f.wIn}&quot; × {f.hIn}&quot;</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{(f.stitches || 0).toLocaleString()}<div className="sub">{f.colors} color{f.colors === 1 ? "" : "s"}</div></td>
+                  <td><select aria-label="Kind" value={f.kind || "flat"} onChange={(e) => void setSew(i, { kind: e.target.value as Sew["kind"] })}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+                  <td><input type="text" aria-label="Where it goes" defaultValue={f.placement || ""} placeholder="Left Chest…" onBlur={(e) => { if ((f.placement || "") !== e.target.value.trim()) void setSew(i, { placement: e.target.value.trim() || undefined }); }} /></td>
+                  <td>{f.lastUsed?.job ? <>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}{f.lastUsed.where ? ` · ${f.lastUsed.where}` : ""}</div></> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>
+                  <td style={{ whiteSpace: "nowrap" }}><a href={fileLink(f.path, f.name)} target="_blank" rel="noreferrer">DST</a>{f.emb && <> · <a href={fileLink(f.emb.path, f.emb.name)} target="_blank" rel="noreferrer">EMB</a></>}{f.sheet && <> · <a href={fileLink(f.sheet.path, f.sheet.name)} target="_blank" rel="noreferrer">Sheet</a></>}</td>
+                </tr>
+              ))}</tbody>
+            </table></div>}
           </section>
           <section className="panel">
             <div className="panel-h"><h2>Used on</h2></div>

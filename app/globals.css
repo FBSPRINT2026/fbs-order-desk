@@ -15488,3 +15488,6 @@ html body .as .as-brand.on::before{background:var(--accent)}
 .bi-cutitem>span:last-child{display:flex;flex-direction:column}
 .bi-cutform .bi-w{min-width:120px;width:140px}
 .bi-wnote{align-self:center;font-size:12.5px}
+/* a logo's embroidery files (app/shop/artwork/[id]) */
+.lg-sew select,.lg-sew input[type=text]{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;background:var(--surface);min-width:0;width:100%}
+.lg-sew td{vertical-align:middle}
