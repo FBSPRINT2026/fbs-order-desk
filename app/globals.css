@@ -15355,3 +15355,46 @@ a.dgt-file{color:var(--accent);text-decoration:none}
 .dst-pv{display:flex;flex-direction:column;gap:6px}
 .dst-pv .emb-dst{padding:0;overflow:hidden;background:var(--surface-2,#f4f4f1)}
 .dst-pv-t{font-size:12.5px;color:var(--ink-2)}
+
+/* Artwork shelves (Oct 27, Nick: "a log of artwork", one row per client: its logos, brands and active orders on the left,
+   its logos on the right with which department has its file; app/shop/artwork/page.tsx) */
+.as{gap:0}
+.as-head{display:grid;grid-template-columns:220px minmax(0,1fr) auto;gap:14px;align-items:center;padding:4px 0 8px}
+.as-head .faint{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.as-row{display:grid;grid-template-columns:220px minmax(0,1fr);gap:14px;border-top:1px solid var(--line);padding:12px 0}
+.as-who{display:flex;flex-direction:column;min-width:0}
+.as-name{font-weight:700;color:var(--ink);font-size:14px}
+.as-name:hover{color:var(--accent)}
+.as-mini{display:flex;gap:10px;font-size:12px;color:var(--ink-3);margin-top:2px;white-space:nowrap}
+.as-mini b{color:var(--ink);font-weight:700}
+.as-sec{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-top:10px;margin-bottom:2px}
+.as-brand{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);background:none;border:0;padding:2px 4px;margin-left:-4px;border-radius:var(--r);text-align:left;cursor:pointer}
+.as-brand:hover{background:var(--surface-2)}
+.as-brand.on{background:var(--accent-soft);color:var(--accent)}
+.as-sw{width:11px;height:11px;border-radius:3px;border:1px solid var(--line);flex:none}
+.as-sw.none{border-style:dashed}
+.as-ord{display:flex;gap:6px;font-size:12.5px;line-height:1.75;color:var(--ink);min-width:0;white-space:nowrap}
+.as-ord .ordno{color:var(--accent);flex:none}
+.as-ord-n{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.as-ord:hover .as-ord-n{text-decoration:underline}
+.as-more{font-size:12px;align-self:flex-start}
+.as-logos{display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start;min-width:0}
+.as-t{width:96px;display:flex;flex-direction:column;gap:4px;color:var(--ink);transition:opacity .15s}
+.as-t.dim{opacity:.3}
+.as-t.hot .as-pic{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.as-pic{position:relative;height:76px;border:1px solid var(--line);border-radius:var(--r);background:#fff;overflow:hidden;display:block}
+.as-t:hover .as-pic{border-color:var(--accent)}
+.as-pic .lp{position:absolute;inset:0;display:grid;place-items:center}
+.as-pic .lp img{max-width:80%;max-height:80%;object-fit:contain}
+.as-ext{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--ink-3)}
+.as-star{position:absolute;top:2px;right:5px;font-size:12px;color:var(--warn)}
+.as-lanes{display:flex;gap:3px}
+.as-ln{font-size:10.5px;line-height:15px;padding:0 4px;border-radius:3px;border:1px solid var(--line);color:var(--ink-3)}
+.as-ln.has{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.as-lab{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.as-lab b{color:var(--ink);font-weight:700}
+.as-plus{height:76px;border:1px dashed var(--line);border-radius:var(--r);background:none;color:var(--ink-3);font-size:13px;cursor:pointer;justify-content:center;align-items:center}
+.as-plus:hover{color:var(--accent);border-color:var(--accent)}
+.as-none{font-size:12.5px;padding-top:4px}
+.as-key{border-top:1px solid var(--line);padding-top:8px;margin:0;font-size:12px}
+@media (max-width:760px){.as-row,.as-head{grid-template-columns:1fr}.as-head>.faint{display:none}}
