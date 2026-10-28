@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { colorwaysOf, pickSewFile, sewFilesOf, sewKindOf, type Brand } from "@/lib/brands";
-import type { Design, GLine, Imprint } from "@/lib/pricing";
+import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
 
 /**
  * The customer's logos on file and their brand standards, for the order reader (Oct 27, Nick on Cedar Promos' ShipStation
@@ -87,5 +87,80 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
   }
   if (Object.keys(inkBy).length) im.inkBy = inkBy;
   return im;
+}
+
+/**
+ * Groups that are the same logo on file at the same spots are ONE group with a color change (Oct 27, Nick on SO#73417:
+ * the reader made a group per polo; #40195, the order he built, is "Left Chest" with all six polos in Oxford Blue and a
+ * color change to Super White on the Navy and Black, and the quarter-zip's sleeve its own group). Merges groups whose
+ * prints are all logos on file with the same method, spot and logo: the thread most garments get (else the brand's
+ * light-goods thread) stays the print's, the others become Imprint.inkBy by garment color. Groups at other spots stay
+ * apart. Returns the new list and, for each old group, the group it went into.
+ */
+export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups: Group[]; into: Map<Group, Group> } {
+  const into = new Map<Group, Group>();
+  const ck2 = (c: string) => (c || "").trim().toLowerCase();
+  const isLogo = (g: Group) => g.imprints.length > 0 && g.imprints.every((im) => im.design_id && im.fromBrand);
+  const sig = (g: Group) => g.imprints.map((im) => `${im.method}|${ck2(im.location)}|${im.design_id}`).sort().join("~");
+  const bySig = new Map<string, Group[]>();
+  for (const g of groups) if (isLogo(g)) { const k = sig(g); bySig.set(k, [...(bySig.get(k) || []), g]); }
+  const out: Group[] = [];
+  const done = new Set<Group>();
+  let merged = false;
+  for (const g of groups) {
+    if (done.has(g)) continue;
+    const set = isLogo(g) ? bySig.get(sig(g)) || [g] : [g];
+    if (set.length < 2) { out.push(g); into.set(g, g); done.add(g); continue; }
+    // one print at a time (matched by spot), each garment color's thread
+    const keyOf = (im: Imprint) => `${im.method}|${ck2(im.location)}|${im.design_id}`;
+    const base: Group = JSON.parse(JSON.stringify(g));
+    let clash = false;
+    for (const im of base.imprints) {
+      const k = keyOf(im);
+      const per: { color: string; inks: string; n: number }[] = [];
+      for (const x of set) {
+        const xi = x.imprints.find((y) => keyOf(y) === k);
+        if (!xi) continue;
+        for (const l of x.lines) {
+          const own = Object.entries(xi.inkBy || {}).find(([c]) => ck2(c) === ck2(l.color))?.[1];
+          const first = (xi.inks || "").split(/\s*,\s*/)[0] || "";
+          const inks = own && first && own[first] ? (xi.inks || "").replace(first, own[first]) : xi.inks || "";
+          per.push({ color: l.color, inks, n: 1 });
+        }
+      }
+      // the same garment color can't get two threads in one group: leave these apart
+      const seen = new Map<string, string>();
+      for (const p of per) { const was = seen.get(ck2(p.color)); if (was != null && ck2(was) !== ck2(p.inks)) clash = true; seen.set(ck2(p.color), p.inks); }
+      if (clash) break;
+      const tally = new Map<string, number>();
+      for (const p of per) tally.set(p.inks, (tally.get(p.inks) || 0) + p.n);
+      const brand = brands.find((b) => b.name === im.fromBrand);
+      const light = (brand?.embroidery?.light || [])[0] || "";
+      const top = [...tally.entries()].sort((a, b) => b[1] - a[1] || Number(ck2(b[0]).includes(ck2(light)) && !!light) - Number(ck2(a[0]).includes(ck2(light)) && !!light));
+      const main = top[0]?.[0] || im.inks || "";
+      im.inks = main;
+      im.colors = Math.max(1, main.split(/\s*,\s*/).filter(Boolean).length);
+      const from = main.split(/\s*,\s*/);
+      const inkBy: NonNullable<Imprint["inkBy"]> = {};
+      for (const p of per) {
+        if (ck2(p.inks) === ck2(main)) continue;
+        const to = p.inks.split(/\s*,\s*/);
+        const m: Record<string, string> = {};
+        from.forEach((f, i) => { if (to[i] && ck2(to[i]) !== ck2(f)) m[f] = to[i]; });
+        if (Object.keys(m).length) inkBy[ck2(p.color)] = m;
+      }
+      if (Object.keys(inkBy).length) im.inkBy = inkBy; else delete im.inkBy;
+    }
+    if (clash) { for (const x of set) if (!done.has(x)) { out.push(x); into.set(x, x); done.add(x); } continue; }
+    base.lines = set.flatMap((x) => x.lines);
+    base.finishing = [...new Set(set.flatMap((x) => x.finishing || []))];
+    base.name = [...new Set(base.imprints.map((im) => im.location))].join(" + ");
+    delete base.description;
+    out.push(base); merged = true;
+    for (const x of set) { into.set(x, base); done.add(x); }
+  }
+  // once merged, each logo group is named by its spot like the rest ("Left Chest", "Left Upper Arm")
+  if (merged) for (const g of out) if (isLogo(g) && g.imprints.length === 1) g.name = g.imprints[0].location;
+  return { groups: out, into };
 }
 
