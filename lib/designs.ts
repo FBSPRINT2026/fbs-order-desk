@@ -97,6 +97,27 @@ export async function setDesignPreview(sb: SupabaseClient, d: Design, f: File): 
   return data as Design;
 }
 
+/**
+ * New art for a logo that's already on file (Oct 28, Nick: "D-10251… that's just the DST. Now let's go in and pull the
+ * vector file… you got to be able to do this in reverse… that adds to the group D10251"): the file becomes the logo's
+ * art and picture; the old ones are kept on the logo (specs.previous), its number, sew files and history stay.
+ */
+export async function setLogoArt(sb: SupabaseClient, d: Design, f: File): Promise<Design> {
+  const key = `designs/${d.id}-${crypto.randomUUID().slice(0, 8)}`;
+  const orig = `${key}/${safe(f.name)}`;
+  const up = await sb.storage.from("proofs").upload(orig, f, { contentType: f.type || undefined });
+  if (up.error) throw new Error(up.error.message);
+  const pv = PREVIEWABLE.test(f.type) ? f : await makePreview(f);
+  let preview_path = pv === f ? orig : "";
+  if (pv && pv !== f) { const p2 = `${key}/preview-${safe(pv.name)}`; if (!(await sb.storage.from("proofs").upload(p2, pv, { contentType: pv.type })).error) preview_path = p2; }
+  const dims = pv ? await imageSize(pv) : null;
+  const sp = (d.specs || {}) as Record<string, unknown>;
+  const previous = [...((sp.previous || []) as unknown[]), { file_path: d.file_path, file_name: d.file_name, file_type: d.file_type, preview_path: d.preview_path, at: new Date().toISOString() }];
+  const { data, error } = await sb.from("designs").update({ file_path: orig, file_name: f.name, file_type: f.type || "", ...(preview_path ? { preview_path } : {}), width_px: dims?.w || null, height_px: dims?.h || null, specs: { ...sp, previous } }).eq("id", d.id).select("*").single();
+  if (error) throw new Error(error.message);
+  return data as Design;
+}
+
 /** Signed links for design previews, keyed by design id. */
 export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<Record<string, string>> {
   const withPv = list.filter((d) => d.preview_path);

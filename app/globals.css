@@ -15491,3 +15491,41 @@ html body .as .as-brand.on::before{background:var(--accent)}
 /* a logo's embroidery files (app/shop/artwork/[id]) */
 .lg-sew select,.lg-sew input[type=text]{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;background:var(--surface);min-width:0;width:100%}
 .lg-sew td{vertical-align:middle}
+
+/* a logo's page (app/shop/artwork/[id]): the art on the left, its departments in tabs on the right (Oct 28) */
+.lg-grid{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.lg-grid{grid-template-columns:1fr}}
+.lg-art{aspect-ratio:1/1;border-radius:var(--r);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;transition:background .15s}
+.lg-art img{max-width:82%;max-height:82%;object-fit:contain}
+.lg-bgs{display:flex;gap:6px}
+.lg-bgs button{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);cursor:pointer;padding:0}
+.lg-bgs button.on{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+.lg-size{font-size:14px}
+.lg-k{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-top:4px}
+.lg-pills{display:flex;flex-wrap:wrap;gap:6px}
+.lg-pill{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.lg-nav{margin:0}
+.lg-sew .lg-kind{min-width:110px}
+.lg-hist{display:flex;flex-direction:column;gap:8px}
+.lg-h{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;font-size:13.5px}
+.lg-h b{white-space:nowrap;color:var(--ink-2);font-weight:700}
+/* Find it everywhere (components/LogoResearch.tsx) */
+.dla.lr{width:min(980px,96vw);max-height:92vh;display:flex;flex-direction:column}
+.lr-body{overflow:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px}
+.lr-body h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.lr-row,.lr-job{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line-2)}
+.lr-job.off{opacity:.45}
+.lr-job .bi-pic{width:110px;height:84px;flex:none}
+.bi-pic.sm{width:54px;height:40px;flex:none}
+.lr-jb{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.lr-jb b{font-size:13.5px}
+.lr-jb b .ordno{color:var(--accent);margin-right:4px}
+.lr-tags{display:flex;flex-wrap:wrap;gap:4px}
+.lr-tag{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.lr-tag.c{background:var(--accent-soft);color:var(--accent)}
+.lr-ai{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+.lr-ai button{border:0;background:var(--surface);font:600 12.5px var(--body);color:var(--ink-3);padding:5px 12px;cursor:pointer}
+.lr-ai button.on{background:var(--surface-2);color:var(--ink)}
+.lr-ai button.on.add{background:var(--ok-soft);color:var(--ok)}
+.bi-cutblock{display:flex;flex-direction:column;gap:4px}
+.bi-into{height:36px;border:1px solid var(--line);border-radius:6px;font:13px var(--body);color:var(--ink);padding:0 6px;width:100%;background:var(--surface)}
