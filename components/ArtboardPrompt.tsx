@@ -13,12 +13,13 @@ export default function ArtboardPrompt() {
       <div className="dla abp" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="dla-x" aria-label="Close" onClick={() => done(null)}>×</button>
         <h3>Which logo are you using?</h3>
-        <p className="dla-sub"><span data-notranslate>{ask.fileName}</span> has {ask.pages.length} artboards. Pick the one for this print; only that one is saved.</p>
+        {ask.note ? <p className="dla-sub"><span data-notranslate>{ask.fileName}</span>: {ask.note}</p>
+          : <p className="dla-sub"><span data-notranslate>{ask.fileName}</span> has {ask.pages.length} artboards. Pick the one for this print; only that one is saved.</p>}
         <div className="abp-grid">
           {ask.pages.map((u, i) => (
             <button key={i} type="button" className="abp-c" onClick={() => done(i + 1)} autoFocus={i === 0}>
-              <span className="abp-pic">{u ? <img src={u} alt="" /> : <span className="faint">No preview</span>}</span>
-              <span>Artboard {i + 1}</span>
+              <span className="abp-pic">{u ? <img src={u} alt="" /> : <span className="faint">{ask.note ? "As it is in the file" : "No preview"}</span>}</span>
+              <span>{ask.note ? "Use artboard 1" : `Artboard ${i + 1}`}</span>
             </button>
           ))}
         </div>
