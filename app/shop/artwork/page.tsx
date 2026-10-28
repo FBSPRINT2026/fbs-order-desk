@@ -209,29 +209,6 @@ export default function ArtworkPage() {
         {show !== "mockups" && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> Archived logos</label>}
       </div>
 
-      {drafts.filter((d) => !cust || d.customer_id === cust).length > 0 && (
-        <section className="art-sec art-drafts">
-          <div className="aa-sec-h"><button type="button" className="linkbtn" onClick={() => setDraftsOpen((x) => !x)} aria-expanded={draftsOpen}><h3>{draftsOpen ? "▾" : "▸"} Drafts</h3></button><span className="faint">{drafts.filter((d) => !cust || d.customer_id === cust).length} · made for quotes that haven&apos;t gone out. They join the library when the order is sent; unused for 60 days, they&apos;re archived.</span></div>
-          {draftsOpen && (
-            <div className="design-grid">
-              {drafts.filter((d) => !cust || d.customer_id === cust).map((d) => {
-                const gone = new Date(new Date(d.order?.updated_at && d.order.updated_at > d.created_at ? d.order.updated_at : d.created_at).getTime() + 60 * 864e5);
-                return (
-                  <div key={d.kind + d.id} className="design-card draft">
-                    <div className={"dc-img" + (d.kind === "mockup" ? " mock" : "")}>{d.url ? (d.kind === "logo" ? <LogoPic url={d.url} alt={d.label} /> : <img src={d.url} alt={d.label} />) : <span>{d.kind === "logo" ? "LOGO" : "MOCKUP"}</span>}<span className="dc-draft">Draft</span></div>
-                    <div className="dc-b">
-                      <b>{d.label}</b>
-                      <span className="faint">{custLabel(byId[d.customer_id || ""]) || "No customer"}{d.order ? <> · <Link href={`/shop/orders/${d.order.id}`}>#{d.order.number}</Link></> : " · no open order"}</span>
-                      <span className="faint">Archived {gone.toLocaleDateString(undefined, { month: "short", day: "numeric" })} if unused</span>
-                      <span className="dc-acts"><button type="button" className="btn sm" onClick={() => decideDraft(d, true)}>Keep</button><button type="button" className="btn sm ghost" onClick={() => decideDraft(d, false)}>Take off</button></span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
       {show !== "mockups" && (
         <section className="art-sec as">
           <div className="as-head"><span className="faint">Client</span>
@@ -287,6 +264,29 @@ export default function ArtworkPage() {
         </section>
       )}
 
+      {drafts.filter((d) => !cust || d.customer_id === cust).length > 0 && (
+        <section className="art-sec art-drafts">
+          <div className="aa-sec-h"><button type="button" className="linkbtn" onClick={() => setDraftsOpen((x) => !x)} aria-expanded={draftsOpen}><h3>{draftsOpen ? "▾" : "▸"} Drafts</h3></button><span className="faint">{drafts.filter((d) => !cust || d.customer_id === cust).length} · made for quotes that haven&apos;t gone out. They join the library when the order is sent; unused for 60 days, they&apos;re archived.</span></div>
+          {draftsOpen && (
+            <div className="design-grid">
+              {drafts.filter((d) => !cust || d.customer_id === cust).map((d) => {
+                const gone = new Date(new Date(d.order?.updated_at && d.order.updated_at > d.created_at ? d.order.updated_at : d.created_at).getTime() + 60 * 864e5);
+                return (
+                  <div key={d.kind + d.id} className="design-card draft">
+                    <div className={"dc-img" + (d.kind === "mockup" ? " mock" : "")}>{d.url ? (d.kind === "logo" ? <LogoPic url={d.url} alt={d.label} /> : <img src={d.url} alt={d.label} />) : <span>{d.kind === "logo" ? "LOGO" : "MOCKUP"}</span>}<span className="dc-draft">Draft</span></div>
+                    <div className="dc-b">
+                      <b>{d.label}</b>
+                      <span className="faint">{custLabel(byId[d.customer_id || ""]) || "No customer"}{d.order ? <> · <Link href={`/shop/orders/${d.order.id}`}>#{d.order.number}</Link></> : " · no open order"}</span>
+                      <span className="faint">Archived {gone.toLocaleDateString(undefined, { month: "short", day: "numeric" })} if unused</span>
+                      <span className="dc-acts"><button type="button" className="btn sm" onClick={() => decideDraft(d, true)}>Keep</button><button type="button" className="btn sm ghost" onClick={() => decideDraft(d, false)}>Take off</button></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
       {show === "mockups" && (
         <section className="art-sec">
           <div className="aa-sec-h"><h3>Mockups</h3><span className="faint">{mockSets.length} {q || cust ? "match" + (mockSets.length === 1 ? "" : "es") : "total"}</span></div>

@@ -15398,3 +15398,7 @@ a.dgt-file{color:var(--accent);text-decoration:none}
 .as-none{font-size:12.5px;padding-top:4px}
 .as-key{border-top:1px solid var(--line);padding-top:8px;margin:0;font-size:12px}
 @media (max-width:760px){.as-row,.as-head{grid-template-columns:1fr}.as-head>.faint{display:none}}
+html body .as .as-logos .as-t{flex:0 0 96px;width:96px;min-width:0}
+html body .as .as-pic .lp{position:absolute;inset:0;display:grid;place-items:center;width:auto;height:auto;padding:0;margin:0;border-radius:0}
+html body .as .as-pic .lp img{position:static;width:auto;height:auto;max-width:80%;max-height:80%;object-fit:contain;background:none;border:0;border-radius:0}
+html body .as .as-ord .ordno{font-size:12.5px}
