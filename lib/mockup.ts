@@ -789,7 +789,7 @@ const SUPPLIER_NAMED: Record<string, string> = {
   // plain color words (Oct 27: #40193's "Brown (Dark Brown/Copper)" Adidas jacket showed gray on its digitizing sheet)
   brown: "#4a3128", "dark brown": "#3b2a24", chocolate: "#3b2a24", copper: "#b06a3b", beige: "#d8c8a8", oatmeal: "#d9cfbd", stone: "#bdb6a6",
   grey: "#8d8f91", gray: "#8d8f91", "light grey": "#c9cbc9", "light gray": "#c9cbc9", "dark grey": "#4b4d52", "dark gray": "#4b4d52", "heather grey": "#a8aaad", "heather gray": "#a8aaad", slate: "#5b6670",
-  blue: "#2c5aa0", "dark blue": "#1f2f55", green: "#2e7d4f", "dark green": "#1f3d2b", pink: "#f4a6c1", purple: "#4b2a7b", yellow: "#f7d117",
+  "dark blue": "#1f2f55", "dark green": "#1f3d2b", pink: "#f4a6c1", purple: "#4b2a7b", yellow: "#f7d117",
   burgundy: "#6a1f2d", wine: "#5e1a2b", "hunter green": "#2b4a35", "olive green": "#5f6131", lavender: "#b9a7d6", mint: "#a9dcc0", peach: "#f6b48f",
 };
 const NAMED: Record<string, string> = { ...SUPPLIER_NAMED, ...Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h]))) };

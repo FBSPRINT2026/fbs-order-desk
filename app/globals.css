@@ -13992,6 +13992,7 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .gl.ver{box-shadow:inset 4px 0 var(--ver);padding-left:14px}
 .gl-ver{display:flex;align-items:center;gap:8px;margin:6px 0 2px;padding:7px 10px;border-radius:7px;background:var(--surface-2);font-size:13px}
 .gl-vt{width:22px;height:22px;border-radius:5px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font:700 12px var(--body);color:var(--swatch-ink-dark);text-shadow:0 0 2px rgba(0,0,0,.45);flex:none}
+.gl-vt.lt{color:var(--swatch-ink);text-shadow:none}
 .gl-ver .faint{font-size:12px}
 /* the color change between sections: its own dashed line with the symbol (Oct 27) */
 .gl-ccdiv{display:flex;align-items:center;gap:10px;margin:16px 0 6px;color:var(--warn)}

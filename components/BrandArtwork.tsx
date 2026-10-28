@@ -32,7 +32,8 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
   const [ds, setDs] = useState<Design[] | null>(null);
   const [pics, setPics] = useState<Record<string, string>>({});
   const [pick, setPick] = useState<Design | null>(null);
-  const locs = locationsFor(group.lines);
+  // long sleeves list their upper arms and cuffs; Left / Right Sleeve stay pickable too (Oct 27, Nick)
+  const locs = (() => { const l = locationsFor(group.lines); return l.includes("Left Upper Arm") ? [...l, "Left Sleeve", "Right Sleeve"] : l; })();
   const [loc, setLoc] = useState(fitLocation("Left Chest", group.lines));
   const [size, setSize] = useState(""), [sewIx, setSewIx] = useState(0), [cwName, setCwName] = useState("");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");

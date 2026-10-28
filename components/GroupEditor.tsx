@@ -218,6 +218,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   // looked broken with them)
   const ccShow = ccImps.length > 0 && (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(l.color); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })();
   const verLetter = (color: string) => ccImps.map((x) => String.fromCharCode(65 + versionOfColor(x, color))).join("");
+  const lightHex = (h: string) => { const v = parseInt((h || "").replace("#", "").padEnd(6, "0").slice(0, 6), 16); return 0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160; };
   const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
   /** a print's close-ups by section when the lines are grouped: Group B, C… each on its first garment color */
   const groupTiles = (d: Group["imprints"][number]) => versionsOf(d).map((v, i) => {
@@ -598,7 +599,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
               {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
                 {/* a color change between the sections: its own divider line, so B lines up with A (Oct 27, Nick) */}
                 {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Color change</span></div>}
-                <div className="gl-ver"><span className="gl-vt" style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+                <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
               <div className={"gl" + (same && !vHead ? " same" : "") + (ccShow ? " ver" : "")} style={ccShow ? { ["--ver" as string]: verHex(l.color) } : undefined}>
                 {(!same || vHead) && <div className="gl-sty" inert={fixed || undefined}>
@@ -1413,7 +1414,10 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
   // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
   const [zoom, setZoom] = useState(false);
   // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
-  const painted = usePainted(shown ? "" : cur ? urls[cur.id] || "" : "", d);
+  // a brand logo's own picture in this print's thread (its colorway, lib/designs previewUrls): shown as it is (Oct 27,
+  // Nick: picked 1801 white and the tile still showed the navy logo on navy)
+  const ownCw = cur ? urls[`${cur.id}:ink:${(d.inks || "").trim().toLowerCase()}`] || "" : "";
+  const painted = usePainted(shown ? "" : ownCw || (cur ? urls[cur.id] || "" : ""), ownCw ? { ...d, inkMap: undefined } : d);
   // the art as the Mockup Creator showed it when the mockup was saved: the same picture as the blow-up (falls back to
   // the logo painted here for prints saved before, or with no mockup yet)
   const pic = shown || painted;
