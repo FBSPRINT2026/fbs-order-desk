@@ -14,7 +14,7 @@ export type JobGroup = { name: string; rows: JobRow[]; prints: JobPrint[] };
 export type JobCard = {
   kind: "o" | "a"; id: string; number: string; name: string; customerId: string | null; customer: string; contact: string; phone: string;
   po: string; due: string | null; production: string | null; rush: boolean; status: string; qty: number;
-  delivery: "ship" | "deliver" | "pickup"; shipMethod: string; tracking: string; shipTo: string[];
+  delivery: "ship" | "deliver" | "pickup" | "tbd"; shipMethod: string; tracking: string; shipTo: string[];
   /** wholesale jobs ship blind: the customer's name instead of ours */
   brand: string; blind: boolean;
   groups: JobGroup[];

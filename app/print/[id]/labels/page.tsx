@@ -158,7 +158,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
               <span className="lb-no">#{o.number}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
               <span className="lb-shop" style={brand.length > 14 ? { fontSize: brand.length > 22 ? ".7em" : ".8em" } : undefined}>{brand}</span>
             </div>
-            <div className="lb-mid"><span className="lb-rush">{o.delivery_method === "ship" ? "SHIP" : o.delivery_method === "deliver" ? "DELIVERY" : "PICKUP"}</span></div>
+            <div className="lb-mid"><span className="lb-rush">{o.delivery_method === "ship" ? "SHIP" : o.delivery_method === "deliver" ? "DELIVERY" : o.delivery_method === "tbd" ? "SHIP/PICKUP TBD" : "PICKUP"}</span></div>
             <div style={{ textAlign: "right" }}>
               <div className="lb-box">BOX <span className="blank" /> OF <span className="blank" /></div>
             </div>

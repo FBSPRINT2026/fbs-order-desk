@@ -62,7 +62,7 @@ const sentLines = (g: Group) => g.lines.filter((l) => SIZES.some((z) => +(l.size
 function orderAddresses(o: Record<string, unknown>, cust: Record<string, unknown> | null) {
   const company = String(cust?.company || ""), person = String(cust?.name || "");
   const billingAddress = pvAddress(String(cust?.address || ""), company, person);
-  const shippingAddress = o.delivery_method !== "pickup" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
+  const shippingAddress = o.delivery_method !== "pickup" && o.delivery_method !== "tbd" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
   return { billingAddress, shippingAddress };
 }
 const CARD_RE = CARD;

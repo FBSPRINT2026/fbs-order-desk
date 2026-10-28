@@ -33,7 +33,7 @@ export type DocData = {
   printavo: boolean;
 };
 
-const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery" };
+const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery", tbd: "Pickup / ship: TBD" };
 const day = (s: string | null | undefined, f: Intl.DateTimeFormatOptions) => { const d = parseDate(s); return d ? d.toLocaleDateString("en-US", f).replace(",", "") : ""; };
 
 const colorsLabel = (d: Imprint) => (d.method === "dtf" || d.colors >= FULL_COLOR ? "Full color" : `${d.colors || 1} color${d.colors === 1 || !d.colors ? "" : "s"}`);
@@ -651,7 +651,9 @@ export function InvoiceDoc(p: DocData) {
       </div>
       <div className="parties three">
         <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
-        {o.delivery_method === "pickup"
+        {o.delivery_method === "tbd"
+          ? <div><div className="lbl">Pickup or ship</div>To be decided{due && <><br /><span className="faint">{due}</span></>}</div>
+          : o.delivery_method === "pickup"
           ? <div><div className="lbl">Pickup</div>Pickup at {sh.name}{due && <><br /><span className="faint">{due}</span></>}</div>
           : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>{o.ship_to || "—"}{o.ship_method && <><br /><span className="faint">{o.ship_method}</span></>}</div>}
         {/* the order at a glance (Oct 16, Nick): PO, name, summary, balance due and terms. Quiet, not a billboard. */}

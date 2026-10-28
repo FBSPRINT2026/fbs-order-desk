@@ -63,7 +63,7 @@ export default function JobMobile(p: {
         <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
         <div className="jm-cust">{card.customer || "—"}</div>
         {card.name && <div className="jm-name">{card.name}</div>}
-        <div className="jm-facts"><span><b>{card.qty}</b> {t("pcs")}</span><span>{t("Due")} <b>{fmtDay(card.due, locale)}</b></span>{card.status && <span>{t(card.status)}</span>}<span>{t(card.delivery === "ship" ? "Ship|delivery" : card.delivery === "deliver" ? "Delivery|delivery" : "Pickup|delivery")}</span></div>
+        <div className="jm-facts"><span><b>{card.qty}</b> {t("pcs")}</span><span>{t("Due")} <b>{fmtDay(card.due, locale)}</b></span>{card.status && <span>{t(card.status)}</span>}<span>{card.delivery === "tbd" ? "TBD" : t(card.delivery === "ship" ? "Ship|delivery" : card.delivery === "deliver" ? "Delivery|delivery" : "Pickup|delivery")}</span></div>
         {view !== "home" && <h1 className="jm-viewh">{title[view]}</h1>}
       </section>
       <main className="jm-main">

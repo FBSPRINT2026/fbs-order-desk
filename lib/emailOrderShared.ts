@@ -37,7 +37,7 @@ export type EODraft = {
   v: 2; kind: "new" | "reorder"; summary: string; confidence: "high" | "medium" | "low";
   /** the customer's own notes for the job, word for word (their ClickUp notes, the PO's instructions): the order's Customer notes */
   customerNotes?: string;
-  nickname: string; due_date: string | null; /** the in-hands date is firm (the order's Firm box) */ firm?: boolean; delivery: "pickup" | "ship" | "deliver"; ship_to: string; po_number: string; notes: string;
+  nickname: string; due_date: string | null; /** the in-hands date is firm (the order's Firm box) */ firm?: boolean; delivery: "pickup" | "ship" | "deliver" | "tbd"; ship_to: string; po_number: string; notes: string;
   /** customer supplied garments (wholesale): who sends them, from where, when */
   goods: { supplied: boolean; supplier: string; expected: string; note: string };
   groups: Group[];

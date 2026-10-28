@@ -340,7 +340,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
           </label>
           <label>Job name<input value={d.nickname} onChange={(e) => patch((x) => { x.nickname = e.target.value; })} /></label>
           <label>In-hands date<input type="date" value={d.due_date || ""} onChange={(e) => patch((x) => { x.due_date = e.target.value || null; })} /></label>
-          <label>Delivery<select value={d.delivery} onChange={(e) => patch((x) => { x.delivery = e.target.value as EODraft["delivery"]; })}><option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">We deliver</option></select></label>
+          <label>Delivery<select value={d.delivery} onChange={(e) => patch((x) => { x.delivery = e.target.value as EODraft["delivery"]; })}><option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">We deliver</option><option value="tbd">TBD: not told yet</option></select></label>
           <label>PO #<input value={d.po_number} onChange={(e) => patch((x) => { x.po_number = e.target.value; })} /></label>
         </div>
         {job?.note && <p className="faint eo-note">{job.note}</p>}

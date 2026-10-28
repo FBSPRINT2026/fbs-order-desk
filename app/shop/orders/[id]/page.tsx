@@ -1383,7 +1383,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         return (
           <div className="ot-sum">
             <div><span>Customer</span><b>{cust ? `${custLabel(cust)}${cust.company && cust.name ? " · " + cust.name : ""}` : "No customer yet"}</b><small>{o.price_type === "wholesale" ? "Wholesale" : "Retail"}{cust ? ` · ${PAY_TERMS[cust.payment_terms || "receipt"]}` : ""}{o.tax_exempt ? " · tax exempt" : ""}</small></div>
-            <div><span>In hands</span><b className={o.rush ? "hot" : ""}>{o.due_date ? day(o.due_date) : "No date"}{o.rush ? " · Rush" : o.firm ? " · Firm" : ""}</b><small>{o.production_date ? `Production ${day(o.production_date)} · ` : ""}{o.delivery_method === "ship" ? "Ship" : o.delivery_method === "deliver" ? "Delivery" : "Pickup"}</small></div>
+            <div><span>In hands</span><b className={o.rush ? "hot" : ""}>{o.due_date ? day(o.due_date) : "No date"}{o.rush ? " · Rush" : o.firm ? " · Firm" : ""}</b><small>{o.production_date ? `Production ${day(o.production_date)} · ` : ""}{o.delivery_method === "ship" ? "Ship" : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup / ship TBD" : "Pickup"}</small></div>
             <div><span>Pieces</span><b>{calc.qty}</b><small>{o.groups.length} group{o.groups.length === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</small></div>
             {gw ? <div><span>Goods</span><b className={goodsSt?.status === "received" ? "ok" : goodsSt?.status === "issue" ? "hot" : ""}>{gw}</b><small>Customer supplied</small></div>
               : <div><span>Proofs</span><b className={pendingProofs ? "" : approved ? "ok" : ""}>{pendingProofs ? `${pendingProofs} waiting` : approved ? `${approved} approved` : proofs.length ? `${proofs.length} sent` : "None yet"}</b><small>{pv || st.label}</small></div>}
@@ -1516,8 +1516,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     <label className="check" style={{ fontSize: 12.5, marginTop: 4 }} title="Needed by a set time that day. Makes the date firm (⛰️) on the production calendar."><input type="checkbox" checked={o.due_time != null} onChange={(e) => patch((d) => { d.due_time = e.target.checked ? 600 : null; if (e.target.checked) d.firm = true; })} /> Specific time</label>
                   </div>
                   <div className="field"><label htmlFor="o-del">Pickup, ship or delivery</label>
-                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
-                      <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option>
+                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && d.delivery_method !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
+                      <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option><option value="tbd">TBD: not told yet</option>
                     </select>
                   </div>
                   {o.delivery_method === "ship" && (
@@ -1533,7 +1533,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                 </div>
-                {o.delivery_method !== "pickup" && (
+                {o.delivery_method !== "pickup" && o.delivery_method !== "tbd" && (
                   <div className="grid g2">
                     <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
                     {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}

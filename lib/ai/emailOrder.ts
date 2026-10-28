@@ -318,7 +318,7 @@ function tool(finishingIds: string[]) {
         due_date: { type: ["string", "null"], description: "In-hands date YYYY-MM-DD only if the customer gave one" },
         due_firm: { type: "boolean", description: "True when the paperwork or email says the in-hands date is firm (FIRM, hard date, must have by, event date, no later than)" },
         po_number: { type: "string" },
-        delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
+        delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null], description: "Only what they said: null when the customer didn't say pickup, ship or delivery" },
         ship_to: { type: "string" },
         customer_notes: { type: "string", description: "Rule 13: the short note the CUSTOMER reads on their quote and invoice: at most two short lines, only a request of theirs that nothing else on the order shows (e.g. \"Deliver by local courier.\", \"NOT A REPEAT ORDER - NEW LEFT CHEST LOGO.\"). Never how to decorate it, sizes, styles, quantities, dates, supplier, tracking, SKU or reference numbers, your guesses or questions. Usually empty." },
         notes: { type: "string", description: "Rule 13: the production note staff read: at most three short lines of what production needs that nothing else on the order shows (how to decorate when there are no prints yet, the past job to match, packing). Never the task's or email's name, who made it or when, the due date, what staff told you, new vs reorder, or garments and sizes already on the lines. For a purchase order: its own special instructions (rule 10), short. Often empty." },
@@ -421,7 +421,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-27i";
+export const READER_REV = "2026-10-28a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -940,7 +940,8 @@ ${staffSays}` : ""}`;
     due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date! : null,
     // a firm in-hands date (Oct 23, Nick on HALFF: "you should have checked firm date"): the order's Firm box
     firm: !!(p as { due_firm?: boolean }).due_firm || /\bfirm\b/i.test(`${(p as { customer_notes?: string }).customer_notes || ""} ${p.notes || ""}`),
-    delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
+    // not said: TBD, not pickup (Oct 28, Nick: "sometimes customers give us an order and then don't tell us")
+    delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "tbd",
     ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60),
     customerNotes: String((p as { customer_notes?: string }).customer_notes || "").trim().slice(0, 2000),
     notes: [...refNotes, p.notes || ""].filter(Boolean).join("\n").slice(0, 2000),

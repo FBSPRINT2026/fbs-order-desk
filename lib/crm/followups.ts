@@ -261,7 +261,7 @@ export function computeFollowUps(data: AssistantData, s: Settings, now = Date.no
         const tk: TemplateKey | null = o.delivery_method === "pickup" ? "ready_pickup" : o.delivery_method === "ship" && o.tracking ? "shipped" : null;
         push(o, c, { key: `pickup:${o.id}:${at}`, kind: "pickup", priority: 3,
           title: `#${o.number} has been ${o.delivery_method === "pickup" ? "waiting for pickup" : "ready"} for ${plural(d, "day")}`,
-          body: o.delivery_method === "pickup" ? `Remind ${custLabel(c)} to pick it up.` : o.delivery_method === "ship" ? "Ship it (and add the tracking number), or mark it completed if it's gone out." : "Deliver it, then mark it completed.",
+          body: o.delivery_method === "tbd" ? `Ask ${custLabel(c)} if it's pickup, ship or delivery.` : o.delivery_method === "pickup" ? `Remind ${custLabel(c)} to pick it up.` : o.delivery_method === "ship" ? "Ship it (and add the tracking number), or mark it completed if it's gone out." : "Deliver it, then mark it completed.",
           template: tk || undefined, draft: tk ? renderTemplate(tk, { ...v, balanceLine: bal > 0.004 ? ` The balance is ${money(bal)}, and you can pay online in your portal or when you pick up.` : "" }) : undefined, channel: tk ? "order" : "none", since: at });
       }
     }

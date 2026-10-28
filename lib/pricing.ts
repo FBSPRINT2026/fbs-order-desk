@@ -310,7 +310,8 @@ export type Fee = { label: string; amount: number | "";
 export const isShipFee = (f: { label?: string; ship?: boolean }) => !!f.ship || /^shipping\b/i.test(f.label || "");
 /** What a fee adds to the total (free shipping adds nothing). */
 export const feeAmount = (f: { amount: number | ""; free?: boolean; tbd?: boolean }) => (f.free || f.tbd ? 0 : +f.amount || 0);
-export type Delivery = "pickup" | "ship" | "deliver";
+/** "tbd": the customer hasn't said yet (Oct 28, Nick: "sometimes customers give us an order and then don't tell us") */
+export type Delivery = "pickup" | "ship" | "deliver" | "tbd";
 
 export type Order = {
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";

@@ -97,7 +97,7 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     [x.pendingProof ? "Your proof is ready to look over." : "We're working on your artwork.", x.pendingProof ? "Once you approve, we get it on press." : "We'll send you a proof to approve."],
     [x.customerGoods ? "We're waiting on your garments." : "Your garments are on the way to us.", "When they're in and counted, we print."],
     ["Your job is on press.", o.due_date ? `It's ready ${day(o.due_date)}.` : "We'll let you know when it's ready."],
-    [!o.delivery_method ? "Your order is ready." : o.delivery_method === "ship" ? "Packed and ready to ship." : o.delivery_method === "deliver" ? "Ready to deliver." : "Ready for pickup!", !o.delivery_method ? "We'll be in touch about pickup or shipping." : o.delivery_method === "pickup" ? "Come by anytime during shop hours." : "You'll get tracking when it goes out."],
+    [!o.delivery_method || o.delivery_method === "tbd" ? "Your order is ready." : o.delivery_method === "ship" ? "Packed and ready to ship." : o.delivery_method === "deliver" ? "Ready to deliver." : "Ready for pickup!", !o.delivery_method || o.delivery_method === "tbd" ? "We'll be in touch about pickup or shipping." : o.delivery_method === "pickup" ? "Come by anytime during shop hours." : "You'll get tracking when it goes out."],
     ["All done.", "Thanks for printing with us."],
   ];
   const [now, next] = done ? NOW[5] : NOW[Math.min(at, 4)];
