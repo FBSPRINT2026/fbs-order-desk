@@ -15413,3 +15413,4 @@ html body .as .as-t.drag{opacity:.4}
 html body .as .as-brand.drop{outline:1px dashed var(--accent);outline-offset:-1px;margin:2px 0 2px -4px}
 html body .as .as-brand.over{background:var(--accent-soft);color:var(--accent);outline-style:solid}
 .as-drop-n{margin-left:auto;font-size:11px;color:var(--accent)}
+html body .as .as-pic .lp img{max-width:80%;max-height:60px}
