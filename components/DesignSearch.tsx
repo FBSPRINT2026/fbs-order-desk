@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designLabel, type Design } from "@/lib/pricing";
 import SearchInput from "@/components/SearchInput";
@@ -43,7 +44,7 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
   return (
     <div className="ds" ref={box}>
       <button type="button" className="ds-field" aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setQ(""); }}>
-        {cur ? <>{urls[cur.id] ? <img className="ds-th" src={urls[cur.id]} alt="" /> : <span className="ds-th" />}<span className="ds-name">{cur.starred ? "★ " : ""}{designLabel(cur)}</span></>
+        {cur ? <>{urls[cur.id] ? <span className="ds-th"><LogoThumb d={cur} url={urls[cur.id]} /></span> : <span className="ds-th" />}<span className="ds-name">{cur.starred ? "★ " : ""}{designLabel(cur)}</span></>
           : <span className="ds-name faint">{value ? "Logo from another customer" : designs.length ? placeholder : "No logos on this customer yet"}</span>}
         <span className="ds-caret">▾</span>
       </button>
@@ -55,7 +56,7 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
           <div className="ds-list" role="listbox">
             {list.map((d) => (
               <div key={d.id} role="option" aria-selected={d.id === value} className={"ds-item" + (d.id === value ? " on" : "")} onClick={() => { onPick(d); setOpen(false); }}>
-                {urls[d.id] ? <img className="ds-th" src={urls[d.id]} alt="" /> : <span className="ds-th" />}
+                {urls[d.id] ? <span className="ds-th"><LogoThumb d={d} url={urls[d.id]} /></span> : <span className="ds-th" />}
                 <span className="ds-name">{designLabel(d)}{d.inks ? <span className="faint"> · {d.inks}</span> : null}</span>
                 {onStar && <button type="button" className={"ds-star" + (d.starred ? " on" : "")} title={d.starred ? "Unstar" : "Star as a favorite"} aria-label={d.starred ? "Unstar" : "Star"} onClick={(e) => { e.stopPropagation(); onStar(d, !d.starred); }}>{d.starred ? "★" : "☆"}</button>}
               </div>

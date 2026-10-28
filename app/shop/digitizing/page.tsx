@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -227,7 +228,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   return (
     <>
       <tr className={open ? "on" : ""} onClick={toggle} style={{ cursor: "pointer" }}>
-        <td><span className="dgz-logo">{pic ? <img src={pic} alt="" /> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
+        <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><LogoThumb d={it.d} url={pic} shirt={(it.g.lines || [])[0]?.color} inkMap={it.im.inkMap?.map} /></span> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>

@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM } from "@/lib/pricing";
 import { money } from "@/lib/format";
@@ -1526,7 +1527,7 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
     <div className="dp">
       <span className="dp-l">Logo</span>
       {readOnly
-        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <img src={urls[cur.id]} alt="" />}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
+        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <span className="dp-th"><LogoThumb d={cur} url={urls[cur.id]} /></span>}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
             {onMockup && <button type="button" className="linkbtn" onClick={onMockup}>{cur ? "Change in the Mockup Creator" : "Pick it in the Mockup Creator"}</button>}</span>
         : <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />}
       {canUpload && !readOnly && (

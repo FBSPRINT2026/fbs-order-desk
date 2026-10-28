@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -160,7 +161,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
               <thead><tr><th /><th>Logo</th><th>{LANES.find((l) => l.id === lane)?.label}</th><th /></tr></thead>
               <tbody>{logos.map((d) => { const st = laneState(d, lane); const sews = sewFilesOf(d); const cws = colorwaysOf(d); return (
                 <tr key={d.id}>
-                  <td className="cb-pic">{(cws[0]?.preview && pics[cws[0].preview]) || (d.preview_path && pics[d.preview_path]) ? <img src={(cws[0]?.preview && pics[cws[0].preview]) || pics[d.preview_path]} alt="" /> : null}</td>
+                  <td className="cb-pic">{(cws[0]?.preview && pics[cws[0].preview]) || (d.preview_path && pics[d.preview_path]) ? <LogoThumb d={d} url={(cws[0]?.preview && pics[cws[0].preview]) || pics[d.preview_path]} /> : null}</td>
                   <td><Link href={`/shop/artwork/${d.id}`} className="ordno">D-{d.number}</Link><div className="sub">{d.name}</div></td>
                   <td>
                     <span className={"ba-st" + (st.ready ? " ok" : " need")}>{st.note}</span>

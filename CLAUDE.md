@@ -27,6 +27,15 @@
   Order goods from an invoice still opened the old page after the new right-side panel was built for email). Search for
   the old component, its page route and links to it (`/shop/order-goods?order=`, to-dos, alerts, Ask AI menus) and
   point them all at the one tool; an old page left for another use opens the tool when it's given a link's params.
+- **Fix it everywhere, once** (Nick, Oct 28 2026: "I have to tell you everywhere when there's a problem that's
+  universal… you just fix it in one spot at a time… what do I need to tell you so that you fix it everywhere?"). When
+  something is wrong in one place, it's wrong everywhere the same thing is shown or worked out: search the whole app for
+  every place that draws or computes it (grep the component, the field, the helper) and fix them all in the same
+  change. If they don't already share one piece, make one and point every place at it, so it can't drift again:
+  - a logo's small picture anywhere: `components/LogoThumb.tsx` (never a bare `<img>` of a logo's preview);
+  - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
+    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`).
+  When you tell Nick it's fixed, say where else it was fixed.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the

@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, LOCATIONS, newImprint, uid, type Group, type Imprint } from "@/lib/pricing";
@@ -242,7 +243,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
           <div className="ca-grid">
             {shownLogos.slice(0, 80).map((d) => (
               <button key={d.id} type="button" className={"ca-card" + (logo?.id === d.id ? " on" : "")} onClick={() => setLogo({ id: d.id, label: designLabel(d) })}>
-                <span className="ca-pic logo">{d.preview_path && pics[d.preview_path] ? <img src={pics[d.preview_path]} alt="" /> : null}</span>
+                <span className="ca-pic logo">{d.preview_path && pics[d.preview_path] ? <LogoThumb d={d} url={pics[d.preview_path]} /> : null}</span>
                 <b>{d.name || "Logo"}</b><span className="faint">D-{d.number}</span>
               </button>
             ))}

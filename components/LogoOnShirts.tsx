@@ -128,8 +128,9 @@ export function ShirtView({ url, shirt, ink, size, title, className }: { url: st
  * A logo's picture on a card without the checkerboard (Oct 16, Nick: "I just don't like seeing the checkered stuff"):
  * on the shirt color it was printed on when known, else white, or a dark tile for a light (white) logo.
  */
-export function LogoPic({ url, alt, shirt }: { url: string; alt: string; shirt?: string }) {
+export function LogoPic({ url, alt, shirt, cut }: { url: string; alt: string; shirt?: string; /** off a shirt too: the art with its background square taken off (components/LogoThumb.tsx) */ cut?: boolean }) {
   const art = useArt(url), bg = useShirtBg(shirt || "");
+  if (cut && !shirt) return <span className="lp" style={{ background: art?.light ? "#2b3140" : "#fff" }}>{art === undefined ? null : <img src={art ? art.cut : url} alt={alt} />}</span>;
   // on its shirt: the art with its background and white fill taken off, so a logo saved on a white square doesn't show a
   // white box on the shirt (Oct 28, Nick on the Artwork page: "He Makes a Way with white box… The Lord is my shepherd
   // doesn't have the white knocked out")

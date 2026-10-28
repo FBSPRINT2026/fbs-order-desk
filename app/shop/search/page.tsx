@@ -1,4 +1,5 @@
 "use client";
+import LogoThumb from "@/components/LogoThumb";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -274,7 +275,7 @@ function SearchInner() {
         <section className="sx-sec">
           <h3>Artwork <span className="faint">{art.length}</span></h3>
           <div className="sx-art">{art.map((d) => (
-            <Link key={d.id} href={`/shop/artwork/${d.id}`} className="sx-art-i"><span className="sx-art-p">{artUrls[d.id] ? <img src={artUrls[d.id]} alt="" /> : null}</span><b>D-{d.number} {d.name}</b><small className="faint">{custName(custMap[d.customer_id || ""])}</small></Link>
+            <Link key={d.id} href={`/shop/artwork/${d.id}`} className="sx-art-i"><span className="sx-art-p">{artUrls[d.id] ? <LogoThumb d={d} url={artUrls[d.id]} /> : null}</span><b>D-{d.number} {d.name}</b><small className="faint">{custName(custMap[d.customer_id || ""])}</small></Link>
           ))}</div>
         </section>
       )}
