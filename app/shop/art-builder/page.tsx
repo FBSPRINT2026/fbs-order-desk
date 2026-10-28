@@ -10,6 +10,7 @@ import SearchInput from "@/components/SearchInput";
 import { uploadDesign } from "@/lib/designs";
 import { nextSewCode, sewFilesOf, tajimaName, type Brand, type SewFile } from "@/lib/brands";
 import { tajimaFile } from "@/components/CustomerBrands";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * Customer artwork builder, in Shop Tools (Oct 28, Nick: "call it customer artwork builder… select a customer from a
@@ -21,19 +22,21 @@ import { tajimaFile } from "@/components/CustomerBrands";
  * brand) and files the sew files on them. A DST brings its EMB and sewing PDF with it (Nick: "attached to the DST is those
  * other two files… within the art you would store that").
  */
-type Job = { id: string; visual_id: string; nickname: string; order_date: string; files: Record<string, string> | null };
+type Job = { id: string; visual_id: string; nickname: string; order_date: string; files: Record<string, string> | null; search_text?: string | null;
+  /** a Dropbox folder (the builder's Dropbox source): its path there */ dbx?: string };
+type DbxEntry = { id: string; name: string; folder: boolean; path: string; size?: number };
 type Item = { key: string; job: Job; path: string; name: string; ext: string; kind: "art" | "sew" | "sheet" | "other"; emb?: string; sheet?: string };
 type Box = [number, number, number, number];
 /** a piece cut off a file (a logo off a proof or product sheet): its page and box (0–1 of the page, y down), and a picture */
 type Cut = { page: number; box: Box; pic: string };
-type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string; /** a cut off this file (the pick's key is "<file>#<n>") */ src?: string; cut?: Cut };
+type Pick = { on: boolean; as: "logo" | "sew"; name: string; target: string; /** a sew file: where it goes ("Left Chest, Left Sleeve") */ where?: string; /** a cut off this file (the pick's key is "<file>#<n>") */ src?: string; cut?: Cut };
 type D = Design & { brand_id?: string | null };
 
 const ART = /^(pdf|ai|png|jpe?g|svg|eps|psd|tiff?|webp)$/;
 const PREVIEW = /^(pdf|ai|png|jpe?g|webp|svg)$/;
 const extOf = (p: string) => (p.match(/\.([a-z0-9]+)$/i)?.[1] || "").toLowerCase();
 /** the file's own name: Printavo's copies start with a short code ("mukt3xws5-Embark-Logo.pdf") */
-const nameOf = (p: string) => (p.split("/").pop() || p).replace(/^[a-z0-9]{6,12}-/, "");
+const nameOf = (p: string) => (p.split("/").pop() || p).replace(/^(?=[a-z0-9]*\d)[a-z0-9]{6,12}-/, "");
 const baseOf = (p: string) => nameOf(p).replace(/\.[^.]+$/, "").toLowerCase();
 /** a name a person gave it (not a filepicker code like "qtTHnfKGTcCccaDxZY0w") */
 const realName = (p: string) => { const b = nameOf(p).replace(/\.[^.]+$/, ""); return /^[A-Za-z0-9]{18,22}$/.test(b) ? "" : b.replace(/[_-]+/g, " ").trim(); };
@@ -110,6 +113,24 @@ function factsOf(sb: ReturnType<typeof createClient>, path: string): Promise<Fac
   return FACTS.get(path)!;
 }
 const factLine = (f: Facts) => `${f.wIn}" × ${f.hIn}" · ${f.stitches.toLocaleString()} st · ${f.colors} color${f.colors === 1 ? "" : "s"}`;
+/* where a job's embroidery went, read off its mockups and line items (Oct 28, Nick: "we have to know what the DST is…
+   where it was used… last used on 33998, the location was left chest and left sleeve… the little E… on the nape") */
+const LOCS: [RegExp, string][] = [[/left\s+chest/i, "Left Chest"], [/right\s+chest/i, "Right Chest"], [/left\s+(sleeve|arm)/i, "Left Sleeve"], [/right\s+(sleeve|arm)/i, "Right Sleeve"],
+  [/nape|back\s+(of\s+(the\s+)?)?neck|neck\s*line|back\s+collar/i, "Nape"], [/full\s+back/i, "Full Back"], [/upper\s+back|yoke/i, "Upper Back"], [/center\s+(chest|front)|front\s+center/i, "Center Chest"],
+  [/(hat|cap)\s+front|front\s+of\s+(the\s+)?(hat|cap)/i, "Hat Front"], [/left\s+hip/i, "Left Hip"], [/right\s+hip/i, "Right Hip"], [/cuff/i, "Cuff"], [/side\s+of\s+(the\s+)?(hat|cap)/i, "Hat Side"]];
+const locsIn = (t: string) => LOCS.filter(([re]) => re.test(t)).map(([, n]) => n);
+const TEXTS = new Map<string, Promise<string>>();
+function textOf(sb: ReturnType<typeof createClient>, path: string): Promise<string> {
+  if (!TEXTS.has(path)) TEXTS.set(path, (async () => {
+    const { data } = await sb.storage.from("proofs").download(path);
+    if (!data) return "";
+    const { pdfText } = await import("@/lib/printavoArt");
+    return await pdfText(await data.arrayBuffer(), 4);
+  })().catch(() => ""));
+  return TEXTS.get(path)!;
+}
+const fmtDay = (d: string) => (d ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
+
 /** a job's files with each sewing sheet put with the DST it was made for (same stitches or size) */
 function arrange(list: Item[], facts: Record<string, Facts | null | undefined>): Item[] {
   const sheets = list.filter((i) => i.kind === "art" && i.ext === "pdf" && facts[i.path]);
@@ -261,6 +282,15 @@ function BringInArt() {
   const [newBrand, setNewBrand] = useState<string | null>(null);
   /** the file whose logos are being picked off it */
   const [cutting, setCutting] = useState<Item | null>(null);
+  /** where the files come from: the client's Printavo jobs, or the Dropbox embroidery / film folders */
+  const [source, setSource] = useSticky<"printavo" | "dropbox">("artBuilder.source", "printavo");
+  const [dbxPath, setDbxPath] = useState("/FBS Embroidery Folder/Embroidery");
+  const [dbxList, setDbxList] = useState<DbxEntry[] | null>(null);
+  const [dbxErr, setDbxErr] = useState("");
+  /** a Dropbox folder's files, once copied in to be looked at */
+  const [dbxFiles, setDbxFiles] = useState<Record<string, Record<string, string> | "loading" | string>>({});
+  /** where each Printavo job's embroidery went (read off its mockups) */
+  const [usage, setUsage] = useState<Record<string, string[]>>({});
 
   useEffect(() => { sb.from("customers").select("*").then(({ data }) => setCustomers(((data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))))); }, [sb]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
@@ -269,7 +299,7 @@ function BringInArt() {
     setDesigns((data || []) as D[]);
   }
   useEffect(() => {
-    setJobs(null); setPicks({}); setN(15); setOpenJobs(new Set());
+    setJobs(null); setPicks({}); setN(15); setOpenJobs(new Set()); setDbxPath("/FBS Embroidery Folder/Embroidery");
     if (!cust) { setBrands([]); setDesigns([]); return; }
     sb.from("brands").select("*").eq("customer_id", cust).is("archived_at", null).order("sort").then(({ data }) => { const bs = (data || []) as Brand[]; setBrands(bs); if (!bs.some((b) => b.id === brand)) setBrand(bs.find((b) => q && b.name.toLowerCase().includes(q.toLowerCase().trim()))?.id || ""); });
     void loadDesigns(cust);
@@ -277,7 +307,7 @@ function BringInArt() {
   useEffect(() => {
     if (!cust) return;
     const t = setTimeout(async () => {
-      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files").eq("customer_id", cust).gt("files_total", 0).order("order_date", { ascending: false }).limit(300);
+      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", cust).gt("files_total", 0).order("order_date", { ascending: false }).limit(300);
       // anything in the job: its name, PO, line items, notes (archived_orders.search_text)
       const w = q.trim().replace(/[%,()*]/g, " ").trim();
       if (w) r = r.or(`nickname.ilike.%${w}%,search_text.ilike.%${w}%`);
@@ -298,9 +328,46 @@ function BringInArt() {
     return m;
   }, [designs]);
 
+  // Dropbox: the folder's folders and files; the client's own folder when it has one (Cedar Promo)
+  useEffect(() => {
+    if (source !== "dropbox") return;
+    let on = true;
+    setDbxList(null); setDbxErr("");
+    fetch(`/api/art-builder/dropbox?${new URLSearchParams({ path: dbxPath })}`).then((r) => r.json()).then((j) => { if (!on) return; if (j.error) setDbxErr(j.error); else setDbxList(j.entries || []); }).catch(() => on && setDbxErr("Couldn't reach Dropbox."));
+    return () => { on = false; };
+  }, [source, dbxPath]);
+  useEffect(() => {
+    if (source !== "dropbox" || !cust || dbxPath !== "/FBS Embroidery Folder/Embroidery" || !dbxList) return;
+    const nm = (custLabel(customers.find((c) => c.id === cust) || ({} as Customer)) || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const hit = dbxList.find((e) => e.folder && nm && (nm.startsWith(e.name.toLowerCase().replace(/[^a-z0-9]/g, "")) || e.name.toLowerCase().replace(/[^a-z0-9]/g, "").startsWith(nm.slice(0, 8))));
+    if (hit) setDbxPath(hit.path);
+  }, [source, cust, dbxList]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function openDbx(path: string) {
+    if (dbxFiles[path] && dbxFiles[path] !== "loading" && typeof dbxFiles[path] === "object") return;
+    setDbxFiles((x) => ({ ...x, [path]: "loading" }));
+    const j = await fetch("/api/art-builder/dropbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) }).then((r) => r.json()).catch(() => ({ error: "Couldn't reach Dropbox." }));
+    setDbxFiles((x) => ({ ...x, [path]: j.error ? String(j.error) : Object.fromEntries(((j.files || []) as { name: string; path: string }[]).map((f) => [f.path, f.path])) }));
+  }
+  const dbxJobs: Job[] = useMemo(() => {
+    if (source !== "dropbox" || !dbxList) return [];
+    const here = dbxList.some((e) => !e.folder) ? [{ id: dbxPath, visual_id: "", nickname: `Files in ${dbxPath.split("/").pop()}`, order_date: "", files: null, dbx: dbxPath }] : [];
+    return [...here, ...dbxList.filter((e) => e.folder).map((e) => ({ id: e.path, visual_id: "", nickname: e.name, order_date: "", files: null, dbx: e.path }))]
+      .map((j) => { const f = dbxFiles[j.dbx!]; return typeof f === "object" ? { ...j, files: f } : j; });
+  }, [source, dbxList, dbxPath, dbxFiles]);
+
   // a ticked job's PDFs are read: a sewing sheet goes with its DST, or shows as a sewing sheet
   const [facts, setFacts] = useState<Record<string, Facts | null>>({});
-  const items = useMemo(() => (jobs || []).map((j) => ({ j, list: arrange(itemsOf(j), facts) })).filter((x) => x.list.some((i) => i.kind !== "other")), [jobs, facts]);
+  const items = useMemo(() => (source === "dropbox" ? dbxJobs.map((j) => ({ j, list: j.files ? arrange(itemsOf(j), facts) : [] }))
+    : (jobs || []).map((j) => ({ j, list: arrange(itemsOf(j), facts) })).filter((x) => x.list.some((i) => i.kind !== "other"))), [source, dbxJobs, jobs, facts]);
+  // where a ticked job's embroidery went: its line items and mockups read for locations
+  useEffect(() => {
+    for (const { j, list } of items) {
+      if (!openJobs.has(j.id) || j.dbx || j.id in usage || !list.some((i) => i.kind === "sew")) continue;
+      setUsage((x) => ({ ...x, [j.id]: locsIn(j.search_text || "") }));
+      Promise.all(list.filter((i) => (i.kind === "art" || i.kind === "sheet") && /^(pdf|ai)$/.test(i.ext)).map((i) => textOf(sb, i.path)))
+        .then((ts) => setUsage((x) => ({ ...x, [j.id]: [...new Set([...(x[j.id] || []), ...locsIn(ts.join(" "))])] })));
+    }
+  }, [items, openJobs, sb]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     for (const { j, list } of items) {
       if (!openJobs.has(j.id) || !list.some((i) => i.kind === "sew")) continue;
@@ -309,7 +376,7 @@ function BringInArt() {
   }, [items, openJobs, sb]); // eslint-disable-line react-hooks/exhaustive-deps
   const picked = (Object.entries(picks) as [string, Pick][]).filter(([, p]) => p.on);
   const newLogos = picked.filter(([, p]) => p.as === "logo");
-  const set = (key: string, p: Partial<Pick>, it?: Item) => setPicks((x) => ({ ...x, [key]: { on: true, as: it?.kind === "sew" ? "sew" : "logo", name: it ? realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 60) || it.name : "", target: "", ...x[key], ...p } }));
+  const set = (key: string, p: Partial<Pick>, it?: Item) => setPicks((x) => ({ ...x, [key]: { on: true, as: it?.kind === "sew" ? "sew" : "logo", name: it ? realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 60) || it.name : "", target: "", ...(it?.kind === "sew" ? { where: (usage[it.job.id] || []).join(", ") } : {}), ...x[key], ...p } }));
   const itemByKey = useMemo(() => new Map(items.flatMap((x) => x.list.map((i) => [i.key, i] as const))), [items]);
   const cutsOf = (key: string) => (Object.entries(picks) as [string, Pick][]).filter(([, v]) => v.on && v.src === key && v.cut);
   const addCut = (it: Item, c: Cut) => { const k = `${it.key}#${Date.now().toString(36)}`; const nm = realName(it.path) || it.job.nickname.replace(/^[^a-z]*embark[^a-z]*/i, "").slice(0, 50) || "Logo"; setPicks((x) => ({ ...x, [k]: { on: true, as: "logo", name: `${nm}${cutsOf(it.key).length ? ` ${cutsOf(it.key).length + 1}` : ""}`, target: "", src: it.key, cut: c } })); };
@@ -339,8 +406,8 @@ function BringInArt() {
       try {
         let f = await file(it.path);
         if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error("couldn't cut that logo off the page"); f = c; }
-        const d = (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: `From Printavo #${it.job.visual_id} (${it.job.nickname})` })) as D;
-        const specs = { ...((d.specs || {}) as object), source: { printavo: it.job.visual_id, path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box } : {}) } };
+        const d = (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `From Printavo #${it.job.visual_id} (${it.job.nickname})` })) as D;
+        const specs = { ...((d.specs || {}) as object), source: { ...(it.job.dbx ? { dropbox: it.job.dbx } : { printavo: it.job.visual_id }), path: it.path, ...(p.cut ? { page: p.cut.page, box: p.cut.box } : {}) } };
         await sb.from("designs").update({ specs, ...(brand ? { brand_id: brand } : {}) }).eq("id", d.id);
         made.set(key, { ...d, specs, brand_id: brand || null } as D);
         out.push(`D-${d.number} ${p.name || it.name}${brand ? ` · ${brands.find((b) => b.id === brand)?.name}` : ""}`);
@@ -358,11 +425,12 @@ function BringInArt() {
         const named = await Promise.all(files.map((f) => tajimaFile(f, name)));
         const { takeDigitized } = await import("@/lib/digitizedFiles");
         const { set: s } = await takeDigitized(sb, id, named);
-        const sew = { ...s, code, kind: "flat", source: it.path } as SewFile & { source: string };
+        const sew = { ...s, code, kind: /hat|cap/i.test(p.where || "") ? "cap" : "flat", source: it.path, ...(p.where?.trim() ? { placement: p.where.trim() } : {}),
+          lastUsed: it.job.dbx ? { dropbox: it.job.dbx } : { job: it.job.visual_id, date: it.job.order_date, name: it.job.nickname, where: p.where?.trim() || "" } } as SewFile & { source: string };
         const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), sew] } };
         const { error } = await sb.from("designs").update({ specs }).eq("id", id);
         if (error) throw new Error(error.message);
-        out.push(`${name} on D-${row.number}: ${s.wIn}" × ${s.hIn}", ${s.stitches.toLocaleString()} stitches${s.emb ? ", with its EMB" : ""}${s.sheet ? " and sewing sheet" : ""}`);
+        out.push(`${name} on D-${row.number}: ${s.wIn}" × ${s.hIn}", ${s.stitches.toLocaleString()} stitches${s.emb ? ", with its EMB" : ""}${s.sheet ? " and sewing sheet" : ""}${p.where?.trim() ? ` · ${p.where.trim()}` : ""}${it.job.visual_id ? ` · last used on #${it.job.visual_id}` : ""}`);
       } catch (e) { out.push(`${it.name}: ${e instanceof Error ? e.message : "couldn't file the sew file"}`); }
     }
     setLog(out); setPicks({}); setBusy(false);
@@ -374,24 +442,34 @@ function BringInArt() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Customer artwork builder</h1><div className="eyebrow">A client&apos;s Printavo jobs and their files. Tick a job, say what each file is, bring it in.</div></div>
+        <div><h1>Customer artwork builder</h1><div className="eyebrow">A client&apos;s Printavo jobs or Dropbox folders. Tick one, say what each file is, bring it in.</div></div>
         <div className="row"><Link className="btn" href="/shop/artwork">Artwork</Link><button type="button" className="btn primary" disabled={!picked.length || busy} onClick={() => void bringIn()}>{busy ? "Bringing in…" : `Bring in ${picked.length || ""}`.trim()}</button></div>
       </div>
       <div className="toolbar bi-tools">
+        <div className="chips" role="group" aria-label="Where from">
+          <button type="button" className={"chip" + (source === "printavo" ? " on" : "")} onClick={() => setSource("printavo")}>Printavo jobs</button>
+          <button type="button" className={"chip" + (source === "dropbox" ? " on" : "")} onClick={() => setSource("dropbox")}>Dropbox</button>
+        </div>
         <CustomerPick compact value={cust || null} options={custOpts} placeholder="Client: type one" ariaLabel="Client" onPick={(v) => setCust(v || "")} />
-        <label className="aa-search"><SearchInput placeholder="Jobs named… (embark)" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        {source === "printavo" && <label className="aa-search"><SearchInput placeholder="Anything in a job (embark, a PO, a garment)" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
         {cust && (newBrand === null
           ? <label className="bi-brand"><span className="faint">Logos go under</span><select value={brand} onChange={(e) => (e.target.value === "+" ? setNewBrand("") : setBrand(e.target.value))}><option value="">No brand (the client itself)</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}<option value="+">+ New brand…</option></select></label>
           : <span className="bi-brand"><input type="text" autoFocus placeholder="Brand name (Embark)" value={newBrand} onChange={(e) => setNewBrand(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void makeBrand(); if (e.key === "Escape") setNewBrand(null); }} /><button type="button" className="btn sm" disabled={!newBrand.trim()} onClick={() => void makeBrand()}>Make brand</button><button type="button" className="btn sm ghost" onClick={() => setNewBrand(null)}>Cancel</button></span>)}
       </div>
       {log.length > 0 && <div className="panel bi-log"><div className="panel-b">{log.map((l, i) => <div key={i}>{l}</div>)}</div></div>}
-      {!cust ? <div className="aa-empty">Pick a client to see their Printavo jobs.</div> : !jobs ? <div className="aa-empty">Loading their jobs…</div> : !items.length ? <div className="aa-empty">No jobs with files{q ? ` named "${q}"` : ""}.</div> : (
+      {source === "dropbox" && <div className="bi-crumbs">{["", ...dbxPath.split("/").filter(Boolean)].map((seg, i, a) => { const to = "/" + a.slice(1, i + 1).join("/"); return <span key={i}>{i > 0 && <span className="faint"> / </span>}<button type="button" className="linkbtn" disabled={i === a.length - 1} onClick={() => setDbxPath(i === 0 ? "" : to)}>{i === 0 ? "Dropbox" : seg}</button></span>; })}</div>}
+      {!cust ? <div className="aa-empty">Pick a client: their logos are made under them.</div>
+        : source === "dropbox" ? (dbxErr ? <div className="aa-empty">{dbxErr}</div> : !dbxList ? <div className="aa-empty">Opening the folder…</div> : !items.length ? <div className="aa-empty">Nothing in this folder.</div> : null)
+        : !jobs ? <div className="aa-empty">Loading their jobs…</div> : !items.length ? <div className="aa-empty">No jobs with files{q ? ` with "${q}"` : ""}.</div> : null}
+      {cust && items.length > 0 && (source === "printavo" ? !!jobs : !!dbxList) && (
         <>
-          <p className="faint" style={{ margin: "4px 0 10px" }}>{items.length} job{items.length === 1 ? "" : "s"} with files, newest first.</p>
+          <p className="faint" style={{ margin: "4px 0 10px" }}>{source === "dropbox" ? "Tick a folder to see its files; its name opens it." : `${items.length} job${items.length === 1 ? "" : "s"} with files, newest first.`}</p>
           {items.slice(0, n).map(({ j, list }) => (
             <section key={j.id} className="panel bi-job">
-              <label className="panel-h bi-jh"><input type="checkbox" checked={openJobs.has(j.id)} onChange={() => setOpenJobs((x) => { const m = new Set(x); if (m.has(j.id)) m.delete(j.id); else m.add(j.id); return m; })} />
-                <span className="bi-jt"><span className="ordno">#{j.visual_id}</span> {j.nickname}</span><span className="faint">{j.order_date ? new Date(j.order_date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""} · {list.length} file{list.length === 1 ? "" : "s"}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
+              <label className="panel-h bi-jh"><input type="checkbox" checked={openJobs.has(j.id)} onChange={() => { if (j.dbx && !openJobs.has(j.id)) void openDbx(j.dbx); setOpenJobs((x) => { const m = new Set(x); if (m.has(j.id)) m.delete(j.id); else m.add(j.id); return m; }); }} />
+                {j.dbx ? <span className="bi-jt">{j.dbx !== dbxPath ? <button type="button" className="linkbtn bi-folder" onClick={(e) => { e.preventDefault(); setDbxPath(j.dbx!); }}>{j.nickname}</button> : j.nickname}</span>
+                  : <span className="bi-jt"><span className="ordno">#{j.visual_id}</span> {j.nickname}</span>}
+                <span className="faint">{j.dbx ? (dbxFiles[j.dbx] === "loading" ? "Copying its files in…" : typeof dbxFiles[j.dbx] === "string" ? String(dbxFiles[j.dbx]) : j.files ? `${list.length} file${list.length === 1 ? "" : "s"}` : "Folder") : `${fmtDay(j.order_date)} · ${list.length} file${list.length === 1 ? "" : "s"}`}{list.some((i) => done.has(i.path)) ? " · some brought in" : ""}</span>
                 {(() => { const k = new Set(list.map((i) => i.key)); const c = picked.filter(([key, v]) => k.has(v.src || key)).length; return c > 0 ? <span className="bi-cnt">{c} picked</span> : null; })()}</label>
               {openJobs.has(j.id) && <div className="panel-b bi-files">
                 {list.map((it) => {
@@ -405,6 +483,8 @@ function BringInArt() {
                         <span className="bi-n"><input type="checkbox" checked={!!p?.on || cutsOf(it.key).length > 0} onChange={(e) => (e.target.checked ? (it.kind === "art" && PREVIEW.test(it.ext) && it.ext !== "svg" ? setCutting(it) : set(it.key, { on: true }, it)) : setPicks((x) => Object.fromEntries((Object.entries(x) as [string, Pick][]).map(([k, v]) => [k, k === it.key || v.src === it.key ? { ...v, on: false } : v]))))} /> {it.name}</span>
                       </label>
                       {it.kind === "sew" && <DstInfo sb={sb} path={it.path} />}
+                      {it.kind === "sew" && (it.job.dbx ? <span className="faint">From Dropbox: {it.job.dbx.split("/").slice(-2).join(" / ")}</span>
+                        : <span className="bi-used">Last used on #{it.job.visual_id} · {fmtDay(it.job.order_date)}{usage[it.job.id]?.length ? ` · ${usage[it.job.id].join(", ")}` : ""}</span>)}
                       {it.kind === "sew" && (it.emb || it.sheet) && <span className="faint">with {[it.emb && nameOf(it.emb), it.sheet && nameOf(it.sheet)].filter(Boolean).join(" and ")}</span>}
                       {had && !p?.on && <span className="bi-had">Brought in: {had}</span>}
                       {it.kind === "art" && PREVIEW.test(it.ext) && it.ext !== "svg" && <button type="button" className="linkbtn bi-pickoff" onClick={() => setCutting(it)}>{cutsOf(it.key).length ? "Pick another logo off it" : "Pick the logo off it"}</button>}
@@ -416,7 +496,9 @@ function BringInArt() {
                           <option value="">Sew file for which logo?</option>
                           {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                         </select>
-                      ) : (
+                      ) : null)}
+                      {p?.on && it.kind === "sew" && <input type="text" aria-label="Where it goes" placeholder="Where it goes (Left Chest, Nape…)" value={p.where || ""} onChange={(e) => set(it.key, { where: e.target.value })} />}
+                      {p?.on && (it.kind === "sew" ? null : (
                         <input type="text" aria-label="Logo name" placeholder="Logo name" value={p.name} onChange={(e) => set(it.key, { name: e.target.value })} />
                       ))}
                     </div>
