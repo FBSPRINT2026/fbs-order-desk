@@ -15479,3 +15479,10 @@ html body .as .as-brand.on::before{background:var(--accent)}
 .bi-crumbs .linkbtn:disabled{color:var(--ink);font-weight:700;cursor:default;text-decoration:none}
 .bi-used{font-size:12px;color:var(--ink-2)}
 .bi-folder{font-weight:700;font-size:14px}
+.bi-cutform{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:6px 0}
+.bi-cutform .field{display:flex;flex-direction:column;gap:4px;min-width:180px}
+.bi-cutform .field span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.bi-cutform input,.bi-cutform select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;background:var(--surface)}
+.bi-cutpic.dark{background:#5b6472}
+.bi-cutitem{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
+.bi-cutitem>span:last-child{display:flex;flex-direction:column}
