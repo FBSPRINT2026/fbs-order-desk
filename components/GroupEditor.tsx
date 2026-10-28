@@ -1499,9 +1499,6 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           <span className="pr-how">{METHODS[d.method]}</span>
           {each && <span className="pr-each" title={listed ? "The price list's price for this print. The garment prices were typed, so it's not charged separately." : undefined}>{listed ? "list" : "each"} <b>{each}</b></span>}
         </div>
-        {dgz && !dgz.gray && (orderId || (dgz.tone === "ok" && sewout?.url)
-          ? <button type="button" className={"dgz-st dgz-st-" + dgz.tone} onClick={dgzGo} title={dgz.tone === "ok" && sewout?.url ? "See the sew-out" : "Open it on the Digitizing page"}><b>{dgz.title}</b><small>{dgz.tone === "ok" && !sewout?.url ? "On file" : dgz.sub}</small></button>
-          : <span className={"dgz-st dgz-st-" + dgz.tone}><b>{dgz.title}</b><small>{dgz.sub}</small></span>)}
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
@@ -1510,6 +1507,9 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
+        {dgz && !dgz.gray && (orderId || (dgz.tone === "ok" && sewout?.url)
+          ? <button type="button" className={"dgz-st dgz-st-" + dgz.tone} onClick={dgzGo} title={dgz.tone === "ok" && sewout?.url ? "See the sew-out" : "Open it on the Digitizing page"}><b>{dgz.title}</b><small>{dgz.tone === "ok" && !sewout?.url ? "On file" : dgz.sub}</small></button>
+          : <span className={"dgz-st dgz-st-" + dgz.tone}><b>{dgz.title}</b><small>{dgz.sub}</small></span>)}
         {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
         {printNotes(d.notes) && <div className="pr-notes">{printNotes(d.notes)}</div>}
