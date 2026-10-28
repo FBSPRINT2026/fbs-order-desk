@@ -774,7 +774,10 @@ export type GroupCalc = ReturnType<typeof calcGroup>;
 const screenKey = (d: Imprint, n: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${n}` : "");
 /** the order's screens charged so far, plus the color-change pairs across variations (Imprint.changeOf): print id → pair
  *  key, and the screens the pair's first print paid for */
-export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number> };
+export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number>;
+  /** pieces carrying each logo across the order ("<method>:<design id>" → pieces): the same logo in several groups is
+   *  priced at the break for all of them together (Oct 27, Nick: "if you use it in two separate locations, so like sleeves
+   *  and left chest, it's the same logo… he can get the quantity discount") */ designQty?: Map<string, number> };
 export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
@@ -782,7 +785,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // embroidery has its own quantity breaks on contract pricing
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
-  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[] })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, false, false, ix) }));
+  // each print's price break: the pieces carrying its logo across the whole order (never fewer than this group's)
+  const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}`) || 0 : 0; return n > qty ? n : qty; };
+  const tiOf = (d: Imprint) => (dq(d) === qty ? ti : tierIndex(dq(d), pl));
+  const ixOf = (d: Imprint) => (dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[] })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) }));
   // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
   // another group of the same order) is matched once, so only its first print pays. `seen` is shared by calcOrder.
   // A typed count (inks not named) can't be compared and is charged as typed.
@@ -797,7 +804,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
   const printFor = (light: boolean, dtgLight: boolean) => {
-    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, light, dtgLight, ix)) : imprints;
+    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, tiOf(d), pl, light, dtgLight, ixOf(d))) : imprints;
     const other = imps.filter((_, i) => (g.imprints || [])[i]?.method !== "screen").reduce((a, d) => a + d.each, 0);
     const scr = imps.filter((_, i) => (g.imprints || [])[i]?.method === "screen");
     let screenPart = scr.reduce((a, d) => a + d.each, 0);
@@ -847,7 +854,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   });
   // screens: no underbase screen when every garment is light
   const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => lineQty(l) > 0 && !isLightColor(l.color, pl));
-  const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, true, true, ix) }));
+  const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, true, true, ixOf(d)) }));
   const setups = setups0.map((d, i) => {
     const im = (g.imprints || [])[i], k = im ? screenKey(im, num((d as { screens?: number }).screens)) : "";
     // a color change across variations: the pair prints from one set of screens. The first of the two pays its setup;
@@ -905,6 +912,13 @@ export function calcOrder(
     (seen.links ||= new Map()).set(d.id, key);
     if (!seen.links.has(d.changeOf.imprint)) seen.links.set(d.changeOf.imprint, key);
   }
+  // the same logo in several groups: its pieces counted together for the price break
+  const dqm = new Map<string, number>();
+  for (const g of gs0) {
+    const q = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
+    for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}`))) dqm.set(k, (dqm.get(k) || 0) + q);
+  }
+  seen.designQty = dqm;
   const groups = gs0.map((g) => calcGroup(g, o, s, seen));
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
