@@ -419,7 +419,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-27h";
+export const READER_REV = "2026-10-27i";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -924,7 +924,8 @@ ${staffSays}` : ""}`;
   }
 
   // hats, visors and beanies print on their own spots (Oct 26, Nick): a shirt location read for one moves to the spot it means
-  for (const g of groups) for (const im of g.imprints || []) im.location = fitLocation(im.location, g.lines);
+  // (a group named for its one spot takes the spot's new name: "Left Sleeve" on a quarter-zip is its Left Upper Arm)
+  for (const g of groups) for (const im of g.imprints || []) { const was = im.location; im.location = fitLocation(im.location, g.lines); if (was !== im.location && g.name === was && g.imprints.length === 1) g.name = im.location; }
   const wholesale = cust?.price_type === "wholesale";
   const supplied = p.garments_supplied_by === "customer" || (wholesale && p.garments_supplied_by !== "shop");
   const draft: EODraft = {
