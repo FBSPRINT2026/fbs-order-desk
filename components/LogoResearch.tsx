@@ -45,7 +45,9 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
     let on = true;
     (async () => {
       if (!d.customer_id) { setErr("This logo has no customer to look through."); return; }
-      const terms = [words.brand, ...words.own].filter((x) => x && x.length > 2).map((x) => x.replace(/[%,()*]/g, " ").trim());
+      // a logo under a brand is looked for in that brand's jobs only: its own words ("flag") are too common across the
+      // client's other stores (Oct 28: "flag" pulled in 40 MEI store carts); they rank the brand's jobs instead
+      const terms = (words.brand ? [words.brand] : words.own).filter((x) => x && x.length > 2).map((x) => x.replace(/[%,()*]/g, " ").trim());
       let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", d.customer_id).gt("files_total", 0).order("order_date", { ascending: false }).limit(80);
       if (terms.length) r = r.or(terms.flatMap((t) => [`nickname.ilike.%${t}%`, `search_text.ilike.%${t}%`]).join(","));
       const { data, error } = await r;
@@ -84,6 +86,12 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
     return () => { on = false; };
   }, [sb, d.customer_id, words]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the logo's shape (its print size, a sew file on it, or its art): a DST of another shape is likely another logo of
+  // the brand (the Embark wordmark next to the Embark flag), so it says so instead of "a size this logo doesn't have"
+  const ps = (d.specs as { printSize?: { wIn?: number; hIn?: number } } | null)?.printSize;
+  const shape = ps?.wIn && ps?.hIn ? { w: ps.wIn, h: ps.hIn } : have[0]?.wIn && have[0]?.hIn ? { w: have[0].wIn, h: have[0].hIn } : d.width_px && d.height_px ? { w: d.width_px, h: d.height_px } : null;
+  const offShape = (f: Facts) => !!shape && !!f.hIn && Math.abs(Math.log((f.wIn / f.hIn) / (shape.w / shape.h))) > 0.15;
+  const ratio = (w: number, h: number) => `${(w / h).toFixed(1)} : 1`;
   // the DSTs found, one per file (the same stitches and size across jobs is one file): on the logo already, or new
   const dstGroups = useMemo(() => {
     const g: { key: string; f: Facts; items: Item[]; onLogo?: Sew; jobs: Found[] }[] = [];
@@ -92,7 +100,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
       const k = g.find((x) => sameDst(f, x.f));
       if (k) { k.items.push(it); if (!k.jobs.includes(fd)) k.jobs.push(fd); } else g.push({ key: it.path, f, items: [it], onLogo: have.find((h) => sameDst(f, h)), jobs: [fd] });
     }
-    return g.sort((a, b) => b.jobs.length - a.jobs.length);
+    return g.sort((a, b) => Number(!!b.onLogo) - Number(!!a.onLogo) || Number(offShape(a.f)) - Number(offShape(b.f)) || b.jobs.length - a.jobs.length);
   }, [found, facts]); // eslint-disable-line react-hooks/exhaustive-deps
   const colors = useMemo(() => {
     const m = new Map<string, number>();
@@ -184,7 +192,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
                 <div key={g.key} className="lr-row">
                   <span className="bi-pic sm"><span className="bi-ext">DST</span></span>
                   <div className="lr-jb"><b>{factLine(g.f)}</b>
-                    <span className="faint">{g.onLogo ? `On this logo already (${tajimaName(d.number, Number((g.onLogo.code || "E1").slice(1)) || 1)})` : "A size this logo doesn't have yet"} · used on {g.jobs.map((x) => `#${x.j.visual_id}`).join(", ")}</span>
+                    <span className="faint">{g.onLogo ? `On this logo already (${tajimaName(d.number, Number((g.onLogo.code || "E1").slice(1)) || 1)})` : offShape(g.f) ? <b className="lr-warn">A different shape from this logo ({ratio(g.f.wIn, g.f.hIn)} vs {ratio(shape!.w, shape!.h)}): may be another logo</b> : "A size this logo doesn't have yet"} · used on {g.jobs.map((x) => `#${x.j.visual_id}`).join(", ")}</span>
                     {[...new Set(g.jobs.flatMap((x) => x.locs))].length > 0 && <span className="lr-tags">{[...new Set(g.jobs.flatMap((x) => x.locs))].map((l) => <span key={l} className="lr-tag">{l}</span>)}</span>}
                   </div>
                   <AddIgnore v={dstPick[g.key]} set={(c) => setDstPick((m) => ({ ...m, [g.key]: c }))} />
