@@ -15423,3 +15423,7 @@ html body .as .as-row{grid-template-columns:220px minmax(0,1fr)}
 html body .as .as-logos{border-left:1px solid var(--line);padding-left:14px;min-height:100%}
 html body .as .as-all{width:100%;justify-content:center;gap:6px;margin-top:10px;display:flex;align-items:center}
 html body .as .as-all.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+/* My Day calendar: Me / All, small on the title's line */
+.md-who{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:1px;background:var(--surface)}
+.md-who button{border:0;background:none;font-size:11px;font-weight:600;line-height:18px;padding:0 8px;border-radius:999px;color:var(--ink-3);cursor:pointer}
+.md-who button.on{background:var(--accent-soft);color:var(--accent)}

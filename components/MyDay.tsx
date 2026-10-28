@@ -254,15 +254,16 @@ function CalendarPanel({ d, setD, shop }: { d: Day | null; setD: (f: (x: Day | n
 
   return (
     <>
-      <div className="md-col-h"><h2>Calendar</h2><span className="spacer" />{mode === "appts" && <button type="button" className="md-link" onClick={() => setAdding(!adding)}>+ Event</button>}</div>
+      <div className="md-col-h"><h2>Calendar</h2><span className="spacer" />{mode === "appts" && <button type="button" className="md-link" onClick={() => setAdding(!adding)}>+ Event</button>}
+        {/* whose jobs: small, on the title's line (Oct 28, Nick: "a small me and all… all the way to the right") */}
+        {mode === "jobs" && hasAcc && <span className="md-who" role="group" aria-label="Whose jobs">
+          <button type="button" className={jobsMine ? "on" : ""} aria-pressed={jobsMine} title="Just your accounts" onClick={() => setJobsMine(true)}>Me</button>
+          <button type="button" className={!jobsMine ? "on" : ""} aria-pressed={!jobsMine} title="Everyone's jobs" onClick={() => setJobsMine(false)}>All</button>
+        </span>}</div>
       <div className="md-seg md-calsw" role="tablist" aria-label="Calendars">
         <button type="button" role="tab" aria-selected={mode === "appts"} className={mode === "appts" ? "on" : ""} onClick={() => setMode("appts")}>Appointments</button>
         <button type="button" role="tab" aria-selected={mode === "jobs"} className={mode === "jobs" ? "on" : ""} onClick={() => { setMode("jobs"); setAdding(false); }}>Jobs{jobs ? <small>{jobsOn(today).length}</small> : null}</button>
       </div>
-      {mode === "jobs" && hasAcc && <div className="toolbar md-jobwho"><div className="chips" role="group" aria-label="Whose jobs">
-        <button type="button" className={"chip" + (jobsMine ? " on" : "")} aria-pressed={jobsMine} onClick={() => setJobsMine(true)}>My accounts</button>
-        <button type="button" className={"chip" + (!jobsMine ? " on" : "")} aria-pressed={!jobsMine} onClick={() => setJobsMine(false)}>Everyone</button>
-      </div></div>}
       <div className="md-week" role="group" aria-label="This week">{days.map((day) => {
         const n = mode === "appts" ? on(day).length : 0, o = dueOn(day).length;
         return (
