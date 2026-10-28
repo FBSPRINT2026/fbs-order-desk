@@ -3,6 +3,7 @@ import Link from "next/link";
 import BackLink from "@/components/BackLink";
 import CustomerPick from "@/components/CustomerPick";
 import { use, useEffect, useMemo, useState } from "react";
+import LogoDetails, { logoSpecs } from "@/components/LogoDetails";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, orderGroups, type Customer, type Design, type Order } from "@/lib/pricing";
@@ -26,7 +27,21 @@ type Sep = { id: string; number: number | null; location: string | null; garment
 type Gang = { id: string; name: string | null; status: string | null; created_at: string; data: unknown };
 type Film = { id: string; name: string; file_path: string; order_id: string; created_at: string };
 const fileLink = (p: string, n?: string) => `/api/files/open?${new URLSearchParams({ p, ...(n ? { n } : {}) })}`;
-const BGS: [string, string][] = [["White", "#ffffff"], ["Charcoal", "#2b3140"], ["Sand", "#d8cfbd"], ["Sage", "#8a9a7b"], ["Navy", "#1f2a44"]];
+/** a light logo (white ink) shows on charcoal so it can be seen; anything else on white. No made-up backgrounds or colors
+ *  (Oct 28, Nick: "you're automatically adding in some variations that don't exist… we need to get rid of it") */
+async function isLightArt(url: string): Promise<boolean> {
+  try {
+    const im = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    const c = document.createElement("canvas"); c.width = 64; c.height = Math.max(1, Math.round((64 * (im.naturalHeight || 1)) / (im.naturalWidth || 1)));
+    const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return false;
+    g.drawImage(im, 0, 0, c.width, c.height);
+    const px = g.getImageData(0, 0, c.width, c.height).data;
+    let n = 0, sum = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 128) { n++; sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; }
+    // see-through art that's nearly all light (a white logo); a picture with a white background is opaque, so it stays on white
+    return n > 0 && n < (px.length / 4) * 0.97 && sum / n > 215;
+  } catch { return false; }
+}
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
   emb: <path d="M4 20L20 4M14 4h6v6M6 14l4 4" />,
   sp: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16M10 4v16" /></>,
@@ -51,10 +66,13 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [msg, setMsg] = useState("");
   const [armed, setArmed] = useState(false);
   const [tab, setTab] = useSticky<Tab>("logo.tab", "emb");
-  const [bg, setBg] = useSticky("logo.bg", "#ffffff");
+  const [cwUrls, setCwUrls] = useState<string[]>([]);
+  const [shown, setShown] = useState(-1); // -1: the logo's own art; else that colorway
+  const [lightArt, setLightArt] = useState(false);
   const [research, setResearch] = useState(false);
   // the logo editor (remove the white, change colors, crop): opened from here or a logo card's ✎ (?edit=1)
   const [editing, setEditing] = useState(false);
+  const [details, setDetails] = useState(false);
   const [sewBusy, setSewBusy] = useState(false);
   useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
 
@@ -67,6 +85,9 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     const { data: urls } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
     setPv(des.preview_path ? urls?.[0]?.signedUrl || "" : "");
     setOrig(urls?.[des.preview_path ? 1 : 0]?.signedUrl || "");
+    const cwp = colorwaysOf(des).map((c) => c.preview || "");
+    const { data: cu } = cwp.some(Boolean) ? await sb.storage.from("proofs").createSignedUrls(cwp.map((x) => x || des.preview_path || "x"), 3600) : { data: [] };
+    setCwUrls(cwp.map((x, i) => (x ? cu?.[i]?.signedUrl || "" : "")));
     const [c, o, s, so, b, g] = await Promise.all([
       sb.from("customers").select("*"),
       des.customer_id ? sb.from("orders").select("*").eq("customer_id", des.customer_id).order("number", { ascending: false }) : Promise.resolve({ data: [] }),
@@ -88,6 +109,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     } else setFilms([]);
   }
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shownUrl = shown >= 0 ? cwUrls[shown] || "" : pv;
+  useEffect(() => { let on = true; setLightArt(false); if (shownUrl) void isLightArt(shownUrl).then((v) => { if (on) setLightArt(v); }); return () => { on = false; }; }, [shownUrl]);
 
   async function patch(p: Partial<D>) {
     if (!d) return;
@@ -144,6 +167,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     <>
       <BackLink href="/shop/artwork" label="Artwork" />
       {editing && <LogoEditor d={d} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); setMsg("Logo saved"); load(); }} />}
+      {details && <LogoDetails d={d} onClose={() => setDetails(false)} onSaved={(x) => { setDetails(false); setD(x as D); setMsg("Details saved"); }} />}
       {research && <LogoResearch d={d} brand={brand} onClose={() => setResearch(false)} onDone={(m) => { setResearch(false); setMsg(m); load(); }} />}
       <div className="page-head">
         <div><h1>{designLabel(d)}</h1><div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}{brand ? ` · ${brand.name}` : ""}</div></div>
@@ -159,13 +183,18 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
         <div className="stack">
           <section className="panel">
             <div className="panel-b stack">
-              <div className="lg-art" style={{ background: bg }}>{pv ? <img src={pv} alt={d.name} /> : <span className="faint">No preview</span>}</div>
-              <div className="lg-bgs" role="group" aria-label="Background">{BGS.map(([n, h]) => <button key={h} type="button" title={n} aria-label={n} className={bg === h ? "on" : ""} style={{ background: h }} onClick={() => setBg(h)} />)}</div>
+              <div className={"lg-art" + (lightArt || ((d.specs as { onShirts?: unknown[] } | null)?.onShirts?.length && shown < 0) ? " dark" : "")}>{shownUrl ? <img src={shownUrl} alt={d.name} /> : <span className="faint">No preview</span>}</div>
+              {cws.length > 0 && <div className="lg-cws" role="group" aria-label="Colorways"><button type="button" className={"lg-pill" + (shown < 0 ? " on" : "")} onClick={() => setShown(-1)}>As on file</button>{cws.map((c, i) => <button key={c.name + i} type="button" className={"lg-pill" + (shown === i ? " on" : "")} title={c.inks.join(", ")} onClick={() => setShown(i)}>{c.name}</button>)}</div>}
               {ps?.wIn ? <div className="lg-size"><b>Prints {ps.wIn}&quot;{ps.hIn ? ` × ${ps.hIn}"` : " wide"}</b>{ps.location ? <span className="faint"> · {ps.location}</span> : null}</div> : null}
               <div className="sub">{/\.(svg|ai|eps|pdf)$/i.test(d.file_name) ? "Vector" : "Picture"} · {d.colors} color{d.colors === 1 ? "" : "s"}{d.inks ? ` · ${d.inks}` : ""}{ratio ? ` · 1 : ${ratio.toFixed(2)}` : ""}</div>
-              {cws.length > 0 && <><div className="lg-k">Colorways</div><div className="lg-pills">{cws.map((c) => <span key={c.name} className="lg-pill">{c.name}</span>)}</div></>}
+              {(() => { const ls = logoSpecs(d); return <>
+                {ls.inkList?.length ? <><div className="lg-k">Prints in</div><div className="lg-pills">{ls.inkList.map((c) => <span key={c.name} className="lg-pill">{c.hex ? <i className="lg-dot" style={{ background: c.hex }} /> : null}{c.name}</span>)}</div></> : null}
+                {ls.threads?.length ? <><div className="lg-k">Thread</div><div className="lg-pills">{ls.threads.map((c) => <span key={c.name} className="lg-pill">{c.hex ? <i className="lg-dot" style={{ background: c.hex }} /> : null}{c.name}</span>)}</div></> : null}
+                {ls.where && !ps?.location ? <><div className="lg-k">Goes on</div><div className="sub">{ls.where}</div></> : null}
+              </>; })()}
               {src && (src.printavo || src.dropbox) && <><div className="lg-k">Came from</div><div className="sub">{src.printavo ? `Printavo #${src.printavo}` : `Dropbox: ${src.dropbox}`}{src.where ? ` · ${src.where}` : ""}</div></>}
               {brand && <><div className="lg-k">Brand standard</div><div className="sub">{brand.name}{brand.rules?.light ? ` · light goods ${brand.rules.light}` : ""}{brand.rules?.dark ? ` · dark goods ${brand.rules.dark}` : ""}{brand.embroidery?.light?.length ? ` · thread ${brand.embroidery.light[0]}${brand.embroidery.dark?.length ? ` / ${brand.embroidery.dark[0]}` : ""}` : ""}</div></>}
+              <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setDetails(true)} title="What it prints and sews in, where it goes, a set size: all optional">Fill in its details</button>
               <label className="btn sm" style={{ cursor: "pointer", alignSelf: "flex-start" }}>{pv ? "Replace preview image" : "Add preview image"}<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { setD(await setDesignPreview(sb, d, f)); setMsg("Preview updated"); load(); } catch (er) { setMsg(String(er)); } }} /></label>
             </div>
           </section>

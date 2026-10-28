@@ -31,8 +31,9 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   // the same logo already on their account? ask before making another art number (lib/sameArt.ts; Oct 24, Nick)
   let artHashV: string | null = null;
   if (opts.customer_id && !opts.draft && !opts.preview && !opts.clean) {
-    const chk = await checkSameArt(opts.file, PREVIEWABLE.test(opts.file.type) ? opts.file : null, opts.name || opts.file.name.replace(/\.[^.]+$/, ""), opts.customer_id);
+    const chk = await checkSameArt(opts.file, PREVIEWABLE.test(opts.file.type) ? opts.file : null, opts.name || opts.file.name.replace(/\.[^.]+$/, ""), opts.customer_id, { colorways: true });
     if (chk.use) return chk.use.design as unknown as Design;
+    if (chk.colorwayOf) return addColorway(sb, chk.colorwayOf.design as unknown as Design, opts.file, { name: opts.name, inks: opts.inks });
     artHashV = chk.hash;
   }
   const key = crypto.randomUUID();
@@ -93,6 +94,29 @@ export async function setDesignPreview(sb: SupabaseClient, d: Design, f: File): 
   if (up.error) throw new Error(up.error.message);
   const dims = await imageSize(f);
   const { data, error } = await sb.from("designs").update({ preview_path: path, width_px: dims?.w || null, height_px: dims?.h || null }).eq("id", d.id).select("*").single();
+  if (error) throw new Error(error.message);
+  return data as Design;
+}
+
+/**
+ * The same logo in other colors, kept on the logo as a colorway (Oct 28, Nick: "if we bring it in again and it's like a
+ * different color, you can say like add colorway… blue on a white, and then we did blue… you can see all those different
+ * colorways"): its file and picture go on the logo's specs.colorways; the logo keeps its number.
+ */
+export async function addColorway(sb: SupabaseClient, d: Design, f: File, o: { name?: string; inks?: string } = {}): Promise<Design> {
+  const key = `designs/${d.id}-cw-${crypto.randomUUID().slice(0, 8)}`;
+  const orig = `${key}/${safe(f.name)}`;
+  const up = await sb.storage.from("proofs").upload(orig, f, { contentType: f.type || undefined });
+  if (up.error) throw new Error(up.error.message);
+  const pv = PREVIEWABLE.test(f.type) ? f : await makePreview(f);
+  let preview = pv === f ? orig : "";
+  if (pv && pv !== f) { const p2 = `${key}/preview-${safe(pv.name)}`; if (!(await sb.storage.from("proofs").upload(p2, pv, { contentType: pv.type })).error) preview = p2; }
+  const { data: fresh } = await sb.from("designs").select("specs, name").eq("id", d.id).maybeSingle();
+  const sp = ((fresh?.specs ?? d.specs) || {}) as Record<string, unknown>;
+  const list = ((sp.colorways || []) as { name: string }[]);
+  const nm = o.name && o.name.trim() && o.name.trim().toLowerCase() !== String(fresh?.name || d.name).trim().toLowerCase() ? o.name.trim() : `Colorway ${list.length + 1}`;
+  const cw = { name: nm, inks: (o.inks || "").split(/\s*,\s*/).filter(Boolean), ...(preview ? { preview } : {}), file: { path: orig, name: f.name } };
+  const { data, error } = await sb.from("designs").update({ specs: { ...sp, colorways: [...list, cw] } }).eq("id", d.id).select("*").single();
   if (error) throw new Error(error.message);
   return data as Design;
 }

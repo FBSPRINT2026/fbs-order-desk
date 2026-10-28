@@ -69,8 +69,16 @@ export function artDistance(a: string, b: string): number | null {
   return miss <= (inkOff < 70 ? 0.3 : 0.18) ? Math.round(miss * 100) : null;
 }
 
-export type SameArtMatch = { cand: ArtCandidate; why: "looks" | "name" };
-type Ask = { match: SameArtMatch; fileName: string; preview: string; resolve: (use: boolean) => void };
+export type SameArtMatch = { cand: ArtCandidate; why: "looks" | "name"; /** the same art in other colors: it can be added as a colorway */ recolor?: boolean };
+/** what they said: use the one on file, add it as a colorway of it, or keep it as a new logo */
+export type SameArtChoice = "use" | "colorway" | "new";
+/** the two inks far apart (the art's average ink color) */
+export function inkDiffers(a: string, b: string): boolean {
+  if (!isArtHash(a) || !isArtHash(b)) return false;
+  const p = read(a).ink, q = read(b).ink;
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) >= 70;
+}
+type Ask = { match: SameArtMatch; fileName: string; preview: string; colorways: boolean; resolve: (c: SameArtChoice) => void };
 const listeners = new Set<(a: Ask) => void>();
 export function onSameArt(f: (a: Ask) => void) { listeners.add(f); return () => { listeners.delete(f); }; }
 
@@ -78,7 +86,7 @@ export function onSameArt(f: (a: Ask) => void) { listeners.add(f); return () => 
  * Before a logo is saved: is it one they already have? Returns the logo to use instead (they said so), or null to go
  * ahead, plus this file's fingerprint to keep with the new logo.
  */
-export async function checkSameArt(file: File, look: Blob | null, name: string, customerId?: string): Promise<{ use: ArtCandidate | null; hash: string | null }> {
+export async function checkSameArt(file: File, look: Blob | null, name: string, customerId?: string, o: { colorways?: boolean } = {}): Promise<{ use: ArtCandidate | null; hash: string | null; colorwayOf?: ArtCandidate }> {
   const hash = look ? await artHash(look) : null;
   if (!listeners.size) return { use: null, hash };
   const cands = await sameArtCandidates(customerId).catch(() => [] as ArtCandidate[]);
@@ -89,10 +97,10 @@ export async function checkSameArt(file: File, look: Blob | null, name: string, 
   if (fresh.length) void saveArtHashes(fresh, customerId);
   const nm = name.trim().toLowerCase().replace(/[_\s-]+/g, " ");
   let best: SameArtMatch | null = null, bestD = 99;
-  if (hash) for (const c of cands) if (c.art_hash) { const dd = artDistance(hash, c.art_hash); if (dd !== null && dd < bestD) { bestD = dd; best = { cand: c, why: "looks" }; } }
+  if (hash) for (const c of cands) if (c.art_hash) { const dd = artDistance(hash, c.art_hash); if (dd !== null && dd < bestD) { bestD = dd; best = { cand: c, why: "looks", recolor: inkDiffers(hash, c.art_hash) }; } }
   if (!best && nm) { const c = cands.find((z) => z.name.trim().toLowerCase().replace(/[_\s-]+/g, " ") === nm); if (c) best = { cand: c, why: "name" }; }
   if (!best) return { use: null, hash };
   const preview = look ? URL.createObjectURL(look) : "";
-  const use = await new Promise<boolean>((resolve) => { listeners.forEach((f) => f({ match: best!, fileName: file.name, preview, resolve })); });
-  return { use: use ? best.cand : null, hash };
+  const choice = await new Promise<SameArtChoice>((resolve) => { listeners.forEach((f) => f({ match: best!, fileName: file.name, preview, colorways: !!o.colorways, resolve })); });
+  return { use: choice === "use" ? best.cand : null, hash, ...(choice === "colorway" ? { colorwayOf: best.cand } : {}) };
 }
