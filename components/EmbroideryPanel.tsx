@@ -3,13 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Imprint } from "@/lib/pricing";
 import { mergeProduction, type ProductionSettings } from "@/lib/production";
-import { BACKINGS, THREAD_LINES, TOPPINGS, lineName, backingFor, closestThreads, coverageOf, cycleMinutes, embGarment, embMax, embWarnings, estimateStitches, findThreads, piecesPerHour, threadByName, threadLabel, type EmbSpec, type Thread } from "@/lib/embroidery";
-import type { DstInfo } from "@/lib/dst";
-import DstPreview from "@/components/DstPreview";
-import { takeDigitized } from "@/lib/digitizedFiles";
-import SewSequence, { sheetHex } from "@/components/SewSequence";
+import { lineName, backingFor, closestThreads, coverageOf, embGarment, embWarnings, estimateStitches, findThreads, threadByName, threadLabel, type EmbSpec, type Thread } from "@/lib/embroidery";
 import { loadThreadStock, stockKey } from "@/lib/threadStock";
-import { lastOf, type EmbLast } from "@/lib/embroideryLast";
 import PuffPicker from "@/components/PuffPicker";
 
 /**
@@ -19,8 +14,12 @@ import PuffPicker from "@/components/PuffPicker";
  * prints" when the print's method is Embroidery; screen prints never see it.
  *   - Thread colors: each color of the logo → the closest Madeira thread (with its PMS), changed by picking another
  *   - Stitches: estimated from the size and how much of the logo is stitched, until the digitized file (DST) says
- *   - How long it sews (a cycle, pieces an hour on each machine), backing and topping for the garment, 3D puff, metallic
- *   - Where a needle can't go (a polo's buttons) and the usual largest size here
+ *   - 3D puff
+ * Only that (Oct 29, Nick: "it's just too much information for the mock-up builder… just like with the screen printing
+ * side, you just select the color. It should give the stitch estimate… just select 3D"): sew time, backing and topping,
+ * the thread line, small detail, metallic and the digitizer's files aren't here. The backing and topping still default
+ * for the garment (the work order and the digitizing request use them); the files come in on the order (Already
+ * digitized?) and on Digitizing.
  */
 type Row = { hexes: string[]; cur?: { name: string; hex: string } };
 let prodCache: ProductionSettings | null = null;
@@ -45,22 +44,6 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
     if (prodCache || portal) return;
     void createClient().from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => { prodCache = mergeProduction((data?.data as { production?: unknown } | null)?.production); setProd(prodCache); });
   }, [portal]);
-
-  // what this logo was sewn with last time (a reorder starts from it)
-  const [last, setLast] = useState<EmbLast | null>(null);
-  // the sew-out the customer approved, on file with the logo (lib/sewouts.ts)
-  const [sew, setSew] = useState<{ url: string; order: number; version: number; by: string; at: string } | null>(null);
-  useEffect(() => {
-    if (!designId || portal) return;
-    const sb = createClient();
-    void sb.from("designs").select("specs").eq("id", designId).maybeSingle().then(async ({ data }) => {
-      setLast(lastOf(data?.specs));
-      const so = (data?.specs as { embroidery?: { sewout?: { path: string; order: number; version: number; by: string; at: string } } } | null)?.embroidery?.sewout;
-      if (!so?.path) { setSew(null); return; }
-      const { data: u } = await sb.storage.from("proofs").createSignedUrl(so.path, 3600);
-      setSew(u?.signedUrl ? { url: u.signedUrl, order: so.order, version: so.version, by: so.by, at: so.at } : null);
-    });
-  }, [designId, portal]);
 
   // how much of the logo is stitched: read off the painted logo
   const [cov, setCov] = useState<number | null>(emb.coverage ?? null);
@@ -100,82 +83,25 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
   }, [back.backing]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (ch: Partial<EmbSpec>) => setIm({ emb: ch });
 
-  const stitches = im.stitches || est || 0;
-  const cap = g === "cap";
-  const cyc = prod && stitches ? cycleMinutes(stitches, prod.embroidery, { cap, colors: nThreads, puff: emb.puff, metallic: emb.metallic, detail: emb.detail }) : null;
-  const heads = (prod?.machines || []).filter((m) => m.type === "embroidery" && m.active !== false).sort((a, b) => b.heads - a.heads);
+  // only what would stop it sewing right (a polo's buttons, too big for the spot)
   const warns = embWarnings(g, im.location, Math.round(wIn * 100) / 100);
-  const mx = embMax(im.location);
-
-  // the digitized file (DST): its stitch count replaces the estimate
-  const [dst, setDst] = useState<DstInfo | null>(null);
-  const [dstErr, setDstErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const threadHexes = useMemo(() => sewing.map((r) => r.cur!.hex), [sewing]);
-  // each stop in its thread's color when the worksheet says which (else the print's threads in turn)
-  const dstColors = useMemo(() => (emb.file?.ws?.sequence.length ? emb.file.ws.sequence.map(sheetHex) : threadHexes), [emb.file?.ws, threadHexes]);
-  // the digitizer's files (Oct 23, Nick: "the DST is the main thing that we sew from, the .EMB is for the Hatch program
-  // that we can edit, the PDF shows us the details and how to sew it and the color changes"): the zip or the loose files
-  async function takeFiles(list: File[]) {
-    setDstErr(""); setBusy(true);
-    try {
-      const { set, info } = await takeDigitized(createClient(), designId || null, list, { save: !portal });
-      setDst(info);
-      setIm({ stitches: info.stitches, emb: { stitchesFrom: "file", file: set } });
-    } catch (e) { setDstErr(e instanceof Error ? e.message : "Couldn't read those files."); }
-    setBusy(false);
-  }
 
   return (
     <div className="emb">
-      <div className="mk-plan emb-how"><b>How it sews:</b> Embroidery, {nThreads} thread color{nThreads === 1 ? "" : "s"}{emb.puff ? ", 3D puff" : ""}{emb.metallic ? ", metallic" : ""}.</div>
-      {last && (
-        <div className="emb-last">
-          <b>Last time</b> <span className="faint">#{last.order} · {new Date(last.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-          <div>{[last.threads, last.size && `${last.location} ${last.size}`, last.stitches && `${last.stitches.toLocaleString()} stitches`, last.backing, last.topping && last.topping !== "None" && last.topping, last.puff && "3D puff", last.metallic && "metallic"].filter(Boolean).join(" · ")}</div>
-          {(last.backing !== emb.backing || last.topping !== emb.topping || !!last.puff !== !!emb.puff) && <button type="button" className="lc-link" onClick={() => setIm({ emb: { backing: last.backing || emb.backing, topping: last.topping || emb.topping, puff: last.puff || undefined, metallic: last.metallic || undefined, line: (last.line as EmbSpec["line"]) || emb.line } })}>Use the same backing and effects</button>}
-        </div>
-      )}
-      {sew && (
-        <a className="emb-sew" href={sew.url} target="_blank" rel="noreferrer" title="Open the approved sew-out">
-          <img src={sew.url} alt="Approved sew-out" />
-          <span><b>Approved sew-out</b><span className="faint">#{sew.order} v{sew.version} · {sew.by} · {new Date(sew.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></span>
-        </a>
-      )}
       <ThreadColors rows={rows} line={line} stock={stock} onPick={onPick} onHover={onHover} />
-
       <div className="emb-facts">
         <div className="emb-row">
           <label className="emb-l" htmlFor={`st-${im.id}`}>Stitches</label>
           <input id={`st-${im.id}`} type="number" min={0} step={100} className="emb-st" value={im.stitches ?? ""} placeholder={est ? String(est) : "—"}
             onChange={(e) => setIm({ stitches: e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined, emb: { stitchesFrom: e.target.value ? "staff" : "estimate" } })} />
           <span className="faint emb-from">
-            {from === "file" && emb.file ? <>from the digitized file ({emb.file.name})</>
+            {from === "file" && emb.file ? <>from the digitized file</>
               : from === "staff" ? <>typed{est ? <> · estimate ≈ {est.toLocaleString()} <button type="button" className="lc-link" onClick={() => setIm({ stitches: est, emb: { stitchesFrom: "estimate" } })}>Use it</button></> : null}</>
-              : est ? <>≈ estimated: {wIn.toFixed(2)}&quot; × {(hIn || wIn).toFixed(2)}&quot;, {Math.round((cov || 0) * 100)}% of it stitched</> : "estimated once the logo and size are set"}
+              : est ? <>≈ estimated: {wIn.toFixed(2)}&quot; × {(hIn || wIn).toFixed(2)}&quot;, {Math.round((cov || 0) * 100)}% of it stitched. The digitized file sets the real count.</> : "estimated once the logo and size are set"}
           </span>
         </div>
-        {cyc && (
-          <div className="emb-row emb-run">
-            <span className="emb-l">Sews in</span>
-            <span><b>{cyc.min.toFixed(1)} min</b> a cycle at {cyc.spm} stitches a minute{cap ? " (caps)" : ""}</span>
-            {heads.length > 0 && <span className="faint emb-heads">{heads.map((m) => `${m.heads === 1 ? "single head" : m.heads + " head"} ≈ ${piecesPerHour(cyc.min, m.heads)}/hr`).join(" · ")}</span>}
-          </div>
-        )}
-        <div className="emb-row emb-two">
-          <label><span className="emb-l">Backing</span>
-            <select value={emb.backing || back.backing} onChange={(e) => set({ backing: e.target.value })} aria-label="Backing">{[...new Set([...(emb.backing && !(BACKINGS as readonly string[]).includes(emb.backing) ? [emb.backing] : []), ...BACKINGS])].map((b) => <option key={b}>{b}</option>)}</select>
-          </label>
-          <label><span className="emb-l">Topping</span>
-            <select value={emb.topping || back.topping} onChange={(e) => set({ topping: e.target.value })} aria-label="Topping">{TOPPINGS.map((b) => <option key={b}>{b}</option>)}</select>
-          </label>
-        </div>
-        <p className="faint emb-why">{back.why}{(emb.backing && emb.backing !== back.backing) ? ` (we'd use ${back.backing})` : ""}</p>
         <div className="emb-row emb-checks">
           <label className="check" title="Raised: satin stitched over foam. Sews slower, more stitches"><input type="checkbox" checked={!!emb.puff} onChange={(e) => set({ puff: e.target.checked || undefined })} /> 3D puff</label>
-          <label className="check" title="Metallic thread: sews slower, breaks more"><input type="checkbox" checked={!!emb.metallic} onChange={(e) => set({ metallic: e.target.checked || undefined })} /> Metallic thread</label>
-          <label className="check" title="Small lettering or fine detail: sews slower"><input type="checkbox" checked={!!emb.detail} onChange={(e) => set({ detail: e.target.checked || undefined })} /> Small detail</label>
-          <select className="emb-line" value={line} onChange={(e) => set({ line: e.target.value as Thread["line"] })} aria-label="Thread line">{THREAD_LINES.map((l) => <option key={l} value={l}>{lineName(l)}</option>)}</select>
         </div>
         {/* 3D puff: all of it or only some parts, and big enough to puff (Oct 26) */}
         {emb.puff && artUrl && (
@@ -184,23 +110,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
             onChange={(sel) => set({ puffParts: sel })}
             onSummary={(note, warn) => { if (note !== (emb.puffNote || "") || warn !== (emb.puffWarn || "")) set({ puffNote: note || undefined, puffWarn: warn || undefined }); }} />
         )}
-        {(warns.length > 0 || mx) && (
-          <ul className="emb-warn">
-            {warns.map((w, i) => <li key={i} className="bad">{w}</li>)}
-            {mx && !warns.some((w) => w.includes("usual")) && <li>Usual {im.location} embroidery: {mx.usual}.</li>}
-          </ul>
-        )}
-        {!portal && (
-          <div className="emb-row emb-file">
-            <span className="emb-l">Digitized file</span>
-            {emb.file ? <span><b>{emb.file.name}</b> · {emb.file.stitches.toLocaleString()} stitches · {emb.file.colors} color{emb.file.colors === 1 ? "" : "s"} · {emb.file.wIn}&quot; × {emb.file.hIn}&quot;{[emb.file.path && { p: emb.file.path, n: emb.file.name, l: "DST" }, emb.file.emb && { p: emb.file.emb.path, n: emb.file.emb.name, l: "EMB (Hatch)" }, emb.file.sheet && { p: emb.file.sheet.path, n: emb.file.sheet.name, l: "Worksheet" }].filter(Boolean).map((x) => { const f = x as { p: string; n: string; l: string }; return <a key={f.l} className="lc-link" href={`/api/files/open?${new URLSearchParams({ p: f.p, n: f.n })}`} target="_blank" rel="noreferrer">{f.l}</a>; })}</span> : <span className="faint">Not digitized yet: the stitches are an estimate</span>}
-            <label className="btn sm" style={{ cursor: "pointer" }} title="The digitizer's zip, or the DST (with the EMB and the PDF worksheet if you have them)">{busy ? "Reading…" : emb.file ? "Replace the files" : "Add the digitizer's files"}<input type="file" hidden multiple accept=".zip,.dst,.DST,.emb,.EMB,.pdf" onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ""; if (fs.length) void takeFiles(fs); }} /></label>
-          </div>
-        )}
-        {dstErr && <div className="err">{dstErr}</div>}
-        {emb.file && wIn > 0 && Math.abs(emb.file.wIn - wIn) > 0.15 && <p className="emb-warn-1">The file sews {emb.file.wIn}&quot; wide; this print is set to {wIn.toFixed(2)}&quot;. A digitized file can&apos;t be resized much: ask the digitizer for the new size.</p>}
-        {dst && <DstPreview info={dst} colors={dstColors} fabric={fabric || (shirtLight ? "#F4F4F1" : "#2A2E36")} width={360} />}
-        {emb.file?.ws && <SewSequence ws={emb.file.ws} />}
+        {warns.length > 0 && <ul className="emb-warn">{warns.map((w, i) => <li key={i} className="bad">{w}</li>)}</ul>}
       </div>
     </div>
   );
@@ -213,7 +123,7 @@ function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; lin
   const pickT = (r: Row, t: Thread | null) => { onHover(r.hexes, null); onPick(r.hexes, t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: r.hexes[0] }); setOpen(null); setQ(""); };
   return (
     <div className="mk-colors emb-threads">
-      <div className="lbl">THREAD COLORS IN THIS LOGO <span className="faint">{lineName(line)}</span></div>
+      <div className="lbl">THREAD COLORS</div>
       {rows.map((r) => {
         const k = r.hexes.join(), cur = r.cur, t = cur && cur.name !== "none" ? threadByName(cur.name) : null;
         const near = closestThreads(r.hexes[0], { line, n: 5, stock });
