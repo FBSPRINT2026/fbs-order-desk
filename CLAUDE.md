@@ -1,5 +1,26 @@
 # FBS Order Desk: house rules for changes
 
+- **Permanent solutions, never patches (the first rule; Nick, Oct 28 2026: "this is a system we're gonna use for five
+  years, maybe more… we want really good permanent solutions that fix the problems, not 'we found a way to do this one
+  order right'… when you fix a problem, you've gotta be fixing it so that it figures out 10 other problems").**
+  - **Fix the kind of problem, not the case.** Before changing anything, find the root cause and name the whole family of
+    problems it belongs to: "it read a total row as an order line", not "McKenna's extras"; "it didn't see shirts drawn
+    in a file", not "LYL 102326.ai". The fix has to handle every member of that family, including ones nobody has hit yet.
+  - **No special-case rules.** Never key behavior on one customer, one file name, one form layout or one order (no "if the
+    name says mockup", no "McKenna's third row"). Use general abilities instead:
+    - look at the actual content the way a person would;
+    - check the result against the source itself: every total on the paperwork is accounted for, sizes add up, and the
+      art fits the shirt;
+    - learn from what staff correct, so a saved before-and-after from a real job guides the next similar one.
+  - **Systems that learn over special cases.** When the shop teaches something (a correction, a returned DST, a fixed
+    order), it should be kept and used automatically next time, for everyone, without anyone ticking "remember".
+  - **Leave it better than one fix.** When you meet a special-case rule from before, replace it with the general one in
+    the same change.
+  - **Prove it on more than the one case.** Before calling it fixed, try it on the order it was found on and on other
+    real past jobs of the same kind (other customers, other files), and say what they showed.
+  - **Say what it covers.** When you tell Nick it's fixed, name the family of problems the fix covers and what else it
+    will now catch, not just the order it was found on.
+
 - **Toggles remember their setting.** Every toggle, tab, view switch or filter a person sets must stay set after a
   refresh or when they come back (Nicholas, Sep 29 2026). Use `useSticky("area.name", default)` from
   `lib/useSticky.ts` instead of `useState` for these. It saves to this browser's localStorage under `fbs:<key>`.
