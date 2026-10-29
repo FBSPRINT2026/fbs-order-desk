@@ -409,8 +409,10 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
   } catch (e) { return fail(e); }
 }
 
-// SanMar's ship-via names (their Purchase Order Integration Guide); will call is picked up at their Dallas warehouse
-const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY", "6": "WILL CALL" };
+// SanMar's ship methods (Purchase Order Integration Guide 24.6, p. 9); will call is the pickup warehouse's code in the
+// ship method instead (p. 10: "<shipMethod>REN</shipMethod>"), and needs Warehouse Selection on our account
+const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
+const SM_WILL_CALL: Record<string, string> = { "1": "PRE", "2": "CIN", "3": "COP", "4": "REN", "5": "NJE", "6": "JAC", "7": "MSP", "12": "PHX", "31": "VA1" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
 export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
   try {
@@ -434,7 +436,7 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
     const from = mergeSettings(st?.data).ship.from;
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (SanMar ships here)." };
     const poNum = (p.label || "Stock").replace(/[^A-Za-z0-9 #-]/g, "").trim().slice(0, 20) + " " + new Date().toISOString().slice(5, 10).replace("-", "");
-    const order = { poNum: poNum.slice(0, 28), attention: from.name || "Receiving", shipTo: from.company || "FBS Print", address1: from.street1, address2: from.street2 || "", city: from.city, state: from.state, zip: from.zip, email: v.user?.email || "", shipMethod: SM_SHIP[p.shippingMethod] || "UPS", lines };
+    const order = { poNum: poNum.slice(0, 28), attention: from.name || "Receiving", shipTo: from.company || "FBS Print", address1: from.street1, address2: from.street2 || "", city: from.city, state: from.state, zip: from.zip, email: v.user?.email || "", shipMethod: p.shippingMethod === "6" ? SM_WILL_CALL["3"] : SM_SHIP[p.shippingMethod] || "UPS", lines };
     const fee = await sanmarFeePct(admin);
     const sub = lines.reduce((a, l) => a + l.qty * (l.price || 0), 0);
     if (p.test) {
