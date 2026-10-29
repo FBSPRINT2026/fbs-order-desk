@@ -520,11 +520,11 @@ export async function placeOneStop(p: { lines: { code: string; qty: number; labe
     const row = {
       order_id: p.orderId || null, customer_id: p.customerId || null, activity_id: p.activityId || null, label: po, supplier: "onestop", supplier_order: r.orderNumber || po, po,
       status: "ordered", placed_via: "api", lines: lines.map((l) => ({ sku: l.code, qty: l.qty, label: l.label })), total: r.total || null, expected_date: null, created_by: v.user!.email || "staff",
-      note: `One Stop${osOrdersLive() ? "" : " TEST SYSTEM (not charged or shipped)"}: ${r.shipVia}, freight ${r.shipping.toFixed(2)}.`, garments,
+      note: `One Stop: ${r.shipVia}, freight ${r.shipping.toFixed(2)}.`, garments,
     };
     const ins = await admin.from("blank_orders").insert(row).select("id").single();
     if (ins.error) return { ok: true as const, po: r.orderNumber, warn: `Ordered with One Stop (${r.orderNumber}), but it couldn't be saved here: ${ins.error.message}` };
-    if (p.orderId && osOrdersLive()) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+    if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
     return { ok: true as const, po: r.orderNumber, total: r.total, freight: r.shipping, live: osOrdersLive() };
   } catch (e) { return fail(e); }
 }

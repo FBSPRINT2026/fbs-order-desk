@@ -17,7 +17,7 @@ export const SM_SHIP_OPTS: [string, string][] = [["psst", "PSST program (SanMar 
 /** One Stop (their ship-via numbers for our account): Ground is free at $175 and up (Oct 29, Nick: "we get free ground
  *  shipping at $175"); ships from Grand Rapids, MI 49544 */
 export const OS_FREE_AT = 175;
-export const OS_SHIP_OPTS: [string, string][] = [["1", "UPS Ground (free at $175)"], ["3", "UPS 3 Day Select (we pay more freight)"], ["2", "UPS 2nd Day Air (we pay more freight)"], ["10", "Customer pickup (Michigan)"]];
+export const OS_SHIP_OPTS: [string, string][] = [["1", "UPS Ground (free at $175)"], ["3", "UPS 3 Day Select (we pay more freight)"], ["2", "UPS 2nd Day Air (we pay more freight)"], ["4", "UPS Next Day Air (we pay more freight)"], ["10", "Customer pickup (Michigan)"]];
 
 const FREE: Record<GoodsSup, string[]> = { ss: ["40", "6", "1", ""], sm: ["psst", "6", ""], os: ["10", ""] };
 export const FREE_NAME: Record<GoodsSup, string> = { ss: "UPS Ground (contract decorator network)", sm: "PSST", os: `UPS Ground on $${OS_FREE_AT} or more` };

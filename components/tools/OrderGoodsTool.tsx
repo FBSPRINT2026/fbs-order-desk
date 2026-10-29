@@ -275,7 +275,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       sum += rr.total || osParts.reduce((a, p) => a + p.qty * p.each, 0);
       if (rr.freight) freight = `One Stop freight ${money(rr.freight)}`;
       froms.push("One Stop");
-      if (!test) out.push(`One Stop ${rr.po || ""}${rr.live ? "" : " (their test system)"}`.trim());
+      if (!test) out.push(`One Stop ${rr.po || ""}`.trim());
       if (rr.warn) setErr(rr.warn);
     }
     setBusy("");
@@ -469,7 +469,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             {ssParts.length > 0 && <div className="field"><label htmlFor="og-ship">S&amp;S shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SS_SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>}
             {smParts.length > 0 && smOn && <div className="field"><label htmlFor="og-smship">SanMar shipping</label><select id="og-smship" value={smShip} onChange={(e) => { setSmShip(e.target.value); setCheck(null); }}>{SM_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{smShip === "psst" && <small className="faint">We&apos;re a PSST decorator: SanMar ships it its own way (usually UPS Ground), free. Ordered by 1 pm, it ships today.</small>}</div>}
             {osParts.length > 0 && osOn && <div className="og-2f">
-              <div className="field"><label htmlFor="og-osship">One Stop shipping</label><select id="og-osship" value={osShip} onChange={(e) => { setOsShip(e.target.value); setCheck(null); }}>{OS_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><small className="faint">From Grand Rapids, MI: about 3 days by ground. {osParts.reduce((a, p) => a + p.qty * p.each, 0) >= 175 ? "Ground is free (over $175)." : `Under $175 (${money(osParts.reduce((a, p) => a + p.qty * p.each, 0))}): they charge ground freight; it shows when you check.`}{opts?.onestopLive ? "" : " Orders go to One Stop's test system for now."}</small></div>
+              <div className="field"><label htmlFor="og-osship">One Stop shipping</label><select id="og-osship" value={osShip} onChange={(e) => { setOsShip(e.target.value); setCheck(null); }}>{OS_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><small className="faint">From Grand Rapids, MI: about 3 days by ground. {osParts.reduce((a, p) => a + p.qty * p.each, 0) >= 175 ? "Ground is free (over $175)." : `Under $175 (${money(osParts.reduce((a, p) => a + p.qty * p.each, 0))}): they charge ground freight; it shows when you check.`}{opts?.onestopLive ? "" : " Checking works; ordering from One Stop gets switched on after a first look."}</small></div>
               <div className="field og-cvv"><label htmlFor="og-cvv">Card CVV</label><input id="og-cvv" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} /><small className="faint">Card ending 5488. Not saved.</small></div>
             </div>}
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}{check.freight ? ` (includes ${check.freight})` : ""}. Nothing bought yet.</div>}

@@ -14,8 +14,8 @@ import { startTracker } from "@/lib/goodsTrack";
  * maker's own style number ("mill_style_code": 6210), and each size its barcode (GTIN). So a garment is found by its
  * style number and brand, never by their code: `osStyle("Next Level", "6210")`.
  *
- * Reads (catalog, stock, prices, tracking) always use the live system. Orders go to their test system
- * (api-test.onestopinc.com: never charged or shipped) until ONESTOP_ORDERS=on.
+ * Everything uses their live system (our token isn't valid on their test system). The check before ordering is their
+ * preflight, which never creates an order; placing an order waits for ONESTOP_ORDERS=on.
  */
 const LIVE = "https://api.onestopinc.com/";
 const TEST = "https://api-test.onestopinc.com/";
@@ -165,7 +165,10 @@ function orderResult(j: Raw): OsOrderResult {
  * typed at order time and passed straight through; it's never kept anywhere (Oct 29, Nick: paid with the card ending 5488).
  */
 export async function osOrder(o: { lines: { code: string; qty: number }[]; po: string; shipVia: string; cvv: string; zip: string; place: boolean }): Promise<OsOrderResult> {
-  const test = !osOrdersLive();
+  // our token works on One Stop's live system only (their test system says "Invalid token"): the check (preflight)
+  // never orders anything, so it runs live; placing waits for ONESTOP_ORDERS=on
+  if (o.place && !osOrdersLive()) throw new OneStopError("One Stop ordering isn't switched on yet (ONESTOP_ORDERS=on in Vercel). Checking prices, stock and freight works.");
+  const test = false;
   const set = await osSetup(o.zip, test);
   const ship = set.ships.find((x) => x.number === o.shipVia) || set.ships.find((x) => /ups ground/i.test(x.description)) || set.ships[0];
   if (!ship) throw new OneStopError("One Stop gave no shipping methods for our address.");

@@ -1334,10 +1334,9 @@ export default function SeparationStudio({ id }: { id: string }) {
               {/* width or height (Oct 29, Nick: "we should be able to set the width or height… it just should never get cut
                   off"): type either, the other follows the art; the one typed stays outlined and is the one kept */}
               <div className="sep-sz">
-                <label className={"sep-szf" + (st.sizeBy !== "h" ? " set" : "")} title="Print width"><small>W</small><input type="number" min={0.5} max={20} step={0.25} value={r2(st.widthIn)} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0.25); set({ widthIn: w, sizeBy: "w", heightIn: undefined }); }} aria-label="Print width in inches" /></label>
+                <label className={"sep-szf" + (st.sizeBy !== "h" ? " set" : "")} title="Print width"><small>W</small><input type="number" min={0.5} max={20} step={0.25} value={r2(st.widthIn)} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0.25); set({ widthIn: w, sizeBy: "w", heightIn: undefined }); }} aria-label="Print width in inches" /><i>in</i></label>
                 <span className="sep-szx" aria-hidden>×</span>
-                <label className={"sep-szf" + (st.sizeBy === "h" ? " set" : "")} title="Print height"><small>H</small><input type="number" min={0.5} max={30} step={0.25} value={artAsp ? r2(st.sizeBy === "h" && st.heightIn ? st.heightIn : st.widthIn * artAsp) : ""} disabled={!artAsp} onChange={(e) => { const h = Math.max(0.25, +e.target.value || 0.25); if (artAsp) set({ heightIn: h, sizeBy: "h", widthIn: h / artAsp }); }} aria-label="Print height in inches" /></label>
-                <span className="sep-szu">in</span>
+                <label className={"sep-szf" + (st.sizeBy === "h" ? " set" : "")} title="Print height"><small>H</small><input type="number" min={0.5} max={30} step={0.25} value={artAsp ? r2(st.sizeBy === "h" && st.heightIn ? st.heightIn : st.widthIn * artAsp) : ""} disabled={!artAsp} onChange={(e) => { const h = Math.max(0.25, +e.target.value || 0.25); if (artAsp) set({ heightIn: h, sizeBy: "h", widthIn: h / artAsp }); }} aria-label="Print height in inches" /><i>in</i></label>
               </div>
 </>}>
             {img && (() => {
