@@ -1,4 +1,5 @@
 import "server-only";
+import { carries, supplierBrands } from "@/lib/supplierBrands";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ssSkus } from "@/lib/ss";
 import { matchColor } from "@/lib/colorMatch";
@@ -11,9 +12,13 @@ export type GoodsRow = { key: string; brand: string; style: string; color: strin
 /** Match rows to S&S skus (one lookup per style; our catalog remembers the S&S style id). Fills sku, price, stock. */
 export async function matchToSS(admin: SupabaseClient, rows: GoodsRow[], opts: { fixColors?: boolean } = {}) {
   const styles = [...new Set(rows.map((r) => `${r.brand}|${r.style}`))];
-  for (const st of styles) {
+  // a brand S&S doesn't carry (from its own brand list: Port & Co, Sport-Tek, OGIO…) isn't looked for there
+  // (lib/supplierBrands.ts); the styles are looked up side by side, not one after another
+  const brands = await supplierBrands(admin).catch(() => null);
+  await Promise.all(styles.map(async (st) => {
     const [brand, style] = st.split("|");
-    if (!style) { for (const r of rows.filter((x) => `${x.brand}|${x.style}` === st)) r.note = "No style number"; continue; }
+    if (!style) { for (const r of rows.filter((x) => `${x.brand}|${x.style}` === st)) r.note = "No style number"; return; }
+    if (brands && !carries(brands, "ss", brand)) { for (const r of rows.filter((x) => `${x.brand}|${x.style}` === st)) r.note = `${brand} isn't carried at S&S`; return; }
     const { data: gar } = await admin.from("garments").select("ss_style_id").ilike("style", style).not("ss_style_id", "is", null).limit(1).maybeSingle();
     const info = await ssSkus(gar?.ss_style_id ? +gar.ss_style_id : `${brand} ${style}`.trim()).catch(() => null);
     const colors = info ? [...new Set(info.skus.map((k) => k.colorName))].sort((a, b) => a.localeCompare(b)) : [];
@@ -30,7 +35,7 @@ export async function matchToSS(admin: SupabaseClient, rows: GoodsRow[], opts: {
       if (!sku) { r.note = info.skus.some((k) => k.colorName.toLowerCase() === r.color.toLowerCase()) ? "Size not carried in this color" : "Color not found at S&S"; continue; }
       Object.assign(r, { sku: sku.sku, price: sku.price, stock: sku.qty, found: true, note: sku.qty < r.qty ? `Only ${sku.qty} in stock` : "" });
     }
-  }
+  }));
   return rows;
 }
 

@@ -7,6 +7,7 @@ import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ss
 import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
 import { cleanGoodsPo, customerShort, defaultGoodsPo, typedShort } from "@/lib/goodsPo";
+import { carries, supplierBrands } from "@/lib/supplierBrands";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
 /** the short names the shop typed for customers' goods POs (lib/goodsPo.ts): read for the default, kept when a typed
  *  one differs from ours (Oct 29, Nick: "Dear Heart Designs could be DHD… then I can type over it") */
@@ -404,8 +405,11 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
     // SanMar: the same garment, color and size there
     if (sanmarConfigured()) {
       const styles = [...new Set(rows.map((r) => `${r.brand}|${r.style}`))];
+      // a brand SanMar doesn't carry (its own catalog: Team 365, Comfort Colors' S&S-only lines…) isn't looked for there
+      const brands = await supplierBrands(admin).catch(() => null);
       await Promise.all(styles.map(async (k) => {
         const [brand, style] = k.split("|");
+        if (brands && !carries(brands, "sm", brand)) { notes.push(`SanMar doesn't carry ${brand}`); return; }
         const smStyle = await sanmarStyleOf(admin, brand, style);
         const mine = rows.filter((r) => `${r.brand}|${r.style}` === k);
         if (!smStyle) { notes.push(`SanMar doesn't carry ${style}`); return; }
