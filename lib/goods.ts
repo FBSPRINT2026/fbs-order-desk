@@ -41,7 +41,7 @@ export type GoodsItem = {
 export const NO_GOODS: GoodsState = { status: "waiting", issue_type: "", issue_note: "", expected: "", updated_at: null, supplier: "", supplier_po: "", ship_date: null };
 
 /** Where wholesale customers' goods usually come from. Anything else is stored as its name. */
-export const SUPPLIERS: Record<string, string> = { sanmar: "SanMar", ss: "S&S Activewear" };
+export const SUPPLIERS: Record<string, string> = { sanmar: "SanMar", ss: "S&S Activewear", onestop: "One Stop" };
 export const supplierLabel = (s?: string | null) => (s ? SUPPLIERS[s] || s : "");
 /** Nothing known yet about the goods: no supplier and no tracking. */
 export const goodsNeedInfo = (g: GoodsState, shipments: { tracking: string }[]) => g.status === "waiting" && !g.supplier && !shipments.some((x) => x.tracking);
