@@ -61,12 +61,13 @@ export default function ProofsPage() {
       if (error) { setErr(error.message); return; }
       const os = (data || []) as unknown as O[];
       const ids = os.map((o) => o.id);
-      const chunk = <T,>(f: (part: string[]) => PromiseLike<{ data: T[] | null }>) => Promise.all(Array.from({ length: Math.ceil(ids.length / 150) }, (_, i) => f(ids.slice(i * 150, i * 150 + 150)))).then((rs) => rs.flatMap((r) => r.data || []));
+      // a few orders at a time: the database hands back at most 1,000 rows a query (500 orders' mockups are more)
+      const chunk = <T,>(f: (part: string[]) => PromiseLike<{ data: T[] | null }>) => Promise.all(Array.from({ length: Math.ceil(ids.length / 40) }, (_, i) => f(ids.slice(i * 40, i * 40 + 40)))).then((rs) => rs.flatMap((r) => r.data || []));
       const [ps, ms, sws, evs] = await Promise.all([
         chunk<P>((part) => sb.from("proofs").select("id, order_id, version, status, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, archived_at, mockup_id, approved_via, created_at").in("order_id", part).not("version", "is", null)),
         chunk<{ id: string; order_id: string }>((part) => sb.from("mockups").select("id, order_id").in("order_id", part).is("archived_at", null)),
         chunk<S>((part) => sb.from("sewouts").select("id, order_id, imprint_id, version, status, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, archived_at, created_at").in("order_id", part)),
-        chunk<Ev>((part) => sb.from("order_events").select("order_id, kind, detail, actor, created_at").in("order_id", part).in("kind", [...ART_EV, ...SEW_EV]).order("created_at", { ascending: false }).limit(2000)),
+        chunk<Ev>((part) => sb.from("order_events").select("order_id, kind, detail, actor, created_at").in("order_id", part).in("kind", [...ART_EV, ...SEW_EV]).order("created_at", { ascending: false }).limit(1000)),
       ]);
       if (!live) return;
       const out: Item[] = [];
