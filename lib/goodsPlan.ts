@@ -10,7 +10,8 @@
  *   fast  - the soonest warehouse for each size, then the cheapest
  * A size is split between warehouses only when one can't cover it. Pure: used by the Order goods panel.
  */
-export type Sup = "ss" | "sm";
+/** S&S, SanMar, and One Stop (the third choice: only for what the first two can't fill; lib/onestop.ts) */
+export type Sup = "ss" | "sm" | "os";
 export type Src = { sup: Sup; wh: string; stock: number; price: number };
 export type PlanItem = { key: string; qty: number; srcs: Src[] };
 export type PlanMode = "easy" | "cheap" | "fast";
@@ -28,9 +29,11 @@ export const SM_WH: Record<string, [string, string, number]> = {
   "3": ["Dallas, TX", "Dallas", 1], "12": ["Phoenix, AZ", "Phoenix", 2], "2": ["Cincinnati, OH", "Cincinnati", 3], "7": ["Minneapolis, MN", "Minneapolis", 3],
   "6": ["Jacksonville, FL", "Jacksonville", 3], "31": ["Richmond, VA", "Richmond", 3], "4": ["Reno, NV", "Reno", 3], "5": ["Robbinsville, NJ", "Robbinsville", 4], "1": ["Seattle, WA", "Seattle", 4],
 };
-export const supName = (s: Sup) => (s === "ss" ? "S&S" : "SanMar");
+/** One Stop ships from Michigan: UPS Ground to us is about 3 business days (Oct 29, Nick: "the shipping takes a long time") */
+export const OS_WH: Record<string, [string, string, number]> = { MI: ["Michigan (One Stop)", "One Stop", 3] };
+export const supName = (s: Sup) => (s === "ss" ? "S&S" : s === "os" ? "One Stop" : "SanMar");
 export const whInfo = (sup: Sup, wh: string): { name: string; short: string; days: number } => {
-  const x = (sup === "ss" ? SS_WH : SM_WH)[wh];
+  const x = (sup === "ss" ? SS_WH : sup === "os" ? OS_WH : SM_WH)[wh];
   return x ? { name: x[0], short: x[1], days: x[2] } : { name: sup === "sm" ? `Warehouse ${wh}` : wh, short: wh, days: 4 };
 };
 export const shipKey = (p: { sup: Sup; wh: string }) => `${p.sup}:${p.wh}`;
@@ -46,6 +49,7 @@ export function arriveOn(days: number, now = new Date()): Date {
 }
 
 const costOf = (s: Src, feePct: number) => (s.sup === "sm" ? s.price * (1 + feePct / 100) : s.price);
+const SUP_RANK: Record<Sup, number> = { ss: 0, sm: 1, os: 2 };
 const even = (a: number, b: number) => Math.abs(a - b) < 0.005;
 
 /** fill one size from sources in the given order */
@@ -61,7 +65,7 @@ function fill(it: PlanItem, order: Src[], feePct: number, parts: Part[], short: 
 const byCheap = (feePct: number) => (a: Src, b: Src) => {
   const ca = costOf(a, feePct), cb = costOf(b, feePct);
   if (!even(ca, cb)) return ca - cb;
-  if (a.sup !== b.sup) return a.sup === "ss" ? -1 : 1; // no card fee at S&S
+  if (a.sup !== b.sup) return SUP_RANK[a.sup] - SUP_RANK[b.sup]; // S&S first (no card fee), One Stop last
   return whInfo(a.sup, a.wh).days - whInfo(b.sup, b.wh).days;
 };
 const byFast = (feePct: number) => (a: Src, b: Src) => whInfo(a.sup, a.wh).days - whInfo(b.sup, b.wh).days || byCheap(feePct)(a, b);

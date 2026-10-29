@@ -8,6 +8,7 @@ import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarP
 import { SM_WH, type Src } from "@/lib/goodsPlan";
 import { cleanGoodsPo, customerShort, defaultGoodsPo, typedShort } from "@/lib/goodsPo";
 import { carries, supplierBrands } from "@/lib/supplierBrands";
+import { osConfigured, osOrder, osOrdersLive, osPrices, osStyle } from "@/lib/onestop";
 import { paidShipBlock } from "@/lib/goodsShip";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
 /** the short names the shop typed for customers' goods POs (lib/goodsPo.ts): read for the default, kept when a typed
@@ -389,6 +390,8 @@ async function sanmarStyleOf(admin: ReturnType<typeof createAdminClient>, brand:
   return (list.find((x) => x.style.toUpperCase() === st && same(x)) || list.find((x) => same(x) && /^[A-Z]{1,3}$/.test(x.style.toUpperCase().slice(0, x.style.length - st.length)) && x.style.toUpperCase().endsWith(st)) || null)?.style || "";
 }
 
+/** One Stop's size codes (SM, MD, LG, XL, 2X…) as ours (S, M, L, XL, 2XL…) */
+const osSizeOf = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS" } as Record<string, string>)[k] || k; };
 export type SanMarRef = { style: string; color: string; size: string; inventoryKey?: string; sizeIndex?: string };
 /**
  * Where each size can come from: S&S (its warehouses, our price) and SanMar (its warehouses, our price before the card
@@ -398,7 +401,7 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
   try {
     await staff();
     const admin = createAdminClient();
-    const srcs: Record<string, Src[]> = {}, sm: Record<string, SanMarRef> = {}, notes: string[] = [];
+    const srcs: Record<string, Src[]> = {}, sm: Record<string, SanMarRef> = {}, os: Record<string, { code: string }> = {}, notes: string[] = [];
     for (const r of rows) srcs[r.key] = [];
     // S&S, SanMar and the money settings all at once (Oct 29, Nick: the screen "sits there for quite a while")
     const ssJob = (async () => {
@@ -433,9 +436,35 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
       }));
     }
     const [money] = await Promise.all([moneyJob, ssJob]);
+    // One Stop, the third choice (Oct 29, Nick: "when S&S and SanMar are out of a specific size or color"): only for the
+    // sizes the first two can't fill, found by the maker's brand and style number (their own codes don't follow the maker's)
+    const short = rows.filter((r) => srcs[r.key].reduce((a, x) => a + x.stock, 0) < r.qty);
+    if (short.length && osConfigured()) {
+      const brands = await supplierBrands(admin).catch(() => null);
+      const styles = [...new Set(short.map((r) => `${r.brand}|${r.style}`))];
+      const found: { key: string; code: string }[] = [];
+      await Promise.all(styles.map(async (k) => {
+        const [brand, style] = k.split("|");
+        if (brands && !carries(brands, "os", brand)) { notes.push(`One Stop doesn't carry ${brand}`); return; }
+        const its = await osStyle(admin, brand, style).catch((e) => { notes.push(e instanceof Error ? e.message : String(e)); return []; });
+        if (!its.length) { notes.push(`One Stop doesn't carry ${brand} ${style}`); return; }
+        for (const r of short.filter((x) => `${x.brand}|${x.style}` === k)) {
+          const want = colorWords(r.color), size = osSizeOf(r.size);
+          const hit = its.find((x) => osSizeOf(x.size) === size && colorWords(x.color) === want);
+          if (hit) found.push({ key: r.key, code: hit.code });
+          else if (!its.some((x) => colorWords(x.color) === want)) notes.push(`One Stop ${style} doesn't come in ${r.color}`);
+        }
+      }));
+      const px = found.length ? await osPrices(found.map((f) => f.code)).catch((e) => { notes.push(e instanceof Error ? e.message : String(e)); return new Map(); }) : new Map();
+      for (const f of found) {
+        const p = px.get(f.code) as { onHand: number; price: number } | undefined;
+        os[f.key] = { code: f.code };
+        if (p && p.onHand > 0 && p.price > 0) srcs[f.key].push({ sup: "os", wh: "MI", stock: p.onHand, price: p.price });
+      }
+    }
     // S&S first in each list, as before
     for (const k of Object.keys(srcs)) srcs[k].sort((a, b) => (a.sup === b.sup ? 0 : a.sup === "ss" ? -1 : 1));
-    return { ok: true as const, srcs, sm, notes: [...new Set(notes)], fee: money.fee, money, sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode() };
+    return { ok: true as const, srcs, sm, os, notes: [...new Set(notes)], fee: money.fee, money, sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode(), onestop: osConfigured(), onestopLive: osOrdersLive() };
   } catch (e) { return fail(e); }
 }
 
@@ -446,6 +475,41 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
 const SM_SHIP: Record<string, string> = { psst: "PSST", "40": "PSST", "14": "PSST", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
 const SM_WILL_CALL: Record<string, string> = { "1": "PRE", "2": "CIN", "3": "COP", "4": "REN", "5": "NJE", "6": "JAC", "7": "MSP", "12": "PHX", "31": "VA1" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
+/**
+ * One Stop's part of the goods (lib/onestop.ts): checked first (their preflight: nothing is ordered, and it gives the
+ * freight), then placed by their codes on the card ending 5488. The card's CVV is typed in Order goods each time and
+ * passed straight to One Stop; it's never saved. Orders go to One Stop's test system until ONESTOP_ORDERS=on.
+ */
+export async function placeOneStop(p: { lines: { code: string; qty: number; label: string; price: number }[]; shippingMethod: string; cvv: string; test: boolean; paidShipOk?: boolean; label: string; po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
+  try {
+    const v = await staff();
+    if (!osConfigured()) return { ok: false as const, error: "One Stop isn't connected (ONESTOP_API_TOKEN in Vercel)." };
+    const lines = p.lines.filter((l) => l.code && l.qty > 0);
+    if (!lines.length) return { ok: false as const, error: "Nothing to order from One Stop." };
+    const paidNo = paidShipBlock("os", p.shippingMethod, p.test, p.paidShipOk);
+    if (paidNo) return { ok: false as const, error: paidNo };
+    if (!p.test && !/^\d{3,4}$/.test(String(p.cvv || "").trim())) return { ok: false as const, error: "Type the card's security code (CVV) for One Stop. It isn't saved." };
+    const admin = createAdminClient();
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const zip = mergeSettings(st?.data).ship.from.zip || "";
+    if (!zip) return { ok: false as const, error: "Add our address in Shipping center → Settings first (One Stop ships there)." };
+    const po = (cleanGoodsPo(p.po || "") || defaultGoodsPo({ customer: p.label })).slice(0, 15).trim();
+    const r = await osOrder({ lines: lines.map((l) => ({ code: l.code, qty: l.qty })), po, shipVia: p.shippingMethod, cvv: p.cvv || "", zip, place: !p.test });
+    if (p.test) return { ok: true as const, total: Math.round((r.subtotal + r.shipping + r.tax) * 100) / 100 || lines.reduce((a, l) => a + l.qty * l.price, 0), freight: r.shipping, shipVia: r.shipVia, messages: r.messages, live: osOrdersLive() };
+    await keepShort(admin, p.customerId, po).catch(() => null);
+    const garments = (p.garments || []).filter((g) => g && g.style && goodsPcs(g) > 0).slice(0, 60);
+    const row = {
+      order_id: p.orderId || null, customer_id: p.customerId || null, activity_id: p.activityId || null, label: po, supplier: "onestop", supplier_order: r.orderNumber || po, po,
+      status: "ordered", placed_via: "api", lines: lines.map((l) => ({ sku: l.code, qty: l.qty, label: l.label })), total: r.total || null, expected_date: null, created_by: v.user!.email || "staff",
+      note: `One Stop${osOrdersLive() ? "" : " TEST SYSTEM (not charged or shipped)"}: ${r.shipVia}, freight ${r.shipping.toFixed(2)}.`, garments,
+    };
+    const ins = await admin.from("blank_orders").insert(row).select("id").single();
+    if (ins.error) return { ok: true as const, po: r.orderNumber, warn: `Ordered with One Stop (${r.orderNumber}), but it couldn't be saved here: ${ins.error.message}` };
+    if (p.orderId && osOrdersLive()) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+    return { ok: true as const, po: r.orderNumber, total: r.total, freight: r.shipping, live: osOrdersLive() };
+  } catch (e) { return fail(e); }
+}
+
 export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; paidShipOk?: boolean; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
   try {
     const v = await staff();

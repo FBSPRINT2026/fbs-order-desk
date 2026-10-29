@@ -1,5 +1,5 @@
 "use client";
-import { SS_SHIP, SM_SHIP_OPTS, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
+import { SS_SHIP, SM_SHIP_OPTS, OS_SHIP_OPTS, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
 import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { GOODS_PO_MAX, cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
 import Link from "next/link";
@@ -14,7 +14,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
-import { addExtrasToOrder, goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
+import { addExtrasToOrder, goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeOneStop, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
 import { arriveOn, dayOptions, pickOption, shipKey, supName, whInfo, type DayOption, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSeesMoney } from "@/components/RoleContext";
 import PointsDecision from "@/components/PointsDecision";
@@ -66,12 +66,15 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null), [skipped, setSkipped] = useState<string[]>([]);
   const [smShip, setSmShip] = useState("psst");
+  // One Stop (the third choice): its shipping, and the card's security code typed each time (never kept: One Stop asks
+  // for it on every card order; Oct 29, Nick: paid with the card ending 5488)
+  const [osShip, setOsShip] = useState("1"), [cvv, setCvv] = useState("");
   // paid shipping asked about before ordering (Oct 29, Nick: "S&S gives us… free UPS ground… SanMar free PSST… if you
   // select any of the other options… a pop-up… you've selected a non-free option… if you accidentally shipped 500 shirts
   // next day air, that would be like a $1,000 mistake"). Free: S&S UPS Ground (contract decorator network), SanMar PSST,
   // and will call (we pick up)
   const [paidAsk, setPaidAsk] = useState<string[] | null>(null);
-  const [ship, setShip] = useState("40"), [busy, setBusy] = useState(""), [check, setCheck] = useState<{ total: number; expected: string | null; from: string } | null>(null), [sure, setSure] = useState(false);
+  const [ship, setShip] = useState("40"), [busy, setBusy] = useState(""), [check, setCheck] = useState<{ total: number; expected: string | null; from: string; freight?: string } | null>(null), [sure, setSure] = useState(false);
   const [placed, setPlaced] = useState<string>(""), [min, setMin] = useState(false);
   // where each size ships from, grouped by warehouse (Oct 26, Nick: "group by warehouse… Fort Worth and the sizes you're
   // getting from there and the colors"): asked of S&S as soon as the goods are shown, and again when a quantity changes
@@ -221,20 +224,22 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const byKey = new Map(lines.map((x) => [x.key, x]));
   const ssParts = (plan?.parts || []).filter((p) => p.sup === "ss"), smParts = (plan?.parts || []).filter((p) => p.sup === "sm");
   const smOn = !!opts?.sanmarOrders;
+  const osParts = (plan?.parts || []).filter((p) => p.sup === "os"), osOn = !!opts?.onestop;
   const ready = wanted.filter((x) => plan?.parts.some((p) => p.key === x.key));
   const total = plan ? plan.total : 0, pcs = wanted.reduce((a, x) => a + x.qty, 0);
   const xRows = wanted.filter((x) => x.extra), xPcs = xRows.reduce((a, x) => a + x.qty, 0);
   const xNoReason = xRows.some((x) => !x.extra!.reason.trim());
   const extrasNote = xPcs ? <p className="og-note og-xn">{[...new Set(xRows.map(gkOf))].map((gk) => { const rs = xRows.filter((x) => gkOf(x) === gk), e = rs[0].extra!; return `${rs.reduce((a, x) => a + x.qty, 0)} extra ${rs[0].style} ${rs[0].color} (${rs.map((x) => `${x.qty} ${x.size}`).join(", ")}): ${e.reason || "say what it's for"}, ${e.print ? "printed" : "not printed"}, ${e.free ? "no charge" : "charged"}`; }).join(" · ")}. Goes on the order as Extras when it's placed.</p> : null;
   const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : [])]);
+  const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : []), ...(osParts.length && osOn ? [{ sup: "os" as const, code: osShip }] : [])]);
   async function run(test: boolean, paidOk = false) {
     if (!plan) return;
     if (!test && !paidOk) { const pl = paidLines(); if (pl.length) { setPaidAsk(pl); return; } }
     if (xNoReason) { setErr("Say what the extra is for (Other: type it) before ordering."); setEditing(true); return; }
     setBusy(test ? "check" : "place"); setErr("");
     const out: string[] = [], dates: string[] = [], froms: string[] = [];
-    let sum = 0, garmentsLeft = test ? undefined : garmentsFromRows(ready);
+    let sum = 0, garmentsLeft = test ? undefined : garmentsFromRows(ready), freight = "";
+    if (!test && osParts.length && osOn && !/^\d{3,4}$/.test(cvv.trim())) { setBusy(""); setErr("Type the card's security code (CVV) for One Stop. It isn't saved."); return; }
     // S&S's part, each size from the warehouse the plan picked
     if (ssParts.length) {
       const per = new Map<string, number>();
@@ -260,8 +265,21 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       if (!test) out.push(`SanMar PO ${(r as { po?: string }).po || ""}`.trim());
       if ((r as { warn?: string }).warn) setErr((r as { warn?: string }).warn!);
     }
+    // One Stop's part: only what S&S and SanMar can't fill (goodsOptions offers One Stop just for those sizes)
+    if (osParts.length && osOn) {
+      const r = await placeOneStop({ lines: osParts.map((p) => { const x = byKey.get(p.key)!; return { code: opts!.os[p.key]?.code || "", qty: p.qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: p.each }; }),
+        shippingMethod: osShip, cvv, test, paidShipOk: paidOk, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+      if (!test) setCvv("");
+      if (!r.ok) { setBusy(""); setErr((out.length && !test ? `${out.join("; ")} went through, but One Stop's didn't: ` : "") + r.error); if (!test && out.length) setPlaced(out.join(" · ")); return; }
+      const rr = r as { total?: number; freight?: number; live?: boolean; po?: string; warn?: string };
+      sum += rr.total || osParts.reduce((a, p) => a + p.qty * p.each, 0);
+      if (rr.freight) freight = `One Stop freight ${money(rr.freight)}`;
+      froms.push("One Stop");
+      if (!test) out.push(`One Stop ${rr.po || ""}${rr.live ? "" : " (their test system)"}`.trim());
+      if (rr.warn) setErr(rr.warn);
+    }
     setBusy("");
-    if (test) { setCheck({ total: Math.round(sum * 100) / 100, expected: dates.sort().pop() || null, from: [...new Set(froms)].join(", ") }); setSure(false); }
+    if (test) { setCheck({ total: Math.round(sum * 100) / 100, expected: dates.sort().pop() || null, from: [...new Set(froms)].join(", "), freight }); setSure(false); }
     else {
       setPlaced(out.join(" · ") || "placed");
       // the extras go back on the order as Extras lines, with why (addExtrasToOrder)
@@ -353,7 +371,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
                   const sub = here.reduce((n, p) => n + p.qty * p.each, 0);
                   const when = arrive[sk] ? dayShort(new Date(arrive[sk])) : `about ${dayShort(arriveOn(w.days))}`;
                   return (
-                    <section key={sk} className={"og-wh " + sup} style={{ ["--wc" as string]: sup === "ss" ? "var(--fbs-blue)" : "var(--fbs-salmon)" }}>
+                    <section key={sk} className={"og-wh " + sup} style={{ ["--wc" as string]: sup === "ss" ? "var(--fbs-blue)" : sup === "os" ? "var(--fbs-violet)" : "var(--fbs-salmon)" }}>
                       <div className="og-whs" aria-hidden>{supName(sup)} {w.short}</div>
                       <div className="og-whb">
                         <div className="og-whh"><b>{supName(sup)} · {w.name}</b><span>{here.reduce((n, p) => n + p.qty, 0)} pcs · {money(sub)} · {when}</span></div>
@@ -449,7 +467,11 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             <div className="field"><label htmlFor="og-po">PO name</label><input id="og-po" type="text" value={po} maxLength={GOODS_PO_MAX} placeholder={defaultGoodsPo({ orderNo, customer: who })} onChange={(e) => { setPo(e.target.value); setCheck(null); }} onBlur={(e) => setPo(cleanGoodsPo(e.target.value))} /><small className="faint">On the S&amp;S and SanMar orders and their boxes. Keep the job number first so receiving matches it.</small></div>
             {ssParts.length > 0 && <div className="field"><label htmlFor="og-ship">S&amp;S shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SS_SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>}
             {smParts.length > 0 && smOn && <div className="field"><label htmlFor="og-smship">SanMar shipping</label><select id="og-smship" value={smShip} onChange={(e) => { setSmShip(e.target.value); setCheck(null); }}>{SM_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{smShip === "psst" && <small className="faint">We&apos;re a PSST decorator: SanMar ships it its own way (usually UPS Ground), free. Ordered by 1 pm, it ships today.</small>}</div>}
-            {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
+            {osParts.length > 0 && osOn && <div className="og-2f">
+              <div className="field"><label htmlFor="og-osship">One Stop shipping</label><select id="og-osship" value={osShip} onChange={(e) => { setOsShip(e.target.value); setCheck(null); }}>{OS_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><small className="faint">From Michigan: about 3 days by ground. Its freight shows when you check.{opts?.onestopLive ? "" : " Orders go to One Stop's test system for now."}</small></div>
+              <div className="field og-cvv"><label htmlFor="og-cvv">Card CVV</label><input id="og-cvv" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} /><small className="faint">Card ending 5488. Not saved.</small></div>
+            </div>}
+            {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}{check.freight ? ` (includes ${check.freight})` : ""}. Nothing bought yet.</div>}
             {placed && smParts.length > 0 && !smOn && <div className="pv-err">Still to order on sanmar.com: {smParts.map((p) => { const x = byKey.get(p.key)!, r = opts?.sm[p.key]; return `${r?.style || x.style} ${r?.color || x.color} ${r?.size || x.size} × ${p.qty}`; }).join("; ")}</div>}
             {placed && <div className="og-done">Ordered: <b>{placed}</b>. {orderId ? <>It&apos;s linked to #{orderNo ?? ""}.</> : <>It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</>}</div>}
           </>}

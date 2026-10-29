@@ -7,23 +7,28 @@
  * skip the question.
  *   - S&S: UPS Ground is free (contract decorator network); will call is free (we pick up); the rest we pay freight.
  *   - SanMar: PSST is free (SanMar picks the carrier); will call is free; UPS air we pay freight.
+ *   - One Stop: UPS Ground is their standard (not free: its freight is on their bill, and the check shows it); faster asks.
  */
-export type GoodsSup = "ss" | "sm";
+export type GoodsSup = "ss" | "sm" | "os";
 
 export const SS_SHIP: [string, string][] = [["40", "UPS Ground (free: decorator network)"], ["14", "FedEx Ground (we pay freight)"], ["16", "UPS 3 Day Select (we pay freight)"], ["3", "UPS 2nd Day Air (we pay freight)"], ["2", "UPS Next Day Air (we pay freight)"], ["6", "Will call (we pick up)"]];
 export const SM_SHIP_OPTS: [string, string][] = [["psst", "PSST program (SanMar picks the carrier, free)"], ["6", "Will call: we pick up at SanMar Dallas"], ["3", "UPS 2nd Day Air (we pay freight)"], ["2", "UPS Next Day Air (we pay freight)"]];
 
-const FREE: Record<GoodsSup, string[]> = { ss: ["40", "6", "1", ""], sm: ["psst", "6", ""] };
-export const FREE_NAME: Record<GoodsSup, string> = { ss: "UPS Ground (contract decorator network)", sm: "PSST" };
-export const FREE_CODE: Record<GoodsSup, string> = { ss: "40", sm: "psst" };
-const SUP: Record<GoodsSup, string> = { ss: "S&S", sm: "SanMar" };
+/** One Stop (their ship-via numbers for our account): Ground is their standard (its freight is on their bill, shown by
+ *  the check); anything faster asks first, like the others */
+export const OS_SHIP_OPTS: [string, string][] = [["1", "UPS Ground (One Stop's standard)"], ["3", "UPS 3 Day Select (we pay more freight)"], ["2", "UPS 2nd Day Air (we pay more freight)"], ["10", "Customer pickup (Michigan)"]];
+
+const FREE: Record<GoodsSup, string[]> = { ss: ["40", "6", "1", ""], sm: ["psst", "6", ""], os: ["1", "10", ""] };
+export const FREE_NAME: Record<GoodsSup, string> = { ss: "UPS Ground (contract decorator network)", sm: "PSST", os: "UPS Ground" };
+export const FREE_CODE: Record<GoodsSup, string> = { ss: "40", sm: "psst", os: "1" };
+const SUP: Record<GoodsSup, string> = { ss: "S&S", sm: "SanMar", os: "One Stop" };
 
 export const shipFree = (sup: GoodsSup, code: string | null | undefined) => FREE[sup].includes(String(code ?? ""));
-export const shipName = (sup: GoodsSup, code: string) => ((sup === "ss" ? SS_SHIP : SM_SHIP_OPTS).find(([k]) => k === code)?.[1] || code).replace(/ \((we pay freight|free[^)]*)\)$/, "");
+export const shipName = (sup: GoodsSup, code: string) => ((sup === "ss" ? SS_SHIP : sup === "os" ? OS_SHIP_OPTS : SM_SHIP_OPTS).find(([k]) => k === code)?.[1] || code).replace(/ \((we pay (more )?freight|free[^)]*|One Stop's standard)\)$/, "");
 
 /** one line per supplier that's set to paid shipping, for the question */
 export function paidShipLines(picks: { sup: GoodsSup; code: string }[]): string[] {
-  return picks.filter((p) => !shipFree(p.sup, p.code)).map((p) => `${SUP[p.sup]}: ${shipName(p.sup, p.code)}. Our free way is ${FREE_NAME[p.sup]}.`);
+  return picks.filter((p) => !shipFree(p.sup, p.code)).map((p) => `${SUP[p.sup]}: ${shipName(p.sup, p.code)}. Our ${p.sup === "os" ? "usual" : "free"} way is ${FREE_NAME[p.sup]}.`);
 }
 
 /** the server's check: a real order on paid shipping needs the person to have said yes to paying for it */

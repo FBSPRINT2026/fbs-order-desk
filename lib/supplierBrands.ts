@@ -11,18 +11,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * unknown brand is looked up everywhere, as before. Brands are compared loosely ("Port & Co" = "Port & Company",
  * "Bella + Canvas" = "BELLA+CANVAS", "Next Level Apparel" = "Next Level").
  */
-export type Sup = "ss" | "sm";
+export type Sup = "ss" | "sm" | "os";
 export const brandKey = (b: string) => String(b || "").toLowerCase().replace(/&|\+|\band\b/g, " ").replace(/\b(company|co|apparel|inc|brand|brands|usa)\b/g, " ").replace(/[^a-z0-9]/g, "");
 
-let memo: { at: number; ss: Set<string>; sm: Set<string> } | null = null;
+let memo: { at: number; ss: Set<string>; sm: Set<string>; os: Set<string> } | null = null;
 
-export async function supplierBrands(admin: SupabaseClient): Promise<{ ss: Set<string>; sm: Set<string> }> {
+export async function supplierBrands(admin: SupabaseClient): Promise<{ ss: Set<string>; sm: Set<string>; os: Set<string> }> {
   if (memo && Date.now() - memo.at < 30 * 60_000) return memo;
   const [{ data: st }, { data: smRows }] = await Promise.all([
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("sanmar_styles").select("brand").eq("sellable", true).limit(10000),
   ]);
-  const d = (st?.data || {}) as { ssBrands?: { at: string; list: string[] } };
+  const d = (st?.data || {}) as { ssBrands?: { at: string; list: string[] }; osBrands?: { at: string; list: string[] } };
   let ssList = d.ssBrands?.list || [];
   // S&S's brand list, refreshed weekly
   if (!ssList.length || Date.now() - Date.parse(d.ssBrands?.at || "") > 7 * 864e5) {
@@ -32,8 +32,19 @@ export async function supplierBrands(admin: SupabaseClient): Promise<{ ss: Set<s
       await admin.from("settings").update({ data: { ...(st?.data || {}), ssBrands: { at: new Date().toISOString(), list: fresh } } }).eq("id", 1);
     }
   }
+  // One Stop's makers (their "mills"), refreshed weekly
+  let osList = d.osBrands?.list || [];
+  if (!osList.length || Date.now() - Date.parse(d.osBrands?.at || "") > 7 * 864e5) {
+    const { osBrandNames, osConfigured } = await import("@/lib/onestop");
+    const fresh = osConfigured() ? await osBrandNames().catch(() => [] as string[]) : [];
+    if (fresh.length) {
+      osList = fresh;
+      const { data: cur } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      await admin.from("settings").update({ data: { ...(cur?.data || {}), osBrands: { at: new Date().toISOString(), list: fresh } } }).eq("id", 1);
+    }
+  }
   const smList = [...new Set(((smRows || []) as { brand: string }[]).map((x) => x.brand))];
-  memo = { at: Date.now(), ss: new Set(ssList.map(brandKey).filter(Boolean)), sm: new Set(smList.map(brandKey).filter(Boolean)) };
+  memo = { at: Date.now(), ss: new Set(ssList.map(brandKey).filter(Boolean)), sm: new Set(smList.map(brandKey).filter(Boolean)), os: new Set(osList.map(brandKey).filter(Boolean)) };
   return memo;
 }
 
@@ -47,7 +58,7 @@ async function ssBrandNames(): Promise<string[]> {
 }
 
 /** does this supplier carry this brand? unknown (no brand, or the supplier's list isn't in) = yes, look it up */
-export function carries(b: { ss: Set<string>; sm: Set<string> }, sup: Sup, brand: string): boolean {
+export function carries(b: { ss: Set<string>; sm: Set<string>; os: Set<string> }, sup: Sup, brand: string): boolean {
   const k = brandKey(brand), set = b[sup];
   if (!k || !set.size) return true;
   if (set.has(k)) return true;

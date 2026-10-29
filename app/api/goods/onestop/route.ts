@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
-import { osBrandNames, osConfigured, osOrdersLive, osPrices, osSetup, osStyle } from "@/lib/onestop";
+import { osBrandNames, osConfigured, osOrdersLive, osPing, osPrices, osSetup, osStyle } from "@/lib/onestop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   const brand = sp.get("brand") || "Next Level", style = sp.get("style") || "6210";
   const out: Record<string, unknown> = { orders: osOrdersLive() ? "live" : "test system" };
   const step = async (k: string, f: () => Promise<unknown>) => { try { out[k] = await f(); } catch (e) { out[k] = { error: e instanceof Error ? e.message : String(e) }; } };
+  await step("ping", osPing);
   await step("brands", async () => { const b = await osBrandNames(); return { count: b.length, some: b.slice(0, 40) }; });
   let codes: string[] = [];
   await step("style", async () => { const it = await osStyle(admin, brand, style); codes = it.slice(0, 6).map((x) => x.code); return { found: it.length, colors: [...new Set(it.map((x) => x.color))].slice(0, 30), sample: it.slice(0, 6) }; });

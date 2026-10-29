@@ -15648,3 +15648,6 @@ button.panel-h.osp-fold[aria-expanded="false"]{border-bottom:0}
 .ogp-add textarea{min-height:56px;font-size:13px}
 .ogp-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .ogp-acts{display:flex;justify-content:flex-end;gap:6px}
+/* Order goods: One Stop's shipping and the card's CVV side by side (Oct 29) */
+.og-2f{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:10px;align-items:start}
+.og-cvv input{letter-spacing:.2em}

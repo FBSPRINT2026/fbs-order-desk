@@ -19,13 +19,22 @@ import { startTracker } from "@/lib/goodsTrack";
  */
 const LIVE = "https://api.onestopinc.com/";
 const TEST = "https://api-test.onestopinc.com/";
-export const osConfigured = () => !!process.env.ONESTOP_API_TOKEN?.trim();
+/** the token as pasted: just the code, even if "Token …", quotes or spaces came along with it */
+const osToken = () => String(process.env.ONESTOP_API_TOKEN || "").trim().replace(/^["']|["']$/g, "").replace(/^(authorization:\s*)?token\s+/i, "").replace(/\s+/g, "");
+export const osConfigured = () => !!osToken();
 export const osOrdersLive = () => process.env.ONESTOP_ORDERS?.trim().toLowerCase() === "on";
 
 export class OneStopError extends Error {}
 
+/** is the token good, and on which of their systems (a token from their test dashboard only works on test)? */
+export async function osPing(): Promise<{ live: string; test: string; token: { length: number; hex: boolean } }> {
+  const t = osToken();
+  const one = async (test: boolean) => { try { await os("ping/", { test }); return "ok"; } catch (e) { return e instanceof Error ? e.message : String(e); } };
+  return { live: await one(false), test: await one(true), token: { length: t.length, hex: /^[0-9a-f]+$/i.test(t) } };
+}
+
 async function os<T>(path: string, init?: { method?: "GET" | "POST"; body?: unknown; test?: boolean; timeoutMs?: number }): Promise<T> {
-  const token = process.env.ONESTOP_API_TOKEN?.trim();
+  const token = osToken();
   if (!token) throw new OneStopError("One Stop isn't connected (ONESTOP_API_TOKEN in Vercel).");
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), init?.timeoutMs || 25_000);

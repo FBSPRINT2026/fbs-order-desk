@@ -5,6 +5,7 @@ import { goodsCheck } from "@/lib/goodsTrack";
 import { resolvePending } from "@/lib/manifest";
 import { aiMatchPending } from "@/lib/goodsAi";
 import { checkManifestMail } from "@/lib/manifestMail";
+import { osTrackingPass } from "@/lib/onestop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,10 +40,12 @@ async function go(admin: ReturnType<typeof createAdminClient>, opts: { force?: b
   try {
     // 0. the supplier manifests in the shipping mailbox (Goods & Receiving → Settings), imported once each
     const manifests = await checkManifestMail(admin, { deadline: Date.now() + 60000 }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // 0b. One Stop doesn't email manifests: its tracking for our open One Stop orders, from their API
+    const onestop = await osTrackingPass(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const tracking = await goodsCheck(admin, Date.now() + 40000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const rules = await resolvePending(admin, Date.now() + 70000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const ai = await aiMatchPending(admin, end, { max: opts.max ?? 25, force: opts.force });
-    return NextResponse.json({ ...ai, rules, tracking });
+    return NextResponse.json({ ...ai, rules, tracking, onestop });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   finally { await admin.rpc("printavo_sync_release", { p_job: "goods-ai" }); }
