@@ -51,6 +51,9 @@ type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
 type State = Exclude<Filter, "all">;
 type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string; note?: string; changes?: { what: string; from: string; to: string; needle?: number }[] | null };
+/** a logo's sew-outs on any order, to show each stitch file version's approval (Oct 29, Nick: "once we get approval…
+ *  version 2 gets approved. There should be a note… approved 10/29 for order…") */
+type DSw = { id: string; design_id: string; status: string; decided_at: string | null; sent_at: string | null; created_at: string; archived_at: string | null; sewn?: { file?: { path?: string } | null } | null; orders?: { number: number } | null };
 /** an email to the digitizer sent from a mailbox outside the portal that couldn't be put on an order by itself */
 type Outside = { id: string; subject: string; from_email: string; occurred_at: string; meta: { account?: string } | null };
 const embOf = (d: Design | null): EmbSpecs => ((d?.specs as { embroidery?: EmbSpecs } | null)?.embroidery) || {};
@@ -70,6 +73,7 @@ export default function Digitizing() {
   const [sws, setSws] = useState<Sw[]>([]), [swUrls, setSwUrls] = useState<Record<string, string>>({}), [msg, setMsg] = useState("");
   // the threads on the wall (for "What we sewed"), which orders have a proof, and emails to the digitizer to place
   const [stock, setStock] = useState<string[]>([]), [proofed, setProofed] = useState<Set<string>>(new Set()), [outside, setOutside] = useState<Outside[]>([]);
+  const [dsws, setDsws] = useState<DSw[]>([]);
 
   async function load() {
     const sb = createClient();
@@ -82,12 +86,14 @@ export default function Digitizing() {
     // the sew-outs on these orders, newest first, with their photos (read before the list shows, so each print's state is right)
     const { data: sw } = os.length ? await sb.from("sewouts").select("*").in("order_id", os.map((o) => o.id)).order("version", { ascending: false }) : { data: [] };
     const list = (sw || []) as Sw[];
-    const [{ data: st }, { data: pf }, { data: mk }, { data: ox }] = await Promise.all([
+    const [{ data: st }, { data: pf }, { data: mk }, { data: ox }, { data: ds2 }] = await Promise.all([
       sb.from("stock_threads").select("line, code").is("archived_at", null),
       os.length ? sb.from("proofs").select("order_id").in("order_id", os.map((o) => o.id)) : Promise.resolve({ data: [] }),
       os.length ? sb.from("mockups").select("order_id").in("order_id", os.map((o) => o.id)).is("archived_at", null) : Promise.resolve({ data: [] }),
       sb.from("activities").select("id, subject, from_email, occurred_at, meta").is("order_id", null).eq("meta->>digitize_unplaced", "true").gte("occurred_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(20),
+      ids.length ? sb.from("sewouts").select("id, design_id, status, decided_at, sent_at, created_at, archived_at, sewn, orders(number)").in("design_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ]);
+    setDsws(((ds2 || []) as unknown as DSw[]));
     setStock(((st || []) as { line: string; code: string }[]).map((r) => stockKey(r.line, r.code)));
     setProofed(new Set([...((pf || []) as { order_id: string }[]), ...((mk || []) as { order_id: string }[])].map((r) => r.order_id)));
     setOutside((ox || []) as Outside[]);
@@ -220,7 +226,7 @@ export default function Digitizing() {
                 const ctx: SewCtx = { files: e.files || (f ? [f] : []), current: f?.path, inks: it.im.inks || "", size: it.im.size || "", stitches: it.im.stitches || undefined, stock };
                 return (
                   <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={(requestOf(it.im, it.d) as EmbSpecs["request"]) || undefined} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
-                    ctx={ctx} noProof={!proofed.has(it.o.id)} onUse={(set) => void useFile(it, set)}
+                    ctx={ctx} noProof={!proofed.has(it.o.id)} onUse={(set) => void useFile(it, set)} dsws={it.d ? dsws.filter((x) => x.design_id === it.d!.id) : []}
                     canEdit={canEdit} busy={busy === it.key} text={requestText(it)} reply={e.reply || null} onSend={() => setTool({ orderId: it.o.id, imprintId: it.im.id })} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)}
                     sws={swOf(it)} swUrls={swUrls} onSew={(m) => { setMsg(m); setTimeout(() => setMsg(""), 6000); void load(); }} />
                 );
@@ -239,7 +245,7 @@ const CHG_OUTRO = "Please send back the updated DST, EMB and worksheet. Thank yo
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
-function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, reply, onSend, onAsked, onDst, sws, swUrls, onSew, ctx, noProof, onUse }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; reply: EmbSpecs["reply"]; onSend: () => void; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void; ctx: SewCtx; noProof: boolean; onUse: (f: EmbFile) => void }) {
+function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, reply, onSend, onAsked, onDst, sws, swUrls, onSew, ctx, noProof, onUse, dsws }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; reply: EmbSpecs["reply"]; onSend: () => void; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void; ctx: SewCtx; noProof: boolean; onUse: (f: EmbFile) => void; dsws: DSw[] }) {
   // their files, from the email they came on, added like files dropped in
   const [taking, setTaking] = useState(false);
   async function takeReply() {
@@ -334,17 +340,33 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                 </div>
                 {/* every version of the stitch file, oldest first (Oct 29, Nick: "show version one, which was 6 inches wide…
                     version two, which is 4.02"): a resize or a fix is the next version, and the order says which one it sews */}
-                {(ctx.files.length > 1) && <div className="dgz-vers">
-                  <div className="imp-l">Versions</div>
-                  {[...sewVersions(ctx.files)].reverse().map((x) => { const on = x.path === f?.path; return (
-                    <div key={x.path} className={"dgz-ver" + (on ? " on" : "")}>
-                      <b>Version {x.v}</b>
-                      <span>{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()} stitches · {x.at ? day(x.at) : ""}</span>
-                      <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: x.path, n: x.name })}`} target="_blank" rel="noreferrer">DST</a>
-                      {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }}><span className="pill-t">On this order</span></span>
-                        : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}
-                    </div>); })}
-                </div>}
+                {(ctx.files.length > 1 || dsws.length > 0) && (() => {
+                  const vers = sewVersions(ctx.files as EmbFile[]);
+                  // which version a sew-out sewed: its own record, else the newest file it could have been
+                  const verOf = (x: DSw) => x.sewn?.file?.path ? vers.find((v) => v.path === x.sewn!.file!.path) : [...vers].reverse().find((v) => (v.at || "") <= x.created_at);
+                  const open = (p: string, n: string) => `/api/files/open?${new URLSearchParams({ p, n })}`;
+                  return <div className="dgz-vers">
+                    <div className="imp-l">Versions</div>
+                    {[...vers].reverse().map((x) => { const on = x.path === f?.path; const notes = dsws.filter((y) => verOf(y)?.path === x.path && !(y.archived_at && y.status === "pending")); return (
+                      <div key={x.path} className="dgz-vrow">
+                        <div className={"dgz-ver" + (on ? " on" : "")}>
+                          <b>Version {x.v}</b>
+                          <span>{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()} stitches · {x.at ? day(x.at) : ""}</span>
+                          {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }}><span className="pill-t">On this order</span></span>
+                            : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}
+                          <span className="dgz-vfiles">
+                            <a className="btn sm" href={open(x.path, x.name)} target="_blank" rel="noreferrer">DST</a>
+                            {x.emb ? <a className="btn sm" href={open(x.emb.path, x.emb.name)} target="_blank" rel="noreferrer">EMB (Hatch)</a> : <span className="btn sm dgz-vnone" title="The EMB didn't come with this version">No EMB</span>}
+                            {x.sheet ? <a className="btn sm" href={open(x.sheet.path, x.sheet.name)} target="_blank" rel="noreferrer">Worksheet</a> : <span className="btn sm dgz-vnone" title="The worksheet didn't come with this version">No worksheet</span>}
+                          </span>
+                        </div>
+                        {notes.map((y) => { const n = y.orders?.number ? ` for order #${y.orders.number}` : ""; const dt = (s: string | null) => (s ? new Date(s).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/Chicago" }) : "");
+                          return <div key={y.id} className={"dgz-vnote " + (y.status === "approved" ? "ok" : y.status === "changes" ? "bad" : "wait")}>
+                            {y.status === "approved" ? `✓ Sew-out approved ${dt(y.decided_at)}${n}` : y.status === "changes" ? `Changes asked ${dt(y.decided_at)}${n}` : y.sent_at ? `Sew-out sent ${dt(y.sent_at)}${n} · waiting` : `Sew-out saved ${dt(y.created_at)}${n} · not sent yet`}
+                          </div>; })}
+                      </div>); })}
+                  </div>;
+                })()}
                 {chg !== null && <div className="dgz-chg">
                   {/* only what needs to change is typed; the thanks before it and the ask after it are always the same
                       (Oct 28, Nick: "just put what we need to change… the middle part would only be changeable") */}

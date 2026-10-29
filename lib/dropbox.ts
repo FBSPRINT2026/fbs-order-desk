@@ -81,3 +81,10 @@ export async function uploadFile(admin: SupabaseClient, path: string, bytes: Uin
   }
   return r.json() as Promise<DbxEntry>;
 }
+
+/** files whose name matches, anywhere in the Dropbox (newest first), optionally only these extensions */
+export async function searchFiles(admin: SupabaseClient, query: string, exts: string[] = [], max = 60): Promise<DbxEntry[]> {
+  const r = await api<{ matches: { metadata: { metadata: DbxEntry } }[] }>(admin, "files/search_v2", { query: query.slice(0, 200), options: { max_results: Math.min(max, 1000), file_status: "active", filename_only: true, ...(exts.length ? { file_extensions: exts } : {}) } });
+  return (r.matches || []).map((m) => m.metadata?.metadata).filter((x): x is DbxEntry => !!x && x[".tag"] === "file")
+    .sort((a, b) => (b.server_modified || "").localeCompare(a.server_modified || ""));
+}

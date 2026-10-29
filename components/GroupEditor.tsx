@@ -23,7 +23,8 @@ import { mainSize, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 export const saveFinishing = (wholesale: boolean) => async (f: { name: string; price: number }) =>
   fetch("/api/settings/finishing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...f, wholesale }) }).then((r) => r.ok).catch(() => false);
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { digitizeStamp, digitizeState, digitizingHref, type DgzSewout } from "@/lib/digitizeStatus";
+import { digitizeStamp, digitizeState, digitizingHref, embSpecsOf, type DgzSewout } from "@/lib/digitizeStatus";
+import DigitizedFinder from "@/components/DigitizedFinder";
 
 type Props = {
   /** the order (staff): its prints' digitizing stamps open them on the Digitizing page */ orderId?: string;
@@ -109,6 +110,12 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   }).map((x) => x.i) : [];
   useEffect(() => { if (specFromCatalog.length) update((x) => { for (const i of specFromCatalog) if (x.lines[i]) x.lines[i].specialty = true; }); }, [specFromCatalog.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const [askSkip, setAskSkip] = useState(false);
+  // "Already digitized?" open for one print (components/DigitizedFinder.tsx)
+  const [finder, setFinder] = useState<string | null>(null);
+  /** the print has a stitch file: its own, or its logo's from before */
+  const hasSewFile = (d: Imprint) => !!d.emb?.file || !!(embSpecsOf((designs || []).find((x) => x.id === d.design_id)).files || []).length;
+  const finderFor = finder ? g.imprints.find((x) => x.id === finder) : null;
+  const finderDesign = finderFor?.design_id ? (designs || []).find((x) => x.id === finderFor.design_id) || null : null;
   // a price typed on one line: the rest of the group too? (Oct 20, Nick: "change the price to 2.25… a quick pop-up: do
   // you want to change all the items on this group to 2.25?")
   const [askAll, setAskAll] = useState<null | { li: number; v: number }>(null);
@@ -566,6 +573,23 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   })();
   return (
     <section className={"line" + (hidePrices ? " np" : "") + (fixed ? " fixed" : "")}>
+      {finderFor && <DigitizedFinder designId={finderDesign?.id || null}
+        where={[finderFor.location, finderDesign ? designLabel(finderDesign) : "", g.name || ""].filter(Boolean).join(" · ")}
+        hint={(finderDesign?.name || g.name || "").replace(/\b(mockup|front|back|left|right|chest|logo|final|copy)\b/gi, " ").replace(/\s+/g, " ").trim()}
+        onClose={() => setFinder(null)}
+        onDone={(set, _info, sewout) => {
+          const di = g.imprints.findIndex((x) => x.id === finderFor.id);
+          // the print sews this file: its size and stitches are the file's, and with no sew-out it's ready to sew
+          update((x) => {
+            const im = x.imprints[di]; if (!im) return;
+            im.emb = { ...(im.emb || {}), stitchesFrom: "file", file: set };
+            im.stitches = set.stitches;
+            const w = /(\d+(?:\.\d+)?)/.exec(im.size || "");
+            if (set.wIn && (!w || Math.abs(+w[1] - set.wIn) > 0.05)) im.size = `${Math.round(set.wIn * 100) / 100}" wide`;
+            if (sewout) delete im.digitized; else im.digitized = true;
+          });
+          setFinder(null);
+        }} />}
       <div className="line-h">
         <input type="text" className="grp-name" readOnly={fixed} aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {/* the group description, right on the group's line (Oct 22, Nick: "move it where you have the add group
@@ -843,7 +867,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1032,7 +1056,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                       {/* the one digitizing fee (lib/pricing.ts digitizingFee): $40, plus $1 a started 1,000 past 6,000 (Oct 28, Nick) */}
                       {!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")} title={d.digitized ? "Digitized before: no charge" : d.digitizeFee != null ? "Set by hand" : `${money(wpl.digitizing)} base${(d.stitches || 0) > (wpl.digStitches ?? 6000) ? ` + ${Math.ceil(((d.stitches || 0) - (wpl.digStitches ?? 6000)) / 1000)} × ${money(wpl.digPer1k ?? 1)} for the stitches past ${(wpl.digStitches ?? 6000).toLocaleString()}` : ""}`}>{money(digitizingFee(d, wpl))}</b>}
                       {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
-                      <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
+                      <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); if (e.target.checked && !hasSewFile(d)) { setFinder(d.id); return; } update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
                   ))}
                   {(wpl.embSpecialty?.length || 0) > 0 && g.lines.some((l) => (l.style || "").trim()) && (() => {
                     const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
@@ -1415,7 +1439,7 @@ function ChangeTile({ d, url, color, hex, swap, sym, own }: { d: Group["imprints
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout }: { /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout, onFind }: { /** "Already digitized?": find the print's existing stitch files (components/DigitizedFinder.tsx) */ onFind?: () => void; /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string>; url?: string; to?: string }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
@@ -1513,6 +1537,9 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           : <span className={"dgz-st dgz-st-" + dgz.tone}><b>{dgz.title}</b><small>{dgz.sub}</small></span>)}
         {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
+        {/* the logo was digitized before: bring its files in instead (Oct 29, Nick: "already digitized question mark…
+            all the way at the bottom of that") */}
+        {dgz?.gray && onFind && <button type="button" className="btn sm pr-dgz-find" onClick={onFind} title="Find its DST, EMB and worksheet in the email, Dropbox or this computer">Already digitized?</button>}
         {printNotes(d.notes) && <div className="pr-notes">{printNotes(d.notes)}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>{confirmTitle(d.confirm.why)}</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}</div>}
       </div>

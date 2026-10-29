@@ -175,7 +175,7 @@ export async function dismissDigitizeEmail(admin: SupabaseClient, activityId: st
 }
 
 /** a message from a mailbox, read whole (attachments too): Exchange by its id, else the mail server by folder and uid */
-async function readWhole(admin: SupabaseClient, acct: MailAccount, folder: string, uid: number, messageId: string): Promise<MailMsg | null> {
+export async function readWhole(admin: SupabaseClient, acct: MailAccount, folder: string, uid: number, messageId: string): Promise<MailMsg | null> {
   const { simpleParser } = await import("mailparser");
   const { toMsg } = await import("@/lib/mail/imap");
   const { ewsReady, ewsMimeByMessageId } = await import("@/lib/mail/ewsBox");

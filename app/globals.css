@@ -10425,7 +10425,7 @@ div.prod-kind{border:0;padding:0}
 .arc-lines{display:flex;flex-direction:column;gap:3px;padding-left:4px}
 /* a visual-only print on the order page: greyed under a big stamp (Oct 20) */
 .pr.pr-vis{position:relative}
-.pr.pr-vis>*:not(.pr-vis-stamp):not(.dla-bg){opacity:.38;filter:grayscale(1);pointer-events:none;user-select:none}
+.pr.pr-vis>*:not(.pr-vis-stamp):not(.dla-bg):not(.pr-main),.pr.pr-vis>.pr-main>*:not(.pr-dgz-find){opacity:.38;filter:grayscale(1);pointer-events:none;user-select:none}
 .pr-vis-stamp{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;font:inherit;padding:0}
 .pr-vis-stamp>span{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 18px 7px;border:3px solid #6b6f76;border-radius:8px;background:rgba(255,255,255,.88);color:#4a4e55;text-transform:uppercase;letter-spacing:.06em;transform:rotate(-3deg)}
 .pr-vis-stamp b{font-size:20px;font-weight:900;line-height:1.1}
@@ -15725,3 +15725,39 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .dgz-sewn{color:var(--warn)!important}
 .dgz-out .tbl select{height:32px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;max-width:320px}
 .nowrap{white-space:nowrap}
+/* "Already digitized?" under a print waiting on digitizing, and its finder (components/DigitizedFinder.tsx) */
+.pr-dgz-find{align-self:flex-start;margin-top:6px;position:relative;z-index:2}
+.dla.dgf{width:min(680px,100%)}
+.dgf-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 6px}
+.dgf-q{display:flex;gap:6px;flex:1;min-width:220px}
+.dgf-q input{flex:1;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink)}
+.dgf-hint{font-size:12px;margin:2px 0 6px}
+.dgf-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.dgf-hit{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px}
+.dgf-hit:hover{border-color:var(--accent)}
+.dgf-hit.on{border-color:var(--accent);background:var(--accent-soft)}
+.dgf-hit[disabled]{cursor:progress}
+.dgf-t .faint{font-size:12px}
+.dgf-files{display:flex;flex-wrap:wrap;gap:4px}
+.dgf-files span{font-size:11.5px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--surface)}
+.dgf-path{font-size:11.5px;word-break:break-all}
+.dgf-drop{display:flex;flex-direction:column;align-items:center;gap:4px;border:2px dashed var(--line);border-radius:8px;padding:22px;cursor:pointer;text-align:center}
+.dgf-drop:hover{border-color:var(--accent)}
+.dgf-pack{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 8px}
+.dgf-slot{border:1px solid var(--line);border-radius:6px;padding:7px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dgf-slot b{font-size:13px}
+.dgf-slot .faint{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dgf-slot.ok b{color:var(--ok)}
+.dgf-read{font-size:12.5px;background:var(--surface-2);border-radius:6px;padding:8px 10px}
+.dgf-miss{color:var(--warn)}
+.dgf-ask{display:flex;flex-direction:column;gap:6px;margin-top:10px;border:1.5px solid var(--accent);border-radius:8px;padding:10px 12px}
+@media (max-width:560px){.dgf-pack{grid-template-columns:1fr}}
+.dgz-vrow{display:flex;flex-direction:column;gap:4px;padding:6px 0;border-top:1px solid var(--line-2)}
+.dgz-vrow:first-of-type{border-top:0}
+.dgz-vfiles{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.dgz-vnone{opacity:.5;cursor:default}
+.dgz-vnote{font-size:12.5px;border-radius:6px;padding:4px 10px;width:fit-content;margin-left:82px}
+.dgz-vnote.ok{background:var(--ok-soft);color:var(--ok)}
+.dgz-vnote.wait{background:var(--warn-soft);color:var(--warn)}
+.dgz-vnote.bad{background:var(--danger-soft);color:var(--danger)}
+@media (max-width:640px){.dgz-vnote{margin-left:0}}
