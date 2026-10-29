@@ -27,7 +27,7 @@ export const osOrdersLive = () => process.env.ONESTOP_ORDERS?.trim().toLowerCase
 export class OneStopError extends Error {}
 
 /** is the token good, and on which of their systems (a token from their test dashboard only works on test)? */
-export async function osPing(): Promise<{ live: string; test: string; token: { length: number; hex: boolean } }> {
+export async function osPing(): Promise<{ live: string; test: string; token: { length: number; hex: boolean; otherChars: number } }> {
   const t = osToken();
   const one = async (test: boolean) => { try { await os("ping/", { test }); return "ok"; } catch (e) { return e instanceof Error ? e.message : String(e); } };
   // the token's shape only (never the token): their tokens are 40 letters and digits
