@@ -215,7 +215,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const options = useMemo(() => {
     if (!opts) return null;
     const items = wanted.map((x) => ({ key: x.key, qty: x.qty, srcs: (opts.srcs[x.key] || []).filter((s) => !ssOnly || s.sup === "ss") }));
-    return dayOptions(items, opts.fee, opts.money.bigRun);
+    return dayOptions(items, opts.fee, opts.money.bigRun, opts.osFreight ? { freeAt: opts.osFreeAt, freight: opts.osFreight } : undefined);
   }, [optKey2, opts]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setChosen(null); }, [optKey2]);
   const need = needBy ? new Date(needBy + "T23:59") : null;
@@ -231,7 +231,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const xNoReason = xRows.some((x) => !x.extra!.reason.trim());
   const extrasNote = xPcs ? <p className="og-note og-xn">{[...new Set(xRows.map(gkOf))].map((gk) => { const rs = xRows.filter((x) => gkOf(x) === gk), e = rs[0].extra!; return `${rs.reduce((a, x) => a + x.qty, 0)} extra ${rs[0].style} ${rs[0].color} (${rs.map((x) => `${x.qty} ${x.size}`).join(", ")}): ${e.reason || "say what it's for"}, ${e.print ? "printed" : "not printed"}, ${e.free ? "no charge" : "charged"}`; }).join(" · ")}. Goes on the order as Extras when it's placed.</p> : null;
   const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : []), ...(osParts.length && osOn ? [{ sup: "os" as const, code: osShip }] : [])]);
+  const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : []), ...(osParts.length && osOn ? [{ sup: "os" as const, code: osShip, amount: osParts.reduce((a, p) => a + p.qty * p.each, 0) }] : [])]);
   async function run(test: boolean, paidOk = false) {
     if (!plan) return;
     if (!test && !paidOk) { const pl = paidLines(); if (pl.length) { setPaidAsk(pl); return; } }
@@ -445,6 +445,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             })}
             </>}
             {skipped.length > 0 && <p className="faint og-note">Left for now (no blank picked): {skipped.join(", ")}.</p>}
+            {(plan as { topUp?: { pcs: number; extra: number; freight: number; amount: number } } | null)?.topUp && (() => { const t = (plan as unknown as { topUp: { pcs: number; extra: number; freight: number; amount: number } }).topUp; return <p className="og-note">Moved {t.pcs} pc{t.pcs === 1 ? "" : "s"} to One Stop to reach $175 for free ground: {money(t.extra)} more in goods instead of about {money(t.freight)} freight.</p>; })()}
             <div className="og-tot"><span>{xPcs ? `${(pcs - xPcs).toLocaleString()} for the order + ${xPcs} extra` : `${pcs.toLocaleString()} pcs`}{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{plan ? money(total) : "…"}</b></div>
             {owner && plan && opts && plan.parts.length > 0 && <>
               <button type="button" className={"og-pts" + (smParts.length ? "" : " none")} aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
@@ -468,7 +469,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             {ssParts.length > 0 && <div className="field"><label htmlFor="og-ship">S&amp;S shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SS_SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>}
             {smParts.length > 0 && smOn && <div className="field"><label htmlFor="og-smship">SanMar shipping</label><select id="og-smship" value={smShip} onChange={(e) => { setSmShip(e.target.value); setCheck(null); }}>{SM_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{smShip === "psst" && <small className="faint">We&apos;re a PSST decorator: SanMar ships it its own way (usually UPS Ground), free. Ordered by 1 pm, it ships today.</small>}</div>}
             {osParts.length > 0 && osOn && <div className="og-2f">
-              <div className="field"><label htmlFor="og-osship">One Stop shipping</label><select id="og-osship" value={osShip} onChange={(e) => { setOsShip(e.target.value); setCheck(null); }}>{OS_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><small className="faint">From Michigan: about 3 days by ground. Its freight shows when you check.{opts?.onestopLive ? "" : " Orders go to One Stop's test system for now."}</small></div>
+              <div className="field"><label htmlFor="og-osship">One Stop shipping</label><select id="og-osship" value={osShip} onChange={(e) => { setOsShip(e.target.value); setCheck(null); }}>{OS_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><small className="faint">From Grand Rapids, MI: about 3 days by ground. {osParts.reduce((a, p) => a + p.qty * p.each, 0) >= 175 ? "Ground is free (over $175)." : `Under $175 (${money(osParts.reduce((a, p) => a + p.qty * p.each, 0))}): they charge ground freight; it shows when you check.`}{opts?.onestopLive ? "" : " Orders go to One Stop's test system for now."}</small></div>
               <div className="field og-cvv"><label htmlFor="og-cvv">Card CVV</label><input id="og-cvv" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} /><small className="faint">Card ending 5488. Not saved.</small></div>
             </div>}
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}{check.freight ? ` (includes ${check.freight})` : ""}. Nothing bought yet.</div>}

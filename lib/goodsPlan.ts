@@ -12,7 +12,7 @@
  */
 /** S&S, SanMar, and One Stop (the third choice: only for what the first two can't fill; lib/onestop.ts) */
 export type Sup = "ss" | "sm" | "os";
-export type Src = { sup: Sup; wh: string; stock: number; price: number };
+export type Src = { sup: Sup; wh: string; stock: number; price: number; /** offered only to reach a supplier's free-shipping amount (One Stop's $175), never planned on its own */ topUp?: boolean };
 export type PlanItem = { key: string; qty: number; srcs: Src[] };
 export type PlanMode = "easy" | "cheap" | "fast";
 export type Part = { key: string; sup: Sup; wh: string; qty: number; each: number; days: number };
@@ -29,7 +29,7 @@ export const SM_WH: Record<string, [string, string, number]> = {
   "3": ["Dallas, TX", "Dallas", 1], "12": ["Phoenix, AZ", "Phoenix", 2], "2": ["Cincinnati, OH", "Cincinnati", 3], "7": ["Minneapolis, MN", "Minneapolis", 3],
   "6": ["Jacksonville, FL", "Jacksonville", 3], "31": ["Richmond, VA", "Richmond", 3], "4": ["Reno, NV", "Reno", 3], "5": ["Robbinsville, NJ", "Robbinsville", 4], "1": ["Seattle, WA", "Seattle", 4],
 };
-/** One Stop ships from Michigan: UPS Ground to us is about 3 business days (Oct 29, Nick: "the shipping takes a long time") */
+/** One Stop ships from Grand Rapids, MI 49544 (Oct 29, Nick): UPS Ground to Richardson is 3 business days ("the shipping takes a long time") */
 export const OS_WH: Record<string, [string, string, number]> = { MI: ["Michigan (One Stop)", "One Stop", 3] };
 export const supName = (s: Sup) => (s === "ss" ? "S&S" : s === "os" ? "One Stop" : "SanMar");
 export const whInfo = (sup: Sup, wh: string): { name: string; short: string; days: number } => {
@@ -126,7 +126,8 @@ export function makePlan(items: PlanItem[], mode: PlanMode, feePct: number): Pla
  * goods here sooner is its own option ("the majority of the goods here Wednesday and one box Thursday… so that we can
  * start running it"). Shipping is free at both suppliers: only the goods and SanMar's card fee count (points come back
  * on both, the same share of what's paid, so they never change the order of the options). */
-export type DayOption = Plan & { kind: "full" | "early"; start: number; startPcs: number; pcs: number };
+export type DayOption = Plan & { kind: "full" | "early"; start: number; startPcs: number; pcs: number; /** pieces moved to One Stop to reach its free shipping */ topUp?: TopUp };
+export type TopUp = { pcs: number; extra: number; freight: number; amount: number };
 export type Pick = { option: DayOption; i: number; why: string; tone: "best" | "trade"; cheapest: DayOption; late: boolean };
 
 const startOf = (p: Plan, share = 0.8) => {
@@ -137,7 +138,49 @@ const startOf = (p: Plan, share = 0.8) => {
   return { start: p.days, startPcs: pcs, pcs };
 };
 
-export function dayOptions(items: PlanItem[], feePct: number, bigRun = 250): DayOption[] {
+export function dayOptions(items: PlanItem[], feePct: number, bigRun = 250, top?: { freeAt: number; freight: number }): DayOption[] {
+  const out = dayOptions0(items.map((i) => ({ ...i, srcs: i.srcs.filter((s) => !s.topUp) })), feePct, bigRun);
+  return top ? out.map((o) => osTopUp(o, items, feePct, top.freeAt, top.freight)) : out;
+}
+
+/**
+ * One Stop's free ground starts at $175 (Oct 29, Nick: "if it's 40 cents more at One Stop per item and we need to add 10
+ * more items for $4 to avoid $30 shipping, we would do that"). When a plan already buys something from One Stop (a size
+ * the others are out of) but under $175, move pieces One Stop also has from the other suppliers, the ones that cost the
+ * least more first, until it reaches $175, and keep that only when the extra is less than the freight it saves.
+ * `freight`: what One Stop charges for ground under $175, learned from their checks (goodsOptions).
+ */
+export function osTopUp<T extends Plan & { topUp?: TopUp }>(p: T, items: PlanItem[], feePct: number, freeAt: number, freight: number): T {
+  const osAmt = p.parts.filter((x) => x.sup === "os").reduce((a, x) => a + x.qty * x.each, 0);
+  if (!osAmt || osAmt >= freeAt - 0.005 || freight <= 0) return p;
+  const used = new Map<string, number>();
+  for (const x of p.parts) if (x.sup === "os") used.set(x.key, (used.get(x.key) || 0) + x.qty);
+  const cands = p.parts.filter((x) => x.sup !== "os").map((x) => {
+    const src = items.find((i) => i.key === x.key)?.srcs.find((s) => s.sup === "os" && s.stock > 0);
+    return src ? { part: x, src, left: src.stock - (used.get(x.key) || 0), per: (src.price - x.each) / src.price } : null;
+  }).filter((c): c is NonNullable<typeof c> => !!c && c.left > 0).sort((a, b) => a.per - b.per);
+  let amt = osAmt, extra = 0, pcs = 0;
+  const moves: { part: Part; src: Src; n: number }[] = [];
+  for (const c of cands) {
+    if (amt >= freeAt - 0.005) break;
+    const n = Math.min(c.part.qty, c.left, Math.ceil((freeAt - amt) / c.src.price));
+    if (n <= 0) continue;
+    moves.push({ part: c.part, src: c.src, n });
+    amt += n * c.src.price; extra += n * (c.src.price - c.part.each); pcs += n;
+  }
+  if (amt < freeAt - 0.005 || extra >= freight) return p;
+  const parts: Part[] = p.parts.map((x) => ({ ...x }));
+  for (const m of moves) {
+    const from = parts.find((x) => x.key === m.part.key && x.sup === m.part.sup && x.wh === m.part.wh)!;
+    from.qty -= m.n;
+    const to = parts.find((x) => x.key === m.part.key && x.sup === "os");
+    if (to) to.qty += m.n; else parts.push({ key: m.part.key, sup: "os", wh: m.src.wh, qty: m.n, each: Math.round(costOf(m.src, feePct) * 10000) / 10000, days: whInfo("os", m.src.wh).days });
+  }
+  const kept = parts.filter((x) => x.qty > 0);
+  return { ...p, ...sum(p.mode, kept, p.short, feePct), topUp: { pcs, extra: Math.round(extra * 100) / 100, freight, amount: Math.round(amt * 100) / 100 } };
+}
+
+function dayOptions0(items: PlanItem[], feePct: number, bigRun = 250): DayOption[] {
   const its = items.filter((i) => i.qty > 0);
   const all = its.flatMap((i) => i.srcs.filter((s) => s.stock > 0));
   const days = [...new Set(all.map((s) => whInfo(s.sup, s.wh).days))].sort((a, b) => a - b);
