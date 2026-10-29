@@ -29,11 +29,12 @@ export function mockupArtKey(g: Pick<Group, "imprints">): string {
   return hash((g.imprints || []).map((im) => stable([im.id, im.design_id || "", im.method || "", (im.location || "").trim(), (im.size || "").trim(), String(im.drop ?? "").trim(), (im.inks || "").trim(), im.inkMap?.map || null, im.inkBy || null, im.emb?.file?.path || ""])).join("|"));
 }
 
-export type MockupArt = { k: string; /** each logo's picture (designs.preview_path) when it was drawn */ d: Record<string, string> };
+export type MockupArt = { k: string; /** each logo's picture (designs.preview_path) when it was drawn */ d: Record<string, string>;
+  /** saved since the garment's color as drawn is kept on its lines (GLine.shade, Oct 29): one made before is drawn again once */ s?: 1 };
 
 export function mockupArtStamp(g: Pick<Group, "imprints">, designs: { id: string; preview_path?: string | null; file_path?: string | null }[]): MockupArt {
   const ids = [...new Set((g.imprints || []).map((im) => im.design_id).filter(Boolean))] as string[];
-  return { k: mockupArtKey(g), d: Object.fromEntries(ids.map((id) => { const x = designs.find((y) => y.id === id); return [id, String(x?.preview_path || x?.file_path || "")]; }).filter(([, p]) => p)) };
+  return { k: mockupArtKey(g), d: Object.fromEntries(ids.map((id) => { const x = designs.find((y) => y.id === id); return [id, String(x?.preview_path || x?.file_path || "")]; }).filter(([, p]) => p)), s: 1 };
 }
 
 /** the group's saved pictures no longer match its prints or logos */
@@ -42,6 +43,8 @@ export function mockupStale(g: Group, designs: { id: string; preview_path?: stri
   const st = g.mockupArt;
   if (st) {
     if (st.k !== mockupArtKey(g)) return true;
+    // drawn before its garment's color was kept with it: once more, so the order's little pictures get that color
+    if (!st.s) return true;
     // a logo's art changed (recolored, replaced): only logos this page has loaded are compared
     return Object.entries(st.d || {}).some(([id, p]) => { const x = designs.find((y) => y.id === id); const now = x ? String(x.preview_path || x.file_path || "") : ""; return !!now && now !== p; });
   }

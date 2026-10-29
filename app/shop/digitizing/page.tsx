@@ -10,9 +10,10 @@ import { previewUrls } from "@/lib/designs";
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
 import { readDst, type DstInfo } from "@/lib/dst";
 import DstPreview from "@/components/DstPreview";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
-import SewSequence, { sheetHex } from "@/components/SewSequence";
+import SewSequence from "@/components/SewSequence";
+import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { lineName, threadByName } from "@/lib/embroidery";
 import { tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
@@ -294,7 +295,8 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   const [copied, setCopied] = useState(false);
   // the DST, read once the row is opened (drawn thread by thread: components/DstPreview.tsx)
   const [dstInfo, setDstInfo] = useState<DstInfo | null>(null);
-  const dstColors = f?.ws?.sequence.length ? f.ws.sequence.map(sheetHex) : (it.im.inks || "").split(/\s*,\s*/).map((n) => threadByName(n)?.hex || "").filter(Boolean);
+  // each needle's thread: the worksheet's real thread, else the order's (lib/needleThreads.ts)
+  const dstColors = stopColors(f?.ws, it.im.inks || "");
   useEffect(() => {
     if (!open || !f) return;
     let live = true;
@@ -322,7 +324,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
               the needs sew-out section"): the line at the top says where it is */}
           <div className={"dgz-grid" + (f ? "" : " nofile")}>
             {f && <div className="dgz-card dgz-pic-big">
-              {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(it.g.lines?.[0]?.color || "") || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
+              {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(lineColor(it.g.lines?.[0])) || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
               <div className="sub">On {it.g.lines?.[0]?.color || "the garment"}</div>
             </div>}
             <div className="stack" style={{ gap: 12, minWidth: 0 }}>
@@ -340,7 +342,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   <div><span className="imp-l">Price</span><b>{st === "ok" ? "Firm" : "Firm after sew-out"}</b></div>
                 </div>
                 <div className="dgz-chips">
-                  {(f.ws?.threads.length ? f.ws.threads.map((t) => ({ k: `${t.needle}${t.code}`, hex: sheetHex(t), label: `${t.chart && t.chart !== "Default" ? t.chart.replace(/ ?(PolyNeon|Classic) ?40/i, "") + " " : ""}${t.code} ${t.name} · needle ${t.needle}` })) : (it.im.inks || "").split(/\s*,\s*/).filter(Boolean).map((n) => ({ k: n, hex: threadByName(n)?.hex || "#ccc", label: n }))).map((t) => <span key={t.k} className="dgz-chip"><i style={{ background: t.hex }} />{t.label}</span>)}
+                  {needleThreads(f.ws, it.im.inks || "").map((t) => <span key={`${t.needle}${t.label}`} className="dgz-chip"><i style={{ background: t.hex }} />{t.label}{f.ws ? ` · needle ${t.needle}` : ""}</span>)}
                   <span className="spacer" />
                   {f.path && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer">DST</a>}
                   {f.emb && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (Hatch)</a>}
@@ -392,7 +394,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   </div>
                 </div>}
               </div>}
-              {f?.ws && <div className="dgz-card"><SewSequence ws={f.ws} open /></div>}
+              {f?.ws && <div className="dgz-card"><SewSequence ws={f.ws} inks={it.im.inks || ""} open /></div>}
               {(sws.length > 0 || (!f && st !== "need")) && <div className="dgz-card">
                 <div className="imp-l">Sew-out</div>
                 {!sws.length && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then download the PDF proof or send it to the customer{SEWOUT_EMAILS ? "" : " (customer emails are off, so Send only works once they're on)"}. Once approved it&apos;s kept with the logo for reorders.</div>}

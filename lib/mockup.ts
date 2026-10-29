@@ -791,6 +791,9 @@ const SUPPLIER_NAMED: Record<string, string> = {
   grey: "#8d8f91", gray: "#8d8f91", "light grey": "#c9cbc9", "light gray": "#c9cbc9", "dark grey": "#4b4d52", "dark gray": "#4b4d52", "heather grey": "#a8aaad", "heather gray": "#a8aaad", slate: "#5b6670",
   "dark blue": "#1f2f55", "dark green": "#1f3d2b", pink: "#f4a6c1", purple: "#4b2a7b", yellow: "#f7d117",
   burgundy: "#6a1f2d", wine: "#5e1a2b", "hunter green": "#2b4a35", "olive green": "#5f6131", lavender: "#b9a7d6", mint: "#a9dcc0", peach: "#f6b48f",
+  // the plain color words any name may end in ("Regatta Blue", a worksheet's "Light Green"), the last thing tried
+  blue: "#2a5caa", green: "#2e7d4f", "dark red": "#7a1d2e", "light red": "#e8848a", "dark purple": "#3b1f5e", "light purple": "#b9a7d6",
+  "dark yellow": "#d4a017", "light orange": "#f7a35c", "dark orange": "#bf5700", "light brown": "#a07850", aqua: "#3fb8c4", turquoise: "#30b5b0", magenta: "#c6007e", violet: "#8a74b5",
 };
 const NAMED: Record<string, string> = { ...SUPPLIER_NAMED, ...Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h]))) };
 const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);
@@ -817,9 +820,12 @@ export const guessHex = (color: string): string => {
  */
 export const garmentHex = (supplierHex: string | null | undefined, name: string): string => {
   const sh = supplierHex && /^#?[0-9a-f]{6}$/i.test(supplierHex) ? (supplierHex.startsWith("#") ? supplierHex : "#" + supplierHex) : "";
-  const g = guessHex(name);
-  if (!sh) return g;
-  if (g === "#9aa1ab") return sh; // a name we don't know: the supplier's
+  if (!sh) return guessHex(name);
+  // only a name we know as a whole ("Heather Navy") outranks the supplier's code; a color word inside a name doesn't
+  // ("Regatta Blue" is an L.L. Bean tote whose body is natural canvas: its code is right, "blue" is the trim)
+  const spaced = (name || "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().trim();
+  const g = NAMED[spaced] || NAMED[spaced.replace(/heather\s*/g, "").trim()] || "";
+  if (!g) return sh;
   const rgb = (h: string) => { const v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
   const a = rgb(sh), b = rgb(g);
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 150 ? g : sh;
@@ -831,7 +837,17 @@ export const garmentHex = (supplierHex: string | null | undefined, name: string)
  * how many times have we talked about this… permanently fix this problem throughout the site": #40188's tote showed
  * cream in its mockup and gray on the order).
  */
-export const lineColor = (l: { color?: string; hex?: string } | null | undefined): string => (l?.hex && /^#[0-9a-f]{6}$/i.test(l.hex) ? l.hex : l?.color || "");
+export const lineColor = (l: { color?: string; hex?: string; shade?: string } | null | undefined): string => lineHex(l) || l?.color || "";
+/**
+ * The color a line was last SHOWN in, when one is known: picked by hand (`hex`), else the color the Mockup Creator worked
+ * out and drew it in (`shade`: the catalog's color code, the color read off the garment's photo, a drawn garment's
+ * look), saved with every mockup. A name alone can't say it (Oct 29: #40188's L.L. Bean tote "Regatta Blue" is named for
+ * its trim; its body is natural canvas, cream in the mockup and gray on the order), so the pictures follow the mockup.
+ */
+export const lineHex = (l: { hex?: string; shade?: string } | null | undefined): string => {
+  const ok = (h?: string) => !!h && /^#[0-9a-f]{6}$/i.test(h);
+  return ok(l?.hex) ? l!.hex!.toLowerCase() : ok(l?.shade) ? l!.shade!.toLowerCase() : "";
+};
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 

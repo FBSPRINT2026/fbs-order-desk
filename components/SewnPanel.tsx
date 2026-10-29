@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import { closestThreads, findThreads, threadByName, threadKey, threadLabel, type Thread } from "@/lib/embroidery";
 import { sewVersions } from "@/lib/digitizeStatus";
+import { needleThreads } from "@/lib/needleThreads";
+import type { Worksheet } from "@/lib/worksheet";
 
 /**
  * "What we sewed", next to the sew-out photo (Oct 29, Nick: "we sewed out 1739 and we used a different thread… we might
@@ -19,17 +21,11 @@ const inch = (n: number) => `${Math.round(n * 100) / 100}"`;
 const day = (s?: string) => (s ? new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
 const widthOf = (size: string) => { const m = /(\d+(?:\.\d+)?)/.exec(size || ""); return m ? +m[1] : null; };
 
-/** the threads to ask about: the file's needles (from the digitizer's worksheet), else the order's threads */
+/** the threads to ask about: each needle's thread (lib/needleThreads.ts: the worksheet's, else the order's), else the order's */
 function rowsFor(file: SewFileLite | undefined, inks: string): SewnValue["threads"] {
-  const ordered = (inks || "").split(/\s*,\s*/).filter(Boolean);
-  const ws = file?.ws?.threads || [];
-  if (ws.length) return ws.map((t) => {
-    const mine = ordered.find((n) => threadByName(n)?.code === t.code);
-    const th = threadByName(`${/isacord/i.test(t.chart || "") ? "Isacord" : "Madeira"} ${t.code}`);
-    const label = mine || (th ? threadLabel(th) : `${t.code} ${t.name}`);
-    return { needle: t.needle, ordered: label, sewn: label };
-  });
-  return ordered.map((n) => ({ ordered: n, sewn: n }));
+  const ws = file?.ws?.threads?.length ? file.ws : null;
+  if (ws) return needleThreads(ws as unknown as Worksheet, inks).map((t) => ({ needle: t.needle, ordered: t.label, sewn: t.label }));
+  return (inks || "").split(/\s*,\s*/).filter(Boolean).map((n) => ({ ordered: n, sewn: n }));
 }
 export function startSewn(ctx: SewCtx): SewnValue {
   const v = sewVersions(ctx.files);

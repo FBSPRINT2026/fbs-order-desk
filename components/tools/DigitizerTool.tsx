@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { orderGroups, type Design, type Imprint, type Order } from "@/lib/pricing";
 import { paintPrint } from "@/lib/inkColors";
 import { threadByName } from "@/lib/embroidery";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { DIGITIZE_FROM, DIGITIZER, dayLabel, digitizeEmailMany, logoName, sheetName, specRows, type DigitizeCtx } from "@/lib/digitizer";
 
 /**
@@ -209,8 +209,7 @@ export default function DigitizerTool({ orderId, imprintId: imprint0, onClose, o
         const sz = parseSize(im.size, ratio);
         const ctx: DigitizeCtx = { number: o.number, company: cust?.company || cust?.name || "", nickname: o.nickname, due: o.due_date, g, im, d, wIn: sz.w || undefined, hIn: sz.h || undefined };
         const l0 = g.lines[0];
-        const lh = (l0 as { hex?: string } | undefined)?.hex || "";
-        const garmentHex = /^#[0-9a-f]{6}$/i.test(lh) ? lh : guessHex(l0?.color || "Black");
+        const garmentHex = guessHex(lineColor(l0) || "Black");
         const map = im.inkMap && im.inkMap.design === im.design_id ? im.inkMap.map : null;
         const pk = map ? Object.values(map).filter((v) => v.name !== "none" && v.hex) : [];
         const threads = [...new Map(pk.map((v) => [v.hex.toLowerCase(), v])).values()];

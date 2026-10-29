@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import type { Group } from "@/lib/pricing";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { fixDesignArt, type ArtAction } from "@/lib/artFix";
 import { MicButton } from "@/components/SearchInput";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
@@ -197,7 +197,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
       const g = o.groups.find((x) => x.imprints.some((im) => im.id === pid)), im = g?.imprints.find((x) => x.id === pid);
       const mark = (state: "done" | "error", e?: string) => setRounds((rs) => rs.map((r, i) => (i !== ri ? r : { ...r, art: r.art.map((a) => (a.id === pid ? { ...a, state, err: e } : a)) })));
       if (!g || !im?.design_id) { mark("error", "That print has no logo"); continue; }
-      const f = await fixDesignArt(sb, im.design_id, cs.map((c) => c.field as ArtAction), { shirt: guessHex(g.lines[0]?.color || ""), widthIn: parseFloat(String(im.size || "")) || undefined, say: cs.map((c) => c.say) });
+      const f = await fixDesignArt(sb, im.design_id, cs.map((c) => c.field as ArtAction), { shirt: guessHex(lineColor(g.lines[0])), widthIn: parseFloat(String(im.size || "")) || undefined, say: cs.map((c) => c.say) });
       if (!f.ok) { mark("error", f.error); continue; }
       for (const c of cs) await noteArtChange(orderId, pid, c.say).catch(() => null);
       mark("done"); setStale(true);

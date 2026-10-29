@@ -217,6 +217,9 @@ export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   /** the garment's color as picked in the Mockup Creator (its Background, or the eyedropper off the photo): what every
    *  picture of it shows (lib/mockup.ts lineColor) */ hex?: string;
+  /** the color the Mockup Creator drew it in when nobody picked one (the catalog's code, the color read off its photo),
+   *  saved with each mockup so the order's pictures match it (lib/mockup.ts lineHex) */
+  shade?: string;
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
   /** an embroidery specialty item (hat, bag, fleece…) set by hand; unset = from its name, style and brand (isSpecialtyItem) */
   specialty?: boolean | null;

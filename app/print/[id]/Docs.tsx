@@ -1,5 +1,5 @@
-import { threadByName, threads as threadsAll } from "@/lib/embroidery";
-import { sheetThreadName } from "@/lib/worksheet";
+import { threadByName } from "@/lib/embroidery";
+import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
@@ -73,10 +73,7 @@ const swapInk = (k: string, sw?: Record<string, string> | null) => (sw && sw[k.t
 
 /** each color stop's thread (the worksheet's, else the print's threads in turn), for drawing its DST */
 function dstColorsOf(d: Imprint): string[] {
-  const ws = d.emb?.file?.ws;
-  const byCode = (code: string, chart: string) => threadsAll().find((x) => x.code === code && (/classic|rayon/i.test(chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.hex;
-  if (ws?.sequence?.length) return ws.sequence.map((x) => byCode(x.code, x.chart) || "#333333");
-  return inkNames(d.inks || "").map((n) => threadByName(n)?.hex || colorHex(n) || "#333333");
+  return stopColors(d.emb?.file?.ws, d.inks || "");
 }
 function ArtPic({ d, des, pic, style, hires, swap }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string; swap?: Record<string, string> | null }) {
   const b = des?.art_box;
@@ -419,7 +416,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
         <>
           <table className="ink">
             <thead><tr><th style={{ width: ".55in" }}>Needle</th><th>Thread</th><th className="w">Stitches</th><th className="w">Stops</th><th style={{ width: ".7in" }}>Threaded</th></tr></thead>
-            <tbody>{emb.file.ws.threads.map((t) => { const nm = t.name || threadsAll().find((x) => x.code === t.code && (/classic|rayon/i.test(t.chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(t.chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.name || ""; return <tr key={t.chart + t.code}><td><b>{t.needle}</b></td><td><Swatch c={threadsAll().find((x) => x.code === t.code && (/classic|rayon/i.test(t.chart) ? x.line === "Classic Rayon 40" : /isacord/i.test(t.chart) ? x.line === "Isacord 40" : x.line === "Polyneon 40"))?.hex || "#ccc"} /><b>{sheetThreadName({ ...t, name: nm })}</b></td><td>{t.stitches.toLocaleString()}</td><td>{t.stops}</td><td><span className="cb" /></td></tr>; })}</tbody>
+            <tbody>{needleThreads(emb.file.ws, d.inks || "").map((nt) => { const t = emb.file!.ws!.threads.find((x) => x.needle === nt.needle)!; return <tr key={nt.needle + nt.label}><td><b>{nt.needle}</b></td><td><Swatch c={nt.hex} /><b>{nt.label}</b>{nt.from !== "sheet" && t?.name ? <small>worksheet: {t.name}</small> : null}</td><td>{t?.stitches.toLocaleString()}</td><td>{t?.stops}</td><td><span className="cb" /></td></tr>; })}</tbody>
           </table>
           {emb.file.ws.sequence.length > 1 && <div className="n2"><b>Stop order (needles):</b> {emb.file.ws.sequence.map((x) => x.needle).join(" → ")} <span className="faint">· {emb.file.ws.stops} stops, {emb.file.ws.trims} trims</span></div>}
         </>
@@ -776,9 +773,8 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
   const file = sw.sewn?.file || (emb.file ? { path: emb.file.path, name: emb.file.name, wIn: emb.file.wIn, hIn: emb.file.hIn, stitches: emb.file.stitches } : null);
   const seq = emb.file?.path === file?.path ? emb.file?.ws?.sequence || [] : [];
   const hexOf = (n: string) => threadByName(n)?.hex || colorHex(n) || "#333333";
-  const dstColors = seq.length
-    ? seq.map((x) => { const t = sewnThreads.find((y) => y.needle === x.needle); return t ? hexOf(t.sewn) : hexOf(`${/isacord/i.test(x.chart) ? "Isacord" : "Madeira"} ${x.code}`); })
-    : sewnThreads.map((t) => hexOf(t.sewn));
+  const sewnBy = Object.fromEntries(sewnThreads.filter((t) => t.needle).map((t) => [t.needle!, t.sewn]));
+  const dstColors = seq.length ? stopColors(emb.file?.ws, d?.inks || "", sewnBy) : sewnThreads.map((t) => hexOf(t.sewn));
   const inch = (n: number) => `${Math.round(n * 100) / 100}"`;
   return (
     <section className="sheet pf pf-cover so">

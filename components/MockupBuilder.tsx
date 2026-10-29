@@ -2824,12 +2824,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     // a garment drawn here from the customer's sheet (Oct 27): its look goes on the order's line, and its name and color
     // when the order's line had none
+    const scKey = (x: { style?: string; color?: string }) => `${(x.style || "").trim().toLowerCase()}|${(x.color || "").trim().toLowerCase()}`;
     for (const l of lines) {
       const ol = g.lines.find((x) => x.id === l.id); if (!ol) continue;
       if (l.look) ol.look = l.look;
-      // the color picked here (Background, eyedropper) is the garment's color on the order too, for every picture of it
-      if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) ol.hex = l.hex; else delete ol.hex;
       if (l.look && !(ol.style || "").trim()) { ol.style = l.style; ol.brand = l.brand; if (!(ol.color || "").trim()) ol.color = l.color; }
+      // the garment's color as drawn here goes on the order too, for every picture of it (lib/mockup.ts lineHex): the color
+      // picked (Background, eyedropper) as `hex`, and the color it was drawn in either way as `shade` (the catalog's code,
+      // the color read off its photo), on each of the order's lines of this garment (its extras line too)
+      const shade = shirtHex(l);
+      for (const x of g.lines.filter((y) => y.id === l.id || scKey(y) === scKey(ol))) {
+        if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) x.hex = l.hex.toLowerCase(); else delete x.hex;
+        if (/^#[0-9a-f]{6}$/i.test(shade) && shade.toLowerCase() !== "#9aa1ab") x.shade = shade.toLowerCase(); else delete x.shade;
+      }
     }
     if (mockupSaved) { g.mockupAt = new Date().toISOString(); delete g.mockupSkipped; }
     g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
@@ -3778,7 +3785,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             ))}
             {neckSet && line && (
               <div className="mk-neck-card" title="Private Label: the maker's tag cut out and their label printed inside the neck">
-                <NeckLabelView set={neckSet} size={neckSize} shirtHex={guessHex(line.color)} width={190} />
+                <NeckLabelView set={neckSet} size={neckSize} shirtHex={shirtHex(line)} width={190} />
                 <small>{neckSet.name || "Neck label"}{neckSet.content ? ` · ${neckSet.content}` : ""}</small>
               </div>
             )}

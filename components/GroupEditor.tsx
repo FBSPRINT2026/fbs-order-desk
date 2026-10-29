@@ -4,7 +4,7 @@ import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { guessHex, garmentHex, registerAreas, smallerSpot } from "@/lib/mockup";
+import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
@@ -197,7 +197,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
     if (!l) return "#9aa1ab";
-    if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; // picked in the Mockup Creator (lib/mockup.ts lineColor)
+    if (lineHex(l)) return lineHex(l); // as the Mockup Creator showed it (picked, or drawn): lib/mockup.ts lineHex
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const gar = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase());
     const ci = gar?.color_images?.[l.color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
@@ -207,7 +207,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const hexOfColor = (color: string) => {
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const l = g.lines.find((x) => key(x.color) === key(color));
-    if (l?.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex;
+    if (lineHex(l)) return lineHex(l);
     const gar = l ? catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase()) : undefined;
     const ci = gar?.color_images?.[color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(color))?.[1];
     return garmentHex(ci?.hex, color) || guessHex(color) || "#9aa1ab";

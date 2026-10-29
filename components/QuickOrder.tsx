@@ -31,7 +31,7 @@ import { isPsd, psdPicture } from "@/lib/psdPic";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
-import { guessHex, isHeather, shirtBg, spotFor } from "@/lib/mockup";
+import { guessHex, isHeather, lineColor, shirtBg, spotFor } from "@/lib/mockup";
 import { knockOut } from "@/lib/artPrep";
 import { inkName, planPrint, pxOfImage } from "@/lib/printPlan";
 import { colorHex } from "@/lib/inkColors";
@@ -712,7 +712,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // and asked at the check, with taking it out as the guess
     const boxedOut: { group: string; location: string }[] = [], artInks = new Map<string, { name: string; hex: string }[]>(), ratioOf = new Map<string, number>();
     for (const x of d.groups) {
-      const shirt = guessHex(x.lines.find((l) => l.color)?.color || "White"), shirtName = x.lines.find((l) => l.color)?.color || "white";
+      const shirt = guessHex(lineColor(x.lines.find((l) => l.color)) || "White"), shirtName = x.lines.find((l) => l.color)?.color || "white";
       for (const im of x.imprints) {
         const path = d.art?.[im.id];
         if (!path || im.method === "dtf" || (d.check || []).some((c) => c.local === `bg:${im.id}`)) continue;
@@ -1816,7 +1816,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
             <div className="rv-h"><b data-notranslate>{gname}</b><span className="faint">{pcs(g).toLocaleString("en-US")} pcs</span></div>
             {g.lines.map((l) => (
               <div key={l.id} className="rv-shirt">
-                <span className="rv-sw" style={{ background: shirtBg(l.color || "White") }} aria-hidden />
+                <span className="rv-sw" style={{ background: shirtBg(l.color || "White", guessHex(lineColor(l) || "White")) }} aria-hidden />
                 <span data-notranslate><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b> · {l.color || "no color"}</span>
                 <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).sort(([a], [b]) => sizeRank(a) - sizeRank(b)).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
               </div>
