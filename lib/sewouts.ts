@@ -69,8 +69,31 @@ export async function saveSewout(admin: SupabaseClient, x: { orderId: string; im
   const version = (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
   const at = new Date().toISOString();
 
+  const ap = await applySewn(admin, o, pr.im, x.sewn);
+  if (!ap.ok) return ap;
+  const { sewn, changes, patch } = ap, im = pr.im;
+
+  const live = rows.filter((r) => !r.archived_at);
+  if (live.length) await admin.from("sewouts").update({ archived_at: at }).in("id", live.map((r) => r.id));
+  const { data: made, error } = await admin.from("sewouts").insert({
+    order_id: o.id, imprint_id: x.imprintId, design_id: im.design_id || null, version, photo_path: x.photoPath, raw_path: x.rawPath || null,
+    placement_path: x.placementPath || null, sewn, changes: changes.length ? changes : null,
+    note: (x.note || "").trim().slice(0, 1000), created_by: me.email,
+  }).select("id").single();
+  if (error || !made) return { ok: false as const, error: error?.message || "Couldn't save the sew-out." };
+  const where = `${im.location}${(patch.size || im.size) ? `, ${patch.size || im.size}` : ""}`;
+  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_saved", detail: `Sew-out v${version} (${where})${x.placementPath ? " with a placement photo" : ""}`, actor: me.email });
+  if (changes.length) await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_changes", detail: `Changed to match the sew-out (${im.location}): ${changeWords(changes)}`.slice(0, 1000), actor: me.email });
+  return { ok: true as const, id: made.id as string, version, changes };
+}
+
+/**
+ * What was really sewn, made into the sew-out's record, and the order changed to match it (the stitch file version, its
+ * size and stitches, each thread). Used by a new sew-out and by Edit on a saved one.
+ */
+async function applySewn(admin: SupabaseClient, o: Order, im: import("@/lib/pricing").Imprint, input: SewnInput | undefined) {
+  const x = { sewn: input };
   // what was sewn: the file from the logo's versions (or the print's own), the threads as picked
-  const im = pr.im;
   const { data: d } = im.design_id ? await admin.from("designs").select("specs").eq("id", im.design_id).maybeSingle() : { data: null };
   const { sewVersions } = await import("@/lib/digitizeStatus");
   const files = sewVersions(((d?.specs as { embroidery?: { files?: import("@/lib/digitizedFiles").DigitizedSet[] } } | null)?.embroidery?.files) || []);
@@ -103,18 +126,37 @@ export async function saveSewout(admin: SupabaseClient, x: { orderId: string; im
     if (ge) return { ok: false as const, error: `Couldn't update the order: ${ge.message}` };
   }
 
-  const live = rows.filter((r) => !r.archived_at);
-  if (live.length) await admin.from("sewouts").update({ archived_at: at }).in("id", live.map((r) => r.id));
-  const { data: made, error } = await admin.from("sewouts").insert({
-    order_id: o.id, imprint_id: x.imprintId, design_id: im.design_id || null, version, photo_path: x.photoPath, raw_path: x.rawPath || null,
-    placement_path: x.placementPath || null, sewn, changes: changes.length ? changes : null,
-    note: (x.note || "").trim().slice(0, 1000), created_by: me.email,
-  }).select("id").single();
-  if (error || !made) return { ok: false as const, error: error?.message || "Couldn't save the sew-out." };
-  const where = `${im.location}${(patch.size || im.size) ? `, ${patch.size || im.size}` : ""}`;
-  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_saved", detail: `Sew-out v${version} (${where})${x.placementPath ? " with a placement photo" : ""}`, actor: me.email });
-  if (changes.length) await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_changes", detail: `Changed to match the sew-out (${im.location}): ${changeWords(changes)}`.slice(0, 1000), actor: me.email });
-  return { ok: true as const, id: made.id as string, version, changes };
+  return { ok: true as const, sewn, changes, patch };
+}
+
+/**
+ * Edit a saved sew-out at the computer (Oct 29, Nick: "the thread, everything should be editable from there too… I don't
+ * need to go back to my phone"): a new crop or photo, the placement photo added, replaced or taken off, the note, and
+ * what was sewn (the order follows it again). Only while the customer hasn't answered; the same version is kept.
+ */
+export async function editSewout(admin: SupabaseClient, id: string, x: { photoPath?: string; rawPath?: string; placementPath?: string | null; note?: string; sewn?: SewnInput }, me: Staff) {
+  const { data: row } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
+  const s = row as Sewout | null;
+  if (!s) return { ok: false as const, error: "That sew-out isn't there anymore." };
+  if (s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };
+  if (s.status !== "pending") return { ok: false as const, error: "The customer already answered this one. Take a new sew-out photo instead." };
+  const { o } = await load(admin, s.order_id);
+  const pr = printOf(o, s.imprint_id);
+  if (!pr) return { ok: false as const, error: "That print isn't on the order anymore." };
+  const ap = await applySewn(admin, o, pr.im, x.sewn);
+  if (!ap.ok) return ap;
+  const upd: Record<string, unknown> = { sewn: ap.sewn, note: (x.note ?? s.note ?? "").trim().slice(0, 1000) };
+  // what changed on the order since the photo: this edit's changes join the ones already made
+  const before = (s.changes || []).filter((c) => !ap.changes.some((n) => n.what === c.what && (n.needle ?? null) === (c.needle ?? null)));
+  const all = [...before, ...ap.changes];
+  upd.changes = all.length ? all : null;
+  if (x.photoPath) { upd.photo_path = x.photoPath; if (x.rawPath) upd.raw_path = x.rawPath; }
+  if (x.placementPath !== undefined) upd.placement_path = x.placementPath;
+  const { error } = await admin.from("sewouts").update(upd).eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  const what = [x.photoPath ? "photo" : "", x.placementPath !== undefined ? (x.placementPath ? "placement photo" : "placement photo taken off") : "", ap.changes.length ? changeWords(ap.changes) : ""].filter(Boolean).join("; ");
+  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_edited", detail: `Sew-out v${s.version} (${pr.im.location}) edited${what ? `: ${what}` : ""}`.slice(0, 1000), actor: me.email });
+  return { ok: true as const, version: s.version, changes: ap.changes };
 }
 
 /** the changes in words, for the history and the message */

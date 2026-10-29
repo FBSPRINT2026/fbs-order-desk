@@ -13,7 +13,7 @@ import DstPreview from "@/components/DstPreview";
 import { guessHex, lineColor } from "@/lib/mockup";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence from "@/components/SewSequence";
-import { needleThreads, stopColors } from "@/lib/needleThreads";
+import { stopColors } from "@/lib/needleThreads";
 import { lineName, threadByName } from "@/lib/embroidery";
 import { tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
@@ -50,7 +50,8 @@ type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: s
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
 type State = Exclude<Filter, "all">;
-type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string; note?: string; changes?: { what: string; from: string; to: string; needle?: number }[] | null };
+type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string; note?: string; changes?: { what: string; from: string; to: string; needle?: number }[] | null;
+  raw_path?: string | null; sewn?: { file?: { path: string } | null; threads?: { needle?: number; ordered: string; sewn: string }[] } | null };
 /** a logo's sew-outs on any order, to show each stitch file version's approval (Oct 29, Nick: "once we get approval…
  *  version 2 gets approved. There should be a note… approved 10/29 for order…") */
 type DSw = { id: string; design_id: string; status: string; decided_at: string | null; sent_at: string | null; created_at: string; archived_at: string | null; sewn?: { file?: { path?: string } | null } | null; orders?: { number: number } | null };
@@ -95,10 +96,10 @@ export default function Digitizing() {
     setProofed(new Set([...((pf || []) as { order_id: string }[]), ...((mk || []) as { order_id: string }[])].map((r) => r.order_id)));
     setSws(list); setDesigns(map); setOrders(os);
     if (list.length) {
-      const paths = [...list.map((x) => x.photo_path), ...list.map((x) => x.placement_path || "").filter(Boolean)];
+      const paths = [...list.map((x) => x.photo_path), ...list.map((x) => x.placement_path || "").filter(Boolean), ...list.filter((x) => !x.archived_at).map((x) => x.raw_path || "").filter(Boolean)];
       const { data: su } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
       const byPath = Object.fromEntries((su || []).map((r, i) => [paths[i], r?.signedUrl || ""]));
-      setSwUrls(Object.fromEntries(list.flatMap((x) => [[x.id, byPath[x.photo_path] || ""], ...(x.placement_path ? [[`${x.id}:place`, byPath[x.placement_path] || ""]] : [])])));
+      setSwUrls(Object.fromEntries(list.flatMap((x) => [[x.id, byPath[x.photo_path] || ""], ...(x.placement_path ? [[`${x.id}:place`, byPath[x.placement_path] || ""]] : []), ...(x.raw_path && byPath[x.raw_path] ? [[`${x.id}:raw`, byPath[x.raw_path]]] : [])])));
     }
     void previewUrls(sb, Object.values(map)).then(setUrls).catch(() => null);
   }
@@ -292,6 +293,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
     onSew(`Sent back to ${DIGITIZER.name.split(" ")[0]} for changes. Their fixed file comes in here by itself.`);
   }
   const live = sws.find((x) => !x.archived_at);
+  const where = [`#${it.o.number}`, it.o.customers?.company || it.o.customers?.name || "", `${it.im.location}${it.im.size ? `, ${it.im.size}` : ""}`].filter(Boolean).join(" · ");
   const [copied, setCopied] = useState(false);
   // the DST, read once the row is opened (drawn thread by thread: components/DstPreview.tsx)
   const [dstInfo, setDstInfo] = useState<DstInfo | null>(null);
@@ -329,11 +331,13 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
             </div>}
             <div className="stack" style={{ gap: 12, minWidth: 0 }}>
               {f && <div className="dgz-card">
+                {/* the stitch file: what it is, its versions (each with its files and its sew-out), and sending it back
+                    (Oct 29, Nick: "very messy… you don't need two DST, EMB, worksheet things there… sew-out saved… to the
+                    right of on this order") */}
                 <div className="dgz-head">
-                  <div><div className="imp-l">Sew file</div><b className="dgz-code">{it.d ? tajimaName(it.d.number, Number(((f as EmbFile & { code?: string }).code || "E1").slice(1)) || 1) : f.name}{it.im.location ? ` · ${it.im.location}` : ""}</b><div className="sub">{f.name}</div></div>
+                  <div><div className="imp-l">Sew file</div><b className="dgz-code">{it.d ? tajimaName(it.d.number, Number(((f as EmbFile & { code?: string }).code || "E1").slice(1)) || 1) : f.name}{it.im.location ? ` · ${it.im.location}` : ""}</b><div className="sub">{f.name} · {DIGITIZER.name}</div></div>
                   <span className="spacer" />
-                  {canEdit && it.d && <button type="button" className="btn" onClick={() => setChg(chg === null ? draftChanges() : null)}>Send back to {DIGITIZER.name.split(" ")[0]} for changes</button>}
-                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} label={live?.status === "pending" ? "Retake the photo" : sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={[`#${it.o.number}`, it.o.customers?.company || it.o.customers?.name || "", `${it.im.location}${it.im.size ? `, ${it.im.size}` : ""}`].filter(Boolean).join(" · ")} />}
+                  {canEdit && it.d && st !== "ok" && <button type="button" className="btn" onClick={() => setChg(chg === null ? draftChanges() : null)}>Send back to {DIGITIZER.name.split(" ")[0]} for changes</button>}
                 </div>
                 <div className="dgz-facts">
                   <div><span className="imp-l">Size</span><b>{f.wIn}&quot; × {f.hIn}&quot;</b>{it.im.size && <small>asked {it.im.size}</small>}</div>
@@ -341,40 +345,35 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   <div><span className="imp-l">Threads</span><b>{f.ws?.threads.length || f.colors}</b>{f.ws && <small>{f.ws.stops} stop{f.ws.stops === 1 ? "" : "s"} · {f.ws.trims} trim{f.ws.trims === 1 ? "" : "s"}</small>}</div>
                   <div><span className="imp-l">Price</span><b>{st === "ok" ? "Firm" : "Firm after sew-out"}</b></div>
                 </div>
-                <div className="dgz-chips">
-                  {needleThreads(f.ws, it.im.inks || "").map((t) => <span key={`${t.needle}${t.label}`} className="dgz-chip"><i style={{ background: t.hex }} />{t.label}{f.ws ? ` · needle ${t.needle}` : ""}</span>)}
-                  <span className="spacer" />
-                  {f.path && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer">DST</a>}
-                  {f.emb && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (Hatch)</a>}
-                  {f.sheet && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet</a>}
-                </div>
-                {/* every version of the stitch file, oldest first (Oct 29, Nick: "show version one, which was 6 inches wide…
+                {/* every version of the stitch file, newest first (Oct 29, Nick: "show version one, which was 6 inches wide…
                     version two, which is 4.02"): a resize or a fix is the next version, and the order says which one it sews */}
-                {(ctx.files.length > 1 || dsws.length > 0) && (() => {
-                  const vers = sewVersions(ctx.files as EmbFile[]);
+                {(() => {
+                  const vers = sewVersions((ctx.files.length ? ctx.files : [f]) as EmbFile[]);
                   // which version a sew-out sewed: its own record, else the newest file it could have been
                   const verOf = (x: DSw) => x.sewn?.file?.path ? vers.find((v) => v.path === x.sewn!.file!.path) : [...vers].reverse().find((v) => (v.at || "") <= x.created_at);
-                  const open = (p: string, n: string) => `/api/files/open?${new URLSearchParams({ p, n })}`;
+                  const href = (p: string, n: string) => `/api/files/open?${new URLSearchParams({ p, n })}`;
+                  const dt = (x: string | null) => (x ? new Date(x).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/Chicago" }) : "");
                   return <div className="dgz-vers">
                     <div className="imp-l">Versions</div>
-                    {[...vers].reverse().map((x) => { const on = x.path === f?.path; const notes = dsws.filter((y) => verOf(y)?.path === x.path && !(y.archived_at && y.status === "pending")); return (
-                      <div key={x.path} className="dgz-vrow">
-                        <div className={"dgz-ver" + (on ? " on" : "")}>
-                          <b>Version {x.v}</b>
-                          <span>{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()} stitches · {x.at ? day(x.at) : ""}</span>
-                          {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }}><span className="pill-t">On this order</span></span>
-                            : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}
-                          <span className="dgz-vfiles">
-                            <a className="btn sm" href={open(x.path, x.name)} target="_blank" rel="noreferrer">DST</a>
-                            {x.emb ? <a className="btn sm" href={open(x.emb.path, x.emb.name)} target="_blank" rel="noreferrer">EMB (Hatch)</a> : <span className="btn sm dgz-vnone" title="The EMB didn't come with this version">No EMB</span>}
-                            {x.sheet ? <a className="btn sm" href={open(x.sheet.path, x.sheet.name)} target="_blank" rel="noreferrer">Worksheet</a> : <span className="btn sm dgz-vnone" title="The worksheet didn't come with this version">No worksheet</span>}
-                          </span>
-                        </div>
-                        {notes.map((y) => { const n = y.orders?.number ? ` for order #${y.orders.number}` : ""; const dt = (s: string | null) => (s ? new Date(s).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/Chicago" }) : "");
-                          return <div key={y.id} className={"dgz-vnote " + (y.status === "approved" ? "ok" : y.status === "changes" ? "bad" : "wait")}>
-                            {y.status === "approved" ? `✓ Sew-out approved ${dt(y.decided_at)}${n}` : y.status === "changes" ? `Changes asked ${dt(y.decided_at)}${n}` : y.sent_at ? `Sew-out sent ${dt(y.sent_at)}${n} · waiting` : `Sew-out saved ${dt(y.created_at)}${n} · not sent yet`}
-                          </div>; })}
-                      </div>); })}
+                    <table className="tbl dgz-vt">
+                      <thead><tr><th>Version</th><th>Size · stitches</th><th>Sew-out</th><th className="r">Files</th></tr></thead>
+                      <tbody>{[...vers].reverse().map((x) => {
+                        const on = x.path === f.path;
+                        const notes = dsws.filter((y) => verOf(y)?.path === x.path && !(y.archived_at && y.status === "pending"));
+                        return <tr key={x.path} className={on ? "on" : ""}>
+                          <td><b className="dgz-vn">Version {x.v}</b>{" "}
+                            {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }} title={`The stitch file #${it.o.number} sews`}><span className="pill-t">Sewing this one</span></span>
+                              : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}</td>
+                          <td className="nw">{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()}{x.at ? ` · ${day(x.at)}` : ""}</td>
+                          <td>{notes.length ? notes.map((y) => { const n = y.orders?.number && y.orders.number !== it.o.number ? ` · #${y.orders.number}` : "";
+                            return <span key={y.id} className="pill" style={{ ["--sc" as string]: y.status === "approved" ? "var(--ok)" : y.status === "changes" ? "var(--danger)" : "var(--warn)" }}><span className="pill-t">{y.status === "approved" ? `Approved ${dt(y.decided_at)}` : y.status === "changes" ? `Changes asked ${dt(y.decided_at)}` : y.sent_at ? `Sent ${dt(y.sent_at)} · waiting` : `Saved ${dt(y.created_at)} · not sent yet`}{n}</span></span>; }) : <span className="faint">Not sewn yet</span>}</td>
+                          <td className="r nw">
+                            <a className="btn sm" href={href(x.path, x.name)} target="_blank" rel="noreferrer">DST</a>{" "}
+                            {x.emb ? <a className="btn sm" href={href(x.emb.path, x.emb.name)} target="_blank" rel="noreferrer">EMB</a> : <span className="btn sm dgz-vnone" title="The EMB didn't come with this version">No EMB</span>}{" "}
+                            {x.sheet ? <a className="btn sm" href={href(x.sheet.path, x.sheet.name)} target="_blank" rel="noreferrer">Worksheet</a> : <span className="btn sm dgz-vnone" title="The worksheet didn't come with this version">No worksheet</span>}
+                          </td>
+                        </tr>; })}</tbody>
+                    </table>
                   </div>;
                 })()}
                 {chg !== null && <div className="dgz-chg">
@@ -394,39 +393,46 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   </div>
                 </div>}
               </div>}
-              {f?.ws && <div className="dgz-card"><SewSequence ws={f.ws} inks={it.im.inks || ""} open /></div>}
-              {(sws.length > 0 || (!f && st !== "need")) && <div className="dgz-card">
-                <div className="imp-l">Sew-out</div>
-                {!sws.length && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then download the PDF proof or send it to the customer{SEWOUT_EMAILS ? "" : " (customer emails are off, so Send only works once they're on)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
-                {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
-                  <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
-                    {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
-                    <div className="stack" style={{ gap: 4, minWidth: 0 }}>
-                      <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>
-                      <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not sent yet`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
-                      {x.decided_at && <div className="sub">{x.decided_name} · {day(x.decided_at)}</div>}
-                      {x.customer_comment && <div style={{ fontSize: 13 }}>“{x.customer_comment}”</div>}
-                      {(x.changes || []).length > 0 && <div className="sub dgz-sewn">Order changed to match: {(x.changes || []).map((c) => c.what === "thread" ? `${c.from} → ${c.to}` : c.what === "size" ? `size ${c.to}` : c.what === "stitches" ? `${c.to} stitches` : `file ${c.to}`).join(" · ")}</div>}
-                      {swUrls[`${x.id}:place`] && <a className="sub" href={swUrls[`${x.id}:place`]} target="_blank" rel="noreferrer">Placement photo</a>}
-                      {/* after the photo: the proof to download, or sent to the customer (Oct 29, Nick) */}
-                      {canEdit && !x.archived_at && x.status === "pending" && !x.sent_at && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                        <a className="btn sm" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Download PDF proof</a>
-                        <button type="button" className="btn sm primary" disabled={swBusy} onClick={() => { setSwBusy(true); void sendSewoutToCustomer(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? `Sent to ${r.to}.` : r.error || "Couldn't send it."); }); }}>Send to customer</button>
-                      </div>}
-                      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                        <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">PDF proof</a>
-                        {canEdit && !x.archived_at && x.status === "pending" && <>
-                          {SEWOUT_EMAILS && x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
-                          <button type="button" className="lc-link" onClick={() => setHow(how === x.id ? null : x.id)}>Approved another way…</button>
-                        </>}
-                      </div>
-                      {how === x.id && <div className="row" style={{ gap: 6 }}>
-                        <input type="text" autoFocus placeholder="How they approved it (a call, an email…)" onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; setSwBusy(true); void approveSewoutAnother(x.id, v).then((r) => { setSwBusy(false); setHow(null); onSew(r.ok ? "Marked approved." : r.error || "Couldn't save it."); }); } }} />
-                        <span className="faint" style={{ fontSize: 12 }}>Enter to save</span>
-                      </div>}
+              {(f || sws.length > 0) && <div className="dgz-card">
+                {/* the sew-out: its photos, where it stands, its buttons, and the threads it was sewn in, all changeable here
+                    (Oct 29, Nick: "the sew sequence, the thread, everything should be editable from there too… an edit
+                    button there on the right") */}
+                <div className="dgz-head">
+                  <div className="row" style={{ gap: 8 }}><span className="imp-l">Sew-out{live ? ` · version ${live.version}` : ""}</span>
+                    {live && <span className="pill" style={{ ["--sc" as string]: live.status === "approved" ? "var(--ok)" : live.status === "changes" ? "var(--danger)" : "var(--warn)" }}><span className="pill-t">{live.status === "approved" ? "Approved" : live.status === "changes" ? "Changes asked" : live.sent_at ? "Waiting on the customer" : "Not sent yet"}</span></span>}</div>
+                  <span className="spacer" />
+                  {canEdit && live && live.status === "pending" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} primary={false} onDone={onSew} where={where}
+                    edit={{ id: live.id, photo: swUrls[`${live.id}:raw`] || swUrls[live.id] || "", place: swUrls[`${live.id}:place`] || undefined, note: live.note || "", sewn: live.sewn ? { filePath: live.sewn.file?.path, threads: live.sewn.threads || [] } : null }} />}
+                  {canEdit && st !== "ok" && f && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} primary={!live} label={live?.status === "pending" ? "Retake the photo" : sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={where} />}
+                  {canEdit && live && live.status === "pending" && !live.sent_at && <button type="button" className="btn primary" disabled={swBusy} onClick={() => { setSwBusy(true); void sendSewoutToCustomer(live.id).then((r) => { setSwBusy(false); onSew(r.ok ? `Sent to ${r.to}.` : r.error || "Couldn't send it."); }); }}>Send to customer</button>}
+                </div>
+                {!live && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then download the PDF proof or send it to the customer{SEWOUT_EMAILS ? "" : " (customer emails are off, so Send only works once they're on)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
+                {live && <div className="dgz-sw">
+                  <figure>{swUrls[live.id] ? <a href={swUrls[live.id]} target="_blank" rel="noreferrer"><img src={swUrls[live.id]} alt={`Sew-out version ${live.version}`} /></a> : <span className="dgz-sw-none" />}<figcaption>Close up</figcaption></figure>
+                  {swUrls[`${live.id}:place`] && <figure><a href={swUrls[`${live.id}:place`]} target="_blank" rel="noreferrer"><img src={swUrls[`${live.id}:place`]} alt="Placement on the garment" /></a><figcaption>Placement</figcaption></figure>}
+                  <div className="stack" style={{ gap: 6, minWidth: 0 }}>
+                    <div className="sub">{live.sent_at ? `Sent ${day(live.sent_at)} to ${live.sent_to}` : `Saved ${day(live.created_at)} · not sent yet`}{live.viewed_at ? ` · opened ${day(live.viewed_at)}${live.view_count > 1 ? ` (${live.view_count}×)` : ""}` : live.sent_at ? " · not opened yet" : ""}</div>
+                    {live.decided_at && <div className="sub">{live.decided_name} · {day(live.decided_at)}</div>}
+                    {live.customer_comment && <div style={{ fontSize: 13 }}>“{live.customer_comment}”</div>}
+                    {live.note && <div className="sub">Note: {live.note}</div>}
+                    {(live.changes || []).length > 0 && <div className="sub dgz-sewn">Order changed to match: {(live.changes || []).map((c) => c.what === "thread" ? `${c.from} → ${c.to}` : c.what === "size" ? `size ${c.to}` : c.what === "stitches" ? `${c.to} stitches` : `file ${c.to}`).join(" · ")}</div>}
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <a className="btn sm" href={`/print/${it.o.id}?sewout=${live.id}`} target="_blank" rel="noreferrer">Download PDF proof</a>
+                      {canEdit && live.status === "pending" && SEWOUT_EMAILS && live.sent_at && <button type="button" className="btn sm" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(live.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
+                      {canEdit && live.status === "pending" && <button type="button" className="btn sm ghost" onClick={() => setHow(how === live.id ? null : live.id)}>Approved another way…</button>}
                     </div>
+                    {how === live.id && <div className="row" style={{ gap: 6 }}>
+                      <input type="text" autoFocus placeholder="How they approved it (a call, an email…)" onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; setSwBusy(true); void approveSewoutAnother(live.id, v).then((r) => { setSwBusy(false); setHow(null); onSew(r.ok ? "Marked approved." : r.error || "Couldn't save it."); }); } }} />
+                      <span className="faint" style={{ fontSize: 12 }}>Enter to save</span>
+                    </div>}
                   </div>
-                ))}</div>}
+                </div>}
+                {f?.ws && <SewSequence ws={f.ws} inks={it.im.inks || ""} sewn={live?.sewn ? Object.fromEntries((live.sewn.threads || []).filter((t) => t.needle).map((t) => [t.needle!, t.sewn])) : null} open />}
+                {sws.filter((x) => x !== live).length > 0 && <div className="dgz-old">
+                  <span className="imp-l">Earlier</span>
+                  {sws.filter((x) => x !== live).map((x) => <a key={x.id} className="dgz-oldsw" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer" title="Its PDF proof">
+                    {swUrls[x.id] ? <img src={swUrls[x.id]} alt="" /> : null}Version {x.version} · {x.status === "approved" ? "approved" : x.status === "changes" ? "changes asked" : "replaced"} · {day(x.created_at)}</a>)}
+                </div>}
               </div>}
             </div>
           </div>

@@ -15803,3 +15803,22 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .pr-dgz-warn{--sc:var(--warn)}
 .pr-dgz-ok{--sc:var(--ok)}
 .pr-dgz-gray{--sc:#6b6f76}
+
+/* Digitizing, an opened job (Oct 29, Nick: "this page needs to be rethought… very messy"): the stitch file with one
+   versions table (each version's sew-out and files on its row), then the sew-out card (photos, buttons, sew sequence) */
+.dgz-vt{margin:0}
+.dgz-vt td,.dgz-vt th{padding:6px 8px}
+.dgz-vt tr.on td{background:var(--accent-soft,var(--surface-2))}
+.dgz-vt .dgz-vn{white-space:nowrap}
+.dgz-vt tr.on .dgz-vn{color:var(--accent)}
+.dgz-vt .nw{white-space:nowrap}
+.dgz-vt .r{text-align:right}
+.dgz-vt td .pill+.pill{margin-left:4px}
+.dgz-sw{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:12px;align-items:start}
+.dgz-sw figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:3px}
+.dgz-sw img,.dgz-sw-none{width:96px;height:96px;object-fit:cover;border-radius:6px;background:var(--surface-2);display:block}
+.dgz-sw figcaption{font-size:12px;color:var(--ink-3)}
+.dgz-old{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid var(--line-2,var(--line));padding-top:8px}
+.dgz-oldsw{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3)}
+.dgz-oldsw img{width:28px;height:28px;object-fit:cover;border-radius:4px;opacity:.7}
+@media (max-width:640px){.dgz-sw{grid-template-columns:auto auto}.dgz-sw>.stack{grid-column:1/-1}}

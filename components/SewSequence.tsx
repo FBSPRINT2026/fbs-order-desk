@@ -8,9 +8,9 @@ import { needleThreads } from "@/lib/needleThreads";
  * the same color might start and stop several times"): each thread once with its needle, then every stop in order.
  * The thread on each needle is lib/needleThreads.ts's (a worksheet that only names colors gets the order's threads).
  */
-export default function SewSequence({ ws, inks = "", open: open0 = false }: { ws: Worksheet; inks?: string; open?: boolean }) {
+export default function SewSequence({ ws, inks = "", sewn, open: open0 = false }: { ws: Worksheet; inks?: string; /** what a sew-out recorded on each needle */ sewn?: Record<number, string> | null; open?: boolean }) {
   const [open, setOpen] = useState(open0);
-  const nt = needleThreads(ws, inks);
+  const nt = needleThreads(ws, inks, sewn);
   const on = (needle: number) => nt.find((t) => t.needle === needle);
   return (
     <div className="sew">

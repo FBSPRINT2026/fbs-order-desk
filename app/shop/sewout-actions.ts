@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { approveSewoutAnotherWay, remindSewout, saveSewout, sendSewoutNow, type SewnInput } from "@/lib/sewouts";
+import { approveSewoutAnotherWay, editSewout, remindSewout, saveSewout, sendSewoutNow, type SewnInput } from "@/lib/sewouts";
 import { makeSnap } from "@/lib/phoneSnap";
 
 /** Sew-out approval from the shop (lib/sewouts.ts): save the photo and email it, remind, or approved another way. */
@@ -17,6 +17,10 @@ const run = async <T,>(f: () => Promise<T>) => { try { return await f(); } catch
  *  is changed to match. Nothing is sent: Send to customer does that. */
 export async function sendSewoutPhoto(orderId: string, imprintId: string, photoPath: string, rawPath: string, note: string, extra: { placementPath?: string; sewn?: SewnInput } = {}) {
   return run(async () => saveSewout(createAdminClient(), { orderId, imprintId, photoPath, rawPath, note, ...extra }, await me()));
+}
+/** Edit a saved sew-out at the computer: the photo or its crop, the placement photo, the note, what was sewn */
+export async function editSewoutAction(id: string, x: { photoPath?: string; rawPath?: string; placementPath?: string | null; note?: string; sewn?: SewnInput }) {
+  return run(async () => editSewout(createAdminClient(), id, x, await me()));
 }
 /** Send to customer: the saved sew-out emailed to approve */
 export async function sendSewoutToCustomer(id: string) { return run(async () => sendSewoutNow(createAdminClient(), id, await me())); }
