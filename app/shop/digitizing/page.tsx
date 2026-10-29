@@ -218,11 +218,6 @@ export default function Digitizing() {
                   <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (orders && !n ? " z" : "")}>{orders ? n : "…"}</span></span>
                   <span className="dgz-nm">{l}</span>
                   <span className="dgz-hint">{hint}</span>
-                  {/* every logo at this station, side by side (Oct 29, Nick: "spread them out… we don't need a white box around
-                      the little squares and you can show all of them") */}
-                  <span className="dgz-tray">{!orders ? null : !n ? <span className="dgz-empty">Nothing waiting</span> : <>
-                    {here.map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <PrintThumb d={it.d} url={urls[it.d.id]} print={it.im} lines={it.g.lines} /> : <small className="dgz-noart">{it.d ? "…" : "No logo"}</small>}</span>)}
-                  </>}</span>
                 </button>
               );
             })}
@@ -313,7 +308,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   return (
     <>
       <tr className={open ? "on" : ""} data-dgz={it.key} onClick={toggle} style={{ cursor: "pointer" }}>
-        <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><PrintThumb d={it.d} url={pic} print={it.im} lines={it.g.lines} /></span> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
+        <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><PrintThumb d={it.d} url={pic} print={it.im} lines={it.g.lines} /></span> : null}<b style={{ whiteSpace: "nowrap" }} title={it.d ? designLabel(it.d) : undefined}>{it.d ? `D-${it.d.number}` : "No logo yet"}</b></span></td>
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>
