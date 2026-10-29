@@ -824,15 +824,15 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
             {sw.note && <div className="full so-note"><b>Note:</b> {sw.note}</div>}
           </div>
       </div>
-      <div className="pf-ok">
-        <div className="t">Please check the sew-out before you approve</div>
-        <div className="s">Spelling, thread colors, size and the small details. This is the real stitching on our machine; the run is sewn to match it. We start the run once this sew-out is approved, and keep it on file for reorders.</div>
+      {/* the approval box, small: one line to read, the two boxes, then one line each to write on (Oct 29, Nick: "make the
+          approval thing smaller") */}
+      <div className="pf-ok so-ok">
+        <div className="s"><b>Please check the sew-out before you approve.</b> Spelling, thread colors, size and the small details. This is the real stitching on our machine; the run is sewn to match it.</div>
         <div className="pf-boxes">
           <span><i className="cb" data-pdf-check="sewout-approved" /> Approved as sewn</span>
           <span><i className="cb" data-pdf-check="sewout-changes" /> Changes needed, send a new sew-out</span>
         </div>
-        <div className="pf-notes" data-pdf-text="sewout-changes-text" data-pdf-multi="1"><span>Changes or notes</span></div>
-        <div className="pf-sign"><div data-pdf-text="sewout-signature">Signature</div><div data-pdf-text="sewout-name">Name</div><div data-pdf-text="sewout-date">Date</div></div>
+        <div className="pf-sign"><div data-pdf-text="sewout-changes-text">Changes or notes</div><div data-pdf-text="sewout-signature">Signature</div><div data-pdf-text="sewout-name">Name</div><div data-pdf-text="sewout-date">Date</div></div>
         {ok && <div className="s ok">Approved{sw.approved_via === "staff" ? "" : " online"}: {ok}</div>}
         {sw.status === "changes" && sw.customer_comment && <div className="s">Changes asked: {sw.customer_comment}</div>}
       </div>

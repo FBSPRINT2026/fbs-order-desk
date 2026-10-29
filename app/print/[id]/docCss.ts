@@ -218,9 +218,19 @@ export const DOC_CSS = `
 .pdoc .pf-inks span{display:inline-flex;align-items:center;white-space:nowrap}
 .pdoc .so .so-head h2{font-family:var(--disp,inherit);font-size:17pt;margin:10px 0 2px;line-height:1.15}
 .pdoc .so .so-head p{font-size:10pt;color:var(--ink2);margin:0 0 8px}
-.pdoc .so .so-hero{flex:none;display:grid;grid-template-columns:1fr 1.45in;gap:16px;align-items:end}
+/* the close-up dead center on the page; it slides left only when it would run into the original file, and shrinks when it's
+   wider than the room left of it (Oct 29, Nick: "the close up… should always be in the dead center… if it's a really
+   wide one… start to move over") */
+.pdoc .so .so-hero{flex:none;display:grid;grid-template-columns:1fr minmax(0,auto) minmax(1.6in,1fr);align-items:end}
+.pdoc .so .so-hero>.so-ph{grid-column:2}
+.pdoc .so .so-hero>.so-org{grid-column:3;justify-self:end}
 .pdoc .so .so-ph{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
-.pdoc .so .so-ph img{max-width:100%;max-height:3.6in;object-fit:contain;border-radius:14px;box-shadow:0 10px 24px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.18);display:block}
+.pdoc .so .so-ok{padding:5px 12px 7px;border-width:1.5px}
+.pdoc .so .so-ok .s{margin-top:0;font-size:9pt}
+.pdoc .so .so-ok .s b{color:var(--ink);font-size:10pt}
+.pdoc .so .so-ok .pf-boxes{margin-top:4px}
+.pdoc .so .so-ok .pf-sign{grid-template-columns:2.2fr 1.6fr 1.3fr .9fr;gap:14px;margin-top:22px}
+.pdoc .so .so-ph img{max-width:100%;max-height:4.2in;object-fit:contain;border-radius:14px;box-shadow:0 10px 24px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.18);display:block}
 .pdoc .so .so-ph figcaption,.pdoc .so .so-org figcaption{font-size:9pt;color:var(--ink2);font-weight:600;text-align:center}
 .pdoc .so .so-ph .none{width:100%;height:3in;border:1px dashed var(--line);border-radius:14px;display:grid;place-items:center;color:var(--ink2)}
 .pdoc .so .so-org{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
