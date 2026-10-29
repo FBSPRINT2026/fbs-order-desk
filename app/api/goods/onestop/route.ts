@@ -20,6 +20,10 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams, admin = createAdminClient();
   const brand = sp.get("brand") || "Next Level", style = sp.get("style") || "6210";
   // ?search=…: what One Stop's search sends back (its first rows as they come), and what we make of it
+  if (sp.get("path")) {
+    const { osItemsRaw } = await import("@/lib/onestop");
+    return NextResponse.json(await osItemsRaw(sp.get("path")!).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })));
+  }
   if (sp.get("search")) {
     const { osSearchRaw, osSearch } = await import("@/lib/onestop");
     const q = sp.get("search")!;
