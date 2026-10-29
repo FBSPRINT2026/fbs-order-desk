@@ -20,7 +20,7 @@ import { startTracker } from "@/lib/goodsTrack";
 const LIVE = "https://api.onestopinc.com/";
 const TEST = "https://api-test.onestopinc.com/";
 /** the token as pasted: just the code, even if "Token …", quotes or spaces came along with it */
-const osToken = () => String(process.env.ONESTOP_API_TOKEN || "").trim().replace(/^["']|["']$/g, "").replace(/^(authorization:\s*)?token\s+/i, "").replace(/[^0-9a-z]/gi, ""); // their tokens are 40 letters and digits: anything else (a period, a hidden character) came along with the copy
+const osToken = () => String(process.env.ONESTOP_API_TOKEN || "").trim().replace(/^["']|["']$/g, "").replace(/^(authorization:\s*)?token\s+/i, "").replace(/[\s\u200b-\u200d\ufeff]+/g, ""); // spaces and hidden characters that come along with a copy
 export const osConfigured = () => !!osToken();
 export const osOrdersLive = () => process.env.ONESTOP_ORDERS?.trim().toLowerCase() === "on";
 
@@ -30,7 +30,8 @@ export class OneStopError extends Error {}
 export async function osPing(): Promise<{ live: string; test: string; token: { length: number; hex: boolean } }> {
   const t = osToken();
   const one = async (test: boolean) => { try { await os("ping/", { test }); return "ok"; } catch (e) { return e instanceof Error ? e.message : String(e); } };
-  return { live: await one(false), test: await one(true), token: { length: t.length, hex: /^[0-9a-f]+$/i.test(t) } };
+  // the token's shape only (never the token): their tokens are 40 letters and digits
+  return { live: await one(false), test: await one(true), token: { length: t.length, hex: /^[0-9a-f]+$/i.test(t), otherChars: t.replace(/[0-9a-z]/gi, "").length } };
 }
 
 async function os<T>(path: string, init?: { method?: "GET" | "POST"; body?: unknown; test?: boolean; timeoutMs?: number }): Promise<T> {
