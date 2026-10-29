@@ -1,4 +1,5 @@
 import "server-only";
+import type { GoodsExtra } from "@/lib/goodsExtras";
 import { carries, supplierBrands } from "@/lib/supplierBrands";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ssSkus } from "@/lib/ss";
@@ -11,9 +12,6 @@ export type GoodsRow = { key: string; brand: string; style: string; color: strin
   /** bought on top of the order (Oct 29, Nick: "one extra large… as a test print… you have to indicate what it is, and
    *  then we've got to add it back to the order"): why, printed or left blank, and charged or not */
   extra?: GoodsExtra };
-export type GoodsExtra = { reason: string; print: boolean; free: boolean };
-/** the reasons an extra is bought; "Other" asks for words */
-export const EXTRA_REASONS = ["Shop sample / test print", "Spare for misprints", "Customer's extras", "Other"] as const;
 
 /** Match rows to S&S skus (one lookup per style; our catalog remembers the S&S style id). Fills sku, price, stock. */
 export async function matchToSS(admin: SupabaseClient, rows: GoodsRow[], opts: { fixColors?: boolean } = {}) {
