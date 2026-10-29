@@ -6,8 +6,24 @@ import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricin
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
 import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
-import { cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
+import { cleanGoodsPo, customerShort, defaultGoodsPo, typedShort } from "@/lib/goodsPo";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
+/** the short names the shop typed for customers' goods POs (lib/goodsPo.ts): read for the default, kept when a typed
+ *  one differs from ours (Oct 29, Nick: "Dear Heart Designs could be DHD… then I can type over it") */
+async function learnedShort(admin: ReturnType<typeof createAdminClient>, customerId?: string | null) {
+  if (!customerId) return "";
+  const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  return String(((data?.data || {}) as { goodsShort?: Record<string, string> }).goodsShort?.[customerId] || "");
+}
+async function keepShort(admin: ReturnType<typeof createAdminClient>, customerId: string | null | undefined, po: string) {
+  const t = typedShort(po); if (!customerId || !t) return;
+  const { data: c } = await admin.from("customers").select("company, name").eq("id", customerId).maybeSingle();
+  const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const d = (data?.data || {}) as { goodsShort?: Record<string, string> };
+  const have = d.goodsShort?.[customerId] || customerShort(String(c?.company || c?.name || ""));
+  if (t === have || /^stock$/i.test(t)) return;
+  await admin.from("settings").update({ data: { ...d, goodsShort: { ...(d.goodsShort || {}), [customerId]: t } } }).eq("id", 1);
+}
 const smWh = (id: string, name: string) => (SM_WH[id] ? id : Object.entries(SM_WH).find(([, v]) => name && new RegExp(v[1], "i").test(name))?.[0] || id);
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
@@ -111,7 +127,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
         let n = lead; while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
         needBy = d.toISOString().slice(0, 10);
       }
-      return { ok: true as const, needBy, production: prod, due, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim(), po: defaultGoodsPo({ orderNo: o.number as number, customer: c?.company || c?.name }) };
+      return { ok: true as const, needBy, production: prod, due, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim(), po: defaultGoodsPo({ orderNo: o.number as number, customer: c?.company || c?.name, short: await learnedShort(admin, c?.id as string | undefined) }) };
     }
     if (p.email) {
       const { data: a } = await admin.from("activities").select("id, subject, from_email, customer_id, order_id, meta").eq("id", p.email).maybeSingle();
@@ -122,7 +138,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
       const pl = sg?.payload as { draft?: { groups?: Group[] }; groups?: Group[] } | null;
       const rows = rowsOf(pl?.draft?.groups || pl?.groups || []);
       if (rows.length && ssConfigured()) await matchToSS(admin, rows, { fixColors: true });
-      return { ok: true as const, email: { id: a.id as string, subject: (a.subject as string) || "", from: (a.from_email as string) || "" }, customer: c ? { id: c.id as string, name: (c.company as string) || (c.name as string) } : null, rows, label: `${c?.company || c?.name || a.from_email} (ahead of order)`, po: defaultGoodsPo({ customer: c?.company || c?.name || a.from_email }), read: !!pl };
+      return { ok: true as const, email: { id: a.id as string, subject: (a.subject as string) || "", from: (a.from_email as string) || "" }, customer: c ? { id: c.id as string, name: (c.company as string) || (c.name as string) } : null, rows, label: `${c?.company || c?.name || a.from_email} (ahead of order)`, po: defaultGoodsPo({ customer: c?.company || c?.name || a.from_email, short: await learnedShort(admin, c?.id as string | undefined) }), read: !!pl };
     }
     return { ok: true as const, rows: [] as GoodsRow[] };
   } catch (e) { return fail(e); }
@@ -178,6 +194,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
       email: p.test ? undefined : v.user!.email || undefined,
     }), admin, p.test);
     const results = res.map((r) => ({ orderNumber: r.orderNumber, warehouse: r.warehouseAbbr, total: r.total, expected: r.expectedDeliveryDate }));
+    if (!p.test) await keepShort(admin, p.customerId, po).catch(() => null);
     if (!p.test) {
       const expected = results.map((r) => r.expected).filter(Boolean).sort().pop() || null;
       const row = {
@@ -447,6 +464,7 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
       return { ok: true as const, checked: r, total: Math.round(sub * (1 + fee / 100) * 100) / 100, po: order.poNum };
     }
     const r = await sanmarSubmitPO(order);
+    await keepShort(admin, p.customerId, order.poNum).catch(() => null);
     const garments = (p.garments || []).filter((g) => g && g.style && goodsPcs(g) > 0).slice(0, 60);
     const row = {
       order_id: p.orderId || null, customer_id: p.customerId || null, activity_id: p.activityId || null, label: order.poNum, supplier: "sanmar", supplier_order: order.poNum, po: order.poNum,
