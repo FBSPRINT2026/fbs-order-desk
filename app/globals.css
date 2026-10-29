@@ -15761,3 +15761,24 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .dgz-vnote.wait{background:var(--warn-soft);color:var(--warn)}
 .dgz-vnote.bad{background:var(--danger-soft);color:var(--danger)}
 @media (max-width:640px){.dgz-vnote{margin-left:0}}
+/* Digitizing's stages as a production line (app/shop/digitizing/page.tsx, Oct 29) */
+.dgz-line{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:start;padding:6px 0 2px}
+.dgz-rail{position:absolute;left:10%;right:10%;top:34px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--danger),var(--warn) 25%,var(--fbs-blue) 50%,var(--warn) 75%,var(--ok));opacity:.35}
+.dgz-stn{all:unset;box-sizing:border-box;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;padding:0 4px;text-align:center;min-width:0}
+.dgz-stn:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
+.dgz-ring{width:56px;height:56px;border-radius:50%;background:var(--surface);border:3px solid var(--c);display:grid;place-items:center;color:var(--c);position:relative;z-index:1;transition:box-shadow .15s}
+.dgz-stn:hover .dgz-ring{box-shadow:0 0 0 5px color-mix(in srgb,var(--c) 14%,transparent)}
+.dgz-stn.on .dgz-ring{background:var(--c);color:#fff;box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 22%,transparent)}
+.dgz-cnt{position:absolute;top:-6px;right:-10px;min-width:22px;height:22px;border-radius:11px;background:var(--c);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;padding:0 5px;border:2px solid var(--surface);box-sizing:border-box}
+.dgz-nm{font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dgz-stn.on .dgz-nm{color:var(--c)}
+.dgz-hint{font-size:12px;color:var(--ink-3);margin-top:-3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dgz-logos{display:flex;margin-top:2px}
+.dgz-logos>span{width:26px;height:26px;border-radius:6px;background:var(--surface-2);border:1.5px solid var(--surface);margin-left:-7px;overflow:hidden;display:grid;place-items:center}
+.dgz-logos>span:first-child{margin-left:0}
+.dgz-logos>span img{width:100%;height:100%;object-fit:contain}
+.dgz-logos i{font-style:normal;font-size:10.5px;font-weight:700;color:var(--ink-3)}
+.dgz-stn.zero .dgz-ring{opacity:.45}
+.dgz-stn.zero .dgz-nm{color:var(--ink-3)}
+.dgz-all{display:flex;justify-content:flex-end;margin-top:-4px}
+@media (max-width:760px){.dgz-line{grid-template-columns:repeat(5,minmax(64px,1fr))}.dgz-hint{display:none}.dgz-nm{font-size:11.5px;white-space:normal}.dgz-ring{width:44px;height:44px}.dgz-rail{top:28px}}

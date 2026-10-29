@@ -1,7 +1,7 @@
 "use client";
 import LogoThumb from "@/components/LogoThumb";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { currentSewFile, digitizeState, requestOf, sewVersions } from "@/lib/digitizeStatus";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
@@ -205,13 +205,23 @@ export default function Digitizing() {
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
-          <div className="toolbar">
-            <div className="chips" role="tablist">
-              {([["need", "Needs digitizing"], ["asked", "Requested"], ["done", "Needs sew-out"], ["sent", "Waiting on approval"], ["ok", "Approved or sewn before"], ["all", "All"]] as [Filter, string][]).map(([k, l]) => (
-                <button key={k} type="button" role="tab" aria-selected={filter === k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>{l} <span className="pill-n">{orders ? count(k) : "…"}</span></button>
-              ))}
-            </div>
+          {/* the stages as a production line (Oct 29, Nick: "make it more graphical… like an order moving along"): each
+              station's count and the logos waiting there; the picked one is filled; All is at the end */}
+          <div className="dgz-line" role="tablist" aria-label="Where each logo is">
+            <div className="dgz-rail" aria-hidden />
+            {LINE.map(([k, l, hint, c, icon]) => {
+              const here = items.filter((it) => stateOf(it) === k), n = here.length;
+              return (
+                <button key={k} type="button" role="tab" aria-selected={filter === k} className={"dgz-stn" + (filter === k ? " on" : "") + (orders && !n ? " zero" : "")} style={{ ["--c" as string]: c }} onClick={() => setFilter(k)}>
+                  <span className="dgz-ring">{icon}<span className="dgz-cnt">{orders ? n : "…"}</span></span>
+                  <span className="dgz-nm">{l}</span>
+                  <span className="dgz-hint">{hint}</span>
+                  {n > 0 && <span className="dgz-logos" aria-hidden>{here.slice(0, 4).map((it) => <span key={it.key}>{it.d && urls[it.d.id] ? <LogoThumb d={it.d} url={urls[it.d.id]} shirt={(it.g.lines || [])[0]?.color} inkMap={it.im.inkMap?.map} /> : <i>{(it.d?.name || it.im.location || "?").slice(0, 1).toUpperCase()}</i>}</span>)}{n > 4 && <span><i>+{n - 4}</i></span>}</span>}
+                </button>
+              );
+            })}
           </div>
+          <div className="dgz-all"><button type="button" className={"chip" + (filter === "all" ? " on" : "")} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All <span className="pill-n">{orders ? count("all") : "…"}</span></button></div>
           {!orders ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{filter === "need" ? "Nothing waiting to be digitized. An embroidered print on an order shows up here until its DST is in." : "Nothing here."}</div> : (
             <div className="tbl-wrap"><table className="tbl dgz">
               <thead><tr><th>Logo</th><th>Order</th><th>Print</th><th>Stitches</th><th>State</th><th /></tr></thead>
@@ -236,6 +246,15 @@ export default function Digitizing() {
 }
 
 const CHG_OUTRO = "Please send back the updated DST, EMB and worksheet. Thank you!";
+const ico = (d: string) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>;
+/** the five stations, in order: name, what it waits on, its color, its icon */
+const LINE: [State, string, string, string, ReactNode][] = [
+  ["need", "Needs digitizing", "send to the digitizer", "var(--danger)", ico("M3 17c3-6 5-9 7-9s-1 8 2 8 3-6 5-6 2 4 4 4")],
+  ["asked", "Requested", "waiting on the file", "var(--warn)", ico("M22 2 11 13M22 2l-7 20-4-9-9-4z")],
+  ["done", "Needs sew-out", "files in, sew a sample", "var(--fbs-blue)", ico("M5 19 19 5M15 5h4v4M4 20l3-1M9 11c-3 1-5 4-4 7")],
+  ["sent", "Waiting on approval", "with the customer", "var(--warn)", ico("M6 2h12M6 22h12M7 2c0 5 10 7 10 10s-10 5-10 10M17 2c0 5-10 7-10 10s10 5 10 10")],
+  ["ok", "Approved", "on file for reorders", "var(--ok)", ico("M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3")],
+];
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
