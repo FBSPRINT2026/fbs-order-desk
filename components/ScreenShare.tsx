@@ -15,7 +15,13 @@ import { createPortal } from "react-dom";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
-const ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
+// how the two computers find each other: on one network directly; across networks (the shop and the house) through the
+// relay that /api/call/ice hands out (Oct 29, Nick: "I can't see it from the house")
+const STUN: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
+type Ice = { iceServers: RTCIceServer[]; relay: boolean };
+async function getIce(): Promise<Ice> {
+  try { const r = await fetch("/api/call/ice", { cache: "no-store" }); const j = (await r.json()) as Ice; return j.iceServers?.length ? j : { iceServers: STUN, relay: false }; } catch { return { iceServers: STUN, relay: false }; }
+}
 type Sig = { t: "hello" | "join" | "offer" | "answer" | "ice" | "bye"; sdp?: RTCSessionDescriptionInit; c?: RTCIceCandidateInit; from: string };
 type Invite = { id: string; host_email: string; host_name: string; note: string; created_at: string };
 const first = (n: string) => (n || "").split(/[\s@._]+/)[0].replace(/^./, (c) => c.toUpperCase());
@@ -68,13 +74,20 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
   const pc = useRef<RTCPeerConnection | null>(null), chan = useRef<RealtimeChannel | null>(null);
   const screen = useRef<MediaStream | null>(null), mic = useRef<MediaStream | null>(null), remote = useRef<MediaStream | null>(null);
   const vid = useRef<HTMLVideoElement | null>(null), audio = useRef<HTMLAudioElement | null>(null), pending = useRef<RTCIceCandidateInit[]>([]);
+  // the relay for this call, and whether the picture is really getting through ("Live" only once it is)
+  const ice = useRef<Ice | null>(null), tries = useRef(0);
+  const [link, setLink] = useState<"" | "trying" | "ok" | "failed">("");
 
   const send = useCallback((m: Omit<Sig, "from">) => void chan.current?.send({ type: "broadcast", event: "sig", payload: { ...m, from: email } }), [email]);
-  const newPeer = (onTrack: (e: RTCTrackEvent) => void) => {
+  const newPeer = (onTrack: (e: RTCTrackEvent) => void, onLink: (st: RTCPeerConnectionState) => void) => {
     pc.current?.close();
-    const p = new RTCPeerConnection({ iceServers: ICE });
+    // ?relay=1 sends everything through the relay, to test it from one network
+    const forceRelay = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("relay") === "1";
+    const p = new RTCPeerConnection({ iceServers: ice.current?.iceServers || STUN, ...(forceRelay && ice.current?.relay ? { iceTransportPolicy: "relay" as const } : {}) });
     p.onicecandidate = (e) => { if (e.candidate) send({ t: "ice", c: e.candidate.toJSON() }); };
     p.ontrack = onTrack;
+    p.onconnectionstatechange = () => { if (pc.current === p) onLink(p.connectionState); };
+    setLink("trying");
     pc.current = p; pending.current = [];
     return p;
   };
@@ -102,6 +115,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
     screen.current = s;
     s.getVideoTracks()[0]?.addEventListener("ended", () => void stop());
     await getMic();
+    ice.current = await getIce();
     let sid = id;
     if (!sid) {
       const { data, error } = await sb.from("screen_sessions").insert({ host_email: email, host_name: name || first(email), note: note.slice(0, 300) }).select("id").single();
@@ -119,13 +133,15 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
         const p = newPeer((e) => { // their voice
           if (!audio.current) { audio.current = new Audio(); audio.current.autoplay = true; }
           audio.current.srcObject = e.streams[0] || new MediaStream([e.track]);
+        }, (st) => {
+          if (st === "connected") { setLink("ok"); setState("live"); }
+          else if (st === "failed") { setLink("failed"); setState("waiting"); }
         });
         screen.current?.getTracks().forEach((t) => p.addTrack(t, screen.current!));
         mic.current?.getTracks().forEach((t) => p.addTrack(t, mic.current!));
         p.addTransceiver("audio", { direction: "recvonly" });
         const offer = await p.createOffer(); await p.setLocalDescription(offer);
         send({ t: "offer", sdp: p.localDescription!.toJSON() });
-        setState("live");
       } else if (m.t === "answer" && m.sdp && pc.current) { await pc.current.setRemoteDescription(m.sdp); await flushIce(); }
       else if (m.t === "ice" && m.c) await addIce(m.c);
       else if (m.t === "bye") { pc.current?.close(); pc.current = null; setState("waiting"); }
@@ -149,17 +165,22 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
       setWho(String(row?.host_name || first(String(row?.host_email || ""))));
       if (row?.status === "ended") { setState("ended"); return; }
       await getMic();
+      ice.current = await getIce();
+      if (!live) return;
       await sb.from("screen_sessions").update({ status: "live", viewer_email: email, joined_at: new Date().toISOString() }).eq("id", sessionId);
       const c = sb.channel(`screen-${sessionId}`, { config: { broadcast: { self: false } } });
       c.on("broadcast", { event: "sig" }, async ({ payload }) => {
         const m = payload as Sig;
-        if (m.t === "hello") { send({ t: "join" }); void sb.from("screen_sessions").update({ status: "live" }).eq("id", sessionId); } // they (re)started sharing
+        if (m.t === "hello") { tries.current = 0; send({ t: "join" }); void sb.from("screen_sessions").update({ status: "live" }).eq("id", sessionId); } // they (re)started sharing
         else if (m.t === "offer" && m.sdp) {
           remote.current = new MediaStream();
           const p = newPeer((e) => {
             remote.current!.addTrack(e.track);
             if (vid.current) { vid.current.srcObject = remote.current; vid.current.play().catch(() => setSoundOff(true)); }
-            setState("live");
+          }, (st) => {
+            if (st === "connected") { tries.current = 0; setLink("ok"); setState("live"); }
+            // no way through: ask them to start over once or twice (a new link, new routes), then say so
+            else if (st === "failed") { setLink("failed"); setState("waiting"); if (tries.current++ < 2) send({ t: "join" }); }
           });
           await p.setRemoteDescription(m.sdp);
           mic.current?.getTracks().forEach((t) => p.addTrack(t, mic.current!));
@@ -191,7 +212,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
       <div className="ss-bar">
         <span className={"ss-live" + (state === "live" ? " on" : "")} aria-hidden />
         <b data-notranslate>{who ? `${who}'s screen` : "Their screen"}</b>
-        <span className="faint">{state === "waiting" ? "Connecting…" : state === "away" ? "They stopped sharing. This window waits in case they come back." : state === "ended" ? "This share has ended." : hasMic ? "Live · you can talk, your mic is on" : "Live"}</span>
+        <span className="faint">{state === "waiting" ? (link === "failed" ? "Can't get their picture through from this network" : "Connecting…") : state === "away" ? "They stopped sharing. This window waits in case they come back." : state === "ended" ? "This share has ended." : hasMic ? "Live · you can talk, your mic is on" : "Live"}</span>
         <span className="spacer" />
         {soundOff && <button type="button" className="btn sm primary" onClick={() => { void vid.current?.play(); setSoundOff(false); }}>Turn on sound</button>}
         {hasMic && state !== "ended" && <button type="button" className="btn sm" onClick={mute}>{muted ? "Unmute" : "Mute"}</button>}
@@ -199,7 +220,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
       </div>
       <div className="ss-stage">
         <video ref={vid} autoPlay playsInline />
-        {state !== "live" && <div className="ss-wait">{state === "ended" ? "This share has ended. You can close this window." : state === "away" ? `Waiting for ${who || "them"} to share again…` : `Connecting to ${who || "their screen"}…`}</div>}
+        {state !== "live" && <div className="ss-wait">{state === "ended" ? "This share has ended. You can close this window." : state === "away" ? `Waiting for ${who || "them"} to share again…` : link === "failed" ? (ice.current?.relay ? `Couldn't reach ${who || "their screen"}. Click Leave and join again.` : `Couldn't reach ${who || "their screen"}: your networks block a direct link, and the call relay isn't set up yet.`) : `Connecting to ${who || "their screen"}…`}</div>}
       </div>
     </div>
   );
@@ -217,7 +238,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
         </ol>
       </>}
       {(state === "waiting" || state === "live") && <>
-        <p className="ss-status">{state === "live" ? <><b>{who || "Nick"} is watching.</b> You&apos;re live.</> : "Waiting for Nick to join…"}</p>
+        <p className="ss-status">{state === "live" ? <><b>{who || "Nick"} is watching.</b> You&apos;re live.</> : link === "trying" ? `${who || "Nick"} is joining…` : link === "failed" ? `${who || "Nick"} couldn't connect from where he is. He can try joining again.` : "Waiting for Nick to join…"}</p>
         <p className="faint">Keep this little window open. You can go back to the portal, click around and even refresh it: the call keeps going here.</p>
         <div className="row" style={{ gap: 8 }}>
           {hasMic && <button type="button" className="btn" onClick={mute}>{muted ? "Unmute" : "Mute"}</button>}
