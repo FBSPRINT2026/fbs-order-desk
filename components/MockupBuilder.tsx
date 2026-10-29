@@ -68,7 +68,8 @@ import { bareStyle } from "@/lib/ai/normalize";
 type Line = { id: string; style: string; brand: string; color: string; garment: string;
   /** a garment that isn't in the catalog: the photos they uploaded (storage paths; Oct 24, Nick: "LA Apparel isn't offered at either of those two suppliers") */ own?: { front: string; back?: string };
   /** the shirt's color picked off the photo with the eyedropper (close-ups and logo tiles; Oct 24, Nick) */ hex?: string;
-  /** a garment we have no photo of, drawn (Oct 27): what it looks like, read off the customer's mockup (trim, stripes, quilted…) */ look?: GarmentLook };
+  /** a garment we have no photo of, drawn (Oct 27): what it looks like, read off the customer's mockup (trim, stripes, quilted…) */ look?: GarmentLook;
+  /** the color it was last saved in (GLine.shade): a logo mockup's background stays this unless someone picks another */ shade?: string };
 type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
@@ -586,7 +587,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // one mockup per garment: the same style and color twice (their extras line under it) is one shirt, not two
           // identical mockups (Oct 22: #40104 and #40106 each got the same Red / Charcoal mockup twice)
           const seenSC = new Set<string>();
-          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}) })));
+          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
@@ -1864,7 +1865,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || ((g0) => (g0 !== "#9aa1ab" ? g0 : fits[photo(l, "front")]?.hex || g0))(guessHex(l.color)); };
+  // a logo mockup's background is staff's (Oct 29, Nick: "you should never edit the background… just the thread colors"):
+  // the color picked, else the one it was saved with, and only the first time it's made the garment's color
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (logoOnly && l.shade && /^#[0-9a-f]{6}$/i.test(l.shade)) return l.shade; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || fits[photo(l, "front")]?.hex || guessHex(l.color); /* the garment's own color (its code, its photo) before what its name says: "Regatta Blue" is a natural tote's trim */ };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
@@ -2835,7 +2838,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const shade = shirtHex(l);
       for (const x of g.lines.filter((y) => y.id === l.id || scKey(y) === scKey(ol))) {
         if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) x.hex = l.hex.toLowerCase(); else delete x.hex;
-        if (/^#[0-9a-f]{6}$/i.test(shade) && shade.toLowerCase() !== "#9aa1ab") x.shade = shade.toLowerCase(); else delete x.shade;
+        if (/^#[0-9a-f]{6}$/i.test(shade) && (logoOnly || shade.toLowerCase() !== "#9aa1ab")) x.shade = shade.toLowerCase(); else delete x.shade;
       }
     }
     if (mockupSaved) { g.mockupAt = new Date().toISOString(); delete g.mockupSkipped; }
