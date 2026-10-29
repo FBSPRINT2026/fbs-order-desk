@@ -4,7 +4,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
+import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order, withoutShopPieces } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
@@ -135,7 +135,7 @@ export async function reorderRequest(fromId: string): Promise<Result> {
     const { data: src } = await supabase.from("orders").select("*").eq("id", fromId).maybeSingle();
     if (!src || src.status === "request" || src.status === "quote") return { ok: false, error: "We couldn't find that order." };
     const { data: cust } = await admin.from("customers").select("price_type,tax_exempt").eq("id", src.customer_id).maybeSingle();
-    const groups = orderGroups(src as Order).map((g) => ({
+    const groups = orderGroups(withoutShopPieces(src as Order)).map((g) => ({
       id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
       lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
       imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
@@ -619,7 +619,7 @@ export async function reorderInto(id: string, ref: string): Promise<Result & { g
     if (ref.startsWith("o:")) {
       const { data: src } = await supabase.from("orders").select("*").eq("id", ref.slice(2)).maybeSingle();
       if (!src || src.customer_id !== cust.id) return { ok: false, error: "We couldn't find that order." };
-      groups = orderGroups(src as Order).map((g) => ({
+      groups = orderGroups(withoutShopPieces(src as Order)).map((g) => ({
         id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
         lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
         imprints: g.imprints.map((d) => ({ ...d, id: uid() })),

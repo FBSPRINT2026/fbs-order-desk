@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
+import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order, withoutShopPieces } from "@/lib/pricing";
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
@@ -22,7 +22,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const admin = createAdminClient();
   const { data: od } = await admin.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
-  const o = od as Order;
+  const o = withoutShopPieces(od as Order); // labels go on the customer's boxes: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
   const [{ data: cu }, { data: s }] = await Promise.all([
     admin.from("customers").select("*").eq("id", o.customer_id).maybeSingle(),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),

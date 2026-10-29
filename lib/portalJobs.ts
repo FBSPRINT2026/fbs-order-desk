@@ -1,4 +1,4 @@
-import { lineQty, orderGroups, type Order } from "@/lib/pricing";
+import { lineQty, orderGroups, type Order, withoutShopPieces } from "@/lib/pricing";
 
 /**
  * The customer's jobs as their dashboard shows them (Oct 15, Nick: "more visual, so it shows jobs and they're moving
@@ -55,7 +55,7 @@ type JobExtra = {
 };
 
 export function jobFor(o: Order, x: JobExtra): PortalJob {
-  const groups = orderGroups(o);
+  const groups = orderGroups(withoutShopPieces(o));
   const lines = groups.flatMap((g) => g.lines).filter((l) => lineQty(l) > 0);
   const qty = lines.reduce((a, l) => a + lineQty(l), 0) || o.qty || 0;
   const colors = [...new Set(lines.map((l) => l.color).filter(Boolean))];

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { GoodsRow } from "@/lib/ssMatch";
-import { EXTRA_REASONS, type GoodsExtra } from "@/lib/goodsExtras";
+import { EXTRA_REASONS, shopReason, type GoodsExtra } from "@/lib/goodsExtras";
 import type { EODraft } from "@/lib/emailOrderShared";
 import type { Group } from "@/lib/pricing";
 import { money } from "@/lib/format";
@@ -90,7 +90,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   // to indicate what it is, and then we've got to add it back to the order"): the order's own quantities are locked;
   // extras are their own rows (key + "~x"), each garment's with a reason, printed or not, charged or not
   const [xMeta, setXMeta] = useState<Record<string, GoodsExtra & { other?: string }>>({});
-  const xDefault: GoodsExtra = { reason: EXTRA_REASONS[0], print: true, free: true };
+  const xDefault: GoodsExtra = { reason: EXTRA_REASONS[0], print: true, free: true, shop: true };
   const gkOf = (x: { brand: string; style: string; color: string }) => `${x.brand}|${x.style}|${x.color}`;
   const metaOf = (gk: string) => xMeta[gk] || xDefault;
   const reasonOf = (m: GoodsExtra & { other?: string }) => (m.reason === "Other" ? (m.other || "").trim() : m.reason);
@@ -98,15 +98,17 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
     const key = base.key + "~x", m = metaOf(gkOf(base));
     setRows((rs) => {
       const list = (rs || []).filter((y) => y.key !== key);
-      if (qty > 0) { const at = list.findIndex((y) => y.key === base.key); list.splice(at + 1, 0, { ...base, key, qty, extra: { reason: reasonOf(m), print: m.print, free: m.free } }); }
+      if (qty > 0) { const at = list.findIndex((y) => y.key === base.key); list.splice(at + 1, 0, { ...base, key, qty, extra: { reason: reasonOf(m), print: m.print, free: m.free || !!m.shop, shop: !!m.shop } }); }
       return list;
     });
     setCheck(null);
   }
   function setMeta(gk: string, patch: Partial<GoodsExtra & { other?: string }>) {
+    // a shop sample or a spare is ours: hidden from the customer, no charge; picking one of those reasons sets it
+    if (patch.reason && patch.reason !== "Other") patch = { ...patch, shop: shopReason(patch.reason), ...(shopReason(patch.reason) ? { free: true } : {}) };
     const m = { ...metaOf(gk), ...patch };
     setXMeta((x) => ({ ...x, [gk]: m }));
-    setRows((rs) => (rs || []).map((y) => (y.extra && gkOf(y) === gk ? { ...y, extra: { reason: reasonOf(m), print: m.print, free: m.free } } : y)));
+    setRows((rs) => (rs || []).map((y) => (y.extra && gkOf(y) === gk ? { ...y, extra: { reason: reasonOf(m), print: m.print, free: m.free || !!m.shop, shop: !!m.shop } } : y)));
   }
   const stopped = useRef(false), waiting = useRef<((e: Error) => void) | null>(null), ran = useRef(false);
   const step = (label: string) => setSteps((s) => [...s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)), { label, state: "doing" }]);
@@ -264,10 +266,10 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       setPlaced(out.join(" · ") || "placed");
       // the extras go back on the order as Extras lines, with why (addExtrasToOrder)
       if (orderId && xRows.length) {
-        const byG = new Map<string, { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean }>();
+        const byG = new Map<string, { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean; shop?: boolean }>();
         for (const x of xRows.filter((y) => ready.some((r) => r.key === y.key))) {
-          type XG = { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean };
-          const g: XG = byG.get(gkOf(x)) || { brand: x.brand, style: x.style, color: x.color, sizes: {} as Record<string, number>, reason: x.extra!.reason, print: x.extra!.print, free: x.extra!.free };
+          type XG = { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean; shop?: boolean };
+          const g: XG = byG.get(gkOf(x)) || { brand: x.brand, style: x.style, color: x.color, sizes: {} as Record<string, number>, reason: x.extra!.reason, print: x.extra!.print, free: x.extra!.free, shop: x.extra!.shop };
           g.sizes[x.size] = (g.sizes[x.size] || 0) + x.qty; byG.set(gkOf(x), g);
         }
         const r = await addExtrasToOrder(orderId, [...byG.values()], out.join(" · "));
@@ -413,8 +415,9 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
                     ))}</div>
                     {exN > 0 && <div className="og-xf">
                       <select value={m.reason} aria-label="Why the extra" onChange={(e) => setMeta(k, { reason: e.target.value })}>{EXTRA_REASONS.map((r) => <option key={r}>{r}</option>)}</select>
-                      <select value={`${m.print ? "p" : "b"}${m.free ? "f" : "c"}`} aria-label="Printed and charged" onChange={(e) => setMeta(k, { print: e.target.value[0] === "p", free: e.target.value[1] === "f" })}>
-                        <option value="pf">Printed, no charge</option><option value="pc">Printed, charged</option><option value="bf">Not printed, no charge</option><option value="bc">Not printed, charged</option>
+                      <select value={`${m.print ? "p" : "b"}${m.shop ? "s" : m.free ? "f" : "c"}`} aria-label="Printed, and who it's for" onChange={(e) => setMeta(k, { print: e.target.value[0] === "p", free: e.target.value[1] !== "c", shop: e.target.value[1] === "s" })}>
+                        {(m.shop || m.reason === "Other") && <><option value="ps">Printed, ours (hidden from customer)</option><option value="bs">Not printed, ours (hidden from customer)</option></>}
+                        {(!m.shop || m.reason === "Other") && <><option value="pf">Printed, no charge</option><option value="pc">Printed, charged</option><option value="bf">Not printed, no charge</option><option value="bc">Not printed, charged</option></>}
                       </select>
                       {m.reason === "Other" && <input type="text" value={m.other || ""} placeholder="What it's for" aria-label="What the extra is for" onChange={(e) => setMeta(k, { other: e.target.value })} />}
                     </div>}

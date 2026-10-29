@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, orderGroups, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, mergeSettings, orderGroups, type Order, type Payment, withoutShopPieces } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Result = { ok: boolean; error?: string; url?: string };
@@ -116,7 +116,7 @@ export async function proofForChange(proofId: string, view = false): Promise<Own
     if (!view && proof.status !== "pending") return { ok: false, error: "This proof was already reviewed." };
     const { admin, order } = await customerOrder(proof.order_id);
     const { data: mk } = await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
-    const groups = orderGroups(order);
+    const groups = orderGroups(withoutShopPieces(order));
     const g = groups.find((x) => x.id === mk?.group_id) || groups[0];
     if (!g) return { ok: false, error: "This order has no garments yet." };
     return {

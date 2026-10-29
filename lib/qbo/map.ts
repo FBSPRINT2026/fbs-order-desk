@@ -1,4 +1,4 @@
-import { calcOrder, imprintLabel, orderGroups, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
+import { calcOrder, imprintLabel, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
 
 /**
  * QuickBooks Online: what we send, built from our records. Pure functions (no database, no network), so they can be
@@ -263,7 +263,8 @@ export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks",
  * link), or null in a preview before the customer exists there. Problems stop it from being sent; warnings are shown.
  */
 export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | null; customerRef: { value: string; name?: string } | null; settings: Settings; qs: QboSettings }): InvoiceBuild {
-  const { order: o, customer: cu, settings, qs } = inp;
+  // the customer's invoice: never the shop's own pieces (shop samples, spares; they're never charged)
+  const { customer: cu, settings, qs } = inp, o = withoutShopPieces(inp.order);
   const calc = calcOrder(o, settings);
   const groups = orderGroups(o);
   const problems: string[] = [], warnings: string[] = [];

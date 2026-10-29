@@ -102,7 +102,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
       for (const g of gs) {
         const art = g.fromMockup ? `art: made by the customer in our Mockup Creator (mockup M-${g.fromMockup.number ?? "?"})` : (g.customerMockups || []).length ? "art: the customer's own mockup file was attached" : g.mockupAt || (g.mockupThumbs || []).length ? "art: we made the mockup" : "art: no mockup yet";
         const prints = (g.imprints || []).filter((d) => d.location).map((d) => `${d.location}${d.design_id ? "" : " (no logo picked)"}${d.inks ? ` in ${d.inks}` : ""}`).join("; ");
-        const garments = (g.lines || []).filter((l) => l.style).map((l) => `${l.style} ${l.color || ""}`.trim()).join(", ");
+        const garments = (g.lines || []).filter((l) => l.style && !(l as { shopUse?: boolean }).shopUse).map((l) => `${l.style} ${l.color || ""}`.trim()).join(", ");
         out.push(`  group ${g.name || ""}: ${garments || "garments not set"} | ${art}${prints ? ` | prints: ${prints}` : ""}`);
       }
       const pr = by(prf, o.id)[0];

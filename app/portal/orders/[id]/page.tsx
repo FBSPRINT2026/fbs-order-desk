@@ -8,7 +8,7 @@ import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ImprintSpecs from "@/components/ImprintSpecs";
-import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
+import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
@@ -54,7 +54,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
-  const o = od as Order;
+  const o = withoutShopPieces(od as Order); // the customer's view: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
   // a request the customer hasn't sent in yet opens in the order builder
   if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
   const isReq = o.status === "request";

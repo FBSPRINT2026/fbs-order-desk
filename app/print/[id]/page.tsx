@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
 import { loadGroupLook } from "@/lib/groupLook";
 import { addStockInks } from "@/lib/inkColors";
 import PrintButton from "./PrintButton";
@@ -19,7 +19,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const db = isStaff ? createAdminClient() : supabase; // customers read through row security
   const { data: od } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
-  const o = od as Order;
+  // the customer's documents (invoice, quote, proof, sew-out) never show the shop's own pieces; the work order does
+  const o = !!work && isStaff ? (od as Order) : withoutShopPieces(od as Order);
   const admin = createAdminClient();
   const [{ data: cu }, { data: s }, { data: pays }] = await Promise.all([
     admin.from("customers").select("*").eq("id", o.customer_id).maybeSingle(),

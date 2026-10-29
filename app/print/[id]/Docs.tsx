@@ -227,7 +227,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               {g.imprints.length > 4
                 ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
                 : <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} />)}</div>}
-              <h2>Garments <span>{gc?.qty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
+              <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - 4} more garment${lines.length - 4 === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {countTable(lines.slice(0, 4))}
               {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
                 <h2>Notes {longNotes && <span>continued on page {notesPage ? pgNotes : pgMk}</span>}</h2>
@@ -247,7 +247,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             {/* 3. each mockup big, its prints blown up under it */}
             {mk.map((u, i) => {
               const col = mkColor(i), bg = col ? p.colorHexes?.[ckey(col)] || mkHex(i) : mkHex(i);
-              const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.qty || 0;
+              const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.allQty || 0;
               return (
                 <section className="sheet wo1" key={"mk" + i}>
                   {top([col || colors, `${qty} pcs`, mk.length > 1 ? `mockup ${i + 1} of ${mk.length}` : ""].filter(Boolean).join(" · "))}
@@ -289,7 +289,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
             {/* 4. each print's press sheet */}
             {!allSup && g.imprints.map((d, di) => (
               <div key={d.id} style={{ display: "contents" }}>
-                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.qty || 0} page={printPg[di]} total={total} footL={footL} />
+                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} />
               </div>
             ))}
           </div>
@@ -355,7 +355,7 @@ function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][num
   return (
     <>
       <tr>
-        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
+        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}</td>
         {sizes.map((z) => <td key={z} className="sz">{l.sizes?.[z as keyof typeof l.sizes] ? <b>{l.sizes[z as keyof typeof l.sizes]}</b> : ""}</td>)}
         <td className="tot"><b>{q}</b></td>
       </tr>

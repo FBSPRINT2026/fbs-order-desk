@@ -498,7 +498,7 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
  * line under the garment it copies (the same group), with the reason as its note, printed or not, charged or not; and a
  * line in the order's history. The order's own quantities aren't changed.
  */
-export async function addExtrasToOrder(orderId: string, extras: { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean }[], placedAt: string) {
+export async function addExtrasToOrder(orderId: string, extras: { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean; /** the shop's own (hidden from the customer) */ shop?: boolean }[], placedAt: string) {
   try {
     const v = await staff();
     const admin = createAdminClient();
@@ -513,10 +513,10 @@ export async function addExtrasToOrder(orderId: string, extras: { brand: string;
       if (!g) continue;
       const base = (g.lines || []).find((l) => same(l.style, x.style) && same(l.color, x.color) && !l.extras);
       // the same extras for the same reason again: added to that line
-      const have = (g.lines || []).find((l) => l.extras && same(l.style, x.style) && same(l.color, x.color) && same(String(l.note || ""), x.reason) && !!l.extrasPrint === x.print && !!l.extrasFree === x.free);
+      const have = (g.lines || []).find((l) => l.extras && same(l.style, x.style) && same(l.color, x.color) && same(String(l.note || ""), x.reason) && !!l.extrasPrint === x.print && !!l.extrasFree === x.free && !!l.shopUse === !!x.shop);
       if (have) { for (const [z, q] of Object.entries(x.sizes)) if (q) have.sizes[z as keyof typeof have.sizes] = ((have.sizes[z as keyof typeof have.sizes] || 0) as number) + q; }
-      else g.lines.splice(base ? g.lines.indexOf(base) + 1 : g.lines.length, 0, { ...(base ? JSON.parse(JSON.stringify(base)) : {}), id: uid(), brand: x.brand || base?.brand || "", style: x.style, color: x.color, sizes: { ...x.sizes }, extras: true, extrasPrint: x.print, extrasFree: x.free, priceOverride: x.free ? 0 : null, note: x.reason });
-      said.push(`${n} extra (${Object.entries(x.sizes).filter(([, q]) => q).map(([z, q]) => `${q} ${z}`).join(", ")}) ${[x.brand, x.style, x.color].filter(Boolean).join(" ")} for ${x.reason.toLowerCase()}${x.print ? ", printed" : ", not printed"}${x.free ? ", no charge" : ", charged"}`);
+      else g.lines.splice(base ? g.lines.indexOf(base) + 1 : g.lines.length, 0, { ...(base ? JSON.parse(JSON.stringify(base)) : {}), id: uid(), brand: x.brand || base?.brand || "", style: x.style, color: x.color, sizes: { ...x.sizes }, extras: true, extrasPrint: x.print, extrasFree: x.free || !!x.shop, priceOverride: x.free || x.shop ? 0 : null, note: x.reason, ...(x.shop ? { shopUse: true } : { shopUse: undefined }) });
+      said.push(`${n} extra (${Object.entries(x.sizes).filter(([, q]) => q).map(([z, q]) => `${q} ${z}`).join(", ")}) ${[x.brand, x.style, x.color].filter(Boolean).join(" ")} for ${x.reason.toLowerCase()}${x.print ? ", printed" : ", not printed"}${x.shop ? ", ours (not on the customer's invoice)" : x.free ? ", no charge" : ", charged"}`);
     }
     if (!said.length) return { ok: true as const };
     const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);

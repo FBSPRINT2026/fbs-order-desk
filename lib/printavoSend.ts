@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionReset, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { CARD, htmlText } from "@/lib/printavoChanges";
-import { calcOrder, FULL_COLOR, imprintLabel, shopNotes, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, imprintLabel, shopNotes, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey, shopPiecesNote, withoutShopPieces } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 import { parseAddress } from "@/lib/qbo/map";
 
@@ -57,7 +57,7 @@ const lineDescription = (g: Group, l: { brand?: string; garment?: string }, last
 /** A production file in Printavo that opens the order here (Oct 16, Nick): app/pv/[n]/[file]/route.ts */
 const orderLink = (number: number) => `${SITE_URL}/pv/${number}/Open-in-FBS-Order-Desk-${number}.html`;
 /** The lines of a group that go to Printavo (any size has a quantity). */
-const sentLines = (g: Group) => g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0));
+const sentLines = (g: Group) => g.lines.filter((l) => !l.shopUse && SIZES.some((z) => +(l.sizes?.[z] || 0) > 0));
 /** The billing and shipping addresses sent with an order. */
 function orderAddresses(o: Record<string, unknown>, cust: Record<string, unknown> | null) {
   const company = String(cust?.company || ""), person = String(cust?.name || "");
@@ -82,7 +82,10 @@ async function load(admin: SupabaseClient, orderId: string) {
   const { data: pc } = o.customer_id ? await admin.from("printavo_customers").select("printavo_id, data").eq("customer_id", o.customer_id) : { data: [] };
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const { data: oi } = await admin.from("order_internal").select("production_notes").eq("order_id", orderId).maybeSingle();
-  return { o: o as Order & Record<string, unknown>, cust: cust as Record<string, unknown> | null, pcs: (pc || []) as { printavo_id: string; data: Record<string, unknown> }[], settings: mergeSettings(st?.data), prodNote: String(oi?.production_notes || "") };
+  // Printavo's invoice goes to the customer: the shop's own pieces (shop samples, spares) stay off its lines and are
+  // listed in the production note instead, for the crew
+  const shop = shopPiecesNote(o as Order);
+  return { o: withoutShopPieces(o as Order) as Order & Record<string, unknown>, cust: cust as Record<string, unknown> | null, pcs: (pc || []) as { printavo_id: string; data: Record<string, unknown> }[], settings: mergeSettings(st?.data), prodNote: [String(oi?.production_notes || ""), shop].filter(Boolean).join("\n") };
 }
 
 /** The Printavo contact the quote goes to: the one with the customer's email, else the customer's primary contact. */

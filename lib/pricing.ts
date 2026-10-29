@@ -235,6 +235,11 @@ export type GLine = {
   extrasPrint?: boolean;
   /** their extras at no charge (ticked by default); unticked = printed and charged like the rest */
   extrasFree?: boolean;
+  /** the shop's own pieces on this order: a shop sample, spares for misprints (Oct 29, Nick: "if we ordered extras and
+   *  it's a shop sample, we shouldn't show it on the invoice for the client… spare for misprints… also be hidden.
+   *  Customer extras is a different thing"). Printed with the job and on the work order, but never on anything the
+   *  customer sees or is billed from (`withoutShopPieces`), never charged, and never counted toward the customer's breaks */
+  shopUse?: boolean;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */
@@ -661,6 +666,26 @@ export function tierIndex(q: number, s: { tiers: number[] }) {
 export function lineQty(l: { sizes?: Partial<Record<Size, number>> }) {
   return SIZES.reduce((a, sz) => a + num(l.sizes?.[sz]), 0);
 }
+/** the pieces the customer is billed for: the shop's own pieces (shopUse) count for nothing */
+export const billQty = (l: { sizes?: Partial<Record<Size, number>>; shopUse?: boolean }) => (l.shopUse ? 0 : lineQty(l));
+/**
+ * THE order as the customer sees it: the shop's own pieces (Line.shopUse) taken out. Every page, document, sync and
+ * message that reaches the customer or bills them (invoice, quote, proof, portal, Printavo, QuickBooks, the AI's
+ * replies) loads the order through this before drawing or pricing it; staff pages and the work order use the order as is.
+ * Prices don't move (shop pieces are never charged or counted), so totals match the staff side.
+ */
+/** the shop's own pieces in words, for staff-only notes (Printavo's production note): "Ours, not on the invoice: …" */
+export function shopPiecesNote(o: Pick<Order, "groups" | "lines">): string {
+  const ls = orderGroups(o).flatMap((g) => (g.lines || []).filter((l) => l.shopUse && lineQty(l) > 0));
+  if (!ls.length) return "";
+  return "Ours, not on the customer's invoice: " + ls.map((l) => `${SIZES.filter((z) => num(l.sizes?.[z])).map((z) => `${num(l.sizes?.[z])} ${z}`).join(", ")} ${[l.brand, l.style, l.color].filter(Boolean).join(" ")}${l.note ? ` (${l.note})` : ""}${l.extrasPrint === false ? ", not printed" : ", printed"}`).join("; ") + ".";
+}
+export function withoutShopPieces<T extends Pick<Order, "groups" | "lines">>(o: T): T {
+  if (!o) return o;
+  const gs = orderGroups(o);
+  if (!gs.some((g) => (g.lines || []).some((l) => l.shopUse))) return o;
+  return { ...o, groups: gs.map((g) => ({ ...g, lines: (g.lines || []).filter((l) => !l.shopUse) })) } as T;
+}
 
 /** front prints first, then the back, then sleeves, then anything else (tags); same side keeps its order */
 export const printSideRank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder|nape/.test(l) ? 2 : /front|chest|pocket|vertical|bottom/.test(l) ? 1 : 4; };
@@ -787,7 +812,7 @@ export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScree
    *  and left chest, it's the same logo… he can get the quantity discount") */ designQty?: Map<string, number> };
 export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
-  const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
+  const qty = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
   const ti = tierIndex(qty, pl);
   // embroidery has its own quantity breaks on contract pricing
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
@@ -856,19 +881,19 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const { light, print: basePrint } = printLine(l.color);
     const linePrint = r2(basePrint + locExtra + inkExtra + embSpecial(l));
     const calcEach = r2(garmentRaw + linePrint + finishEach);
-    const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
-    const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
+    const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
+    const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
       const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
-      upTotal += q * up;
+      if (!l.shopUse) upTotal += q * up;
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
   // screens: no underbase screen when every garment is light
-  const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => lineQty(l) > 0 && !isLightColor(l.color, pl));
+  const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => billQty(l) > 0 && !isLightColor(l.color, pl));
   const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, true, true, ixOf(d)) }));
   const setups = setups0.map((d, i) => {
     const im = (g.imprints || [])[i], k = im ? screenKey(im, num((d as { screens?: number }).screens)) : "";
@@ -910,7 +935,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, qty, ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, qty, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
@@ -930,7 +955,7 @@ export function calcOrder(
   // the same logo in several groups: its pieces counted together for the price break
   const dqm = new Map<string, number>();
   for (const g of gs0) {
-    const q = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
+    const q = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
     for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}`))) dqm.set(k, (dqm.get(k) || 0) + q);
   }
   seen.designQty = dqm;
@@ -950,7 +975,7 @@ export function calcOrder(
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   const qty = groups.reduce((a, g) => a + g.qty, 0);
-  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
+  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g) => a + g.allQty, 0) };
 }
 
 export const uid = () =>

@@ -40,7 +40,8 @@ export async function restoreVersion(proofId: string, which: "ours" | "theirs", 
     // garments: the style and color go back on each garment line (matched by line, or the only line); quantities stay
     const one = snap.lines.length === 1 && g.lines.length >= 1;
     const lines = g.lines.map((l, i) => {
-      const s = snap.lines.find((x) => x.id && x.id === l.id) || (one ? snap.lines[0] : snap.lines[i]);
+      // the customer never sees the shop's own pieces, so their version only reaches those by id
+      const s = snap.lines.find((x) => x.id && x.id === l.id) || (l.shopUse ? undefined : one ? snap.lines[0] : snap.lines[i]);
       return s ? { ...l, style: s.style, brand: s.brand, color: s.color, garment: s.garment } : l;
     });
     const at = new Date().toISOString();

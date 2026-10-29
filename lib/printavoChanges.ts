@@ -43,7 +43,7 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
   if (snap) {
     const groups = o.groups || [];
     groups.forEach((g, gi) => {
-      const ours = g.lines.filter((l) => lineQty(l) > 0), theirs = snap.groups[gi]?.lines || [];
+      const ours = g.lines.filter((l) => lineQty(l) > 0 && !l.shopUse), theirs = snap.groups[gi]?.lines || [];
       ours.forEach((l, li) => {
         const t0 = theirs[li]; if (!t0) return;
         // Printavo keeps a one-size item's count under "Other" (OTHER); ours is OS (Oct 28, Nick: #40189's 20 Carhartt
@@ -99,7 +99,7 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
     }
     // garments: style / color changed, lines added or taken out, print details
     (o.groups || []).forEach((g, gi) => {
-      const ours = g.lines.filter((l) => lineQty(l) > 0), theirs = snap.groups[gi]?.lines || [];
+      const ours = g.lines.filter((l) => lineQty(l) > 0 && !l.shopUse), theirs = snap.groups[gi]?.lines || [];
       if (!snap.groups[gi]) return;
       ours.forEach((l, li) => {
         const t = theirs[li]; if (!t) { changes.push({ what: "Line removed", key: `lr${gi}.${li}`, text: `${[l.style, l.color].filter(Boolean).join(" ")} isn't on the Printavo order any more`, apply: (d) => { d.groups[gi].lines = d.groups[gi].lines.filter((y) => y.id !== l.id); } }); return; }

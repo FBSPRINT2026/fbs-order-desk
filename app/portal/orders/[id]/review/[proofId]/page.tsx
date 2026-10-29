@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { inkNames, isPmsInk, lineQty, sizeLabel, FULL_COLOR, METHODS, SIZES, type Order, type Proof } from "@/lib/pricing";
+import { inkNames, isPmsInk, lineQty, sizeLabel, FULL_COLOR, METHODS, SIZES, type Order, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
 import { fmtStamp } from "@/lib/format";
@@ -22,7 +22,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
   const ctx = await getPortalCtx(as, `/portal/orders/${id}/review/${proofId}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).maybeSingle();
   if (!od) notFound();
-  const o = od as Order;
+  const o = withoutShopPieces(od as Order); // the customer's view: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
   const { data: pf } = await ctx.db.from("proofs").select("*").eq("id", proofId).eq("order_id", id).is("archived_at", null).maybeSingle();
   if (!pf) notFound();
   const proof = pf as Proof;

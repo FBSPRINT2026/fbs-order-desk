@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { inkNames, lineQty, orderGroups, sizeLabel, SIZES, type Order } from "@/lib/pricing";
+import { inkNames, lineQty, orderGroups, sizeLabel, SIZES, type Order, withoutShopPieces } from "@/lib/pricing";
 import { guessHex } from "@/lib/mockup";
 import { fmtStamp } from "@/lib/format";
 import { threadByName } from "@/lib/embroidery";
@@ -20,7 +20,7 @@ export default async function SewoutReview({ params, searchParams }: { params: P
   const ctx = await getPortalCtx(as, `/portal/orders/${id}/sewout/${sid}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).maybeSingle();
   if (!od) notFound();
-  const o = od as Order;
+  const o = withoutShopPieces(od as Order); // the customer's view: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
   const admin = createAdminClient();
   const { data: sw } = await admin.from("sewouts").select("*").eq("id", sid).eq("order_id", id).maybeSingle();
   if (!sw) notFound();
