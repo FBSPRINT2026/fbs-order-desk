@@ -58,7 +58,7 @@ export function digitizeStamp(s: ReturnType<typeof digitizeState>): { title: str
   switch (s.state) {
     case "need": return { title: "Needs digitizing", sub: "Stitches and price confirmed after sew-out", gray: true, tone: "gray" };
     case "asked": return s.changes ? { title: "Changes asked", sub: "Waiting on the digitizer's fixed file", gray: true, tone: "gray" } : { title: "Sent to the digitizer", sub: "Stitches and price confirmed after sew-out", gray: true, tone: "gray" };
-    case "done": return { title: "Pending sew-out approval", sub: "Files are in: sew it out", gray: false, tone: "blue" };
+    case "done": return { title: "Pending sew-out approval", sub: "Files received from digitizer", gray: false, tone: "blue" };
     case "sent": return { title: "Waiting on customer", sub: "Sew-out sent for approval", gray: false, tone: "warn" };
     case "ok": return { title: "Sew-out approved", sub: "Click to see the sew-out", gray: false, tone: "ok" };
   }
