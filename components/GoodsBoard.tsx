@@ -111,9 +111,10 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
       )}
 
       <div className="gc-acts">
-        {mode === "shop" && act.setStatus && !!it.lines?.length && it.goods.status !== "received" && <button type="button" className={"btn sm" + (panel === "count" ? " primary" : ["arrived", "partial"].includes(it.goods.status) ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "count" ? "" : "count")}>Count in</button>}
-        {mode === "shop" && <button type="button" className={"btn sm" + (panel === "status" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "status" ? "" : "status")}>Update status</button>}
+        {/* the order's little Goods panel has no Count in (Oct 29, Nick): goods are counted in on Receiving */}
+        {mode === "shop" && !compact && act.setStatus && !!it.lines?.length && it.goods.status !== "received" && <button type="button" className={"btn sm" + (panel === "count" ? " primary" : ["arrived", "partial"].includes(it.goods.status) ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "count" ? "" : "count")}>Count in</button>}
         {(mode === "shop" || it.goods.status !== "received") && <button type="button" className={"btn sm" + (panel === "track" ? " primary" : mode === "portal" && it.goods.status === "waiting" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "track" ? "" : "track")}>+ Add tracking</button>}
+        {mode === "shop" && <button type="button" className={"btn sm" + (panel === "status" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "status" ? "" : "status")}>Update status</button>}
         <button type="button" className={"btn sm" + (panel === "msg" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "msg" ? "" : "msg")}>Message about goods</button>
         <span className="spacer" />
         <Link className="gc-link" href={act.chatHref(it.order.id)}>Conversation</Link>

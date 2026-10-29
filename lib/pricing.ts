@@ -215,6 +215,8 @@ export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | u
 /** One garment + color row, with its size run. */
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
+  /** the garment's color as picked in the Mockup Creator (its Background, or the eyedropper off the photo): what every
+   *  picture of it shows (lib/mockup.ts lineColor) */ hex?: string;
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
   /** an embroidery specialty item (hat, bag, fleece…) set by hand; unset = from its name, style and brand (isSpecialtyItem) */
   specialty?: boolean | null;

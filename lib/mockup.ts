@@ -796,6 +796,8 @@ const NAMED: Record<string, string> = { ...SUPPLIER_NAMED, ...Object.fromEntries
 const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);
 /** a color name's color: exact, then without "heather"/(…), then any known color named inside it ("True Royal" → Royal) */
 export const guessHex = (color: string): string => {
+  // a color that's already a color (a garment's color picked in the Mockup Creator): itself
+  if (/^#[0-9a-f]{6}$/i.test((color || "").trim())) return (color || "").trim().toLowerCase();
   // two-tone names ("White/ Royal", "White - Kelly", "Heather/Navy"): the body is the first color, the trim the second
   // (Oct 20: a White/ Royal raglan's close-ups were drawn on royal blue)
   // a note in brackets is set aside first ("Brown (Dark Brown/Copper)" is brown, Oct 27: its digitizing sheet showed gray)
@@ -822,6 +824,14 @@ export const garmentHex = (supplierHex: string | null | undefined, name: string)
   const a = rgb(sh), b = rgb(g);
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 150 ? g : sh;
 };
+/**
+ * THE color a garment line shows in: the one picked for it in the Mockup Creator (Background or the eyedropper) when there
+ * is one, else its color name. Every place that draws a line's color (the order's print tiles, the logo thumbnails, the
+ * printed pages) gives this to guessHex / shirtBg / LogoThumb, so the boxes agree everywhere (Oct 29, Nick: "the boxes…
+ * how many times have we talked about this… permanently fix this problem throughout the site": #40188's tote showed
+ * cream in its mockup and gray on the order).
+ */
+export const lineColor = (l: { color?: string; hex?: string } | null | undefined): string => (l?.hex && /^#[0-9a-f]{6}$/i.test(l.hex) ? l.hex : l?.color || "");
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 

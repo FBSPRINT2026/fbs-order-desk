@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { GLine, Imprint } from "@/lib/pricing";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { threadByName } from "@/lib/embroidery";
 import { colorHex } from "@/lib/inkColors";
 import { InkSelect, ThreadSelect } from "@/components/InkSelect";
@@ -84,7 +84,7 @@ export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprin
           <thead><tr><th>Garment</th><th>A · as printed</th>{vers.map((v, i) => <th key={i}>{String.fromCharCode(66 + i)} · {v.to || "…"}</th>)}</tr></thead>
           <tbody>{colors.map((l) => { const k = ck(l.color), on = pick[k] || 0; const n = lines.filter((x) => ck(x.color) === k).length; return (
             <tr key={k}>
-              <td><span className="cc-g"><i style={{ background: guessHex(l.color) }} /><b>{l.color}</b>{n > 1 ? <span className="faint">{n} styles</span> : <span className="faint">{l.style}</span>}</span></td>
+              <td><span className="cc-g"><i style={{ background: guessHex(lineColor(l)) }} /><b>{l.color}</b>{n > 1 ? <span className="faint">{n} styles</span> : <span className="faint">{l.style}</span>}</span></td>
               {[0, ...vers.map((_, i) => i + 1)].map((vi) => (
                 <td key={vi}><label className="cc-tick"><input type="radio" name={`cc-${k}`} checked={on === vi} onChange={() => setPick({ ...pick, [k]: vi })} aria-label={`${l.color}: ${vi ? `change ${String.fromCharCode(65 + vi)}` : "as printed"}`} /></label></td>
               ))}

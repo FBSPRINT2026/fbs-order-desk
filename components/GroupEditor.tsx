@@ -197,6 +197,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const shirtHex = (() => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
     if (!l) return "#9aa1ab";
+    if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; // picked in the Mockup Creator (lib/mockup.ts lineColor)
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const gar = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase());
     const ci = gar?.color_images?.[l.color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
@@ -206,6 +207,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const hexOfColor = (color: string) => {
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const l = g.lines.find((x) => key(x.color) === key(color));
+    if (l?.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex;
     const gar = l ? catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase()) : undefined;
     const ci = gar?.color_images?.[color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(color))?.[1];
     return garmentHex(ci?.hex, color) || guessHex(color) || "#9aa1ab";
@@ -1565,7 +1567,7 @@ function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?:
 }
 
 function DesignPick({ imprint, lines, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
-  imprint: { design_id?: string; size: string; artRatio?: number; inkMap?: Imprint["inkMap"] }; /** the group's garments, for its picture */ lines?: { color?: string }[]; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  imprint: { design_id?: string; size: string; artRatio?: number; inkMap?: Imprint["inkMap"] }; /** the group's garments, for its picture */ lines?: { color?: string; hex?: string }[]; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
   /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
    *  new art from the main order page") */ readOnly?: boolean; onMockup?: () => void;
   onStar?: (d: Design, starred: boolean) => void;

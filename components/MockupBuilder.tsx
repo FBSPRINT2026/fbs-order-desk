@@ -586,7 +586,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // one mockup per garment: the same style and color twice (their extras line under it) is one shirt, not two
           // identical mockups (Oct 22: #40104 and #40106 each got the same Red / Charcoal mockup twice)
           const seenSC = new Set<string>();
-          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}) })));
+          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
@@ -2369,10 +2369,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // Private Label: the inside of the neck with their label, in the top corner of the last photo (Oct 20, Nick: "it
     // needs to be something we add to the mock-up, just like the sleeve… show the tag removed and it printed inside")
     if (neckSet) {
-      const lab = await labelFor(neckSet, neckSize, guessHex(l.color)).catch(() => null);
+      const lab = await labelFor(neckSet, neckSize, shirtHex(l)).catch(() => null);
       const iw = Math.round(pw * 0.34), ih = Math.round(iw * 0.8), ix = pad + (views.length - 1) * (pw + pad) + pw - iw - 6, iy = top + 6;
       x.save(); x.shadowColor = "rgba(0,0,0,0.18)"; x.shadowBlur = 8; x.fillStyle = "#fff"; x.beginPath(); x.roundRect(ix - 3, iy - 3, iw + 6, ih + 26, 8); x.fill(); x.restore();
-      drawNeckView(x, ix, iy, iw, ih, guessHex(l.color), lab, neckSet.widthIn || 2.5, `Inside neck · ${neckSize}`);
+      drawNeckView(x, ix, iy, iw, ih, shirtHex(l), lab, neckSet.widthIn || 2.5, `Inside neck · ${neckSize}`);
     }
     if (!bare && !quiet) {
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
@@ -2827,6 +2827,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (const l of lines) {
       const ol = g.lines.find((x) => x.id === l.id); if (!ol) continue;
       if (l.look) ol.look = l.look;
+      // the color picked here (Background, eyedropper) is the garment's color on the order too, for every picture of it
+      if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) ol.hex = l.hex; else delete ol.hex;
       if (l.look && !(ol.style || "").trim()) { ol.style = l.style; ol.brand = l.brand; if (!(ol.color || "").trim()) ol.color = l.color; }
     }
     if (mockupSaved) { g.mockupAt = new Date().toISOString(); delete g.mockupSkipped; }
@@ -3076,7 +3078,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (orderId && newMockups.length) {
         const { data: od } = await sb.from("orders").select("groups").eq("id", orderId).maybeSingle();
         const sg = ((od?.groups || []) as Order["groups"]).find((x) => x.id === groupId);
-        if (sg) await sb.from("mockups").update({ snapshot: { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } }).in("id", newMockups);
+        if (sg) await sb.from("mockups").update({ snapshot: { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.hex ? { hex: l.hex } : {}) })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } }).in("id", newMockups);
       }
       saveOk.current = true;
       baseSig.current = sigNowRef.current();

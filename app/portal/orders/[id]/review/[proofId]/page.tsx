@@ -5,7 +5,7 @@ import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inkNames, isPmsInk, lineQty, sizeLabel, FULL_COLOR, METHODS, SIZES, type Order, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { fmtStamp } from "@/lib/format";
 import { orderGroups } from "@/lib/pricing";
 import { loadGroupLook, printSize } from "@/lib/groupLook";
@@ -85,7 +85,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
                   {lines.map((l) => (
                     <div className="ar-gar" key={l.id}>
                       <b>{[l.brand, l.style].filter(Boolean).join(" ")}{l.garment ? ` · ${l.garment}` : ""}</b>
-                      <div className="ar-c"><span className="ar-sw" style={{ background: lines.length === 1 ? hex : guessHex(l.color) }} />{l.color}</div>
+                      <div className="ar-c"><span className="ar-sw" style={{ background: lines.length === 1 ? hex : guessHex(lineColor(l)) }} />{l.color}</div>
                       <div className="ar-chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                     </div>
                   ))}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inkNames, lineQty, orderGroups, sizeLabel, SIZES, type Order, withoutShopPieces } from "@/lib/pricing";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, lineColor } from "@/lib/mockup";
 import { fmtStamp } from "@/lib/format";
 import { threadByName } from "@/lib/embroidery";
 import { printOf, sewoutViewed, type Sewout } from "@/lib/sewouts";
@@ -79,7 +79,7 @@ export default async function SewoutReview({ params, searchParams }: { params: P
                   {lines.map((l) => (
                     <div className="ar-gar" key={l.id}>
                       <b>{[l.brand, l.style].filter(Boolean).join(" ")}{l.garment ? ` · ${l.garment}` : ""}</b>
-                      <div className="ar-c"><span className="ar-sw" style={{ background: guessHex(l.color) }} />{l.color}</div>
+                      <div className="ar-c"><span className="ar-sw" style={{ background: guessHex(lineColor(l)) }} />{l.color}</div>
                       <div className="ar-chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                     </div>
                   ))}
