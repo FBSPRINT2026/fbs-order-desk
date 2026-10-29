@@ -4,7 +4,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
-import { sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
+import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
 const smWh = (id: string, name: string) => (SM_WH[id] ? id : Object.entries(SM_WH).find(([, v]) => name && new RegExp(v[1], "i").test(name))?.[0] || id);
@@ -399,7 +399,8 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
           const price = hit.myPrice || hit.casePrice || hit.piecePrice;
           sm[r.key] = { style: smStyle, color: hit.catalogColor || hit.color, size: hit.rawSize, inventoryKey: hit.inventoryKey || undefined, sizeIndex: hit.sizeIndex || undefined };
           const whs = (inv.get(sanmarStockKey(hit.catalogColor, hit.rawSize)) || inv.get(sanmarStockKey(hit.color, hit.rawSize)) || []) as { whse: string; qty: number }[];
-          if (price > 0) for (const w of whs) if (w.qty > 0) srcs[r.key].push({ sup: "sm", wh: smWh(w.whse, (w as { name?: string }).name || ""), stock: w.qty, price });
+          // only what's past SanMar's buffer: an order for a warehouse's last pieces is put on hold (SANMAR_BUFFER)
+          if (price > 0) for (const w of whs) if (w.qty > SANMAR_BUFFER) srcs[r.key].push({ sup: "sm", wh: smWh(w.whse, (w as { name?: string }).name || ""), stock: w.qty - SANMAR_BUFFER, price });
         }
       }));
     }
@@ -408,7 +409,8 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
   } catch (e) { return fail(e); }
 }
 
-const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
+// SanMar's ship-via names (their Purchase Order Integration Guide); will call is picked up at their Dallas warehouse
+const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY", "6": "WILL CALL" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
 export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
   try {
@@ -416,7 +418,17 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
     if (!sanmarPOMode()) return { ok: false as const, error: "SanMar ordering isn't turned on yet (SanMar's integration team has to switch it on for our account)." };
     const lines = p.lines.filter((l) => l.style && l.qty > 0);
     if (!lines.length) return { ok: false as const, error: "Nothing to order from SanMar." };
-    if (p.shippingMethod === "6") return { ok: false as const, error: "Will call isn't set up for SanMar: pick a UPS method." };
+    // every line names its warehouse (Oct 28, SanMar: with Warehouse Selection on, a line without one fails the whole order)
+    if (sanmarPOWhse()) {
+      const none = lines.filter((l) => !l.whse);
+      if (none.length) return { ok: false as const, error: `No SanMar warehouse picked for ${none.map((l) => (l as { label?: string }).label || `${l.style} ${l.color} ${l.size}`).join(", ")}. Nothing was sent.` };
+    }
+    // will call is picked up at SanMar Dallas, on its own PO (SanMar: will call and shipped orders are separate POs; the
+    // panel uses one way for the whole order, so this order is all will call)
+    if (p.shippingMethod === "6") {
+      const away = lines.filter((l) => l.whse !== "3");
+      if (away.length) return { ok: false as const, error: `Will call is only from SanMar Dallas. ${away.map((l) => (l as { label?: string }).label || `${l.style} ${l.color} ${l.size}`).join(", ")} ${away.length === 1 ? "comes" : "come"} from another warehouse: ship ${away.length === 1 ? "it" : "them"} by UPS instead, as a separate order. Nothing was sent.` };
+    }
     const admin = createAdminClient();
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const from = mergeSettings(st?.data).ship.from;

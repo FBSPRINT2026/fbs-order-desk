@@ -286,6 +286,16 @@ export const sanmarStockKey = (color: string, size: string) => pkey(color, size)
 export const sanmarPOMode = () => { const v = process.env.SANMAR_PO?.trim().toLowerCase() || ""; return v === "on" || v === "edev" ? v : ""; };
 export const sanmarPOWhse = () => process.env.SANMAR_PO_WHSE?.trim().toLowerCase() === "on";
 const poHost = () => (sanmarPOMode() === "edev" ? "https://edev-ws.sanmar.com:8080" : "https://ws.sanmar.com:8080");
+/** SanMar's test system (EDEV) has its own web services login (Oct 28: sent by their integration team), put in Vercel by
+ *  Nick as SANMAR_EDEV_USERNAME / SANMAR_EDEV_PASSWORD; without them the live login is used */
+const poAuth = () => {
+  const c = cred(), edev = sanmarPOMode() === "edev";
+  const user = (edev && process.env.SANMAR_EDEV_USERNAME?.trim()) || c.user, pass = (edev && process.env.SANMAR_EDEV_PASSWORD?.trim()) || c.pass;
+  return `<arg1><sanMarCustomerNumber>${esc(c.num)}</sanMarCustomerNumber><sanMarUserName>${esc(user)}</sanMarUserName><sanMarUserPassword>${esc(pass)}</sanMarUserPassword><senderId></senderId><senderPassword></senderPassword></arg1>`;
+};
+/** SanMar's stock a warehouse must keep after our order (Oct 28, SanMar: an order for a warehouse's last pieces is held
+ *  for a person to look at; "most customers use 20-50 units as a buffer"): only stock past this is offered */
+export const SANMAR_BUFFER = 25;
 export type SanMarPOLine = { style: string; color: string; size: string; qty: number; inventoryKey?: string; sizeIndex?: string; whse?: string };
 export type SanMarPO = { poNum: string; attention: string; shipTo: string; address1: string; address2?: string; city: string; state: string; zip: string; email: string; shipMethod: string; lines: SanMarPOLine[] };
 // SanMar asks for no commas in any field
@@ -293,7 +303,7 @@ const po = (s: string, n: number) => esc(String(s || "").replace(/,/g, " ").repl
 function poXml(o: SanMarPO) {
   const whse = sanmarPOWhse();
   const lines = o.lines.map((l) => `<webServicePoDetailList>${l.inventoryKey && l.sizeIndex ? `<inventoryKey>${po(l.inventoryKey, 10)}</inventoryKey><sizeIndex>${po(l.sizeIndex, 11)}</sizeIndex>` : `<inventoryKey></inventoryKey><sizeIndex></sizeIndex>`}<style>${po(l.style, 60)}</style><color>${po(l.color, 50)}</color><size>${po(l.size, 50)}</size><quantity>${Math.round(l.qty)}</quantity><whseNo>${whse && l.whse ? po(l.whse, 10) : ""}</whseNo></webServicePoDetailList>`).join("");
-  return `<arg0><attention>${po(o.attention, 35)}</attention><notes></notes><poNum>${po(o.poNum, 28)}</poNum><shipTo>${po(o.shipTo, 28)}</shipTo><shipAddress1>${po(o.address1, 35)}</shipAddress1><shipAddress2>${po(o.address2 || "", 35)}</shipAddress2><shipCity>${po(o.city, 28)}</shipCity><shipState>${po(o.state, 2)}</shipState><shipZip>${po(o.zip.replace(/[^0-9-]/g, ""), 10)}</shipZip><shipMethod>${po(o.shipMethod, 15)}</shipMethod><shipEmail>${po(o.email, 105)}</shipEmail><residence>N</residence><department></department>${lines}</arg0>${auth()}`;
+  return `<arg0><attention>${po(o.attention, 35)}</attention><notes></notes><poNum>${po(o.poNum, 28)}</poNum><shipTo>${po(o.shipTo, 28)}</shipTo><shipAddress1>${po(o.address1, 35)}</shipAddress1><shipAddress2>${po(o.address2 || "", 35)}</shipAddress2><shipCity>${po(o.city, 28)}</shipCity><shipState>${po(o.state, 2)}</shipState><shipZip>${po(o.zip.replace(/[^0-9-]/g, ""), 10)}</shipZip><shipMethod>${po(o.shipMethod, 15)}</shipMethod><shipEmail>${po(o.email, 105)}</shipEmail><residence>N</residence><department></department>${lines}</arg0>${poAuth()}`;
 }
 const PO_NS = "http://webservice.integration.sanmar.com/";
 /** Checks stock for a PO without placing it: each line's warehouse, or why it can't be had. */
