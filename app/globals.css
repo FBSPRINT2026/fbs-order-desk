@@ -15785,3 +15785,16 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .dgz-all{display:flex;justify-content:flex-end;margin-top:-2px}
 @media (max-width:760px){.dgz-line{gap:4px}.dgz-tray{min-height:44px;padding:4px;gap:3px}.dgz-hint{display:none}.dgz-nm{font-size:11.5px;white-space:normal}.dgz-ring{width:42px;height:42px}.dgz-rail{top:27px}.dgz-tile{width:30px;height:30px}.dgz-tile .lt,.dgz-tile img{width:26px;height:26px}}
 .dgz-noart{font-size:10px;color:var(--ink-3)}
+/* a print's later digitizing stages stamp in the same spot as Needs digitizing (components/GroupEditor.tsx PrintRow):
+   the same stamp, in the stage's color, over a row that isn't grayed; only the stamp itself takes the click */
+.pr:has(>.pr-dgz-on){position:relative}
+.pr-vis-stamp.pr-dgz-on{pointer-events:none;cursor:default}
+.pr-dgz-on>button,.pr-dgz-on>span{pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 18px 7px;border:3px solid var(--sc);border-radius:8px;background:color-mix(in srgb,var(--sc) 10%,#fff);color:var(--sc);text-transform:uppercase;letter-spacing:.06em;transform:rotate(-3deg);font:inherit;opacity:.95}
+.pr-dgz-on>button{cursor:pointer}
+.pr-dgz-on>button:hover{background:color-mix(in srgb,var(--sc) 16%,#fff)}
+.pr-dgz-on b{font-size:20px;font-weight:900;line-height:1.1}
+.pr-dgz-on small{font-size:11px;font-weight:800}
+.pr-dgz-blue{--sc:var(--fbs-blue)}
+.pr-dgz-warn{--sc:var(--warn)}
+.pr-dgz-ok{--sc:var(--ok)}
+.pr-dgz-gray{--sc:#6b6f76}

@@ -1478,6 +1478,11 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
       {dgz?.gray && (orderId
         ? <button type="button" className="pr-vis-stamp pr-dgz" title="Open it on the Digitizing page" onClick={dgzGo}><span><b>{dgz.title}</b><small>{dgz.sub}</small></span></button>
         : <div className="pr-vis-stamp pr-dgz"><span><b>{dgz.title}</b><small>{dgz.sub}</small></span></div>)}
+      {/* every later stage stamps in the same spot, the same size, in its color, over a row that's no longer grayed
+          (Oct 29, Nick: "this stamp needs to remain in the same spot as the needs digitizing stamp before") */}
+      {dgz && !dgz.gray && (orderId || (dgz.tone === "ok" && sewout?.url)
+        ? <div className={"pr-vis-stamp pr-dgz pr-dgz-on pr-dgz-" + dgz.tone}><button type="button" onClick={dgzGo} title={dgz.tone === "ok" && sewout?.url ? "See the sew-out" : "Open it on the Digitizing page"}><b>{dgz.title}</b><small>{dgz.tone === "ok" && !sewout?.url ? "On file" : dgz.sub}</small></button></div>
+        : <div className={"pr-vis-stamp pr-dgz pr-dgz-on pr-dgz-" + dgz.tone}><span><b>{dgz.title}</b><small>{dgz.sub}</small></span></div>)}
       {sewPic && sewout?.url && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label="The sew-out" onClick={() => setSewPic(false)} onKeyDown={(e) => { if (e.key === "Escape") setSewPic(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={sewout.url} alt="The sew-out" />
@@ -1532,9 +1537,6 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
-        {dgz && !dgz.gray && (orderId || (dgz.tone === "ok" && sewout?.url)
-          ? <button type="button" className={"dgz-st dgz-st-" + dgz.tone} onClick={dgzGo} title={dgz.tone === "ok" && sewout?.url ? "See the sew-out" : "Open it on the Digitizing page"}><b>{dgz.title}</b><small>{dgz.tone === "ok" && !sewout?.url ? "On file" : dgz.sub}</small></button>
-          : <span className={"dgz-st dgz-st-" + dgz.tone}><b>{dgz.title}</b><small>{dgz.sub}</small></span>)}
         {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
         {/* the logo was digitized before: bring its files in instead (Oct 29, Nick: "already digitized question mark…
