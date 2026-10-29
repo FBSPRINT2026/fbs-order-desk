@@ -810,7 +810,7 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
           <img src={p.placement} alt="Where it sits on the garment" />
           <figcaption>Placement on the garment</figcaption>
         </figure>}
-          <div className={"so-facts" + (p.placement ? "" : " three")}>
+          <div className="so-facts">
             {file && <div><span>Size</span><b>{inch(file.wIn)} × {inch(file.hIn)}</b></div>}
             {(file?.stitches || d?.stitches) ? <div><span>Stitches</span><b>{(file?.stitches || d?.stitches || 0).toLocaleString()}</b></div> : null}
             {des && <div><span>Logo</span><b>D-{des.number}</b></div>}

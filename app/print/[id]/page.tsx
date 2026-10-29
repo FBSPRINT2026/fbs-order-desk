@@ -49,7 +49,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     const all = g.mockupThumbs?.length ? g.mockupThumbs : placed.length ? placed : (g.customerMockups || []).map((m) => m.path);
     return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, 1);
   });
-  const dPaths = work0 || proof0 ? Object.values(designs).filter((d) => d.preview_path) : [];
+  // the logos' pictures: the work order, the proof, and the sew-out's "compared to the original file"
+  const dPaths = work0 || proof0 || !!sewout ? Object.values(designs).filter((d) => d.preview_path) : [];
   const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();
