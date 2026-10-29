@@ -1429,7 +1429,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               {filmPos !== "center" && <label className="sep-f">Offset from center (in)<input type="number" min={0} max={8} step={0.25} value={filmOffsetIn} onChange={(e) => set({ filmOffsetIn: Math.max(0, Math.min(8, +e.target.value || 0)) })} /></label>}
               {filmPos !== "center" && st.filmOffsetIn != null && st.filmOffsetIn !== CHEST_OFFSET_IN && <button type="button" className="linkbtn" onClick={() => set({ filmOffsetIn: undefined })}>Back to {CHEST_OFFSET_IN}&quot; (shop default)</button>}
               {filmPos === "center" && <label className="sep-chk"><input type="checkbox" checked={filmFlip} onChange={(e) => set({ filmFlip: e.target.checked })} /> Burn upside down (art turned on the film)</label>}
-              <p className="sep-help">{st.filmPos == null && st.filmFlip == null ? `From the print${loc ? ` (${loc})` : ""}. ` : ""}The targets stay on the screen&apos;s center; every screen of this print moves together.{filmFlip ? " The film says UPSIDE DOWN by the bottom target." : ""}</p>
+              <p className="sep-help">{st.filmPos == null && st.filmFlip == null ? `From the print${loc ? ` (${loc})` : ""}. ` : ""}The targets stay on the screen&apos;s center; every screen of this print moves together.{filmFlip ? " The film has an up arrow and BURN UPSIDE DOWN left of the top target." : ""}</p>
             </SetRow>
           </div>
         </aside>

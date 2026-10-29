@@ -150,14 +150,23 @@ function filmDraw(p: FilmPage, tag: string, marks: FilmMarks, i: number, mt: num
   const name = p.ink || p.label, one = `${name}  ${tag}`, side = bw / 2 - a - 12, wid = (t: string, f: number) => t.length * f * 0.6;
   const txt = (t: string, x: number, f: number) => `BT /F1 ${f.toFixed(2)} Tf ${x.toFixed(2)} ${(tTop - f / 3).toFixed(2)} Td (${esc(t)}) Tj ET\n`;
   let label: string;
-  if (wid(one, 11) <= side) label = txt(one, tx + a + 8, 11);
+  // burned upside down: the left of the top target is the arrow's, so the label stays on the right (smaller if it must)
+  if (marks.flip) label = txt(one, tx + a + 8, Math.max(5, Math.min(11, side / (one.length * 0.6))));
+  else if (wid(one, 11) <= side) label = txt(one, tx + a + 8, 11);
   else {
     const f = Math.max(6, Math.min(11, side / (Math.max(name.length, tag.length) * 0.6)));
     label = txt(name, tx - a - 8 - wid(name, f), f) + txt(tag, tx + a + 8, f);
   }
   // turned 180° in place: the same spot on the film, upside down
   const img = marks.flip ? `q ${(-aw).toFixed(2)} 0 0 ${(-ah).toFixed(2)} ${(ax + aw).toFixed(2)} ${(mt + ah).toFixed(2)} cm /Im${i} Do Q\n` : `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${ax.toFixed(2)} ${mt} cm /Im${i} Do Q\n`;
-  const flag = marks.flip ? (() => { const t = "UPSIDE DOWN - burn as is", f = 9; return `BT /F1 ${f} Tf ${(tx + a + 8).toFixed(2)} ${(tBot - f / 3).toFixed(2)} Td (${t}) Tj ET\n`; })() : "";
+  // burned upside down (Oct 29, Nick: "they probably won't read… because they don't speak English… an arrow to the left
+  // of the crop mark… about the same size as the crop mark, maybe a little bit smaller… and say burn upside down"):
+  // a solid up arrow just left of the top target, a bit shorter than the target, the words left of it
+  const flag = marks.flip ? (() => {
+    const h = a * 1.5, w = a * 0.7, sw = w * 0.42, hh = h * 0.45, x0 = tx - a - 8 - w / 2, y0 = tTop - h / 2, t = "BURN UPSIDE DOWN", f = Math.max(5, Math.min(9, (x0 - w / 2 - 8) / (t.length * 0.6)));
+    const arrow = `${(x0 - sw / 2).toFixed(2)} ${y0.toFixed(2)} m ${(x0 + sw / 2).toFixed(2)} ${y0.toFixed(2)} l ${(x0 + sw / 2).toFixed(2)} ${(y0 + h - hh).toFixed(2)} l ${(x0 + w / 2).toFixed(2)} ${(y0 + h - hh).toFixed(2)} l ${x0.toFixed(2)} ${(y0 + h).toFixed(2)} l ${(x0 - w / 2).toFixed(2)} ${(y0 + h - hh).toFixed(2)} l ${(x0 - sw / 2).toFixed(2)} ${(y0 + h - hh).toFixed(2)} l h f\n`;
+    return arrow + `BT /F1 ${f} Tf ${(x0 - w / 2 - 6 - wid(t, f)).toFixed(2)} ${(tTop - f / 3).toFixed(2)} Td (${t}) Tj ET\n`;
+  })() : "";
   return img + "0 G 0 g 0.75 w\n" + (marks.targets === false ? "" : target(tx, tTop) + target(tx, tBot)) + label + flag;
 }
 /** a PDF of pages, each its size, content and 1-bit images (/Im0…/ImN on that page) */
