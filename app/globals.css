@@ -15892,3 +15892,21 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-mail iframe{display:block;width:100%;height:min(560px,55vh);border:0}
 .spt-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .spt-copy{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* Proofs (app/shop/proofs): the four stations, the department tags, and a proof's steps */
+.dgz-line.prf-line{grid-template-columns:repeat(4,minmax(0,1fr))}
+.dgz-line.prf-line .dgz-rail{left:12.5%;right:12.5%}
+.tbl.prf{min-width:0}
+.prf-dept{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;border-radius:4px;padding:1px 6px;margin-right:4px;color:#fff;background:var(--fbs-blue)}
+.prf-dept.embroidery{background:var(--danger)}
+.prf-dept.heat{background:var(--warn)}
+.prf-open{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;padding:4px 0}
+.prf-steps{flex:1 1 360px;min-width:0}
+.prf-steps ol{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.prf-steps li{position:relative;display:flex;flex-direction:column;font-size:13px}
+.prf-steps li::before{content:"";position:absolute;left:-20px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.prf-steps li.ok::before{border-color:var(--ok);background:var(--ok)}
+.prf-steps li.bad::before{border-color:var(--danger);background:var(--danger)}
+.prf-steps li span{font-size:12px;color:var(--ink-3)}
+.prf-steps li small{font-size:12px;color:var(--ink-2,var(--ink-3))}
+.prf-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
