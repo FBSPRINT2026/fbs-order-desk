@@ -70,9 +70,13 @@ type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: 
    *  screen's center with the targets still centered; `filmFlip` burns it upside down (sleeves, totes). Unset = from the
    *  print's location and garment */
   filmPos?: "center" | "lc" | "rc"; filmOffsetIn?: number; filmFlip?: boolean;
+  /** which size was typed: the width (default) or the height (`heightIn`, kept when the art's proportions change) */
+  sizeBy?: "w" | "h"; heightIn?: number;
   /** dot gain on press, taken off the halftone plates ahead of time (Illustrator file and films); 0 if the RIP does it.
    *  (`gain` from SepSettings is filled from this; an old saved films-only `gain` is ignored.) */
   pressGain?: number };
+/** inches to 2 places, for the size boxes (no long decimals cut off in a small box) */
+const r2 = (n: number) => Math.round(n * 100) / 100;
 /** a chest print's art center from the screen's center on the film (Oct 29, Nick: "4 inches by default, then override it") */
 const CHEST_OFFSET_IN = 4;
 const DOT_NAME = { ellipse: "elliptical", round: "round", square: "square" } as const;
@@ -955,6 +959,10 @@ export default function SeparationStudio({ id }: { id: string }) {
 
   /* ---------- outputs ---------- */
   const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
+  // the art's height over its width, for the Size row's height box
+  const artAsp = res && res.w ? res.h / res.w : img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
+  // sized by its height: the height stays when the art's proportions change (a crop, a new trace)
+  useEffect(() => { if (st.sizeBy === "h" && st.heightIn && artAsp) { const w = st.heightIn / artAsp; if (Math.abs(w - st.widthIn) > 0.005) set({ widthIn: w }); } }, [artAsp]); // eslint-disable-line react-hooks/exhaustive-deps
   // where the art sits on the film: a left chest 4" right of the screen's center as you look at the film (the wearer's
   // left is on your right with the shirt facing up), a right chest 4" left; sleeves and bags burned upside down
   const loc = row?.location || "";
@@ -1323,7 +1331,14 @@ export default function SeparationStudio({ id }: { id: string }) {
         <aside className="sep-side">
           <div className="sep-set">
             <SetRow k="size" label="Size" open={more} onToggle={toggleMore} main={<>
-              <label className="sep-sr-num"><input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} aria-label="Print width in inches" />in wide</label>
+              {/* width or height (Oct 29, Nick: "we should be able to set the width or height… it just should never get cut
+                  off"): type either, the other follows the art; the one typed stays outlined and is the one kept */}
+              <div className="sep-sz">
+                <label className={"sep-szf" + (st.sizeBy !== "h" ? " set" : "")} title="Print width"><small>W</small><input type="number" min={0.5} max={20} step={0.25} value={r2(st.widthIn)} onChange={(e) => { const w = Math.max(0.25, +e.target.value || 0.25); set({ widthIn: w, sizeBy: "w", heightIn: undefined }); }} aria-label="Print width in inches" /></label>
+                <span className="sep-szx" aria-hidden>×</span>
+                <label className={"sep-szf" + (st.sizeBy === "h" ? " set" : "")} title="Print height"><small>H</small><input type="number" min={0.5} max={30} step={0.25} value={artAsp ? r2(st.sizeBy === "h" && st.heightIn ? st.heightIn : st.widthIn * artAsp) : ""} disabled={!artAsp} onChange={(e) => { const h = Math.max(0.25, +e.target.value || 0.25); if (artAsp) set({ heightIn: h, sizeBy: "h", widthIn: h / artAsp }); }} aria-label="Print height in inches" /></label>
+                <span className="sep-szu">in</span>
+              </div>
 </>}>
             {img && (() => {
               // pictures can't be blown up (Separo can't either): say how sharp the art is at this print size
@@ -1411,7 +1426,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
             </SetRow>
             <SetRow k="film" label="Film" open={more} onToggle={toggleMore} main={
-              <div className="sep-seg" role="radiogroup" aria-label="Where the art sits on the film">{([["center", "Center"], ["lc", "L chest"], ["rc", "R chest"]] as const).map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={filmPos === v} className={filmPos === v ? "on" : ""} onClick={() => set({ filmPos: v })}>{l}</button>)}</div>}>
+              <div className="rv-seg sep-full" role="radiogroup" aria-label="Where the art sits on the film">{([["center", "Center"], ["lc", "L chest"], ["rc", "R chest"]] as const).map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={filmPos === v} className={filmPos === v ? "on" : ""} onClick={() => set({ filmPos: v })}>{l}</button>)}</div>}>
               {filmPos !== "center" && <label className="sep-f">Offset from center (in)<input type="number" min={0} max={8} step={0.25} value={filmOffsetIn} onChange={(e) => set({ filmOffsetIn: Math.max(0, Math.min(8, +e.target.value || 0)) })} /></label>}
               {filmPos !== "center" && st.filmOffsetIn != null && st.filmOffsetIn !== CHEST_OFFSET_IN && <button type="button" className="linkbtn" onClick={() => set({ filmOffsetIn: undefined })}>Back to {CHEST_OFFSET_IN}&quot; (shop default)</button>}
               <label className="sep-chk"><input type="checkbox" checked={filmFlip} onChange={(e) => set({ filmFlip: e.target.checked })} /> Burn upside down (art turned on the film)</label>

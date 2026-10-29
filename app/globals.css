@@ -15651,3 +15651,10 @@ button.panel-h.osp-fold[aria-expanded="false"]{border-bottom:0}
 /* Order goods: One Stop's shipping and the card's CVV side by side (Oct 29) */
 .og-2f{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:10px;align-items:start}
 .og-cvv input{letter-spacing:.2em}
+/* Separation Studio: Size as width × height (either typed; the typed one outlined) and never cut off (Oct 29) */
+.sep-sz{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
+.sep-szf{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.sep-szf.set{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.sep-szf small{font-size:11px;color:var(--ink-3);font-weight:700}
+.sep-szf input{width:46px;border:0!important;padding:0!important;height:26px!important;background:none!important;box-shadow:none!important;font-size:13px;min-width:0}
+.sep-szx,.sep-szu{font-size:12px;color:var(--ink-3)}
