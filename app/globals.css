@@ -15661,3 +15661,18 @@ button.panel-h.osp-fold[aria-expanded="false"]{border-bottom:0}
 html body .sep-szf input{flex:1 1 auto;width:100%!important;min-width:0!important;border:0!important;padding:0!important;height:28px!important;background:none!important;box-shadow:none!important;font-size:13.5px!important;text-overflow:clip;-moz-appearance:textfield;appearance:textfield}
 html body .sep-szf input::-webkit-outer-spin-button,html body .sep-szf input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .sep-szx{flex:none;font-size:12px;color:var(--ink-3)}
+/* Separation Studio's settings panel, stacked (Oct 29, Nick: "you've got the compacted version of this left panel really
+   tight… rethink how it looks so that everything doesn't seem so tight"): the same width, each label on its own line
+   (small gray caps) with the arrow at the right, its controls the full width under it at the kit's field height */
+.sep-sr{padding:11px 0}
+main.main .sep-sr-h{grid-template-columns:minmax(0,1fr) 22px;grid-template-areas:"l more" "m m";row-gap:7px;column-gap:8px}
+main.main .sep-sr-l{grid-area:l;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+main.main .sep-sr-m{grid-area:m;width:100%;gap:8px}
+main.main .sep-sr-more{grid-area:more}
+main.main .sep-sr-m select,main.main .sep-sr-m input:not([type=checkbox]):not([type=radio]),main.main .sep-sr-m>.btn{height:36px;font-size:14px}
+main.main .sep-sr-m>select{flex:1 1 auto;min-width:0}
+main.main .sep-sr-m>.rv-seg>button{padding:9px 6px!important;font-size:13px!important}
+main.main .sep-sr-m .sep-shirt-sw{width:36px;height:36px}
+main.main .sep-sr-m .sep-szf{height:36px;padding:0 9px}
+html body main.main .sep-sr-m .sep-szf input{height:32px!important;font-size:14px!important}
+main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
