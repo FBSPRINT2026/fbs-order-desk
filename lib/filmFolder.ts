@@ -81,3 +81,18 @@ export async function sendToFolder(bytes: Uint8Array, name: string): Promise<"se
     throw e;
   }
 }
+
+/**
+ * A film into FilmMaker's hot folder through Dropbox (app/api/films/dropbox): the server saves it into Dropbox's
+ * FILM DIRECT TO PRINT, which syncs to the film PC. Works from any computer; the browser saves nothing itself.
+ */
+export async function sendViaDropbox(bytes: Uint8Array, name: string): Promise<{ ok: true } | { ok: false; error: string; setup?: boolean }> {
+  const fd = new FormData();
+  fd.append("file", new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), name);
+  fd.append("name", name);
+  const r = await fetch("/api/films/dropbox", { method: "POST", body: fd }).catch(() => null);
+  if (!r) return { ok: false, error: "Couldn't reach the portal." };
+  if (r.status === 413) return { ok: false, error: "This film is too big to send through the portal." };
+  const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
+  return j.ok ? { ok: true } : { ok: false, error: j.error || `HTTP ${r.status}`, setup: /isn't (connected|set up)|doesn't allow saving/i.test(j.error || "") };
+}

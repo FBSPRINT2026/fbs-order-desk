@@ -10,7 +10,7 @@ import InkMatch from "@/components/InkMatch";
 import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
-import { allowFolder, folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder, type DirHandle } from "@/lib/filmFolder";
+import { allowFolder, sendViaDropbox, folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder, type DirHandle } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
@@ -1777,6 +1777,34 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   async function print(only?: number) {
     setErr(""); setMsg(""); setWorking(true); setAgain(only ?? null);
     try {
+      // through Dropbox first (Oct 29): the portal saves each film into Dropbox's FILM DIRECT TO PRINT, which syncs to
+      // the film PC; nothing on this computer has to allow anything. Only if Dropbox can't take it, the old ways below
+      {
+        const files = await make(rollIn, only, only == null && nesting);
+        const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        const d0 = new Date(), stamp = [d0.getHours(), d0.getMinutes(), d0.getSeconds()].map((v) => String(v).padStart(2, "0")).join("");
+        let sent = 0, why = "";
+        for (const f of files) {
+          const r = await sendViaDropbox(f.bytes, f.name.replace(/(\.[a-z0-9]+)$/i, `-${stamp}$1`));
+          if (r.ok) { sent++; continue; }
+          why = r.error;
+          break;
+        }
+        if (sent === files.length) {
+          if (only == null) onSent();
+          setMsg(only != null ? `Sent film ${only + 1} of ${n} (${inks[only] || "screen"}) again to FilmMaker at ${at}.` : `Sent ${files.length} film${files.length === 1 ? "" : "s"} to FilmMaker at ${at}, one per screen. They print once Dropbox syncs to the film PC (seconds to a minute).`);
+          return;
+        }
+        if (sent > 0) {
+          // part went: the rest download, to drop into FILM DIRECT TO PRINT by hand
+          for (const g of files.slice(sent)) download(g.bytes, g.name);
+          if (only == null) onSent();
+          setErr(`Sent ${sent} of ${files.length} through Dropbox, then it stopped (${why}). The other ${files.length - sent} downloaded: move them into FILM DIRECT TO PRINT.`);
+          return;
+        }
+        if (!canFolder) { for (const g of files) download(g.bytes, g.name); if (only == null) onSent(); setErr(`Couldn't send through Dropbox (${why}), so the films downloaded: move them into FILM DIRECT TO PRINT.`); return; }
+        // nothing went through Dropbox: this computer's own hot folder, as before
+      }
       if (canFolder && !folder && !(await choose())) return;
       // ask for the folder first, while the click still counts: making the films can take longer than that
       if (canFolder) {
@@ -1879,7 +1907,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
       <p className="sep-help">Black films, finished: solid and halftone dots made here at {dpi} dpi (Film DPI under Output; set it to the printer&apos;s resolution). FilmMaker just prints black: no separating, no converting colors to black.</p>
       {canFolder && !folder && <div className="pf-folder faint">The first time on the film PC, it asks for FilmMaker&apos;s hot folder.</div>}
       {!canFolder && <div className="pf-folder faint">This browser downloads the file (Chrome or Edge on the film PC sends it straight to FilmMaker).</div>}
-      {canFolder && folder && <div className="pf-folder faint">Sends to the folder <b data-notranslate>{folder}</b> on this computer · <button type="button" className="linkbtn" onClick={choose}>Change folder</button></div>}
+      <div className="pf-folder faint">Sends through Dropbox to <b data-notranslate>FILM DIRECT TO PRINT</b>: FilmMaker prints once the film PC syncs.{canFolder && folder ? <> If Dropbox can&apos;t take it, this computer&apos;s folder <b data-notranslate>{folder}</b> · <button type="button" className="linkbtn" onClick={choose}>Change folder</button></> : null}</div>
       {msg && <div className="ok-note">{msg}</div>}
       {err && <div className="pv-err">{err}</div>}
       <details className="pf-setup">

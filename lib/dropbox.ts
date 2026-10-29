@@ -65,3 +65,19 @@ export async function download(admin: SupabaseClient, pathOrId: string): Promise
   if (!r.ok) throw new DropboxError(`Dropbox download: ${(await r.text().catch(() => "")).slice(0, 200) || r.status}`);
   return { buf: await r.arrayBuffer(), meta: JSON.parse(r.headers.get("dropbox-api-result") || "{}") as DbxEntry };
 }
+
+/**
+ * Save a file into Dropbox (never over another: a name already there gets " (1)"). Needs the app's files.content.write
+ * permission (Oct 29: added so films go to FilmMaker's hot folder through Dropbox, not through the browser).
+ */
+export async function uploadFile(admin: SupabaseClient, path: string, bytes: Uint8Array): Promise<DbxEntry> {
+  const t = await token(admin);
+  const arg = JSON.stringify({ path, mode: "add", autorename: true, mute: true }).replace(/[\u007f-￿]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+  const r = await fetch("https://content.dropboxapi.com/2/files/upload", { method: "POST", headers: { Authorization: `Bearer ${t}`, "Dropbox-API-Arg": arg, "Content-Type": "application/octet-stream" }, body: bytes as unknown as BodyInit, cache: "no-store" });
+  if (!r.ok) {
+    const txt = (await r.text().catch(() => "")).slice(0, 300);
+    if (/missing_scope|files\.content\.write/i.test(txt)) throw new DropboxError("Dropbox doesn't allow saving yet: tick files.content.write on the Dropbox app (Permissions), then Settings → Dropbox → Connect again.");
+    throw new DropboxError(`Dropbox upload: ${txt || r.status}`);
+  }
+  return r.json() as Promise<DbxEntry>;
+}
