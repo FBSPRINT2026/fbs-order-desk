@@ -1,5 +1,5 @@
 "use client";
-import LogoThumb from "@/components/LogoThumb";
+import { PrintThumb } from "@/components/LogoThumb";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { currentSewFile, digitizeState, requestOf, sewVersions } from "@/lib/digitizeStatus";
@@ -218,7 +218,7 @@ export default function Digitizing() {
                   <span className="dgz-hint">{hint}</span>
                   {/* the logos at this station, on white tiles side by side (Oct 29, Nick: "spread them out") */}
                   <span className="dgz-tray">{!orders ? null : !n ? <span className="dgz-empty">Nothing waiting</span> : <>
-                    {here.slice(0, 3).map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <LogoThumb d={it.d} url={urls[it.d.id]} inkMap={it.im.inkMap?.map} /> : <i>{(it.d?.name || it.im.location || "?").slice(0, 1).toUpperCase()}</i>}</span>)}
+                    {here.slice(0, 3).map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <PrintThumb d={it.d} url={urls[it.d.id]} print={it.im} lines={it.g.lines} /> : <small className="dgz-noart">{it.d ? "…" : "No logo"}</small>}</span>)}
                     {n > 3 && <span className="dgz-more">+{n - 3}</span>}
                   </>}</span>
                 </button>
@@ -318,7 +318,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
   return (
     <>
       <tr className={open ? "on" : ""} data-dgz={it.key} onClick={toggle} style={{ cursor: "pointer" }}>
-        <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><LogoThumb d={it.d} url={pic} shirt={(it.g.lines || [])[0]?.color} inkMap={it.im.inkMap?.map} /></span> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
+        <td><span className="dgz-logo">{pic && it.d ? <span className="dgz-pic"><PrintThumb d={it.d} url={pic} print={it.im} lines={it.g.lines} /></span> : null}<b>{it.d ? designLabel(it.d) : "No logo yet"}</b></span></td>
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>

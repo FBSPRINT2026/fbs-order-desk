@@ -30,3 +30,18 @@ export default function LogoThumb({ d, url, shirt, inkMap, className }: {
     </span>
   );
 }
+
+/**
+ * A logo as an order's print shows it: painted in that print's inks (or threads) on its garment's color. Every place that
+ * shows a print's logo uses this, so a tile can't come out different from the order's own picture (Oct 29, Nick: "these
+ * little squares aren't showing accurately again": the Digitizing line's tiles left out the garment color).
+ */
+export function PrintThumb({ d, url, print, lines, className }: {
+  d: Pick<Design, "id" | "name" | "specs">; url: string;
+  print: { inkMap?: { map?: Record<string, { hex: string; name: string }> | null } | null };
+  /** the print's group's garments: the first with a color is the one it's shown on */ lines?: { color?: string }[] | null;
+  className?: string;
+}) {
+  return <LogoThumb d={d} url={url} shirt={(lines || []).find((l) => l.color)?.color} inkMap={print.inkMap?.map} className={className} />;
+}
+

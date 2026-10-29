@@ -1,6 +1,6 @@
 "use client";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
-import LogoThumb from "@/components/LogoThumb";
+import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee } from "@/lib/pricing";
 import { money } from "@/lib/format";
@@ -933,7 +933,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 )}
                 {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 <div className="imp-art" hidden={!!d.supplied}>
-                      {!(onMockup && !skipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
+                      {!(onMockup && !skipped) && <DesignPick imprint={d} lines={g.lines} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
                           im.design_id = des?.id || undefined;
@@ -1562,8 +1562,8 @@ function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?:
   );
 }
 
-function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
-  imprint: { design_id?: string; size: string; artRatio?: number }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+function DesignPick({ imprint, lines, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
+  imprint: { design_id?: string; size: string; artRatio?: number; inkMap?: Imprint["inkMap"] }; /** the group's garments, for its picture */ lines?: { color?: string }[]; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
   /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
    *  new art from the main order page") */ readOnly?: boolean; onMockup?: () => void;
   onStar?: (d: Design, starred: boolean) => void;
@@ -1579,7 +1579,7 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
     <div className="dp">
       <span className="dp-l">Logo</span>
       {readOnly
-        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <span className="dp-th"><LogoThumb d={cur} url={urls[cur.id]} /></span>}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
+        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <span className="dp-th"><PrintThumb d={cur} url={urls[cur.id]} print={imprint} lines={lines} /></span>}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
             {onMockup && <button type="button" className="linkbtn" onClick={onMockup}>{cur ? "Change in the Mockup Creator" : "Pick it in the Mockup Creator"}</button>}</span>
         : <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />}
       {canUpload && !readOnly && (
