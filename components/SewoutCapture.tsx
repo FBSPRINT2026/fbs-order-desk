@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { phoneSnapState, sendSewoutPhoto, sewoutPhoneLink } from "@/app/shop/sewout-actions";
-import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import PhoneSnapAsk from "@/components/PhoneSnapAsk";
+import SewnPanel, { startSewn, type SewCtx, type SewnValue } from "@/components/SewnPanel";
 
 /**
  * The sew-out photo (Oct 24, Nick: "when our embroidery team does the sew out and they take a picture… crop it and
@@ -15,6 +15,10 @@ import PhoneSnapAsk from "@/components/PhoneSnapAsk";
  * On a computer the button shows a QR code first (Oct 29, Nick: "a QR code that pops up so… on their phone, they can
  * just add it in like a photo"): the phone opens /snap/<id>, which is this same component with `snapId`, takes and crops
  * the photo there, and the computer's pop-up closes when it arrives. "Use a photo on this computer" still works.
+ *
+ * Beside the crop, "What we sewed" (components/SewnPanel.tsx): the stitch file version and the threads really sewn,
+ * which the order is changed to match; and an optional placement photo (a wider shot of where it sits on the garment).
+ * Saving keeps it; Send to customer on Digitizing sends it (Oct 29, Nick).
  */
 type Box = { x: number; y: number; w: number; h: number }; // 0..1 of the (turned) photo
 const MAX_OUT = 1800;
@@ -50,8 +54,18 @@ function loadImage(f: File): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const u = URL.createObjectURL(f); const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("That photo couldn't be opened.")); im.src = u; });
 }
 
-export default function SewoutCapture({ orderId, imprintId, label, onDone, snapId, where }: {
+/** a picked photo, scaled down to send (the placement photo isn't cropped) */
+async function scaled(f: File, max = 1800): Promise<Blob> {
+  const im = await loadImage(f), k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+  c.getContext("2d")!.drawImage(im, 0, 0, c.width, c.height);
+  return new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the placement photo."))), "image/jpeg", 0.88));
+}
+
+export default function SewoutCapture({ orderId, imprintId, label, onDone, snapId, where, ctx }: {
   orderId: string; imprintId: string; label?: string; onDone: (msg: string) => void;
+  /** the print's stitch files, threads and size, and the threads on the wall, for "What we sewed" */
+  ctx?: SewCtx;
   /** on the phone, from the computer's QR code: uploads with that link instead of a sign-in */
   snapId?: string;
   /** the order and print, for the computer's QR pop-up ("#40200 · Logotology · Left chest") */
@@ -61,6 +75,9 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
   const [turn, setTurn] = useState(0); // quarter turns
   const [box, setBox] = useState<Box>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
   const [note, setNote] = useState("");
+  const [sewn, setSewn] = useState<SewnValue | null>(null);
+  const [place, setPlace] = useState<{ file: File; url: string } | null>(null);
+  const pickPlace = (f: File) => setPlace((p) => { if (p) URL.revokeObjectURL(p.url); return { file: f, url: URL.createObjectURL(f) }; });
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [preview, setPreview] = useState("");
   const cv = useRef<HTMLCanvasElement | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -69,7 +86,8 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
   const [computer, setComputer] = useState(false);
   useEffect(() => { setComputer(!snapId && !window.matchMedia("(pointer: coarse)").matches); }, [snapId]);
   const [ask, setAsk] = useState<{ id: string | null; done: string; error: string } | null>(null);
-  const pick = (f: File) => void loadImage(f).then((im) => { setAsk(null); setTurn(0); setImg(im); }).catch((x) => setErr(x.message));
+  const pick = (f: File) => void loadImage(f).then((im) => { setAsk(null); setTurn(0); setImg(im); setSewn(ctx ? startSewn(ctx) : null); setPlace(null); }).catch((x) => setErr(x.message));
+  const close = () => { setImg(null); setNote(""); setTurn(0); setPlace(null); };
   async function openAsk() {
     setErr(""); setAsk({ id: null, done: "", error: "" });
     const r = await sewoutPhoneLink(orderId, imprintId);
@@ -142,18 +160,21 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
       r.getContext("2d")!.drawImage(c, 0, 0, r.width, r.height);
       const blob = (x: HTMLCanvasElement) => new Promise<Blob>((res, rej) => x.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't save the photo."))), "image/jpeg", 0.9));
       const sb = createClient();
+      const sewnOut = sewn ? { filePath: sewn.filePath || undefined, threads: sewn.threads } : undefined;
       if (snapId) {
         // on the phone: upload with the link's pass, then save it the same way (app/api/snap)
-        const post = async (body: object) => { const x = await fetch("/api/snap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: snapId, ...body }) }); return (await x.json()) as { ok: boolean; error?: string; photo?: { path: string; token: string }; raw?: { path: string; token: string }; msg?: string }; };
+        const post = async (body: object) => { const x = await fetch("/api/snap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: snapId, ...body }) }); return (await x.json()) as { ok: boolean; error?: string; photo?: { path: string; token: string }; raw?: { path: string; token: string }; placement?: { path: string; token: string }; msg?: string }; };
         const u = await post({ step: "urls" });
         if (!u.ok || !u.photo || !u.raw) throw new Error(u.error || "Couldn't get the photo ready to upload.");
         const a = await sb.storage.from("proofs").uploadToSignedUrl(u.photo.path, u.photo.token, await blob(o), { contentType: "image/jpeg" });
         if (a.error) throw new Error(a.error.message);
         await sb.storage.from("proofs").uploadToSignedUrl(u.raw.path, u.raw.token, await blob(r), { contentType: "image/jpeg" });
-        const done = await post({ step: "save", photo: u.photo.path, raw: u.raw.path, note });
-        if (!done.ok) throw new Error(done.error || "Couldn't send it.");
-        onDone(done.msg || "Sent.");
-        setImg(null); setNote(""); setTurn(0); setBusy(false);
+        let placement: string | undefined;
+        if (place && u.placement) { const pu = await sb.storage.from("proofs").uploadToSignedUrl(u.placement.path, u.placement.token, await scaled(place.file), { contentType: "image/jpeg" }); if (!pu.error) placement = u.placement.path; }
+        const done = await post({ step: "save", photo: u.photo.path, raw: u.raw.path, placement, note, sewn: sewnOut });
+        if (!done.ok) throw new Error(done.error || "Couldn't save it.");
+        onDone(done.msg || "Saved.");
+        close(); setBusy(false);
         return;
       }
       const ts = Date.now();
@@ -161,11 +182,13 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
       const up1 = await sb.storage.from("proofs").upload(photo, await blob(o), { contentType: "image/jpeg" });
       if (up1.error) throw new Error(up1.error.message);
       await sb.storage.from("proofs").upload(raw, await blob(r), { contentType: "image/jpeg" });
-      const res = await sendSewoutPhoto(orderId, imprintId, photo, raw, note);
-      if (!res.ok) throw new Error(res.error || "Couldn't send it.");
-      onDone("error" in res && res.error ? res.error : res.emailed ? `Sew-out v${res.version} sent to the customer.` : `Sew-out v${res.version} saved, but the email didn't go out. Use Remind to try again.`);
-      setImg(null); setNote(""); setTurn(0);
-    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't send it."); }
+      let placement: string | undefined;
+      if (place) { const pp = `sewouts/${orderId}/${ts}-placement.jpg`; const pu = await sb.storage.from("proofs").upload(pp, await scaled(place.file), { contentType: "image/jpeg" }); if (!pu.error) placement = pp; }
+      const res = await sendSewoutPhoto(orderId, imprintId, photo, raw, note, { placementPath: placement, sewn: sewnOut });
+      if (!res.ok) throw new Error(res.error || "Couldn't save it.");
+      onDone(`Sew-out v${res.version} saved.${res.changes.length ? ` The order now matches what was sewn (${res.changes.length} change${res.changes.length === 1 ? "" : "s"}).` : ""} Download the PDF proof or send it to the customer.`);
+      close();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save it."); }
     setBusy(false);
   }
 
@@ -185,27 +208,49 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
         status={ask.done || "Waiting for the phone… keep this open."} onFile={pick} onClose={() => setAsk(null)} />}
       {err && !img && <div className="pv-err">{err}</div>}
       {img && (
-        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sw-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) setImg(null); }}>
-          <div className="mk-modal sow-modal">
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sw-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) close(); }}>
+          <div className={"mk-modal sow-modal" + (sewn ? " wide" : "")}>
             <h2 id="sw-t">Crop the sew-out</h2>
-            <p className="faint">Drag the box or its corners so it frames the stitching. This is the picture the customer sees.{SEWOUT_EMAILS ? "" : " Customer emails are off, so saving doesn't send it."}</p>
-            <div className="sow-stage" ref={wrap} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
-              {preview && <img src={preview} alt="The sew-out photo" draggable={false} />}
-              <div className="sow-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} onPointerDown={(e) => down("move", e)}>
-                {["tl", "tr", "bl", "br"].map((c) => <span key={c} className={"sow-h " + c} onPointerDown={(e) => down(c, e)} />)}
+            <p className="faint">Drag the box or its corners so it frames the stitching. This is the picture the customer sees.{where ? <span data-notranslate> · {where}</span> : null}</p>
+            <div className="sow-cols">
+              <div className="stack" style={{ gap: 10, minWidth: 0 }}>
+                <div className="sow-stage" ref={wrap} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
+                  {preview && <img src={preview} alt="The sew-out photo" draggable={false} />}
+                  <div className="sow-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} onPointerDown={(e) => down("move", e)}>
+                    {["tl", "tr", "bl", "br"].map((c) => <span key={c} className={"sow-h " + c} onPointerDown={(e) => down(c, e)} />)}
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="btn sm" onClick={() => setTurn(turn - 1)} disabled={busy}>↺ Turn left</button>
+                  <button type="button" className="btn sm" onClick={() => setTurn(turn + 1)} disabled={busy}>↻ Turn right</button>
+                  <button type="button" className="btn sm" onClick={() => cv.current && setBox(findStitching(cv.current))} disabled={busy}>Find the stitching</button>
+                </div>
+                {/* a second, wider photo of where it sits on the garment (Oct 29, Nick: "we might take another photo for placement") */}
+                <div className="sow-place">
+                  {place ? <img src={place.url} alt="Placement photo" /> : <span className="sow-place-none" aria-hidden>Placement</span>}
+                  <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+                    <span className="imp-l">Placement photo (optional)</span>
+                    <span className="faint" style={{ fontSize: 12 }}>A wider shot showing where it sits on the garment. It goes on the proof next to the close-up.</span>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <label className="btn sm" style={{ cursor: "pointer" }}>{place ? "Change it" : "Add a placement photo"}
+                        <input type="file" hidden accept="image/*" {...(computer ? {} : { capture: "environment" as const })} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickPlace(f); }} />
+                      </label>
+                      {place && <button type="button" className="btn sm ghost" onClick={() => { URL.revokeObjectURL(place.url); setPlace(null); }}>Remove</button>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="stack" style={{ gap: 10, minWidth: 0 }}>
+                {sewn && ctx && <SewnPanel ctx={ctx} value={sewn} onChange={setSewn} />}
+                <label className="sow-note"><span className="imp-l">Note for the customer (optional)</span>
+                  <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything they should know, like a thread we swapped" /></label>
               </div>
             </div>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <button type="button" className="btn sm" onClick={() => setTurn(turn - 1)} disabled={busy}>↺ Turn left</button>
-              <button type="button" className="btn sm" onClick={() => setTurn(turn + 1)} disabled={busy}>↻ Turn right</button>
-              <button type="button" className="btn sm" onClick={() => cv.current && setBox(findStitching(cv.current))} disabled={busy}>Find the stitching</button>
-            </div>
-            <label className="sow-note"><span className="imp-l">Note for the customer (optional)</span>
-              <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything they should know, like a thread we swapped" /></label>
             {err && <div className="pv-err">{err}</div>}
             <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-              <button type="button" className="btn" onClick={() => setImg(null)} disabled={busy}>Cancel</button>
-              <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : SEWOUT_EMAILS ? "Save and send to the customer" : "Save the sew-out"}</button>
+              <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>Saving keeps it with the order. Nothing goes to the customer until Send.</span>
+              <button type="button" className="btn" onClick={close} disabled={busy}>Cancel</button>
+              <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save the sew-out"}</button>
             </div>
           </div>
         </div>

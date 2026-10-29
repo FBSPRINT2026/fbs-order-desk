@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/supabase/server";
 import type { MailAccount } from "@/lib/mail/config";
 import { runAccount } from "@/lib/mail/run";
 import { sweepDigitizerReplies } from "@/lib/digitizerAuto";
+import { sweepDigitizerOutside } from "@/lib/digitizerOutside";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ export const maxDuration = 60;
 
 /**
  * Digitizing → Check now (Oct 28, Nick: "add a check now button… if it comes in, you just check"): reads Amanda's
- * mailbox (where the digitizer answers) right now, then adds the files of any reply that came in (lib/digitizerAuto.ts).
+ * mailbox (where the digitizer answers) right now, then adds the files of any reply that came in (lib/digitizerAuto.ts),
+ * and takes in any email to the digitizer sent from a mailbox outside the portal, with its answers (lib/digitizerOutside.ts).
  * Staff only. Reads mail; sends nothing.
  */
 export async function POST() {
@@ -21,7 +23,8 @@ export async function POST() {
   const before = await sweepDigitizerReplies(admin).catch(() => 0);
   const { data: a } = await admin.from("mail_accounts").select("*").eq("enabled", true).ilike("email", "amanda@fbsprint.com").maybeSingle();
   let read: unknown = null;
-  if (a) read = await runAccount(admin, a as MailAccount, Date.now() + 35000).catch((e) => String(e));
+  if (a) read = await runAccount(admin, a as MailAccount, Date.now() + 28000).catch((e) => String(e));
+  const outside = await sweepDigitizerOutside(admin, Date.now() + 15000).catch(() => 0);
   const after = await sweepDigitizerReplies(admin).catch(() => 0);
-  return NextResponse.json({ ok: true, added: before + after, read });
+  return NextResponse.json({ ok: true, added: before + after, outside, read });
 }

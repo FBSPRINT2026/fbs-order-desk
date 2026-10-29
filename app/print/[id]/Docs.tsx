@@ -747,14 +747,17 @@ export function InvoiceDoc(p: DocData) {
 }
 
 // ───────────────────────────── sew-out approval ─────────────────────────────
-export type SewoutRow = { id: string; imprint_id: string; version: number; status: string; note: string; sent_at: string | null; decided_at: string | null; decided_name: string | null; customer_comment: string; approved_via: string };
+export type SewoutRow = { id: string; imprint_id: string; version: number; status: string; note: string; sent_at: string | null; decided_at: string | null; decided_name: string | null; customer_comment: string; approved_via: string;
+  placement_path?: string | null; sewn?: { file?: { path: string; name: string; v?: number; wIn: number; hIn: number; stitches: number } | null; threads: { needle?: number; ordered: string; sewn: string }[] } | null };
 /**
  * The sew-out approval PDF (Oct 24, Nick: "take a picture, crop it and say here's your sew out… put it on a PDF that
- * has approval like our proof approval does now… on file for future reference"): the photo of the sewn logo big, what
- * it is (where, size, stitches, backing, threads with their PMS), the garments, and the approval box, fillable like the
- * art proof's. One page.
+ * has approval like our proof approval does now… on file for future reference"). Oct 29, Nick: "cropped, with rounded
+ * corners and… a drop shadow… here's an actual image of your sew-out for approval… it can bring in the DST as you sewed
+ * it… 4x2"; "we might take another photo for placement"; "select the real thread we used". So: the photo big in a
+ * rounded, shadowed frame, the placement photo beside it when there is one, the stitch file drawn as sewn with its
+ * measured size, the threads really sewn (and what they replaced), the garments, and the approval box. One page.
  */
-export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: string }) {
+export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: string; placement?: string }) {
   const { o, cust, groups, sw } = p;
   const sh = p.settings.shop;
   const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
@@ -762,14 +765,23 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
   const gi = Math.max(0, groups.findIndex((g) => g.imprints.some((d) => d.id === sw.imprint_id)));
   const g = groups[gi], d = g?.imprints.find((x) => x.id === sw.imprint_id);
   const des = d?.design_id ? p.designs[d.design_id] : null;
-  const threads = d ? inkNames(d.inks) : [];
+  // the threads really sewn (the sew-out's own record), else the print's
+  const sewnThreads = sw.sewn?.threads?.length ? sw.sewn.threads : (d ? inkNames(d.inks) : []).map((n) => ({ needle: undefined as number | undefined, ordered: n, sewn: n }));
   const shown = (g?.lines || []).filter((l) => l.style || l.color);
   const garments = shown.filter((l, i) => shown.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i);
   const ok = sw.status === "approved" && sw.decided_at
     ? `${sw.decided_name || "Approved"}, ${new Date(sw.decided_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
   const emb = d?.emb || {};
+  // the stitch file sewn: its size and stitches, drawn in the threads sewn (each color stop's needle → the thread on it)
+  const file = sw.sewn?.file || (emb.file ? { path: emb.file.path, name: emb.file.name, wIn: emb.file.wIn, hIn: emb.file.hIn, stitches: emb.file.stitches } : null);
+  const seq = emb.file?.path === file?.path ? emb.file?.ws?.sequence || [] : [];
+  const hexOf = (n: string) => threadByName(n)?.hex || colorHex(n) || "#333333";
+  const dstColors = seq.length
+    ? seq.map((x) => { const t = sewnThreads.find((y) => y.needle === x.needle); return t ? hexOf(t.sewn) : hexOf(`${/isacord/i.test(x.chart) ? "Isacord" : "Madeira"} ${x.code}`); })
+    : sewnThreads.map((t) => hexOf(t.sewn));
+  const inch = (n: number) => `${Math.round(n * 100) / 100}"`;
   return (
-    <section className="sheet pf pf-cover">
+    <section className="sheet pf pf-cover so">
       <div className="top">
         <div className="brand"><img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
           {(sh.phone || sh.email) && <div className="sub">{[fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")}</div>}</div>
@@ -781,23 +793,38 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
         <div><div className="lbl">Job</div><b>{o.nickname || "—"}</b>{o.po_number && <div className="faint">PO {o.po_number}</div>}</div>
         <div><div className="lbl">In hands</div><b>{due || "To be set"}</b><div className="faint">{DELIVERY[o.delivery_method] || "Pickup"}</div></div>
       </div>
-      <div className="pf-hero">
-        {p.photo ? <img src={p.photo} alt="Sew-out" /> : <div className="none">Sew-out photo</div>}
-        <span>Your logo stitched on our machine{d ? ` · ${d.location}` : ""}</span>
+      <div className="so-head">
+        <h2>Here&apos;s an actual photo of your sew-out for approval</h2>
+        <p>Your logo stitched on our machine, the same way the whole run will sew. Please look it over and approve it, or tell us what to change.</p>
       </div>
-      <div className="pf-sum">
-        <div>
-          <div className="lbl">Embroidery</div>
-          {d ? <div className="pf-pr">
-            <b>{d.location}</b>{d.size ? <> · <b>{d.size}</b></> : null}{d.stitches ? ` · ${d.stitches.toLocaleString()} stitches` : ""}
-            <div className="faint">{[des ? `D-${des.number}${des.name ? ` · ${des.name}` : ""}` : "", emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</div>
-            {threads.length > 0 && <div className="pf-inks">{threads.map((k) => { const t = threadByName(k); return <span key={k}><Swatch c={t?.hex || "#ccc"} />{k}{t?.pms[0] ? ` (PMS ${t.pms[0].replace(/^PMS\s*/i, "")})` : ""}</span>; })}</div>}
-          </div> : <div className="pf-pr">This print isn&apos;t on the order anymore.</div>}
-        </div>
-        <div>
-          <div className="lbl">Garments</div>
-          {garments.map((l) => <div className="pf-pr" key={l.id}><Swatch c={colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
-          {sw.note && <div className="pf-pr"><b>Note:</b> {sw.note}</div>}
+      <div className={"so-hero" + (p.placement ? " two" : "")}>
+        <figure className="so-ph">
+          {p.photo ? <img src={p.photo} alt="Your sew-out" /> : <div className="none">Sew-out photo</div>}
+          <figcaption>The sew-out, close up{d ? ` · ${d.location}` : ""}</figcaption>
+        </figure>
+        {p.placement && <figure className="so-ph so-pl">
+          <img src={p.placement} alt="Where it sits on the garment" />
+          <figcaption>Placement on the garment</figcaption>
+        </figure>}
+        <div className="so-side">
+          {file && <div className="so-dst">
+            <div className="lbl">As sewn (from the stitch file)</div>
+            <div className="so-dst-pic"><DstPicture path={file.path} colors={dstColors} style={{ width: "100%", height: "100%" }} fallback={<span className="faint">Drawn from the stitch file</span>} /></div>
+            <div className="so-dim"><span>{inch(file.wIn)} wide</span><span>{inch(file.hIn)} tall</span></div>
+          </div>}
+          <div className="so-facts">
+            {file && <div><span>Size</span><b>{inch(file.wIn)} × {inch(file.hIn)}</b></div>}
+            {(file?.stitches || d?.stitches) ? <div><span>Stitches</span><b>{(file?.stitches || d?.stitches || 0).toLocaleString()}</b></div> : null}
+            {d && <div><span>Placement</span><b>{d.location}</b></div>}
+            {des && <div><span>Logo</span><b>D-{des.number}</b></div>}
+            <div className="wide"><span>Thread{sewnThreads.length === 1 ? "" : "s"}</span>{sewnThreads.map((t, i) => {
+              const th = threadByName(t.sewn); const swapped = t.sewn.toLowerCase() !== t.ordered.toLowerCase();
+              return <b key={i} className="so-th"><Swatch c={hexOf(t.sewn)} />{t.needle && sewnThreads.length > 1 ? `${t.needle}. ` : ""}{t.sewn}{th?.pms[0] ? ` (PMS ${th.pms[0].replace(/^PMS\s*/i, "")})` : ""}{swapped && <small> in place of {t.ordered}</small>}</b>;
+            })}</div>
+            {garments.length > 0 && <div className="wide"><span>Garment{garments.length === 1 ? "" : "s"}</span>{garments.map((l) => <b key={l.id} className="so-th"><Swatch c={colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} />{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}{l.color ? ` · ${l.color}` : ""}</b>)}</div>}
+            {(emb.backing || emb.puff || emb.metallic) && <div className="wide"><span>Details</span><b>{[emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</b></div>}
+          </div>
+          {sw.note && <div className="so-note"><b>Note:</b> {sw.note}</div>}
         </div>
       </div>
       <div className="pf-ok">

@@ -1,7 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { approveSewoutAnotherWay, remindSewout, sendSewout } from "@/lib/sewouts";
+import { approveSewoutAnotherWay, remindSewout, saveSewout, sendSewoutNow, type SewnInput } from "@/lib/sewouts";
 import { makeSnap } from "@/lib/phoneSnap";
 
 /** Sew-out approval from the shop (lib/sewouts.ts): save the photo and email it, remind, or approved another way. */
@@ -13,10 +13,13 @@ async function me() {
 }
 const run = async <T,>(f: () => Promise<T>) => { try { return await f(); } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." }; } };
 
-/** The cropped sew-out photo (already uploaded) becomes the print's next sew-out and is emailed to the customer. */
-export async function sendSewoutPhoto(orderId: string, imprintId: string, photoPath: string, rawPath: string, note: string) {
-  return run(async () => sendSewout(createAdminClient(), { orderId, imprintId, photoPath, rawPath, note }, await me()));
+/** The cropped sew-out photo (already uploaded) becomes the print's next sew-out, with what was really sewn; the order
+ *  is changed to match. Nothing is sent: Send to customer does that. */
+export async function sendSewoutPhoto(orderId: string, imprintId: string, photoPath: string, rawPath: string, note: string, extra: { placementPath?: string; sewn?: SewnInput } = {}) {
+  return run(async () => saveSewout(createAdminClient(), { orderId, imprintId, photoPath, rawPath, note, ...extra }, await me()));
 }
+/** Send to customer: the saved sew-out emailed to approve */
+export async function sendSewoutToCustomer(id: string) { return run(async () => sendSewoutNow(createAdminClient(), id, await me())); }
 export async function remindSewoutAction(id: string) { return run(async () => remindSewout(createAdminClient(), id, await me())); }
 export async function approveSewoutAnother(id: string, how: string) { return run(async () => approveSewoutAnotherWay(createAdminClient(), id, await me(), how)); }
 

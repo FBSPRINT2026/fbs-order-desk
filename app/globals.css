@@ -15698,3 +15698,30 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 /* the close-up's background color, chosen outright when there's no garment photo (components/MockupBuilder.tsx CloseUp) */
 .mk-cu-eyeb{position:relative}
 .mk-cu-color{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
+/* the sew-out photo step: crop and placement on the left, "What we sewed" on the right (components/SewoutCapture.tsx, SewnPanel.tsx) */
+.sow-modal.wide{max-width:960px}
+.sow-cols{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:760px){.sow-cols{grid-template-columns:1fr}}
+.sow-place{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:8px}
+.sow-place img,.sow-place-none{width:72px;height:72px;border-radius:6px;object-fit:cover;flex:none;background:var(--surface-2)}
+.sow-place-none{display:grid;place-items:center;font-size:11px;color:var(--ink-3)}
+.swn{display:flex;flex-direction:column;gap:10px}
+.swn .field select{height:36px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:14px;padding:0 8px;width:100%;color:var(--ink);background:var(--surface)}
+.swp{display:flex;flex-direction:column;gap:4px}
+.swp-f{display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;background:var(--surface)}
+.swp-f input{border:0;outline:0;flex:1;min-width:0;font:inherit;font-size:14px;color:var(--ink);background:transparent;height:34px;padding:0}
+.swp-sw{width:14px;height:14px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15);display:inline-block}
+.swp-was{font-size:12px;color:var(--ink-3)}
+.swp-sug{display:flex;flex-wrap:wrap;gap:6px}
+.swp-chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--ink)}
+.swp-chip.on{border-color:var(--accent);background:var(--accent-soft,var(--surface-2));color:var(--accent)}
+.swn-chg{background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:8px 10px;font-size:12.5px;line-height:1.5}
+/* Digitizing: every version of a logo's stitch file, the no-proof flag, emails sent outside the portal */
+.dgz-vers{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line-2,var(--line));padding-top:8px;margin-top:6px}
+.dgz-ver{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.dgz-ver span{color:var(--ink-3);white-space:nowrap}
+.dgz-ver.on b{color:var(--ok)}
+.dgz-noproof{color:var(--warn)!important}
+.dgz-sewn{color:var(--warn)!important}
+.dgz-out .tbl select{height:32px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;max-width:320px}
+.nowrap{white-space:nowrap}

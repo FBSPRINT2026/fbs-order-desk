@@ -166,7 +166,7 @@ export type Outcome = "customer" | "lead" | "sent" | "skipped" | "duplicate" | "
  * an email from the digitizer naming the order (#40189). Kept on the order (not a customer email, no AI reply), its
  * files saved, and the logo marked "files came in" so Digitizing offers to add them. Nothing is added by itself.
  */
-async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, acct: Acct): Promise<Outcome | null> {
+export async function digitizerReply(admin: SupabaseClient, m: MailMsg, from: string, acct: Acct): Promise<Outcome | null> {
   const ids = [...new Set([m.inReplyTo, ...m.references].filter(Boolean))].slice(-20);
   let req: { id: string; order_id: string | null; meta: { digitize?: { order_id: string; imprint_id: string; design_id: string | null; /** a request for several logos at once (Oct 27) */ items?: { imprint_id: string; design_id: string | null }[] } } } | null = null;
   if (ids.length) {
@@ -287,6 +287,8 @@ export async function keepIncoming(admin: SupabaseClient, m: MailMsg, acct: Acct
 
 export async function handleSent(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome> {
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return "duplicate"; }
+  // our email to the digitizer, sent outside the portal: put on its order for Digitizing (lib/digitizerOutside.ts)
+  { const { digitizerSent } = await import("@/lib/digitizerOutside"); const dz = await digitizerSent(admin, m, acct).catch(() => null); if (dz) return dz; }
   const parent = await threadParent(admin, m);
   let customerId: string | null = parent?.customer_id || null;
   if (!customerId) for (const r of [...m.to, ...m.cc]) { const x = await matchAddress(admin, r.address); if (x.customerId && !x.ignore) { customerId = x.customerId; break; } }

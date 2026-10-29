@@ -78,6 +78,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     const { data: swr } = await db.from("sewouts").select("*").eq("id", sewout).eq("order_id", id).maybeSingle();
     if (!swr) notFound();
     const { data: ph } = await admin.storage.from("proofs").createSignedUrl((swr as { photo_path: string }).photo_path, 3600);
+    const pp = (swr as { placement_path?: string | null }).placement_path;
+    const { data: pl } = pp ? await admin.storage.from("proofs").createSignedUrl(pp, 3600) : { data: null };
     const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     const sw = swr as SewoutRow;
     return (
@@ -85,7 +87,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
         <title>{nameOf(`Sew-out v${sw.version}`)}</title>
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
         <div className="print-bar"><PrintButton fileName={nameOf(`Sew-out v${sw.version}`)} /></div>
-        <SewoutDoc {...data} printed={printed} sw={sw} photo={ph?.signedUrl || ""} />
+        <SewoutDoc {...data} printed={printed} sw={sw} photo={ph?.signedUrl || ""} placement={pl?.signedUrl || undefined} />
       </div>
     );
   }

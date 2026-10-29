@@ -2,7 +2,7 @@
 import LogoThumb from "@/components/LogoThumb";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { digitizeState } from "@/lib/digitizeStatus";
+import { currentSewFile, digitizeState, requestOf, sewVersions } from "@/lib/digitizeStatus";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole } from "@/components/RoleContext";
@@ -17,7 +17,10 @@ import { lineName, threadByName } from "@/lib/embroidery";
 import { tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
 import { SEWOUT_EMAILS } from "@/lib/customerContact";
-import { approveSewoutAnother, remindSewoutAction } from "@/app/shop/sewout-actions";
+import { approveSewoutAnother, remindSewoutAction, sendSewoutToCustomer } from "@/app/shop/sewout-actions";
+import type { SewCtx } from "@/components/SewnPanel";
+import { stockKey } from "@/lib/threadStock";
+import { matchOutsideDigitize } from "@/app/shop/digitize-outside-actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import { DIGITIZER } from "@/lib/digitizer";
 
@@ -34,6 +37,9 @@ import { DIGITIZER } from "@/lib/digitizer";
  * Then the sew-out (Oct 24, Nick: "we do a sew out… take a picture… automatically send an email for approval"): the photo
  * of the sewn sample, cropped, saved and emailed to the customer to approve (components/SewoutCapture.tsx, lib/sewouts.ts)
  *   - Sew-out sent → waiting on the customer; Approved → on file with the logo for every reorder
+ * Made hard to go around (Oct 29, Nick: "my wife keeps going around the system"): every stitch file version stays and is
+ * listed (a resize asked by plain email is version 2), an email to the digitizer from any mailbox is put on its order
+ * (lib/digitizerOutside.ts) or listed here to pick the order, and a print sent to digitizing with no proof says so.
  */
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
 type EmbFile = DigitizedSet;
@@ -44,7 +50,9 @@ type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: s
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
 type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
 type State = Exclude<Filter, "all">;
-type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string };
+type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string; note?: string; changes?: { what: string; from: string; to: string; needle?: number }[] | null };
+/** an email to the digitizer sent from a mailbox outside the portal that couldn't be put on an order by itself */
+type Outside = { id: string; subject: string; from_email: string; occurred_at: string; meta: { account?: string } | null };
 const embOf = (d: Design | null): EmbSpecs => ((d?.specs as { embroidery?: EmbSpecs } | null)?.embroidery) || {};
 
 export default function Digitizing() {
@@ -60,6 +68,8 @@ export default function Digitizing() {
   // the Digitizer open for one print (components/tools/DigitizerTool.tsx)
   const [tool, setTool] = useState<{ orderId: string; imprintId: string } | null>(null);
   const [sws, setSws] = useState<Sw[]>([]), [swUrls, setSwUrls] = useState<Record<string, string>>({}), [msg, setMsg] = useState("");
+  // the threads on the wall (for "What we sewed"), which orders have a proof, and emails to the digitizer to place
+  const [stock, setStock] = useState<string[]>([]), [proofed, setProofed] = useState<Set<string>>(new Set()), [outside, setOutside] = useState<Outside[]>([]);
 
   async function load() {
     const sb = createClient();
@@ -72,8 +82,22 @@ export default function Digitizing() {
     // the sew-outs on these orders, newest first, with their photos (read before the list shows, so each print's state is right)
     const { data: sw } = os.length ? await sb.from("sewouts").select("*").in("order_id", os.map((o) => o.id)).order("version", { ascending: false }) : { data: [] };
     const list = (sw || []) as Sw[];
+    const [{ data: st }, { data: pf }, { data: mk }, { data: ox }] = await Promise.all([
+      sb.from("stock_threads").select("line, code").is("archived_at", null),
+      os.length ? sb.from("proofs").select("order_id").in("order_id", os.map((o) => o.id)) : Promise.resolve({ data: [] }),
+      os.length ? sb.from("mockups").select("order_id").in("order_id", os.map((o) => o.id)).is("archived_at", null) : Promise.resolve({ data: [] }),
+      sb.from("activities").select("id, subject, from_email, occurred_at, meta").is("order_id", null).not("meta->digitize_unplaced", "is", null).order("occurred_at", { ascending: false }).limit(20),
+    ]);
+    setStock(((st || []) as { line: string; code: string }[]).map((r) => stockKey(r.line, r.code)));
+    setProofed(new Set([...((pf || []) as { order_id: string }[]), ...((mk || []) as { order_id: string }[])].map((r) => r.order_id)));
+    setOutside((ox || []) as Outside[]);
     setSws(list); setDesigns(map); setOrders(os);
-    if (list.length) { const { data: su } = await sb.storage.from("proofs").createSignedUrls(list.map((x) => x.photo_path), 3600); setSwUrls(Object.fromEntries(list.map((x, i) => [x.id, su?.[i]?.signedUrl || ""]))); }
+    if (list.length) {
+      const paths = [...list.map((x) => x.photo_path), ...list.map((x) => x.placement_path || "").filter(Boolean)];
+      const { data: su } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
+      const byPath = Object.fromEntries((su || []).map((r, i) => [paths[i], r?.signedUrl || ""]));
+      setSwUrls(Object.fromEntries(list.flatMap((x) => [[x.id, byPath[x.photo_path] || ""], ...(x.placement_path ? [[`${x.id}:place`, byPath[x.placement_path] || ""]] : [])])));
+    }
     void previewUrls(sb, Object.values(map)).then(setUrls).catch(() => null);
   }
   useEffect(() => { void load(); }, []);
@@ -140,6 +164,16 @@ export default function Digitizing() {
     setBusy("");
     if (error) setErr(error.message); else void load();
   }
+  /** sew this print from another version of the logo's stitch file: the order takes its file and stitch count */
+  async function useFile(it: Item, set: EmbFile) {
+    setBusy(it.key); setErr("");
+    const sb = createClient();
+    const { data: fresh } = await sb.from("orders").select("groups").eq("id", it.o.id).maybeSingle();
+    const groups = ((fresh?.groups || it.o.groups || []) as Group[]).map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => (im.id === it.im.id ? { ...im, stitches: set.stitches, emb: { ...(im.emb || {}), stitchesFrom: "file" as const, file: set } } : im)) }));
+    const { error } = await sb.from("orders").update({ groups }).eq("id", it.o.id);
+    setBusy("");
+    if (error) setErr(error.message); else void load();
+  }
   // what the digitizer sends back: the zip, or the DST (to sew), EMB (to edit in Hatch) and PDF worksheet
   async function takeFiles(it: Item, list: File[]) {
     if (!it.d) return;
@@ -168,6 +202,7 @@ export default function Digitizing() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
+      {outside.length > 0 && <OutsideEmails list={outside} orders={orders || []} onDone={(m) => { setMsg(m); void load(); }} />}
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
@@ -181,9 +216,11 @@ export default function Digitizing() {
             <div className="tbl-wrap"><table className="tbl dgz">
               <thead><tr><th>Logo</th><th>Order</th><th>Print</th><th>Stitches</th><th>State</th><th /></tr></thead>
               <tbody>{shown.map((it) => {
-                const st = stateOf(it), e = embOf(it.d), f = it.im.emb?.file || e.files?.[0];
+                const st = stateOf(it), e = embOf(it.d), f = currentSewFile(it.im, e.files);
+                const ctx: SewCtx = { files: e.files || (f ? [f] : []), current: f?.path, inks: it.im.inks || "", size: it.im.size || "", stitches: it.im.stitches || undefined, stock };
                 return (
-                  <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={e.request} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
+                  <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={(requestOf(it.im, it.d) as EmbSpecs["request"]) || undefined} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
+                    ctx={ctx} noProof={!proofed.has(it.o.id)} onUse={(set) => void useFile(it, set)}
                     canEdit={canEdit} busy={busy === it.key} text={requestText(it)} reply={e.reply || null} onSend={() => setTool({ orderId: it.o.id, imprintId: it.im.id })} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)}
                     sws={swOf(it)} swUrls={swUrls} onSew={(m) => { setMsg(m); setTimeout(() => setMsg(""), 6000); void load(); }} />
                 );
@@ -202,7 +239,7 @@ const CHG_OUTRO = "Please send back the updated DST, EMB and worksheet. Thank yo
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
-function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, reply, onSend, onAsked, onDst, sws, swUrls, onSew }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; reply: EmbSpecs["reply"]; onSend: () => void; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void }) {
+function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, reply, onSend, onAsked, onDst, sws, swUrls, onSew, ctx, noProof, onUse }: { it: Item; pic: string; st: State; f?: EmbFile; req?: EmbSpecs["request"]; open: boolean; toggle: () => void; canEdit: boolean; busy: boolean; text: string; reply: EmbSpecs["reply"]; onSend: () => void; onAsked: () => void; onDst: (f: File[]) => void; sws: Sw[]; swUrls: Record<string, string>; onSew: (m: string) => void; ctx: SewCtx; noProof: boolean; onUse: (f: EmbFile) => void }) {
   // their files, from the email they came on, added like files dropped in
   const [taking, setTaking] = useState(false);
   async function takeReply() {
@@ -262,7 +299,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
         <td><Link className="ordno" href={`/shop/orders/${it.o.id}`} onClick={(e) => e.stopPropagation()}>#{it.o.number}</Link><div className="sub">{it.o.customers?.company || it.o.customers?.name || ""}{it.o.nickname ? ` · ${it.o.nickname}` : ""}</div></td>
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>
-        <td><span className="pill" style={{ ["--sc" as string]: STATE[st][1] }}><span className="pill-t">{STATE[st][0]}</span></span>{reply && !f && reply.files.length ? <div className="sub" style={{ color: "var(--ok)" }}>Files came in {day(reply.at)}</div> : req && st === "asked" ? <div className="sub">{day(req.at)}{req.via === "email" ? " · emailed" : ""}</div> : st === "sent" && sws[0]?.sent_at ? <div className="sub">{day(sws[0].sent_at)}{sws[0].viewed_at ? " · opened" : ""}</div> : null}</td>
+        <td><span className="pill" style={{ ["--sc" as string]: STATE[st][1] }}><span className="pill-t">{STATE[st][0]}</span></span>{noProof && st !== "ok" && <div className="sub dgz-noproof" title="The art was never proofed in the portal: make the proof so the customer approves what's digitized">No proof on the order</div>}{reply && !f && reply.files.length ? <div className="sub" style={{ color: "var(--ok)" }}>Files came in {day(reply.at)}</div> : req && st === "asked" ? <div className="sub">{day(req.at)}{req.via === "email" ? " · emailed" : ""}</div> : st === "sent" && sws[0]?.sent_at ? <div className="sub">{day(sws[0].sent_at)}{sws[0].viewed_at ? " · opened" : ""}</div> : null}</td>
         <td className="faint">{open ? "▾" : "▸"}</td>
       </tr>
       {open && (
@@ -280,7 +317,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   <div><div className="imp-l">Sew file</div><b className="dgz-code">{it.d ? tajimaName(it.d.number, Number(((f as EmbFile & { code?: string }).code || "E1").slice(1)) || 1) : f.name}{it.im.location ? ` · ${it.im.location}` : ""}</b><div className="sub">{f.name}</div></div>
                   <span className="spacer" />
                   {canEdit && it.d && <button type="button" className="btn" onClick={() => setChg(chg === null ? draftChanges() : null)}>Send back to {DIGITIZER.name.split(" ")[0]} for changes</button>}
-                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={[`#${it.o.number}`, it.o.customers?.company || it.o.customers?.name || "", `${it.im.location}${it.im.size ? `, ${it.im.size}` : ""}`].filter(Boolean).join(" · ")} />}
+                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} label={live?.status === "pending" ? "Retake the photo" : sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={[`#${it.o.number}`, it.o.customers?.company || it.o.customers?.name || "", `${it.im.location}${it.im.size ? `, ${it.im.size}` : ""}`].filter(Boolean).join(" · ")} />}
                 </div>
                 <div className="dgz-facts">
                   <div><span className="imp-l">Size</span><b>{f.wIn}&quot; × {f.hIn}&quot;</b>{it.im.size && <small>asked {it.im.size}</small>}</div>
@@ -295,6 +332,19 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   {f.emb && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.emb.path, n: f.emb.name })}`} target="_blank" rel="noreferrer">EMB (Hatch)</a>}
                   {f.sheet && <a className="dgz-chip" href={`/api/files/open?${new URLSearchParams({ p: f.sheet.path, n: f.sheet.name })}`} target="_blank" rel="noreferrer">Worksheet</a>}
                 </div>
+                {/* every version of the stitch file, oldest first (Oct 29, Nick: "show version one, which was 6 inches wide…
+                    version two, which is 4.02"): a resize or a fix is the next version, and the order says which one it sews */}
+                {(ctx.files.length > 1) && <div className="dgz-vers">
+                  <div className="imp-l">Versions</div>
+                  {[...sewVersions(ctx.files)].reverse().map((x) => { const on = x.path === f?.path; return (
+                    <div key={x.path} className={"dgz-ver" + (on ? " on" : "")}>
+                      <b>Version {x.v}</b>
+                      <span>{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()} stitches · {x.at ? day(x.at) : ""}</span>
+                      <a className="ap-link" href={`/api/files/open?${new URLSearchParams({ p: x.path, n: x.name })}`} target="_blank" rel="noreferrer">DST</a>
+                      {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }}><span className="pill-t">On this order</span></span>
+                        : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}
+                    </div>); })}
+                </div>}
                 {chg !== null && <div className="dgz-chg">
                   {/* only what needs to change is typed; the thanks before it and the ask after it are always the same
                       (Oct 28, Nick: "just put what we need to change… the middle part would only be changeable") */}
@@ -315,17 +365,24 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
               {f?.ws && <div className="dgz-card"><SewSequence ws={f.ws} open /></div>}
               {(sws.length > 0 || (!f && st !== "need")) && <div className="dgz-card">
                 <div className="imp-l">Sew-out</div>
-                {!sws.length && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture and crop it{SEWOUT_EMAILS ? ": it's emailed to the customer to approve" : ". It gets an approval page in the customer's portal and a PDF (customer emails are off, so nothing is sent)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
+                {!sws.length && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then download the PDF proof or send it to the customer{SEWOUT_EMAILS ? "" : " (customer emails are off, so Send only works once they're on)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
                 {sws.length > 0 && <div className="sow-list">{sws.map((x) => (
                   <div key={x.id} className={"sow-item" + (x.archived_at ? " old" : "")}>
                     {swUrls[x.id] ? <a href={swUrls[x.id]} target="_blank" rel="noreferrer"><img src={swUrls[x.id]} alt={`Sew-out version ${x.version}`} /></a> : <img alt="" />}
                     <div className="stack" style={{ gap: 4, minWidth: 0 }}>
                       <div><b>Version {x.version}</b> <span className="pill" style={{ ["--sc" as string]: x.status === "approved" ? "var(--ok)" : x.status === "changes" ? "var(--danger)" : x.archived_at ? "var(--ink-3)" : "var(--warn)" }}><span className="pill-t">{x.status === "approved" ? "Approved" : x.status === "changes" ? "Changes asked" : x.archived_at ? "Replaced" : "Waiting"}</span></span></div>
-                      <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not emailed`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
+                      <div className="sub">{x.sent_at ? `Sent ${day(x.sent_at)} to ${x.sent_to}` : `Saved ${day(x.created_at)} · not sent yet`}{x.viewed_at ? ` · opened ${day(x.viewed_at)}${x.view_count > 1 ? ` (${x.view_count}×)` : ""}` : x.sent_at ? " · not opened yet" : ""}</div>
                       {x.decided_at && <div className="sub">{x.decided_name} · {day(x.decided_at)}</div>}
                       {x.customer_comment && <div style={{ fontSize: 13 }}>“{x.customer_comment}”</div>}
+                      {(x.changes || []).length > 0 && <div className="sub dgz-sewn">Order changed to match: {(x.changes || []).map((c) => c.what === "thread" ? `${c.from} → ${c.to}` : c.what === "size" ? `size ${c.to}` : c.what === "stitches" ? `${c.to} stitches` : `file ${c.to}`).join(" · ")}</div>}
+                      {swUrls[`${x.id}:place`] && <a className="sub" href={swUrls[`${x.id}:place`]} target="_blank" rel="noreferrer">Placement photo</a>}
+                      {/* after the photo: the proof to download, or sent to the customer (Oct 29, Nick) */}
+                      {canEdit && !x.archived_at && x.status === "pending" && !x.sent_at && <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <a className="btn sm" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Download PDF proof</a>
+                        <button type="button" className="btn sm primary" disabled={swBusy} onClick={() => { setSwBusy(true); void sendSewoutToCustomer(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? `Sent to ${r.to}.` : r.error || "Couldn't send it."); }); }}>Send to customer</button>
+                      </div>}
                       <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                        <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">Approval PDF</a>
+                        <a className="ap-link" href={`/print/${it.o.id}?sewout=${x.id}`} target="_blank" rel="noreferrer">PDF proof</a>
                         {canEdit && !x.archived_at && x.status === "pending" && <>
                           {SEWOUT_EMAILS && x.sent_at && <button type="button" className="lc-link" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(x.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
                           <button type="button" className="lc-link" onClick={() => setHow(how === x.id ? null : x.id)}>Approved another way…</button>
@@ -357,5 +414,41 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
         </td></tr>
       )}
     </>
+  );
+}
+
+/** emails to the digitizer sent from a mailbox outside the portal that couldn't be put on an order by themselves: pick it */
+function OutsideEmails({ list, orders, onDone }: { list: Outside[]; orders: O[]; onDone: (m: string) => void }) {
+  const [pick, setPick] = useState<Record<string, string>>({}), [busy, setBusy] = useState("");
+  const opts = orders.filter((o) => (o.groups || []).some((g) => (g.imprints || []).some((im) => im.method === "embroidery")));
+  async function go(id: string, orderId: string | null) {
+    setBusy(id);
+    const r = await matchOutsideDigitize(id, orderId);
+    setBusy("");
+    onDone(r.ok ? (orderId ? `Put on #${r.number}: its print shows as requested, and ${DIGITIZER.name.split(" ")[0]}'s files come in on their own.` : "Set aside.") : r.error);
+  }
+  return (
+    <section className="panel dgz-out">
+      <div className="panel-h"><h2>Sent to {DIGITIZER.name.split(" ")[0]} outside the portal</h2><span className="faint">Pick the order each one is for, so its files come in and the logo shows as requested</span></div>
+      <div className="panel-b">
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Email</th><th>Sent</th><th>Order</th><th /></tr></thead>
+          <tbody>{list.map((x) => (
+            <tr key={x.id}>
+              <td><b data-notranslate>{x.subject || "(no subject)"}</b><div className="sub">{x.from_email}</div></td>
+              <td className="nowrap">{day(x.occurred_at)}</td>
+              <td><select value={pick[x.id] || ""} aria-label="The order this email is for" onChange={(e) => setPick({ ...pick, [x.id]: e.target.value })}>
+                <option value="">Pick the order…</option>
+                {opts.map((o) => <option key={o.id} value={o.id}>#{o.number} · {o.customers?.company || o.customers?.name || ""}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
+              </select></td>
+              <td className="nowrap"><div className="row" style={{ gap: 6 }}>
+                <button type="button" className="btn sm primary" disabled={!pick[x.id] || busy === x.id} onClick={() => void go(x.id, pick[x.id])}>Put on order</button>
+                <button type="button" className="btn sm ghost" disabled={busy === x.id} title="Not about an order (a question, a hello)" onClick={() => void go(x.id, null)}>Not for an order</button>
+              </div></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </div>
+    </section>
   );
 }

@@ -11,17 +11,27 @@ import { SEWOUT_EMAILS } from "@/lib/customerContact";
  * automatically send an email for approval… crop it and say here's your sew out… put it on a PDF that has approval like
  * our proof approval does now, then you approve that, on file for future reference").
  *
- * - Maria takes the photo (Digitizing), crops it, and saves it. With SEWOUT_EMAILS on, saving emails the customer the
- *   photo and a link to approve it. It's off for now (Oct 24, Nick: "we're not gonna send any emails right now"): the
- *   sew-out, its approval page and PDF are made, and nothing is sent.
+ * - Maria takes the photo (Digitizing), crops it, says what was really sewn, and saves it. Saving never sends (Oct 29,
+ *   Nick: "after you upload it and take a photo, that should switch to… PDF proof, download or send to customer"):
+ *   Send to customer emails the photo and a link to approve it (sendSewoutNow), when SEWOUT_EMAILS is on.
+ * - What was sewn talks back to the order (Oct 29, Nick: "we might not even have the thread in stock… select the real
+ *   thread we used. It needs to go back and change it on the order form… all this stuff has to talk back"): the stitch
+ *   file version sewn (size, stitches) and each thread sewn replace the print's on the order, and the change is written
+ *   in the order's history and on the proof.
+ * - A second, wider photo shows where it sits on the garment (placement_path).
  * - A newer photo of the same print is the next version; the one before steps aside (archived, still in the history).
  * - The customer approves (typing their name) or asks for changes; the shop hears either way. "Approved another way"
  *   records a call or an email.
  * - An approved sew-out is kept on the logo (designs.specs.embroidery.sewout), so every reorder has it on file.
  */
 type Staff = { email: string; name: string };
+/** what was really sewn: the stitch file (by its path among the logo's files) and each thread, ordered and sewn */
+export type SewnInput = { filePath?: string; threads?: { needle?: number; ordered: string; sewn: string }[] };
+export type SewnRecord = { file?: { path: string; name: string; v?: number; wIn: number; hIn: number; stitches: number; at?: string } | null; threads: { needle?: number; ordered: string; sewn: string }[] };
+export type SewChange = { what: "thread" | "size" | "stitches" | "file"; from: string; to: string; needle?: number };
 export type Sewout = {
   id: string; order_id: string; imprint_id: string; design_id: string | null; version: number; photo_path: string; raw_path: string | null; note: string;
+  placement_path?: string | null; sewn?: SewnRecord | null; changes?: SewChange[] | null;
   sent_at: string | null; sent_to: string | null; viewed_at: string | null; last_viewed_at: string | null; view_count: number;
   status: "pending" | "approved" | "changes"; decided_at: string | null; decided_name: string | null; customer_comment: string; approved_via: string;
   created_by: string; created_at: string; archived_at: string | null;
@@ -42,29 +52,90 @@ export function printOf(o: Order, imprintId: string) {
   return null;
 }
 
-/** Save a sew-out photo as the print's next version and email it to the customer for approval. */
-export async function sendSewout(admin: SupabaseClient, x: { orderId: string; imprintId: string; photoPath: string; rawPath?: string; note?: string }, me: Staff) {
-  const { o, customer, settings } = await load(admin, x.orderId);
+/** the width an order's size names ("6\" wide", "4.02 x 0.8", "3.5") */
+const widthOf = (size: string | undefined) => { const m = /(\d+(?:\.\d+)?)/.exec(size || ""); return m ? +m[1] : null; };
+const inch = (n: number) => `${Math.round(n * 100) / 100}"`;
+
+/**
+ * Save a sew-out photo as the print's next version, with what was really sewn, and make the order match it. Nothing is
+ * sent: Send to customer (sendSewoutNow) does that.
+ */
+export async function saveSewout(admin: SupabaseClient, x: { orderId: string; imprintId: string; photoPath: string; rawPath?: string; placementPath?: string; note?: string; sewn?: SewnInput }, me: Staff) {
+  const { o } = await load(admin, x.orderId);
   const pr = printOf(o, x.imprintId);
   if (!pr) return { ok: false as const, error: "That print isn't on the order anymore." };
   const { data: prev } = await admin.from("sewouts").select("id, version, archived_at").eq("order_id", o.id).eq("imprint_id", x.imprintId);
   const rows = (prev || []) as { id: string; version: number; archived_at: string | null }[];
   const version = (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
   const at = new Date().toISOString();
+
+  // what was sewn: the file from the logo's versions (or the print's own), the threads as picked
+  const im = pr.im;
+  const { data: d } = im.design_id ? await admin.from("designs").select("specs").eq("id", im.design_id).maybeSingle() : { data: null };
+  const { sewVersions } = await import("@/lib/digitizeStatus");
+  const files = sewVersions(((d?.specs as { embroidery?: { files?: import("@/lib/digitizedFiles").DigitizedSet[] } } | null)?.embroidery?.files) || []);
+  const file = (x.sewn?.filePath ? files.find((f) => f.path === x.sewn!.filePath) : null) || (im.emb?.file ? files.find((f) => f.path === im.emb!.file!.path) || { ...im.emb.file, v: 0 } : files[files.length - 1]) || null;
+  const threads = (x.sewn?.threads || []).filter((t) => t.sewn?.trim()).map((t) => ({ needle: t.needle, ordered: t.ordered.trim().slice(0, 80), sewn: t.sewn.trim().slice(0, 80) }));
+  const sewn: SewnRecord = { file: file ? { path: file.path, name: file.name, v: file.v || undefined, wIn: file.wIn, hIn: file.hIn, stitches: file.stitches, at: file.at } : null, threads };
+
+  // the order follows what was sewn
+  const changes: SewChange[] = [];
+  for (const t of threads) if (t.sewn.toLowerCase() !== t.ordered.toLowerCase()) changes.push({ what: "thread", from: t.ordered, to: t.sewn, needle: t.needle });
+  const patch: Partial<typeof im> = {};
+  if (threads.length) {
+    const inks = [...new Set(threads.map((t) => t.sewn))].join(", ");
+    if (inks !== (im.inks || "")) patch.inks = inks;
+  }
+  if (file) {
+    const w = widthOf(im.size);
+    if (file.wIn && (w === null || Math.abs(w - file.wIn) > 0.05)) { changes.push({ what: "size", from: im.size || "not set", to: `${inch(file.wIn)} wide` }); patch.size = `${inch(file.wIn)} wide`; }
+    if (file.stitches && file.stitches !== im.stitches) { changes.push({ what: "stitches", from: im.stitches ? im.stitches.toLocaleString() : "estimate", to: file.stitches.toLocaleString() }); patch.stitches = file.stitches; }
+    if (im.emb?.file?.path !== file.path) {
+      if (im.emb?.file) changes.push({ what: "file", from: im.emb.file.name, to: `${file.name}${file.v ? ` (version ${file.v})` : ""}` });
+      const { v: _v, ...set } = file as typeof file & { v?: number }; void _v;
+      patch.emb = { ...(im.emb || {}), stitchesFrom: "file", file: set as import("@/lib/digitizedFiles").DigitizedSet };
+    } else if (patch.stitches) patch.emb = { ...(im.emb || {}), stitchesFrom: "file" };
+  }
+  if (Object.keys(patch).length) {
+    const { data: fresh } = await admin.from("orders").select("groups").eq("id", o.id).maybeSingle();
+    const groups = ((fresh?.groups || o.groups || []) as import("@/lib/pricing").Group[]).map((g) => ({ ...g, imprints: (g.imprints || []).map((y) => (y.id === im.id ? { ...y, ...patch } : y)) }));
+    const { error: ge } = await admin.from("orders").update({ groups }).eq("id", o.id);
+    if (ge) return { ok: false as const, error: `Couldn't update the order: ${ge.message}` };
+  }
+
   const live = rows.filter((r) => !r.archived_at);
   if (live.length) await admin.from("sewouts").update({ archived_at: at }).in("id", live.map((r) => r.id));
-  const to = SEWOUT_EMAILS ? customer?.email || "" : "";
   const { data: made, error } = await admin.from("sewouts").insert({
-    order_id: o.id, imprint_id: x.imprintId, design_id: pr.im.design_id || null, version, photo_path: x.photoPath, raw_path: x.rawPath || null,
-    note: (x.note || "").trim().slice(0, 1000), sent_at: to ? at : null, sent_to: to || null, created_by: me.email,
+    order_id: o.id, imprint_id: x.imprintId, design_id: im.design_id || null, version, photo_path: x.photoPath, raw_path: x.rawPath || null,
+    placement_path: x.placementPath || null, sewn, changes: changes.length ? changes : null,
+    note: (x.note || "").trim().slice(0, 1000), created_by: me.email,
   }).select("id").single();
   if (error || !made) return { ok: false as const, error: error?.message || "Couldn't save the sew-out." };
-  const where = `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}`;
-  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_sent", detail: `Sew-out v${version} (${where})${to ? ` to ${to}` : SEWOUT_EMAILS ? ", not emailed: no customer email" : ", saved (customer emails are off)"}`, actor: me.email });
-  if (!SEWOUT_EMAILS) return { ok: true as const, id: made.id, version, emailed: false, error: `Sew-out v${version} saved. Customer emails are off, so nothing was sent.` };
-  if (!to) return { ok: true as const, id: made.id, version, emailed: false, error: "Saved, but this customer has no email address, so it wasn't sent." };
-  const emailed = await emailSewout(admin, { o, to, shop: settings.shop.name, id: made.id, photoPath: x.photoPath, where, note: x.note || "", reminder: false });
-  return { ok: true as const, id: made.id, version, emailed };
+  const where = `${im.location}${(patch.size || im.size) ? `, ${patch.size || im.size}` : ""}`;
+  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_saved", detail: `Sew-out v${version} (${where})${x.placementPath ? " with a placement photo" : ""}`, actor: me.email });
+  if (changes.length) await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_changes", detail: `Changed to match the sew-out (${im.location}): ${changeWords(changes)}`.slice(0, 1000), actor: me.email });
+  return { ok: true as const, id: made.id as string, version, changes };
+}
+
+/** the changes in words, for the history and the message */
+export const changeWords = (cs: SewChange[]) => cs.map((c) => c.what === "thread" ? `thread${c.needle ? ` (needle ${c.needle})` : ""} ${c.from} → ${c.to}` : c.what === "size" ? `size ${c.from} → ${c.to}` : c.what === "stitches" ? `stitches ${c.from} → ${c.to}` : `stitch file ${c.to}`).join("; ");
+
+/** Send to customer: the saved sew-out emailed for approval (when customer emails are on) */
+export async function sendSewoutNow(admin: SupabaseClient, id: string, me: Staff) {
+  const { data: sw } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
+  const s = sw as Sewout | null;
+  if (!s || s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };
+  if (s.status !== "pending") return { ok: false as const, error: "The customer already answered this one." };
+  if (!SEWOUT_EMAILS) return { ok: false as const, error: "Customer emails are off, so nothing was sent. Download the PDF proof and send it, or they can approve it in their portal." };
+  const { o, customer, settings } = await load(admin, s.order_id);
+  if (!customer?.email) return { ok: false as const, error: "This order's customer has no email address. Download the PDF proof and send it." };
+  const pr = printOf(o, s.imprint_id);
+  const where = pr ? `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}` : "your logo";
+  const emailed = await emailSewout(admin, { o, to: customer.email, shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: s.note || "", reminder: false });
+  if (!emailed) return { ok: false as const, error: "The email didn't go out. Try again in a minute." };
+  await admin.from("sewouts").update({ sent_at: new Date().toISOString(), sent_to: customer.email }).eq("id", s.id);
+  await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_sent", detail: `Sew-out v${s.version} (${where}) to ${customer.email}`, actor: me.email });
+  return { ok: true as const, emailed: true, to: customer.email };
 }
 
 /** the email: the photo itself, what it is, and the button to approve it */

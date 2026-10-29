@@ -23,6 +23,7 @@ export async function GET(req: Request) {
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true).or(`last_error_at.is.null,last_error_at.lt.${cutoff}`).order("last_run_at", { ascending: true, nullsFirst: true });
   const out: Record<string, unknown> = {};
   // digitizer replies whose files weren't added yet (lib/digitizerAuto.ts): added first, before the mailboxes use the minute
+  { const { sweepDigitizerOutside } = await import("@/lib/digitizerOutside"); out.digitizerOutside = await sweepDigitizerOutside(admin, Date.now() + 20000).catch((e) => String(e)); }
   { const { sweepDigitizerReplies } = await import("@/lib/digitizerAuto"); out.digitizer = await sweepDigitizerReplies(admin).catch((e) => String(e)); }
   for (const a of (data || []) as MailAccount[]) {
     if (Date.now() > deadline - 8000) break;
