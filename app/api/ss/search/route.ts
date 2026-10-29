@@ -72,7 +72,7 @@ export async function GET(req: Request) {
   const [a, b, o0, brands] = await Promise.all([
     ss ? ssSearch(q).then((r) => r.map((h): Hit => ({ ...h, supplier: "ss" }))).catch((e) => { err = e instanceof Error ? e.message : String(e); return [] as Hit[]; }) : Promise.resolve([] as Hit[]),
     sm ? sanmarSearch(q).catch(() => [] as Hit[]) : Promise.resolve([] as Hit[]),
-    ost ? osSearch(q).catch(() => []) : Promise.resolve([]),
+    ost ? osSearch(createAdminClient(), q).catch(() => []) : Promise.resolve([]),
     ost ? supplierBrands(createAdminClient()).catch(() => null) : Promise.resolve(null),
   ]);
   // One Stop (Oct 29, Nick): only what S&S and SanMar don't have, the brands only One Stop carries (Fruit of the Loom,

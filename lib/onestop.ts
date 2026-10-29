@@ -247,20 +247,55 @@ export async function osSearchRaw(q: string) {
   return { keys: Object.keys((j || {}) as object), count: rs.length, first: rs.slice(0, 3) };
 }
 
-/** One Stop styles matching what was typed (their own search across names, codes and makers), one row per style */
-export async function osSearch(q: string): Promise<OsHit[]> {
-  const t = s(q);
-  if (t.length < 2) return [];
-  const j = await os<unknown>(`items/?search=${encodeURIComponent(t)}&flat=Y&supplies=false`, { timeoutMs: 15_000 });
-  const out = new Map<string, OsHit>();
-  for (const r of results(j)) {
-    const it = item(r), code = it.style || s(r.style_code);
-    if (!code || out.has(code)) continue;
-    const imgs = (r.images || r.image_paths || {}) as Raw;
-    out.set(code, { brand: it.brand, style: it.millStyle || code, osStyle: code, title: it.name, image: media(r.image || r.main_image || r.style_image || imgs.front || imgs.main || `images/styles/standard/${code}.jpg`) });
-    if (out.size >= 25) break;
+/**
+ * One Stop's catalog, a row per style, kept in onestop_catalog (their own search only knows their codes: "GD110" finds
+ * it, "3930" or "fruit of the loom" find nothing). Their flat listing (items/?flat=Y) gives each style's maker, the
+ * maker's style number, name and photo. A full pass runs when it's a week old (the hourly goods pass, or the check).
+ */
+export async function osCatalogSync(admin: SupabaseClient, deadline = Date.now() + 45_000): Promise<{ styles: number; pages: number; done: boolean }> {
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const d = (st?.data || {}) as { osCatalog?: { at?: string; page?: number; started?: string } };
+  const prog = d.osCatalog || {};
+  let page = prog.page && prog.started ? prog.page : 1, started = prog.started && prog.page ? prog.started : new Date().toISOString(), styles = 0, pages = 0, done = false;
+  while (Date.now() < deadline) {
+    const j = await os<{ results?: unknown; total_pages?: number }>(`items/?flat=Y&supplies=false&page=${page}`, { timeoutMs: 30_000 });
+    const r0 = j?.results;
+    const rows = (Array.isArray(r0) ? r0 : r0 && typeof r0 === "object" ? Object.values(r0 as Record<string, unknown>) : []) as Raw[];
+    const ups = rows.map((r) => ({ style: s(r.style || r.style_code).toUpperCase(), brand: s(r.mill_name), mill_code: s(r.mill_code), mill_style_code: s(r.mill_style_code), title: s(r.web_name || r.description), image: media(r.generic_image || (r.images as Raw | undefined)?.main), filters: s(r.filters), sizes: s(r.sizes), active: true, synced_at: new Date().toISOString() })).filter((x) => x.style);
+    for (let k = 0; k < ups.length; k += 500) await admin.from("onestop_catalog").upsert(ups.slice(k, k + 500));
+    styles += ups.length; pages++;
+    const total = +(j?.total_pages || 0);
+    if (!rows.length || (total && page >= total)) { done = true; break; }
+    page++;
   }
-  return [...out.values()];
+  const { data: cur } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const base = (cur?.data || {}) as Record<string, unknown>;
+  if (done) {
+    // styles One Stop no longer lists: kept, but out of the search
+    await admin.from("onestop_catalog").update({ active: false }).lt("synced_at", started);
+    await admin.from("settings").update({ data: { ...base, osCatalog: { at: new Date().toISOString() } } }).eq("id", 1);
+  } else await admin.from("settings").update({ data: { ...base, osCatalog: { ...(prog.at ? { at: prog.at } : {}), page, started } } }).eq("id", 1);
+  return { styles, pages, done };
+}
+/** the catalog copy is a week old or was never finished: carry on with it (for the goods pass) */
+export async function osCatalogDue(admin: SupabaseClient): Promise<boolean> {
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const c = ((st?.data || {}) as { osCatalog?: { at?: string; page?: number } }).osCatalog;
+  return !c?.at || !!c.page || Date.now() - Date.parse(c.at) > 7 * 864e5;
+}
+
+/** One Stop styles matching what was typed: the maker's name or style number, One Stop's code, or words of the name */
+export async function osSearch(admin: SupabaseClient, q: string): Promise<OsHit[]> {
+  const words = s(q).toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9\-+&\/]/g, "")).filter(Boolean).slice(0, 5);
+  if (!words.length || s(q).length < 2) return [];
+  type Row = { style: string; brand: string; mill_style_code: string; title: string; image: string };
+  let qb = admin.from("onestop_catalog").select("style, brand, mill_style_code, title, image").eq("active", true);
+  for (const w of words) qb = qb.or([`style.ilike.%${w}%`, `mill_style_code.ilike.${w}%`, `brand.ilike.%${w}%`, `title.ilike.%${w}%`].join(","));
+  const rows = ((await qb.limit(300)).data || []) as Row[];
+  const full = s(q).toLowerCase(), lc = (x: string) => (x || "").toLowerCase();
+  const score = (r: Row) => (lc(r.mill_style_code) === full || lc(r.style) === full || `${lc(r.brand)} ${lc(r.mill_style_code)}` === full ? 0 : words.some((w) => lc(r.mill_style_code).startsWith(w) || lc(r.style).startsWith(w)) ? 1 : 2);
+  return rows.sort((a, b) => score(a) - score(b) || a.brand.localeCompare(b.brand) || a.mill_style_code.localeCompare(b.mill_style_code)).slice(0, 25)
+    .map((r) => ({ brand: r.brand, style: r.mill_style_code || r.style, osStyle: r.style, title: r.title, image: r.image }));
 }
 
 export type OsGarment = {

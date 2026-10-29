@@ -20,6 +20,11 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams, admin = createAdminClient();
   const brand = sp.get("brand") || "Next Level", style = sp.get("style") || "6210";
   // ?search=…: what One Stop's search sends back (its first rows as they come), and what we make of it
+  // ?sync=1: carry on copying One Stop's catalog (about 45 seconds a go; call again until done)
+  if (sp.get("sync")) {
+    const { osCatalogSync } = await import("@/lib/onestop");
+    return NextResponse.json(await osCatalogSync(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })));
+  }
   if (sp.get("path")) {
     const { osItemsRaw } = await import("@/lib/onestop");
     return NextResponse.json(await osItemsRaw(sp.get("path")!).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })));
@@ -28,7 +33,7 @@ export async function GET(req: Request) {
     const { osSearchRaw, osSearch } = await import("@/lib/onestop");
     const q = sp.get("search")!;
     const raw = await osSearchRaw(q).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    const hits = await osSearch(q).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    const hits = await osSearch(admin, q).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     return NextResponse.json({ raw, hits });
   }
   const out: Record<string, unknown> = { orders: osOrdersLive() ? "live" : "test system" };
