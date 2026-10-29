@@ -1085,6 +1085,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     inp.oninput = () => set(inp.value); inp.click();
   }
   const resetShirtColor = () => { const li = active; setLines((ls) => ls.map((x, j) => (j === li ? { ...x, hex: undefined } : x))); };
+  /** the background color chosen outright (Oct 29, Nick: "since there is no garment I need to be able to select a color"):
+   *  a logo mockup, or a garment with no photo, has nothing to pick a color off */
+  const setShirtHex = (hex: string) => { const li = active; setLines((ls) => ls.map((x, j) => (j === li ? { ...x, hex: hex.toLowerCase() } : x))); };
 
   const garmentFor = (l: Line) => {
     // "Gildan 64000" on an order: the style is the number (lib/ai/normalize.ts bareStyle)
@@ -1927,7 +1930,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 return (
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
-                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye && !logoOnly && !!line && (!!garmentFor(line) || !!line.own) ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor}
+                    onColor={eye && (logoOnly || !line || (!garmentFor(line) && !line.own)) ? setShirtHex : undefined} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} arm={sp.arm} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
@@ -3779,7 +3783,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
                 const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
                 return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
-              }).map(({ im }, i) => closeUp(im, cuSize, i === 0 && !logoOnly))}
+              }).map(({ im }, i) => closeUp(im, cuSize, i === 0))}
             </div>
           </div>
           {designerFor && (
@@ -4629,8 +4633,9 @@ let inkNamesCache: string[] | null = null;
 const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor }: {
   /** pick the shirt's color off the photo (Oct 24, Nick: "an eyedropper to select the color in the shirt") */ onEyedrop?: () => void; picked?: boolean; onResetHex?: () => void;
+  /** choose the background color outright, when there's no garment photo to pick it off (a logo mockup) */ onColor?: (hex: string) => void;
   size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   /** a long sleeve's spot: "upper" (the shoulder seam above, the art centered) or "cuff" (the cuff hemline below) */ arm?: "upper" | "cuff";
   colors: { hex: string; name: string }[];
@@ -4663,6 +4668,13 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
             <span className="sw" style={{ background: hex }} />
           </button>
           {picked && onResetHex && <button type="button" className="mk-cu-eyer" title="Back to the color from the photo" aria-label="Reset the shirt color" onClick={onResetHex}>↺</button>}
+        </span>}
+        {onColor && <span className="mk-cu-eye">
+          <label className="mk-cu-eyeb" title="Pick the background color (the garment's color)">
+            <span className="sw" style={{ background: hex }} />Background
+            <input type="color" className="mk-cu-color" value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#9aa1ab"} aria-label="Background color" onChange={(e) => onColor(e.target.value)} />
+          </label>
+          {picked && onResetHex && <button type="button" className="mk-cu-eyer" title="Back to the color from the order" aria-label="Reset the background color" onClick={onResetHex}>↺</button>}
         </span>}
       </div>
       <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex, alignSelf: "center" }}
