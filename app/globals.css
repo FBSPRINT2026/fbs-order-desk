@@ -15697,7 +15697,7 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .snap-big{justify-content:center;min-height:48px;font-size:16px}
 /* the close-up's background color, chosen outright when there's no garment photo (components/MockupBuilder.tsx CloseUp) */
 .mk-cu-eyeb{position:relative}
-.mk-cu-color{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
+.mk-cu-bgpick{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
 /* the sew-out photo step: crop and placement on the left, "What we sewed" on the right (components/SewoutCapture.tsx, SewnPanel.tsx) */
 .sow-modal.wide{max-width:960px}
 .sow-cols{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}

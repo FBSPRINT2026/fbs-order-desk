@@ -4676,7 +4676,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
         {onColor && <span className="mk-cu-eye">
           <label className="mk-cu-eyeb" title="Pick the background color (the garment's color)">
             <span className="sw" style={{ background: hex }} />Background
-            <input type="color" className="mk-cu-color" value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#9aa1ab"} aria-label="Background color" onChange={(e) => onColor(e.target.value)} />
+            <input type="color" className="mk-cu-bgpick" value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#9aa1ab"} aria-label="Background color" onChange={(e) => onColor(e.target.value)} />
           </label>
           {picked && onResetHex && <button type="button" className="mk-cu-eyer" title="Back to the color from the order" aria-label="Reset the background color" onClick={onResetHex}>↺</button>}
         </span>}
