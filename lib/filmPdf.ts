@@ -65,7 +65,13 @@ export async function filmPdf(pages: FilmPage[], z: (u8: Uint8Array) => Promise<
  * across the roll (see `rollLayout`). Print it as one composite black job at 100%.
  */
 /** which marks go around each film (the shop can turn them off) */
-export type FilmMarks = { crop?: boolean; targets?: boolean };
+/**
+ * `offsetPt`: the art's center this far from the screen's center, + to the right as you look at the film (Oct 29, Nick:
+ * "offset left chest prints and right chest prints by 4 inches on the film… the crop marks stay in the center"): the
+ * targets stay on the screen's center line and only the art moves. `flip`: the art turned 180° on the film (sleeves,
+ * totes: "we burn it upside down"), the label still upright, with a flag saying so.
+ */
+export type FilmMarks = { crop?: boolean; targets?: boolean; offsetPt?: number; flip?: boolean };
 export async function filmRollPdf(pages: FilmPage[], rollIn: number, title: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
   const N = pages.length, m = 36, aw = pages[0].widthIn * 72, ah = pages[0].heightIn * 72, iw = aw + 2 * m, ih = ah + 2 * m;
   const L = rollLayout(N, aw, ah, rollIn, m);
@@ -123,19 +129,22 @@ const ROLL_EDGE_IN = 0.4;             // in: the printer's own margins
  * (Oct 22, Nick: "we need to auto-rotate -90 degrees if it can save film"), or when it's too wide for the roll upright
  */
 export const ROTATE_MIN_SAVE = 18; // pt: turn it only when that saves at least ¼" of film
-export function filmBox(artW: number, artH: number, rollIn: number) {
-  const mt = FILM_GAP + 2 * FILM_TARGET + 6, bw = artW + 2 * FILM_SIDE, bh = artH + 2 * mt, P = (rollIn - ROLL_EDGE_IN) * 72;
+export function filmBox(artW: number, artH: number, rollIn: number, offsetPt = 0) {
+  // an offset art keeps the targets on the film's center: the film is as wide as twice the art's far edge from center
+  const mt = FILM_GAP + 2 * FILM_TARGET + 6, bw = artW + 2 * Math.abs(offsetPt) + 2 * FILM_SIDE, bh = artH + 2 * mt, P = (rollIn - ROLL_EDGE_IN) * 72;
   const tooWide = bw > P, saves = !tooWide && bh <= P && bh - bw >= ROTATE_MIN_SAVE;
   const rot = tooWide || saves, w = rot ? bh : bw, h = rot ? bw : bh;
   return { rot, why: (tooWide ? "wide" : saves ? "saves" : "") as "" | "wide" | "saves", savedIn: saves ? (bh - bw) / 72 : 0, mt, w, h, fits: w <= P, widthIn: w / 72, lengthIn: h / 72 };
 }
 /** one film's marks, label and art, in its own frame (art at FILM_SIDE, mt), drawing image /Im{i} */
 function filmDraw(p: FilmPage, tag: string, marks: FilmMarks, i: number, mt: number) {
-  const aw = p.widthIn * 72, ah = p.heightIn * 72, ms = FILM_SIDE, bw = aw + 2 * ms;
+  const off = marks.offsetPt || 0, aw = p.widthIn * 72, ah = p.heightIn * 72, ms = FILM_SIDE, half = Math.abs(off) + aw / 2, bw = 2 * half + 2 * ms;
+  // the art's left edge: the targets' line (the screen's center) plus the offset, less half the art
+  const ax = ms + half + off - aw / 2;
   const r = FILM_TARGET / 2, k = r * 0.5523, a = FILM_TARGET;
   const target = (x: number, y: number) => `${x - a} ${y} m ${x + a} ${y} l S ${x} ${y - a} m ${x} ${y + a} l S ${x + r} ${y} m ${x + r} ${y + k} ${x + k} ${y + r} ${x} ${y + r} c ${x - k} ${y + r} ${x - r} ${y + k} ${x - r} ${y} c ${x - r} ${y - k} ${x - k} ${y - r} ${x} ${y - r} c ${x + k} ${y - r} ${x + r} ${y - k} ${x + r} ${y} c S\n`;
   // targets centered, their near edge ¾" from the art
-  const tx = ms + aw / 2, tTop = mt + ah + FILM_GAP + a, tBot = mt - FILM_GAP - a;
+  const tx = ms + half, tTop = mt + ah + FILM_GAP + a, tBot = mt - FILM_GAP - a;
   // the label beside the top target: one line on the right when it fits ("PMS 2745 C  #1467 Full Front"); on a narrow
   // film (a sleeve) the ink goes on the left and the job # + location on the right, smaller only if it still won't fit
   const name = p.ink || p.label, one = `${name}  ${tag}`, side = bw / 2 - a - 12, wid = (t: string, f: number) => t.length * f * 0.6;
@@ -146,8 +155,10 @@ function filmDraw(p: FilmPage, tag: string, marks: FilmMarks, i: number, mt: num
     const f = Math.max(6, Math.min(11, side / (Math.max(name.length, tag.length) * 0.6)));
     label = txt(name, tx - a - 8 - wid(name, f), f) + txt(tag, tx + a + 8, f);
   }
-  return `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${ms} ${mt} cm /Im${i} Do Q\n0 G 0 g 0.75 w\n` +
-    (marks.targets === false ? "" : target(tx, tTop) + target(tx, tBot)) + label;
+  // turned 180° in place: the same spot on the film, upside down
+  const img = marks.flip ? `q ${(-aw).toFixed(2)} 0 0 ${(-ah).toFixed(2)} ${(ax + aw).toFixed(2)} ${(mt + ah).toFixed(2)} cm /Im${i} Do Q\n` : `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${ax.toFixed(2)} ${mt} cm /Im${i} Do Q\n`;
+  const flag = marks.flip ? (() => { const t = "UPSIDE DOWN - burn as is", f = 9; return `BT /F1 ${f} Tf ${(tx + a + 8).toFixed(2)} ${(tBot - f / 3).toFixed(2)} Td (${t}) Tj ET\n`; })() : "";
+  return img + "0 G 0 g 0.75 w\n" + (marks.targets === false ? "" : target(tx, tTop) + target(tx, tBot)) + label + flag;
 }
 /** a PDF of pages, each its size, content and 1-bit images (/Im0…/ImN on that page) */
 type Sheet = { W: number; H: number; content: string; imgs: FilmPage[] };
@@ -181,7 +192,7 @@ async function sheetsPdf(sheets: Sheet[], title: string, z: (u8: Uint8Array) => 
 const sheetPdf = (W: number, H: number, content: string, imgs: FilmPage[], title: string, z: (u8: Uint8Array) => Promise<Uint8Array>) => sheetsPdf([{ W, H, content, imgs }], title, z);
 /** one film as a page: just the film, upright unless too wide for the roll */
 function filmSheet(p: FilmPage, rollIn: number, tag: string, marks: FilmMarks): Sheet {
-  const B = filmBox(p.widthIn * 72, p.heightIn * 72, rollIn);
+  const B = filmBox(p.widthIn * 72, p.heightIn * 72, rollIn, marks.offsetPt || 0);
   // turned -90° (clockwise): the film's top runs down the right side of the page
   const place = B.rot ? `q 0 -1 1 0 0 ${(B.h).toFixed(2)} cm\n` : `q 1 0 0 1 0 0 cm\n`;
   return { W: B.w, H: B.h, content: place + filmDraw(p, tag, marks, 0, B.mt) + "Q\n", imgs: [p] };
@@ -200,9 +211,9 @@ export async function filmSinglePdf(p: FilmPage, rollIn: number, tag: string, z:
  * film keeps its own marks and label; all upright, or all turned only when that saves at least 15% of the film.
  */
 export const NEST_GAP = 18; // pt: ¼" between films
-export function nestLayout(n: number, artW: number, artH: number, rollIn: number) {
+export function nestLayout(n: number, artW: number, artH: number, rollIn: number, offsetPt = 0) {
   const one = filmBox(artW, artH, 1000), P = (rollIn - ROLL_EDGE_IN) * 72, G = NEST_GAP;
-  const bw = artW + 2 * FILM_SIDE, bh = artH + 2 * one.mt;
+  const bw = artW + 2 * Math.abs(offsetPt) + 2 * FILM_SIDE, bh = artH + 2 * one.mt;
   let best: { rot: boolean; cols: number; rows: number; w: number; h: number; fw: number; fh: number } | null = null;
   for (const rot of [false, true]) {
     const fw = rot ? bh : bw, fh = rot ? bw : bh;
@@ -218,7 +229,7 @@ export function nestLayout(n: number, artW: number, artH: number, rollIn: number
   return { fits: true, ...best, mt: one.mt, widthIn: best.w / 72, lengthIn: best.h / 72, place };
 }
 export async function filmNestPdf(pages: FilmPage[], rollIn: number, tag: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
-  const L = nestLayout(pages.length, pages[0].widthIn * 72, pages[0].heightIn * 72, rollIn);
+  const L = nestLayout(pages.length, pages[0].widthIn * 72, pages[0].heightIn * 72, rollIn, marks.offsetPt || 0);
   let content = "";
   pages.forEach((p, i) => {
     const at = L.place[i];

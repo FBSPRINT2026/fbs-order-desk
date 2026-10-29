@@ -66,9 +66,15 @@ type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: 
   lpiFor?: Record<string, number>;
   /** films: crop marks at the corners / registration targets on the four sides (default on) */
   cropMarks?: boolean; regMarks?: boolean;
+  /** where the art sits on the film (Oct 29, Nick): centered, or left / right chest `filmOffsetIn` (default 4") off the
+   *  screen's center with the targets still centered; `filmFlip` burns it upside down (sleeves, totes). Unset = from the
+   *  print's location and garment */
+  filmPos?: "center" | "lc" | "rc"; filmOffsetIn?: number; filmFlip?: boolean;
   /** dot gain on press, taken off the halftone plates ahead of time (Illustrator file and films); 0 if the RIP does it.
    *  (`gain` from SepSettings is filled from this; an old saved films-only `gain` is ignored.) */
   pressGain?: number };
+/** a chest print's art center from the screen's center on the film (Oct 29, Nick: "4 inches by default, then override it") */
+const CHEST_OFFSET_IN = 4;
 const DOT_NAME = { ellipse: "elliptical", round: "round", square: "square" } as const;
 const PRESS_GAIN = 0.15;
 const CHOKE_PT = 0.5, TRAP_PT = 0.25, FINE_PT = 2, FINE_CHOKE_PT = 0.15, BUMP_PT = 0.25;
@@ -949,6 +955,17 @@ export default function SeparationStudio({ id }: { id: string }) {
 
   /* ---------- outputs ---------- */
   const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
+  // where the art sits on the film: a left chest 4" right of the screen's center as you look at the film (the wearer's
+  // left is on your right with the shirt facing up), a right chest 4" left; sleeves and bags burned upside down
+  const loc = row?.location || "";
+  const autoPos: NonNullable<Studio["filmPos"]> = /\bleft\s*chest\b|^\s*l\.?\s*c\.?\s*$/i.test(loc) ? "lc" : /\bright\s*chest\b|^\s*r\.?\s*c\.?\s*$/i.test(loc) ? "rc" : "center";
+  const onBag = !!order && !!row && orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)))
+    .some((g) => g.lines.some((l) => /\b(tote|bag|backpack|drawstring|cinch)\b/i.test(`${l.style || ""} ${l.garment || ""}`)));
+  const autoFlip = /sleeve/i.test(loc) || onBag;
+  const filmPos = st.filmPos ?? autoPos, filmOffsetIn = st.filmOffsetIn ?? CHEST_OFFSET_IN, filmFlip = st.filmFlip ?? autoFlip;
+  const filmOffsetPt = filmPos === "lc" ? filmOffsetIn * 72 : filmPos === "rc" ? -filmOffsetIn * 72 : 0;
+  const filmMarks = { targets: st.regMarks !== false, offsetPt: filmOffsetPt, flip: filmFlip };
+  const filmWhere = [filmPos === "center" ? "" : `${filmPos === "lc" ? "Left" : "Right"} chest: art ${+filmOffsetIn.toFixed(2)}" ${filmPos === "lc" ? "right" : "left"} of center`, filmFlip ? "burned upside down" : ""].filter(Boolean).join(", ");
   const tonal = st.method === "sim";
   // spot color on vector art: each original shape goes on the plates of the inks that print its color (solid, or as
   // tints when its color is mixed from other inks)
@@ -995,8 +1012,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   async function filmsFile(rollIn = ROLL_IN) {
     const { pages, names } = await filmPages(), named = pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` }));
     let nest = false; try { nest = JSON.parse(localStorage.getItem("fbs:sep.films.nest") || "false") === true; } catch { /* no storage */ }
-    return nest && named.length > 1 ? filmNestPdf(named, rollIn, title, deflate, { targets: st.regMarks !== false })
-      : filmPagesPdf(named, rollIn, title, deflate, { targets: st.regMarks !== false });
+    return nest && named.length > 1 ? filmNestPdf(named, rollIn, title, deflate, filmMarks)
+      : filmPagesPdf(named, rollIn, title, deflate, filmMarks);
   }
   /** Print films: one file per screen in print order, each upright (turned only if too wide for the roll) and just the
    *  size of its film, so FilmMaker (Auto Page, white space removed) trims the film after every screen */
@@ -1006,14 +1023,14 @@ export default function SeparationStudio({ id }: { id: string }) {
     const out: { name: string; bytes: Uint8Array }[] = [];
     // override: every film nested on one sheet (small prints), cut apart by hand instead of trimmed one by one
     if (nest && only == null && n > 1) {
-      const bytes = await filmNestPdf(pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` })), rollIn, title, deflate, { targets: st.regMarks !== false });
+      const bytes = await filmNestPdf(pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` })), rollIn, title, deflate, filmMarks);
       return [{ name: `${slug(title)}-nested-${n}-films.pdf`, bytes }];
     }
     for (let i = 0; i < n; i++) {
       if (only != null && i !== only) continue;
       const ink = names[i] || `screen ${i + 1}`;
       // on the film, right of the top target: just the ink, the job # and the location
-      const bytes = await filmSinglePdf({ ...pages[i], ink }, rollIn, title, deflate, { targets: st.regMarks !== false });
+      const bytes = await filmSinglePdf({ ...pages[i], ink }, rollIn, title, deflate, filmMarks);
       out.push({ name: `${slug(title)}-${String(i + 1).padStart(pad, "0")}-of-${n}-${slug(ink)}.pdf`, bytes });
     }
     return out;
@@ -1393,6 +1410,13 @@ export default function SeparationStudio({ id }: { id: string }) {
               <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find again</button></>}>
               <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
             </SetRow>
+            <SetRow k="film" label="Film" open={more} onToggle={toggleMore} main={
+              <div className="sep-seg" role="radiogroup" aria-label="Where the art sits on the film">{([["center", "Center"], ["lc", "L chest"], ["rc", "R chest"]] as const).map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={filmPos === v} className={filmPos === v ? "on" : ""} onClick={() => set({ filmPos: v })}>{l}</button>)}</div>}>
+              {filmPos !== "center" && <label className="sep-f">Offset from center (in)<input type="number" min={0} max={8} step={0.25} value={filmOffsetIn} onChange={(e) => set({ filmOffsetIn: Math.max(0, Math.min(8, +e.target.value || 0)) })} /></label>}
+              {filmPos !== "center" && st.filmOffsetIn != null && st.filmOffsetIn !== CHEST_OFFSET_IN && <button type="button" className="linkbtn" onClick={() => set({ filmOffsetIn: undefined })}>Back to {CHEST_OFFSET_IN}&quot; (shop default)</button>}
+              <label className="sep-chk"><input type="checkbox" checked={filmFlip} onChange={(e) => set({ filmFlip: e.target.checked })} /> Burn upside down (art turned on the film)</label>
+              <p className="sep-help">{st.filmPos == null && st.filmFlip == null ? `From the print${loc ? ` (${loc})` : ""}. ` : ""}The targets stay on the screen&apos;s center; every screen of this print moves together.{filmFlip ? " The film says UPSIDE DOWN by the bottom target." : ""}</p>
+            </SetRow>
           </div>
         </aside>
 
@@ -1527,7 +1551,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <PressSetupCard compact presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup} commit={commitSetup} clearSetup={() => setSetup(null)}
               sheet={{ title: `Press setup S-${row.number}`, heading: `Press setup · ${row.location || ""}${order ? ` · #${order.number} ${order.nickname || ""}` : ""}`, sub: `S-${row.number} · ${plates.length} screens · shirt ${row.garment_color || st.garment || "not picked"}` }} />
           )}
-          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
+          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy} offsetPt={filmOffsetPt} where={filmWhere}
             make={async (rollIn, only, nest) => { try { return await filmsEach(rollIn, only, nest); } finally { setBusy(""); } }}
             onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
@@ -1748,8 +1772,8 @@ const SHOP_MESH = [80, 110, 156, 195, 230, 305];
 const LPIS = [35, 40, 45, 50, 55, 60, 65, 75, 85];
 /** the film printer's roll (Epson, 17"): every film goes on it */
 const ROLL_IN = 17;
-function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }: {
-  n: number; inks: string[]; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
+function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent, offsetPt = 0, where = "" }: {
+  n: number; inks: string[]; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean; offsetPt?: number; where?: string;
   /** `only`: one film (0-based, print order) */
   make: (rollIn: number, only?: number, nest?: boolean) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
 }) {
@@ -1765,7 +1789,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   // override: nest every film on one sheet instead of trimming after each (small prints: sleeves, napes)
   const [nest, setNest] = useSticky("sep.films.nest", false);
   const nesting = nest && n > 1;
-  const B = filmBox(W, H, rollIn), NL = nestLayout(n, W, H, rollIn), total = nesting ? NL.lengthIn : n * B.lengthIn;
+  const B = filmBox(W, H, rollIn, offsetPt), NL = nestLayout(n, W, H, rollIn, offsetPt), total = nesting ? NL.lengthIn : n * B.lengthIn;
   const fits = nesting ? NL.fits : B.fits;
   async function choose() {
     setErr("");
