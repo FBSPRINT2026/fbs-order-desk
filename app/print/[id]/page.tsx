@@ -18,7 +18,9 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const viewer = await getViewer();
   // the customer's proof link (lib/proofLinks.ts) opens its own proof or sew-out PDF with no sign-in, and nothing else
   const lk = link ? await openLink(createAdminClient(), link) : null;
-  const byLink = !!lk && lk.order_id === id && ((lk.kind === "sewout" && !!sewout && sewout === lk.sewout_id) || (lk.kind === "art" && !!proof && !sewout && !work));
+  // an order's page link (lib/customerSend.ts) opens that order's proof, its sew-outs and its quote or invoice
+  const swOk = lk?.kind === "order" && !!sewout ? !!(await createAdminClient().from("sewouts").select("id").eq("id", sewout).eq("order_id", id).maybeSingle()).data : false;
+  const byLink = !!lk && lk.order_id === id && !work && ((lk.kind === "sewout" && !!sewout && sewout === lk.sewout_id) || (lk.kind === "art" && !!proof && !sewout) || (lk.kind === "order" && (!sewout || swOk)));
   if (!viewer.user && !byLink) redirect(`/login?next=/print/${id}`);
   const isStaff = byLink ? false : viewer.isStaff;
   const db = isStaff || byLink ? createAdminClient() : viewer.supabase; // customers read through row security

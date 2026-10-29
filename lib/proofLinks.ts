@@ -18,7 +18,7 @@ import { fmtPhone } from "@/lib/phone";
  *   history says it, and the shop is emailed. Approve, approve with a small change (no new proof), or changes with a new
  *   proof. A link to a version that was replaced says so.
  */
-export type LinkKind = "art" | "sewout";
+export type LinkKind = "art" | "sewout" | "order";
 export type ProofLinkRow = { id: string; kind: LinkKind; order_id: string; version: number | null; sewout_id: string | null; sent_to: string; created_by: string; created_at: string };
 export type LinkDecision = "approved" | "approved_changes" | "changes";
 
@@ -27,7 +27,7 @@ export const proofUrl = (id: string) => `${siteUrl()}/proof/${id}`;
 /** the link for this proof (the one already made for it, else a new one) */
 export async function proofLinkFor(admin: SupabaseClient, x: { kind: LinkKind; orderId: string; version?: number | null; sewoutId?: string | null; to?: string; by?: string }) {
   let q = admin.from("proof_links").select("id").eq("kind", x.kind).eq("order_id", x.orderId);
-  q = x.kind === "art" ? q.eq("version", x.version || 0) : q.eq("sewout_id", x.sewoutId || "");
+  q = x.kind === "art" ? q.eq("version", x.version || 0) : x.kind === "sewout" ? q.eq("sewout_id", x.sewoutId || "") : q;
   const { data: had } = await q.limit(1).maybeSingle();
   if (had?.id) {
     if (x.to) await admin.from("proof_links").update({ sent_to: x.to }).eq("id", had.id);
@@ -48,9 +48,24 @@ export async function openLink(admin: SupabaseClient, id: string): Promise<Proof
 type SewoutRow = { id: string; order_id: string; imprint_id: string; design_id: string | null; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; archived_at: string | null; note: string; sent_at: string | null; sewn?: { file?: { wIn: number; hIn: number; stitches: number } | null; threads?: { needle?: number; sewn: string }[] } | null };
 
 /** Everything the link's page needs, from the link alone. */
-export async function linkPage(admin: SupabaseClient, id: string) {
-  const link = await openLink(admin, id);
-  if (!link) return null;
+export type Step = { kind: "art" } | { kind: "sewout"; id: string };
+export async function linkPage(admin: SupabaseClient, id: string, step?: Step) {
+  const link0 = await openLink(admin, id);
+  if (!link0) return null;
+  // the order's page (lib/customerSend.ts): one of its steps, as if it had its own link (the proof version out now, or a
+  // sew-out of this order)
+  let link = link0;
+  if (link0.kind === "order") {
+    if (!step) return null;
+    if (step.kind === "art") {
+      const { data: lv } = await admin.from("proofs").select("version").eq("order_id", link0.order_id).not("version", "is", null).is("archived_at", null).limit(1).maybeSingle();
+      link = { ...link0, kind: "art", version: (lv?.version as number) || 0 };
+    } else {
+      const { data: so } = await admin.from("sewouts").select("id").eq("id", step.id).eq("order_id", link0.order_id).maybeSingle();
+      if (!so) return null;
+      link = { ...link0, kind: "sewout", sewout_id: step.id };
+    }
+  }
   const { data: od } = await admin.from("orders").select("*").eq("id", link.order_id).maybeSingle();
   if (!od) return null;
   const o = withoutShopPieces(od as Order);
@@ -87,8 +102,8 @@ export async function linkViewed(admin: SupabaseClient, p: LinkPage) {
 }
 
 /** The customer's answer on the link's page. */
-export async function decideByLink(admin: SupabaseClient, id: string, decision: LinkDecision, name: string, note: string) {
-  const p = await linkPage(admin, id);
+export async function decideByLink(admin: SupabaseClient, id: string, decision: LinkDecision, name: string, note: string, step?: Step) {
+  const p = await linkPage(admin, id, step);
   if (!p) return { ok: false as const, error: "This proof link doesn't work anymore. Ask us for a new one." };
   if (p.status === "replaced") return { ok: false as const, error: "A newer proof was sent after this one. Please open the newest proof email." };
   if (p.status !== "pending") return { ok: false as const, error: "This proof was already answered. Refresh the page." };

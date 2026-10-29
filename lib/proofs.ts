@@ -81,7 +81,8 @@ export async function previewProofEmail(admin: SupabaseClient, orderId: string, 
 /** Send the current mockups to the customer as the next proof version. */
 export async function sendProofs(admin: SupabaseClient, orderId: string, me: Staff, /** what we changed on their art (Oct 24, Nick: "we've got to say what we did to it") */ note = "",
   /** email: false = make the proof and its link without emailing (Oct 29, Nick: "copy a link… so I can just type an email
-   *  and go, hey, here's your proof, and then just click the button below") */ opts: { email?: boolean } = {}) {
+   *  and go, hey, here's your proof, and then just click the button below"); sentTo: who it went to, when sent with the
+   *  order's other steps in one email (lib/customerSend.ts) */ opts: { email?: boolean; sentTo?: string } = {}) {
   const email = opts.email !== false;
   const { order, customer, settings } = await load(admin, orderId);
   if (email && !customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
@@ -98,11 +99,12 @@ export async function sendProofs(admin: SupabaseClient, orderId: string, me: Sta
   }
   const at = new Date().toISOString();
   const to = email ? customer!.email : customer?.email || "";
-  const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: email ? to : "link copied" });
-  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} ${email ? `to ${to}` : "(link copied to send yourself)"}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
+  const sentTo = email ? to : opts.sentTo || "link copied";
+  const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: sentTo });
+  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} ${sentTo === "link copied" ? "(link copied to send yourself)" : `to ${sentTo}`}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
   // what we changed goes with the proof: in their Messages on the order, and in the email
   if (note.trim()) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: `Proof version ${version}: ${note.trim().slice(0, 2000)}` });
-  if (!email) return { ok: true as const, version, emailed: false, link: proofUrl(await proofLinkFor(admin, { kind: "art", orderId, version, to, by: me.email })) };
+  if (!email) return { ok: true as const, version, emailed: false, link: proofUrl(await proofLinkFor(admin, { kind: "art", orderId, version, to: sentTo === "link copied" ? to : sentTo, by: me.email })) };
   // the customer's proof link (lib/proofLinks.ts): their page with the PDF, approve or ask for changes, no sign-in
   const lk = await linkEmail(admin, { order, customer: customer!, settings, version, mocks, reminder: false, note: [...(note.trim() ? [note.trim()] : []), ...artChangesOf(order)].join("\n"), by: me.email });
   return { ok: true as const, version, emailed: lk.emailed, link: lk.url };

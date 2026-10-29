@@ -121,7 +121,7 @@ export default function ProofsPage() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Proofs</h1><div className="eyebrow">Every proof and sew-out on the open orders: where it is, and what&apos;s next</div></div>
+        <div><h1>Proof Center</h1><div className="eyebrow">Every proof and sew-out on the open orders: where it is, and what&apos;s next</div></div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}

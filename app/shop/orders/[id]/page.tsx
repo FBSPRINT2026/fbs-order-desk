@@ -39,6 +39,7 @@ import CustomerArtwork from "@/components/CustomerArtwork";
 import { labelFileName } from "@/lib/printavoNames";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
+import SendProofTool from "@/components/tools/SendProofTool";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import DigitizerTool from "@/components/tools/DigitizerTool";
@@ -904,6 +905,23 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     return () => document.removeEventListener("click", onClick, true);
   }, [o?.draft]);
 
+  // before Send to customer opens: the draft saved and the order checked (the inks match each print's colors)
+  async function beforeSend() {
+    if (!o) return false;
+    if (o.draft && !(await commitDraft())) return false;
+    const bad = (o.groups || []).flatMap((g) => g.imprints).find((d) => (d.method === "embroidery" || (d.method === "screen" && d.colors < 11)) && d.inks.trim() && d.inks.split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length !== d.colors);
+    if (bad) { say(`${bad.location || "An imprint"}: the inks listed don't match its number of colors. Fix that before sending.`); return false; }
+    await save();
+    return true;
+  }
+  async function afterSend(m: string) {
+    say(m);
+    if (!o) return;
+    const { data } = await sb.from("orders").select("status, sent_at").eq("id", o.id).maybeSingle();
+    if (data) setO((p) => (p ? { ...p, status: data.status, sent_at: data.sent_at } : p));
+    loadSide();
+  }
+
   async function send() {
     if (!o) return;
     if (o.draft && !(await commitDraft())) return;
@@ -1298,7 +1316,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               40,000-series number */}
           {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
-          {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
+          {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
+          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
@@ -1800,14 +1819,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>}
               {o.status === "quote" ? (
                 <>
-                  <textarea id="send-note" rows={4} placeholder="Message to the customer (goes with the quote)" aria-label="Message to the customer" />
-                  <button className="btn primary" type="button" onClick={send}>Send quote to customer</button>
+                  <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />
                 </>
               ) : (
                 <>
                   <div className="muted" style={{ fontSize: 13 }}>{o.sent_at ? `Sent ${fmtStamp(o.sent_at)}.` : "Visible in the customer's portal."} {o.approved_at ? `Approved by ${o.approved_name}.` : o.type === "quote" ? "Waiting for approval." : ""}</div>
-                  <textarea id="send-note" rows={2} placeholder="Optional note for the email" aria-label="Note for the email" />
-                  <button className="btn" type="button" onClick={send}>Email customer a link</button>
+                  <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" primary={false} before={beforeSend} onDone={afterSend} />
+                  <SendProofTool target={{ kind: "order", orderId: o.id }} mode="copy" onDone={say} />
                 </>
               )}
               {o.status !== "quote" && (

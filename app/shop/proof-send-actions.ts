@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { previewProofEmail, sendProofs } from "@/lib/proofs";
 import { previewSewoutEmail, sendSewoutNow, sewoutLinkCopy } from "@/lib/sewouts";
+import type { Pick3 } from "@/lib/customerSend";
 
 /**
  * Send a proof (components/tools/SendProofTool.tsx): the preview first, then Send, or Copy the link / a button to put in
@@ -52,5 +53,31 @@ export async function proofCopyLink(t: ProofTarget) {
     }
     const r = await sendProofs(admin, t.orderId, who, t.note || "", { email: false });
     return r.ok ? { ok: true as const, url: r.link } : r;
+  } catch (e) { return fail(e); }
+}
+
+/* ── Send to customer, all together (lib/customerSend.ts; Oct 29, Nick, option A) ── */
+
+export async function sendOptionsAction(orderId: string) {
+  try { await me(); const { sendOptions } = await import("@/lib/customerSend"); return { ok: true as const, ...(await sendOptions(createAdminClient(), orderId)) }; } catch (e) { return fail(e); }
+}
+export async function bundlePreview(orderId: string, pick: Pick3) {
+  try { await me(); const { previewSend } = await import("@/lib/customerSend"); return await previewSend(createAdminClient(), orderId, pick); } catch (e) { return fail(e); }
+}
+export async function bundleSend(orderId: string, pick: Pick3) {
+  try {
+    const who = await me(); const { sendTogether } = await import("@/lib/customerSend");
+    const r = await sendTogether(createAdminClient(), orderId, pick, who, true);
+    return r.ok ? { ok: true as const, msg: r.emailed ? `Sent: ${r.done.join(", ")}.` : `Made ${r.done.join(", ")}, but the email didn't go out. Copy the link and send it yourself.`, url: r.url } : r;
+  } catch (e) { return fail(e); }
+}
+export async function bundleCopy(orderId: string, pick: Pick3) {
+  try { const who = await me(); const { sendTogether } = await import("@/lib/customerSend"); const r = await sendTogether(createAdminClient(), orderId, pick, who, false); return r.ok ? { ok: true as const, url: r.url } : r; } catch (e) { return fail(e); }
+}
+/** the order's customer page link as it is (nothing new sent) */
+export async function orderLinkAction(orderId: string) {
+  try {
+    const who = await me(); const { proofLinkFor, proofUrl } = await import("@/lib/proofLinks");
+    return { ok: true as const, url: proofUrl(await proofLinkFor(createAdminClient(), { kind: "order", orderId, by: who.email })) };
   } catch (e) { return fail(e); }
 }

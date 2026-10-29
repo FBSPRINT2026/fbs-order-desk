@@ -15910,3 +15910,27 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .prf-steps li span{font-size:12px;color:var(--ink-3)}
 .prf-steps li small{font-size:12px;color:var(--ink-2,var(--ink-3))}
 .prf-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* the order's customer page: the steps waiting on them (app/proof/[id]/OrderSteps.tsx) */
+.pfl-ttl{display:flex;flex-direction:column;line-height:1.2;margin-left:8px;padding-left:12px;border-left:1px solid var(--line)}
+.pfl-ttl b{font-family:var(--display);font-size:16px}
+.pfl-ttl span{font-size:12px;color:var(--ink-3)}
+.pfl-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pfl-step-b{all:unset;box-sizing:border-box;width:100%;display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.pfl-step-b:hover{background:var(--surface-2)}
+.pfl-step-b.on{border-color:var(--accent);background:var(--accent-soft)}
+.pfl-step-b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pfl-step-b b{display:block;font-size:14px}
+.pfl-step-b small{display:block;font-size:12.5px;color:var(--ink-3)}
+.pfl-num{width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--ink);font-size:12px;font-weight:700;display:grid;place-items:center;flex:none}
+.pfl-step-b.todo .pfl-num,.pfl-step-b.on .pfl-num{background:var(--accent);color:#fff}
+.pfl-step-b.done .pfl-num{background:var(--ok);color:#fff}
+.pfl-step-b.changes .pfl-num{background:var(--warn);color:#fff}
+.pfl-step-b.locked{opacity:.7}
+.pfl-ans-wrap{border-top:1px solid var(--line);padding-top:12px}
+.pfl-ans-wrap .pfl-ans{border-top:0;padding-top:0}
+.spt-picks{display:flex;flex-direction:column;gap:6px}
+.spt-chk{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer}
+.spt-chk.on{border-color:var(--accent);background:var(--accent-soft)}
+.spt-chk input{margin-top:3px}
+.spt-chk b{display:block;font-size:14px}
+.spt-chk small{display:block;font-size:12.5px;color:var(--ink-3)}

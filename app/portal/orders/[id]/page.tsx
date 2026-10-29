@@ -15,6 +15,7 @@ import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import { fmtPhone } from "@/lib/phone";
+import { orderSteps } from "@/lib/customerSend";
 
 // the order's steps the customer sees (Oct 24, Nick: "sent to FBS, quote, proof, approved, and then you'd have waiting on
 // goods… in production, ready, and then done"); a quote and its proof usually go out together
@@ -65,6 +66,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   ]);
   // the customer opened their proof (not staff looking at their portal): shown to the shop on the order (lib/proofs.ts)
   if (!ctx.isStaff && (pr.data || []).length) await proofViewed(createAdminClient(), id).catch(() => null);
+  // what's waiting on them on their order page (the link our Send to customer email opens, lib/customerSend.ts)
+  const { data: olk } = await createAdminClient().from("proof_links").select("id").eq("kind", "order").eq("order_id", id).limit(1).maybeSingle();
+  const waitingOn = olk?.id ? ((await orderSteps(createAdminClient(), olk.id))?.steps || []).filter((x) => x.state === "todo") : [];
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
   const goodsHere = needsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
@@ -143,6 +147,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div></div>
 
+        {/* one place for everything waiting on them: the same page our email's button opens */}
+        {olk?.id && waitingOn.length > 0 && <div className="callout warn po-wait">
+          <h2>Waiting on you: {waitingOn.map((x) => x.kind === "art" ? "your proof" : x.kind === "sewout" ? "your sew-out" : x.kind === "quote" ? "your quote" : "the deposit").filter((v, i, a) => a.indexOf(v) === i).join(", ")}</h2>
+          <div className="muted">Look it over and approve it on one page.</div>
+          <a className="btn primary" style={{ marginTop: 8 }} href={`/proof/${olk.id}`}>Review and approve</a>
+        </div>}
         {hold ? (
           <div className="callout warn po-hold">
             <h2>This order is on hold: {hold.title}</h2>

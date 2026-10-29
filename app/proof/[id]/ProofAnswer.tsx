@@ -9,7 +9,8 @@ type Status = "pending" | "approved" | "changes" | "replaced" | "gone";
  * changes. When you say requires changes… make a minor change, but no need to reproof, or…"). Approving asks for their
  * name; a change asks which kind and what.
  */
-export default function ProofAnswer({ id, kind, status, decidedName, decidedAt, comment }: { id: string; kind: "art" | "sewout"; status: Status; decidedName: string; decidedAt: string; comment: string }) {
+export default function ProofAnswer({ id, kind, status, decidedName, decidedAt, comment, target, onAnswered }: { id: string; kind: "art" | "sewout"; status: Status; decidedName: string; decidedAt: string; comment: string;
+  /** on an order's page: which of its steps this answers */ target?: import("@/lib/proofLinks").Step; onAnswered?: () => void }) {
   const [step, setStep] = useState<"" | "approve" | "changes">("");
   const [small, setSmall] = useState(true);
   const [note, setNote] = useState(""), [name, setName] = useState("");
@@ -34,9 +35,10 @@ export default function ProofAnswer({ id, kind, status, decidedName, decidedAt, 
 
   const send = (decision: "approved" | "approved_changes" | "changes") => start(async () => {
     setErr("");
-    const r = await answerProof(id, decision, name, note);
+    const r = await answerProof(id, decision, name, note, target);
     if (!r.ok) { setErr(r.error); return; }
     setDone(decision);
+    onAnswered?.();
   });
   return (
     <div className="pfl-ans">
