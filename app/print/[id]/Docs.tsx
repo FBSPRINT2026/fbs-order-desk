@@ -539,20 +539,9 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                   {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => <div className="pf-pr" key={l.id}><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
                 </div>
               </div>
-              <div className="pf-ok">
-                <div className="t">Please check everything before you approve</div>
-                <div className="s">Spelling, art, ink colors, print sizes and placement. Ink colors are matched to the names listed (PMS or stock ink); colors on a screen or a home printer are close but not exact. Sizes are the printed size on the garment. We start production once this proof is approved.</div>
-                {/* data-pdf-*: these become fillable fields in the saved PDF (Oct 20, Nick: "make those editable fields so that
-                    they can just sign it with Acrobat… and send it back to us") */}
-                <div className="pf-boxes">
-                  <span><i className="cb" data-pdf-check={`approved-${gi + 1}`} /> Approved as shown</span>
-                  <span><i className="cb" data-pdf-check={`approved-with-changes-${gi + 1}`} /> Approved with the changes noted</span>
-                  <span><i className="cb" data-pdf-check={`changes-needed-${gi + 1}`} /> Changes needed, send a new proof</span>
-                </div>
-                <div className="pf-notes" data-pdf-text={`changes-${gi + 1}`} data-pdf-multi="1"><span>Changes or notes</span></div>
-                <div className="pf-sign"><div data-pdf-text={`signature-${gi + 1}`}>Signature</div><div data-pdf-text={`name-${gi + 1}`}>Name</div><div data-pdf-text={`date-${gi + 1}`}>Date</div></div>
-                {approved && <div className="s ok">Approved online: {approved}</div>}
-              </div>
+              {/* no approval box on the PDF (Oct 29, Nick: "take the approval out… we're going to use this system"): the
+                  customer approves on their proof page (/proof/…); the mockup takes the room */}
+              {approved && <div className="pf-appr">Approved: {approved}</div>}
               {foot()}
             </section>
             {extra.map((pair, xi) => (
@@ -824,18 +813,10 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
             {sw.note && <div className="full so-note"><b>Note:</b> {sw.note}</div>}
           </div>
       </div>
-      {/* the approval box, small: one line to read, the two boxes, then one line each to write on (Oct 29, Nick: "make the
-          approval thing smaller") */}
-      <div className="pf-ok so-ok">
-        <div className="s"><b>Please check the sew-out before you approve.</b> Spelling, thread colors, size and the small details. This is the real stitching on our machine; the run is sewn to match it.</div>
-        <div className="pf-boxes">
-          <span><i className="cb" data-pdf-check="sewout-approved" /> Approved as sewn</span>
-          <span><i className="cb" data-pdf-check="sewout-changes" /> Changes needed, send a new sew-out</span>
-        </div>
-        <div className="pf-sign"><div data-pdf-text="sewout-changes-text">Changes or notes</div><div data-pdf-text="sewout-signature">Signature</div><div data-pdf-text="sewout-name">Name</div><div data-pdf-text="sewout-date">Date</div></div>
-        {ok && <div className="s ok">Approved{sw.approved_via === "staff" ? "" : " online"}: {ok}</div>}
-        {sw.status === "changes" && sw.customer_comment && <div className="s">Changes asked: {sw.customer_comment}</div>}
-      </div>
+      {/* no approval box on the PDF (Oct 29, Nick: "take the approval out… we're going to use this system"): the customer
+          approves on their proof page; what they said shows here once they have */}
+      {ok && <div className="pf-appr">Approved{sw.approved_via === "staff" ? "" : " online"}: {ok}</div>}
+      {sw.status === "changes" && sw.customer_comment && <div className="pf-appr bad">Changes asked: {sw.customer_comment}</div>}
       <div className="foot"><span>Sew-out v{sw.version} · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page 1 of 1</span></div>
     </section>
   );

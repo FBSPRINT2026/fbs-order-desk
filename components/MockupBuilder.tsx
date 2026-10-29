@@ -2549,46 +2549,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         y += maxH + 8 * PX;
         x.fillStyle = C.line; x.fillRect(L, y, CW, 1 * PX); y += 1 * PX + 8 * PX;
 
-        // from the bottom up: the approval box, then the prints and garments, then the picture fills what's left
-        const okPad = 14 * PX, okW = CW - 2 * okPad;
-        x.font = body(400, 9.5);
-        const okText = wrap(x, "Spelling, art, ink colors, print sizes and placement. Ink colors are matched to the names listed (PMS or stock ink); colors on a screen or a home printer are close but not exact. Sizes are the printed size on the garment. We start production once this proof is approved.", okW);
-        const boxes = ["Approved as shown", "Approved with the changes noted", "Changes needed, send a new proof"];
-        x.font = body(400, 10);
-        const boxRows: string[][] = [[]]; { let bw = 0; for (const t of boxes) { const w = 14 * PX + 7 * PX + x.measureText(t).width + 18 * PX; if (bw + w > okW && boxRows[boxRows.length - 1].length) { boxRows.push([]); bw = 0; } boxRows[boxRows.length - 1].push(t); bw += w; } }
-        const okH = 8 * PX + 12 * PT * 1.35 + 3 * PX + okText.length * 9.5 * PT * 1.4 + 7 * PX + boxRows.length * 10 * PT * 1.6 + 8 * PX + 0.5 * IN + 32 * PX + 3 * PX + 8.5 * PT * 1.4 + 10 * PX;
-        const okY = BOT - 8.5 * PT - 6 * PX - okH;
-        // the box
-        x.strokeStyle = C.ink; x.lineWidth = 2 * PX; rrect(x, L, okY, CW, okH, 12 * PX); x.stroke();
-        let oy = okY + 8 * PX + 12 * PT;
-        x.fillStyle = C.ink; x.font = body(800, 12); x.fillText("Please check everything before you approve", L + okPad, oy);
-        oy += 0.35 * 12 * PT + 3 * PX;
-        x.fillStyle = C.ink2; x.font = body(400, 9.5); for (const r of okText) { oy += 9.5 * PT * 1.4; x.fillText(r, L + okPad, oy - 0.3 * 9.5 * PT); }
-        oy += 7 * PX;
-        x.font = body(400, 10);
-        for (const row of boxRows) {
-          let bx = L + okPad; const by = oy + 10 * PT * 1.6;
-          for (const t of row) {
-            const cb = 14 * PX, ty = by - 0.35 * 10 * PT;
-            x.strokeStyle = C.ink; x.lineWidth = 1.5 * PX; rrect(x, bx, ty - cb + 2 * PX, cb, cb, 3 * PX); x.stroke();
-            fields.push({ page: 0, kind: "check", name: ["approved", "approved-with-changes", "changes-needed"][boxes.indexOf(t)], x: bx, y: ty - cb + 2 * PX, w: cb, h: cb });
-            x.fillStyle = C.ink; x.fillText(t, bx + cb + 7 * PX, ty); bx += cb + 7 * PX + x.measureText(t).width + 18 * PX;
-          }
-          oy = by;
-        }
-        oy += 8 * PX;
-        x.strokeStyle = C.line; x.lineWidth = 1 * PX; rrect(x, L + okPad, oy, okW, 0.5 * IN, 6 * PX); x.stroke();
-        lbl(x, "Changes or notes", L + okPad + 7 * PX, oy + 3 * PX + 8.5 * PT, 8.5);
-        fields.push({ page: 0, kind: "text", name: "changes", x: L + okPad + 3 * PX, y: oy + 16 * PX, w: okW - 6 * PX, h: 0.5 * IN - 19 * PX, multi: true });
-        oy += 0.5 * IN + 32 * PX;
-        const sg = 18 * PX, sw0 = okW - 2 * sg, sws = [2, 1.6, 1].map((f) => (sw0 * f) / 4.6);
-        let sx = L + okPad;
-        ["Signature", "Name", "Date"].forEach((t, i) => {
-          x.fillStyle = C.ink; x.fillRect(sx, oy, sws[i], 1.5 * PX);
-          lbl(x, t, sx, oy + 3 * PX + 8.5 * PT, 8.5);
-          fields.push({ page: 0, kind: "text", name: t.toLowerCase(), x: sx, y: oy - 25 * PX, w: sws[i], h: 23 * PX });
-          sx += sws[i] + sg;
-        });
+        // from the bottom up: the prints and garments, then the picture fills what's left. No approval box (Oct 29, Nick:
+        // "on all the proofs… take the approval out… we're going to use this system": the customer approves on their
+        // proof page)
+        const okY = BOT - 8.5 * PT - 6 * PX;
 
         // the prints (left) and the garments (right)
         const rowsP = prints.map((im) => ({ im, inks: inkNamesOf(im) }));

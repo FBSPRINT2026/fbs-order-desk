@@ -221,7 +221,7 @@ export const DOC_CSS = `
 /* the close-up dead center on the page; it slides left only when it would run into the original file, and shrinks when it's
    wider than the room left of it (Oct 29, Nick: "the close up… should always be in the dead center… if it's a really
    wide one… start to move over") */
-.pdoc .so .so-hero{flex:none;display:grid;grid-template-columns:1fr minmax(0,auto) minmax(1.6in,1fr);align-items:end}
+.pdoc .so .so-hero{flex:none;display:grid;grid-template-columns:1fr minmax(0,auto) minmax(1.75in,1fr);align-items:end}
 .pdoc .so .so-hero>.so-ph{grid-column:2}
 .pdoc .so .so-hero>.so-org{grid-column:3;justify-self:end}
 .pdoc .so .so-ph{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
@@ -230,16 +230,16 @@ export const DOC_CSS = `
 .pdoc .so .so-ok .s b{color:var(--ink);font-size:10pt}
 .pdoc .so .so-ok .pf-boxes{margin-top:4px}
 .pdoc .so .so-ok .pf-sign{grid-template-columns:2.2fr 1.6fr 1.3fr .9fr;gap:14px;margin-top:22px}
-.pdoc .so .so-ph img{max-width:100%;max-height:4.2in;object-fit:contain;border-radius:14px;box-shadow:0 10px 24px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.18);display:block}
+.pdoc .so .so-ph img{max-width:100%;max-height:5.1in;object-fit:contain;border-radius:14px;box-shadow:0 10px 24px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.18);display:block}
 .pdoc .so .so-ph figcaption,.pdoc .so .so-org figcaption{font-size:9pt;color:var(--ink2);font-weight:600;text-align:center}
 .pdoc .so .so-ph .none{width:100%;height:3in;border:1px dashed var(--line);border-radius:14px;display:grid;place-items:center;color:var(--ink2)}
 .pdoc .so .so-org{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
 .pdoc .so .so-org .lbl{text-align:center}
-.pdoc .so .so-org-pic{width:1.45in;height:1.45in;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.pdoc .so .so-org-pic{width:1.6in;height:1.6in;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .pdoc .so .so-org-pic .lt{display:block;width:100%;height:100%}
 .pdoc .so .so-below{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
 .pdoc .so .so-below.pl{display:grid;grid-template-columns:2.1in 1fr;gap:16px;align-items:start}
-.pdoc .so .so-pl img{max-height:1.5in;border-radius:10px}
+.pdoc .so .so-pl img{max-height:1.9in;border-radius:10px}
 .pdoc .so .so-facts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;align-content:start}
 .pdoc .so .so-facts>div{display:flex;flex-direction:column;min-width:0}
 .pdoc .so .so-facts .wide{grid-column:span 2}
@@ -280,8 +280,10 @@ export const DOC_CSS = `
 .pdoc .pf-cover .pf-who .lbl{font-size:7.5pt}
 .pdoc .pf-cover .pf-who b{font-size:10.5pt}
 .pdoc .pf-cover .pf-who .faint{font-size:8.5pt;margin-top:1px}
-.pdoc .pf-cover .pf-hero{flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;margin:2px 0}
-.pdoc .pf-cover .pf-hero img{flex:none;width:100%;height:auto;max-height:none;object-fit:contain}
+.pdoc .pf-cover .pf-hero{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;gap:2px;margin:2px 0}
+.pdoc .pf-cover .pf-hero img{flex:1 1 0;min-height:0;width:100%;object-fit:contain}
+.pdoc .pf-appr{margin-top:8px;font-size:10pt;font-weight:700;color:var(--ok)}
+.pdoc .pf-appr.bad{color:var(--danger,#b42318)}
 .pdoc .pf-cover .pf-hero span{font-size:9.5pt}
 .pdoc .pf-cover .pf-sum{margin-top:2px;padding-top:4px;gap:14px}
 .pdoc .pf-cover .pf-sum .lbl{font-size:7.5pt}
