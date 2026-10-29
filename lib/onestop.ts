@@ -227,7 +227,7 @@ export async function osTrackingPass(admin: SupabaseClient): Promise<{ added: nu
 const MEDIA = "https://media.onestopinc.com/";
 const media = (p: unknown) => { const x = s(p); return !x ? "" : /^https?:\/\//i.test(x) ? x : MEDIA + x.replace(/^\//, ""); };
 /** our size names (S, M, L, 2XL…) from One Stop's (SM, MD, LG, 2X…) */
-export const osOurSize = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS" } as Record<string, string>)[k] || k; };
+export const osOurSize = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS", OSFM: "OS" } as Record<string, string>)[k] || k; };
 
 /** a style found at One Stop: the maker's brand and style number (Fruit of the Loom 3930), and One Stop's own code */
 export type OsHit = { brand: string; style: string; osStyle: string; title: string; image: string };

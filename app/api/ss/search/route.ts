@@ -89,7 +89,9 @@ export async function GET(req: Request) {
   const exact = (h: Hit) => [t, stripped].includes(h.style.toLowerCase()) || `${h.brand} ${h.style}`.toLowerCase() === t;
   // a style number typed without its brand letters (3142 → A4N3142, 5000 → G5000): right after the exact ones
   const ends = (h: Hit) => /^\d{3,}[a-z]?$/.test(t) && h.style.toLowerCase().endsWith(t) && !exact(h);
-  const rest = (h: Hit) => !exact(h) && !ends(h);
-  const results = [...a.filter(exact), ...b.filter(exact), ...o.filter(exact), ...a.filter(ends), ...b.filter(ends), ...o.filter(ends), ...a.filter(rest).slice(0, 20), ...b.filter(rest), ...o.filter(rest), ...a.filter(rest).slice(20)].slice(0, 50);
+  const rest = (h: Hit) => !exact(h) && !ends(h) && !(brandKey(q) && brandKey(h.brand) === brandKey(q));
+  // the brand typed ("pacific headwear"): that brand's styles first, whoever carries it
+  const qb = brandKey(q), isBrand = (h: Hit) => !!qb && brandKey(h.brand) === qb && !exact(h);
+  const results = [...a.filter(exact), ...b.filter(exact), ...o.filter(exact), ...a.filter(isBrand), ...b.filter(isBrand), ...o.filter(isBrand), ...a.filter(ends), ...b.filter(ends), ...o.filter(ends), ...a.filter(rest).slice(0, 20), ...b.filter(rest), ...o.filter(rest), ...a.filter(rest).slice(20)].slice(0, 50);
   return NextResponse.json({ results });
 }

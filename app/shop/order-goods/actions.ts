@@ -391,7 +391,7 @@ async function sanmarStyleOf(admin: ReturnType<typeof createAdminClient>, brand:
 }
 
 /** One Stop's size codes (SM, MD, LG, XL, 2X…) as ours (S, M, L, XL, 2XL…) */
-const osSizeOf = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS" } as Record<string, string>)[k] || k; };
+const osSizeOf = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS", OSFM: "OS" } as Record<string, string>)[k] || k; };
 export type SanMarRef = { style: string; color: string; size: string; inventoryKey?: string; sizeIndex?: string };
 /**
  * Where each size can come from: S&S (its warehouses, our price) and SanMar (its warehouses, our price before the card
