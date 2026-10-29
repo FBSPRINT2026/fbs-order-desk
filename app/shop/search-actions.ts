@@ -1,6 +1,7 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { testFound } from "@/lib/format";
 
 /**
  * The left search's shortcut (Oct 24, Nick: "if we type in an order number… that should just take us right to the order…
@@ -32,7 +33,7 @@ export async function quickJump(q: string): Promise<string> {
     const k = key(t);
     if (k.length < 3) return "";
     const { data: cs } = await admin.from("customers").select("id, company, name, is_test").limit(10000);
-    const list = (cs || []).filter((c) => !c.is_test).map((c) => ({ id: c.id as string, keys: [key(String(c.company || "")), key(String(c.name || ""))].filter(Boolean) }));
+    const list = (cs || []).filter((c) => testFound(c, t)).map((c) => ({ id: c.id as string, keys: [key(String(c.company || "")), key(String(c.name || ""))].filter(Boolean) }));
     const exact = list.filter((c) => c.keys.includes(k));
     if (exact.length === 1) return `/shop/customers/${exact[0].id}`;
     if (exact.length > 1) return "";

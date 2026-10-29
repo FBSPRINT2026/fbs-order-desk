@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import SearchInput from "@/components/SearchInput";
 import { useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf } from "@/components/bits";
-import { money } from "@/lib/format";
+import { money, testFound } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
@@ -84,7 +84,7 @@ function SearchInner() {
     const ASEL = `${ARCHIVE_LIST_COLS}, po_number, customers(company, name)`;
     (async () => {
       const { data: c } = await sb.from("customers").select("id, company, name, email, phone, price_type, payment_terms, is_test").or(`company.ilike.${like},name.ilike.${like},email.ilike.${like}`).order("company").limit(25);
-      const cs = ((c || []) as (Cust & { is_test?: boolean })[]).filter((x) => !x.is_test);
+      const cs = ((c || []) as (Cust & { is_test?: boolean })[]).filter((x) => testFound(x, t));
       if (!live) return;
       setCusts(cs); done();
       // Printavo jobs: by number, by words, and the matched customers' own

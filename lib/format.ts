@@ -42,3 +42,14 @@ export function custLabel(c?: { company?: string; name?: string } | null) {
   if (!c) return "No customer";
   return c.company || c.name || "Unnamed";
 }
+
+/**
+ * Test accounts (XYZ / ABC / JKL Test Company: where the shop tries things) stay out of the customer lists, counts and
+ * mailings, but are found whenever someone searches or types for one (Oct 29, Nick: searched "xyz test" on Customers and
+ * got nothing). THE rule for every list and picker of customers: `testFound(c, typed)`.
+ */
+export function testFound(c: { is_test?: boolean | null; company?: string | null; name?: string | null; email?: string | null }, typed: string): boolean {
+  if (!c.is_test) return true;
+  const t = typed.trim().toLowerCase();
+  return t.length >= 2 && [c.company, c.name, c.email, "test"].filter(Boolean).join(" ").toLowerCase().includes(t);
+}

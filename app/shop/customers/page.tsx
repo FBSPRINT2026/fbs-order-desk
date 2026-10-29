@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { daysUntil, fmtDate, fmtStamp, money } from "@/lib/format";
+import { daysUntil, fmtDate, fmtStamp, money, testFound } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
@@ -44,8 +44,8 @@ export default function CustomersPage() {
     return m;
   }, [orders]);
 
-  // test companies are off (Oct 21, Nick: "we're past that point… might come back to it later"): kept, not listed
-  const list = Object.values(customers).filter((c) => !c.is_test)
+  // test companies aren't listed (Oct 21, Nick: "we're past that point"), but are found when searched for (lib/format testFound)
+  const list = Object.values(customers).filter((c) => testFound(c, q))
     .filter((c) => !q.trim() || [c.name, c.company, c.email, c.phone, ...(c.tags || [])].join(" ").toLowerCase().includes(q.trim().toLowerCase()))
     .filter((c) => !tag || (tag === "__fu" ? !!c.next_follow_up && (daysUntil(c.next_follow_up) ?? 1) <= 0 : (c.tags || []).includes(tag)))
     .sort((a, b) => Number(isFav(b)) - Number(isFav(a)) || (a.company || a.name || "").localeCompare(b.company || b.name || ""));
