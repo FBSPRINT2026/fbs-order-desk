@@ -232,6 +232,13 @@ export const osOurSize = (z: string) => { const k = String(z || "").toUpperCase(
 /** a style found at One Stop: the maker's brand and style number (Fruit of the Loom 3930), and One Stop's own code */
 export type OsHit = { brand: string; style: string; osStyle: string; title: string; image: string };
 
+/** the raw first rows of One Stop's search (for the connection check) */
+export async function osSearchRaw(q: string) {
+  const j = await os<unknown>(`items/?search=${encodeURIComponent(q)}&flat=Y&supplies=false`, { timeoutMs: 15_000 });
+  const rs = results(j);
+  return { keys: Object.keys((j || {}) as object), count: rs.length, first: rs.slice(0, 3) };
+}
+
 /** One Stop styles matching what was typed (their own search across names, codes and makers), one row per style */
 export async function osSearch(q: string): Promise<OsHit[]> {
   const t = s(q);

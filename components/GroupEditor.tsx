@@ -1216,7 +1216,7 @@ export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: 
               {it.kind === "ss" && <em>{garmentSupName(it.h.supplier).toUpperCase()}</em>}
             </div>
           ))}
-          {loading && <div className="sm-note">Searching S&amp;S and SanMar…</div>}
+          {loading && <div className="sm-note">Searching S&amp;S, SanMar and One Stop…</div>}
           {busy && <div className="sm-note">Pulling it in…</div>}
         </div>
       ) : null}
