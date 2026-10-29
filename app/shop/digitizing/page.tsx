@@ -212,11 +212,15 @@ export default function Digitizing() {
             {LINE.map(([k, l, hint, c, icon]) => {
               const here = items.filter((it) => stateOf(it) === k), n = here.length;
               return (
-                <button key={k} type="button" role="tab" aria-selected={filter === k} className={"dgz-stn" + (filter === k ? " on" : "") + (orders && !n ? " zero" : "")} style={{ ["--c" as string]: c }} onClick={() => setFilter(k)}>
-                  <span className="dgz-ring">{icon}<span className="dgz-cnt">{orders ? n : "…"}</span></span>
+                <button key={k} type="button" role="tab" aria-selected={filter === k} className={"dgz-stn" + (filter === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => setFilter(k)}>
+                  <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (orders && !n ? " z" : "")}>{orders ? n : "…"}</span></span>
                   <span className="dgz-nm">{l}</span>
                   <span className="dgz-hint">{hint}</span>
-                  {n > 0 && <span className="dgz-logos" aria-hidden>{here.slice(0, 4).map((it) => <span key={it.key}>{it.d && urls[it.d.id] ? <LogoThumb d={it.d} url={urls[it.d.id]} shirt={(it.g.lines || [])[0]?.color} inkMap={it.im.inkMap?.map} /> : <i>{(it.d?.name || it.im.location || "?").slice(0, 1).toUpperCase()}</i>}</span>)}{n > 4 && <span><i>+{n - 4}</i></span>}</span>}
+                  {/* the logos at this station, on white tiles side by side (Oct 29, Nick: "spread them out") */}
+                  <span className="dgz-tray">{!orders ? null : !n ? <span className="dgz-empty">Nothing waiting</span> : <>
+                    {here.slice(0, 3).map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <LogoThumb d={it.d} url={urls[it.d.id]} inkMap={it.im.inkMap?.map} /> : <i>{(it.d?.name || it.im.location || "?").slice(0, 1).toUpperCase()}</i>}</span>)}
+                    {n > 3 && <span className="dgz-more">+{n - 3}</span>}
+                  </>}</span>
                 </button>
               );
             })}
@@ -249,10 +253,10 @@ const CHG_OUTRO = "Please send back the updated DST, EMB and worksheet. Thank yo
 const ico = (d: string) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>;
 /** the five stations, in order: name, what it waits on, its color, its icon */
 const LINE: [State, string, string, string, ReactNode][] = [
-  ["need", "Needs digitizing", "send to the digitizer", "var(--danger)", ico("M3 17c3-6 5-9 7-9s-1 8 2 8 3-6 5-6 2 4 4 4")],
+  ["need", "Needs digitizing", "send to the digitizer", "var(--danger)", ico("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z")],
   ["asked", "Requested", "waiting on the file", "var(--warn)", ico("M22 2 11 13M22 2l-7 20-4-9-9-4z")],
-  ["done", "Needs sew-out", "files in, sew a sample", "var(--fbs-blue)", ico("M5 19 19 5M15 5h4v4M4 20l3-1M9 11c-3 1-5 4-4 7")],
-  ["sent", "Waiting on approval", "with the customer", "var(--warn)", ico("M6 2h12M6 22h12M7 2c0 5 10 7 10 10s-10 5-10 10M17 2c0 5-10 7-10 10s10 5 10 10")],
+  ["done", "Needs sew-out", "files in, sew a sample", "var(--fbs-blue)", ico("M4 20 18 6M15 4l5 5M7 17c-2-1-4 0-4 2")],
+  ["sent", "Waiting on approval", "with the customer", "var(--warn)", ico("M6 2h12M6 22h12M7 2c0 5 10 7 10 10S7 17 7 22M17 2c0 5-10 7-10 10s10 5 10 10")],
   ["ok", "Approved", "on file for reorders", "var(--ok)", ico("M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3")],
 ];
 const STATE: Record<State, [string, string]> = { need: ["Needs digitizing", "var(--danger)"], asked: ["Requested", "var(--warn)"], done: ["Needs sew-out", "var(--fbs-blue)"], sent: ["Waiting on approval", "var(--warn)"], ok: ["Approved", "var(--ok)"] };
