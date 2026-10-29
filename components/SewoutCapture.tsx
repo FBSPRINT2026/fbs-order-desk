@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { sendSewoutPhoto } from "@/app/shop/sewout-actions";
+import { phoneSnapState, sendSewoutPhoto, sewoutPhoneLink } from "@/app/shop/sewout-actions";
 import { SEWOUT_EMAILS } from "@/lib/customerContact";
+import PhoneSnapAsk from "@/components/PhoneSnapAsk";
 
 /**
  * The sew-out photo (Oct 24, Nick: "when our embroidery team does the sew out and they take a picture… crop it and
@@ -10,6 +11,10 @@ import { SEWOUT_EMAILS } from "@/lib/customerContact";
  * the stitching (found by how it stands out from the fabric around the edges of the photo); drag the box or its corners
  * to change it, turn the photo if it's sideways, add a note if there's something to say, and "Save and send" crops it,
  * keeps it with the order and emails it to the customer to approve (lib/sewouts.ts).
+ *
+ * On a computer the button shows a QR code first (Oct 29, Nick: "a QR code that pops up so… on their phone, they can
+ * just add it in like a photo"): the phone opens /snap/<id>, which is this same component with `snapId`, takes and crops
+ * the photo there, and the computer's pop-up closes when it arrives. "Use a photo on this computer" still works.
  */
 type Box = { x: number; y: number; w: number; h: number }; // 0..1 of the (turned) photo
 const MAX_OUT = 1800;
@@ -45,7 +50,13 @@ function loadImage(f: File): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const u = URL.createObjectURL(f); const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("That photo couldn't be opened.")); im.src = u; });
 }
 
-export default function SewoutCapture({ orderId, imprintId, label, onDone }: { orderId: string; imprintId: string; label?: string; onDone: (msg: string) => void }) {
+export default function SewoutCapture({ orderId, imprintId, label, onDone, snapId, where }: {
+  orderId: string; imprintId: string; label?: string; onDone: (msg: string) => void;
+  /** on the phone, from the computer's QR code: uploads with that link instead of a sign-in */
+  snapId?: string;
+  /** the order and print, for the computer's QR pop-up ("#40200 · Logotology · Left chest") */
+  where?: string;
+}) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [turn, setTurn] = useState(0); // quarter turns
   const [box, setBox] = useState<Box>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
@@ -54,6 +65,29 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
   const cv = useRef<HTMLCanvasElement | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const drag = useRef<{ mode: string; sx: number; sy: number; b: Box } | null>(null);
+  // a computer (a mouse, not a touch screen) gets the QR pop-up first; a phone or tablet goes straight to the camera
+  const [computer, setComputer] = useState(false);
+  useEffect(() => { setComputer(!snapId && !window.matchMedia("(pointer: coarse)").matches); }, [snapId]);
+  const [ask, setAsk] = useState<{ id: string | null; done: string; error: string } | null>(null);
+  const pick = (f: File) => void loadImage(f).then((im) => { setAsk(null); setTurn(0); setImg(im); }).catch((x) => setErr(x.message));
+  async function openAsk() {
+    setErr(""); setAsk({ id: null, done: "", error: "" });
+    const r = await sewoutPhoneLink(orderId, imprintId);
+    setAsk((a) => (a ? (r.ok ? { ...a, id: r.id } : { ...a, error: r.error }) : a));
+  }
+  // waiting for the phone: ask every few seconds until the photo is in
+  const askId = ask?.id, askDone = !!ask?.done;
+  useEffect(() => {
+    if (!askId || askDone) return;
+    let live = true;
+    const t = setInterval(async () => {
+      const r = await phoneSnapState(askId);
+      if (!live || !r.ok) return;
+      if (r.done) { setAsk((a) => (a ? { ...a, done: r.msg || "The photo came in from the phone." } : a)); onDone(r.msg || "The sew-out came in from the phone."); }
+      else if (r.expired) setAsk((a) => (a ? { ...a, error: "The code ran out (30 minutes). Close this and click the button again for a new one." } : a));
+    }, 3000);
+    return () => { live = false; clearInterval(t); };
+  }, [askId, askDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the photo, turned, on a canvas
   const turned = () => {
@@ -107,7 +141,22 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
       const r = document.createElement("canvas"); r.width = Math.round(c.width * kr); r.height = Math.round(c.height * kr);
       r.getContext("2d")!.drawImage(c, 0, 0, r.width, r.height);
       const blob = (x: HTMLCanvasElement) => new Promise<Blob>((res, rej) => x.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't save the photo."))), "image/jpeg", 0.9));
-      const sb = createClient(), ts = Date.now();
+      const sb = createClient();
+      if (snapId) {
+        // on the phone: upload with the link's pass, then save it the same way (app/api/snap)
+        const post = async (body: object) => { const x = await fetch("/api/snap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: snapId, ...body }) }); return (await x.json()) as { ok: boolean; error?: string; photo?: { path: string; token: string }; raw?: { path: string; token: string }; msg?: string }; };
+        const u = await post({ step: "urls" });
+        if (!u.ok || !u.photo || !u.raw) throw new Error(u.error || "Couldn't get the photo ready to upload.");
+        const a = await sb.storage.from("proofs").uploadToSignedUrl(u.photo.path, u.photo.token, await blob(o), { contentType: "image/jpeg" });
+        if (a.error) throw new Error(a.error.message);
+        await sb.storage.from("proofs").uploadToSignedUrl(u.raw.path, u.raw.token, await blob(r), { contentType: "image/jpeg" });
+        const done = await post({ step: "save", photo: u.photo.path, raw: u.raw.path, note });
+        if (!done.ok) throw new Error(done.error || "Couldn't send it.");
+        onDone(done.msg || "Sent.");
+        setImg(null); setNote(""); setTurn(0); setBusy(false);
+        return;
+      }
+      const ts = Date.now();
       const photo = `sewouts/${orderId}/${ts}.jpg`, raw = `sewouts/${orderId}/${ts}-whole.jpg`;
       const up1 = await sb.storage.from("proofs").upload(photo, await blob(o), { contentType: "image/jpeg" });
       if (up1.error) throw new Error(up1.error.message);
@@ -122,10 +171,18 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone }: { o
 
   return (
     <>
-      <label className="btn sm primary" style={{ cursor: "pointer" }}>
-        {label || "Take the sew-out photo"}
-        <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void loadImage(f).then((im) => { setTurn(0); setImg(im); }).catch((x) => setErr(x.message)); }} />
-      </label>
+      {computer
+        ? <button type="button" className="btn sm primary" onClick={() => void openAsk()}>{label || "Take the sew-out photo"}</button>
+        : <label className={snapId ? "btn primary snap-big" : "btn sm primary"} style={{ cursor: "pointer" }}>
+          {label || "Take the sew-out photo"}
+          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pick(f); }} />
+        </label>}
+      {snapId && <label className="btn snap-big" style={{ cursor: "pointer" }}>
+        Pick from my photos
+        <input type="file" hidden accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pick(f); }} />
+      </label>}
+      {ask && !img && <PhoneSnapAsk title="Take the sew-out photo" sub={where || ""} path={ask.id ? `/snap/${ask.id}` : null} done={!!ask.done} error={ask.error}
+        status={ask.done || "Waiting for the phone… keep this open."} onFile={pick} onClose={() => setAsk(null)} />}
       {err && !img && <div className="pv-err">{err}</div>}
       {img && (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sw-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) setImg(null); }}>

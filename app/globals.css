@@ -15676,3 +15676,22 @@ main.main .sep-sr-m .sep-shirt-sw{width:36px;height:36px}
 main.main .sep-sr-m .sep-szf{height:36px;padding:0 9px}
 html body main.main .sep-sr-m .sep-szf input{height:32px!important;font-size:14px!important}
 main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
+/* the "take it with your phone" pop-up (components/PhoneSnapAsk.tsx) and the phone page it opens (app/snap/[id]) */
+.dla.psn{width:min(460px,100%)}
+.psn-row{display:flex;gap:16px;align-items:center;margin:12px 0}
+.psn-qr{width:156px;height:156px;flex:none;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;display:grid;place-items:center;box-sizing:border-box}
+.psn-qr span,.psn-qr svg{display:block;width:100%;height:100%}
+.psn-qr .faint{height:auto;width:auto;font-size:12px}
+.psn-how{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--ink)}
+.psn-how span{font-size:12.5px;color:var(--ink-3)}
+.psn-st{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border-radius:6px;background:var(--surface-2);color:var(--ink-3)}
+.psn-st.ok{background:var(--ok-soft);color:var(--ok)}
+.psn-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:psn-blink 1.2s infinite;flex:none}
+@keyframes psn-blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.psn-dot{animation:none}}
+.psn-acts{justify-content:space-between;flex-wrap:wrap}
+@media (max-width:480px){.psn-row{flex-direction:column;align-items:flex-start}}
+.snap-page{max-width:520px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:6px;font-family:var(--body);color:var(--ink)}
+.snap-page h1{font-family:var(--display);font-size:22px;margin:0}
+.snap-acts{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.snap-big{justify-content:center;min-height:48px;font-size:16px}

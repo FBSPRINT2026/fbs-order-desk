@@ -280,7 +280,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   <div><div className="imp-l">Sew file</div><b className="dgz-code">{it.d ? tajimaName(it.d.number, Number(((f as EmbFile & { code?: string }).code || "E1").slice(1)) || 1) : f.name}{it.im.location ? ` · ${it.im.location}` : ""}</b><div className="sub">{f.name}</div></div>
                   <span className="spacer" />
                   {canEdit && it.d && <button type="button" className="btn" onClick={() => setChg(chg === null ? draftChanges() : null)}>Send back to {DIGITIZER.name.split(" ")[0]} for changes</button>}
-                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} />}
+                  {canEdit && st !== "ok" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} label={sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={[`#${it.o.number}`, it.o.customers?.company || it.o.customers?.name || "", `${it.im.location}${it.im.size ? `, ${it.im.size}` : ""}`].filter(Boolean).join(" · ")} />}
                 </div>
                 <div className="dgz-facts">
                   <div><span className="imp-l">Size</span><b>{f.wIn}&quot; × {f.hIn}&quot;</b>{it.im.size && <small>asked {it.im.size}</small>}</div>
