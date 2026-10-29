@@ -400,11 +400,14 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
     const admin = createAdminClient();
     const srcs: Record<string, Src[]> = {}, sm: Record<string, SanMarRef> = {}, notes: string[] = [];
     for (const r of rows) srcs[r.key] = [];
-    // S&S
-    if (ssConfigured()) {
-      const st = await ssStock(rows.map((r) => r.sku)).catch((e) => { notes.push("S&S stock: " + (e instanceof Error ? e.message : String(e))); return new Map(); });
+    // S&S, SanMar and the money settings all at once (Oct 29, Nick: the screen "sits there for quite a while")
+    const ssJob = (async () => {
+      const skus = rows.map((r) => r.sku).filter(Boolean);
+      if (!ssConfigured() || !skus.length) return;
+      const st = await ssStock(skus).catch((e) => { notes.push("S&S stock: " + (e instanceof Error ? e.message : String(e))); return new Map(); });
       for (const r of rows) for (const w of (st.get(r.sku) || []) as { warehouseAbbr: string; qty: number }[]) if (r.price > 0) srcs[r.key].push({ sup: "ss", wh: w.warehouseAbbr, stock: w.qty, price: r.price });
-    }
+    })();
+    const moneyJob = goodsMoney(admin);
     // SanMar: the same garment, color and size there
     if (sanmarConfigured()) {
       const styles = [...new Set(rows.map((r) => `${r.brand}|${r.style}`))];
@@ -429,7 +432,9 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
         }
       }));
     }
-    const money = await goodsMoney(admin);
+    const [money] = await Promise.all([moneyJob, ssJob]);
+    // S&S first in each list, as before
+    for (const k of Object.keys(srcs)) srcs[k].sort((a, b) => (a.sup === b.sup ? 0 : a.sup === "ss" ? -1 : 1));
     return { ok: true as const, srcs, sm, notes: [...new Set(notes)], fee: money.fee, money, sanmar: sanmarConfigured(), sanmarOrders: sanmarPOMode() };
   } catch (e) { return fail(e); }
 }

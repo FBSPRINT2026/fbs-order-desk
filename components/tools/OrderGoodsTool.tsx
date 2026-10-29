@@ -137,9 +137,8 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
           if ("needBy" in r) { setNeedBy((r.needBy as string | null) || null); setProdDay(((r as { production?: string | null }).production) || null); }
           if ("label" in r && r.label) setLabel0(String(r.label));
           setPo((x) => x || String(("po" in r && r.po) || defaultGoodsPo({ customer: c?.name })));
-          step("Checking stock and price with S&S and SanMar…");
+          step("Checking stock and warehouses at S&S and SanMar…");
           setRows((r.rows || []) as Row[]);
-          finishSteps();
           return;
         }
         if (!activityId) throw new Error("Nothing to order goods for.");
@@ -172,11 +171,10 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
         }
         if (cc.rows.length) groups = applyColors(groups, cc.rows);
         // 4. the goods, checked with S&S
-        step("Checking stock and price with S&S…");
+        step("Checking stock and warehouses at S&S and SanMar…");
         const r = await goodsFromGroups(groups);
         if (!r.ok) throw new Error(r.error);
         setRows(r.rows);
-        finishSteps();
       } catch (e) {
         if (stopped.current) return;
         setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state: "error" as const } : x)));
@@ -202,9 +200,12 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   useEffect(() => {
     if (!wanted.length) { setOpts(null); return; }
     let live = true;
-    const t = setTimeout(() => { void goodsOptions(wanted.map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price }))).then((r) => { if (live && r.ok) setOpts(r); else if (live && !r.ok) setErr(r.error); }); }, 300);
+    const t = setTimeout(() => { void goodsOptions(wanted.map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price }))).then((r) => { if (live && r.ok) setOpts(r); else if (live && !r.ok) { setErr(r.error); setSteps((ss) => ss.map((x) => (x.state === "doing" ? { ...x, state: "error" as const } : x))); } }); }, 300);
     return () => { live = false; clearTimeout(t); };
   }, [optKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the "Checking stock" step keeps spinning until both suppliers' stock and warehouses are in (Oct 29, Nick: "this
+  // screen sits there for quite a while… some sort of… hey, this is what I'm doing… a spinning symbol")
+  useEffect(() => { if (rows && (opts || !wanted.length)) finishSteps(); }, [rows, opts, wanted.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const optKey2 = wanted.map((x) => `${x.key}:${x.qty}`).join(",") + "|" + ssOnly + "|" + (opts ? opts.fee + ":" + opts.money.bigRun + ":" + Object.keys(opts.srcs).length : "");
   const options = useMemo(() => {
     if (!opts) return null;
@@ -390,13 +391,18 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
               return (
                 <section key={k} className="og-g">
                   <div className="og-gh"><b data-notranslate>{[f.brand, f.style].filter(Boolean).join(" ")} · {f.color}</b><span>{xs.reduce((a, x) => a + x.qty, 0)}{exN ? ` + ${exN}` : ""}</span></div>
-                  <div className="og-sz">{xs.map((x) => (
-                    <label key={x.key} className={!x.found ? "bad" : x.stock < x.qty ? "low" : ""} title={x.note || (x.found ? `${x.stock} in stock at S&S` : "")}>
+                  <div className="og-sz">{xs.map((x) => {
+                    // stock at S&S and SanMar together (Oct 29, Nick: a SanMar-only style read "isn't carried at S&S" while SanMar was still being checked)
+                    const src = opts?.srcs[x.key] || [], at = (sup: Sup) => src.filter((y) => y.sup === sup).reduce((n, y) => n + y.stock, 0);
+                    const have = at("ss") + at("sm"), tip = opts ? [`S&S: ${x.found ? at("ss") : x.note || "not carried"}`, opts.sanmar ? `SanMar: ${opts.sm[x.key] ? at("sm") : "not carried"}` : ""].filter(Boolean).join(" · ") : "Checking S&S and SanMar…";
+                    const cls = !opts ? "" : !have ? "bad" : have < x.qty ? "low" : "", say = !opts ? "checking…" : !have ? (x.found || opts.sm[x.key] ? "out of stock" : "not carried") : have < x.qty ? `${have} left` : "in stock";
+                    return (
+                    <label key={x.key} className={cls} title={tip}>
                       <span>{x.size}</span>
                       <input type="number" min={0} inputMode="numeric" value={x.qty} readOnly={!!orderId} title={orderId ? "From the order: add extras below" : undefined} aria-label={`${f.style} ${f.color} ${x.size}`} onChange={(e) => { if (orderId) return; const v = Math.max(0, Math.round(+e.target.value || 0)); setRows((rs) => (rs || []).map((y) => (y.key === x.key ? { ...y, qty: v } : y))); setCheck(null); }} />
-                      <small>{!x.found ? (x.note || "not at S&S") : x.stock < x.qty ? `${x.stock} left` : "in stock"}</small>
-                    </label>
-                  ))}</div>
+                      <small>{say}</small>
+                    </label>);
+                  })}</div>
                   {orderId && editing && <div className="og-x">
                     <div className="og-xh">Extra, not on the order{exN ? `: ${exN}` : ""}</div>
                     <div className="og-sz">{xs.map((x) => (
@@ -418,7 +424,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             })}
             </>}
             {skipped.length > 0 && <p className="faint og-note">Left for now (no blank picked): {skipped.join(", ")}.</p>}
-            <div className="og-tot"><span>{xPcs ? `${(pcs - xPcs).toLocaleString()} for the order + ${xPcs} extra` : `${pcs.toLocaleString()} pcs`}{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
+            <div className="og-tot"><span>{xPcs ? `${(pcs - xPcs).toLocaleString()} for the order + ${xPcs} extra` : `${pcs.toLocaleString()} pcs`}{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{plan ? money(total) : "…"}</b></div>
             {owner && plan && opts && plan.parts.length > 0 && <>
               <button type="button" className={"og-pts" + (smParts.length ? "" : " none")} aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
                 <svg viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="9" r="6" /><path d="M15.5 9.5a6 6 0 1 1-6 6" /></svg>{(() => {
