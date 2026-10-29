@@ -20,7 +20,7 @@ import { startTracker } from "@/lib/goodsTrack";
 const LIVE = "https://api.onestopinc.com/";
 const TEST = "https://api-test.onestopinc.com/";
 /** the token as pasted: just the code, even if "Token …", quotes or spaces came along with it */
-const osToken = () => String(process.env.ONESTOP_API_TOKEN || "").trim().replace(/^["']|["']$/g, "").replace(/^(authorization:\s*)?token\s+/i, "").replace(/\s+/g, "");
+const osToken = () => String(process.env.ONESTOP_API_TOKEN || "").trim().replace(/^["']|["']$/g, "").replace(/^(authorization:\s*)?token\s+/i, "").replace(/[^0-9a-z]/gi, ""); // their tokens are 40 letters and digits: anything else (a period, a hidden character) came along with the copy
 export const osConfigured = () => !!osToken();
 export const osOrdersLive = () => process.env.ONESTOP_ORDERS?.trim().toLowerCase() === "on";
 
