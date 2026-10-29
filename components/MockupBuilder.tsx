@@ -1107,9 +1107,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     void garmentPhotoUrls(want, customerId || undefined).then((m) => setOwnUrls((u) => ({ ...u, ...m })));
   }, [lines, customerId]);
 
-  // a style on the order that isn't in the catalog yet (so no photos): pull it from S&S / SanMar once
+  // a style on the order that isn't in the catalog yet (so no photos): pull it from S&S / SanMar once. Never for a logo
+  // mockup (Oct 29, Nick: "when I say add logo, that's not for a garment… it doesn't try to bring in any images. It's
+  // just a blank square"): the logo on a plain square of the color picked
   useEffect(() => {
-    if (!catalog.length && !orderId) return;
+    if (logoOnly || (!catalog.length && !orderId)) return;
     lines.forEach((l) => {
       const st = bareStyle(l.style, l.brand).style;
       if (l.own || !st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
@@ -1122,6 +1124,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   // styles pulled from S&S before photos were saved: refresh them once to get the color photos
   useEffect(() => {
+    if (logoOnly) return;
     lines.forEach((l) => {
       const g = garmentFor(l);
       if (!g?.ss_style_id || refreshed.current.has(g.ss_style_id)) return;
@@ -1140,7 +1143,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [garDrawing, setGarDrawing] = useState("");
   const garDrawn = useRef(new Set<string>());
   useEffect(() => {
-    if (portal || !orderId || lookingUp || garDrawing || !custMocks.length) return;
+    if (logoOnly || portal || !orderId || lookingUp || garDrawing || !custMocks.length) return;
     const key = (l: Line) => bareStyle(l.style, l.brand).style.toUpperCase();
     const l = lines.find((x) => x.look?.kind && !x.look.draw && !x.own && x.style.trim() && !garmentFor(x) && tried.current.has(key(x)) && !garDrawn.current.has(key(x)));
     if (!l) return;
