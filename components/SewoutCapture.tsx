@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { phoneSnapState, sendSewoutPhoto, sewoutPhoneLink } from "@/app/shop/sewout-actions";
 import PhoneSnapAsk from "@/components/PhoneSnapAsk";
+import PhotoButtons from "@/components/PhotoButtons";
 import SewnPanel, { startSewn, type SewCtx, type SewnValue } from "@/components/SewnPanel";
 
 /**
@@ -196,14 +197,8 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
     <>
       {computer
         ? <button type="button" className="btn sm primary" onClick={() => void openAsk()}>{label || "Take the sew-out photo"}</button>
-        : <label className={snapId ? "btn primary snap-big" : "btn sm primary"} style={{ cursor: "pointer" }}>
-          {label || "Take the sew-out photo"}
-          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pick(f); }} />
-        </label>}
-      {snapId && <label className="btn snap-big" style={{ cursor: "pointer" }}>
-        Pick from my photos
-        <input type="file" hidden accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pick(f); }} />
-      </label>}
+        : <PhotoButtons onFiles={(fs) => pick(fs[0])} take={label || "Take the sew-out photo"} choose="Pick from my photos"
+          className={snapId ? "btn primary snap-big" : "btn sm primary"} chooseClass={snapId ? "btn snap-big" : "btn sm"} />}
       {ask && !img && <PhoneSnapAsk title="Take the sew-out photo" sub={where || ""} path={ask.id ? `/snap/${ask.id}` : null} done={!!ask.done} error={ask.error}
         status={ask.done || "Waiting for the phone… keep this open."} onFile={pick} onClose={() => setAsk(null)} />}
       {err && !img && <div className="pv-err">{err}</div>}
@@ -232,9 +227,7 @@ export default function SewoutCapture({ orderId, imprintId, label, onDone, snapI
                     <span className="imp-l">Placement photo (optional)</span>
                     <span className="faint" style={{ fontSize: 12 }}>A wider shot showing where it sits on the garment. It goes on the proof next to the close-up.</span>
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <label className="btn sm" style={{ cursor: "pointer" }}>{place ? "Change it" : "Add a placement photo"}
-                        <input type="file" hidden accept="image/*" {...(computer ? {} : { capture: "environment" as const })} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickPlace(f); }} />
-                      </label>
+                      <PhotoButtons onFiles={(fs) => pickPlace(fs[0])} take={place ? "Take another" : "Take a placement photo"} choose={place ? "Choose another" : "Choose a photo"} />
                       {place && <button type="button" className="btn sm ghost" onClick={() => { URL.revokeObjectURL(place.url); setPlace(null); }}>Remove</button>}
                     </div>
                   </div>

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useT } from "@/components/job/lang";
+import PhotoButtons from "@/components/PhotoButtons";
 import { garmentHex } from "@/lib/mockup";
 import GarmentShape, { garmentKind } from "@/components/GarmentShape";
 import { garmentLooks, type GarmentLook } from "@/app/shop/receiving/garment-actions";
@@ -39,7 +40,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
     .map((c) => { const v = n(c.k) ?? 0, x = extra[c.k]; return { ...c, v, issue: (x?.issue || (v < c.expected ? "short" : "over")) as Issue, bad: x?.bad || 0, note: x?.note || "" }; });
   const setX = (k: string, p: Partial<Extra>, def: Issue) => setExtra((e) => ({ ...e, [k]: { issue: e[k]?.issue || def, bad: e[k]?.bad || 0, note: e[k]?.note || "", ...p } }));
 
-  async function addPhotos(fs: FileList | null) {
+  async function addPhotos(fs: File[] | null) {
     if (!fs?.length) return;
     setBusy(t("Uploading photos…")); setErr("");
     for (const f of [...fs].slice(0, 8)) {
@@ -183,7 +184,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
 
           <div className="ck-foot-f">
             <label className="ck-note">{t("Note")}<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Anything about this delivery (boxes crushed, came on the S&S truck…)")} /></label>
-            <label className="btn ck-photo">{t("📷 Add photos")}<input type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} /></label>
+            <PhotoButtons multiple className="btn ck-photo" take={t("📷 Take photos")} choose={t("Add photos")} onFiles={(fs) => void addPhotos(fs)} />
             {photos.length > 0 && <span className="faint">{photos.length === 1 ? t("1 photo added") : t("{0} photos added", photos.length)}</span>}
           </div>
         </div>

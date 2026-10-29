@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
 import { shrinkPhoto } from "./JobFiles";
 import { useT } from "./lang";
+import PhotoButtons from "@/components/PhotoButtons";
 
 /**
  * Counting a job's goods in on a phone: one size at a time, smallest first (each style / color in turn), on a big
@@ -25,7 +26,6 @@ export default function PhoneCheckin({ job, onDone }: { job: CheckJob; onDone: (
   const [boxes, setBoxes] = useState<number | "">(job.boxes || ""), [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  const cam = useRef<HTMLInputElement>(null);
 
   const c = cells[i];
   const counted = Object.keys(got).length, pcs = cells.reduce((s, x) => s + (got[x.k] ?? 0), 0), expected = cells.reduce((s, x) => s + x.expected, 0);
@@ -89,8 +89,8 @@ export default function PhoneCheckin({ job, onDone }: { job: CheckJob; onDone: (
           <button type="button" aria-label={t("One more box")} onClick={() => setBoxes((+boxes || 0) + 1)}>+</button>
         </div>
         <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Anything about this delivery (boxes crushed, came on the S&S truck…)")} />
-        <button type="button" className="jm-ghost" onClick={() => cam.current?.click()}>{photos.length ? (photos.length === 1 ? t("1 photo added") : t("{0} photos added", photos.length)) + " · " + t("Add more") : t("📷 Add photos")}</button>
-        <input ref={cam} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...fs].slice(0, 8)); }} />
+        {photos.length > 0 && <div className="jm-faint">{photos.length === 1 ? t("1 photo added") : t("{0} photos added", photos.length)}</div>}
+        <div className="row" style={{ gap: 8 }}><PhotoButtons multiple className="jm-ghost" take={t("📷 Take photos")} choose={t("Choose photos")} onFiles={(fs) => setPhotos((p) => [...p, ...fs].slice(0, 8))} /></div>
         {err && <div className="jm-err">{err}</div>}
         <button type="button" className={"jm-go" + (problems.length ? " warn" : "")} disabled={busy} onClick={save}>{busy ? t("Saving…") : problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In")}</button>
       </div>
