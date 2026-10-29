@@ -36,7 +36,6 @@ import { isReorder } from "@/components/ReorderPanel";
 import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
 import CustomerArtwork from "@/components/CustomerArtwork";
 import { labelFileName } from "@/lib/printavoNames";
-import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
@@ -1712,7 +1711,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
               right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
           {/* Goods, right under Totals (Oct 29, Nick): who ordered them, from where, the PO, arrival, tracking */}
-          {o.status !== "request" && <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale"} />}
+          {o.status !== "request" && <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale" && o.type === "invoice"} customerId={o.customer_id} />}
           {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
           {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (
@@ -1739,12 +1738,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onTbd={(on) => patch((d) => { const i = d.fees.findIndex(isShipFee); if (i >= 0) { if (on) d.fees[i].tbd = true; else delete d.fees[i].tbd; } else if (on) d.fees.push({ label: "Shipping · to be decided", amount: 0, ship: true, tbd: true }); })}
               onClear={() => patch((d) => { d.fees = d.fees.filter((f) => !isShipFee(f)); d.ship_method = ""; })} />
           )}
-          {o.price_type === "wholesale" && o.type === "invoice" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Customer supplied goods</h2></div>
-              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
-            </section>
-          )}
+          {/* Customer supplied goods: now inside the Goods panel above (Oct 29, Nick: "merge those together") */}
           {/* Printavo: at the very bottom (Oct 21, Nick: "the Printavo sync will go away shortly… move it to the very bottom") */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
             <div className="panel-h"><h2>Printavo</h2></div>

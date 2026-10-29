@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { GOODS, TRACK, trackingUrl } from "@/lib/goods";
+import { TRACK, trackingUrl } from "@/lib/goods";
 import { money } from "@/lib/format";
-import { addGoodsInfo, goodsPanel, readGoodsPaste, type GoodsAdd, type GoodsPanel, type PanelTrack } from "@/app/shop/goods-panel-actions";
+import ShopGoods from "@/components/ShopGoods";
+import { addGoodsInfo, goodsPanel, readGoodsPaste, setBuyReceived, type GoodsAdd, type GoodsPanel, type PanelTrack } from "@/app/shop/goods-panel-actions";
 
 /**
  * The order's Goods panel, under Totals (Oct 29, Nick): "N/A" and "No current information" until something is known;
@@ -21,7 +22,7 @@ function Track({ t }: { t: PanelTrack }) {
   );
 }
 
-export default function OrderGoodsPanel({ orderId, wholesale }: { orderId: string; wholesale: boolean }) {
+export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { orderId: string; wholesale: boolean; customerId: string | null }) {
   const [p, setP] = useState<GoodsPanel | null>(null), [err, setErr] = useState("");
   const [add, setAdd] = useState<GoodsAdd | null>(null), [paste, setPaste] = useState(""), [busy, setBusy] = useState("");
   const load = useCallback(() => { void goodsPanel(orderId).then((r) => (r.ok ? (setP(r.panel), setErr("")) : setErr(r.error))); }, [orderId]);
@@ -33,9 +34,11 @@ export default function OrderGoodsPanel({ orderId, wholesale }: { orderId: strin
     return () => window.removeEventListener("fbs:order-changed", on);
   }, [load]);
 
-  const fbs = p?.fbs || [], cust = p?.cust || null;
-  const head = fbs.length && cust ? "Customer supplied + FBS" : fbs.length ? "FBS ordered" : cust ? "Customer supplied" : "N/A";
-  const open = () => { setAdd(blank(wholesale ? "cust" : "fbs")); setPaste(""); setErr(""); };
+  const fbs = p?.fbs || [];
+  // the customer's goods: wholesale orders, or any order where they've told us something (the old panel's card, as is)
+  const showCust = wholesale || !!p?.cust;
+  const head = fbs.length && showCust ? "Customer + FBS" : fbs.length ? "FBS ordered" : showCust ? "Customer supplied" : "N/A";
+  const open = (who?: "fbs" | "cust", buyId?: string) => { setAdd({ ...blank(who || (wholesale ? "cust" : "fbs")), ...(buyId ? { buyId } : {}) }); setPaste(""); setErr(""); };
   async function read() {
     setBusy("read"); setErr("");
     const r = await readGoodsPaste(orderId, paste);
@@ -43,6 +46,13 @@ export default function OrderGoodsPanel({ orderId, wholesale }: { orderId: strin
     if (!r.ok) return setErr(r.error);
     // what the reader found fills the form; anything it didn't find keeps what was typed
     setAdd((a) => ({ ...(a || blank(r.add.who)), ...Object.fromEntries(Object.entries(r.add).filter(([, v]) => v)) } as GoodsAdd));
+  }
+  async function received(buyId: string, yes: boolean) {
+    setBusy("recv"); setErr("");
+    const r = await setBuyReceived(orderId, buyId, yes);
+    setBusy("");
+    if (!r.ok) return setErr(r.error);
+    load();
   }
   async function save() {
     if (!add) return;
@@ -52,32 +62,42 @@ export default function OrderGoodsPanel({ orderId, wholesale }: { orderId: strin
     if (!r.ok) return setErr(r.error);
     setAdd(null); setPaste(""); load();
   }
-  const fbsState = (b: GoodsPanel["fbs"][number]) => b.status === "received" ? "Received" : b.tracking.some((t) => t.delivered) ? "Delivered" : b.tracking.some((t) => t.status === "in_transit" || t.status === "out_for_delivery") ? "In transit" : b.tracking.length ? "Shipped" : "Ordered";
+  // our purchase's steps, the same four-step look as the customer's goods
+  const stepOf = (b: GoodsPanel["fbs"][number]) => (b.status === "received" ? 3 : b.tracking.length && b.tracking.every((t) => t.delivered || t.status === "delivered") ? 2 : b.tracking.length ? 1 : 0);
+  const FBS_STEPS = ["Ordered", "Shipped", "Delivered", "Received"];
 
   return (
     <section className="panel ogp" aria-label="Goods">
       <div className="panel-h"><h2>Goods</h2><span className="faint">{head === "N/A" ? head : <b className="osp-now">{head}</b>}</span></div>
       <div className="panel-b">
         {!p && !err && <div className="faint">Loading…</div>}
-        {p && !fbs.length && !cust && !add && <div className="ogp-foot"><span className="faint">No current information</span><button type="button" className="btn sm" onClick={open}>Add</button></div>}
-        {cust && <div className="ogp-sec">
+        {p && !fbs.length && !showCust && !add && <div className="ogp-foot"><span className="faint">No current information</span><button type="button" className="btn sm" onClick={() => open()}>Add</button></div>}
+        {showCust && <div className="ogp-sec">
           {fbs.length > 0 && <div className="ogp-lbl">Customer supplied</div>}
-          <div className="ogp-r"><span data-notranslate>{[cust.vendor ? `From ${cust.vendor}` : "Their goods", cust.po && `PO ${cust.po}`].filter(Boolean).join(" · ")}</span>{cust.expected && <span className="faint">ETA {/^\d{4}-/.test(cust.expected) ? day(cust.expected) : cust.expected}</span>}</div>
-          {cust.tracking.map((t) => <Track key={t.tracking} t={t} />)}
-          {!cust.tracking.length && <div className="ogp-r"><span className="faint">Tracking</span><span className="faint">not yet</span></div>}
-          <div className="ogp-r"><span className="faint">Status</span><b>{GOODS[cust.status as keyof typeof GOODS]?.label || cust.status}</b></div>
+          <ShopGoods orderIds={[orderId]} customerId={customerId} compact onCount={() => load()} />
         </div>}
-        {fbs.map((b) => (
-          <div className="ogp-sec" key={b.id}>
-            {cust && <div className="ogp-lbl">FBS ordered</div>}
-            <div className="ogp-r"><span data-notranslate>{[b.vendor, b.po && `PO ${b.po}`].filter(Boolean).join(" · ")}</span>{b.expected && <span className="faint">Arr. {day(b.expected)}</span>}</div>
-            {(b.pcs > 0 || b.total) && <div className="ogp-r"><span className="faint">{[b.pcs ? `${b.pcs} pcs` : "", `ordered ${day(b.at)}`].filter(Boolean).join(" · ")}</span>{b.total ? <span className="faint">{money(b.total)}</span> : null}</div>}
-            {b.tracking.map((t) => <Track key={t.tracking} t={t} />)}
-            {!b.tracking.length && <div className="ogp-r"><span className="faint">Tracking</span><span className="faint">not yet</span></div>}
-            <div className="ogp-r"><span className="faint">Status</span><b>{fbsState(b)}</b></div>
-          </div>
-        ))}
-        {(fbs.length > 0 || cust) && !add && <div className="ogp-foot"><span /><button type="button" className="btn sm" onClick={open}>Add</button></div>}
+        {fbs.map((b) => {
+          const at = stepOf(b), c = at === 3 ? "var(--ok)" : "var(--accent)";
+          return (
+            <div className="ogp-sec" key={b.id}>
+              {showCust && <div className="ogp-lbl">FBS ordered</div>}
+              <article className="gc" style={{ ["--gc" as string]: c }}>
+                <header className="gc-h"><span className="gc-st">{FBS_STEPS[at]}</span></header>
+                <ol className="gc-steps" aria-label="Goods progress">{FBS_STEPS.map((l, i) => <li key={l} className={i < at ? "done" : i === at ? "now" : ""}><span />{l}</li>)}</ol>
+                <div className="gc-from" data-notranslate>Ordered from <b>{b.vendor}</b>{b.po ? ` · PO ${b.po}` : ""}</div>
+                <div className="ogp-r"><span className="faint">{[b.pcs ? `${b.pcs} pcs` : "", `ordered ${day(b.at)}`, b.expected && at < 2 ? `arrives ${day(b.expected)}` : ""].filter(Boolean).join(" · ")}</span>{b.total ? <span className="faint">{money(b.total)}</span> : null}</div>
+                {b.tracking.map((t) => <Track key={t.tracking} t={t} />)}
+                {!b.tracking.length && at < 3 && <div className="ogp-r"><span className="faint">Tracking</span><span className="faint">{/sanmar|s&s/i.test(b.vendor) ? "comes with the supplier's manifest" : "not yet"}</span></div>}
+                <div className="gc-acts">
+                  <button type="button" className="btn sm" disabled={!!busy} onClick={() => void received(b.id, at !== 3)}>{at === 3 ? "Not received" : "Mark received"}</button>
+                  <button type="button" className="btn sm" onClick={() => open("fbs", b.id)}>+ Add tracking</button>
+                  <button type="button" className="btn sm" onClick={() => open("fbs")}>+ Add another order</button>
+                </div>
+              </article>
+            </div>
+          );
+        })}
+        {(fbs.length > 0 || showCust) && !add && <div className="ogp-foot"><span className="faint">{fbs.length ? "" : "We ordered some too? "}</span><button type="button" className="btn sm" onClick={() => open(fbs.length ? undefined : "fbs")}>Add</button></div>}
         {add && <div className="ogp-add">
           <div className="chips" role="radiogroup" aria-label="Who ordered the goods">
             <button type="button" className={"chip" + (add.who === "fbs" ? " on" : "")} role="radio" aria-checked={add.who === "fbs"} onClick={() => setAdd({ ...add, who: "fbs" })}>FBS ordered</button>

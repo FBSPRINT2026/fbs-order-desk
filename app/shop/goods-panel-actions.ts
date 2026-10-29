@@ -149,3 +149,15 @@ export async function readGoodsPaste(orderId: string, text: string): Promise<{ o
     return { ok: true, add: { who: d.who === "fbs" || d.who === "cust" ? d.who : o?.price_type === "wholesale" ? "cust" : "fbs", vendor: d.vendor || "", po: d.po || "", eta: /^\d{4}-\d{2}-\d{2}$/.test(d.eta || "") ? d.eta : "", carrier: d.carrier || "", tracking: String(d.tracking || "").replace(/\s+/g, "") } };
   } catch (e) { return fail(e); }
 }
+
+/** our goods order is here (or isn't after all): Receiving's check-in does this too */
+export async function setBuyReceived(orderId: string, buyId: string, yes: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await staff();
+    const admin = createAdminClient();
+    const { error } = await admin.from("blank_orders").update({ received_at: yes ? new Date().toISOString() : null }).eq("id", buyId).eq("order_id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: yes ? "Goods we ordered marked received" : "Goods we ordered marked not received", actor: v.email });
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
