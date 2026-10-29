@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { closestThreads, findThreads, threadByName, threadKey, threadLabel, type Thread } from "@/lib/embroidery";
+import { findThreads, threadByName, threadLabel } from "@/lib/embroidery";
 import { sewVersions } from "@/lib/digitizeStatus";
 import { needleThreads } from "@/lib/needleThreads";
 import type { Worksheet } from "@/lib/worksheet";
@@ -46,20 +46,11 @@ export function sewnChanges(ctx: SewCtx, val: SewnValue): string[] {
   return out;
 }
 
-function ThreadPick({ id, value, ordered, stock, onChange }: { id: string; value: string; ordered: string; stock: Set<string>; onChange: (v: string) => void }) {
+/** a thread, typed or picked (Madeira or Isacord), with its color beside it */
+function ThreadPick({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
   const [q, setQ] = useState(value);
-  const base = threadByName(ordered);
-  // the closest threads we carry, from both brands, best first
-  const near = useMemo(() => {
-    if (!base) return [] as (Thread & { dE: number; word: string; stocked: boolean })[];
-    const all = [...closestThreads(base.hex, { line: "Polyneon 40", stock, n: 6 }), ...closestThreads(base.hex, { line: "Isacord 40", stock, n: 6 })]
-      .filter((t) => !(t.line === base.line && t.code === base.code));
-    return all.sort((a, b) => Number(b.stocked) - Number(a.stocked) || a.dE - b.dE).slice(0, 3);
-  }, [base, stock]);
   const list = useMemo(() => (q.trim().length >= 2 ? [...findThreads(q, "Polyneon 40", 12), ...findThreads(q, "Isacord 40", 12)] : []), [q]);
   const cur = threadByName(value);
-  const set = (v: string) => { setQ(v); onChange(v); };
-  const inStock = base ? stock.has(threadKey(base.line, base.code)) : true;
   return (
     <div className="swp">
       <div className="swp-f">
@@ -67,34 +58,25 @@ function ThreadPick({ id, value, ordered, stock, onChange }: { id: string; value
         <input id={id} type="text" list={`${id}-l`} value={q} placeholder="Type a thread number or color" onChange={(e) => { setQ(e.target.value); const t = threadByName(e.target.value); if (t) onChange(threadLabel(t)); }} onBlur={() => { const t = threadByName(q); if (t) setQ(threadLabel(t)); }} />
         <datalist id={`${id}-l`}>{list.map((t) => <option key={t.line + t.code} value={threadLabel(t)} />)}</datalist>
       </div>
-      <div className="swp-was">Ordered: {ordered}{base && stock.size > 0 && !inStock ? " (not on the wall)" : ""}</div>
-      <div className="swp-sug">
-        {near.map((t) => { const l = threadLabel(t); return <button key={l} type="button" className={"swp-chip" + (l === value ? " on" : "")} onClick={() => set(l)}><i className="swp-sw" style={{ background: t.hex }} aria-hidden />{l.replace(/^Madeira /, "")} · {t.word}{t.stocked ? " · in stock" : ""}</button>; })}
-        {value !== ordered && <button type="button" className="swp-chip" onClick={() => set(ordered)}>As ordered</button>}
-      </div>
     </div>
   );
 }
 
-export default function SewnPanel({ ctx, value, onChange }: { ctx: SewCtx; value: SewnValue; onChange: (v: SewnValue) => void }) {
-  const stock = useMemo(() => new Set(ctx.stock), [ctx.stock]);
-  const versions = useMemo(() => sewVersions(ctx.files), [ctx.files]);
-  const changes = sewnChanges(ctx, value);
+/**
+ * Only what was sewn: each needle's thread (Oct 29, Nick: "you're going too far… all we're trying to get from this screen
+ * is… what we did… change the thread of what we did. And then any notes"). The stitch file is the one on the order.
+ */
+export default function SewnPanel({ value, onChange }: { ctx: SewCtx; value: SewnValue; onChange: (v: SewnValue) => void }) {
   return (
     <div className="swn">
       <div className="imp-l">What we sewed</div>
-      {versions.length > 0 && <div className="field"><label htmlFor="swn-file">Stitch file sewn</label>
-        <select id="swn-file" value={value.filePath} onChange={(e) => { const f = versions.find((x) => x.path === e.target.value); onChange({ filePath: e.target.value, threads: rowsFor(f, ctx.inks).map((r) => ({ ...r, sewn: value.threads.find((t) => t.ordered === r.ordered)?.sewn || r.sewn })) }); }}>
-          {[...versions].reverse().map((f) => <option key={f.path} value={f.path}>Version {f.v} · {inch(f.wIn)} × {inch(f.hIn)} · {f.stitches.toLocaleString()} stitches · {day(f.at)}</option>)}
-        </select></div>}
       {value.threads.map((t, i) => (
         <div className="field" key={`${t.needle || ""}-${i}`}>
-          <label htmlFor={`swn-t${i}`}>{t.needle ? `Needle ${t.needle} · ` : ""}Thread sewn</label>
-          <ThreadPick id={`swn-t${i}`} value={t.sewn} ordered={t.ordered} stock={stock} onChange={(v) => onChange({ ...value, threads: value.threads.map((x, j) => (j === i ? { ...x, sewn: v } : x)) })} />
+          <label htmlFor={`swn-t${i}`}>{t.needle ? `Needle ${t.needle}` : value.threads.length > 1 ? `Thread ${i + 1}` : "Thread"}</label>
+          <ThreadPick id={`swn-t${i}`} value={t.sewn} onChange={(v) => onChange({ ...value, threads: value.threads.map((x, j) => (j === i ? { ...x, sewn: v } : x)) })} />
         </div>
       ))}
       {!value.threads.length && <div className="faint" style={{ fontSize: 12.5 }}>No threads on the order for this print yet.</div>}
-      {changes.length > 0 && <div className="swn-chg"><b>Saving changes the order to match what was sewn:</b>{changes.map((c) => <div key={c}>{c}</div>)}</div>}
     </div>
   );
 }
