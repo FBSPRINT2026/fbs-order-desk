@@ -56,13 +56,16 @@
   - a logo's small picture anywhere: `components/LogoThumb.tsx` (never a bare `<img>` of a logo's preview);
     an order print's logo: `PrintThumb` from the same file (its inks on its garment's color);
   - a garment's color anywhere (tiles, swatches, close-ups, printed pages): `lineColor(line)` from `lib/mockup.ts` (the
-    color picked in the Mockup Creator, else its name), passed to `guessHex` / `shirtBg` / LogoThumb (Nick, Oct 29: "the
+    color picked in the Mockup Creator, else the color the mockup drew it in (`shade`, saved with each mockup), else its name), passed to `guessHex` / `shirtBg` / LogoThumb (Nick, Oct 29: "the
     boxes… permanently fix this problem throughout the site");
   - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
     by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`);
   - a group's saved mockup pictures: `lib/mockupFresh.ts` (`mockupHref` for every link into a group's mockup, so a logo
     mockup opens the logo builder; the save stamps `mockupArt`, and the order page redraws stale pictures by itself;
     anything that swaps a group's pictures for others clears `mockupArt`);
+  - the thread on each needle of a stitch file (its picture, chips, sew sequence, work order, sew-out): `needleThreads` /
+    `stopColors` in `lib/needleThreads.ts` (a worksheet that only names colors, "8 Dark Blue", is needle 8 in a color, not
+    a thread or a PMS: the order's thread nearest that color goes on it);
   - where an embroidered print is in digitizing: `digitizeState` / `digitizeStamp` in `lib/digitizeStatus.ts` (the
     Digitizing page's tabs and the order's print stamps).
   When you tell Nick it's fixed, say where else it was fixed.
