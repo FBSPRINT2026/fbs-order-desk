@@ -225,7 +225,7 @@ export default function Digitizing() {
           <div className="dgz-all"><button type="button" className={"chip" + (filter === "all" ? " on" : "")} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All <span className="pill-n">{orders ? count("all") : "…"}</span></button></div>
           {!orders ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{filter === "need" ? "Nothing waiting to be digitized. An embroidered print on an order shows up here until its DST is in." : "Nothing here."}</div> : (
             <div className="tbl-wrap"><table className="tbl dgz">
-              <thead><tr><th>Logo</th><th>Order</th><th>Print</th><th>Stitches</th><th>State</th><th /></tr></thead>
+              <thead><tr><th>Logo</th><th>Order</th><th>Print</th><th>Stitches</th><th>State</th></tr></thead>
               <tbody>{shown.map((it) => {
                 const st = stateOf(it), e = embOf(it.d), f = currentSewFile(it.im, e.files);
                 const ctx: SewCtx = { files: e.files || (f ? [f] : []), current: f?.path, inks: it.im.inks || "", size: it.im.size || "", stitches: it.im.stitches || undefined, stock };
@@ -313,10 +313,9 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
         <td>{it.im.location}<div className="sub">{it.im.size || "size not set"}</div></td>
         <td className="num">{(f?.stitches || it.im.stitches || 0) ? (f?.stitches || it.im.stitches)!.toLocaleString() : "—"}<div className="sub">{f ? "from the DST" : it.im.stitches ? "estimate" : ""}</div></td>
         <td><span className="pill" style={{ ["--sc" as string]: STATE[st][1] }}><span className="pill-t">{STATE[st][0]}</span></span>{noProof && st !== "ok" && <div className="sub dgz-noproof" title="The art was never proofed in the portal: make the proof so the customer approves what's digitized">No proof on the order</div>}{reply && !f && reply.files.length ? <div className="sub" style={{ color: "var(--ok)" }}>Files came in {day(reply.at)}</div> : req && st === "asked" ? <div className="sub">{day(req.at)}{req.via === "email" ? " · emailed" : ""}</div> : st === "sent" && sws[0]?.sent_at ? <div className="sub">{day(sws[0].sent_at)}{sws[0].viewed_at ? " · opened" : ""}</div> : null}</td>
-        <td className="faint">{open ? "▾" : "▸"}</td>
       </tr>
       {open && (
-        <tr className="dgz-more"><td colSpan={6}>
+        <tr className="dgz-more"><td colSpan={5}>
           {/* no step tracker here (Oct 29, Nick: "I don't need the graphical representation of where we're at… we're already in
               the needs sew-out section"): the line at the top says where it is */}
           <div className={"dgz-grid" + (f ? "" : " nofile")}>
@@ -359,10 +358,10 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                           <td><b className="dgz-vn">Version {x.v}</b>{" "}
                             {on ? <span className="pill" style={{ ["--sc" as string]: "var(--ok)" }} title={`The stitch file #${it.o.number} sews`}><span className="pill-t">Sewing this one</span></span>
                               : canEdit && <button type="button" className="lc-link" disabled={busy} onClick={() => { const { v: _v, ...set } = x; void _v; onUse(set as unknown as EmbFile); }}>Sew this one</button>}</td>
-                          <td className="nw">{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()}{x.at ? ` · ${day(x.at)}` : ""}</td>
+                          <td>{x.wIn}&quot; × {x.hIn}&quot; · {x.stitches.toLocaleString()}{x.at ? ` · ${day(x.at)}` : ""}</td>
                           <td>{notes.length ? notes.map((y) => { const n = y.orders?.number && y.orders.number !== it.o.number ? ` · #${y.orders.number}` : "";
                             return <span key={y.id} className="pill" style={{ ["--sc" as string]: y.status === "approved" ? "var(--ok)" : y.status === "changes" ? "var(--danger)" : "var(--warn)" }}><span className="pill-t">{y.status === "approved" ? `Approved ${dt(y.decided_at)}` : y.status === "changes" ? `Changes asked ${dt(y.decided_at)}` : y.sent_at ? `Sent ${dt(y.sent_at)} · waiting` : `Saved ${dt(y.created_at)} · not sent yet`}{n}</span></span>; }) : <span className="faint">Not sewn yet</span>}</td>
-                          <td className="r nw">
+                          <td className="r dgz-vfl">
                             <a className="btn sm" href={href(x.path, x.name)} target="_blank" rel="noreferrer">DST</a>{" "}
                             {x.emb ? <a className="btn sm" href={href(x.emb.path, x.emb.name)} target="_blank" rel="noreferrer">EMB</a> : <span className="btn sm dgz-vnone" title="The EMB didn't come with this version">No EMB</span>}{" "}
                             {x.sheet ? <a className="btn sm" href={href(x.sheet.path, x.sheet.name)} target="_blank" rel="noreferrer">Worksheet</a> : <span className="btn sm dgz-vnone" title="The worksheet didn't come with this version">No worksheet</span>}

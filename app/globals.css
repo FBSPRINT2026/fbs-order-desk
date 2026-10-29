@@ -15606,7 +15606,9 @@ span.ds-th{overflow:hidden}
 .dgz-steps>div small{display:block;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
 .dgz-steps>div.d{border-top-color:var(--ok);color:var(--ink)}
 .dgz-steps>div.n{border-top-color:var(--accent);color:var(--accent)}
-.dgz-grid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:14px;align-items:start}
+.dgz-grid{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.dgz-grid>.dgz-pic-big{flex:0 0 280px;box-sizing:border-box}
+.dgz-grid>.stack{flex:1 1 440px;min-width:0}
 .dgz-grid.nofile{grid-template-columns:minmax(0,1fr)}
 .dgz-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .dgz-pic-big{padding:10px;align-items:stretch}
@@ -15822,3 +15824,10 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .dgz-oldsw{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3)}
 .dgz-oldsw img{width:28px;height:28px;object-fit:cover;border-radius:4px;opacity:.7}
 @media (max-width:640px){.dgz-sw{grid-template-columns:auto auto}.dgz-sw>.stack{grid-column:1/-1}}
+/* the list fits its panel without scrolling sideways (Oct 29, Nick: "remove the… horizontal scroll"): tighter cells, the
+   customer and job line can break anywhere, a version's files wrap under each other when narrow */
+.tbl.dgz th,.tbl.dgz td{padding-left:8px;padding-right:8px}
+.tbl.dgz td .sub{overflow-wrap:anywhere}
+.dgz-vt .dgz-vfl{white-space:normal}
+.dgz-vt .dgz-vfl .btn{margin:2px 0}
+table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
