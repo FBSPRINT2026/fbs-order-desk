@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, orderGroups, uid, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
 import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
@@ -479,5 +479,39 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
     if (ins.error) return { ok: true as const, po: order.poNum, warn: `Ordered with SanMar (PO ${order.poNum}), but it couldn't be saved here: ${ins.error.message}` };
     if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
     return { ok: true as const, po: order.poNum, id: ins.data.id };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Extras bought with an order's goods go back on the order (Oct 29, Nick: "if you order extra… you have to indicate what
+ * it is, and then we've got to add it back to the order… like the extras for McKenna… printed, not printed"): an Extras
+ * line under the garment it copies (the same group), with the reason as its note, printed or not, charged or not; and a
+ * line in the order's history. The order's own quantities aren't changed.
+ */
+export async function addExtrasToOrder(orderId: string, extras: { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean }[], placedAt: string) {
+  try {
+    const v = await staff();
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("id, groups").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false as const, error: "Order not found." };
+    const groups = orderGroups(o as unknown as Order);
+    const same = (a: string, b: string) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+    const said: string[] = [];
+    for (const x of extras) {
+      const n = Object.values(x.sizes).reduce((a, q) => a + (+q || 0), 0); if (!n) continue;
+      const g = groups.find((y) => (y.lines || []).some((l) => same(l.style, x.style) && same(l.color, x.color))) || groups[0];
+      if (!g) continue;
+      const base = (g.lines || []).find((l) => same(l.style, x.style) && same(l.color, x.color) && !l.extras);
+      // the same extras for the same reason again: added to that line
+      const have = (g.lines || []).find((l) => l.extras && same(l.style, x.style) && same(l.color, x.color) && same(String(l.note || ""), x.reason) && !!l.extrasPrint === x.print && !!l.extrasFree === x.free);
+      if (have) { for (const [z, q] of Object.entries(x.sizes)) if (q) have.sizes[z as keyof typeof have.sizes] = ((have.sizes[z as keyof typeof have.sizes] || 0) as number) + q; }
+      else g.lines.splice(base ? g.lines.indexOf(base) + 1 : g.lines.length, 0, { ...(base ? JSON.parse(JSON.stringify(base)) : {}), id: uid(), brand: x.brand || base?.brand || "", style: x.style, color: x.color, sizes: { ...x.sizes }, extras: true, extrasPrint: x.print, extrasFree: x.free, priceOverride: x.free ? 0 : null, note: x.reason });
+      said.push(`${n} extra (${Object.entries(x.sizes).filter(([, q]) => q).map(([z, q]) => `${q} ${z}`).join(", ")}) ${[x.brand, x.style, x.color].filter(Boolean).join(" ")} for ${x.reason.toLowerCase()}${x.print ? ", printed" : ", not printed"}${x.free ? ", no charge" : ", charged"}`);
+    }
+    if (!said.length) return { ok: true as const };
+    const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
+    if (error) return { ok: false as const, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Ordered ${said.join("; ")}, with the goods (${placedAt}). Added to the order as Extras. — ${v.user?.email || "staff"}` });
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

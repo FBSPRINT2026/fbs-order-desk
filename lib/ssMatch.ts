@@ -7,7 +7,13 @@ import { matchColor } from "@/lib/colorMatch";
 /** A garment line to buy: style / color / size and how many, matched to an S&S sku with price and stock. */
 export type GoodsRow = { key: string; brand: string; style: string; color: string; size: string; qty: number; sku: string; price: number; stock: number; found: boolean; note: string;
   /** from an email only: the color the customer wrote, the style's real colors, and whether the match is a sure one */
-  asked?: string; options?: string[]; sure?: boolean; styleID?: number };
+  asked?: string; options?: string[]; sure?: boolean; styleID?: number;
+  /** bought on top of the order (Oct 29, Nick: "one extra large… as a test print… you have to indicate what it is, and
+   *  then we've got to add it back to the order"): why, printed or left blank, and charged or not */
+  extra?: GoodsExtra };
+export type GoodsExtra = { reason: string; print: boolean; free: boolean };
+/** the reasons an extra is bought; "Other" asks for words */
+export const EXTRA_REASONS = ["Shop sample / test print", "Spare for misprints", "Customer's extras", "Other"] as const;
 
 /** Match rows to S&S skus (one lookup per style; our catalog remembers the S&S style id). Fills sku, price, stock. */
 export async function matchToSS(admin: SupabaseClient, rows: GoodsRow[], opts: { fixColors?: boolean } = {}) {

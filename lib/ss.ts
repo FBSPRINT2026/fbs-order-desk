@@ -4,6 +4,7 @@ import { fabricLines } from "@/lib/fabric";
 import { parseInches, type GarmentSpecs } from "@/lib/garmentBody";
 
 /** S&S Activewear API v2 (https://api.ssactivewear.com/V2/Default.aspx). Basic auth: account number / API key. */
+import { brandKey } from "@/lib/supplierBrands";
 const BASE = "https://api.ssactivewear.com/v2";
 
 export function ssConfigured() {
@@ -74,21 +75,36 @@ export async function ssSearch(q: string): Promise<SSHit[]> {
 
 /** Find the S&S style for what someone typed ("G5000", "5000", "Gildan 5000", "18500B"). */
 /** Find the S&S style for what someone typed ("G5000", "5000", "Gildan 5000", "18500B"). */
+/**
+ * A style at S&S from what we have: "Gildan 5000", "G5000", or a style written SanMar's way (Oct 29, Nick: "Next Level
+ * 6210… is NL6210… S&S has Next Level, Bella+Canvas… just call it by brand"). The style is searched with and without
+ * the letters in front ("NL6210" → 6210); a hit counts when its style matches and its brand is the one we have, or the
+ * letters stand for it (its first letters, "G" → Gildan, or its initials, "NL" → Next Level, "BC" → Bella + Canvas).
+ * "BG424" (Port Authority, a SanMar tote) must not become Augusta's 424 (Oct 9): no brand those letters stand for.
+ */
+const initialsOf = (b: string) => String(b || "").replace(/[^A-Za-z ]+/g, " ").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toLowerCase();
 async function findStyle(q: string): Promise<SSStyle | null> {
-  const t = q.trim();
-  const stripped = t.replace(/^[A-Za-z]{1,2}(?=\d)/, "");
-  const tries = [t, stripped].filter((v, i, a) => v && a.indexOf(v) === i);
-  for (const term of tries) {
+  const parts = q.trim().split(/\s+/);
+  const t = parts.pop() || "", brand = parts.join(" ");
+  const bk = brandKey(brand);
+  const stripped = t.replace(/^[A-Za-z]{1,3}(?=\d)/, "");
+  const prefix = t.match(/^([A-Za-z]{1,3})(?=\d)/)?.[1]?.toLowerCase();
+  const sameBrand = (s: SSStyle) => { const k = brandKey(s.brandName); return !!bk && (k === bk || (k.length >= 4 && (bk.startsWith(k) || k.startsWith(bk)))); };
+  const lettersFor = (s: SSStyle) => !!prefix && (s.brandName.toLowerCase().startsWith(prefix) || initialsOf(s.brandName).startsWith(prefix));
+  for (const term of [t, stripped].filter((v, i, a) => v && a.indexOf(v) === i)) {
     const list = await ssGet<SSStyle[]>(`/styles?search=${encodeURIComponent(term)}`);
     if (!Array.isArray(list) || !list.length) continue;
-    const eq = (s: SSStyle) => [s.styleName, s.partNumber, `${s.brandName} ${s.styleName}`].some((x) => (x || "").toLowerCase() === t.toLowerCase() || (x || "").toLowerCase() === stripped.toLowerCase());
+    const eq = (s: SSStyle) => [s.styleName, s.partNumber].some((x) => [t, stripped].some((y) => (x || "").toLowerCase() === y.toLowerCase()));
     const hits = list.filter(eq);
-    const prefix = t.match(/^([A-Za-z]{1,2})(?=\d)/)?.[1]?.toLowerCase();
-    // the letters dropped ("G5000" → 5000): only a style of a brand those letters stand for. "BG424" (Port Authority,
-    // a SanMar tote) must not become Augusta's 424 (Oct 9): no such brand here, so it's left for SanMar.
-    const pick = term === t ? (prefix && hits.find((s) => s.brandName.toLowerCase().startsWith(prefix))) || hits[0]
-      : prefix ? hits.find((s) => s.brandName.toLowerCase().startsWith(prefix)) : hits[0];
+    const pick = hits.find(sameBrand) || hits.find(lettersFor) || (term === t && !bk ? hits[0] : undefined);
     if (pick) return pick;
+  }
+  // written some other way ("5000 Gildan", a full name): S&S's own search on the whole thing, its brand + style matching
+  if (brand) {
+    const list = await ssGet<SSStyle[]>(`/styles?search=${encodeURIComponent(q.trim())}`);
+    const whole = q.trim().toLowerCase();
+    const hit = Array.isArray(list) ? list.find((s) => `${s.brandName} ${s.styleName}`.toLowerCase() === whole || `${s.styleName} ${s.brandName}`.toLowerCase() === whole) : undefined;
+    if (hit) return hit;
   }
   return null;
 }

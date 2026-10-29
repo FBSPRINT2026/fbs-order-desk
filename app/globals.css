@@ -15057,6 +15057,13 @@ html[data-phone-deep] .mdp-only{display:none}
 .og-check{font-size:13px;padding:9px 12px;border-radius:9px;background:color-mix(in srgb,var(--ok) 9%,var(--surface));color:var(--ink)}
 .og-done{font-size:13.5px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,var(--fbs-blue) 9%,var(--surface))}
 .og-note{font-size:12.5px;margin:0}
+/* extras bought on top of an order's goods (Order goods: + Order extra) */
+.og-x{margin:0 8px 8px;border:1px dashed var(--warn);border-radius:6px;background:var(--warn-soft);padding:6px 8px}
+.og-xh{font-size:12px;font-weight:700;color:var(--warn);margin-bottom:4px}
+.og-xf{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.og-xf select,.og-xf input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.og-xs{color:var(--warn);font-weight:700;margin-left:1px}
+.og-xn{color:var(--warn)}
 .og-foot{position:sticky;bottom:0;background:var(--surface);display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line-2)}
 .og-view{display:inline-flex;align-items:center;gap:6px}
 .og-view svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}

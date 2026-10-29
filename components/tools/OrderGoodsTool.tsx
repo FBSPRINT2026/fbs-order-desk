@@ -3,7 +3,7 @@ import { GOODS_PO_MAX, cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import type { GoodsRow } from "@/lib/ssMatch";
+import { EXTRA_REASONS, type GoodsExtra, type GoodsRow } from "@/lib/ssMatch";
 import type { EODraft } from "@/lib/emailOrderShared";
 import type { Group } from "@/lib/pricing";
 import { money } from "@/lib/format";
@@ -11,7 +11,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
-import { goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
+import { addExtrasToOrder, goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
 import { arriveOn, dayOptions, pickOption, shipKey, supName, whInfo, type DayOption, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSeesMoney } from "@/components/RoleContext";
 import PointsDecision from "@/components/PointsDecision";
@@ -76,6 +76,28 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const [chosen, setChosen] = useState<number | null>(null);
   const [ssOnly, setSsOnly] = useState(false), [feeEdit, setFeeEdit] = useState(false);
   const [editing, setEditing] = useState(false), [arrive, setArrive] = useState<Record<string, string>>({});
+  // extras on top of an order's goods (Oct 29, Nick: "changing quantities… kind of dangerous… if you order extra, you have
+  // to indicate what it is, and then we've got to add it back to the order"): the order's own quantities are locked;
+  // extras are their own rows (key + "~x"), each garment's with a reason, printed or not, charged or not
+  const [xMeta, setXMeta] = useState<Record<string, GoodsExtra & { other?: string }>>({});
+  const xDefault: GoodsExtra = { reason: EXTRA_REASONS[0], print: true, free: true };
+  const gkOf = (x: { brand: string; style: string; color: string }) => `${x.brand}|${x.style}|${x.color}`;
+  const metaOf = (gk: string) => xMeta[gk] || xDefault;
+  const reasonOf = (m: GoodsExtra & { other?: string }) => (m.reason === "Other" ? (m.other || "").trim() : m.reason);
+  function setExtra(base: Row, qty: number) {
+    const key = base.key + "~x", m = metaOf(gkOf(base));
+    setRows((rs) => {
+      const list = (rs || []).filter((y) => y.key !== key);
+      if (qty > 0) { const at = list.findIndex((y) => y.key === base.key); list.splice(at + 1, 0, { ...base, key, qty, extra: { reason: reasonOf(m), print: m.print, free: m.free } }); }
+      return list;
+    });
+    setCheck(null);
+  }
+  function setMeta(gk: string, patch: Partial<GoodsExtra & { other?: string }>) {
+    const m = { ...metaOf(gk), ...patch };
+    setXMeta((x) => ({ ...x, [gk]: m }));
+    setRows((rs) => (rs || []).map((y) => (y.extra && gkOf(y) === gk ? { ...y, extra: { reason: reasonOf(m), print: m.print, free: m.free } } : y)));
+  }
   const stopped = useRef(false), waiting = useRef<((e: Error) => void) | null>(null), ran = useRef(false);
   const step = (label: string) => setSteps((s) => [...s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)), { label, state: "doing" }]);
   const finishSteps = () => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)));
@@ -188,9 +210,13 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const smOn = !!opts?.sanmarOrders;
   const ready = wanted.filter((x) => plan?.parts.some((p) => p.key === x.key));
   const total = plan ? plan.total : 0, pcs = wanted.reduce((a, x) => a + x.qty, 0);
+  const xRows = wanted.filter((x) => x.extra), xPcs = xRows.reduce((a, x) => a + x.qty, 0);
+  const xNoReason = xRows.some((x) => !x.extra!.reason.trim());
+  const extrasNote = xPcs ? <p className="og-note og-xn">{[...new Set(xRows.map(gkOf))].map((gk) => { const rs = xRows.filter((x) => gkOf(x) === gk), e = rs[0].extra!; return `${rs.reduce((a, x) => a + x.qty, 0)} extra ${rs[0].style} ${rs[0].color} (${rs.map((x) => `${x.qty} ${x.size}`).join(", ")}): ${e.reason || "say what it's for"}, ${e.print ? "printed" : "not printed"}, ${e.free ? "no charge" : "charged"}`; }).join(" · ")}. Goes on the order as Extras when it's placed.</p> : null;
   const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   async function run(test: boolean) {
     if (!plan) return;
+    if (xNoReason) { setErr("Say what the extra is for (Other: type it) before ordering."); setEditing(true); return; }
     setBusy(test ? "check" : "place"); setErr("");
     const out: string[] = [], dates: string[] = [], froms: string[] = [];
     let sum = 0, garmentsLeft = test ? undefined : garmentsFromRows(ready);
@@ -221,7 +247,21 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
     }
     setBusy("");
     if (test) { setCheck({ total: Math.round(sum * 100) / 100, expected: dates.sort().pop() || null, from: [...new Set(froms)].join(", ") }); setSure(false); }
-    else setPlaced(out.join(" · ") || "placed");
+    else {
+      setPlaced(out.join(" · ") || "placed");
+      // the extras go back on the order as Extras lines, with why (addExtrasToOrder)
+      if (orderId && xRows.length) {
+        const byG = new Map<string, { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean }>();
+        for (const x of xRows.filter((y) => ready.some((r) => r.key === y.key))) {
+          type XG = { brand: string; style: string; color: string; sizes: Record<string, number>; reason: string; print: boolean; free: boolean };
+          const g: XG = byG.get(gkOf(x)) || { brand: x.brand, style: x.style, color: x.color, sizes: {} as Record<string, number>, reason: x.extra!.reason, print: x.extra!.print, free: x.extra!.free };
+          g.sizes[x.size] = (g.sizes[x.size] || 0) + x.qty; byG.set(gkOf(x), g);
+        }
+        const r = await addExtrasToOrder(orderId, [...byG.values()], out.join(" · "));
+        if (!r.ok) setErr(`Ordered, but the extras couldn't be added to the order: ${r.error}. Add them by hand.`);
+        else window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId } }));
+      }
+    }
   }
 
   // tucked away, the panel stays as it was (a question half answered stays half answered) and only a bar shows
@@ -306,11 +346,12 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
                         <table className="og-wt"><thead><tr><th />{sizes.map((z) => <th key={z}>{z}</th>)}<th /></tr></thead>
                           <tbody>{gks.map((k) => {
                             const xs = wanted.filter((x) => `${x.brand}|${x.style}|${x.color}` === k), f = xs[0];
-                            const q = (z: string) => { const x = xs.find((y) => y.size === z); return x ? here.filter((p) => p.key === x.key).reduce((n, p) => n + p.qty, 0) : 0; };
+                            const q = (z: string) => xs.filter((y) => y.size === z).reduce((n, x) => n + here.filter((p) => p.key === x.key).reduce((m, p) => m + p.qty, 0), 0);
+                            const xq = (z: string) => xs.filter((y) => y.size === z && y.extra).reduce((n, x) => n + here.filter((p) => p.key === x.key).reduce((m, p) => m + p.qty, 0), 0);
                             return (
                               <tr key={k}>
                                 <td data-notranslate><b>{sup === "sm" && opts?.sm[xs[0].key]?.style ? opts.sm[xs[0].key].style : f.style}</b> {f.color}</td>
-                                {sizes.map((z) => { const x = xs.find((y) => y.size === z), n = q(z); return <td key={z} className={!n ? "z" : x && split.has(x.key) ? "p" : ""}>{n || "–"}</td>; })}
+                                {sizes.map((z) => { const x = xs.find((y) => y.size === z), n = q(z), e = xq(z); return <td key={z} className={!n ? "z" : x && split.has(x.key) ? "p" : ""} title={e ? `${e} extra` : undefined}>{n || "–"}{e ? <sup className="og-xs">+{e}</sup> : null}</td>; })}
                                 <td className="t">{sizes.reduce((n, z) => n + q(z), 0)}</td>
                               </tr>
                             );
@@ -324,28 +365,48 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
                 {plan.short.length > 0 && <p className="pv-err">Not enough at {ssOnly || !opts?.sanmar ? "S&S" : "S&S or SanMar"}: {plan.short.map((s) => { const x = byKey.get(s.key); return x ? `${x.style} ${x.color} ${x.size} (${s.qty} short)` : ""; }).filter(Boolean).join("; ")}</p>}
                 {none.length > 0 && <p className="pv-err">Not found: {none.map((x) => `${x.style} ${x.color} ${x.size}`).join("; ")}</p>}
                 {!!opts?.notes.length && <p className="faint og-note">{opts.notes.join(" · ")}</p>}
-                <button type="button" className="linkbtn og-edit" onClick={() => setEditing(true)}>Change quantities</button>
+                {extrasNote}
+                <button type="button" className="linkbtn og-edit" onClick={() => setEditing(true)}>{orderId ? "+ Order extra" : "Change quantities"}</button>
               </>;
             })() : <>
-            {editing && <button type="button" className="linkbtn og-edit" onClick={() => setEditing(false)}>Done changing: show by warehouse</button>}
+            {editing && <button type="button" className="linkbtn og-edit" onClick={() => setEditing(false)}>{orderId ? "Done: show by warehouse" : "Done changing: show by warehouse"}</button>}
             {blanks.map((k) => {
-              const xs = lines.filter((x) => `${x.brand}|${x.style}|${x.color}` === k).sort((a, b) => sizeRank(a.size) - sizeRank(b.size)), f = xs[0];
+              const xs = lines.filter((x) => `${x.brand}|${x.style}|${x.color}` === k && !x.extra).sort((a, b) => sizeRank(a.size) - sizeRank(b.size)), f = xs[0];
+              if (!f) return null;
+              const exOf = (x: Row) => lines.find((y) => y.key === x.key + "~x");
+              const exN = xs.reduce((a, x) => a + (exOf(x)?.qty || 0), 0), m = metaOf(k);
               return (
                 <section key={k} className="og-g">
-                  <div className="og-gh"><b data-notranslate>{[f.brand, f.style].filter(Boolean).join(" ")} · {f.color}</b><span>{xs.reduce((a, x) => a + x.qty, 0)}</span></div>
+                  <div className="og-gh"><b data-notranslate>{[f.brand, f.style].filter(Boolean).join(" ")} · {f.color}</b><span>{xs.reduce((a, x) => a + x.qty, 0)}{exN ? ` + ${exN}` : ""}</span></div>
                   <div className="og-sz">{xs.map((x) => (
                     <label key={x.key} className={!x.found ? "bad" : x.stock < x.qty ? "low" : ""} title={x.note || (x.found ? `${x.stock} in stock at S&S` : "")}>
                       <span>{x.size}</span>
-                      <input type="number" min={0} inputMode="numeric" value={x.qty} aria-label={`${f.style} ${f.color} ${x.size}`} onChange={(e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); setRows((rs) => (rs || []).map((y) => (y.key === x.key ? { ...y, qty: v } : y))); setCheck(null); }} />
+                      <input type="number" min={0} inputMode="numeric" value={x.qty} readOnly={!!orderId} title={orderId ? "From the order: add extras below" : undefined} aria-label={`${f.style} ${f.color} ${x.size}`} onChange={(e) => { if (orderId) return; const v = Math.max(0, Math.round(+e.target.value || 0)); setRows((rs) => (rs || []).map((y) => (y.key === x.key ? { ...y, qty: v } : y))); setCheck(null); }} />
                       <small>{!x.found ? (x.note || "not at S&S") : x.stock < x.qty ? `${x.stock} left` : "in stock"}</small>
                     </label>
                   ))}</div>
+                  {orderId && editing && <div className="og-x">
+                    <div className="og-xh">Extra, not on the order{exN ? `: ${exN}` : ""}</div>
+                    <div className="og-sz">{xs.map((x) => (
+                      <label key={x.key + "~x"}>
+                        <span>{x.size}</span>
+                        <input type="number" min={0} inputMode="numeric" value={exOf(x)?.qty || ""} placeholder="–" aria-label={`Extra ${f.style} ${f.color} ${x.size}`} onChange={(e) => setExtra(x, Math.max(0, Math.round(+e.target.value || 0)))} />
+                      </label>
+                    ))}</div>
+                    {exN > 0 && <div className="og-xf">
+                      <select value={m.reason} aria-label="Why the extra" onChange={(e) => setMeta(k, { reason: e.target.value })}>{EXTRA_REASONS.map((r) => <option key={r}>{r}</option>)}</select>
+                      <select value={`${m.print ? "p" : "b"}${m.free ? "f" : "c"}`} aria-label="Printed and charged" onChange={(e) => setMeta(k, { print: e.target.value[0] === "p", free: e.target.value[1] === "f" })}>
+                        <option value="pf">Printed, no charge</option><option value="pc">Printed, charged</option><option value="bf">Not printed, no charge</option><option value="bc">Not printed, charged</option>
+                      </select>
+                      {m.reason === "Other" && <input type="text" value={m.other || ""} placeholder="What it's for" aria-label="What the extra is for" onChange={(e) => setMeta(k, { other: e.target.value })} />}
+                    </div>}
+                  </div>}
                 </section>
               );
             })}
             </>}
             {skipped.length > 0 && <p className="faint og-note">Left for now (no blank picked): {skipped.join(", ")}.</p>}
-            <div className="og-tot"><span>{pcs.toLocaleString()} pcs{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
+            <div className="og-tot"><span>{xPcs ? `${(pcs - xPcs).toLocaleString()} for the order + ${xPcs} extra` : `${pcs.toLocaleString()} pcs`}{plan ? ` · ${plan.ships} shipment${plan.ships === 1 ? "" : "s"}` : opts === null && wanted.length ? " · checking S&S and SanMar…" : ""}</span><b>{money(total)}</b></div>
             {owner && plan && opts && plan.parts.length > 0 && <>
               <button type="button" className={"og-pts" + (smParts.length ? "" : " none")} aria-expanded={pointsOpen} onClick={() => setPointsOpen((x) => !x)}>
                 <svg viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="9" r="6" /><path d="M15.5 9.5a6 6 0 1 1-6 6" /></svg>{(() => {
