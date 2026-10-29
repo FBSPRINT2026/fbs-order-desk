@@ -20,7 +20,6 @@ import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import { approveSewoutAnother, remindSewoutAction, sendSewoutToCustomer } from "@/app/shop/sewout-actions";
 import type { SewCtx } from "@/components/SewnPanel";
 import { stockKey } from "@/lib/threadStock";
-import { matchOutsideDigitize } from "@/app/shop/digitize-outside-actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import { DIGITIZER } from "@/lib/digitizer";
 
@@ -39,7 +38,7 @@ import { DIGITIZER } from "@/lib/digitizer";
  *   - Sew-out sent → waiting on the customer; Approved → on file with the logo for every reorder
  * Made hard to go around (Oct 29, Nick: "my wife keeps going around the system"): every stitch file version stays and is
  * listed (a resize asked by plain email is version 2), an email to the digitizer from any mailbox is put on its order
- * (lib/digitizerOutside.ts) or listed here to pick the order, and a print sent to digitizing with no proof says so.
+ * (lib/digitizerOutside.ts) or its stitch files found with "Already digitized?" on the order, and a print sent to digitizing with no proof says so.
  */
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null };
 type EmbFile = DigitizedSet;
@@ -54,8 +53,6 @@ type Sw = { id: string; order_id: string; imprint_id: string; version: number; p
 /** a logo's sew-outs on any order, to show each stitch file version's approval (Oct 29, Nick: "once we get approval…
  *  version 2 gets approved. There should be a note… approved 10/29 for order…") */
 type DSw = { id: string; design_id: string; status: string; decided_at: string | null; sent_at: string | null; created_at: string; archived_at: string | null; sewn?: { file?: { path?: string } | null } | null; orders?: { number: number } | null };
-/** an email to the digitizer sent from a mailbox outside the portal that couldn't be put on an order by itself */
-type Outside = { id: string; subject: string; from_email: string; occurred_at: string; meta: { account?: string } | null };
 const embOf = (d: Design | null): EmbSpecs => ((d?.specs as { embroidery?: EmbSpecs } | null)?.embroidery) || {};
 
 export default function Digitizing() {
@@ -72,7 +69,7 @@ export default function Digitizing() {
   const [tool, setTool] = useState<{ orderId: string; imprintId: string } | null>(null);
   const [sws, setSws] = useState<Sw[]>([]), [swUrls, setSwUrls] = useState<Record<string, string>>({}), [msg, setMsg] = useState("");
   // the threads on the wall (for "What we sewed"), which orders have a proof, and emails to the digitizer to place
-  const [stock, setStock] = useState<string[]>([]), [proofed, setProofed] = useState<Set<string>>(new Set()), [outside, setOutside] = useState<Outside[]>([]);
+  const [stock, setStock] = useState<string[]>([]), [proofed, setProofed] = useState<Set<string>>(new Set());
   const [dsws, setDsws] = useState<DSw[]>([]);
 
   async function load() {
@@ -86,17 +83,15 @@ export default function Digitizing() {
     // the sew-outs on these orders, newest first, with their photos (read before the list shows, so each print's state is right)
     const { data: sw } = os.length ? await sb.from("sewouts").select("*").in("order_id", os.map((o) => o.id)).order("version", { ascending: false }) : { data: [] };
     const list = (sw || []) as Sw[];
-    const [{ data: st }, { data: pf }, { data: mk }, { data: ox }, { data: ds2 }] = await Promise.all([
+    const [{ data: st }, { data: pf }, { data: mk }, { data: ds2 }] = await Promise.all([
       sb.from("stock_threads").select("line, code").is("archived_at", null),
       os.length ? sb.from("proofs").select("order_id").in("order_id", os.map((o) => o.id)) : Promise.resolve({ data: [] }),
       os.length ? sb.from("mockups").select("order_id").in("order_id", os.map((o) => o.id)).is("archived_at", null) : Promise.resolve({ data: [] }),
-      sb.from("activities").select("id, subject, from_email, occurred_at, meta").is("order_id", null).eq("meta->>digitize_unplaced", "true").gte("occurred_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(20),
       ids.length ? sb.from("sewouts").select("id, design_id, status, decided_at, sent_at, created_at, archived_at, sewn, orders(number)").in("design_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ]);
     setDsws(((ds2 || []) as unknown as DSw[]));
     setStock(((st || []) as { line: string; code: string }[]).map((r) => stockKey(r.line, r.code)));
     setProofed(new Set([...((pf || []) as { order_id: string }[]), ...((mk || []) as { order_id: string }[])].map((r) => r.order_id)));
-    setOutside((ox || []) as Outside[]);
     setSws(list); setDesigns(map); setOrders(os);
     if (list.length) {
       const paths = [...list.map((x) => x.photo_path), ...list.map((x) => x.placement_path || "").filter(Boolean)];
@@ -208,7 +203,6 @@ export default function Digitizing() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      {outside.length > 0 && <OutsideEmails list={outside} orders={orders || []} onDone={(m) => { setMsg(m); void load(); }} />}
       <section className="panel">
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="toolbar">
@@ -436,41 +430,5 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
         </td></tr>
       )}
     </>
-  );
-}
-
-/** emails to the digitizer sent from a mailbox outside the portal that couldn't be put on an order by themselves: pick it */
-function OutsideEmails({ list, orders, onDone }: { list: Outside[]; orders: O[]; onDone: (m: string) => void }) {
-  const [pick, setPick] = useState<Record<string, string>>({}), [busy, setBusy] = useState("");
-  const opts = orders.filter((o) => (o.groups || []).some((g) => (g.imprints || []).some((im) => im.method === "embroidery")));
-  async function go(id: string, orderId: string | null) {
-    setBusy(id);
-    const r = await matchOutsideDigitize(id, orderId);
-    setBusy("");
-    onDone(r.ok ? (orderId ? `Put on #${r.number}: its print shows as requested, and ${DIGITIZER.name.split(" ")[0]}'s files come in on their own.` : "Set aside.") : r.error);
-  }
-  return (
-    <section className="panel dgz-out">
-      <div className="panel-h"><h2>Sent to {DIGITIZER.name.split(" ")[0]} outside the portal</h2><span className="faint">Pick the order each one is for, so its files come in and the logo shows as requested</span></div>
-      <div className="panel-b">
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Email</th><th>Sent</th><th>Order</th><th /></tr></thead>
-          <tbody>{list.map((x) => (
-            <tr key={x.id}>
-              <td><b data-notranslate>{x.subject || "(no subject)"}</b><div className="sub">{x.from_email}</div></td>
-              <td className="nowrap">{day(x.occurred_at)}</td>
-              <td><select value={pick[x.id] || ""} aria-label="The order this email is for" onChange={(e) => setPick({ ...pick, [x.id]: e.target.value })}>
-                <option value="">Pick the order…</option>
-                {opts.map((o) => <option key={o.id} value={o.id}>#{o.number} · {o.customers?.company || o.customers?.name || ""}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
-              </select></td>
-              <td className="nowrap"><div className="row" style={{ gap: 6 }}>
-                <button type="button" className="btn sm primary" disabled={!pick[x.id] || busy === x.id} onClick={() => void go(x.id, pick[x.id])}>Put on order</button>
-                <button type="button" className="btn sm ghost" disabled={busy === x.id} title="Not about an order (a question, a hello)" onClick={() => void go(x.id, null)}>Not for an order</button>
-              </div></td>
-            </tr>
-          ))}</tbody>
-        </table></div>
-      </div>
-    </section>
   );
 }

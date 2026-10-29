@@ -15,7 +15,8 @@ import type { MailAccount } from "@/lib/mail/config";
  *   - a new email: put on the open embroidered order it names (its number, a D- logo number, or a word only that order
  *     has: "Order: Embark" → #40188 Embark LL Bean Tote), the print marked requested by email; their reply's files then
  *     come in on their own like any request's
- *   - an email it can't place waits at the top of Digitizing to pick the order (placeDigitizeEmail): nothing is lost.
+ *   - an email it can't place yet is kept, and tried again on every check (the order may be made later); its stitch
+ *     files are found from the order with "Already digitized?" (components/DigitizedFinder.tsx).
  */
 const lc = (s: string) => (s || "").trim().toLowerCase();
 const bare = (id: string) => (id || "").trim().replace(/^<|>$/g, "");
@@ -59,6 +60,9 @@ export async function findDigitizeOrder(admin: SupabaseClient, m: Pick<MailMsg, 
   const add = (id: string, n: number) => score.set(id, (score.get(id) || 0) + n);
   const nums = new Set([...all.matchAll(/(?:#|\b)(\d{5})\b/g)].map((x) => +x[1]));
   const dnums = new Set([...all.matchAll(/\bD-?(\d{4,6})\b/gi)].map((x) => +x[1]));
+  // an order number named outright decides it (a logo on two orders: "D-10241 … FBS #40189" is #40189)
+  const named = cands.filter((o) => nums.has(o.number));
+  if (named.length === 1) return { order: named[0], prints: printsFor(named[0]) };
   for (const o of cands) {
     if (nums.has(o.number)) add(o.id, 100);
     if (embOf(o).some((im) => im.design_id && dnums.has(o.designNums[im.design_id]))) add(o.id, 100);
@@ -69,11 +73,14 @@ export async function findDigitizeOrder(admin: SupabaseClient, m: Pick<MailMsg, 
   const ranked = [...score.entries()].sort((a, b) => b[1] - a[1]);
   if (!ranked.length || ranked[0][1] < 30 || (ranked[1] && ranked[1][1] > ranked[0][1] * 0.6)) return null;
   const order = cands.find((o) => o.id === ranked[0][0])!;
+  return { order, prints: printsFor(order) };
   // which of its embroidered prints: the one named (logo number or name, or its spot), else the ones still waiting
-  const prints = embOf(order);
-  const named = prints.filter((im) => (im.design_id && dnums.has(order.designNums[im.design_id])) || words(`${im.location} ${im.design_id ? order.designNames[im.design_id] || "" : ""}`).some((w) => words(all).includes(w)));
-  const waiting = prints.filter((im) => !im.emb?.file && !im.emb?.request);
-  return { order, prints: named.length ? named : waiting.length ? waiting : prints };
+  function printsFor(order: Cand) {
+    const prints = embOf(order);
+    const said = prints.filter((im) => (im.design_id && dnums.has(order.designNums[im.design_id])) || words(`${im.location} ${im.design_id ? order.designNames[im.design_id] || "" : ""}`).some((w) => words(all).includes(w)));
+    const waiting = prints.filter((im) => !im.emb?.file && !im.emb?.request);
+    return said.length ? said : waiting.length ? waiting : prints;
+  }
 }
 
 /** the print is asked of the digitizer: on its logo, or on the print itself when there's no logo on file */
@@ -99,6 +106,19 @@ async function markRequested(admin: SupabaseClient, orderId: string, im: Imprint
 
 type Dz = { order_id: string; imprint_id: string; design_id: string | null; items?: { imprint_id: string; design_id: string | null }[]; outside?: boolean };
 
+/** the digitizing request a thread belongs to, from the emails it answers (newest first; one id at a time, since
+ *  message ids carry + = < > that a list filter can trip on) */
+async function threadDz(admin: SupabaseClient, ids: string[]): Promise<Dz | null> {
+  for (const id of [...ids].reverse().slice(0, 16)) {
+    const { data } = await admin.from("activities").select("meta").eq("external_id", id).limit(3);
+    for (const r of (data || []) as { meta: { digitize?: Dz; digitizer_reply?: Dz } | null }[]) {
+      const x = r.meta?.digitize || r.meta?.digitizer_reply;
+      if (x?.order_id) return { order_id: x.order_id, imprint_id: x.imprint_id, design_id: x.design_id, items: x.items };
+    }
+  }
+  return null;
+}
+
 /** One email from us to the digitizer: kept, and put on its order (or left to place on Digitizing). Null: not one. */
 export async function digitizerSent(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome | null> {
   if (!toDigitizer(m)) return null;
@@ -107,10 +127,7 @@ export async function digitizerSent(admin: SupabaseClient, m: MailMsg, acct: Acc
   // a thread we know: the portal's request, or one caught before
   const ids = [...new Set([m.inReplyTo, ...m.references].filter(Boolean).flatMap((x) => [bare(x), `<${bare(x)}>`]))].slice(-40);
   let dz: Dz | null = null;
-  if (ids.length) {
-    const { data } = await admin.from("activities").select("meta").in("external_id", ids).order("occurred_at", { ascending: false }).limit(10);
-    for (const r of (data || []) as { meta: { digitize?: Dz; digitizer_reply?: Dz } | null }[]) { const x = r.meta?.digitize || r.meta?.digitizer_reply; if (x?.order_id) { dz = { order_id: x.order_id, imprint_id: x.imprint_id, design_id: x.design_id, items: x.items }; break; } }
-  }
+  dz = await threadDz(admin, ids);
   const at = m.date.toISOString();
   let unplaced = false;
   if (dz) {
@@ -150,30 +167,6 @@ export async function digitizerSent(admin: SupabaseClient, m: MailMsg, acct: Acc
   return "digitizer";
 }
 
-/** a placed-by-hand email (Digitizing): its order and prints, and the prints marked requested */
-export async function placeDigitizeEmail(admin: SupabaseClient, activityId: string, orderId: string, by: string) {
-  const { data: a } = await admin.from("activities").select("id, occurred_at, from_email, meta").eq("id", activityId).maybeSingle();
-  if (!a) return { ok: false as const, error: "That email isn't there anymore." };
-  const { data: o } = await admin.from("orders").select("id, number, customer_id, groups").eq("id", orderId).maybeSingle();
-  if (!o) return { ok: false as const, error: "That order isn't there anymore." };
-  const prints = ((o.groups || []) as Group[]).flatMap((g) => g.imprints || []).filter((im) => im.method === "embroidery");
-  if (!prints.length) return { ok: false as const, error: "That order has no embroidered print." };
-  const waiting = prints.filter((im) => !im.emb?.file && !im.emb?.request);
-  const mine = waiting.length ? waiting : prints;
-  for (const im of mine) await markRequested(admin, o.id, im, a.occurred_at as string, String(a.from_email || by));
-  const dz: Dz = { order_id: o.id, imprint_id: mine[0].id, design_id: mine[0].design_id || null, items: mine.map((im) => ({ imprint_id: im.id, design_id: im.design_id || null })), outside: true };
-  const meta = { ...((a.meta || {}) as Record<string, unknown>), digitize: dz, digitize_unplaced: null };
-  await admin.from("activities").update({ order_id: o.id, customer_id: o.customer_id, meta }).eq("id", activityId);
-  await admin.from("order_events").insert({ order_id: o.id, kind: "digitize_outside", detail: `An email to ${DIGITIZER.name} sent outside the portal was put on this order`, actor: by });
-  return { ok: true as const, number: o.number as number };
-}
-/** not about an order (a question, a hello): off the list */
-export async function dismissDigitizeEmail(admin: SupabaseClient, activityId: string) {
-  const { data: a } = await admin.from("activities").select("meta").eq("id", activityId).maybeSingle();
-  if (!a) return;
-  await admin.from("activities").update({ meta: { ...((a.meta || {}) as Record<string, unknown>), digitize_unplaced: null, digitize_dismissed: true } }).eq("id", activityId);
-}
-
 /** a message from a mailbox, read whole (attachments too): Exchange by its id, else the mail server by folder and uid */
 export async function readWhole(admin: SupabaseClient, acct: MailAccount, folder: string, uid: number, messageId: string): Promise<MailMsg | null> {
   const { simpleParser } = await import("mailparser");
@@ -200,7 +193,9 @@ export async function sweepDigitizerOutside(admin: SupabaseClient, until = Date.
   const { data: rows } = await admin.from("mail_index").select("account_id, folder, uid, message_id, in_reply_to, from_email, to_text, sent_at")
     .gte("sent_at", since).or(`to_text.ilike.%@${DIGITIZER.domain}%,from_email.ilike.%@${DIGITIZER.domain}`).order("sent_at", { ascending: false }).limit(300);
   const list = (rows || []) as { account_id: string; folder: string; uid: number; message_id: string; in_reply_to: string; from_email: string; to_text: string; sent_at: string }[];
-  if (!list.length) return 0;
+  // emails kept earlier without an order: tried again (a fix to the matching, or the order made since)
+  let n = await replaceUnplaced(admin).catch(() => 0);
+  if (!list.length) return n;
   const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
   const byId = new Map(((accts || []) as MailAccount[]).map((a) => [a.id, a]));
   // what the portal already has, looked up at once
@@ -214,7 +209,6 @@ export async function sweepDigitizerOutside(admin: SupabaseClient, until = Date.
   const known = async (mid: string) => { const b = bare(mid); if (!b || have.has(b)) return true; const { data } = await admin.from("activities").select("id").in("external_id", [b, `<${b}>`]).limit(1); if (data?.length) have.add(b); return !!data?.length; };
   const knownNow = (mid: string) => have.has(bare(mid));
   const seen = new Set<string>();
-  let n = 0;
   // ours oldest first within the week, so a thread's first email is placed before its follow-ups
   const ours = list.filter((r) => !lc(r.from_email).endsWith("@" + DIGITIZER.domain)).reverse();
   const theirs = list.filter((r) => lc(r.from_email).endsWith("@" + DIGITIZER.domain) && r.in_reply_to);
@@ -235,6 +229,30 @@ export async function sweepDigitizerOutside(admin: SupabaseClient, until = Date.
     if (!(await known(r.in_reply_to))) continue;
     const m = await readWhole(admin, a, r.folder, r.uid, b).catch(() => null);
     if (m && (await digitizerReply(admin, m, lc(m.from.address), { id: a.id, email: a.email }).catch(() => null)) === "digitizer") n++;
+  }
+  return n;
+}
+
+/** the week's emails to the digitizer still without an order, placed if they can be now */
+async function replaceUnplaced(admin: SupabaseClient): Promise<number> {
+  const since = new Date(Date.now() - SWEEP_DAYS * 86400000).toISOString();
+  const { data } = await admin.from("activities").select("id, subject, body, from_email, occurred_at, meta").is("order_id", null).eq("meta->>digitize_unplaced", "true").gte("occurred_at", since).limit(40);
+  let n = 0;
+  for (const a of (data || []) as { id: string; subject: string; body: string; from_email: string; occurred_at: string; meta: { references?: string[]; attachments?: { name?: string }[] } & Record<string, unknown> }[]) {
+    const refs = (a.meta.references || []).filter(Boolean);
+    let dz = await threadDz(admin, [...new Set(refs.flatMap((x) => [bare(x), `<${bare(x)}>`]))]);
+    if (!dz) {
+      const hit = await findDigitizeOrder(admin, { subject: a.subject || "", text: a.body || "", attachments: (a.meta.attachments || []).map((x) => ({ filename: x.name || "" })) as MailMsg["attachments"], date: new Date(a.occurred_at) });
+      if (hit) {
+        dz = { order_id: hit.order.id, imprint_id: hit.prints[0].id, design_id: hit.prints[0].design_id || null, items: hit.prints.map((im) => ({ imprint_id: im.id, design_id: im.design_id || null })), outside: true };
+        for (const im of hit.prints) await markRequested(admin, hit.order.id, im, a.occurred_at, lc(a.from_email));
+      }
+    }
+    if (!dz) continue;
+    const { data: o } = await admin.from("orders").select("customer_id").eq("id", dz.order_id).maybeSingle();
+    await admin.from("activities").update({ order_id: dz.order_id, customer_id: (o?.customer_id as string) || null, meta: { ...a.meta, digitize: { ...dz, outside: true }, digitize_unplaced: null } }).eq("id", a.id);
+    await admin.from("order_events").insert({ order_id: dz.order_id, kind: "digitize_outside", detail: `Emailed to ${DIGITIZER.name}, outside the portal: "${(a.subject || "").slice(0, 120)}"`, actor: lc(a.from_email) });
+    n++;
   }
   return n;
 }
