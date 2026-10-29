@@ -86,7 +86,7 @@ export default function Digitizing() {
       sb.from("stock_threads").select("line, code").is("archived_at", null),
       os.length ? sb.from("proofs").select("order_id").in("order_id", os.map((o) => o.id)) : Promise.resolve({ data: [] }),
       os.length ? sb.from("mockups").select("order_id").in("order_id", os.map((o) => o.id)).is("archived_at", null) : Promise.resolve({ data: [] }),
-      sb.from("activities").select("id, subject, from_email, occurred_at, meta").is("order_id", null).not("meta->digitize_unplaced", "is", null).order("occurred_at", { ascending: false }).limit(20),
+      sb.from("activities").select("id, subject, from_email, occurred_at, meta").is("order_id", null).eq("meta->>digitize_unplaced", "true").gte("occurred_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(20),
     ]);
     setStock(((st || []) as { line: string; code: string }[]).map((r) => stockKey(r.line, r.code)));
     setProofed(new Set([...((pf || []) as { order_id: string }[]), ...((mk || []) as { order_id: string }[])].map((r) => r.order_id)));

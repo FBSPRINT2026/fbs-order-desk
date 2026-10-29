@@ -30,9 +30,11 @@ type Cand = { id: string; number: number; nickname: string | null; customer_id: 
 type OrderPick = { order: Cand; prints: Imprint[] };
 
 /** the open embroidered orders, with their prints' logo numbers and names */
-async function candidates(admin: SupabaseClient): Promise<Cand[]> {
+async function candidates(admin: SupabaseClient, before: string): Promise<Cand[]> {
   const since = new Date(Date.now() - 150 * 86400000).toISOString();
-  const { data } = await admin.from("orders").select("id, number, nickname, customer_id, groups, customers(company, name)").not("status", "in", "(completed,request)").gte("created_at", since).order("number", { ascending: false }).limit(500);
+  // only orders that existed when the email went out: an email can't be about an order made after it (Oct 29: an
+  // "Order: Armstrong…" email from Oct 14 was put on #40189, made Oct 27)
+  const { data } = await admin.from("orders").select("id, number, nickname, customer_id, groups, customers(company, name)").not("status", "in", "(completed,request)").gte("created_at", since).lte("created_at", before).order("number", { ascending: false }).limit(500);
   const os = ((data || []) as unknown as { id: string; number: number; nickname: string | null; customer_id: string | null; groups: Group[] | null; customers?: { company?: string; name?: string } | null }[])
     .filter((o) => (o.groups || []).some((g) => (g.imprints || []).some((im) => im.method === "embroidery")));
   const ids = [...new Set(os.flatMap((o) => (o.groups || []).flatMap((g) => (g.imprints || []).map((im) => im.design_id).filter(Boolean) as string[])))];
@@ -43,8 +45,8 @@ async function candidates(admin: SupabaseClient): Promise<Cand[]> {
 }
 
 /** the order (and its prints) an email to the digitizer is about, when it's clear; null when it isn't */
-export async function findDigitizeOrder(admin: SupabaseClient, m: Pick<MailMsg, "subject" | "text" | "attachments">): Promise<OrderPick | null> {
-  const cands = await candidates(admin);
+export async function findDigitizeOrder(admin: SupabaseClient, m: Pick<MailMsg, "subject" | "text" | "attachments" | "date">): Promise<OrderPick | null> {
+  const cands = await candidates(admin, m.date.toISOString());
   if (!cands.length) return null;
   const subject = m.subject || "", body = fresh(m.text), files = m.attachments.map((a) => a.filename || "").join(" ");
   const strong = `${subject} ${files}`, all = `${strong} ${body}`;
@@ -81,13 +83,16 @@ async function markRequested(admin: SupabaseClient, orderId: string, im: Imprint
     const { data: d } = await admin.from("designs").select("specs").eq("id", im.design_id).maybeSingle();
     if (d) {
       const sp = (d.specs || {}) as Record<string, unknown>, emb = (sp.embroidery || {}) as { request?: { at: string } | null };
-      if (!changes && emb.request && emb.request.at >= at) return;
+      // never over a newer request (the portal's own, or a later one)
+      if (emb.request && emb.request.at >= at) return;
       await admin.from("designs").update({ specs: { ...sp, embroidery: { ...emb, request: req } } }).eq("id", im.design_id);
       return;
     }
   }
   const { data: o } = await admin.from("orders").select("groups").eq("id", orderId).maybeSingle();
   if (!o) return;
+  const cur = ((o.groups || []) as Group[]).flatMap((g) => g.imprints || []).find((x) => x.id === im.id);
+  if (cur?.emb?.request && cur.emb.request.at >= at) return;
   const groups = ((o.groups || []) as Group[]).map((g) => ({ ...g, imprints: (g.imprints || []).map((x) => (x.id === im.id ? { ...x, emb: { ...(x.emb || {}), request: req } } : x)) }));
   await admin.from("orders").update({ groups }).eq("id", orderId);
 }
@@ -115,7 +120,9 @@ export async function digitizerSent(admin: SupabaseClient, m: MailMsg, acct: Acc
     if (ASKS_CHANGE.test(text)) for (const it of items) {
       const { data: d } = it.design_id ? await admin.from("designs").select("specs").eq("id", it.design_id).maybeSingle() : { data: null };
       const files = ((d?.specs as { embroidery?: { files?: { at?: string }[] } } | null)?.embroidery?.files) || [];
-      if (!files.length) continue;
+      // a change asked after their newest file came in (one asked before it is what that file answered)
+      const last = files.map((f) => f.at || "").sort().pop() || "";
+      if (!files.length || at <= last) continue;
       const { data: o } = await admin.from("orders").select("groups").eq("id", dz.order_id).maybeSingle();
       const im = ((o?.groups || []) as Group[]).flatMap((g) => g.imprints || []).find((x) => x.id === it.imprint_id);
       if (im) await markRequested(admin, dz.order_id, im, at, lc(m.from.address), fresh(m.text).trim().split(/\n\s*\n/)[0].slice(0, 400) || m.subject);
@@ -181,15 +188,17 @@ async function readWhole(admin: SupabaseClient, acct: MailAccount, folder: strin
   return raw ? toMsg(await simpleParser(raw)) : null;
 }
 
+/** how far back the sweep looks: a week (older mail is from before the portal's digitizing, and for jobs long gone) */
+export const SWEEP_DAYS = 7;
 /**
- * The sweep: every shop mailbox's mail with the digitizer over the last three weeks that the portal doesn't have yet.
+ * The sweep: every shop mailbox's mail with the digitizer over the last week that the portal doesn't have yet.
  * Our emails to them first (so their answers find their request), then their answers in those threads (their files
  * come in on their own). Returns how many it took in.
  */
 export async function sweepDigitizerOutside(admin: SupabaseClient, until = Date.now() + 40000): Promise<number> {
-  const since = new Date(Date.now() - 21 * 86400000).toISOString();
+  const since = new Date(Date.now() - SWEEP_DAYS * 86400000).toISOString();
   const { data: rows } = await admin.from("mail_index").select("account_id, folder, uid, message_id, in_reply_to, from_email, to_text, sent_at")
-    .gte("sent_at", since).or(`to_text.ilike.%@${DIGITIZER.domain}%,from_email.ilike.%@${DIGITIZER.domain}`).order("sent_at", { ascending: true }).limit(300);
+    .gte("sent_at", since).or(`to_text.ilike.%@${DIGITIZER.domain}%,from_email.ilike.%@${DIGITIZER.domain}`).order("sent_at", { ascending: false }).limit(300);
   const list = (rows || []) as { account_id: string; folder: string; uid: number; message_id: string; in_reply_to: string; from_email: string; to_text: string; sent_at: string }[];
   if (!list.length) return 0;
   const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
@@ -206,7 +215,8 @@ export async function sweepDigitizerOutside(admin: SupabaseClient, until = Date.
   const knownNow = (mid: string) => have.has(bare(mid));
   const seen = new Set<string>();
   let n = 0;
-  const ours = list.filter((r) => !lc(r.from_email).endsWith("@" + DIGITIZER.domain));
+  // ours oldest first within the week, so a thread's first email is placed before its follow-ups
+  const ours = list.filter((r) => !lc(r.from_email).endsWith("@" + DIGITIZER.domain)).reverse();
   const theirs = list.filter((r) => lc(r.from_email).endsWith("@" + DIGITIZER.domain) && r.in_reply_to);
   for (const r of ours) {
     if (Date.now() > until) break;
