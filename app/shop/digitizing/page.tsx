@@ -194,7 +194,7 @@ export default function Digitizing() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Digitizing</h1><div className="eyebrow">Embroidered logos on open orders: ask the digitizer, then bring the DST in</div></div>
+        <div><h1>Embroidery Pre-Press Digitizing Center</h1><div className="eyebrow">Embroidered logos on open orders: ask the digitizer, then bring the DST in</div></div>
         <div className="row">
           {/* read Amanda's mailbox now and add any digitizer files that came in (Oct 28, Nick: "add a check now button…";
               then "move the check now button all the way to the right… of the top panel") */}
