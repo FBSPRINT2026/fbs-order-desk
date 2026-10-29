@@ -1,3 +1,3 @@
--- Goods panel on the order (Oct 29, Nick): tracking for goods we bought (any vendor, typed, pasted or from the supplier),
--- kept on our own goods order (customer supplied tracking stays in goods_shipments, which the customer's portal shows)
+-- Oct 29: added for the order's Goods panel, then not used: our goods' boxes and tracking live in blank_shipments (the
+-- nightly supplier manifests and the panel's Add both write there). Left in place (columns are never dropped).
 alter table blank_orders add column if not exists tracking jsonb not null default '[]'::jsonb;

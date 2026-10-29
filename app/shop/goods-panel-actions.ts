@@ -24,30 +24,28 @@ async function staff() {
   return v;
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) });
-type BuyRow = { id: string; supplier: string | null; supplier_order: string | null; po: string | null; status: string | null; lines: { qty?: number }[] | null; total: number | string | null; expected_date: string | null; placed_via: string | null; created_at: string; received_at: string | null; note: string | null; tracking: PanelTrack[] | null };
+type BuyRow = { id: string; supplier: string | null; supplier_order: string | null; po: string | null; status: string | null; lines: { qty?: number }[] | null; total: number | string | null; expected_date: string | null; placed_via: string | null; created_at: string; received_at: string | null; note: string | null };
 
 export async function goodsPanel(orderId: string): Promise<{ ok: true; panel: GoodsPanel } | { ok: false; error: string }> {
   try {
     await staff();
     const admin = createAdminClient();
-    const [{ data: buys }, { data: g }, { data: sh }, { data: ml }] = await Promise.all([
-      admin.from("blank_orders").select("id, supplier, supplier_order, po, status, lines, total, expected_date, placed_via, created_at, received_at, note, tracking").eq("order_id", orderId).order("created_at"),
+    const [{ data: buys }, { data: g }, { data: sh }, { data: bs }] = await Promise.all([
+      admin.from("blank_orders").select("id, supplier, supplier_order, po, status, lines, total, expected_date, placed_via, created_at, received_at, note").eq("order_id", orderId).neq("status", "cancelled").order("created_at"),
       admin.from("order_goods").select("status, supplier, supplier_po, ship_date, expected").eq("order_id", orderId).maybeSingle(),
       admin.from("goods_shipments").select("carrier, tracking, eta, track_status, track_detail, est_delivery, delivered_at").eq("order_id", orderId).order("created_at"),
-      admin.from("supplier_manifest_lines").select("supplier, supplier_order, customer_po, tracking, method, track_status, track_detail, est_delivery, delivered_at").eq("order_id", orderId).eq("kind", "blanks"),
+      // our goods' boxes: from the supplier manifests matched every night (lib/manifest.ts applyBlanks) and from Add here
+      admin.from("blank_shipments").select("blank_order_id, supplier, carrier, tracking, eta, track_status, track_detail, est_delivery, delivered_at").eq("order_id", orderId).order("created_at"),
     ]);
-    const mans = (ml || []) as { supplier: string; supplier_order: string; customer_po: string; tracking: string; method: string; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null }[];
-    const fbs: PanelBuy[] = ((buys || []) as BuyRow[]).map((b) => {
-      const own = (b.tracking || []).filter((t) => t && t.tracking);
-      // a supplier manifest's boxes for this purchase (same supplier, its order number or our PO)
-      const keys = new Set([b.supplier_order, b.po].flatMap((x) => String(x || "").split(/,\s*/)).filter(Boolean).map((x) => x.toLowerCase()));
-      const fromMan = mans.filter((m) => (!b.supplier || !m.supplier || m.supplier === b.supplier) && (keys.has(String(m.supplier_order || "").toLowerCase()) || keys.has(String(m.customer_po || "").toLowerCase())));
-      const seen = new Set(own.map((t) => t.tracking));
-      const man: PanelTrack[] = [];
-      for (const m of fromMan) if (m.tracking && !seen.has(m.tracking)) { seen.add(m.tracking); man.push({ carrier: carrierOf(m.tracking) || m.method || "", tracking: m.tracking, status: m.track_status, detail: m.track_detail, eta: m.est_delivery, delivered: m.delivered_at }); }
+    const boxes = (bs || []) as { blank_order_id: string | null; supplier: string | null; carrier: string; tracking: string; eta: string | null; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null }[];
+    const rows = (buys || []) as BuyRow[];
+    const fbs: PanelBuy[] = rows.map((b) => {
+      // its boxes; a box not tied to one goes with the same supplier's (or the only) purchase
+      const mine = boxes.filter((x) => x.blank_order_id ? x.blank_order_id === b.id : (rows.find((r) => r.supplier === x.supplier) || rows[0])?.id === b.id);
+      const tracking: PanelTrack[] = mine.filter((x) => x.tracking).map((x) => ({ carrier: x.carrier || carrierOf(x.tracking), tracking: x.tracking, status: x.track_status, detail: x.track_detail, eta: x.est_delivery || x.eta, delivered: x.delivered_at }));
       return {
         id: b.id, vendor: supplierLabel(b.supplier) || "Vendor", po: String(b.supplier_order || b.po || ""), pcs: (b.lines || []).reduce((a, l) => a + (+(l.qty || 0) || 0), 0),
-        total: b.total == null ? null : +b.total, expected: b.expected_date, status: b.received_at ? "received" : b.status || "ordered", via: b.placed_via || "", at: b.created_at, note: b.note || "", tracking: [...own, ...man],
+        total: b.total == null ? null : +b.total, expected: b.expected_date, status: b.received_at ? "received" : b.status || "ordered", via: b.placed_via || "", at: b.created_at, note: b.note || "", tracking,
       } as PanelBuy;
     });
     const ships = (sh || []) as { carrier: string; tracking: string; eta: string | null; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null }[];
@@ -85,25 +83,36 @@ export async function addGoodsInfo(orderId: string, a: GoodsAdd): Promise<{ ok: 
     }
     // ours: a vendor we name (SanMar / S&S by their key so Order goods' orders and these read the same)
     const key = /^s\s*&\s*s|^ss$|activewear/i.test(vendor) ? "ss" : /^san\s*mar/i.test(vendor) ? "sanmar" : vendor;
-    const t: PanelTrack | null = tracking ? { carrier: a.carrier || carrierOf(tracking), tracking } : null;
-    if (t) { const f = await startTracker(tracking, t.carrier).catch(() => null); if (f) Object.assign(t, { status: f.track_status, detail: f.track_detail, eta: f.est_delivery, delivered: f.delivered_at, tracker_id: f.tracker_id }); }
-    const { data: mine } = await admin.from("blank_orders").select("id, supplier, supplier_order, po, tracking, expected_date").eq("order_id", orderId);
-    const rows = (mine || []) as { id: string; supplier: string | null; supplier_order: string | null; po: string | null; tracking: PanelTrack[] | null; expected_date: string | null }[];
-    // tracking (or a date) for a purchase we already have: the one picked, or the same vendor and number, or the only one from that vendor
+    const carrier = tracking ? a.carrier || carrierOf(tracking) : "";
+    const { data: mine } = await admin.from("blank_orders").select("id, supplier, supplier_order, po").eq("order_id", orderId).neq("status", "cancelled");
+    const rows = (mine || []) as { id: string; supplier: string | null; supplier_order: string | null; po: string | null }[];
+    // tracking (or a date) for a purchase we already have: the one picked, the same order number, or the only one from that vendor (or the only one)
     const same = a.buyId ? rows.find((r) => r.id === a.buyId)
       : rows.find((r) => po && [r.supplier_order, r.po].some((x) => String(x || "").toLowerCase() === po.toLowerCase()))
         || (!po && vendor ? rows.filter((r) => (r.supplier || "").toLowerCase() === key.toLowerCase()) : []).find((_, i, xs) => xs.length === 1)
         || (!po && !vendor && rows.length === 1 ? rows[0] : undefined);
+    let buyId = same?.id || null;
     if (same) {
-      const list = (same.tracking || []).filter((x) => !t || x.tracking !== t.tracking);
-      const { error } = await admin.from("blank_orders").update({ tracking: t ? [...list, t] : list, ...(eta ? { expected_date: eta } : {}), ...(po && !same.supplier_order ? { supplier_order: po } : {}) }).eq("id", same.id);
-      if (error) return { ok: false, error: error.message };
+      if (eta || (po && !same.supplier_order)) { const { error } = await admin.from("blank_orders").update({ ...(eta ? { expected_date: eta } : {}), ...(po && !same.supplier_order ? { supplier_order: po } : {}) }).eq("id", same.id); if (error) return { ok: false, error: error.message }; }
     } else {
       const { data: o } = await admin.from("orders").select("number, customer_id").eq("id", orderId).maybeSingle();
-      const { error } = await admin.from("blank_orders").insert({ order_id: orderId, customer_id: o?.customer_id || null, label: `#${o?.number ?? ""}`, supplier: key || "other", supplier_order: po, po, status: "ordered", placed_via: "manual",
-        lines: [], total: null, expected_date: eta, note: (a.note || "").slice(0, 500), created_by: v.email || "staff", tracking: t ? [t] : [] });
+      const { data: made, error } = await admin.from("blank_orders").insert({ order_id: orderId, customer_id: o?.customer_id || null, label: `#${o?.number ?? ""}`, supplier: key || "other", supplier_order: po, po, status: "ordered", placed_via: "manual",
+        lines: [], total: null, expected_date: eta, note: (a.note || "").slice(0, 500), created_by: v.email || "staff" }).select("id").single();
       if (error) return { ok: false, error: error.message };
+      buyId = made?.id || null;
+      await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
     }
+    // the box goes where the nightly manifests put ours (blank_shipments), followed live
+    if (tracking) {
+      const { data: had } = await admin.from("blank_shipments").select("id").eq("order_id", orderId).eq("tracking", tracking).maybeSingle();
+      if (!had) {
+        const { data: row, error } = await admin.from("blank_shipments").insert({ order_id: orderId, blank_order_id: buyId, supplier: key || null, carrier, tracking, eta, note: `Added by ${v.email || "staff"}`, source: "staff" }).select("id").single();
+        if (error) return { ok: false, error: error.message };
+        const f = await startTracker(tracking, carrier).catch(() => null);
+        if (f && row) await admin.from("blank_shipments").update(f).eq("id", row.id);
+      }
+    }
+    const t = tracking ? { carrier, tracking } : null;
     await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: `Goods we ordered: ${[supplierLabel(key) || vendor, po && `order ${po}`, t && `${t.carrier} ${t.tracking}`, eta && `arrives ${eta}`].filter(Boolean).join(" · ")}`, actor: v.email });
     return { ok: true };
   } catch (e) { return fail(e); }
