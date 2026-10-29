@@ -287,11 +287,13 @@ export const sanmarPOMode = () => { const v = process.env.SANMAR_PO?.trim().toLo
 export const sanmarPOWhse = () => process.env.SANMAR_PO_WHSE?.trim().toLowerCase() === "on";
 const poHost = () => (sanmarPOMode() === "edev" ? "https://edev-ws.sanmar.com:8080" : "https://ws.sanmar.com:8080");
 /** SanMar's test system (EDEV) has its own web services login (Oct 28: sent by their integration team), put in Vercel by
- *  Nick as SANMAR_EDEV_USERNAME / SANMAR_EDEV_PASSWORD; without them the live login is used */
+ *  Nick as SANMAR_EDEV_USERNAME / SANMAR_EDEV_PASSWORD (and SANMAR_EDEV_CUSTOMER_NUMBER if theirs differs); without
+ *  them the live login is used. Their guide: "EDEV credentials are different than production credentials" */
 const poAuth = () => {
   const c = cred(), edev = sanmarPOMode() === "edev";
   const user = (edev && process.env.SANMAR_EDEV_USERNAME?.trim()) || c.user, pass = (edev && process.env.SANMAR_EDEV_PASSWORD?.trim()) || c.pass;
-  return `<arg1><sanMarCustomerNumber>${esc(c.num)}</sanMarCustomerNumber><sanMarUserName>${esc(user)}</sanMarUserName><sanMarUserPassword>${esc(pass)}</sanMarUserPassword><senderId></senderId><senderPassword></senderPassword></arg1>`;
+  const num = (edev && process.env.SANMAR_EDEV_CUSTOMER_NUMBER?.trim()) || c.num;
+  return `<arg1><sanMarCustomerNumber>${esc(num)}</sanMarCustomerNumber><sanMarUserName>${esc(user)}</sanMarUserName><sanMarUserPassword>${esc(pass)}</sanMarUserPassword><senderId></senderId><senderPassword></senderPassword></arg1>`;
 };
 /** SanMar's stock a warehouse must keep after our order (Oct 28, SanMar: an order for a warehouse's last pieces is held
  *  for a person to look at; "most customers use 20-50 units as a buffer"): only stock past this is offered */
