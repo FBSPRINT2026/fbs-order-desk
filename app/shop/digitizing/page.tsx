@@ -216,10 +216,10 @@ export default function Digitizing() {
                   <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (orders && !n ? " z" : "")}>{orders ? n : "…"}</span></span>
                   <span className="dgz-nm">{l}</span>
                   <span className="dgz-hint">{hint}</span>
-                  {/* the logos at this station, on white tiles side by side (Oct 29, Nick: "spread them out") */}
+                  {/* every logo at this station, side by side (Oct 29, Nick: "spread them out… we don't need a white box around
+                      the little squares and you can show all of them") */}
                   <span className="dgz-tray">{!orders ? null : !n ? <span className="dgz-empty">Nothing waiting</span> : <>
-                    {here.slice(0, 3).map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <PrintThumb d={it.d} url={urls[it.d.id]} print={it.im} lines={it.g.lines} /> : <small className="dgz-noart">{it.d ? "…" : "No logo"}</small>}</span>)}
-                    {n > 3 && <span className="dgz-more">+{n - 3}</span>}
+                    {here.map((it) => <span key={it.key} className="dgz-tile" title={`${it.d ? designLabel(it.d) : "No logo yet"} · #${it.o.number}`}>{it.d && urls[it.d.id] ? <PrintThumb d={it.d} url={urls[it.d.id]} print={it.im} lines={it.g.lines} /> : <small className="dgz-noart">{it.d ? "…" : "No logo"}</small>}</span>)}
                   </>}</span>
                 </button>
               );
@@ -290,16 +290,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
     setChg(null); setChgNote("");
     onSew(`Sent back to ${DIGITIZER.name.split(" ")[0]} for changes. Their fixed file comes in here by itself.`);
   }
-  // the steps it goes through, with when each happened
   const live = sws.find((x) => !x.archived_at);
-  const steps: { k: string; label: string; sub?: string; state: "" | "d" | "n" }[] = (() => {
-    const fAt = (f as EmbFile | undefined)?.at;
-    const done = [!!req || !!f, !!f && !(req?.changes && req.at > (fAt || "")), !!live, live?.status === "approved", st === "ok"];
-    const subs = [req ? `${req.changes ? "Changes asked" : "Asked"} ${day(req.at)}` : f ? "On file" : "", fAt ? `${day(fAt)}${reply ? " · from " + DIGITIZER.name.split(" ")[0] : ""}` : "", live ? day(live.created_at) : "", live?.decided_at ? day(live.decided_at) : live?.sent_at ? `Sent ${day(live.sent_at)}` : "", st === "ok" ? "Kept for reorders" : ""];
-    const labels = [req?.changes && req.at > (fAt || "") ? "Changes asked" : "Requested", "Files in", "Sew-out", "Customer approval", "On file"];
-    const next = done.findIndex((x) => !x);
-    return labels.map((label, i) => ({ k: label, label, sub: subs[i], state: done[i] ? "d" : i === next ? "n" : "" }));
-  })();
   const [copied, setCopied] = useState(false);
   // the DST, read once the row is opened (drawn thread by thread: components/DstPreview.tsx)
   const [dstInfo, setDstInfo] = useState<DstInfo | null>(null);
@@ -327,8 +318,8 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
       </tr>
       {open && (
         <tr className="dgz-more"><td colSpan={6}>
-          {/* the logo's way through digitizing (Oct 28, Nick: "rethink the layout of this and make it look a little nicer") */}
-          <div className="dgz-steps">{steps.map((x) => <div key={x.k} className={x.state}><b>{x.label}</b><small>{x.sub || "\u00a0"}</small></div>)}</div>
+          {/* no step tracker here (Oct 29, Nick: "I don't need the graphical representation of where we're at… we're already in
+              the needs sew-out section"): the line at the top says where it is */}
           <div className={"dgz-grid" + (f ? "" : " nofile")}>
             {f && <div className="dgz-card dgz-pic-big">
               {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(it.g.lines?.[0]?.color || "") || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
