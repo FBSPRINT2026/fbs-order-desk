@@ -1,18 +1,20 @@
 "use client";
 import { useMemo } from "react";
+import { createPortal } from "react-dom";
 import { qrSvg } from "@/lib/qr";
 
 /**
  * THE "take it with your phone" pop-up (lib/phoneSnap.ts): any photo button on a computer opens this. The QR code opens
  * the short link on a phone, the picture is taken there, and `status` turns green when it arrives. "Use a photo on this
- * computer" still picks a file here.
+ * computer" still picks a file here. Drawn on the page's body, so a table row or toolbar it's opened from can't squeeze it.
  */
 export default function PhoneSnapAsk({ title, sub, path, status, done, error, onFile, onClose }: {
   title: string; sub: string; path: string | null; status: string; done?: boolean; error?: string; onFile: (f: File) => void; onClose: () => void;
 }) {
   const url = path && typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : "";
   const qr = useMemo(() => (url ? qrSvg(url, 2).svg : ""), [url]);
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label={title} onClick={onClose} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
       <div className="dla psn" onClick={(e) => e.stopPropagation()}>
         <h3>{title}</h3>
@@ -34,6 +36,7 @@ export default function PhoneSnapAsk({ title, sub, path, status, done, error, on
           <button type="button" className="btn" onClick={onClose}>{done ? "Close" : "Cancel"}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

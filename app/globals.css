@@ -15677,7 +15677,7 @@ main.main .sep-sr-m .sep-szf{height:36px;padding:0 9px}
 html body main.main .sep-sr-m .sep-szf input{height:32px!important;font-size:14px!important}
 main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 /* the "take it with your phone" pop-up (components/PhoneSnapAsk.tsx) and the phone page it opens (app/snap/[id]) */
-.dla.psn{width:min(460px,100%)}
+.dla.psn{width:min(460px,100%);white-space:normal;text-align:left}
 .psn-row{display:flex;gap:16px;align-items:center;margin:12px 0}
 .psn-qr{width:156px;height:156px;flex:none;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;display:grid;place-items:center;box-sizing:border-box}
 .psn-qr span,.psn-qr svg{display:block;width:100%;height:100%}
