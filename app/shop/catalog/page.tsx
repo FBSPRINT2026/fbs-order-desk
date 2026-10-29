@@ -1,4 +1,5 @@
 "use client";
+import { bySupplierStyle, garmentSupName, inCatalogHit, lookupQuery } from "@/lib/garmentSup";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -43,7 +44,7 @@ export default function CatalogPage() {
   const [ssBusy, setSsBusy] = useState("");
   type Hit = { styleID: number; brand: string; style: string; title: string; supplier?: "ss" | "sanmar" };
   const [ssHits, setSsHits] = useState<Hit[]>([]);
-  const have = (h: Hit) => h.supplier === "sanmar" ? items.some((g) => g.supplier === "sanmar" && (g.supplier_style || g.style).toLowerCase() === h.style.toLowerCase()) : items.some((g) => g.ss_style_id === h.styleID);
+  const have = (h: Hit) => inCatalogHit(items, h);
   async function searchSS() {
     const q = ssq.trim();
     if (q.length < 2) return;
@@ -58,10 +59,10 @@ export default function CatalogPage() {
   async function addOne(h: Hit) {
     const label = `${h.brand} ${h.style}`;
     setSsBusy(label);
-    const r = await fetch(h.supplier === "sanmar" ? `/api/ss/lookup?supplier=sanmar&style=${encodeURIComponent(h.style)}` : `/api/ss/lookup?styleid=${h.styleID}`);
+    const r = await fetch(`/api/ss/lookup?${lookupQuery(h)}`);
     const j = await r.json().catch(() => ({}));
     setSsBusy("");
-    setMsg(r.ok ? `Added ${label} from ${h.supplier === "sanmar" ? "SanMar" : "S&S"}.` : j.error || "Couldn't add it");
+    setMsg(r.ok ? `Added ${label} from ${garmentSupName(h.supplier)}.` : j.error || "Couldn't add it");
     load();
   }
 
@@ -73,8 +74,8 @@ export default function CatalogPage() {
     let ok = 0;
     for (const st of styles) {
       setSsBusy(st);
-      const g = items.find((x) => x.style === st && (x.ss_style_id || x.supplier === "sanmar"));
-      const r = await fetch(g?.ss_style_id ? `/api/ss/lookup?styleid=${g.ss_style_id}` : g?.supplier === "sanmar" ? `/api/ss/lookup?supplier=sanmar&style=${encodeURIComponent(g.supplier_style || st)}` : `/api/ss/lookup?style=${encodeURIComponent(st)}`);
+      const g = items.find((x) => x.style === st && (x.ss_style_id || bySupplierStyle(x.supplier)));
+      const r = await fetch(g?.ss_style_id ? `/api/ss/lookup?styleid=${g.ss_style_id}` : bySupplierStyle(g?.supplier) ? `/api/ss/lookup?supplier=${g!.supplier}&style=${encodeURIComponent(g!.supplier_style || st)}` : `/api/ss/lookup?style=${encodeURIComponent(st)}`);
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.garment) ok++; else bad.push(`${st}: ${j.error || r.status}`);
     }

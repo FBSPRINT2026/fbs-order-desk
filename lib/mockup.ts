@@ -851,7 +851,7 @@ export function teeSvg(hex: string, view: View, heather = false) {
 }
 
 /** Same-origin link to an S&S photo (so it can be drawn into the saved mockup). */
-export const ssImg = (path: string) => (!path ? "" : path.startsWith("store:") ? `/api/ss/img?s=${encodeURIComponent(path.slice(6))}` : /^https?:\/\/[\w.-]*sanmar\.com\//i.test(path) ? `/api/ss/img?u=${encodeURIComponent(path)}` : `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}`);
+export const ssImg = (path: string) => (!path ? "" : path.startsWith("store:") ? `/api/ss/img?s=${encodeURIComponent(path.slice(6))}` : /^https?:\/\/[\w.-]*(sanmar|onestopinc)\.com\//i.test(path) ? `/api/ss/img?u=${encodeURIComponent(path)}` : `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}`);
 
 /** a short-sleeve tee, from its name and description (for measureGarment's `tee`) */
 // a raglan is a baseball tee with 3/4 sleeves unless it says short sleeve (Oct 21: the Tultex 245 "Fine Jersey Raglan

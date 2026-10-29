@@ -1,4 +1,5 @@
 "use client";
+import { bySupplierStyle } from "@/lib/garmentSup";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
 import CustomerPick from "@/components/CustomerPick";
@@ -132,7 +133,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${supplier === "sanmar" ? "&supplier=sanmar" : ""}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style at S&S or SanMar."); return null; }
       const g = j.garment as Garment;

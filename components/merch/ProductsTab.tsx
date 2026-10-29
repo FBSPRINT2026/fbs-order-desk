@@ -1,4 +1,5 @@
 "use client";
+import { bySupplierStyle, garmentSupName, lookupQuery, supplierStyleOf } from "@/lib/garmentSup";
 import { useEffect, useMemo, useState } from "react";
 import { reorderProducts, saveProduct, setProductActive, storeDesigns, suggestPrice, uploadStoreImage, type StoreBundle } from "@/app/merch-actions";
 import { bySize, isYouthSize, r2, storeImg, unitPrice, type Product, type ProductColor, type YouthBlank } from "@/lib/merch";
@@ -8,7 +9,7 @@ import type { Garment } from "@/lib/pricing";
 
 const money = (n: number) => (+n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 type Design = { id: string; number: number; name: string; url: string; width_px: number | null; height_px: number | null; colors: number; inks: string };
-type Hit = { styleID: number; brand: string; style: string; title: string; image: string; supplier: "ss" | "sanmar" };
+type Hit = { styleID: number; brand: string; style: string; title: string; image: string; supplier: "ss" | "sanmar" | "onestop"; supplierStyle?: string };
 
 /** The store's products: what's on it, the price breakdown (FBS + give-back = shopper price), and the quick builder. */
 export default function ProductsTab({ b, reload }: { b: StoreBundle; reload: () => void }) {
@@ -61,7 +62,7 @@ export default function ProductsTab({ b, reload }: { b: StoreBundle; reload: () 
 const LOCS: { k: string; w: number }[] = [{ k: "Full Front", w: 11 }, { k: "Left Chest", w: 4 }, { k: "Medium Front", w: 9 }, { k: "Full Back", w: 12 }];
 
 async function lookup(h: { styleID?: number; style?: string; supplier?: string }): Promise<Garment> {
-  const q = h.supplier === "sanmar" ? `style=${encodeURIComponent(h.style || "")}&supplier=sanmar` : h.styleID ? `styleid=${h.styleID}` : `style=${encodeURIComponent(h.style || "")}`;
+  const q = lookupQuery(h);
   const r = await fetch(`/api/ss/lookup?${q}`); const j = await r.json();
   if (!r.ok || !j.garment) throw new Error(j.error || "Couldn't load that style.");
   return j.garment as Garment;
@@ -81,7 +82,7 @@ function StylePick({ label, onPick, current }: { label: string; onPick: (g: Garm
       {(!current || q) && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Style # or name" />}
       {hits.length > 0 && <div className="ms-hits">{hits.slice(0, 12).map((h) => (
         <button key={`${h.supplier}${h.styleID}${h.style}`} type="button" disabled={busy} onClick={async () => { setBusy(true); setErr(""); try { onPick(await lookup(h)); setQ(""); setHits([]); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>
-          {h.image ? <img src={h.supplier === "sanmar" ? ssImg(h.image) : ssImg(h.image)} alt="" /> : <span />}<span><b>{h.brand} {h.style}</b><small>{h.title} · {h.supplier === "sanmar" ? "SanMar" : "S&S"}</small></span>
+          {h.image ? <img src={ssImg(h.image)} alt="" /> : <span />}<span><b>{h.brand} {h.style}</b><small>{h.title} · {garmentSupName(h.supplier)}</small></span>
         </button>
       ))}</div>}
       {busy && <div className="faint">Loading colors and sizes…</div>}
@@ -160,11 +161,11 @@ function Builder({ b, product, onClose, onSaved }: { b: StoreBundle; product: Pr
         out.push({ name: c, hex: hexOf(g, c), image, photo, sizes: colorSizes });
       }
       setBusy("Saving…");
-      const youth: YouthBlank | null = yg && sizes.some(isYouthSize) ? { supplier: yg.supplier || "ss", style: yg.supplier === "sanmar" ? yg.supplier_style || yg.style : yg.style, brand: yg.brand, garment_id: yg.id, sizes: sizes.filter(isYouthSize), cost: yg.size_costs || {} } : null;
+      const youth: YouthBlank | null = yg && sizes.some(isYouthSize) ? { supplier: yg.supplier || "ss", style: supplierStyleOf(yg), brand: yg.brand, garment_id: yg.id, sizes: sizes.filter(isYouthSize), cost: yg.size_costs || {} } : null;
       const r = await saveProduct(b.store.id, {
         id: product?.id, name, description: desc, design_id: designId || null,
         imprint: { location: loc, width, colors: inks, method, inks: design?.inks || "", youth },
-        supplier: g.supplier || "ss", style: g.supplier === "sanmar" ? g.supplier_style || g.style : g.style, brand: g.brand, garment_id: g.id,
+        supplier: g.supplier || "ss", style: supplierStyleOf(g), brand: g.brand, garment_id: g.id,
         colors: out, sizes, cost: g.size_costs || {}, base_price: base, giveback: give, upcharges: ups, personalize: pers?.label ? [pers] : [], active: product?.active ?? true,
       });
       if (!r.ok) throw new Error(r.error);

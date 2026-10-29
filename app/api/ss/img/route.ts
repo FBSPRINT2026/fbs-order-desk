@@ -16,8 +16,8 @@ export async function GET(req: Request) {
   }
   let src = "";
   if (u) {
-    // SanMar photos: full URL on a sanmar.com host
-    if (!/^https:\/\/([\w-]+\.)*sanmar\.com\/[\w\/.\-%~]+\.(jpe?g|png|webp)(\?[\w=&.\-]*)?$/i.test(u)) return NextResponse.json({ error: "Bad image address" }, { status: 400 });
+    // SanMar and One Stop photos: a full URL on their own host
+    if (!/^https:\/\/([\w-]+\.)*(sanmar|onestopinc)\.com\/[\w\/.\-%~]+\.(jpe?g|png|webp)(\?[\w=&.\-]*)?$/i.test(u)) return NextResponse.json({ error: "Bad image address" }, { status: 400 });
     src = u;
   } else {
     if (!/^Images\/[\w\/.\-]+\.(jpe?g|png|webp)$/i.test(p)) return NextResponse.json({ error: "Bad image path" }, { status: 400 });

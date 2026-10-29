@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ssConfigured, ssLookup } from "@/lib/ss";
 import { sanmarConfigured, sanmarLookup } from "@/lib/sanmar";
 import { sanmarStyles } from "@/lib/sanmarStyle";
+import { osConfigured, osGarment } from "@/lib/onestop";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
   const id = parseInt(sp.get("styleid") || "", 10) || undefined;
   const want = sp.get("supplier");
   if (!q && !id) return NextResponse.json({ error: "Enter a style" }, { status: 400 });
-  if (!ssConfigured() && !sanmarConfigured()) return NextResponse.json({ error: "No supplier is connected yet (S&S or SanMar keys missing)." }, { status: 503 });
+  if (!ssConfigured() && !sanmarConfigured() && !osConfigured()) return NextResponse.json({ error: "No supplier is connected yet (S&S or SanMar keys missing)." }, { status: 503 });
   try {
     const admin = createAdminClient();
     const save = async (row: Record<string, unknown>, match: () => Promise<{ id: string } | null>) => {
@@ -26,8 +27,19 @@ export async function GET(req: Request) {
       if (res.error) throw new Error(res.error.message);
       return res.data as Record<string, unknown>;
     };
-    // S&S first (unless SanMar was asked for)
-    if (want !== "sanmar" && ssConfigured()) {
+    // One Stop, when asked for (a One Stop search result: Oct 29, Nick), or below when S&S and SanMar don't have it
+    const oneStop = async () => {
+      const g = await osGarment(admin, q, sp.get("brand") || "");
+      if (!g) return null;
+      const data = await save({ ...g, ss_style_id: null, synced_at: new Date().toISOString() }, async () => {
+        const { data: m } = await admin.from("garments").select("id").eq("supplier", "onestop").ilike("supplier_style", g.supplier_style).maybeSingle();
+        return (m as { id: string } | null) || null;
+      });
+      return NextResponse.json({ garment: isStaff ? data : publicGarment(data) });
+    };
+    if (want === "onestop" && q && osConfigured()) { const r = await oneStop(); if (r) return r; }
+    // S&S first (unless SanMar or One Stop was asked for)
+    if (want !== "sanmar" && want !== "onestop" && ssConfigured()) {
       // SanMar's number for another brand's style (BC3001CVC, NL6210, G64400): S&S knows it as 3001CVC, 6210, 64400
       const g = await ssLookup(q, id).catch((e) => { if (!sanmarConfigured() || id) throw e; return null; })
         || (!id && /^(BC|NL|G|C|DT|AA)\d/i.test(q) ? await ssLookup(q.replace(/^(BC|NL|G|C|DT|AA)(?=\d)/i, "")).catch(() => null) : null);
@@ -42,7 +54,7 @@ export async function GET(req: Request) {
       }
     }
     // SanMar (Port Authority, Sport-Tek, District, Nike, OGIO, CornerStone… and anything S&S doesn't have)
-    if (q && sanmarConfigured()) {
+    if (q && want !== "onestop" && sanmarConfigured()) {
       // S&S's number for it at SanMar (3001CVC is BC3001CVC there: lib/sanmarStyle.ts)
       let g = await sanmarLookup(q);
       if (!g) for (const t of (await sanmarStyles(admin, q)).filter((t) => t !== q.toUpperCase())) { g = await sanmarLookup(t).catch(() => null); if (g) break; }
@@ -54,7 +66,9 @@ export async function GET(req: Request) {
         return NextResponse.json({ garment: isStaff ? data : publicGarment(data) });
       }
     }
-    return NextResponse.json({ error: `No style matching "${q}" at ${[ssConfigured() && "S&S", sanmarConfigured() && "SanMar"].filter(Boolean).join(" or ")}.` }, { status: 404 });
+    // One Stop last: a style neither carries (their own brands: Fruit of the Loom, LAT, Izod…)
+    if (q && want !== "onestop" && osConfigured()) { const r = await oneStop().catch(() => null); if (r) return r; }
+    return NextResponse.json({ error: `No style matching "${q}" at ${[ssConfigured() && "S&S", sanmarConfigured() && "SanMar", osConfigured() && "One Stop"].filter(Boolean).join(", ")}.` }, { status: 404 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }

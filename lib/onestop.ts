@@ -220,3 +220,87 @@ export async function osTrackingPass(admin: SupabaseClient): Promise<{ added: nu
   }
   return { added };
 }
+
+/* ---------- the catalog, for the garment search and the Mockup Creator (Oct 29, Nick: "integrating their product
+ * catalog and their images, like into the mockup creator") ---------- */
+
+const MEDIA = "https://media.onestopinc.com/";
+const media = (p: unknown) => { const x = s(p); return !x ? "" : /^https?:\/\//i.test(x) ? x : MEDIA + x.replace(/^\//, ""); };
+/** our size names (S, M, L, 2XL…) from One Stop's (SM, MD, LG, 2X…) */
+export const osOurSize = (z: string) => { const k = String(z || "").toUpperCase().replace(/\s+/g, ""); return ({ SM: "S", MD: "M", LG: "L", "2X": "2XL", "3X": "3XL", "4X": "4XL", "5X": "5XL", "6X": "6XL", XXL: "2XL", XXXL: "3XL", ONE: "OS", OSFA: "OS" } as Record<string, string>)[k] || k; };
+
+/** a style found at One Stop: the maker's brand and style number (Fruit of the Loom 3930), and One Stop's own code */
+export type OsHit = { brand: string; style: string; osStyle: string; title: string; image: string };
+
+/** One Stop styles matching what was typed (their own search across names, codes and makers), one row per style */
+export async function osSearch(q: string): Promise<OsHit[]> {
+  const t = s(q);
+  if (t.length < 2) return [];
+  const j = await os<unknown>(`items/?search=${encodeURIComponent(t)}&flat=Y&supplies=false`, { timeoutMs: 15_000 });
+  const out = new Map<string, OsHit>();
+  for (const r of results(j)) {
+    const it = item(r), code = it.style || s(r.style_code);
+    if (!code || out.has(code)) continue;
+    const imgs = (r.images || r.image_paths || {}) as Raw;
+    out.set(code, { brand: it.brand, style: it.millStyle || code, osStyle: code, title: it.name, image: media(r.image || r.main_image || r.style_image || imgs.front || imgs.main || `images/styles/standard/${code}.jpg`) });
+    if (out.size >= 25) break;
+  }
+  return [...out.values()];
+}
+
+export type OsGarment = {
+  style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[];
+  size_costs: Record<string, number>; color_size_costs: Record<string, Record<string, number>>; image: string;
+  color_images: Record<string, { front: string; back: string; side: string; hex: string }>; supplier: "onestop"; supplier_style: string;
+};
+
+/**
+ * A One Stop style as a catalog garment (the same shape as S&S's and SanMar's): every color with its front, back and
+ * side photos, the sizes, and our price by size and color. `code`: One Stop's style code (NL207CVC, GD110), or the maker's
+ * style number with `brand` (6210 + Next Level), which is looked up first.
+ */
+export async function osGarment(admin: SupabaseClient, code: string, brand = ""): Promise<OsGarment | null> {
+  let st = s(code).toUpperCase();
+  if (!st) return null;
+  // the maker's number: their code for it
+  if (brand || /^\d/.test(st)) {
+    const its = await osStyle(admin, brand, st).catch(() => [] as OsItem[]);
+    if (its.length) st = its[0].style.toUpperCase();
+  }
+  const j = await os<Raw>(`items/style/${encodeURIComponent(st)}/`).catch(() => null);
+  const top = ((j?.results as Raw[] | undefined)?.[0] || j || {}) as Raw;
+  const colorsRaw = (top.colors || {}) as Record<string, Raw>;
+  type Sz = { code: string; size: string; color: string };
+  const skus: Sz[] = [];
+  const color_images: OsGarment["color_images"] = {};
+  for (const c of Object.values(colorsRaw)) {
+    const name = s(c.name);
+    if (!name) continue;
+    color_images[name] = { front: media(c.front || c.main), back: media(c.back), side: media(c.side), hex: "" };
+    for (const z of (Array.isArray(c.sizes) ? c.sizes : []) as Raw[]) { const cd = s(z.onestop_code || z.code); if (cd && z.size) skus.push({ code: cd, size: osOurSize(s(z.size)), color: name }); }
+  }
+  if (!skus.length) return null;
+  // the maker and name: from the style's record, or from one of its sizes
+  let mk = { brand: s(top.mill_name), millStyle: s(top.mill_style_code), name: s(top.web_name || top.description), desc: s(top.web_description) };
+  if (!mk.brand) {
+    const one = results(await os<unknown>(`items/?code=${encodeURIComponent(skus[0].code)}`).catch(() => null))[0];
+    if (one) mk = { brand: s(one.mill_name), millStyle: s(one.mill_style_code), name: s(one.web_name || one.description), desc: s(one.web_description) };
+  }
+  const px = await osPrices(skus.slice(0, 600).map((x) => x.code)).catch(() => new Map<string, { onHand: number; price: number; gtin: string }>());
+  const ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"];
+  const sizes = [...new Set(skus.map((x) => x.size))].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
+  const size_costs: Record<string, number> = {}, color_size_costs: Record<string, Record<string, number>> = {};
+  for (const k of skus) {
+    const v = px.get(k.code)?.price || 0;
+    if (!(v > 0)) continue;
+    size_costs[k.size] = size_costs[k.size] ? Math.min(size_costs[k.size], v) : v;
+    const m = (color_size_costs[k.color] ||= {}); m[k.size] = m[k.size] ? Math.min(m[k.size], v) : v;
+  }
+  const base = Math.min(...Object.values(size_costs), Infinity);
+  const colors = Object.keys(color_images);
+  const first = color_images[colors.find((c) => /white/i.test(c)) || colors[0]];
+  return {
+    style: (mk.millStyle || st).toUpperCase(), brand: mk.brand || "One Stop", description: mk.name, fabric: mk.desc.replace(/<\/li>/gi, "\n").replace(/<[^>]+>/g, "").replace(/\n{2,}/g, "\n").trim().slice(0, 600),
+    fabric_at: new Date().toISOString(), colors, cost: isFinite(base) ? base : 0, sizes, size_costs, color_size_costs, image: first?.front || "", color_images, supplier: "onestop", supplier_style: st,
+  };
+}

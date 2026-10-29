@@ -3,10 +3,12 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandRank, ssConfigured, ssSearch, type SSHit } from "@/lib/ss";
 import { sanmarConfigured } from "@/lib/sanmar";
+import { osConfigured, osSearch } from "@/lib/onestop";
+import { brandKey, carries, supplierBrands } from "@/lib/supplierBrands";
 
 export const dynamic = "force-dynamic";
 
-type Hit = SSHit & { supplier: "ss" | "sanmar" };
+type Hit = SSHit & { supplier: "ss" | "sanmar" | "onestop"; /** One Stop's own code for the style (NL207CVC), for looking it up */ supplierStyle?: string };
 
 /**
  * Words people type that the catalog says another way (Oct 21, Nick: "A4 cooling crew" didn't find A4's Cooling
@@ -58,26 +60,34 @@ async function sanmarSearch(q: string): Promise<Hit[]> {
     .map((r) => ({ styleID: 0, brand: r.brand || "SanMar", style: r.style, title: r.title, image: r.image, supplier: "sanmar" as const }));
 }
 
-// Signed-in staff and customers: list S&S and SanMar styles matching a style number or name (no prices in the results).
+// Signed-in staff and customers: list S&S, SanMar (and One Stop's own brands) styles matching a style number or name (no prices in the results).
 export async function GET(req: Request) {
   const { user } = await getViewer();
   if (!user) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
-  const ss = ssConfigured(), sm = sanmarConfigured();
-  if (!ss && !sm) return NextResponse.json({ error: "No supplier is connected yet." }, { status: 503 });
+  const ss = ssConfigured(), sm = sanmarConfigured(), ost = osConfigured();
+  if (!ss && !sm && !ost) return NextResponse.json({ error: "No supplier is connected yet." }, { status: 503 });
   const q = new URL(req.url).searchParams.get("q")?.trim() || "";
   if (q.length < 2) return NextResponse.json({ results: [] });
   let err = "";
-  const [a, b] = await Promise.all([
+  const [a, b, o0, brands] = await Promise.all([
     ss ? ssSearch(q).then((r) => r.map((h): Hit => ({ ...h, supplier: "ss" }))).catch((e) => { err = e instanceof Error ? e.message : String(e); return [] as Hit[]; }) : Promise.resolve([] as Hit[]),
     sm ? sanmarSearch(q).catch(() => [] as Hit[]) : Promise.resolve([] as Hit[]),
+    ost ? osSearch(q).catch(() => []) : Promise.resolve([]),
+    ost ? supplierBrands(createAdminClient()).catch(() => null) : Promise.resolve(null),
   ]);
-  if (!a.length && !b.length && err) return NextResponse.json({ error: err }, { status: 502 });
+  // One Stop (Oct 29, Nick): only what S&S and SanMar don't have, the brands only One Stop carries (Fruit of the Loom,
+  // LAT, Izod…) and styles neither found; a style either of them has shows once, from them
+  const seen = new Set([...a, ...b].map((h) => `${brandKey(h.brand)}|${h.style.toLowerCase()}`));
+  const elsewhere = (b: string) => !!brands && ((brands.ss.size > 0 && carries(brands, "ss", b)) || (brands.sm.size > 0 && carries(brands, "sm", b)));
+  const o: Hit[] = o0.filter((h) => !seen.has(`${brandKey(h.brand)}|${h.style.toLowerCase()}`) && !elsewhere(h.brand))
+    .map((h) => ({ styleID: 0, brand: h.brand, style: h.style, title: h.title, image: h.image, supplier: "onestop" as const, supplierStyle: h.osStyle }));
+  if (!a.length && !b.length && !o.length && err) return NextResponse.json({ error: err }, { status: 502 });
   // exact style matches from either supplier first, then the rest of S&S, then the rest of SanMar
   const t = q.toLowerCase(), stripped = t.replace(/^[a-z]{1,2}(?=\d)/, "");
   const exact = (h: Hit) => [t, stripped].includes(h.style.toLowerCase()) || `${h.brand} ${h.style}`.toLowerCase() === t;
   // a style number typed without its brand letters (3142 → A4N3142, 5000 → G5000): right after the exact ones
   const ends = (h: Hit) => /^\d{3,}[a-z]?$/.test(t) && h.style.toLowerCase().endsWith(t) && !exact(h);
   const rest = (h: Hit) => !exact(h) && !ends(h);
-  const results = [...a.filter(exact), ...b.filter(exact), ...a.filter(ends), ...b.filter(ends), ...a.filter(rest).slice(0, 20), ...b.filter(rest), ...a.filter(rest).slice(20)].slice(0, 45);
+  const results = [...a.filter(exact), ...b.filter(exact), ...o.filter(exact), ...a.filter(ends), ...b.filter(ends), ...o.filter(ends), ...a.filter(rest).slice(0, 20), ...b.filter(rest), ...o.filter(rest), ...a.filter(rest).slice(20)].slice(0, 50);
   return NextResponse.json({ results });
 }
