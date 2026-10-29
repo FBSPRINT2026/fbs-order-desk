@@ -8,6 +8,7 @@ import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarP
 import { SM_WH, type Src } from "@/lib/goodsPlan";
 import { cleanGoodsPo, customerShort, defaultGoodsPo, typedShort } from "@/lib/goodsPo";
 import { carries, supplierBrands } from "@/lib/supplierBrands";
+import { paidShipBlock } from "@/lib/goodsShip";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
 /** the short names the shop typed for customers' goods POs (lib/goodsPo.ts): read for the default, kept when a typed
  *  one differs from ours (Oct 29, Nick: "Dear Heart Designs could be DHD… then I can type over it") */
@@ -163,13 +164,15 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[];
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; /** said yes to paying for shipping (lib/goodsShip.ts) */ paidShipOk?: boolean; warehouses?: "fewest" | "fastest"; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[];
   /** each sku's warehouse picked by Order goods' plan (lib/goodsPlan.ts); without it the closest that has it */ from?: { sku: string; qty: number; warehouse: string }[] }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
     const lines = p.lines.filter((l) => l.sku && l.qty > 0);
     if (!lines.length) return { ok: false as const, error: "Nothing to order." };
+    const paidNo = paidShipBlock("ss", p.shippingMethod, p.test, p.paidShipOk);
+    if (paidNo) return { ok: false as const, error: paidNo };
     const admin = createAdminClient();
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const from = mergeSettings(st?.data).ship.from;
@@ -438,12 +441,14 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
 const SM_SHIP: Record<string, string> = { psst: "PSST", "40": "PSST", "14": "PSST", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
 const SM_WILL_CALL: Record<string, string> = { "1": "PRE", "2": "CIN", "3": "COP", "4": "REN", "5": "NJE", "6": "JAC", "7": "MSP", "12": "PHX", "31": "VA1" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
-export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
+export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; paidShipOk?: boolean; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
   try {
     const v = await staff();
     if (!sanmarPOMode()) return { ok: false as const, error: "SanMar ordering isn't turned on yet (SanMar's integration team has to switch it on for our account)." };
     const lines = p.lines.filter((l) => l.style && l.qty > 0);
     if (!lines.length) return { ok: false as const, error: "Nothing to order from SanMar." };
+    const paidNo = paidShipBlock("sm", p.shippingMethod, p.test, p.paidShipOk);
+    if (paidNo) return { ok: false as const, error: paidNo };
     // every line names its warehouse (Oct 28, SanMar: with Warehouse Selection on, a line without one fails the whole order)
     if (sanmarPOWhse()) {
       const none = lines.filter((l) => !l.whse);

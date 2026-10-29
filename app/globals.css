@@ -15064,6 +15064,8 @@ html[data-phone-deep] .mdp-only{display:none}
 .og-xf select,.og-xf input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
 .og-xs{color:var(--warn);font-weight:700;margin-left:1px}
 .og-xn{color:var(--warn)}
+.og-paid{margin:6px 0 10px;padding-left:18px;font-size:14px;color:var(--ink)}
+.og-paid li{margin:2px 0}
 .og-foot{position:sticky;bottom:0;background:var(--surface);display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line-2)}
 .og-view{display:inline-flex;align-items:center;gap:6px}
 .og-view svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}

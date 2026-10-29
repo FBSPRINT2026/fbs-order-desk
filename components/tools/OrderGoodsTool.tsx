@@ -1,4 +1,6 @@
 "use client";
+import { SS_SHIP, SM_SHIP_OPTS, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
+import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { GOODS_PO_MAX, cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -53,8 +55,6 @@ type Row = GoodsRow;
 
 // SanMar's own choice (Oct 29, Nick: "when we select PSST program shipping, we do not get to tell it how it goes… however
 // they want to send it"): PSST (SanMar picks the carrier, free to us), will call from Dallas, or a paid rush by UPS
-const SM_SHIP_OPTS: [string, string][] = [["psst", "PSST program (SanMar picks the carrier, free)"], ["6", "Will call: we pick up at SanMar Dallas"], ["3", "UPS 2nd Day Air (we pay freight)"], ["2", "UPS Next Day Air (we pay freight)"]];
-const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 export default function OrderGoodsTool({ activityId, orderId, onClose }: { activityId?: string; orderId?: string; onClose: () => void }) {
   const [label0, setLabel0] = useState(""), [orderNo, setOrderNo] = useState<number | null>(null);
@@ -66,6 +66,11 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null), [skipped, setSkipped] = useState<string[]>([]);
   const [smShip, setSmShip] = useState("psst");
+  // paid shipping asked about before ordering (Oct 29, Nick: "S&S gives us… free UPS ground… SanMar free PSST… if you
+  // select any of the other options… a pop-up… you've selected a non-free option… if you accidentally shipped 500 shirts
+  // next day air, that would be like a $1,000 mistake"). Free: S&S UPS Ground (contract decorator network), SanMar PSST,
+  // and will call (we pick up)
+  const [paidAsk, setPaidAsk] = useState<string[] | null>(null);
   const [ship, setShip] = useState("40"), [busy, setBusy] = useState(""), [check, setCheck] = useState<{ total: number; expected: string | null; from: string } | null>(null), [sure, setSure] = useState(false);
   const [placed, setPlaced] = useState<string>(""), [min, setMin] = useState(false);
   // where each size ships from, grouped by warehouse (Oct 26, Nick: "group by warehouse… Fort Worth and the sizes you're
@@ -219,8 +224,10 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const xNoReason = xRows.some((x) => !x.extra!.reason.trim());
   const extrasNote = xPcs ? <p className="og-note og-xn">{[...new Set(xRows.map(gkOf))].map((gk) => { const rs = xRows.filter((x) => gkOf(x) === gk), e = rs[0].extra!; return `${rs.reduce((a, x) => a + x.qty, 0)} extra ${rs[0].style} ${rs[0].color} (${rs.map((x) => `${x.qty} ${x.size}`).join(", ")}): ${e.reason || "say what it's for"}, ${e.print ? "printed" : "not printed"}, ${e.free ? "no charge" : "charged"}`; }).join(" · ")}. Goes on the order as Extras when it's placed.</p> : null;
   const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  async function run(test: boolean) {
+  const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : [])]);
+  async function run(test: boolean, paidOk = false) {
     if (!plan) return;
+    if (!test && !paidOk) { const pl = paidLines(); if (pl.length) { setPaidAsk(pl); return; } }
     if (xNoReason) { setErr("Say what the extra is for (Other: type it) before ordering."); setEditing(true); return; }
     setBusy(test ? "check" : "place"); setErr("");
     const out: string[] = [], dates: string[] = [], froms: string[] = [];
@@ -230,7 +237,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       const per = new Map<string, number>();
       for (const p of ssParts) { const x = byKey.get(p.key); if (x?.sku) per.set(x.sku, (per.get(x.sku) || 0) + p.qty); }
       const r = await placeGoods({ lines: [...per].map(([sku, qty]) => { const x = wanted.find((y) => y.sku === sku)!; return { sku, qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price }; }),
-        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, paidShipOk: paidOk, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr(r.error); return; }
       garmentsLeft = undefined;
       const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
@@ -242,7 +249,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
     // SanMar's part (once SanMar has switched ordering on for us)
     if (smParts.length && smOn) {
       const r = await placeSanmar({ lines: smParts.map((p) => { const x = byKey.get(p.key)!, ref = opts!.sm[p.key]; const src = (opts!.srcs[p.key] || []).find((s) => s.sup === "sm" && s.wh === p.wh); return { ...ref, qty: p.qty, whse: p.wh, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: src?.price || 0 }; }),
-        shippingMethod: smShip, test, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+        shippingMethod: smShip, test, paidShipOk: paidOk, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr((ssParts.length && !test ? `The S&S order went through (${out.join("; ")}), but SanMar's didn't: ` : "") + r.error); if (!test && out.length) setPlaced(out.join(" · ")); return; }
       if (test) { const c = (r as { checked?: { ok: boolean; message: string } }).checked; if (c && !c.ok) setErr("SanMar: " + (c.message || "some sizes aren't in stock")); }
       sum += (r as { total?: number }).total || smParts.reduce((a, p) => a + p.qty * p.each, 0);
@@ -431,13 +438,16 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
               ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee, money: r.money } : o)); }); }} />%</>
               : <>SanMar prices include our {opts.fee}% card fee; S&amp;S has none, so a tie goes to S&amp;S. <button type="button" className="linkbtn" onClick={() => setFeeEdit(true)}>Change</button>{ssOnly && <> · S&amp;S only. <button type="button" className="linkbtn" onClick={() => { setSsOnly(false); setCheck(null); }}>Show SanMar too</button></>}</>}</p>}
             <div className="field"><label htmlFor="og-po">PO name</label><input id="og-po" type="text" value={po} maxLength={GOODS_PO_MAX} placeholder={defaultGoodsPo({ orderNo, customer: who })} onChange={(e) => { setPo(e.target.value); setCheck(null); }} onBlur={(e) => setPo(cleanGoodsPo(e.target.value))} /><small className="faint">On the S&amp;S and SanMar orders and their boxes. Keep the job number first so receiving matches it.</small></div>
-            <div className="field"><label htmlFor="og-ship">{smParts.length > 0 && smOn ? "S&S shipping" : "Shipping"}</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+            <div className="field"><label htmlFor="og-ship">{smParts.length > 0 && smOn ? "S&S shipping" : "Shipping"}</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SS_SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
             {smParts.length > 0 && smOn && <div className="field"><label htmlFor="og-smship">SanMar shipping</label><select id="og-smship" value={smShip} onChange={(e) => { setSmShip(e.target.value); setCheck(null); }}>{SM_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{smShip === "psst" && <small className="faint">We&apos;re a PSST decorator: SanMar ships it its own way (usually UPS Ground), free. Ordered by 1 pm, it ships today.</small>}</div>}
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}
             {placed && smParts.length > 0 && !smOn && <div className="pv-err">Still to order on sanmar.com: {smParts.map((p) => { const x = byKey.get(p.key)!, r = opts?.sm[p.key]; return `${r?.style || x.style} ${r?.color || x.color} ${r?.size || x.size} × ${p.qty}`; }).join("; ")}</div>}
             {placed && <div className="og-done">Ordered: <b>{placed}</b>. {orderId ? <>It&apos;s linked to #{orderNo ?? ""}.</> : <>It&apos;s saved on this email with a to-do for tomorrow: when you Create order here, it uses these garments and sizes (<Link href="/shop/order-goods">Order goods</Link>).</>}</div>}
           </>}
         </div>}
+        {paidAsk && <PaidShipAsk lines={paidAsk} pcs={pcs} onClose={() => setPaidAsk(null)}
+          onFree={() => { setPaidAsk(null); setShip(FREE_CODE.ss); setSmShip(FREE_CODE.sm); setCheck(null); setSure(false); }}
+          onPay={() => { setPaidAsk(null); void run(false, true); }} />}
         <div className="dla-acts og-foot">
           <button type="button" className="btn og-view" onClick={() => setMin(true)}>
             <svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>View email

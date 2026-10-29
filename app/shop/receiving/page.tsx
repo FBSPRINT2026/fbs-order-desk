@@ -12,6 +12,8 @@ import { ResolveList } from "@/components/IncomingShipments";
 import type { ManifestHit, PendingShipment, PrintavoGoods } from "@/lib/manifest";
 import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine } from "@/app/shop/receiving-actions";
 import SearchInput from "@/components/SearchInput";
+import { SS_SHIP, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
+import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { useSticky } from "@/lib/useSticky";
 import ReceivingSettings from "@/components/ReceivingSettings";
 
@@ -89,7 +91,6 @@ const PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup"
 const stLabel = (st: string | undefined) => (st === "delivered" ? "Arrived" : st && PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
 // UPS Ground always (Nick, Oct 9): "Ground (S&S picks)" can land on UPS Ground Advantage, which is slower
 const WH: Record<string, string> = { TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };
-const SS_METHODS: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 /**
  * Goods & receiving: everything coming to us, in one daily view.
@@ -683,11 +684,14 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
   const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, warehouses: whMode });
   async function test() { setBusy("test"); setErr(""); setDry(null); const r = await orderBlanksSS(o.id, { ...payload(), test: true }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
   const [sure, setSure] = useState(false);
-  async function place() { if (!sure) { setSure(true); return; } setSure(false); setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
+  // paid shipping asks first (lib/goodsShip.ts); the server refuses it unconfirmed
+  const [paidAsk, setPaidAsk] = useState<string[] | null>(null);
+  async function place(paidOk?: unknown) { if (!sure) { setSure(true); return; } const paid = paidShipLines([{ sup: "ss", code: method }]); if (paid.length && paidOk !== true) { setPaidAsk(paid); return; } setSure(false); setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false, paidShipOk: paidOk === true }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
   async function record() { setBusy("rec"); setErr(""); const r = await recordBlanks(o.id, { ...m, expected_date: m.expected_date || null }); setBusy(""); if (!r.ok) return setErr(r.error || "Couldn't save."); onDone(`Recorded the blanks order for #${o.number}.`); }
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label={`Order blanks for #${o.number}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div className="pp-sheet">
+        {paidAsk && <PaidShipAsk lines={paidAsk} pcs={orderable.reduce((n, l) => n + (qty[l.key] || 0), 0)} onClose={() => setPaidAsk(null)} onFree={() => { setPaidAsk(null); setMethod(FREE_CODE.ss); setDry(null); setSure(false); }} onPay={() => { setPaidAsk(null); void place(true); }} />}
         <div className="pp-sheet-h"><div><b>Order blanks · #{o.number}</b> <span className="faint" style={{ fontSize: 14 }}>· {who} · in hands {day(o.due_date)}</span></div><button type="button" className="btn icon ghost" aria-label="Close" disabled={!!busy} onClick={onClose}>✕</button></div>
         <div style={{ padding: "14px 22px" }} className="stack">
           {!plan ? <div className="faint">{err || "Checking S&S for stock and price…"}</div> : (
@@ -707,7 +711,7 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
               <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
                 <b>{orderable.reduce((a, l) => a + (qty[l.key] || 0), 0)} pcs · about {money(total)}</b>
                 <label className="row" style={{ gap: 6, fontSize: 13 }}>Warehouses<select value={whMode} onChange={(e) => { setWhMode(e.target.value as "fewest" | "fastest"); setDry(null); }} style={{ width: "auto" }}><option value="fewest">Fewest shipments</option><option value="fastest">Fastest (closest first)</option></select></label>
-                <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
+                <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); }} style={{ width: "auto" }}>{SS_SHIP.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
                 {lines.some((l) => !l.found) && <span className="bad" style={{ fontSize: 12.5 }}>Lines S&amp;S doesn&apos;t carry aren&apos;t included; order those elsewhere.</span>}
               </div>
               {!plan.ss && <div className="banner">S&amp;S isn&apos;t connected, so ordering here is off. Record an order placed elsewhere instead.</div>}

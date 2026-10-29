@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
 import { ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder } from "@/lib/ss";
+import { paidShipBlock } from "@/lib/goodsShip";
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail } from "@/lib/ssMatch";
 
 async function staff() {
@@ -46,12 +47,14 @@ async function markOrdered(admin: ReturnType<typeof createAdminClient>, orderId:
  * Order the blanks from S&S, shipped to our shop. `test: true` is a dry run: S&S creates the order and cancels it
  * right away, so we see stock, price and warehouses without buying anything.
  */
-export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest" }): Promise<{ ok: boolean; error?: string; card?: string; from?: { sku: string; qty: number; warehouse: string }[]; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
+export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; paidShipOk?: boolean; warehouses?: "fewest" | "fastest" }): Promise<{ ok: boolean; error?: string; card?: string; from?: { sku: string; qty: number; warehouse: string }[]; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY)." };
     const lines = p.lines.filter((l) => l.sku && l.qty > 0);
     if (!lines.length) return { ok: false, error: "Nothing to order." };
+    const paidNo = paidShipBlock("ss", p.shippingMethod, p.test, p.paidShipOk);
+    if (paidNo) return { ok: false, error: paidNo };
     const admin = createAdminClient();
     const [{ data: o }, { data: st }] = await Promise.all([
       admin.from("orders").select("number, nickname, customers(company, name)").eq("id", orderId).single(),

@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
 import { sizeRank } from "@/lib/sizeOrder";
 import SearchInput from "@/components/SearchInput";
+import { SS_SHIP, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
+import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsWarehouses, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
 
 /**
@@ -19,7 +21,6 @@ type Line = { key: string; brand: string; style: string; color: string; size: st
 type Hit = { styleID: number; brand: string; style: string; title: string; image: string };
 type Recent = { id: string; order_id: string | null; number: number | null; label: string; supplier_order: string; status: string; total: number | null; expected_date: string | null; lines: { qty: number; label: string }[]; created_by: string; created_at: string };
 // UPS Ground always (Nick, Oct 9): "Ground (S&S picks)" can land on UPS Ground Advantage, which is slower
-const SS_METHODS: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 /** the style's page on ssactivewear.com (every color with swatches): /p/next_level/6210; Bella + Canvas is "bella" there */
 const ssUrl = (brand: string, style: string) => {
   const b = /bella/i.test(brand) ? "bella" : brand.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -145,10 +146,14 @@ function OrderGoods() {
     }, 700);
     return () => clearTimeout(t);
   }, [whKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  async function place() {
+  // paid shipping asks first (lib/goodsShip.ts); the server refuses it unconfirmed
+  const [paidAsk, setPaidAsk] = useState<string[] | null>(null);
+  async function place(paidOk?: unknown) {
     if (!sure) { setSure(true); return; }
+    const paid = paidShipLines([{ sup: "ss", code: method }]);
+    if (paid.length && paidOk !== true) { setPaidAsk(paid); return; }
     setBusy("place"); setErr("");
-    const r = await placeGoods(payload(false));
+    const r = await placeGoods({ ...payload(false), paidShipOk: paidOk === true });
     setBusy(""); setSure(false);
     if (!r.ok) return setErr(r.error || "S&S said no.");
     setMsg(r.warn || `Ordered from S&S: ${r.results?.map((x) => `${x.orderNumber}${x.warehouse ? ` (${x.warehouse})` : ""}`).join(", ")} · ${pcs} pcs${r.results?.some((x) => x.expected) ? ` · arrives ${day(r.results.map((x) => x.expected).filter(Boolean).sort().pop() || null)}` : ""}. A confirmation email from S&S is on its way.`);
@@ -275,7 +280,7 @@ function OrderGoods() {
             <b>{pcs} pcs · about {money(total)}</b>
             <label className="row" style={{ gap: 6, fontSize: 13 }} title="The quote number Tiffany sends back: the order is priced against it">S&amp;S quote #<input type="text" value={quote} onChange={(e) => { setQuote(e.target.value.trim()); setDry(null); setSure(false); }} placeholder="optional" style={{ width: 110 }} /></label>
             <label className="row" style={{ gap: 6, fontSize: 13 }} title="Fewest shipments: everything from one warehouse when one has it all (closest of those). Fastest: each item from the closest warehouse that has it (may split).">Warehouses<select value={whMode} onChange={(e) => { setWhMode(e.target.value as "fewest" | "fastest"); setDry(null); setSure(false); setFrom({}); }} style={{ width: "auto" }}><option value="fewest">Fewest shipments</option><option value="fastest">Fastest (closest first)</option></select></label>
-            <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); setSure(false); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
+            <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); setSure(false); }} style={{ width: "auto" }}>{SS_SHIP.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
             {lowStock && <span className="bad" style={{ fontSize: 12.5 }}>Some sizes are short at S&amp;S; the dry run shows what they can send.</span>}
             {lines.some((l) => !l.sku) && <span className="bad" style={{ fontSize: 12.5 }}>Red lines aren&apos;t carried by S&amp;S and won&apos;t be ordered.</span>}
           </div>
@@ -294,6 +299,7 @@ function OrderGoods() {
             <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={askQuote} title="Emails Tiffany Clark (our S&S rep) this list for a custom quote, from your email">{busy === "quote" ? "Sending…" : "✉ Email for custom quote"}</button>
           </div>
           {quoteSent && <div className="okmsg">Sent to Tiffany Clark (tiffany.clark@ssactivewear.com) at {quoteSent}. When she sends the quote number, put it in &quot;S&amp;S quote #&quot; and run the dry run: the order is priced against her quote.</div>}
+          {paidAsk && <PaidShipAsk lines={paidAsk} pcs={pcs} onClose={() => setPaidAsk(null)} onFree={() => { setPaidAsk(null); setMethod(FREE_CODE.ss); setDry(null); setSure(false); }} onPay={() => { setPaidAsk(null); void place(true); }} />}
           {sure && <div className="faint" style={{ fontSize: 12.5 }}>This buys the goods from S&amp;S on our account (PO &quot;{po}&quot;), shipped to the shop. Click again to confirm.</div>}
         </div>
       </section>
