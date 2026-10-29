@@ -970,7 +970,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const onBag = !!order && !!row && orderGroups(order).filter((x) => x.id === row.group_id || (!!row.design_id && x.imprints.some((im) => im.design_id === row.design_id && im.location === row.location)))
     .some((g) => g.lines.some((l) => /\b(tote|bag|backpack|drawstring|cinch)\b/i.test(`${l.style || ""} ${l.garment || ""}`)));
   const autoFlip = /sleeve/i.test(loc) || onBag;
-  const filmPos = st.filmPos ?? autoPos, filmOffsetIn = st.filmOffsetIn ?? CHEST_OFFSET_IN, filmFlip = st.filmFlip ?? autoFlip;
+  const filmPos = st.filmPos ?? autoPos, filmOffsetIn = st.filmOffsetIn ?? CHEST_OFFSET_IN, filmFlip = filmPos === "center" && (st.filmFlip ?? autoFlip); // upside down only for centered prints (sleeves, bags), never a chest (Nick, Oct 29)
   const filmOffsetPt = filmPos === "lc" ? filmOffsetIn * 72 : filmPos === "rc" ? -filmOffsetIn * 72 : 0;
   const filmMarks = { targets: st.regMarks !== false, offsetPt: filmOffsetPt, flip: filmFlip };
   const filmWhere = [filmPos === "center" ? "" : `${filmPos === "lc" ? "Left" : "Right"} chest: art ${+filmOffsetIn.toFixed(2)}" ${filmPos === "lc" ? "right" : "left"} of center`, filmFlip ? "burned upside down" : ""].filter(Boolean).join(", ");
@@ -1428,7 +1428,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <div className="rv-seg sep-full" role="radiogroup" aria-label="Where the art sits on the film">{([["center", "Center"], ["lc", "L chest"], ["rc", "R chest"]] as const).map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={filmPos === v} className={filmPos === v ? "on" : ""} onClick={() => set({ filmPos: v })}>{l}</button>)}</div>}>
               {filmPos !== "center" && <label className="sep-f">Offset from center (in)<input type="number" min={0} max={8} step={0.25} value={filmOffsetIn} onChange={(e) => set({ filmOffsetIn: Math.max(0, Math.min(8, +e.target.value || 0)) })} /></label>}
               {filmPos !== "center" && st.filmOffsetIn != null && st.filmOffsetIn !== CHEST_OFFSET_IN && <button type="button" className="linkbtn" onClick={() => set({ filmOffsetIn: undefined })}>Back to {CHEST_OFFSET_IN}&quot; (shop default)</button>}
-              <label className="sep-chk"><input type="checkbox" checked={filmFlip} onChange={(e) => set({ filmFlip: e.target.checked })} /> Burn upside down (art turned on the film)</label>
+              {filmPos === "center" && <label className="sep-chk"><input type="checkbox" checked={filmFlip} onChange={(e) => set({ filmFlip: e.target.checked })} /> Burn upside down (art turned on the film)</label>}
               <p className="sep-help">{st.filmPos == null && st.filmFlip == null ? `From the print${loc ? ` (${loc})` : ""}. ` : ""}The targets stay on the screen&apos;s center; every screen of this print moves together.{filmFlip ? " The film says UPSIDE DOWN by the bottom target." : ""}</p>
             </SetRow>
           </div>
