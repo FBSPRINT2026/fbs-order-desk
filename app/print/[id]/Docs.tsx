@@ -5,7 +5,7 @@ import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLigh
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
-import { guessHex, lineColor, spotFor } from "@/lib/mockup";
+import { guessHex, lineColor, lineHex, spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
@@ -344,7 +344,7 @@ function PrintCard({ d, des, all, allLight, page }: { d: Imprint; des: Design | 
 function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string> }) {
   // the line's own garment color (Oct 27, Nick: the F260 Mauve swatch showed the Blue Spruce green): the order's garment
   // colors first (what the mockups use), then the name; never another line's color
-  const own = (l.hex ? guessHex(lineColor(l)) : "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
+  const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
   const q = lineQty(l);
   const boxes = (
     <>{sizes.map((z) => <td key={z} className="sz"><div /></td>)}<td className="sz"><div /></td></>
@@ -535,7 +535,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 </div>
                 <div>
                   <div className="lbl">Garments</div>
-                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => <div className="pf-pr" key={l.id}><Swatch c={(l.hex ? guessHex(lineColor(l)) : "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
+                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => <div className="pf-pr" key={l.id}><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
                 </div>
               </div>
               <div className="pf-ok">
@@ -817,7 +817,7 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
               const th = threadByName(t.sewn); const swapped = t.sewn.toLowerCase() !== t.ordered.toLowerCase();
               return <b key={i} className="so-th"><Swatch c={hexOf(t.sewn)} />{t.needle && sewnThreads.length > 1 ? `${t.needle}. ` : ""}{t.sewn}{th?.pms[0] ? ` (PMS ${th.pms[0].replace(/^PMS\s*/i, "")})` : ""}{swapped && <small> in place of {t.ordered}</small>}</b>;
             })}</div>
-            {garments.length > 0 && <div className="wide"><span>Garment{garments.length === 1 ? "" : "s"}</span>{garments.map((l) => <b key={l.id} className="so-th"><Swatch c={(l.hex ? guessHex(lineColor(l)) : "") || colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} />{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}{l.color ? ` · ${l.color}` : ""}</b>)}</div>}
+            {garments.length > 0 && <div className="wide"><span>Garment{garments.length === 1 ? "" : "s"}</span>{garments.map((l) => <b key={l.id} className="so-th"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} />{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}{l.color ? ` · ${l.color}` : ""}</b>)}</div>}
             {(emb.backing || emb.puff || emb.metallic) && <div className="wide"><span>Details</span><b>{[emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</b></div>}
           </div>
           {sw.note && <div className="so-note"><b>Note:</b> {sw.note}</div>}

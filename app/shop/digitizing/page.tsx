@@ -325,7 +325,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
           <div className={"dgz-grid" + (f ? "" : " nofile")}>
             {f && <div className="dgz-card dgz-pic-big">
               {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} fabric={guessHex(lineColor(it.g.lines?.[0])) || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
-              <div className="sub">On {it.g.lines?.[0]?.color || "the garment"}</div>
+              <div className="sub">Sew-out simulation, drawn from the DST</div>
             </div>}
             <div className="stack" style={{ gap: 12, minWidth: 0 }}>
               {f && <div className="dgz-card">

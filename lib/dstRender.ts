@@ -30,59 +30,53 @@ export function stitchesOf(info: DstInfo): Seg[] {
 const heading = (s: Seg) => Math.atan2(s.y1 - s.y0, s.x1 - s.x0);
 const turn = (a: number, b: number) => Math.abs(((a - b + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
 
-/** the jump stitches between parts (indexes into the stitches) */
-export function jumpStitches(segs: Seg[], r = 2.3): Set<number> {
+/**
+ * The jump stitches between parts (indexes into the stitches): a long stitch (not a satin zigzag) that crosses bare fabric
+ * for a millimeter or more, away from every other stitch. Each stitch is tested on its own against all the others, so a
+ * fill's long rows (each lying next to its neighbors) stay (Oct 29: #40188's Embark E lost 132 fill stitches and showed
+ * the fabric through its fill when the test left all long stitches out at once).
+ */
+export function jumpStitches(segs: Seg[]): Set<number> {
   const n = segs.length;
   if (n < 3) return new Set();
   const hd = segs.map(heading);
-  // candidates: 0.5 mm or longer and not a satin stitch (a satin stitch's neighbors turn back across it)
   const cand: number[] = [];
   for (let i = 0; i < n; i++) {
     const s = segs[i];
-    if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 5) continue;
+    if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 12) continue; // under 1.2 mm can't cross a gap worth trimming
     const satin = (i === 0 || turn(hd[i], hd[i - 1]) > 2.0) && (i === n - 1 || turn(hd[i], hd[i + 1]) > 2.0);
     if (!satin) cand.push(i);
   }
   if (!cand.length) return new Set();
-  // the design's parts without them: drawn small, then the connected areas labelled
+  // how many stitches lie within 0.6 mm of each spot (0.1 mm grid cells, 2 per unit)
+  const k = 0.5, reach = 6; // a cell is 0.2 mm; "near" is 0.6 mm from a stitch's line
   const xs = segs.flatMap((s) => [s.x0, s.x1]), ys = segs.flatMap((s) => [s.y0, s.y1]);
-  const minX = Math.min(...xs) - 10, minY = Math.min(...ys) - 10, k = 2;
-  const W = Math.ceil((Math.max(...xs) - minX + 10) * k), H = Math.ceil((Math.max(...ys) - minY + 10) * k);
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d", { willReadFrequently: true })!;
-  g.strokeStyle = "#000"; g.lineWidth = Math.max(1, Math.floor(r * 2 * k)); g.lineCap = "butt";
-  const skip = new Set(cand);
-  g.beginPath();
-  segs.forEach((s, i) => { if (skip.has(i)) return; g.moveTo((s.x0 - minX) * k, (s.y0 - minY) * k); g.lineTo((s.x1 - minX) * k, (s.y1 - minY) * k); });
-  g.stroke();
-  const a = g.getImageData(0, 0, W, H).data;
-  const lab = new Int32Array(W * H);
-  let next = 0;
-  const stack: number[] = [];
-  for (let p = 0; p < W * H; p++) {
-    if (lab[p] || a[p * 4 + 3] < 128) continue;
-    next++; lab[p] = next; stack.push(p);
-    while (stack.length) {
-      const q = stack.pop()!, x = q % W, y = (q - x) / W;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-        const o = ny * W + nx;
-        if (!lab[o] && a[o * 4 + 3] >= 128) { lab[o] = next; stack.push(o); }
-      }
+  const minX = Math.min(...xs) - reach, minY = Math.min(...ys) - reach;
+  const W = Math.ceil((Math.max(...xs) - minX + reach) * k) + 1, H = Math.ceil((Math.max(...ys) - minY + reach) * k) + 1;
+  const cnt = new Uint16Array(W * H);
+  const cells = (s: Seg, fn: (p: number) => void) => {
+    const ax = s.x0 - minX, ay = s.y0 - minY, bx = s.x1 - minX, by = s.y1 - minY, dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+    const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - reach) * k)), i1 = Math.min(W - 1, Math.ceil((Math.max(ax, bx) + reach) * k));
+    const j0 = Math.max(0, Math.floor((Math.min(ay, by) - reach) * k)), j1 = Math.min(H - 1, Math.ceil((Math.max(ay, by) + reach) * k));
+    for (let y = j0; y <= j1; y++) for (let x = i0; x <= i1; x++) {
+      const px = x / k - ax, py = y / k - ay, t = Math.max(0, Math.min(1, (px * dx + py * dy) / L2));
+      if (Math.hypot(px - t * dx, py - t * dy) <= reach) fn(y * W + x);
     }
-  }
-  const part = (x: number, y: number) => {
-    const cx = Math.round((x - minX) * k), cy = Math.round((y - minY) * k), seen = new Map<number, number>();
-    for (let yy = cy - 3; yy <= cy + 3; yy++) for (let xx = cx - 3; xx <= cx + 3; xx++) {
-      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
-      const v = lab[yy * W + xx]; if (v) seen.set(v, (seen.get(v) || 0) + 1);
-    }
-    let best = 0, bn = 0; for (const [v, m] of seen) if (m > bn) { best = v; bn = m; }
-    return best;
   };
+  for (const s of segs) cells(s, (p) => { if (cnt[p] < 65535) cnt[p]++; });
   const out = new Set<number>();
-  for (const i of cand) { const s = segs[i], p = part(s.x0, s.y0), q = part(s.x1, s.y1); if (p && q && p !== q) out.add(i); }
+  for (const i of cand) {
+    const s = segs[i], len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0);
+    // along its middle (not the last 0.6 mm at each end, where it meets its own part): the longest stretch with no other
+    // stitch near it
+    let run = 0, best = 0;
+    for (let d = reach; d <= len - reach; d += 1) {
+      const x = s.x0 + ((s.x1 - s.x0) * d) / len - minX, y = s.y0 + ((s.y1 - s.y0) * d) / len - minY;
+      const p = Math.round(y * k) * W + Math.round(x * k);
+      if ((cnt[p] || 0) <= 1) { run++; if (run > best) best = run; } else run = 0;
+    }
+    if (best >= 10) out.add(i); // a millimeter or more over bare fabric
+  }
   return out;
 }
 
