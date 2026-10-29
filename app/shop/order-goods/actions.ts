@@ -411,7 +411,9 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
 
 // SanMar's ship methods (Purchase Order Integration Guide 24.6, p. 9); will call is the pickup warehouse's code in the
 // ship method instead (p. 10: "<shipMethod>REN</shipMethod>"), and needs Warehouse Selection on our account
-const SM_SHIP: Record<string, string> = { "40": "UPS", "14": "UPS", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
+// Ground to the shop goes PSST (Oct 29, Nick: "I am a PSST decorator already"): SanMar's Pack Separately, Ship Together
+// program, free freight to an approved decorator (our ship-to must match SanMar's file: Shipping center → Settings)
+const SM_SHIP: Record<string, string> = { "40": "PSST", "14": "PSST", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
 const SM_WILL_CALL: Record<string, string> = { "1": "PRE", "2": "CIN", "3": "COP", "4": "REN", "5": "NJE", "6": "JAC", "7": "MSP", "12": "PHX", "31": "VA1" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
 export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
