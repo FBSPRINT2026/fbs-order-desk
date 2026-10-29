@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fmtStamp } from "@/lib/format";
 import { approveArtAnotherWay, remindProof, restoreVersion, sendProofVersion } from "@/app/shop/proof-actions";
 import { PROOF_COLS, versionState, type ProofRow } from "@/components/ProofHistory";
+import SendProofTool from "@/components/tools/SendProofTool";
 
 /**
  * Beside the Proof history on the Art & production tab (Oct 16, Nick):
@@ -108,11 +109,8 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
             );
           })}
           {groups.length > 2 && <button type="button" className="linkbtn mkh-more" onClick={() => setShowAll((x) => !x)}>{showAll ? "Fewer saves" : `${groups.length - 2} older save${groups.length - 2 === 1 ? "" : "s"}`}</button>}
-          {current.length > 0 && unsentCurrent && (ask === "send"
-            ? <div className="ca-confirm"><div>Email <b>{email || "the customer"}</b> “Artwork proof ready for your order” with a link to review <b>Version {nextV}</b>?</div>
-                <label className="mk-f"><span>What did you change? (goes with the proof)</span><textarea rows={2} value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="e.g. Picked PMS 157 for the logo like you asked" /></label>
-                <div className="row"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => act("send", () => sendProofVersion(orderId, sendNote), (r) => r.emailed ? `Version ${r.version} sent to ${email}.` : `Version ${r.version} is in their portal. Email is off, so send them the portal link.`)}>{busy === "send" ? "Sending…" : `Send Version ${nextV}`}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>
-            : <div className="mkh-foot"><button type="button" className="btn primary" onClick={() => setAsk("send")} disabled={!email}>Send to customer as Version {nextV}</button>{!email && <span className="faint">The customer has no email address.</span>}</div>)}
+          {/* sending: the preview, then Send, or copy the link / a button for your own email (components/tools/SendProofTool.tsx) */}
+          {current.length > 0 && unsentCurrent && <div className="mkh-foot"><SendProofTool target={{ kind: "art", orderId }} label={`Send to customer as Version ${nextV}`} onDone={(m) => done(m)} /></div>}
         </div>
       </section>
 
@@ -136,6 +134,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
           ) : <div className="ca-call">{current.length ? "No proof sent to the customer yet." : "No mockup yet."}</div>}
 
           <div className="ca-acts">
+            {st?.tone === "wait" && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><span className="faint" style={{ fontSize: 12.5 }}>Their proof link:</span><SendProofTool target={{ kind: "art", orderId, live: true }} mode="copy" onDone={setMsg} /></div>}
             {st?.tone === "wait" && (ask === "remind"
               ? <div className="ca-confirm"><div>Email <b>{email}</b> “Reminder: your artwork proof” with the link to review Version {liveV}?</div>
                   <div className="row"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => act("remind", () => remindProof(orderId), (r) => r.emailed ? `Reminder sent to ${email}.` : "Reminder saved. Email is off, so send them the portal link.")}>{busy === "remind" ? "Sending…" : "Send reminder"}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>

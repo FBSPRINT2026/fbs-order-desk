@@ -49,7 +49,9 @@ export async function middleware(request: NextRequest) {
   const hasCookie = request.cookies.getAll().some((c) => /^sb-.*-auth-token/.test(c.name));
 
   const path = request.nextUrl.pathname;
-  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || path.startsWith("/print") || path.startsWith("/call");
+  // a customer's proof link opens its PDF with no sign-in (?link=…, checked on the page against lib/proofLinks.ts)
+  const linkPdf = path.startsWith("/print/") && request.nextUrl.searchParams.has("link");
+  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || (path.startsWith("/print") && !linkPdf) || path.startsWith("/call");
   if (slow && hasCookie) return response;
   if (!user && needsLogin) {
     const url = request.nextUrl.clone();

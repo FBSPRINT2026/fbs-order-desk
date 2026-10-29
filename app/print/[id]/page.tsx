@@ -6,17 +6,24 @@ import { loadGroupLook } from "@/lib/groupLook";
 import { addStockInks } from "@/lib/inkColors";
 import PrintButton from "./PrintButton";
 import { DOC_CSS } from "./docCss";
+import { openLink } from "@/lib/proofLinks";
 import { InvoiceDoc, ProofDoc, SewoutDoc, WorkOrderDoc, type DocData, type SewoutRow } from "./Docs";
 
 export const dynamic = "force-dynamic";
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
-export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string; sewout?: string }> }) {
+export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string; sewout?: string; link?: string; embed?: string }> }) {
   const { id } = await params;
-  const { work, proof, sewout } = await searchParams;
-  const { supabase, user, isStaff } = await getViewer();
-  if (!user) redirect(`/login?next=/print/${id}`);
-  const db = isStaff ? createAdminClient() : supabase; // customers read through row security
+  const { work, proof, sewout, link, embed } = await searchParams;
+  const viewer = await getViewer();
+  // the customer's proof link (lib/proofLinks.ts) opens its own proof or sew-out PDF with no sign-in, and nothing else
+  const lk = link ? await openLink(createAdminClient(), link) : null;
+  const byLink = !!lk && lk.order_id === id && ((lk.kind === "sewout" && !!sewout && sewout === lk.sewout_id) || (lk.kind === "art" && !!proof && !sewout && !work));
+  if (!viewer.user && !byLink) redirect(`/login?next=/print/${id}`);
+  const isStaff = byLink ? false : viewer.isStaff;
+  const db = isStaff || byLink ? createAdminClient() : viewer.supabase; // customers read through row security
+  // inside the proof page: no buttons, and the pages fit the frame's width
+  const bar = (n: string) => embed ? <script dangerouslySetInnerHTML={{ __html: "(function(){function f(){var w=document.documentElement.clientWidth;document.body.style.zoom=Math.min(1,(w-16)/830)}f();addEventListener('resize',f)})()" }} /> : <div className="print-bar"><PrintButton fileName={n} /></div>;
   const { data: od } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
   // the customer's documents (invoice, quote, proof, sew-out) never show the shop's own pieces; the work order does
@@ -87,7 +94,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       <div className="pdoc">
         <title>{nameOf(`Sew-out v${sw.version}`)}</title>
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
-        <div className="print-bar"><PrintButton fileName={nameOf(`Sew-out v${sw.version}`)} /></div>
+        {bar(nameOf(`Sew-out v${sw.version}`))}
         <SewoutDoc {...data} printed={printed} sw={sw} photo={ph?.signedUrl || ""} placement={pl?.signedUrl || undefined} />
       </div>
     );
@@ -104,13 +111,13 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     const live = rows.filter((r) => !r.archived_at);
     const liveV = live.length ? Math.max(...live.map((r) => r.version)) : 0;
     const sentNow = liveV > 0 && cur.length > 0 && cur.every((m) => live.some((r) => r.mockup_id === m.id));
-    const version = sentNow ? liveV : (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
+    const version = byLink && lk?.version ? lk.version : sentNow ? liveV : (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
     const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     return (
       <div className="pdoc">
         <title>{nameOf(`Proof v${version}`)}</title>
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
-        <div className="print-bar"><PrintButton fileName={nameOf(`Proof v${version}`)} /></div>
+        {bar(nameOf(`Proof v${version}`))}
         <ProofDoc {...data} printed={printed} version={version} />
       </div>
     );

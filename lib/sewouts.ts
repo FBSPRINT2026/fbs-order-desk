@@ -168,34 +168,61 @@ export async function sendSewoutNow(admin: SupabaseClient, id: string, me: Staff
   const s = sw as Sewout | null;
   if (!s || s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };
   if (s.status !== "pending") return { ok: false as const, error: "The customer already answered this one." };
-  if (!SEWOUT_EMAILS) return { ok: false as const, error: "Customer emails are off, so nothing was sent. Download the PDF proof and send it, or they can approve it in their portal." };
+  // a person pressed Send after seeing the preview (Oct 29, Nick: "when we send the proof… it should look like this"), so it
+  // goes; SEWOUT_EMAILS only says whether saving a photo would email by itself
   const { o, customer, settings } = await load(admin, s.order_id);
   if (!customer?.email) return { ok: false as const, error: "This order's customer has no email address. Download the PDF proof and send it." };
   const pr = printOf(o, s.imprint_id);
   const where = pr ? `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}` : "your logo";
-  const emailed = await emailSewout(admin, { o, to: customer.email, shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: s.note || "", reminder: false });
+  const emailed = (await emailSewout(admin, { o, to: customer.email, shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: s.note || "", reminder: false, by: me.email, first: (customer.name || "").trim().split(/\s+/)[0] })).ok;
   if (!emailed) return { ok: false as const, error: "The email didn't go out. Try again in a minute." };
   await admin.from("sewouts").update({ sent_at: new Date().toISOString(), sent_to: customer.email }).eq("id", s.id);
   await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_sent", detail: `Sew-out v${s.version} (${where}) to ${customer.email}`, actor: me.email });
   return { ok: true as const, emailed: true, to: customer.email };
 }
 
-/** the email: the photo itself, what it is, and the button to approve it */
-async function emailSewout(admin: SupabaseClient, p: { o: Order; to: string; shop: string; id: string; photoPath: string; where: string; note: string; reminder: boolean }) {
-  const link = `${siteUrl()}/portal/orders/${p.o.id}/sewout/${p.id}`;
-  // the photo stays viewable from the email for 30 days; the portal page always has it
+/** the email (lib/proofLinks.ts proofEmail): the photo, what it is, and the button to its proof page; send=false only
+ *  makes it (the shop's preview) */
+async function emailSewout(admin: SupabaseClient, p: { o: Order; to: string; shop: string; id: string; photoPath: string; where: string; note: string; reminder: boolean; by?: string; send?: boolean; first?: string }) {
+  const { proofLinkFor, proofUrl, proofEmail, proofRows } = await import("@/lib/proofLinks");
+  const { data: sw } = await admin.from("sewouts").select("*").eq("id", p.id).maybeSingle();
+  const url = p.send === false ? `${siteUrl()}/proof/preview` : proofUrl(await proofLinkFor(admin, { kind: "sewout", orderId: p.o.id, sewoutId: p.id, to: p.to, by: p.by }));
   const { data: su } = await admin.storage.from("proofs").createSignedUrl(p.photoPath, 60 * 60 * 24 * 30);
-  const body = `Here's the sew-out of your logo for "${p.o.nickname || `order #${p.o.number}`}" (${p.where}): the real thing, stitched on our machine. Please look it over and approve it, or tell us what to change. We start the run once it's approved.${p.note ? `\n\n${p.note}` : ""}`;
-  const base = emailLayout(p.shop, p.reminder ? "Your sew-out is waiting for you" : "Your sew-out is ready to approve", body, "Review the sew-out", link);
-  const photo = su?.signedUrl ? `<div style="max-width:520px;margin:0 auto;padding:0 24px"><a href="${link}"><img src="${su.signedUrl}" alt="Your sew-out" style="width:100%;border-radius:8px;border:1px solid #E3E7EE;display:block" /></a></div>` : "";
-  // the photo goes right under the heading and text, before the button
-  const html = photo ? base.replace(/<p style="margin:24px 0">/, `${photo}<p style="margin:24px 0">`) : base;
-  return sendEmail({ to: p.to, replyTo: SHOP_NOTIFY_EMAIL, subject: `${p.reminder ? "Reminder: " : ""}Sew-out ready for your approval: order #${p.o.number}`, html });
+  const { settings } = await load(admin, p.o.id);
+  const em = proofEmail({ settings, first: p.first || "", kind: "sewout", o: p.o, picture: su?.signedUrl || undefined, rows: proofRows(p.o, "sewout", sw as never), url, reminder: p.reminder, note: p.note });
+  if (p.send === false) return { ok: false, url, ...em };
+  const ok = await sendEmail({ to: p.to, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html });
+  return { ok, url, ...em };
+}
+
+/** What Send would email for this sew-out (the shop's preview before Send). */
+export async function previewSewoutEmail(admin: SupabaseClient, id: string) {
+  const { data: sw } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
+  const s = sw as Sewout | null;
+  if (!s) return { ok: false as const, error: "That sew-out isn't there anymore." };
+  const { o, customer, settings } = await load(admin, s.order_id);
+  const pr = printOf(o, s.imprint_id);
+  const where = pr ? `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}` : "your logo";
+  const em = await emailSewout(admin, { o, to: customer?.email || "", shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: s.note || "", reminder: false, send: false, first: (customer?.name || "").trim().split(/\s+/)[0] });
+  return { ok: true as const, to: customer?.email || "", subject: em.subject, html: em.html };
+}
+
+/** The sew-out's proof link to send yourself (Oct 29, Nick: "copy a link… so I can just type an email"): counted as sent. */
+export async function sewoutLinkCopy(admin: SupabaseClient, id: string, me: Staff) {
+  const { data: sw } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
+  const s = sw as Sewout | null;
+  if (!s || s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };
+  const { proofLinkFor, proofUrl } = await import("@/lib/proofLinks");
+  const url = proofUrl(await proofLinkFor(admin, { kind: "sewout", orderId: s.order_id, sewoutId: s.id, by: me.email }));
+  if (!s.sent_at && s.status === "pending") {
+    await admin.from("sewouts").update({ sent_at: new Date().toISOString(), sent_to: "link copied" }).eq("id", s.id);
+    await admin.from("order_events").insert({ order_id: s.order_id, kind: "sewout_sent", detail: `Sew-out v${s.version} (link copied to send yourself)`, actor: me.email });
+  }
+  return { ok: true as const, url };
 }
 
 /** Remind the customer to review the sew-out waiting on them. */
 export async function remindSewout(admin: SupabaseClient, id: string, me: Staff) {
-  if (!SEWOUT_EMAILS) return { ok: false as const, error: "Customer emails are off, so no reminder was sent." };
   const { data: sw } = await admin.from("sewouts").select("*").eq("id", id).maybeSingle();
   const s = sw as Sewout | null;
   if (!s || s.archived_at) return { ok: false as const, error: "That sew-out was replaced by a newer one." };
@@ -204,7 +231,7 @@ export async function remindSewout(admin: SupabaseClient, id: string, me: Staff)
   if (!customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
   const pr = printOf(o, s.imprint_id);
   const where = pr ? `${pr.im.location}${pr.im.size ? `, ${pr.im.size}` : ""}` : "your logo";
-  const emailed = await emailSewout(admin, { o, to: customer.email, shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: "", reminder: true });
+  const emailed = (await emailSewout(admin, { o, to: customer.email, shop: settings.shop.name, id: s.id, photoPath: s.photo_path, where, note: "", reminder: true, by: me.email, first: (customer.name || "").trim().split(/\s+/)[0] })).ok;
   await admin.from("order_events").insert({ order_id: o.id, kind: "sewout_reminder", detail: `Sew-out v${s.version} to ${customer.email}`, actor: me.email });
   return { ok: true as const, emailed };
 }

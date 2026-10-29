@@ -55,31 +55,57 @@ async function makeVersion(admin: SupabaseClient, orderId: string, mocks: Mockup
 
 /** what was changed on the customer's art, said in the proof email */
 const artChangesOf = (o: { groups?: unknown }) => [...new Set(((o.groups || []) as { imprints?: { artChanges?: string[] }[] }[]).flatMap((g) => (g.imprints || []).flatMap((d) => d.artChanges || [])))].slice(0, 6);
-const proofEmail = (shop: string, number: number, nickname: string, link: string, reminder: boolean, artChanges: string[] = []) => ({
-  subject: reminder ? `Reminder: your artwork proof for order #${number}` : `Artwork proof ready for order #${number}`,
-  html: emailLayout(shop, reminder ? "Your artwork proof is waiting for you" : "Your artwork proof is ready",
-    `Please look over the proof for "${nickname || "your order"}" and approve it or tell us what to change. We start printing once it's approved.${artChanges.length ? ` ${artChanges.length === 1 ? "One change we made to your art" : `${artChanges.length} changes we made to your art`}: ${artChanges.join("; ")}.` : ""}`, "Review artwork", link),
-});
+/** the proof email with its link (lib/proofLinks.ts), sent; with send=false only made (the shop's preview) */
+async function linkEmail(admin: SupabaseClient, x: { order: { id: string; number: number; nickname: string; groups?: unknown }; customer: { name: string; company: string; email: string }; settings: ReturnType<typeof mergeSettings>; version: number; mocks: Mockup[]; reminder: boolean; note: string; by: string; send?: boolean }) {
+  const { proofLinkFor, proofUrl, proofEmail, proofRows, firstName } = await import("@/lib/proofLinks");
+  const { data: full } = await admin.from("orders").select("*").eq("id", x.order.id).maybeSingle();
+  const o = full as import("@/lib/pricing").Order;
+  const url = x.send === false ? `${siteUrl()}/proof/preview` : proofUrl(await proofLinkFor(admin, { kind: "art", orderId: o.id, version: x.version, to: x.customer.email, by: x.by }));
+  const m0 = x.mocks[0];
+  const { data: su } = m0 ? await admin.storage.from("proofs").createSignedUrl(String(m0.file_path).replace(/\.png$/, "-thumb.png"), 60 * 60 * 24 * 30) : { data: null };
+  const em = proofEmail({ settings: x.settings, first: firstName(x.customer), kind: "art", o, picture: su?.signedUrl || undefined, rows: proofRows(o, "art"), url, reminder: x.reminder, note: x.note });
+  if (x.send === false) return { url, emailed: false, ...em };
+  const emailed = await sendEmail({ to: x.customer.email, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html });
+  return { url, emailed, ...em };
+}
+
+/** What sending the proof would email (the shop's preview before Send): the subject, the email, who it goes to. */
+export async function previewProofEmail(admin: SupabaseClient, orderId: string, note = "") {
+  const { order, customer, settings } = await load(admin, orderId);
+  const mocks = await currentMockups(admin, orderId);
+  const { next } = await liveProofs(admin, orderId);
+  const lk = await linkEmail(admin, { order, customer: customer || { name: "", company: "", email: "" }, settings, version: next, mocks, reminder: false, note: [...(note.trim() ? [note.trim()] : []), ...artChangesOf(order)].join("\n"), by: "", send: false });
+  return { to: customer?.email || "", subject: lk.subject, html: lk.html, version: next, mockups: mocks.length };
+}
 
 /** Send the current mockups to the customer as the next proof version. */
-export async function sendProofs(admin: SupabaseClient, orderId: string, me: Staff, /** what we changed on their art (Oct 24, Nick: "we've got to say what we did to it") */ note = "") {
+export async function sendProofs(admin: SupabaseClient, orderId: string, me: Staff, /** what we changed on their art (Oct 24, Nick: "we've got to say what we did to it") */ note = "",
+  /** email: false = make the proof and its link without emailing (Oct 29, Nick: "copy a link… so I can just type an email
+   *  and go, hey, here's your proof, and then just click the button below") */ opts: { email?: boolean } = {}) {
+  const email = opts.email !== false;
   const { order, customer, settings } = await load(admin, orderId);
-  if (!customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
-  if (order.status === "quote") return { ok: false as const, error: "Send the quote first so the customer can see this order." };
+  if (email && !customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
   const mocks = await currentMockups(admin, orderId);
   if (!mocks.length) return { ok: false as const, error: "Make a mockup in the Mockup Creator first." };
   const { live } = await liveProofs(admin, orderId);
   const same = live.length === mocks.length && mocks.every((m) => live.some((p) => p.mockup_id === m.id));
-  if (same && live.some((p) => p.status === "pending")) return { ok: false as const, error: "The customer already has this version. Use Remind instead." };
+  const { proofLinkFor, proofUrl } = await import("@/lib/proofLinks");
+  if (same && live.some((p) => p.status === "pending")) {
+    if (email) return { ok: false as const, error: "The customer already has this version. Use Remind instead." };
+    // the version already out: its link again
+    const v = live[0].version;
+    return { ok: true as const, version: v, emailed: false, link: proofUrl(await proofLinkFor(admin, { kind: "art", orderId, version: v, by: me.email })) };
+  }
   const at = new Date().toISOString();
-  const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: customer.email });
-  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} to ${customer.email}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
+  const to = email ? customer!.email : customer?.email || "";
+  const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: email ? to : "link copied" });
+  await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} ${email ? `to ${to}` : "(link copied to send yourself)"}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
   // what we changed goes with the proof: in their Messages on the order, and in the email
   if (note.trim()) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: `Proof version ${version}: ${note.trim().slice(0, 2000)}` });
-  const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
-  const em = proofEmail(settings.shop.name, order.number, order.nickname, link, false, [...(note.trim() ? [note.trim()] : []), ...artChangesOf(order)]);
-  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...em });
-  return { ok: true as const, version, emailed, link };
+  if (!email) return { ok: true as const, version, emailed: false, link: proofUrl(await proofLinkFor(admin, { kind: "art", orderId, version, to, by: me.email })) };
+  // the customer's proof link (lib/proofLinks.ts): their page with the PDF, approve or ask for changes, no sign-in
+  const lk = await linkEmail(admin, { order, customer: customer!, settings, version, mocks, reminder: false, note: [...(note.trim() ? [note.trim()] : []), ...artChangesOf(order)].join("\n"), by: me.email });
+  return { ok: true as const, version, emailed: lk.emailed, link: lk.url };
 }
 
 /** Remind the customer to review the proof that's waiting on them. */
@@ -92,9 +118,8 @@ export async function remindProofs(admin: SupabaseClient, orderId: string, me: S
   const at = new Date().toISOString();
   await admin.from("proofs").update({ reminded_at: at }).in("id", waiting.map((p) => p.id));
   await admin.from("order_events").insert({ order_id: orderId, kind: "proof_reminder", detail: `Version ${waiting[0].version} to ${customer.email}`, actor: me.email });
-  const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
-  const emailed = await sendEmail({ to: customer.email, replyTo: SHOP_NOTIFY_EMAIL, ...proofEmail(settings.shop.name, order.number, order.nickname, link, true, artChangesOf(order)) });
-  return { ok: true as const, emailed };
+  const lk = await linkEmail(admin, { order, customer, settings, version: waiting[0].version, mocks: await currentMockups(admin, orderId), reminder: true, note: "", by: me.email });
+  return { ok: true as const, emailed: lk.emailed };
 }
 
 /**

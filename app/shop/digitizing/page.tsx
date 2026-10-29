@@ -17,11 +17,11 @@ import { stopColors } from "@/lib/needleThreads";
 import { lineName, threadByName } from "@/lib/embroidery";
 import { tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
-import { SEWOUT_EMAILS } from "@/lib/customerContact";
 import { approveSewoutAnother, remindSewoutAction, sendSewoutToCustomer } from "@/app/shop/sewout-actions";
 import type { SewCtx } from "@/components/SewnPanel";
 import { stockKey } from "@/lib/threadStock";
 import DigitizerTool from "@/components/tools/DigitizerTool";
+import SendProofTool from "@/components/tools/SendProofTool";
 import { DIGITIZER } from "@/lib/digitizer";
 
 /**
@@ -398,21 +398,22 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
                   {canEdit && live && live.status === "pending" && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} primary={false} onDone={onSew} where={where}
                     edit={{ id: live.id, photo: swUrls[`${live.id}:raw`] || swUrls[live.id] || "", place: swUrls[`${live.id}:place`] || undefined, note: live.note || "", sewn: live.sewn ? { filePath: live.sewn.file?.path, threads: live.sewn.threads || [] } : null }} />}
                   {canEdit && st !== "ok" && f && <SewoutCapture orderId={it.o.id} imprintId={it.im.id} ctx={ctx} primary={!live} label={live?.status === "pending" ? "Retake the photo" : sws.length ? "Take a new sew-out photo" : "Take the sew-out photo"} onDone={onSew} where={where} />}
-                  {canEdit && live && live.status === "pending" && !live.sent_at && <button type="button" className="btn primary" disabled={swBusy} onClick={() => { setSwBusy(true); void sendSewoutToCustomer(live.id).then((r) => { setSwBusy(false); onSew(r.ok ? `Sent to ${r.to}.` : r.error || "Couldn't send it."); }); }}>Send to customer</button>}
+                  {canEdit && live && live.status === "pending" && !live.sent_at && <SendProofTool target={{ kind: "sewout", orderId: it.o.id, sewoutId: live.id }} label="Send to customer" onDone={onSew} />}
                 </div>
-                {!live && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then download the PDF proof or send it to the customer{SEWOUT_EMAILS ? "" : " (customer emails are off, so Send only works once they're on)"}. Once approved it&apos;s kept with the logo for reorders.</div>}
+                {!live && <div className="faint" style={{ fontSize: 12.5 }}>Sew a sample, take its picture (and a placement photo if you like), crop it and say what was really sewn: the order changes to match. Then send it to the customer (you see the email first), copy its link into your own email, or download the PDF. Once approved it&apos;s kept with the logo for reorders.</div>}
                 {live && <div className="dgz-sw">
                   <figure>{swUrls[live.id] ? <a href={swUrls[live.id]} target="_blank" rel="noreferrer"><img src={swUrls[live.id]} alt={`Sew-out version ${live.version}`} /></a> : <span className="dgz-sw-none" />}<figcaption>Close up</figcaption></figure>
                   {swUrls[`${live.id}:place`] && <figure><a href={swUrls[`${live.id}:place`]} target="_blank" rel="noreferrer"><img src={swUrls[`${live.id}:place`]} alt="Placement on the garment" /></a><figcaption>Placement</figcaption></figure>}
                   <div className="stack" style={{ gap: 6, minWidth: 0 }}>
-                    <div className="sub">{live.sent_at ? `Sent ${day(live.sent_at)} to ${live.sent_to}` : `Saved ${day(live.created_at)} · not sent yet`}{live.viewed_at ? ` · opened ${day(live.viewed_at)}${live.view_count > 1 ? ` (${live.view_count}×)` : ""}` : live.sent_at ? " · not opened yet" : ""}</div>
+                    <div className="sub">{live.sent_at ? (live.sent_to === "link copied" ? `Link copied ${day(live.sent_at)}` : `Sent ${day(live.sent_at)} to ${live.sent_to}`) : `Saved ${day(live.created_at)} · not sent yet`}{live.viewed_at ? ` · opened ${day(live.viewed_at)}${live.view_count > 1 ? ` (${live.view_count}×)` : ""}` : live.sent_at ? " · not opened yet" : ""}</div>
                     {live.decided_at && <div className="sub">{live.decided_name} · {day(live.decided_at)}</div>}
                     {live.customer_comment && <div style={{ fontSize: 13 }}>“{live.customer_comment}”</div>}
                     {live.note && <div className="sub">Note: {live.note}</div>}
                     {(live.changes || []).length > 0 && <div className="sub dgz-sewn">Order changed to match: {(live.changes || []).map((c) => c.what === "thread" ? `${c.from} → ${c.to}` : c.what === "size" ? `size ${c.to}` : c.what === "stitches" ? `${c.to} stitches` : `file ${c.to}`).join(" · ")}</div>}
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                       <a className="btn sm" href={`/print/${it.o.id}?sewout=${live.id}`} target="_blank" rel="noreferrer">Download PDF proof</a>
-                      {canEdit && live.status === "pending" && SEWOUT_EMAILS && live.sent_at && <button type="button" className="btn sm" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(live.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
+                      {canEdit && live.status === "pending" && live.sent_at && <SendProofTool target={{ kind: "sewout", orderId: it.o.id, sewoutId: live.id }} mode="copy" onDone={onSew} />}
+                      {canEdit && live.status === "pending" && live.sent_at && live.sent_to !== "link copied" && <button type="button" className="btn sm" disabled={swBusy} onClick={() => { setSwBusy(true); void remindSewoutAction(live.id).then((r) => { setSwBusy(false); onSew(r.ok ? "Reminder sent." : r.error || "Couldn't send it."); }); }}>Remind them</button>}
                       {canEdit && live.status === "pending" && <button type="button" className="btn sm ghost" onClick={() => setHow(how === live.id ? null : live.id)}>Approved another way…</button>}
                     </div>
                     {how === live.id && <div className="row" style={{ gap: 6 }}>

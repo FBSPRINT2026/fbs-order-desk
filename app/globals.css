@@ -15831,3 +15831,64 @@ main.main .sep-sr-m .sep-sr-sum{font-size:13.5px;color:var(--ink)}
 .dgz-vt .dgz-vfl{white-space:normal}
 .dgz-vt .dgz-vfl .btn{margin:2px 0}
 table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
+
+/* The customer's proof page (app/proof/[id], Oct 29, Nick: "the PDF on the right. And some basic details on the left"):
+   our logo on top, the details and Approve / Requires changes on the left, the PDF filling the right */
+.pfl{min-height:100vh;display:flex;flex-direction:column;background:var(--surface-2);font-family:var(--body);color:var(--ink)}
+.pfl-top{display:flex;align-items:center;gap:12px;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.pfl-top img{height:34px;width:auto;display:block}
+.pfl-top a{font-size:13px;color:var(--ink-3);text-decoration:none;white-space:nowrap}
+.pfl-sp{flex:1}
+.pfl-body{flex:1;display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);min-height:0}
+.pfl-side{background:var(--surface);border-right:1px solid var(--line);padding:20px 22px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.pfl-side h1{font-family:var(--display);font-size:22px;margin:0;line-height:1.2}
+.pfl-sub{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.pfl-kv{width:100%;border-collapse:collapse;font-size:14px;border:1px solid var(--line);border-radius:var(--r)}
+.pfl-kv th{width:40%;text-align:left;font-weight:400;color:var(--ink-3);padding:7px 10px;border-bottom:1px solid var(--line-2,var(--line));white-space:nowrap}
+.pfl-kv td{padding:7px 10px;border-bottom:1px solid var(--line-2,var(--line))}
+.pfl-kv tr:last-child th,.pfl-kv tr:last-child td{border-bottom:0}
+.pfl-g{display:flex;flex-direction:column;gap:6px}
+.pfl-gn{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.pfl-line{font-size:13.5px;line-height:1.35}
+.pfl-line span{display:block;font-size:12.5px;color:var(--ink-3)}
+.pfl-note{font-size:13.5px;background:var(--surface-2);border-radius:var(--r);padding:8px 10px}
+.pfl-ans{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.pfl-lbl{font-size:12px;font-weight:700;color:var(--ink)}
+.pfl-ans textarea,.pfl-ans input[type=text]{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.pfl-ans input[type=text]{height:36px}
+.pfl-btns{display:flex;gap:8px}
+.pfl-btns .btn{flex:1;justify-content:center;height:38px}
+.pfl-ok.btn.primary{background:var(--ok);border-color:var(--ok)}
+.pfl-step{display:flex;flex-direction:column;gap:8px}
+.pfl-opt{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:12.5px;color:var(--ink-3);cursor:pointer}
+.pfl-opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.pfl-opt b{display:block;font-size:13.5px;color:var(--ink);margin-bottom:1px}
+.pfl-opt input{margin-top:3px}
+.pfl-fine{font-size:12px;color:var(--ink-3)}
+.pfl-done{display:flex;flex-direction:column;gap:4px;border-radius:8px;padding:12px 14px;font-size:13.5px}
+.pfl-done.ok{background:var(--ok-soft);color:var(--ok)}
+.pfl-done.chg{background:var(--warn-soft);color:var(--warn)}
+.pfl-done b{font-size:15px}
+.pfl-done span,.pfl-done small{color:var(--ink)}
+.pfl-done small{font-size:12.5px;color:var(--ink-3)}
+.pfl-pdf{display:flex;flex-direction:column;min-width:0;min-height:0;background:#5d6675}
+.pfl-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;color:#fff;font-size:13px}
+.pfl-bar a{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 10px}
+.pfl-pdf iframe{flex:1;width:100%;border:0;min-height:70vh;background:#5d6675}
+.pfl-gone{max-width:520px;margin:12vh auto;padding:0 16px;font-family:var(--body);color:var(--ink)}
+.pfl-gone h1{font-family:var(--display)}
+@media (max-width:820px){.pfl-body{grid-template-columns:1fr}.pfl-side{border-right:0;border-bottom:1px solid var(--line)}.pfl-pdf iframe{min-height:80vh}}
+
+/* Send a proof (components/tools/SendProofTool.tsx): the email as the customer gets it, then Send or Copy */
+.mk-modal.spt{max-width:640px}
+.spt-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.spt-h h2{margin:0}
+.spt-meta{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.spt-meta div{display:flex;gap:8px}
+.spt-meta span{width:60px;color:var(--ink-3);flex:none}
+.spt-note{display:flex;flex-direction:column;gap:4px}
+.spt-note textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px}
+.spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F3F5F8}
+.spt-mail iframe{display:block;width:100%;height:min(560px,55vh);border:0}
+.spt-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.spt-copy{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
