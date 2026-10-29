@@ -236,8 +236,9 @@ export type OsHit = { brand: string; style: string; osStyle: string; title: stri
 export async function osItemsRaw(path: string) {
   if (!/^items\/[\w\/?=&,.\- %]*$/.test(path)) throw new OneStopError("Only items/… reads.");
   const j = await os<unknown>(path, { timeoutMs: 20_000 });
-  const rs = results(j);
-  return { keys: Object.keys((j || {}) as object), meta: Object.fromEntries(Object.entries((j || {}) as Record<string, unknown>).filter(([k]) => k !== "results")), count: rs.length, first: rs.slice(0, 2) };
+  const r0 = (j as { results?: unknown } | null)?.results;
+  const rs: unknown[] = Array.isArray(r0) ? r0 : r0 && typeof r0 === "object" ? Object.entries(r0 as Record<string, unknown>).map(([k, v]) => ({ _key: k, ...(v as object) })) : [];
+  return { keys: Object.keys((j || {}) as object), shape: Array.isArray(r0) ? "array" : typeof r0, meta: Object.fromEntries(Object.entries((j || {}) as Record<string, unknown>).filter(([k]) => k !== "results")), count: rs.length, first: rs.slice(0, 2) };
 }
 /** the raw first rows of One Stop's search (for the connection check) */
 export async function osSearchRaw(q: string) {
