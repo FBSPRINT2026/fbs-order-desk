@@ -470,14 +470,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
   const tried = useRef(new Set<string>());
-  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
+  /** `quiet`: looked up on its own (a style on the order), so a miss just leaves the plain color, with no message */
+  async function lookupStyle(style: string, styleID?: number, supplier?: string, quiet = false): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key) return null;
     setLookingUp(key);
     try {
       const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}`);
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.garment) { setMsg(j.error || "Couldn't find that style at S&S or SanMar."); return null; }
+      if (!r.ok || !j.garment) { if (!quiet) setMsg(r.status === 404 ? j.error || `Couldn't find ${key} at the suppliers.` : `Couldn't look up ${key} right now. Try again in a minute.`); return null; }
       const g = j.garment as Garment;
       setCatalog((c) => [...c.filter((x) => x.id !== g.id), g]);
       return g;
@@ -1114,7 +1115,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (l.own || !st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
       tried.current.add(st.toUpperCase());
       // SanMar's brands (Port Authority, Sport-Tek, District…) go straight to SanMar
-      if (orderId) lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined);
+      if (orderId) void lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined, true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);

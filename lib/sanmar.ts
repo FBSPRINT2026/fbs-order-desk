@@ -98,7 +98,9 @@ export type SanMarGarment = { style: string; brand: string; description: string;
 export async function sanmarLookup(style: string): Promise<SanMarGarment | null> {
   const t = style.trim().toUpperCase();
   if (!t) return null;
-  const skus = await sanmarSkus(t);
+  // a style SanMar doesn't have is "not found", not a failure (Oct 29: "SanMar: ERROR: Invalid style specified. Style:
+  // BOAT AND TOTE® BAG, ZIP-TOP" showed on a logo mockup): the caller tries the next supplier or says it plainly
+  const skus = await sanmarSkus(t).catch((e) => { if (/invalid style|style.*not found|no (data|records?) found/i.test(e instanceof Error ? e.message : String(e))) return [] as SanMarSku[]; throw e; });
   if (!skus.length) return null;
   // the color names people use ("True Royal"), not SanMar's catalog codes ("TrueRoyal")
   const nameOf = (s: SanMarSku) => (s.color || s.catalogColor || "").trim();
