@@ -7,6 +7,7 @@ import { sanmarStyles } from "@/lib/sanmarStyle";
 import { osConfigured, osGarment } from "@/lib/onestop";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Find a style on S&S Activewear (or SanMar when S&S doesn't carry it, or ?supplier=sanmar) and save it to the garment catalog.
 // Customers can use it too (building an order in their portal), but never see our costs.

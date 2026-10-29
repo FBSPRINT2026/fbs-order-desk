@@ -336,12 +336,17 @@ export async function osGarment(admin: SupabaseClient, code: string, brand = "")
     const one = results(await os<unknown>(`items/?code=${encodeURIComponent(skus[0].code)}`).catch(() => null))[0];
     if (one) mk = { brand: s(one.mill_name), millStyle: s(one.mill_style_code), name: s(one.web_name || one.description), desc: s(one.web_description) };
   }
-  const px = await osPrices(skus.slice(0, 600).map((x) => x.code)).catch(() => new Map<string, { onHand: number; price: number; gtin: string }>());
+  // prices: one call for every size of a white and a dark color (a big style has 100+ colors; pricing them all took
+  // longer than the lookup may run, and colors price alike apart from white): the rest take the dark color's price
+  const cols = Object.keys(color_images), white = cols.find((c) => /^white$/i.test(c)), dark = cols.find((c) => /^black$/i.test(c)) || cols.find((c) => c !== white) || cols[0];
+  const sample = skus.filter((x) => x.color === white || x.color === dark).slice(0, 50);
+  const px = await osPrices(sample.map((x) => x.code)).catch(() => new Map<string, { onHand: number; price: number; gtin: string }>());
+  const priceOf = (k: Sz) => px.get(k.code)?.price || px.get(sample.find((x) => x.color === dark && x.size === k.size)?.code || "")?.price || 0;
   const ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"];
   const sizes = [...new Set(skus.map((x) => x.size))].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
   const size_costs: Record<string, number> = {}, color_size_costs: Record<string, Record<string, number>> = {};
   for (const k of skus) {
-    const v = px.get(k.code)?.price || 0;
+    const v = priceOf(k);
     if (!(v > 0)) continue;
     size_costs[k.size] = size_costs[k.size] ? Math.min(size_costs[k.size], v) : v;
     const m = (color_size_costs[k.color] ||= {}); m[k.size] = m[k.size] ? Math.min(m[k.size], v) : v;

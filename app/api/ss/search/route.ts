@@ -79,7 +79,9 @@ export async function GET(req: Request) {
   // LAT, Izod…) and styles neither found; a style either of them has shows once, from them
   const seen = new Set([...a, ...b].map((h) => `${brandKey(h.brand)}|${h.style.toLowerCase()}`));
   const elsewhere = (b: string) => !!brands && ((brands.ss.size > 0 && carries(brands, "ss", b)) || (brands.sm.size > 0 && carries(brands, "sm", b)));
-  const o: Hit[] = o0.filter((h) => !seen.has(`${brandKey(h.brand)}|${h.style.toLowerCase()}`) && !elsewhere(h.brand))
+  // the same garment under another name for the brand ("LAT Apparel" 6901 at One Stop is "Live & Tell by LAT" 6901 at S&S)
+  const sameAs = (h: { brand: string; style: string }) => [...a, ...b].some((x) => x.style.toLowerCase() === h.style.toLowerCase() && (() => { const p = brandKey(x.brand), q2 = brandKey(h.brand); return !!p && !!q2 && (p.includes(q2) || q2.includes(p)); })());
+  const o: Hit[] = o0.filter((h) => !seen.has(`${brandKey(h.brand)}|${h.style.toLowerCase()}`) && !sameAs(h) && !elsewhere(h.brand))
     .map((h) => ({ styleID: 0, brand: h.brand, style: h.style, title: h.title, image: h.image, supplier: "onestop" as const, supplierStyle: h.osStyle }));
   if (!a.length && !b.length && !o.length && err) return NextResponse.json({ error: err }, { status: 502 });
   // exact style matches from either supplier first, then the rest of S&S, then the rest of SanMar
