@@ -3,6 +3,7 @@ import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
 import CustomerPick from "@/components/CustomerPick";
 import ProofSide from "@/components/ProofSide";
+import OrderGoodsPanel from "@/components/OrderGoodsPanel";
 import OrderStages from "@/components/OrderStages";
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
@@ -1710,6 +1711,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </section>
           {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
               right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
+          {/* Goods, right under Totals (Oct 29, Nick): who ordered them, from where, the PO, arrival, tracking */}
+          {o.status !== "request" && <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale"} />}
           {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
           {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (

@@ -7,7 +7,7 @@
  * When a tool changes, it changes once (its component), never in one of the places it shows up. When adding a button
  * for a tool somewhere new, open its component (`component`), don't copy it, and add the place to `places`.
  */
-export type AiToolId = "create-order" | "mockup-helper" | "reply" | "assistant" | "order-helper" | "order-review" | "reorder-check" | "art-resolution" | "design-ai" | "brand" | "catalog-review" | "sep-coach" | "when-print" | "schedule" | "file-guess" | "goods-match" | "order-goods" | "order-transfers" | "ask-shop" | "digitizer";
+export type AiToolId = "goods-reader" | "create-order" | "mockup-helper" | "reply" | "assistant" | "order-helper" | "order-review" | "reorder-check" | "art-resolution" | "design-ai" | "brand" | "catalog-review" | "sep-coach" | "when-print" | "schedule" | "file-guess" | "goods-match" | "order-goods" | "order-transfers" | "ask-shop" | "digitizer";
 
 export type AiTool = {
   id: AiToolId; group: "Orders" | "Art & mockups" | "Email" | "Production" | "Goods" | "Search";
@@ -20,6 +20,8 @@ export type AiTool = {
 };
 
 export const AI_TOOLS: AiTool[] = [
+  { id: "goods-reader", group: "Goods", name: "Goods reader", what: "Reads a pasted supplier confirmation, shipping email, ClickUp note or text about an order's goods: who ordered them (FBS or the customer), the vendor, order number, arrival and tracking, into the order's Goods panel to check and save.",
+    places: ["Order page: Goods panel → Add → paste"], component: "components/OrderGoodsPanel.tsx (app/shop/goods-panel-actions.ts readGoodsPaste)", open: { href: "/shop/orders", label: "Open an order" } },
   { id: "create-order", group: "Orders", name: "Create order / reorder", what: "Reads an email, a ClickUp job or files (POs, work orders, art) and makes the order or the reorder: asks what doesn't add up, checks shirt colors, pulls art off mockups, brings in a Printavo job's art.",
     places: ["Inbox and folder emails: Create order", "Conversations: Create order", "ClickUp jobs: Create order", "AI Workbench: Tools", "Order chat: the next order from the same email", "Order page: a portal simple order (Build it with Create order)"], component: "components/tools/CreateOrderTool.tsx", open: { here: true } },
   { id: "mockup-helper", group: "Art & mockups", name: "Mockup Helper", what: "Pulls the art off a mockup (ours, the customer's, a person wearing it, shirts drawn in their software): front and back, size, drop, inks. Reads the garments on the sheet and draws a blank we have no photo of to match their photo (any cut, buttons, snaps, trim).",

@@ -15627,3 +15627,24 @@ a.dgz-chip:hover{border-color:var(--accent);color:var(--accent)}
 .dgz-mail-h{font-size:12px;color:var(--ink-3)}
 
 .dgz-head .btn,.dgz-head .btn.sm{height:36px;padding:0 14px;font-size:13px;box-sizing:border-box}
+
+/* Goods panel on the order, under Totals (components/OrderGoodsPanel.tsx; Oct 29) and Shop steps folded to one line */
+button.panel-h.osp-fold{width:100%;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;font:inherit;color:inherit;text-align:left;border-radius:var(--r) var(--r) 0 0}
+button.panel-h.osp-fold[aria-expanded="false"]{border-bottom:0}
+.osp-chev{font-style:normal;margin-left:6px;color:var(--ink-3)}
+.ogp .panel-h .faint{font-size:12px;white-space:nowrap}
+.ogp .panel-b{font-size:13px;display:flex;flex-direction:column;gap:8px}
+.ogp-sec{display:flex;flex-direction:column;gap:1px}
+.ogp-sec + .ogp-sec{border-top:1px solid var(--line);padding-top:8px}
+.ogp-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.ogp-r{display:flex;justify-content:space-between;align-items:baseline;gap:8px;white-space:nowrap;line-height:1.6;color:var(--ink)}
+.ogp-r > span:first-child{overflow:hidden;text-overflow:ellipsis}
+.ogp-r b{font-weight:700}
+.ogp-t{display:flex;flex-direction:column;align-items:flex-end;line-height:1.35}
+.ogp-t small{font-size:12px;color:var(--ink-3)}
+.ogp-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ogp-add{display:flex;flex-direction:column;gap:8px}
+.ogp-add .field{margin:0}
+.ogp-add textarea{min-height:56px;font-size:13px}
+.ogp-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ogp-acts{display:flex;justify-content:flex-end;gap:6px}

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { FLAGS, type FlagKey } from "@/lib/orderStages";
+import { useSticky } from "@/lib/useSticky";
 import type { StageView } from "@/lib/orderStagesServer";
 
 /**
@@ -16,6 +17,9 @@ export default function OrderStages({ orderId, printavo, bump = 0 }: { orderId: 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState<{ key: FlagKey | ""; note: string; date: string } | null>(null);
+  // folded to one line by default (Oct 29, Nick: "the shop steps, we need to severely minimize"): the step it's on; click
+  // to open the whole list. Holds and flags show either way
+  const [open, setOpen] = useSticky("order.stepsOpen", false);
   const load = useCallback(async () => {
     const j = await fetch(`/api/orders/${orderId}/stage`).then((r) => r.json()).catch(() => ({ error: "Couldn't load the shop steps." }));
     if (j.error) setErr(j.error); else { setS(j); setErr(""); }
@@ -33,8 +37,9 @@ export default function OrderStages({ orderId, printavo, bump = 0 }: { orderId: 
   const none = !s.steps.some((x) => x.done);
   return (
     <section className="panel osp" aria-label="Shop steps">
-      <div className="panel-h"><h2>Shop steps</h2><span className="faint">{s.current ? <>{none ? "Next" : "Now"}: <b className="osp-now">{s.current.label}</b></> : <b className="osp-now">All done</b>}</span></div>
-      <div className="panel-b">
+      <button type="button" className="panel-h osp-fold" aria-expanded={open} onClick={() => setOpen(!open)} title={open ? "Fold the shop steps" : "Show every shop step"}><h2>Shop steps</h2><span className="faint">{s.current ? <>{none ? "Next" : "Now"}: <b className="osp-now">{s.current.label}</b></> : <b className="osp-now">All done</b>}<i className="osp-chev" aria-hidden>{open ? "▴" : "▾"}</i></span></button>
+      {!open && s.flags.length > 0 && <div className="panel-b osp-flags">{s.flags.map((f) => { const def = FLAGS.find((x) => x.key === f.key); return <span key={f.key} className={"os-flag" + (def?.hold ? " hold" : "") + (def?.customer ? " cust" : "")}>{def?.label || f.key}</span>; })}</div>}
+      {open && <div className="panel-b">
         <div className="osp-cust" title={s.customer.text}>Customer sees: <b>{s.customer.label}</b></div>
         <ol className="osp-rail">
           {s.steps.map((st) => {
@@ -77,7 +82,7 @@ export default function OrderStages({ orderId, printavo, bump = 0 }: { orderId: 
           </div>
         ) : <button type="button" className="btn sm ghost osp-addb" onClick={() => setAdding({ key: "", note: "", date: "" })}>+ Hold or flag</button>}
         {err && <div className="err">{err}</div>}
-      </div>
+      </div>}
     </section>
   );
 }
