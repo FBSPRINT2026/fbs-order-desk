@@ -1,4 +1,5 @@
 "use client";
+import { GOODS_PO_MAX, cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -53,6 +54,8 @@ const SHIP: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], 
 
 export default function OrderGoodsTool({ activityId, orderId, onClose }: { activityId?: string; orderId?: string; onClose: () => void }) {
   const [label0, setLabel0] = useState(""), [orderNo, setOrderNo] = useState<number | null>(null);
+  // the PO name sent to S&S and SanMar: filled in (lib/goodsPo.ts), typed over when you want your own
+  const [po, setPo] = useState("");
   const [steps, setSteps] = useState<Step[]>([]), [err, setErr] = useState("");
   const [who, setWho] = useState(""), [cust, setCust] = useState<{ id: string; name: string } | null>(null);
   const [runsAsk, setRunsAsk] = useState<{ runs: Run[]; prefs: PreferredGood[]; company: string; sender: string; done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void } | null>(null);
@@ -101,6 +104,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
           if (o) setOrderNo(o.number);
           if ("needBy" in r) { setNeedBy((r.needBy as string | null) || null); setProdDay(((r as { production?: string | null }).production) || null); }
           if ("label" in r && r.label) setLabel0(String(r.label));
+          setPo((x) => x || String(("po" in r && r.po) || defaultGoodsPo({ customer: c?.name })));
           step("Checking stock and price with S&S and SanMar…");
           setRows((r.rows || []) as Row[]);
           finishSteps();
@@ -195,7 +199,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       const per = new Map<string, number>();
       for (const p of ssParts) { const x = byKey.get(p.key); if (x?.sku) per.set(x.sku, (per.get(x.sku) || 0) + p.qty); }
       const r = await placeGoods({ lines: [...per].map(([sku, qty]) => { const x = wanted.find((y) => y.sku === sku)!; return { sku, qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price }; }),
-        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr(r.error); return; }
       garmentsLeft = undefined;
       const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
@@ -207,7 +211,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
     // SanMar's part (once SanMar has switched ordering on for us)
     if (smParts.length && smOn) {
       const r = await placeSanmar({ lines: smParts.map((p) => { const x = byKey.get(p.key)!, ref = opts!.sm[p.key]; const src = (opts!.srcs[p.key] || []).find((s) => s.sup === "sm" && s.wh === p.wh); return { ...ref, qty: p.qty, whse: p.wh, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: src?.price || 0 }; }),
-        shippingMethod: ship, test, label, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+        shippingMethod: ship, test, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr((ssParts.length && !test ? `The S&S order went through (${out.join("; ")}), but SanMar's didn't: ` : "") + r.error); if (!test && out.length) setPlaced(out.join(" · ")); return; }
       if (test) { const c = (r as { checked?: { ok: boolean; message: string } }).checked; if (c && !c.ok) setErr("SanMar: " + (c.message || "some sizes aren't in stock")); }
       sum += (r as { total?: number }).total || smParts.reduce((a, p) => a + p.qty * p.each, 0);
@@ -360,6 +364,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
             {opts?.sanmar && <p className="faint og-note og-fee">{feeEdit
               ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee, money: r.money } : o)); }); }} />%</>
               : <>SanMar prices include our {opts.fee}% card fee; S&amp;S has none, so a tie goes to S&amp;S. <button type="button" className="linkbtn" onClick={() => setFeeEdit(true)}>Change</button>{ssOnly && <> · S&amp;S only. <button type="button" className="linkbtn" onClick={() => { setSsOnly(false); setCheck(null); }}>Show SanMar too</button></>}</>}</p>}
+            <div className="field"><label htmlFor="og-po">PO name</label><input id="og-po" type="text" value={po} maxLength={GOODS_PO_MAX} placeholder={defaultGoodsPo({ orderNo, customer: who })} onChange={(e) => { setPo(e.target.value); setCheck(null); }} onBlur={(e) => setPo(cleanGoodsPo(e.target.value))} /><small className="faint">On the S&amp;S and SanMar orders and their boxes. Keep the job number first so receiving matches it.</small></div>
             <div className="field"><label htmlFor="og-ship">Shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
             {smParts.length > 0 && smOn && (ship === "40" || ship === "14") && <p className="og-note">SanMar&apos;s part ships PSST (we&apos;re a PSST decorator): free freight, and ordered by 1 pm it ships today.</p>}
             {check && <div className="og-check">Checked with {check.from || "S&S"}: {money(check.total)}{check.expected ? ` · arrives ${new Date(check.expected).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}. Nothing bought yet.</div>}

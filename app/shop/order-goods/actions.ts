@@ -6,6 +6,7 @@ import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricin
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
 import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
+import { cleanGoodsPo, defaultGoodsPo } from "@/lib/goodsPo";
 // a SanMar warehouse by its number, else by its city (PromoStandards may name it instead)
 const smWh = (id: string, name: string) => (SM_WH[id] ? id : Object.entries(SM_WH).find(([, v]) => name && new RegExp(v[1], "i").test(name))?.[0] || id);
 import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
@@ -110,7 +111,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
         let n = lead; while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
         needBy = d.toISOString().slice(0, 10);
       }
-      return { ok: true as const, needBy, production: prod, due, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim() };
+      return { ok: true as const, needBy, production: prod, due, order: { id: o.id as string, number: o.number as number, nickname: (o.nickname as string) || "" }, customer: c ? { id: c.id, name: c.company || c.name } : null, rows, label: `#${o.number} ${c?.company || c?.name || ""}`.trim(), po: defaultGoodsPo({ orderNo: o.number as number, customer: c?.company || c?.name }) };
     }
     if (p.email) {
       const { data: a } = await admin.from("activities").select("id, subject, from_email, customer_id, order_id, meta").eq("id", p.email).maybeSingle();
@@ -121,7 +122,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
       const pl = sg?.payload as { draft?: { groups?: Group[] }; groups?: Group[] } | null;
       const rows = rowsOf(pl?.draft?.groups || pl?.groups || []);
       if (rows.length && ssConfigured()) await matchToSS(admin, rows, { fixColors: true });
-      return { ok: true as const, email: { id: a.id as string, subject: (a.subject as string) || "", from: (a.from_email as string) || "" }, customer: c ? { id: c.id as string, name: (c.company as string) || (c.name as string) } : null, rows, label: `${c?.company || c?.name || a.from_email} (ahead of order)`, read: !!pl };
+      return { ok: true as const, email: { id: a.id as string, subject: (a.subject as string) || "", from: (a.from_email as string) || "" }, customer: c ? { id: c.id as string, name: (c.company as string) || (c.name as string) } : null, rows, label: `${c?.company || c?.name || a.from_email} (ahead of order)`, po: defaultGoodsPo({ customer: c?.company || c?.name || a.from_email }), read: !!pl };
     }
     return { ok: true as const, rows: [] as GoodsRow[] };
   } catch (e) { return fail(e); }
@@ -145,7 +146,7 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[];
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string; garments?: GoodsGarment[];
   /** each sku's warehouse picked by Order goods' plan (lib/goodsPlan.ts); without it the closest that has it */ from?: { sku: string; qty: number; warehouse: string }[] }) {
   try {
     const v = await staff();
@@ -156,7 +157,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const from = mergeSettings(st?.data).ship.from;
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (S&S ships here)." };
-    const po = (p.label || "Stock").trim().slice(0, 50);
+    const po = cleanGoodsPo(p.po || "") || defaultGoodsPo({ customer: p.label });
     // paid with our saved card (ending 5488), never the account's terms
     // each line from the closest warehouse that has it (Fort Worth first)
     const picked = (p.from || []).filter((f) => f.sku && f.qty > 0 && f.warehouse && lines.some((l) => l.sku === f.sku));
@@ -416,7 +417,7 @@ export async function goodsOptions(rows: { key: string; brand: string; style: st
 const SM_SHIP: Record<string, string> = { "40": "PSST", "14": "PSST", "16": "UPS 3RD DAY", "3": "UPS 2ND DAY", "2": "UPS NEXT DAY" };
 const SM_WILL_CALL: Record<string, string> = { "1": "PRE", "2": "CIN", "3": "COP", "4": "REN", "5": "NJE", "6": "JAC", "7": "MSP", "12": "PHX", "31": "VA1" };
 /** SanMar's part of a plan: checked (test) or ordered, shipped to us and paid with the card on our sanmar.com account */
-export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
+export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; price: number })[]; shippingMethod: string; test: boolean; label: string; /** the PO name typed on Order goods (lib/goodsPo.ts) */ po?: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; garments?: GoodsGarment[] }) {
   try {
     const v = await staff();
     if (!sanmarPOMode()) return { ok: false as const, error: "SanMar ordering isn't turned on yet (SanMar's integration team has to switch it on for our account)." };
@@ -437,7 +438,7 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const from = mergeSettings(st?.data).ship.from;
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (SanMar ships here)." };
-    const poNum = (p.label || "Stock").replace(/[^A-Za-z0-9 #-]/g, "").trim().slice(0, 20) + " " + new Date().toISOString().slice(5, 10).replace("-", "");
+    const poNum = cleanGoodsPo(p.po || "") || defaultGoodsPo({ customer: p.label });
     const order = { poNum: poNum.slice(0, 28), attention: from.name || "Receiving", shipTo: from.company || "FBS Print", address1: from.street1, address2: from.street2 || "", city: from.city, state: from.state, zip: from.zip, email: v.user?.email || "", shipMethod: p.shippingMethod === "6" ? SM_WILL_CALL["3"] : SM_SHIP[p.shippingMethod] || "UPS", lines };
     const fee = await sanmarFeePct(admin);
     const sub = lines.reduce((a, l) => a + l.qty * (l.price || 0), 0);
