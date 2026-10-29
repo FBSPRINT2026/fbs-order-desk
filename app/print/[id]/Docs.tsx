@@ -13,6 +13,7 @@ import WoFit from "./WoFit";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
 import DstPicture from "@/components/DstPicture";
+import { PrintThumb } from "@/components/LogoThumb";
 /** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
 const MATCH_PREV = "Printed to match your previous order";
 
@@ -771,11 +772,9 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
   const emb = d?.emb || {};
   // the stitch file sewn: its size and stitches, drawn in the threads sewn (each color stop's needle → the thread on it)
   const file = sw.sewn?.file || (emb.file ? { path: emb.file.path, name: emb.file.name, wIn: emb.file.wIn, hIn: emb.file.hIn, stitches: emb.file.stitches } : null);
-  const seq = emb.file?.path === file?.path ? emb.file?.ws?.sequence || [] : [];
   const hexOf = (n: string) => threadByName(n)?.hex || colorHex(n) || "#333333";
-  const sewnBy = Object.fromEntries(sewnThreads.filter((t) => t.needle).map((t) => [t.needle!, t.sewn]));
-  const dstColors = seq.length ? stopColors(emb.file?.ws, d?.inks || "", sewnBy) : sewnThreads.map((t) => hexOf(t.sewn));
   const inch = (n: number) => `${Math.round(n * 100) / 100}"`;
+  const art = des ? p.designUrls[des.id] || "" : "";
   return (
     <section className="sheet pf pf-cover so">
       <div className="top">
@@ -793,35 +792,37 @@ export function SewoutDoc(p: DocData & { printed: string; sw: SewoutRow; photo: 
         <h2>Here&apos;s an actual photo of your sew-out for approval</h2>
         <p>Your logo stitched on our machine, the same way the whole run will sew. Please look it over and approve it, or tell us what to change.</p>
       </div>
-      <div className={"so-hero" + (p.placement ? " two" : "")}>
+      {/* the sew-out big, with the art we sent beside it to compare (Oct 29, Nick: "the main thing is the sew out… large and
+          in the center… a smaller version that says compared to original file… down below… the placement and threads") */}
+      <div className="so-hero">
         <figure className="so-ph">
           {p.photo ? <img src={p.photo} alt="Your sew-out" /> : <div className="none">Sew-out photo</div>}
           <figcaption>The sew-out, close up{d ? ` · ${d.location}` : ""}</figcaption>
         </figure>
+        {des && d && art && <figure className="so-org">
+          <div className="lbl">Compared to</div>
+          <div className="so-org-pic"><PrintThumb d={des} url={art} print={d} lines={g?.lines} /></div>
+          <figcaption>The original file</figcaption>
+        </figure>}
+      </div>
+      <div className={"so-below" + (p.placement ? " pl" : "")}>
         {p.placement && <figure className="so-ph so-pl">
           <img src={p.placement} alt="Where it sits on the garment" />
           <figcaption>Placement on the garment</figcaption>
         </figure>}
-        <div className="so-side">
-          {file && <div className="so-dst">
-            <div className="lbl">As sewn (from the stitch file)</div>
-            <div className="so-dst-pic"><DstPicture path={file.path} colors={dstColors} style={{ width: "100%", height: "100%" }} fallback={<span className="faint">Drawn from the stitch file</span>} /></div>
-            <div className="so-dim"><span>{inch(file.wIn)} wide</span><span>{inch(file.hIn)} tall</span></div>
-          </div>}
-          <div className="so-facts">
+          <div className={"so-facts" + (p.placement ? "" : " three")}>
             {file && <div><span>Size</span><b>{inch(file.wIn)} × {inch(file.hIn)}</b></div>}
             {(file?.stitches || d?.stitches) ? <div><span>Stitches</span><b>{(file?.stitches || d?.stitches || 0).toLocaleString()}</b></div> : null}
-            {d && <div><span>Placement</span><b>{d.location}</b></div>}
             {des && <div><span>Logo</span><b>D-{des.number}</b></div>}
+            {d && <div><span>Placement</span><b>{d.location}</b></div>}
             <div className="wide"><span>Thread{sewnThreads.length === 1 ? "" : "s"}</span>{sewnThreads.map((t, i) => {
               const th = threadByName(t.sewn); const swapped = t.sewn.toLowerCase() !== t.ordered.toLowerCase();
               return <b key={i} className="so-th"><Swatch c={hexOf(t.sewn)} />{t.needle && sewnThreads.length > 1 ? `${t.needle}. ` : ""}{t.sewn}{th?.pms[0] ? ` (PMS ${th.pms[0].replace(/^PMS\s*/i, "")})` : ""}{swapped && <small> in place of {t.ordered}</small>}</b>;
             })}</div>
-            {garments.length > 0 && <div className="wide"><span>Garment{garments.length === 1 ? "" : "s"}</span>{garments.map((l) => <b key={l.id} className="so-th"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} />{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}{l.color ? ` · ${l.color}` : ""}</b>)}</div>}
-            {(emb.backing || emb.puff || emb.metallic) && <div className="wide"><span>Details</span><b>{[emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</b></div>}
+            {garments.length > 0 && <div className="full"><span>Garment{garments.length === 1 ? "" : "s"}</span>{garments.map((l) => <b key={l.id} className="so-th"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#9aa1ab"} />{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}{l.color ? ` · ${l.color}` : ""}</b>)}</div>}
+            {(emb.backing || emb.puff || emb.metallic) && <div className="full"><span>Details</span><b>{[emb.backing ? `Backing: ${emb.backing}` : "", emb.puff ? (emb.puffNote && !/all of it/.test(emb.puffNote) ? emb.puffNote : "3D puff") : "", emb.metallic ? "Metallic thread" : ""].filter(Boolean).join(" · ")}</b></div>}
+            {sw.note && <div className="full so-note"><b>Note:</b> {sw.note}</div>}
           </div>
-          {sw.note && <div className="so-note"><b>Note:</b> {sw.note}</div>}
-        </div>
       </div>
       <div className="pf-ok">
         <div className="t">Please check the sew-out before you approve</div>
