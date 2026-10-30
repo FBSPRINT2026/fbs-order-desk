@@ -35,7 +35,7 @@ export async function logosOnFile(admin: SupabaseClient, customerId: string): Pr
     const r = b.rules || {}, e = b.embroidery || {};
     const rule = [r.light ? `light goods get ${r.light}` : "", r.dark ? `dark goods get ${r.dark}` : "", r.one_light ? `one color on light ${r.one_light}` : "", r.one_dark ? `one color on dark ${r.one_dark}` : "",
       e.light?.length ? `embroidery thread on light goods ${e.light.join(", ")}` : "", e.dark?.length ? `on dark goods ${e.dark.join(", ")}` : ""].filter(Boolean).join("; ");
-    return `- Brand "${b.name}"${rule ? `: ${rule}` : ""}${b.notes ? `. Notes: ${b.notes.slice(0, 200)}` : ""}`;
+    return `- Brand "${b.name}"${rule ? `: ${rule}` : ""}${b.notes ? `. Standards: ${b.notes.slice(0, 1500)}` : ""}`;
   });
   const text = [brands.length ? `THIS CUSTOMER'S BRANDS (they order for these companies; each has its standards):\n${brandLines.join("\n")}` : "",
     `THEIR LOGOS ON FILE (rule 4g: when the files show one of these, name it in logo_on_file):\n${lines.join("\n")}`].filter(Boolean).join("\n\n");
