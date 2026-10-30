@@ -1431,23 +1431,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {/* moving off Printavo: a 40,000-series order waits until its customer has been moved (checklist done) */}
       {cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) && <NotMovedBanner customerId={cust.id} name={custLabel(cust)} what="this order"
         onMoved={async () => { const { data } = await sb.from("customers").select("*").eq("id", cust.id).maybeSingle(); if (data) setCustomers((cs) => cs.map((x) => (x.id === cust.id ? (data as Customer) : x))); }} />}
-      {(() => {
-        const pv = pvStatusOf(o as never);
-        const day = (d?: string | null) => (d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
-        const prints = o.groups.reduce((n, g) => n + g.imprints.length, 0);
-        const gw = goodsSt ? (GOODS_WORD[goodsSt.status] || goodsSt.status) + (goodsSt.updated_by === "Printavo" && /received|partial/.test(goodsSt.status) ? " in Printavo" : "") : "";
-        const approved = proofs.filter((p) => p.status === "approved").length;
-        return (
-          <div className="ot-sum">
-            <div><span>Customer</span><b>{cust ? `${custLabel(cust)}${cust.company && cust.name ? " · " + cust.name : ""}` : "No customer yet"}</b><small>{o.price_type === "wholesale" ? "Wholesale" : "Retail"}{cust ? ` · ${PAY_TERMS[cust.payment_terms || "receipt"]}` : ""}{o.tax_exempt ? " · tax exempt" : ""}</small></div>
-            <div><span>In hands</span><b className={o.rush ? "hot" : ""}>{o.due_date ? day(o.due_date) : "No date"}{o.rush ? " · Rush" : o.firm ? " · Firm" : ""}</b><small>{o.production_date ? `Production ${day(o.production_date)} · ` : ""}{o.delivery_method === "ship" ? "Ship" : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup / ship TBD" : "Pickup"}</small></div>
-            <div><span>Pieces</span><b>{calc.qty}</b><small>{o.groups.length} group{o.groups.length === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</small></div>
-            {gw ? <div><span>Goods</span><b className={goodsSt?.status === "received" ? "ok" : goodsSt?.status === "issue" ? "hot" : ""}>{gw}</b><small>Customer supplied</small></div>
-              : <div><span>Proofs</span><b className={pendingProofs ? "" : approved ? "ok" : ""}>{pendingProofs ? `${pendingProofs} waiting` : approved ? `${approved} approved` : proofs.length ? `${proofs.length} sent` : "None yet"}</b><small>{pv || st.label}</small></div>}
-            {seesMoney && <div><span>Total</span><b>{money(calc.total)}</b><small className={calc.balance > 0.004 ? "due" : "ok"}>{calc.balance > 0.004 ? `${money(calc.balance)} due` : calc.total > 0 ? "Paid in full" : "—"}</small></div>}
-          </div>
-        );
-      })()}
+      {/* the summary bar across the top was taken off (Oct 29, Nick: "just unneeded information") */}
       <nav className="aa-nav ot-nav" aria-label="Order sections">
         {([["order", "Order", 0], ["prod", "Art & production", art.length], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
           <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} aria-label={l} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{n > 0 && <span className="aa-n">{n}</span>}</button>)}

@@ -16054,3 +16054,34 @@ table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .jc-list .toolbar .jc-search{margin-left:auto}
 .pfl-sub-ok{font-size:13px;font-weight:700;color:var(--ink);text-align:center;margin-top:-2px}
 .pfl-big.btn{text-transform:none}
+/* the customer's order page: the right side follows what they did (sent back → grayed with what they asked; approved →
+   the check across it), and one calm result after each answer (Oct 29, Nick) */
+.pfl-frame{position:relative;flex:1;display:flex;min-height:0}
+.pfl-frame iframe{flex:1}
+.pfl-pdf.is-changes iframe,.pfl-pdf.is-declined iframe{filter:grayscale(1);opacity:.22;pointer-events:none}
+.pfl-over{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;color:#fff}
+.pfl-over-i{width:58px;height:58px;border-radius:50%;background:var(--warn);color:#fff;font-size:26px;font-weight:800;display:grid;place-items:center}
+.pfl-pdf.is-declined .pfl-over-i{background:var(--ink-3)}
+.pfl-over b{font-family:var(--display);font-size:24px}
+.pfl-over q{max-width:440px;font-size:15px;line-height:1.45;background:rgba(255,255,255,.14);border-radius:8px;padding:8px 14px}
+.pfl-over span{font-size:14px;opacity:.9;max-width:440px}
+.pfl-pdf.is-ok .pfl-bar,.pfl-pdf.is-looks .pfl-bar{background:var(--ok)}
+.pfl-pdf.is-changes .pfl-bar{background:var(--warn)}
+.pfl-pdf.is-ok .pfl-frame,.pfl-pdf.is-looks .pfl-frame{box-shadow:inset 0 0 0 4px var(--ok)}
+.pfl-stamp{position:absolute;top:24px;right:30px;transform:rotate(-7deg);border:4px solid var(--ok);color:var(--ok);background:rgba(255,255,255,.94);border-radius:10px;padding:6px 18px 6px 12px;font-weight:800;font-size:22px;letter-spacing:.08em;text-transform:uppercase;display:flex;gap:8px;align-items:center;pointer-events:none}
+.pfl-stamp span{width:30px;height:30px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:18px;letter-spacing:0}
+.pfl-res{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;align-items:start;padding:2px 0}
+.pfl-res-i{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;background:var(--ok)}
+.pfl-res.chg .pfl-res-i{background:var(--warn)}
+.pfl-res.no .pfl-res-i{background:var(--ink-3)}
+.pfl-res b{display:block;font-family:var(--display);font-size:16px;color:var(--ink);line-height:1.3}
+.pfl-res span{display:block;font-size:13.5px;line-height:1.45;color:var(--ink);margin-top:2px}
+.pfl-res q{display:block;margin-top:8px;font-size:13.5px;line-height:1.45;color:var(--ink);border-left:3px solid var(--line);padding-left:10px}
+.pfl-res small{display:block;margin-top:6px;font-size:12px;color:var(--ink-3)}
+.pfl-done{background:none!important;color:var(--ink)!important;padding:2px 0 2px 50px!important;position:relative;min-height:38px}
+.pfl-done::before{content:"✓";position:absolute;left:0;top:0;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;background:var(--ok)}
+.pfl-done.chg::before{content:"✎";background:var(--warn)}
+.pfl-done b{font-family:var(--display);font-size:16px;color:var(--ink)}
+.pfl-alt{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+.pfl-alt .btn{text-transform:none}
+.pfl-sum li small{display:block;font-size:12.5px;color:var(--ink-3)}
