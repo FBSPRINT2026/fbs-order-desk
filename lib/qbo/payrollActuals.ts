@@ -24,7 +24,14 @@ type Acct = { Id: string; Name: string; FullyQualifiedName?: string; AccountType
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const norm = (s: string) => s.toLowerCase().replace(/\s*:\s*/g, ":").replace(/\s+/g, " ").trim();
 
-export async function payrollActuals(admin: SupabaseClient, payDate: string, bankName: string): Promise<PayrollActuals | null> {
+/** a QuickBooks paycheck name ("Nicholas J. McCoy", "Ruth Bustos (1)") is this person's when it has every word of their first
+ *  and last name */
+const words = (t: string) => t.toLowerCase().replace(/\(\d+\)/g, " ").split(/[^a-z]+/).filter((w) => w.length > 1);
+export const isPerson = (qbName: string, p: { first: string; last: string }) => { const have = new Set(words(qbName)); const want = [...words(p.first), ...words(p.last)]; return want.length > 0 && want.every((w) => have.has(w)); };
+
+/** `leaveOut`: people the Payroll Center leaves out (Oct 30, Nick: "exclude me, my pay, and my taxes"): their paychecks,
+ *  pay and taxes aren't counted */
+export async function payrollActuals(admin: SupabaseClient, payDate: string, bankName: string, leaveOut: { first: string; last: string }[] = []): Promise<PayrollActuals | null> {
   const q = new Qbo(admin, { entity: "Payroll" });
   const accts = await q.query<Acct>("Account", "WHERE Active = true", 5000, "Id, Name, FullyQualifiedName, AccountType");
   const fq = (a: Acct) => norm(a.FullyQualifiedName || a.Name);
@@ -54,6 +61,7 @@ export async function payrollActuals(admin: SupabaseClient, payDate: string, ban
       if (!cd || !here) continue;
       if (!/payroll check/i.test(cd[iType]?.value || "")) continue;
       const amt = +(cd[iAmt]?.value || 0) || 0, name = (cd[iName]?.value || "").trim(), k = kind.get(here)!;
+      if (leaveOut.some((p) => isPerson(name, p))) continue;
       if (cd[iType]?.id) checks.add(cd[iType].id!);
       sums[k] += amt;
       const p = people.get(name) || { name, gross: 0, net: 0, employerTaxes: 0 };

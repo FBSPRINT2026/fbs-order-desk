@@ -142,7 +142,9 @@ export async function makeChecks(start: string, employeeIds: string[]): Promise<
  */
 async function saveActuals(admin: ReturnType<typeof createAdminClient>, start: string, payDate: string) {
   if (!(await qboConnected(admin))) return null;
-  const a = await payrollActuals(admin, payDate, PAY_ACCOUNTS.bank);
+  // people left out of the Payroll Center (payday_skip: Nick, Amanda) aren't in its totals either
+  const { data: skip } = await admin.from("employees").select("first_name, last_name").eq("payday_skip", true);
+  const a = await payrollActuals(admin, payDate, PAY_ACCOUNTS.bank, ((skip || []) as { first_name: string; last_name: string }[]).map((e) => ({ first: e.first_name, last: e.last_name })));
   if (!a) return null;
   const { error } = await admin.from("paydays").upsert({ period_start: start, pay_date: payDate, w2_paychecks: a.paychecks, w2_gross: a.gross, w2_employee_taxes: a.employeeTaxes, w2_deductions: a.deductions, w2_net: a.net, w2_employer_taxes: a.employerTaxes, qbo_pulled_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "period_start" });
   if (error) throw new Error(/w2_gross|paydays/.test(error.message) ? "Run supabase/migrations/237 and 238 first." : error.message);
