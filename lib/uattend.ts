@@ -3,7 +3,8 @@
  *   POST https://api.workwelltech.com/user           {}                          → { Users: [...] }
  *   POST https://api.workwelltech.com/reports/punch  { StartDate, EndDate, ... } → { PunchReportLineItems: [...] }
  * Auth: the account's key in the `x-api-key` header (Vercel env UATTEND_API_KEY, added by Nicholas).
- * Each punch-report line is one in/out pair: we store it as an "in" punch and, once it has one, an "out" punch
+ * Each punch-report line is one in/out pair: we store it as an "in" punch and, once it has one, an "out" punch (a lunch
+ * line, pay code 7, as a "break_start" and a "break_end")
  * (key `ua:<UserId>:<in|out>:<instant>` in time_punches.uattend_id, so running again never doubles anything; the
  * report's own Id is just its line number).
  * Field names follow uAttend's help-center documentation; the parsing is forgiving about case and wrappers.
@@ -57,16 +58,18 @@ export async function uaUserFields(): Promise<string[]> {
   return [...new Set(us.flatMap((u) => Object.keys(u)))].sort();
 }
 
-/** what the punch report sent that wasn't taken as a punch (a sample per kind, names left out): for checking lunch lines */
+/** what the punch report sent that wasn't taken as a punch (a count and one sample per pay code, names left out) */
 let skipped: Record<string, { n: number; sample: Record<string, unknown> }> = {};
-function noteSkipped(x: Record<string, unknown>, as?: string) {
-  const sig = as || Object.entries(x).filter(([k]) => /paycode|dept|department|type|break|lunch/i.test(k)).map(([k, v]) => `${k}=${v}`).join("|") || "other";
+function noteSkipped(x: Record<string, unknown>) {
+  const sig = Object.entries(x).filter(([k]) => /paycode|dept|department|type|break|lunch/i.test(k)).map(([k, v]) => `${k}=${v}`).join("|") || "other";
   const s = (skipped[sig] ||= { n: 0, sample: Object.fromEntries(Object.entries(x).filter(([k]) => !/name|email|phone/i.test(k))) });
   s.n++;
 }
 export function uaSkipped() { const s = skipped; skipped = {}; return s; }
 
-export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out"; at: string };
+export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out" | "break_start" | "break_end"; at: string };
+/** uAttend's pay code for an unpaid lunch line */
+const UA_LUNCH = 7;
 /** wall time in the shop's zone → an instant; InTime may be "07:02 AM", "07:02:00" or a full date-time */
 function when(day: unknown, time: unknown): string | null {
   const t = String(time ?? "").trim(); if (!t) return null;
@@ -92,17 +95,21 @@ export async function uaPunches(from: string, to: string): Promise<UaPunch[]> {
     if (page > 0 && first != null && first === firstPrev) break;
     firstPrev = first;
     for (const x of items) {
+      // pay code 1 is time worked; 7 is an unpaid lunch (Oct 30, Nick: "you may not be figuring lunches right"): its in and
+      // out are when lunch started and ended, and uAttend takes it off the day. Anything else (vacation, sick, holiday, a
+      // paid break) isn't a punch.
       const code = Number(f(x, "PaycodeId") ?? 1);
-      if (code && code !== 1) { noteSkipped(x); continue; } // vacation / sick / holiday entries aren't punches
+      const lunch = code === UA_LUNCH;
+      if (code && code !== 1 && !lunch) { noteSkipped(x); continue; }
       const id = f(x, "Id", "PunchId"); if (id == null) continue;
-      // a sample of an ordinary line too, and every line that carries anything about a break or lunch
-      if (!skipped._line || Object.keys(x).some((k) => /break|lunch|meal/i.test(k) && x[k] != null && x[k] !== "" && x[k] !== 0)) noteSkipped(x, skipped._line ? "_break" : "_line");
       const user = String(f(x, "UserId") ?? ""), first = String(f(x, "FirstName") ?? ""), last = String(f(x, "LastName") ?? "");
       const day = f(x, "PunchDate");
       const inAt = when(f(x, "InDate") ?? day, f(x, "InTime")), outAt = when(f(x, "OutDate") ?? f(x, "InDate") ?? day, f(x, "OutTime"));
+      const [a, b] = lunch ? (["break_start", "break_end"] as const) : (["in", "out"] as const);
+      if (lunch && !(inAt && outAt)) continue; // a lunch with no end yet comes over once it's finished
       // uAttend's "Id" is only the line number in the report, so a punch is known by who and when
-      if (inAt) out.push({ key: `ua:${user}:in:${inAt}`, user, first, last, kind: "in", at: inAt });
-      if (outAt) out.push({ key: `ua:${user}:out:${outAt}`, user, first, last, kind: "out", at: outAt });
+      if (inAt) out.push({ key: `ua:${user}:${a}:${inAt}`, user, first, last, kind: a, at: inAt });
+      if (outAt) out.push({ key: `ua:${user}:${b}:${outAt}`, user, first, last, kind: b, at: outAt });
     }
     if (items.length < 500) break;
   }

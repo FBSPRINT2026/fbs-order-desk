@@ -144,7 +144,9 @@ export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[]
   const dayRec = (d: string) => (days[d] ||= { day: d, worked: 0, breaks: 0, first: null, last: null, issues: [] });
   const issues: Issue[] = [];
   const flag = (i: Issue) => { issues.push(i); dayRec(localDay(i.at)).issues.push(i); };
-  let open: string | null = null, openDay = "", breakAt: string | null = null;
+  // a lunch entered on its own, outside the hours clocked (uAttend takes it off the day anyway, e.g. a 12:00–12:30 lunch
+  // put on a day someone came in at 4:29 PM): taken off that day's hours, the way uAttend's own timecard does
+  let open: string | null = null, openDay = "", breakAt: string | null = null, looseBreak: string | null = null;
   const add = (from: string, to: string) => { const m = Math.max(0, (Date.parse(to) - Date.parse(from)) / 60000); dayRec(openDay).worked += m; };
   for (const p of punches) {
     const d = localDay(p.at);
@@ -158,9 +160,10 @@ export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[]
       else if (was) flag({ kind: "double_in", at: p.at, text: "Clocked in again without clocking out" });
       open = p.at; openDay = d; breakAt = null;
     } else if (p.kind === "break_start") {
-      if (!open) { flag({ kind: "missing_in", at: p.at, text: "Break started without a clock-in" }); continue; }
+      if (!open) { if (p.source === "uattend") { looseBreak = p.at; continue; } flag({ kind: "missing_in", at: p.at, text: "Break started without a clock-in" }); continue; }
       add(open, p.at); open = null; breakAt = p.at;
     } else if (p.kind === "break_end") {
+      if (!breakAt && looseBreak) { const m = Math.max(0, (Date.parse(p.at) - Date.parse(looseBreak)) / 60000); dayRec(localDay(looseBreak)).worked -= m; dayRec(localDay(looseBreak)).breaks += m; looseBreak = null; continue; }
       if (!breakAt) { flag({ kind: "missing_in", at: p.at, text: "Break ended without a break start" }); open = p.at; openDay ||= d; continue; }
       dayRec(openDay).breaks += (Date.parse(p.at) - Date.parse(breakAt)) / 60000; breakAt = null; open = p.at;
     } else if (p.kind === "out") {
