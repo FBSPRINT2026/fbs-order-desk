@@ -150,7 +150,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .doc .meta{font-size:10.5pt;color:var(--ink3);margin-top:6px;line-height:1.45}
 .pdoc .stamp{display:inline-block;border:2.5px solid var(--ok);color:var(--ok);font-weight:800;font-size:13pt;letter-spacing:.12em;padding:3px 12px;border-radius:6px}
 .pdoc .top{position:relative}
-.pdoc .top>.stamp{position:absolute;left:50%;top:6px;transform:translateX(-50%);margin:0}
+.pdoc .top .stamp{position:absolute;left:50%;top:10px;transform:translateX(-50%);margin:0}
 .pdoc .parties{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:22px 0 18px}
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
@@ -221,7 +221,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .hero.wide .hp>.lbl{grid-column:1/-1;margin-bottom:-4px}
 .pdoc .hero.wide .pp .t{font-size:18pt}
 /* art proof (Oct 20) */
-.pdoc .pf .top>.stamp{margin:0}
+.pdoc .pf .top .stamp{margin:0}
 .pdoc .pf-who{display:grid;grid-template-columns:1.6fr 1.2fr .9fr;gap:16px;margin:12px 0 8px;padding:8px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
 .pdoc .pf-who b{font-size:12pt}
 .pdoc .pf-who .faint{font-size:10pt;margin-top:2px}
