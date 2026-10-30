@@ -3,7 +3,7 @@ import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import WholesalePricing from "@/components/WholesalePricing";
-import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
+import { ROLES, PUFF_PRICE, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { getAiStatus } from "@/app/shop/ai-actions";
 import { fmtPhone } from "@/lib/phone";
@@ -125,6 +125,7 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
               <div className="field"><label htmlFor="s-dig">Digitizing, per location</label><input id="s-dig" type="number" step="0.5" value={pl.digitizing} onChange={(e) => updPl((d) => { d.digitizing = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-dig-st">Digitizing: stitches included</label><input id="s-dig-st" type="number" step="500" value={pl.digStitches ?? 6000} onChange={(e) => updPl((d) => { d.digStitches = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-dig-k">Digitizing: each 1,000 more</label><input id="s-dig-k" type="number" step="0.5" value={pl.digPer1k ?? 1} onChange={(e) => updPl((d) => { d.digPer1k = n(e.target.value); })} /></div>
+              <div className="field"><label htmlFor="s-puff" title="Puff ink on a screen print (not embroidery 3D puff): added to each piece, per puffed location">Puff print, per piece per location</label><input id="s-puff" type="number" step="0.25" value={pl.puffPrice ?? PUFF_PRICE} onChange={(e) => updPl((d) => { d.puffPrice = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-ink">Ink change fee, each</label><input id="s-ink" type="number" step="0.5" value={pl.inkChangeFee} onChange={(e) => updPl((d) => { d.inkChangeFee = n(e.target.value); })} /></div>
               {(["2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
                 <div key={z} className="field"><label htmlFor={`s-up-${z}`}>{z} material fee per piece</label><input id={`s-up-${z}`} type="number" step="0.25" value={pl.upcharges[z] ?? 0} onChange={(e) => updPl((d) => { d.upcharges[z] = n(e.target.value); })} /></div>

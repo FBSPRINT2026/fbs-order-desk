@@ -1,5 +1,5 @@
 "use client";
-import { uid, type Finishing, type PriceList } from "@/lib/pricing";
+import { PUFF_PRICE, uid, type Finishing, type PriceList } from "@/lib/pricing";
 import { FBS_CONTRACT_2024 } from "@/lib/contractPricing";
 
 /**
@@ -63,6 +63,7 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
           <div className="field"><label htmlFor="ws-pms">PMS matching (non-standard ink), per color</label><input id="ws-pms" type="number" step="0.5" value={pl.pmsFee ?? 0} onChange={(e) => upd((d) => { d.pmsFee = n(e.target.value); })} /></div>
           <div className="field"><label htmlFor="ws-ink">Specialty ink (polyester, nylon, dyed), per location</label>
             <div className="row" style={{ gap: 6 }}><input id="ws-ink" type="number" step="0.05" value={inkBase} onChange={(e) => setInk(n(e.target.value), ink500)} /><span className="faint">500+</span><input type="number" step="0.05" aria-label="Specialty ink at 500 pieces and up" value={ink500} onChange={(e) => setInk(inkBase, n(e.target.value))} /></div></div>
+          <div className="field"><label htmlFor="ws-puff">Puff print (puff ink, not embroidery 3D puff), per location</label><input id="ws-puff" type="number" step="0.25" value={pl.puffPrice ?? PUFF_PRICE} onChange={(e) => upd((d) => { d.puffPrice = n(e.target.value); })} /></div>
           <div className="field"><label htmlFor="ws-sp">Special imprint (sleeve, pocket, side), per location</label><input id="ws-sp" type="number" step="0.05" value={pl.specialLocPrice ?? 0} onChange={(e) => upd((d) => { d.specialLocPrice = n(e.target.value); })} /></div>
         </div>
         <div className="field"><label htmlFor="ws-sploc">Special imprint locations</label><input id="ws-sploc" type="text" value={(pl.specialLocations || []).join(", ")} onChange={(e) => upd((d) => { d.specialLocations = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>

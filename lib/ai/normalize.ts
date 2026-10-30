@@ -134,6 +134,9 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       const m = sz.match(/^(\d+(?:\.\d+)?)\s*(?:"|”|''|in\.?|inch(?:es)?)?\s*(w|wide|width|t|tall|h|high|height)?\.?$/i);
       im.size = (m ? `${m[1]}" ${/^(t|tall|h|high|height)$/i.test(m[2] || "") ? "tall" : "wide"}` : sz).slice(0, 40);
       im.notes = (d.notes || "").slice(0, 300);
+      // puff ink, when the paperwork says puff on a screen print (Oct 30: "3D Puff print" stayed only a note): the print's
+      // Puff print box, so it's priced and planned as puff
+      if (im.method === "screen" && /\bpuff/i.test(`${im.notes} ${im.inks}`)) im.puff = true;
       // the customer's own heat transfers (rule 4f): pressed where their placement reference shows, not priced
       if (d.supplied_transfers && im.method === "dtf") { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.location = ""; im.size = ""; }
       return im;

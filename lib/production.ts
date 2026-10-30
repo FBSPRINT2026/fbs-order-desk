@@ -264,7 +264,8 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
       const colors = Math.max(1, Math.min(15, +i.colors || 1));
       const dark = darkQty > qty / 2;
       const screens = method === "screen" ? colors + (dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
-      const puff = method === "screen" && /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`);
+      // puff ink: ticked on the print (Oct 30), or written in its inks or notes
+      const puff = method === "screen" && (!!(i as unknown as { puff?: boolean }).puff || /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`));
       const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
       const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
       steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}) });

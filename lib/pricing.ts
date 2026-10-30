@@ -167,6 +167,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  the same screen. Priced the same as with the underbase (two rounds on press) */ printStyle?: "fashion";
   /** a logo with a distress layer printed clean, without it (Oct 16: the distress is a layer, on unless turned off) */ distress?: "off";
   /** soft hand additive mixed into the inks */ softHand?: boolean;
+  /** puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… It's $1 typically"; "puff screen
+   *  print is different than puff 3D embroidery"): a raised screen print, charged per piece (PriceList.puffPrice) and
+   *  printed slower with a flash (lib/production.ts). Screen prints only; embroidery's 3D puff is emb.puff */ puff?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
@@ -376,13 +379,16 @@ export function brandHitFor(bp: BrandPrint | null | undefined, distressed: boole
   if (bp.hit === "fashion" && (!bp.distressedOnly || distressed)) return { printStyle: "fashion", softHand: !!bp.soft };
   return { softHand: bp.hit === "standard" && !!bp.soft && !bp.distressedOnly ? true : undefined };
 }
-/** a screen print as the customer reads it: "3-color screen print", "2-color fashion print (soft, no underbase)" */
-export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand">): string {
+/** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
+export const PUFF_PRICE = 1;
+export const puffEach = (pl: Pick<PriceList, "puffPrice">) => (pl.puffPrice == null || isNaN(+pl.puffPrice) ? PUFF_PRICE : +pl.puffPrice);
+/** a screen print as the customer reads it: "3-color screen print", "2-color fashion print (soft, no underbase)", "1-color puff print" */
+export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand" | "puff">): string {
   if (d.method !== "screen") return d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
   if (d.colors >= FULL_COLOR) return "full color screen print";
   const n = `${d.colors || 1}-color`;
-  if (d.printStyle === "fashion") return `${n} fashion print (${d.softHand ? "soft, " : ""}no underbase)`;
-  return `${n} screen print${d.softHand ? " (soft hand)" : ""}`;
+  if (d.printStyle === "fashion") return `${n} fashion ${d.puff ? "puff " : ""}print (${d.softHand ? "soft, " : ""}no underbase)`;
+  return `${n} ${d.puff ? "puff" : "screen"} print${d.softHand ? " (soft hand)" : ""}`;
 }
 
 export type BrandColor = { name: string; ink: string; /** a wholesaler's client or a second brand ("All My Sons"); none = the account's own */ group?: string };
@@ -434,6 +440,8 @@ export type PriceList = {
   digStitches?: number; digPer1k?: number;
   /** embroidery extras per piece (specialty thread, 3D puff, personalization…), ticked on a group with embroidery */
   embExtras?: Finishing[];
+  /** puff ink on a screen print (Imprint.puff), per puffed location per piece; not set = $1 (Oct 30, Nick) */
+  puffPrice?: number;
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
   contractNotes?: string;
 };
@@ -883,6 +891,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const imps = g.imprints || [];
   const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS, ...((pl.specialLocations || []).some((z) => /sleeve/i.test(z)) ? LONG_SLEEVE_LOCATIONS : [])].map((z) => z.toLowerCase());
   const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
+  // puff ink (Oct 30): each puffed screen print, per piece
+  const puffExtra = imps.filter((d) => d.method === "screen" && d.puff).length * puffEach(pl);
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
   const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
@@ -892,7 +902,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const garmentRaw = pl.useGarment ? num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj) : 0;
     const garmentEach = r2(garmentRaw);
     const { light, print: basePrint } = printLine(l.color);
-    const linePrint = r2(basePrint + locExtra + inkExtra + embSpecial(l));
+    const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
     const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
     const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : calcEach;
@@ -1013,6 +1023,7 @@ export function imprintLabel(d: Imprint) {
   // a fashion hit / soft hand (Oct 16): said so wherever the print is described, so no one expects an underbase
   if (d.method === "screen" && d.printStyle === "fashion") parts.push(d.softHand ? "fashion print (soft, no underbase)" : "fashion print (no underbase)");
   else if (d.method === "screen" && d.softHand) parts.push("soft hand");
+  if (d.method === "screen" && d.puff) parts.push("puff ink");
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
   if (d.drop) parts.push(`${d.drop}" drop`);

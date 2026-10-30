@@ -3,7 +3,7 @@ import BackLink from "@/components/BackLink";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint } from "@/lib/pricing";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -1712,6 +1712,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // brand standards for prints (Oct 16, Nick): the customer's standard size for this logo here ("Peticolas' round logo
   // is always 10.5" on the front"), applied on its own; and how it prints (fashion hit, soft hand), each new print's start
   const brandPrint = useMemo(() => (customers.find((c) => c.id === customerId)?.brand_print || null), [customers, customerId]);
+  // puff ink's price for this customer (retail or wholesale list), shown by the Puff print box (Oct 30)
+  const [puffCost, setPuffCost] = useState<number | null>(null);
+  const custPriceType = customers.find((c) => c.id === customerId)?.price_type === "wholesale" ? "wholesale" : "retail";
+  useEffect(() => {
+    if (portal) return;
+    let live = true;
+    void sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => { if (live && data?.data) setPuffCost(puffEach(priceList(mergeSettings(data.data as Record<string, unknown>), custPriceType))); });
+    return () => { live = false; };
+  }, [portal, custPriceType]); // eslint-disable-line react-hooks/exhaustive-deps
   const brandSized = useRef<Record<string, string>>({}), brandHit = useRef<Record<string, string>>({});
   const [sizeAskB, setSizeAskB] = useState<{ id: string; loc: string; have: number; want: number }[] | null>(null);
   const brandRule = (im: Imprint) => { const d = designOf(im); if (!d || !brandPrint) return null; const r = ratioIm(im); return brandSizeFor(brandPrint, d.id, r ? 1 / r : 0, im.location); };
@@ -4200,6 +4209,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <div className="mk-imp-acts">
                         <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                       </div>
+                      {/* puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… $1 typically"; not
+                          embroidery's 3D puff): a raised print, charged per piece, slower on press with a flash */}
+                      {im.method === "screen" && im.colors < FULL_COLOR && !portal && (
+                        <label className="check mk-puff" title="Puff ink: the print rises when it's cured. Charged per piece and printed slower, with a flash">
+                          <input type="checkbox" checked={!!im.puff} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, puff: e.target.checked || undefined } : x)))} />
+                          Puff print {puffCost != null && <span className="faint">+${puffCost.toFixed(2)} each</span>}
+                        </label>
+                      )}
                       {p.d && im.method === "screen" && !portal && (() => {
                         // Brand standards (Oct 23, Nick: "a little pop-up at the bottom of the imprints… brand standards… soft
                         // print… apply the distress effect… keep that upper section the same… on all prints"; "fashion hit
