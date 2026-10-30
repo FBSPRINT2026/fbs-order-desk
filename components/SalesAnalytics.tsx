@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent } 
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
+import { qboMonthly } from "@/app/shop/finance-actions";
+import type { Fin, FinMonth } from "@/lib/qbo/finance";
 
 /**
  * Sales at a glance (owners / admins): this month and the year so far against last year, orders and average order,
@@ -31,7 +33,7 @@ function Delta({ now, then, label }: { now: number; then: number; label: string 
 type Day = { day: string; sales: number; orders: number };
 type Rep = { owner: string; sales: number; orders: number };
 type DeptRow = { month: string; dept: string; sales: number };
-type Sales = { rows: M[]; days: Day[]; topYear: Top[]; top30: Top[]; reps: Rep[]; depts: DeptRow[]; fresh: { customers: number; sales: number } };
+type Sales = { rows: M[]; days: Day[]; topYear: Top[]; top30: Top[]; reps: Rep[]; depts: DeptRow[]; fresh: { customers: number; sales: number }; /** QuickBooks' P&L by month (the real sales and profit), null when it isn't connected */ fin: Fin | null };
 const ymd = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 const plusDays = (x: Date, n: number) => { const d = new Date(x); d.setDate(d.getDate() + n); return d; };
 
@@ -67,13 +69,15 @@ function loadSales(y: number) {
     sb.rpc("shop_sales_by_owner", { p_from: `${y}-01-01`, p_to: tomorrow }),
     sb.rpc("shop_sales_by_department", { p_from: `${y}-01-01`, p_to: tomorrow }),
     sb.rpc("shop_new_customers", { p_from: `${y}-01-01`, p_to: tomorrow }),
-  ]).then(([a, d, ty, t30, rp, dp, nc]) => ({
+    qboMonthly(y).catch(() => null),
+  ]).then(([a, d, ty, t30, rp, dp, nc, fin]) => ({
     rows: ((a.data || []) as { month: string; sales: number; orders: number }[]).map((r) => ({ month: r.month.slice(0, 7), sales: +r.sales || 0, orders: +r.orders || 0 })),
     days: ((d.data || []) as Day[]).map((r) => ({ day: r.day.slice(0, 10), sales: +r.sales || 0, orders: +r.orders || 0 })),
     topYear: tops(ty), top30: tops(t30),
     reps: ((rp.data || []) as Rep[]).map((r) => ({ owner: r.owner || "Unassigned", sales: +r.sales || 0, orders: +r.orders || 0 })),
     depts: ((dp.data || []) as DeptRow[]).map((r) => ({ month: String(r.month).slice(0, 7), dept: r.dept, sales: +r.sales || 0 })),
     fresh: (() => { const r = ((nc.data || []) as { customers: number; sales: number }[])[0]; return { customers: +(r?.customers || 0), sales: +(r?.sales || 0) }; })(),
+    fin: fin as Fin | null,
   }));
   cache = { at: Date.now(), p };
   return p;
@@ -123,7 +127,14 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
 
   const v = useMemo(() => {
     if (!rows) return null;
-    const get = (yy: number, mm: number) => rows.find((r) => r.month === `${yy}-${String(mm + 1).padStart(2, "0")}`) || { month: "", sales: 0, orders: 0 };
+    // sales by month: QuickBooks' income when it's connected (Oct 30, Nick: "use these real numbers"), else the orders here;
+    // the order counts always come from the orders
+    const fin = data?.fin && data.fin.months.length ? new Map<string, FinMonth>(data.fin.months.map((f) => [f.month, f] as [string, FinMonth])) : null;
+    const get = (yy: number, mm: number) => {
+      const k = `${yy}-${String(mm + 1).padStart(2, "0")}`, r = rows.find((x) => x.month === k) || { month: k, sales: 0, orders: 0 };
+      return fin ? { ...r, sales: fin.get(k)?.income || 0 } : r;
+    };
+    const netOf = (yy: number, to: number) => (fin ? MONTHS.slice(0, to).reduce((s, _, i) => s + (fin.get(`${yy}-${String(i + 1).padStart(2, "0")}`)?.net || 0), 0) : 0);
     const thisYear = MONTHS.map((_, i) => get(y, i)), lastYear = MONTHS.map((_, i) => get(y - 1, i));
     const sum = (a: M[], to: number) => a.slice(0, to).reduce((s, r) => s + r.sales, 0);
     const cnt = (a: M[], to: number) => a.slice(0, to).reduce((s, r) => s + r.orders, 0);
@@ -136,9 +147,10 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       aov: o12 ? s12 / o12 : 0, s12,
       max: Math.max(1, ...thisYear.map((r) => r.sales), ...lastYear.map((r) => r.sales)),
       // gaps in last year's data (the Printavo import is still filling in older months)
-      lyEmpty: lastYear.slice(0, m + 1).filter((r) => !r.orders).length,
+      lyEmpty: fin ? 0 : lastYear.slice(0, m + 1).filter((r) => !r.orders).length,
+      qb: !!fin, net: netOf(y, m + 1), netLY: netOf(y - 1, m + 1),
     };
-  }, [rows, y, m]);
+  }, [rows, data, y, m]);
 
   if (!v) return <div className="db-empty">Loading sales…</div>;
   // chart geometry
@@ -152,7 +164,8 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
         <div><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
         <div><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
         <div><span>Orders this month</span><b>{v.ordersMonth}</b><Delta now={v.ordersMonth} then={v.ordersMonthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-        <div><span>Average order · 12 months</span><b>{money0(v.aov)}</b><span className="an-d">{money0(v.s12)} in the last 12 months</span></div>
+        {v.qb ? <div title="QuickBooks: net income this year"><span>Profit this year</span><b>{money0(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+          : <div><span>Average order · 12 months</span><b>{money0(v.aov)}</b><span className="an-d">{money0(v.s12)} in the last 12 months</span></div>}
       </div>
 
   );
@@ -212,7 +225,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       <div className="an-side-k"><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
       {/* average order and new customers (Oct 26, Nick: "any other metrics you want to add") */}
       <div className="an-side-2">
-        <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>
+        {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
         <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
       </div>
       <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact />
@@ -234,7 +247,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
         <div className="an-k4">
           <div className="an-side-k"><span>This month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
           <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
-          <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>
+          {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
           <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
         </div>
         <OwnerBar reps={data!.reps} y={y} />

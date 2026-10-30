@@ -397,7 +397,7 @@ export default function Dashboard() {
 >
         {/* "Needs you today" taken off My Day; Sales moves up (Oct 24, Nick) */}
         {boss && <section className="db-card db-orange db-sales md2-sales">
-          <div className="db-card-h"><h2>Sales</h2><span className="faint db-h-note">invoices by order date · quotes and holders don&apos;t count</span></div>
+          <div className="db-card-h"><h2>Sales</h2><span className="faint db-h-note">sales and profit from QuickBooks · departments and customers from orders</span></div>
           {/* one big chart on the left, the numbers and lists on the right (Oct 26, Nick picked option B) */}
           <SalesAnalytics part="board" />
         </section>}
