@@ -1,3 +1,4 @@
+import { hasSpotChange, spotLines } from "@/lib/spotChange";
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
@@ -399,7 +400,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   return (
     <section className="sheet">
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
-      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
+      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
       {d.supplied ? (
         // their placement reference, big: the press follows it (Oct 27, Nick)
         <div className="art" style={{ background: "#fff" }}>

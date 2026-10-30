@@ -13,6 +13,8 @@ import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import ColorChange, { versionOfColor, versionsOf } from "@/components/ColorChange";
+import LocationChange from "@/components/LocationChange";
+import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf } from "@/lib/spotChange";
 import { colorChanges } from "@/lib/pricing";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
@@ -127,6 +129,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const [blockMsg, setBlockMsg] = useState("");
   // the color change pop-up for a print (its index), Oct 27
   const [ccAt, setCcAt] = useState<number | null>(null);
+  const [lcAt, setLcAt] = useState<number | null>(null);
   /**
    * "+ Add youth" (Oct 21, Nick: "1717… the corresponding youth is the 9018… Gildan 5000 → 5000B… if you don't know,
    * ask me and I can key it in and you can remember it"): the adult garment's youth style goes on a new line in the
@@ -250,6 +253,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // the sections only show when a version has more than one line (Oct 27: a Dear Heart order with one line per color
   // looked broken with them)
   const ccShow = ccImps.length > 0 && (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(l.color); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })();
+  // location change (Oct 30): one embroidery print sewn at another spot on some garments, shown like a color change
+  const scImps = g.imprints.filter((x) => x.method === "embroidery" && hasSpotChange(x, g.lines));
+  const spShow = !ccShow && scImps.length > 0;
+  const spKey = (l: GLine) => scImps.map((x) => spotsOf(x, g.lines).indexOf(spotOf(x, l))).join(".");
+  const spLetter = (l: GLine) => scImps.map((x) => String.fromCharCode(65 + Math.max(0, spotsOf(x, g.lines).indexOf(spotOf(x, l))))).join("");
+  const spLabel = (l: GLine) => scImps.map((x) => spotOf(x, l)).join("  /  ");
   const verLetter = (color: string) => ccImps.map((x) => String.fromCharCode(65 + versionOfColor(x, color))).join("");
   const lightHex = (h: string) => { const v = parseInt((h || "").replace("#", "").padEnd(6, "0").slice(0, 6), 16); return 0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160; };
   const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
@@ -268,6 +277,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     // Creator: only a brand print without one gets the button here
     if (d.method === "screen" && (n > 0 || !d.fromBrand)) return null;
     return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{n ? `${n}` : "None"} <button type="button" className="linkbtn" onClick={() => setCcAt(di)}>{n ? "Change" : "Add color change"}</button></span></div>;
+  };
+  /** an embroidery print's location change and its Change button (read-out and form), like the color change */
+  const lcRow = (d: Group["imprints"][number], di: number) => {
+    if (fixed || printsFixed || d.supplied || d.method !== "embroidery" || new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => spotKey(x))).size < 2) return null;
+    const sp = spotsOf(d, g.lines);
+    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Location change</span><span className="pr-scr-v">{sp.length > 1 ? spotLines(d, g.lines).map((x) => `${x.letter} ${x.spot}${x.letter === "A" ? "" : ` · ${x.what}`}`).join("  ⟳  ") : "None"} <button type="button" className="linkbtn" onClick={() => setLcAt(di)}>{sp.length > 1 ? "Change" : "Add location change"}</button></span></div>;
   };
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
@@ -682,10 +697,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
-          {(ccShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
+          {(ccShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => spKey(a.l).localeCompare(spKey(b.l)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
             const vk = verKey(l.color), vHead = ccShow && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
+            const sHead = spShow && (pos === 0 || spKey(order[pos - 1].l) !== spKey(l));
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
@@ -699,8 +715,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Color change</span></div>}
                 <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
-              <div className={"gl" + (same && !vHead ? " same" : "") + (ccShow ? " ver" : "")} style={ccShow ? { ["--ver" as string]: verHex(l.color) } : undefined}>
-                {(!same || vHead) && <div className="gl-sty" inert={fixed || undefined}>
+              {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
+                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
+                <div className="gl-ver"><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+              </>); })()}
+              <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "")} style={ccShow ? { ["--ver" as string]: verHex(l.color) } : spShow ? { ["--ver" as string]: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" } : undefined}>
+                {(!same || vHead || sHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
                       onType={(v) => onStyle(li, v)}
@@ -959,6 +979,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
+                {lcAt != null && g.imprints[lcAt] && <LocationChange im={g.imprints[lcAt]} lines={g.lines} onClose={() => setLcAt(null)} onSave={(spotBy) => { const at = lcAt; setLcAt(null); update((x) => { const im = x.imprints[at!]; if (!im) return; if (spotBy) im.spotBy = spotBy; else delete im.spotBy; }); }} />}
                 {ccAt != null && g.imprints[ccAt] && <ColorChange im={g.imprints[ccAt]} lines={g.lines} onClose={() => setCcAt(null)} onSave={(inkBy) => { setCcAt(null); update((x) => {
                   const im = x.imprints[ccAt!];
                   if (!im) return;
@@ -971,7 +992,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1034,6 +1055,13 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                     <span className="imp-l">Color change</span>
                     {versionsOf(d).length ? <span className="imp-cc-v">{versionsOf(d).map((v, i) => { const on = [...new Set(g.lines.filter((x) => versionOfColor(d, x.color) === i + 1).map((x) => x.color))]; return <span key={i}><b>{String.fromCharCode(66 + i)}</b> {v.from} → {v.to} on {on.join(", ")}</span>; })}</span> : <span className="faint">Same {d.method === "embroidery" ? "thread" : "inks"} on every color</span>}
                     <button type="button" className="btn sm ghost" onClick={() => setCcAt(di)}>{versionsOf(d).length ? "Change" : "Add color change"}</button>
+                  </div>
+                )}
+                {d.method === "embroidery" && !d.supplied && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => spotKey(x))).size > 1 && (
+                  <div className="imp-cc">
+                    <span className="imp-l">Location change</span>
+                    {hasSpotChange(d, g.lines) ? <span className="imp-cc-v">{spotLines(d, g.lines).slice(1).map((x) => <span key={x.letter}><b>{x.letter}</b> {x.spot} on {x.what}</span>)}</span> : <span className="faint">Every garment at {d.location || "this spot"}</span>}
+                    <button type="button" className="btn sm ghost" onClick={() => setLcAt(di)}>{hasSpotChange(d, g.lines) ? "Change" : "Add location change"}</button>
                   </div>
                 )}
                 {!d.supplied && <PlaceRefRow d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}

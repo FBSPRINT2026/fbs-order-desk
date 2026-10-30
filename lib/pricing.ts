@@ -174,6 +174,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
    *  Each changed ink is a screen's ink change (inkChanges, the Ink change fee) */ inkBy?: Record<string, Record<string, string>>;
+  /** embroidery only: the other spots this print sews on, by garment (lib/spotChange.ts spotKey → location: "stc15" →
+   *  "Cuff"); every other garment sews at `location` (Oct 30, Nick: "a location change… same logo, same file") */ spotBy?: Record<string, string>;
   /** customer supplied transfers (Oct 27, Nick: "there should be a click box that says customer supplied… you should be
    *  able to just upload the placement reference"): heat press only; they send the transfers (DTF Dallas, their order
    *  number) and we press them where their placement reference shows. Not priced; nothing else on the print to fill in.
