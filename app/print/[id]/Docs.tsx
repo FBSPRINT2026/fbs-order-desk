@@ -208,7 +208,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                 <div>
                   <div className="lbl">Work order · #{o.number}{groups.length > 1 ? ` · group ${gi + 1} of ${groups.length}` : ""}</div>
                   <h1 className="disp">{o.nickname || "Untitled job"}</h1>
-                  {who.length > 0 && <div className="who"><b>{who[0]}</b>{who.slice(1).map((x) => ` · ${x}`).join("")}</div>}
+                  {who.length > 0 && <div className="who"><b>{who[0]}</b>{who.slice(1).map((x) => <span key={x} className="nw"> · {x}</span>)}</div>}
                 </div>
                 <div className="due"><div className="lbl">In hands</div><div className="d disp">{due || "NOT SET"}</div>{dueSub && <small>{dueSub}</small>}</div>
                 <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>

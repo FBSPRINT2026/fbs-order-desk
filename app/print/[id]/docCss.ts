@@ -30,6 +30,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .hd h1{margin:2px 0 0;font-size:34pt;line-height:1}
 .pdoc .hd .who{font-size:13pt;margin-top:6px;color:var(--ink2)}
 .pdoc .hd .who b{color:var(--ink)}
+.pdoc .hd .who .nw{white-space:nowrap}
 .pdoc .flags{display:flex;gap:8px;margin:10px 0 0;flex-wrap:wrap}
 /* the work order's tags on one line under the header, across the full width (Oct 30, Nick: "these can be on the same line") */
 .pdoc .wo-first > .flags{flex-shrink:0}
@@ -426,6 +427,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-first.f1 .cnt tr.counted td.sz div{height:.24in}
 .pdoc .wo-first.f1 .cnt tr.counted td:first-child .by{margin-top:1px}
 .pdoc .wo-first.f2 .wo-mks{min-height:1.5in}
+.pdoc .wo-first.f5 .wo-mks{min-height:1in}
 .pdoc .wo-first.f3 .notes.clip{max-height:.5in}
 .pdoc .wo-first.f4 .notes.clip{display:none}
 .pdoc .wo-first.f4 h2:has(+ .notes.clip){display:none}
