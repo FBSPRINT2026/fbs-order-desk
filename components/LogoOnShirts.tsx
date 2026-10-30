@@ -53,13 +53,11 @@ function makeArt(url: string): Promise<Art | null> {
           const mid = (j: number) => s.map((v) => v[j]).sort((a, b) => a - b)[Math.floor(s.length / 2)] ?? 255;
           br = mid(0); bg = mid(1); bb = mid(2);
         }
-        // on a clear background, white fill inside a darker logo isn't ink ("remove the white"); an all-white logo is
-        let dropWhite = false;
-        if (clearEdge) {
-          let op = 0, wh = 0;
-          for (let i = 0; i < p.length; i += 4) if (p[i + 3] > 128) { op++; if (p[i] > 235 && p[i + 1] > 235 && p[i + 2] > 235) wh++; }
-          dropWhite = op > 0 && wh / op > 0.03 && wh / op < 0.7;
-        }
+        // white on a clear background is the logo's own ink and stays (Oct 30, Nick on D-10301: "you're losing the white
+        // block under All My Sons"): the old guess (3-70% white = "not ink") took real white out of multi-color logos.
+        // White comes off only when someone says so (Edit logo → Remove the white), like the order page, which drops it
+        // only when the print's inks are known and have no white (GroupEditor paintPrint).
+        const dropWhite = false;
         const alpha = new Uint8ClampedArray(W * H);
         let x0 = W, y0 = H, x1 = -1, y1 = -1;
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
