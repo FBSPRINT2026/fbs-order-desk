@@ -135,6 +135,11 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       return fin ? { ...r, sales: fin.get(k)?.income || 0 } : r;
     };
     const netOf = (yy: number, to: number) => (fin ? MONTHS.slice(0, to).reduce((s, _, i) => s + (fin.get(`${yy}-${String(i + 1).padStart(2, "0")}`)?.net || 0), 0) : 0);
+    // the comparisons: last year up to the same day (not the whole of last month), so a month's last-day payroll and
+    // rent don't make this year look better than it is
+    const ly = data?.fin?.lyToDate?.length ? data.fin.lyToDate : null;
+    const lyMonth = ly ? ly.find((f) => f.month === `${y - 1}-${String(m + 1).padStart(2, "0")}`) : null;
+    const lySum = (k: "income" | "net") => (ly ? ly.reduce((s, f) => s + f[k], 0) : null);
     const thisYear = MONTHS.map((_, i) => get(y, i)), lastYear = MONTHS.map((_, i) => get(y - 1, i));
     const sum = (a: M[], to: number) => a.slice(0, to).reduce((s, r) => s + r.sales, 0);
     const cnt = (a: M[], to: number) => a.slice(0, to).reduce((s, r) => s + r.orders, 0);
@@ -142,17 +147,19 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
     const s12 = last12.reduce((s, r) => s + r.sales, 0), o12 = last12.reduce((s, r) => s + r.orders, 0);
     return {
       thisYear, lastYear,
-      month: thisYear[m].sales, monthLY: lastYear[m].sales, ordersMonth: thisYear[m].orders, ordersMonthLY: lastYear[m].orders,
-      ytd: sum(thisYear, m + 1), ytdLY: sum(lastYear, m + 1), ordersYtd: cnt(thisYear, m + 1),
+      month: thisYear[m].sales, monthLY: fin && lyMonth ? lyMonth.income : lastYear[m].sales, ordersMonth: thisYear[m].orders, ordersMonthLY: lastYear[m].orders,
+      ytd: sum(thisYear, m + 1), ytdLY: fin && ly ? lySum("income")! : sum(lastYear, m + 1), ordersYtd: cnt(thisYear, m + 1),
       aov: o12 ? s12 / o12 : 0, s12,
       max: Math.max(1, ...thisYear.map((r) => r.sales), ...lastYear.map((r) => r.sales)),
       // gaps in last year's data (the Printavo import is still filling in older months)
       lyEmpty: fin ? 0 : lastYear.slice(0, m + 1).filter((r) => !r.orders).length,
-      qb: !!fin, net: netOf(y, m + 1), netLY: netOf(y - 1, m + 1),
+      qb: !!fin, net: netOf(y, m + 1), netLY: ly ? lySum("net")! : netOf(y - 1, m + 1),
     };
   }, [rows, data, y, m]);
 
   if (!v) return <div className="db-empty">Loading sales…</div>;
+  // what the change is against: from QuickBooks, last year up to today's date
+  const d0 = now.getDate(), ytdL = v.qb ? `Jan 1–${MONTHS[m]} ${d0}, ${y - 1}` : `Jan–${MONTHS[m]} ${y - 1}`, monL = v.qb ? `${MONTHS[m]} 1–${d0}, ${y - 1}` : `${MONTHS[m]} ${y - 1}`;
   // chart geometry
   const W = box.w, H = box.h, padL = fill ? 58 : 46, padB = 24, padT = 8;
   const cw = (W - padL) / 12, bw = Math.min(fill ? 22 : 16, (cw - 10) / 2);
@@ -161,10 +168,10 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
 
   const K = (
       <div className="an-kpis">
-        <div><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-        <div><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
-        <div><span>Orders this month</span><b>{v.ordersMonth}</b><Delta now={v.ordersMonth} then={v.ordersMonthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-        {v.qb ? <div title="QuickBooks: net income this year"><span>Profit this year</span><b>{money0(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+        <div><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={monL} /></div>
+        <div><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={ytdL} /></div>
+        <div><span>Orders this month</span><b>{v.ordersMonth}</b><Delta now={v.ordersMonth} then={v.ordersMonthLY} label={monL} /></div>
+        {v.qb ? <div title="QuickBooks: net income this year"><span>Profit this year</span><b>{money0(v.net)}</b><Delta now={v.net} then={v.netLY} label={ytdL} /></div>
           : <div><span>Average order · 12 months</span><b>{money0(v.aov)}</b><span className="an-d">{money0(v.s12)} in the last 12 months</span></div>}
       </div>
 
@@ -221,11 +228,11 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
   const T = <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} />;
   if (part === "side") return (
     <div className="an-side">
-      <div className="an-side-k"><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-      <div className="an-side-k"><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+      <div className="an-side-k"><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={monL} /></div>
+      <div className="an-side-k"><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={ytdL} /></div>
       {/* average order and new customers (Oct 26, Nick: "any other metrics you want to add") */}
       <div className="an-side-2">
-        {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
+        {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={ytdL} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
         <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
       </div>
       <TopCustomers topYear={data!.topYear} top30={data!.top30} y={y} compact />
@@ -245,9 +252,9 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
       </div>
       <div className="an-board-r">
         <div className="an-k4">
-          <div className="an-side-k"><span>This month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-          <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
-          {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
+          <div className="an-side-k"><span>This month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={monL} /></div>
+          <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={ytdL} /></div>
+          {v.qb ? <div className="an-side-k" title="QuickBooks: net income this year (sales less every cost)"><span>Profit this year</span><b>{short(v.net)}</b><Delta now={v.net} then={v.netLY} label={ytdL} /></div> : <div className="an-side-k"><span>Average order</span><b>{money0(v.aov)}</b><span className="an-d">last 12 months</span></div>}
           <div className="an-side-k"><span>New customers</span><b>{data!.fresh.customers}</b><span className="an-d">{short(data!.fresh.sales)} in {y}</span></div>
         </div>
         <OwnerBar reps={data!.reps} y={y} />
@@ -259,8 +266,8 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
   // different sales metrics like we did earlier… you can go left or right on that screen")
   if (part === "phone") return <PhoneSales k4={
     <div className="an-k4 an-k2">
-      <div className="an-side-k"><span>Sales this month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
-      <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+      <div className="an-side-k"><span>Sales this month</span><b>{short(v.month)}</b><Delta now={v.month} then={v.monthLY} label={monL} /></div>
+      <div className="an-side-k"><span>This year</span><b>{short(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={ytdL} /></div>
     </div>} slides={[
     { k: "month", label: `Sales by month · vs ${y - 1}`, body: C },
     { k: "dept", label: "By department", body: <><Depts rows={data!.depts} y={y} bare fill /><DeptBar rows={data!.depts} y={y} /></> },
