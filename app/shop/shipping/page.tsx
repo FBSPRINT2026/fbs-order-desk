@@ -1,4 +1,5 @@
 "use client";
+import type { ThirdParty } from "@/lib/thirdParty";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -15,7 +16,7 @@ import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import LabelPrinterPanel from "@/components/job/LabelPrinterPanel";
 
-type NewRow = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
+type NewRow = { third_party?: ThirdParty | null; id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
 type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null };
 
@@ -24,7 +25,9 @@ const fromPv = (a: PvAddress, c: PvRow["contact"], company: string): ShipAddress
   street1: a?.address1 || "", street2: a?.address2 || "", city: a?.city || "", state: a?.state || "", zip: a?.zipCode || "",
   country: !a?.country || /^(us|usa|united states)$/i.test(a.country) ? "US" : a.country, phone: c?.phone || "", email: c?.email || "",
 });
-const billOf = (c?: Customer): { bill: BillTo; account: string; zip: string } => {
+const billOf = (c?: Customer, tp?: ThirdParty | null): { bill: BillTo; account: string; zip: string } => {
+  // the order's own "Bill third party" wins over the customer's usual (Oct 30)
+  if (tp && (tp.account || "").trim() && tp.carrier) return { bill: tp.carrier === "UPS" ? "ups" : "fedex", account: tp.account.trim(), zip: tp.zip || c?.ship_bill_zip || "" };
   const b = (c?.ship_bill || "fbs") as BillTo;
   return { bill: b, account: b === "ups" ? c?.ship_ups_account || "" : b === "fedex" ? c?.ship_fedex_account || "" : "", zip: c?.ship_bill_zip || "" };
 };
@@ -54,7 +57,7 @@ export default function ShippingCenter() {
 
   const load = useCallback(async () => {
     const [n, p, st] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number").eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party").eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
       sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").ilike("status_name", "%ready to ship%").order("due_date", { ascending: true, nullsFirst: false }).limit(300),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
@@ -71,7 +74,7 @@ export default function ShippingCenter() {
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];
         return { kind: "order", printavo: false, id: o.id, number: String(o.number), job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c), shipment: shipOf("order_id", o.id) };
+          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipment: shipOf("order_id", o.id) };
       }),
       ...pvs.map((o): Item => {
         const c = cust[o.customer_id];

@@ -1,3 +1,4 @@
+import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, inkChangesText } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
@@ -122,7 +123,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
       first && p.notes ? p.notes : "",
       gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
       neckLine(cust, g, gc?.finishing || []),
-      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method ? ` (${o.ship_method})` : ""}` : "",
+      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method || isThirdParty(o) ? ` (${[o.ship_method, isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(", ")})` : ""}` : "",
     ].filter(Boolean);
     const extra = first ? p.shopNotes.length + (p.cust.brand_print?.rules || []).length : 0;
     const noteText = noteParts.join("\n\n");
@@ -695,7 +696,7 @@ export function InvoiceDoc(p: DocData) {
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" });
   const paidUp = !isQ && c.paid > 0 && c.balance <= 0.005;
   const contact = cust.company && cust.name && cust.name !== cust.company ? cust.name : "";
-  const how = o.delivery_method === "ship" ? (o.ship_method || "Ship") : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup or ship TBD" : "Pickup";
+  const how = o.delivery_method === "ship" ? [o.ship_method || "Ship", isThirdParty(o) ? thirdPartyLabel(o.third_party) : ""].filter(Boolean).join(", ") : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup or ship TBD" : "Pickup";
   // ship to: a box at the bottom, only when it goes somewhere other than their own address (Oct 30, Nick)
   const shipTo = (o.delivery_method === "ship" || o.delivery_method === "deliver") && (o.ship_to || "").trim() && flat(o.ship_to) !== flat(cust.address) ? String(o.ship_to).trim() : "";
   const deposit = cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 ? c.total / 2 - c.paid : 0;
@@ -785,7 +786,7 @@ export function InvoiceDoc(p: DocData) {
         <div className="iv2-left">
           {paidUp && <div className="iv2-full">Paid in full{payRows.length ? ` · ${payRows[payRows.length - 1].on}` : ""}</div>}
           {shipTo && (() => { const sl = shipLines(shipTo); return (
-            <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
+            <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}{isThirdParty(o) ? ` · ${thirdPartyLabel(o.third_party)}` : ""}</div>
               {sl.lines.map((x, k) => <div key={k} className={k === 0 ? "nm" : ""}>{x}</div>)}
             </div>); })()}
           {o.notes_on_invoice && o.notes?.trim() && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}

@@ -16400,3 +16400,10 @@ main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
 .pers-add .field{margin:0;min-width:120px}
 .pers-add .pers-name{flex:1;min-width:200px}
 .pers-add .btn{height:36px}
+
+/* Bill third party in the order's Delivery panel (Oct 30) */
+.tp-wrap{display:flex;flex-direction:column;gap:8px}
+.tp-box{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)}
+.tp-row{display:grid;grid-template-columns:120px 1fr 120px;gap:10px}
+.tp-box .field{margin:0}
+@media (max-width:640px){.tp-row{grid-template-columns:1fr}}

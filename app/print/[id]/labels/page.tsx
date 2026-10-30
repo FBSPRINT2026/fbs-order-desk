@@ -1,3 +1,4 @@
+import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -191,7 +192,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             )}
             <div className="lb-side">
               <div><span className="k">IN HANDS</span><b>{o.due_date ? fmtDateLong(o.due_date) : "—"}</b></div>
-              {o.delivery_method === "ship" && <div><span className="k">SHIP VIA</span><b>{o.ship_method?.trim() || "—"}</b></div>}
+              {o.delivery_method === "ship" && <div><span className="k">SHIP VIA</span><b>{o.ship_method?.trim() || "—"}{isThirdParty(o) ? ` · ${thirdPartyLabel(o.third_party, true)}` : ""}</b></div>}
               {o.tracking && <div><span className="k">TRACKING</span><b className="trk">{o.tracking}</b></div>}
             </div>
           </div>

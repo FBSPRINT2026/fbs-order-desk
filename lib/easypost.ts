@@ -61,3 +61,18 @@ export async function rateParcel(p: { from: ShipAddress; to: ShipAddress; parcel
   });
   return (sh.rates || []).map((r) => ({ id: r.id, carrier: r.carrier, service: r.service, cost: +r.rate || 0, days: r.delivery_days, deliveryDate: r.delivery_date }));
 }
+
+/**
+ * The carrier accounts connected in FBS's EasyPost dashboard (Oct 30, Nick: "we have two complete separate accounts put
+ * into our FedEx Ship Manager… we have to ship from a separate, a new account number through EasyPost… can you check?").
+ * Only what identifies each account (its id, carrier, description and account number); never its credentials.
+ */
+export async function carrierAccounts(): Promise<{ id: string; type: string; description: string; reference: string; account: string; readable: string }[]> {
+  const key = process.env.EASYPOST_API_KEY?.trim();
+  if (!key) throw new Error("EasyPost isn't connected yet (EASYPOST_API_KEY is missing in Vercel).");
+  const r = await fetch(EP + "/carrier_accounts", { cache: "no-store", headers: { Authorization: "Basic " + Buffer.from(key + ":").toString("base64") } });
+  const j = await r.json().catch(() => null) as { id: string; type: string; description?: string; reference?: string; readable?: string; credentials?: Record<string, unknown> }[] | null;
+  if (!r.ok || !Array.isArray(j)) throw new Error(`EasyPost: HTTP ${r.status}`);
+  return j.map((a) => ({ id: a.id, type: a.type, description: a.description || "", reference: a.reference || "", readable: a.readable || "",
+    account: String(a.credentials?.account_number || a.credentials?.shipper_id || "") }));
+}

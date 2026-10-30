@@ -1,4 +1,5 @@
 "use client";
+import { carrierOf, isThirdParty, type ThirdParty } from "@/lib/thirdParty";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
@@ -375,7 +376,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
       price_type: d.price_type || "retail", order_type: d.order_type || null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
-      ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
+      ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
     }).eq("id", d.id);
@@ -960,7 +961,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const groups = o.groups.map(copyGroup);
     const { data, error } = await sb.from("orders").insert({
       customer_id: o.customer_id, nickname: o.nickname || "Job", groups, fees: o.fees, po_number: "",
-      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, price_type: o.price_type,
+      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, third_party: o.third_party || null, price_type: o.price_type,
       discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: o.notes, total: o.total, qty: o.qty,
     }).select("id").single();
     if (error || !data) return say("Couldn't duplicate: " + error?.message);
@@ -1754,6 +1755,43 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                   </div>
+                {/* Bill third party (Oct 30, Nick): their carrier account pays the shipping; remembered on the customer */}
+                {o.delivery_method === "ship" && (() => {
+                  const tp = o.third_party || null;
+                  const setTp = (fn: (t: ThirdParty) => void) => patch((d) => { const t: ThirdParty = { ...(d.third_party || { carrier: carrierOf(d.ship_method), account: "" }) }; fn(t); d.third_party = t; });
+                  // the customer's shipping account (the same one the Shipping center bills: customers.ship_bill + its account)
+                  const remember = () => {
+                    const t = latest.current?.third_party;
+                    if (!cust || !t || !(t.account || "").trim() || !t.carrier) return;
+                    const up = { ship_bill: (t.carrier === "UPS" ? "ups" : "fedex") as "ups" | "fedex", [t.carrier === "UPS" ? "ship_ups_account" : "ship_fedex_account"]: t.account.trim(), ship_bill_zip: (t.zip || "").trim() };
+                    sb.from("customers").update(up).eq("id", cust.id).then(() => setCustomers((cs) => cs.map((x) => (x.id === cust.id ? { ...x, ...up } : x))));
+                  };
+                  return (
+                    <div className="tp-wrap">
+                      <label className="check"><input type="checkbox" checked={!!tp} onChange={(e) => patch((d) => {
+                        if (!e.target.checked) { d.third_party = null; return; }
+                        const car = carrierOf(d.ship_method) || (cust?.ship_bill === "ups" ? "UPS" : cust?.ship_bill === "fedex" ? "FedEx" : "");
+                        const acct = car === "UPS" ? cust?.ship_ups_account || "" : car === "FedEx" ? cust?.ship_fedex_account || "" : "";
+                        d.third_party = { carrier: car, account: acct, zip: acct ? cust?.ship_bill_zip || "" : "", name: cust?.company || "" };
+                        // they pay the carrier: no shipping charge on our invoice
+                        d.fees = d.fees.filter((f) => !isShipFee(f));
+                      })} /><b>Bill third party</b></label>
+                      {tp && (
+                        <div className="tp-box">
+                          <div className="tp-row">
+                            <div className="field"><label htmlFor="o-tpc">Carrier</label><select id="o-tpc" value={tp.carrier} onChange={(e) => setTp((t) => { t.carrier = e.target.value as ThirdParty["carrier"]; })} onBlur={remember}><option value="">Choose…</option><option value="FedEx">FedEx</option><option value="UPS">UPS</option></select></div>
+                            <div className="field"><label htmlFor="o-tpa">Account #</label><input id="o-tpa" type="text" inputMode="numeric" autoComplete="off" data-notranslate value={tp.account} onChange={(e) => setTp((t) => { t.account = e.target.value; })} onBlur={remember} /></div>
+                            <div className="field"><label htmlFor="o-tpz">Billing ZIP</label><input id="o-tpz" type="text" inputMode="numeric" value={tp.zip || ""} onChange={(e) => setTp((t) => { t.zip = e.target.value; })} onBlur={remember} /></div>
+                          </div>
+                          <div className="field"><label htmlFor="o-tpn">Account name</label><input id="o-tpn" type="text" value={tp.name || ""} onChange={(e) => setTp((t) => { t.name = e.target.value; })} onBlur={remember} /></div>
+                          {tp.carrier && carrierOf(o.ship_method) && tp.carrier !== carrierOf(o.ship_method) && <p className="emb-warn-1">The ship method is {carrierOf(o.ship_method)}, but this account is {tp.carrier}.</p>}
+                          {tp.carrier === "UPS" && !(tp.zip || "").trim() && <p className="faint">UPS needs the account&apos;s billing ZIP to bill it.</p>}
+                          {cust && <p className="faint">Saved on {cust.company || cust.name}&apos;s customer page too: next time it fills in by itself.</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {o.delivery_method !== "pickup" && o.delivery_method !== "tbd" && (
                   <div className="grid g2">
                     <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
@@ -1761,7 +1799,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
               {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
-          {o.delivery_method === "ship" && seesMoney && calc && (
+          {o.delivery_method === "ship" && !isThirdParty(o) && seesMoney && calc && (
             <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}
               garments={o.groups.flatMap((g) => g.lines.map((l) => {
                 // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
