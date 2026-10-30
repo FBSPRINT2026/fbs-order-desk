@@ -3,6 +3,7 @@
 
 import { FULL_COLOR, ST, type Customer, type Order, type OrderCalc, type Proof } from "@/lib/pricing";
 import { daysUntil, fmtDateLong } from "@/lib/format";
+import { offRun, pcsOf, sizesText } from "@/lib/sizeFit";
 
 export type Check = { level: "high" | "medium" | "low"; text: string };
 
@@ -33,6 +34,9 @@ export function checkOrder(o: Order, c: OrderCalc, cust: Customer | undefined, p
       if (!q) return;
       if (!(l.style || l.garment)) add("medium", `${name}: a garment with ${q} pieces has no style.`);
       if (!l.color) add("medium", `${name}: ${l.style || "a garment"} has no color.`);
+      // a size the style doesn't come in (Oct 30: PC099Y with adult sizes on it): it can't be bought or printed as written
+      const off = Object.values(offRun(l.sizes as Record<string, number>, l.sizeRun)).reduce<Record<string, number>>((a, m) => ({ ...a, ...m }), {});
+      if (Object.keys(off).length) add("high", `${name}: ${l.style} doesn't come in ${sizesText(off)} (${pcsOf(off)} pcs). Move them to the right style (the button under the line).`);
     });
     if (!g.imprints.length && g.lines.some((l) => Object.keys(l.sizes || {}).length)) add("medium", `${name}: no imprints.`);
     const pdn = g.imprints.filter((d) => d.confirm && (d.confirm.size || d.confirm.ink)).length;

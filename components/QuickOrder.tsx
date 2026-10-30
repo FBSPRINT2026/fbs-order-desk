@@ -11,6 +11,7 @@ import { openOrderCheck } from "@/components/tools/OrderReview";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
+import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 import SizeRunsAsk, { garmentStep, type RunPick, type RunsAsk } from "@/components/SizeRunsAsk";
 import GoodsBoughtAsk, { dayWord, type GoodsBought } from "@/components/GoodsBoughtAsk";
 import { applyGoods } from "@/lib/goodsGarments";
@@ -107,6 +108,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     return v;
   }
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
+  const [fitAsk, setFitAsk] = useState<{ rows: FitRow[]; done: (r: FitRow[] | null) => void } | null>(null);
   // goods already bought for this (Order goods from the email, no order yet): use them? and which order of this run took them
   const [goodsAsk, setGoodsAsk] = useState<{ list: GoodsBought[]; done: (id: string | null) => void } | null>(null);
   const goodsUsed = useRef(new Map<string, string>());
@@ -232,6 +234,18 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     d = { ...d, groups: gs.groups };
     const prefsColors = gs.usual;
     if (gs.asked) { did.push(...gs.did); if (gs.skipped.length) did.push(`Left without a garment: ${gs.skipped.join(", ")} (ask the customer)`); }
+    // sizes the style doesn't come in (Oct 30, Nick: PC099Y written for the whole run, adult sizes included): they go on
+    // its sister style (youth ↔ adult, toddler, infant), sure ones straight on, the rest asked (components/SizeFit.tsx)
+    step(`${of}Checking the sizes each style comes in…`);
+    const sf = await checkSizeFit(d.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
+    guard();
+    if (sf.ask.length) {
+      note("A style doesn't come in some of its sizes: asking you");
+      const picked = await askOnce<FitRow[] | null>(`fit:${sf.ask.map((x) => `${x.gi}:${x.li}:${x.style}`).join("|")}`, (resolve) => setFitAsk({ rows: sf.rows, done: resolve }));
+      setFitAsk(null);
+      if (picked) sf.rows = picked;
+    }
+    if (sf.rows.length) { const r = applySizeFit(d.groups, sf.rows); d = { ...d, groups: r.groups }; did.push(...r.did); }
     // the shirt colors: the style's real color names (the closest one when not an exact match)
     step(`${of}Checking the shirt colors…`);
     const cc = await checkColors(d.groups, prefsColors).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
@@ -1055,6 +1069,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         {review && <ReviewConfirm a={review} onCancel={cancel} />}
         {goodsAsk && <GoodsBoughtAsk list={goodsAsk.list} activityId={activityId} onDone={(id) => goodsAsk.done(id)} onCancel={cancel} />}
         {runsAsk && <SizeRunsAsk runs={runsAsk.runs} prefs={runsAsk.prefs} company={runsAsk.company} sender={runsAsk.sender} onDone={(picks, remember) => runsAsk.done({ picks, remember })} onCancel={cancel} />}
+        {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={cancel} />}
         {colorAsk && <ColorCheck inline rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={cancel} />}
         {artAsk && <SentArt a={artAsk} onCancel={cancel} />}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}

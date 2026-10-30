@@ -25,6 +25,8 @@ export const saveFinishing = (wholesale: boolean) => async (f: { name: string; p
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { digitizeStamp, digitizeState, digitizingHref, embSpecsOf, type DgzSewout } from "@/lib/digitizeStatus";
 import DigitizedFinder from "@/components/DigitizedFinder";
+import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
+import { offRun, pcsOf, sizesText } from "@/lib/sizeFit";
 
 type Props = {
   /** the order (staff): its prints' digitizing stamps open them on the Digitizing page */ orderId?: string;
@@ -131,6 +133,20 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   type YGuess = { style: string; brand: string; title: string; supplier: string; sure?: boolean };
   const [yth, setYth] = useState<null | { li: number; fix: number | null; adult: string; brand: string; guesses: YGuess[]; typed: string; busy: boolean }>(null);
   const [ythNote, setYthNote] = useState<null | { text: string; li: number; youthLi: number; adult: string; brand: string }>(null);
+  /** "Move them to the right style": the sizes this line's style doesn't come in go on its sister style, found the way
+   *  Create order finds it (a remembered pair or one clear match goes straight on; otherwise it asks, and remembers) */
+  const [fitBusy, setFitBusy] = useState<string | null>(null);
+  const [fitAsk, setFitAsk] = useState<FitRow[] | null>(null);
+  const putFit = (rows: FitRow[]) => { const r = applySizeFit([g], rows); update((x) => { x.lines = r.groups[0].lines; }); if (r.did.length) setYthNote({ text: r.did.join(" · "), li: -1, youthLi: -1, adult: "", brand: "" }); };
+  async function moveOff(li: number) {
+    const l = g.lines[li]; if (!l) return;
+    setFitBusy(l.id);
+    const only: Group = { ...g, lines: g.lines.map((x, i) => (i === li ? x : { ...x, sizes: {} })) };
+    const sf = await checkSizeFit([only]).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
+    setFitBusy(null);
+    if (!sf.rows.length) { setYthNote({ text: `Couldn't check ${l.style}'s sizes in the catalog.`, li: -1, youthLi: -1, adult: "", brand: "" }); return; }
+    if (sf.ask.length) setFitAsk(sf.rows); else putFit(sf.rows);
+  }
   const adultLi = () => { for (let i = g.lines.length - 1; i >= 0; i--) { const l = g.lines[i]; if (l.style.trim() && !(l.sizeRun || []).some((z) => (YOUTH_SIZES as readonly string[]).includes(z))) return i; } return -1; };
   async function putYouth(li: number, fix: number | null, style: string, brand: string, supplier: string | undefined, learn: "staff" | "catalog" | false) {
     const adult = g.lines[li];
@@ -274,10 +290,9 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
         const run = (hit.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
         if (run.length) {
           const os = run.length === 1 && run[0] === ONE_SIZE;
-          const keep: GLine["sizes"] = {};
-          if (os) { const q = lineTotal(l); if (q) keep[ONE_SIZE] = q; }
-          else for (const z of run) { const v = l.sizes?.[z as keyof GLine["sizes"]]; if (v) keep[z as keyof GLine["sizes"]] = v; }
-          l.sizes = keep;
+          // a one-size item takes the whole qty; otherwise every quantity stays, even in a size this style doesn't come in
+          // (Oct 30: picking PC099Y deleted the adult sizes): it shows in its own column, flagged, with "Move them" below
+          if (os) { const q = lineTotal(l); l.sizes = q ? { [ONE_SIZE]: q } : {}; }
           l.sizeRun = run;
           l.oneSize = os;
         }
@@ -700,6 +715,19 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                     {g.lines.length > 1 && !fixed && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
                   </div>
                 </div>
+                {/* sizes this style doesn't come in (Oct 30, PC099Y with adult sizes): moved to its sister style here, the
+                    same check Create order runs (components/SizeFit.tsx) */}
+                {!fixed && (() => {
+                  const off = offRun(l.sizes as Record<string, number>, l.sizeRun);
+                  const all = Object.values(off).reduce<Record<string, number>>((a, m) => ({ ...a, ...m }), {});
+                  if (!Object.keys(all).length) return null;
+                  return (
+                    <div className="sf-note" role="status">
+                      <span>{l.style} doesn&apos;t come in {sizesText(all)} ({pcsOf(all)} pcs).</span>
+                      <button type="button" className="btn sm" disabled={fitBusy === l.id} onClick={() => void moveOff(li)}>{fitBusy === l.id ? "Finding the style…" : "Move them to the right style"}</button>
+                    </div>
+                  );
+                })()}
                 {(l.note != null || noteOpen === l.id) && (
                   <div className="gl-note">
                     <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="Line description: ship-to, packing, a name…" value={l.note || ""}
@@ -773,6 +801,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
             </div>
           );
         })()}
+        {fitAsk && <SizeFitAsk rows={fitAsk} onDone={(r) => { setFitAsk(null); putFit(r); }} onCancel={() => setFitAsk(null)} />}
         {yth && !yth.busy && (
           <div className="yth-ask">
             <b>Youth style for {yth.brand ? `${yth.brand} ` : ""}{yth.adult}?</b> <span className="faint">It&apos;s remembered for next time.</span>

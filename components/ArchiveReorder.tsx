@@ -3,6 +3,7 @@ import { useState } from "react";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import type { EODraft } from "@/lib/emailOrderShared";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
+import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 
 /**
  * Reorder on an archived Printavo job: the same garments, sizes and prints as a new 40,000-series order, with the art
@@ -12,6 +13,7 @@ import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/component
 export default function ArchiveReorder({ archivedId, small }: { archivedId: string; small?: boolean }) {
   const [step, setStep] = useState(""), [err, setErr] = useState(""), [custId, setCustId] = useState("");
   const [ask, setAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
+  const [fitAsk, setFitAsk] = useState<{ rows: FitRow[]; done: (r: FitRow[] | null) => void } | null>(null);
   async function go() {
     setErr(""); setStep("Copying the job…");
     try {
@@ -22,8 +24,18 @@ export default function ArchiveReorder({ archivedId, small }: { archivedId: stri
       if (!j.customer.moved_at) throw new Error("move");
       // the old job's colors checked against the style's real colors before anything is made ("Forest Green" →
       // "Heather Forest Green", "Rust/Burnt Orange" → "Heather Redwood"); not exact = asked
-      setStep("Checking the shirt colors…");
       let start = j.draft;
+      // sizes the style doesn't come in go on its sister style (Oct 30, PC099Y with adult sizes): components/SizeFit.tsx
+      setStep("Checking the sizes each style comes in…");
+      const sf = await checkSizeFit(start.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
+      if (sf.ask.length) {
+        const picked = await new Promise<FitRow[] | null>((done) => setFitAsk({ rows: sf.rows, done }));
+        setFitAsk(null);
+        if (!picked) { setStep(""); return; }
+        sf.rows = picked;
+      }
+      if (sf.rows.length) start = { ...start, groups: applySizeFit(start.groups, sf.rows).groups };
+      setStep("Checking the shirt colors…");
       const cc = await checkColors(start.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
       let rows = cc.rows;
       if (cc.ask.length) {
@@ -48,6 +60,7 @@ export default function ArchiveReorder({ archivedId, small }: { archivedId: stri
   return (
     <>
       <button type="button" className={"btn primary" + (small ? " sm" : "")} disabled={!!step} onClick={go} title="A new order with the same garments, sizes and prints; the art comes from the old mockup and the film">{step || "Reorder"}</button>
+      {fitAsk && <SizeFitAsk rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
       {ask && <ColorCheck rows={ask.rows} onDone={(r) => ask.done(r)} onCancel={() => ask.done(null)} />}
       {err && <div className="err" style={{ flexBasis: "100%" }}>{err === "move" ? <>This customer isn&apos;t in the new system yet. <a href={`/shop/customers/${custId}`}>Move them first</a>, then Reorder.</> : err}</div>}
     </>

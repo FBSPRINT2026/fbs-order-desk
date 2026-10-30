@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
+import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 import { aiLookUp, forgetOrderMemory, orderMemories, rememberOrderNote } from "@/app/shop/ai-actions";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
@@ -113,6 +114,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
    * built in the Mockup Creator (auto), which opens the order when it's saved.
    */
   const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
+  const [fitAsk, setFitAsk] = useState<{ rows: FitRow[]; done: (r: FitRow[] | null) => void } | null>(null);
   async function create(mode: "new" | "edit" = "new") {
     if (!d) return;
     // Create order: a tab opened now (while it's still a click) so the browser doesn't block it later.
@@ -122,6 +124,16 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
     let dd = d, films: { id: string; name: string }[] = [];
     // the shirt colors checked against the style's real colors first ("Forest Green" → "Heather Forest Green"), so
     // the mockup shows the real shirt; anything not an exact match is asked
+    // sizes the style doesn't come in go on its sister style (Oct 30, PC099Y with adult sizes): components/SizeFit.tsx
+    setStep("Checking the sizes each style comes in…");
+    const sf = await checkSizeFit(dd.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
+    if (sf.ask.length) {
+      const picked = await new Promise<FitRow[] | null>((done) => setFitAsk({ rows: sf.rows, done }));
+      setFitAsk(null);
+      if (!picked) { setBusy(""); setStep(""); w?.close(); return; }
+      sf.rows = picked;
+    }
+    if (sf.rows.length) { dd = { ...dd, groups: applySizeFit(dd.groups, sf.rows).groups }; setD(dd); }
     setStep("Checking the shirt colors…");
     const cc = await checkColors(dd.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
     let rows = cc.rows;
@@ -302,6 +314,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
         onMoved={() => setData((x) => (x && x.customer ? { ...x, customer: { ...x.customer, moved_at: new Date().toISOString() } } : x))} />}
       {d && !editing && <WhenLine when={when} due={d.due_date} onUse={(day) => patch((x) => { x.due_date = day; })} />}
       {d && !editing && <Review d={d} files={files} urlOf={urlOf} custName={data.customer ? data.customer.company || data.customer.name || "" : ""} job={d.reorderOf ? data.past.find((p) => p.ref === d.reorderOf)?.label || "" : ""} finishing={data.finishing} />}
+      {fitAsk && <SizeFitAsk rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
       {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={() => colorAsk.done(null)} />}
       {d && !editing && <>
         <div className="eo-foot">

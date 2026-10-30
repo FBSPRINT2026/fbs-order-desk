@@ -16307,3 +16307,14 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-fix{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px}
 .pc-fix-p{white-space:nowrap}
 .pc-fix-p .bad{color:var(--danger);font-size:12.5px}
+
+/* Sizes a style doesn't come in (Oct 30, PC099Y with adult sizes): components/SizeFit.tsx */
+.sf-row{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.sf-row:first-child{border-top:0;padding-top:0}
+.sf-what{margin:0;font-size:14px;color:var(--ink)}
+.sf-move{display:flex;flex-direction:column;gap:6px}
+.sf-sizes{font-size:13px;color:var(--ink)}
+.sf-opts{display:flex;flex-wrap:wrap;gap:6px}
+.sf-opts .chip small{color:var(--ink-3);font-size:12px;margin-left:4px}
+.sf-type input{height:36px;border-radius:6px;border:1px solid var(--line);font:inherit;font-size:14px;padding:0 10px;width:min(220px,100%);color:var(--ink);background:var(--surface)}
+.sf-note{font-size:12.5px;color:var(--warn);display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 4px}
