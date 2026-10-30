@@ -83,6 +83,7 @@ const GOODS_WORD: Record<string, string> = { waiting: "Waiting on goods", on_way
 // the order tabs' icons: on a phone the tabs show these instead of their names (Oct 15, Nick: "the middle tool bar
 // has a horizontal scroll… just make those icons without words")
 const TAB_ICONS: Record<string, ReactNode> = {
+  goods: <><path d="M21 8 12 3 3 8v8l9 5 9-5z" /><path d="m3 8 9 5 9-5M12 13v8" /></>,
   order: <><path d="M9 3.5h6v3H9z" /><path d="M7 5H5v15.5h14V5h-2" /><path d="M8.5 11h7M8.5 15h4.5" /></>,
   prod: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-9 8" /></>,
   msg: <path d="M4 5h16v11H10l-5 4v-4H4z" />,
@@ -182,10 +183,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
-  type Tab = "order" | "prod" | "msg" | "pay" | "act";
+  type Tab = "order" | "prod" | "goods" | "msg" | "pay" | "act";
   const [tab, setTabS] = useState<Tab>("order");
   const setTab = (t: Tab) => { setTabS(t); try { const u = new URL(window.location.href); if (t === "order") u.searchParams.delete("tab"); else u.searchParams.set("tab", t); window.history.replaceState(window.history.state, "", u.toString()); } catch { /* */ } };
-  useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "msg", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
+  useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "goods", "msg", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
   const [talkN, setTalkN] = useState(0);
   const [goodsSt, setGoodsSt] = useState<{ status: string; updated_by: string | null } | null>(null);
 
@@ -1529,7 +1530,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </section>
 
       <nav className="aa-nav ot-nav" aria-label="Order sections">
-        {([["order", "Order", 0], ["prod", "Art & production", art.length], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
+        {([["order", "Order", 0], ["prod", "Art & production", art.length], ["goods", "Goods", 0], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
           <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} aria-label={l} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{n > 0 && <span className="aa-n">{n}</span>}</button>)}
       </nav>
       <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
@@ -1633,62 +1634,40 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
           <aside className="ed-aside">
           <section className="panel jd-panel">
-              {/* the job, as lines (Oct 29, Nick: "a lot of boxes for not so much information… PO with the number sign… production
-                  date… specific time on the in hands… Firm and Rush") */}
-              <div className="panel-h"><h2>Job details</h2>
-                <button type="button" className={"jd-type" + (jdTab === "type" ? " on" : "")} aria-expanded={jdTab === "type"} title="Order type" onClick={() => setJdTab(jdTab === "type" ? "details" : "type")}>{ORDER_TYPE_LABEL[orderTypeOf(o)]}<span aria-hidden> ▾</span></button>
+              {/* the job and its type (Oct 29, Nick: "job details and type… production date above the in-hands date… a clock
+                  symbol to set a time… firm and rush… little check boxes… in the header… job type at the bottom… stand out") */}
+              <div className="panel-h"><h2>Job details and type</h2>
+                <span className="jd-flags">
+                  <label className={"jd-ck firm" + (o.firm ? " on" : "")} title="Firm in-hands date: it can't move (⛰️ on the production calendar)"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} />Firm</label>
+                  <label className={"jd-ck rush" + (o.rush ? " on" : "")} title="Rush job (🔥 on the production calendar)"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} />Rush</label>
+                </span>
               </div>
               <div className="panel-b stack">
-                {jdTab === "type" && <OrderTypeRow o={o} patch={patch} bare />}
                 <div className="jl">
                   <label className="jl-k" htmlFor="o-nick">Job name</label>
                   <div className="jl-v"><input id="o-nick" className="jl-in" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <label className="jl-k" htmlFor="o-po">PO #</label>
                   <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
-                  <label className="jl-k" htmlFor="o-due">In hands</label>
-                  {/* the date (and its time) on top, Time / Firm / Rush on their own row under it, so nothing's squeezed */}
-                  <div className="jl-v jl-stack">
-                    <span className="jl-dt"><input id="o-due" className="jl-in jl-date" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} />
-                    {o.due_time != null && <input className="jl-in jl-time" type="time" step={900} aria-label="Due by" value={`${String(Math.floor(o.due_time / 60)).padStart(2, "0")}:${String(o.due_time % 60).padStart(2, "0")}`} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) patch((d) => { d.due_time = h * 60 + (m || 0); d.firm = true; }); }} />}</span>
-                    <span className="jl-tg">
-                      <button type="button" className={"jl-t" + (o.due_time != null ? " on" : "")} aria-pressed={o.due_time != null} title="Needed by a set time that day (makes the date firm)" onClick={() => patch((d) => { d.due_time = d.due_time != null ? null : 600; if (d.due_time != null) d.firm = true; })}>Time</button>
-                      <button type="button" className={"jl-t firm" + (o.firm ? " on" : "")} aria-pressed={!!o.firm} title="Firm in-hands date: it can't move (⛰️ on the production calendar)" onClick={() => patch((d) => { d.firm = !d.firm; })}>Firm</button>
-                      <button type="button" className={"jl-t rush" + (o.rush ? " on" : "")} aria-pressed={!!o.rush} title="Rush job (🔥 on the production calendar)" onClick={() => patch((d) => { d.rush = !d.rush; })}>Rush</button>
-                    </span>
-                  </div>
                   <label className="jl-k" htmlFor="o-prod">Production</label>
                   <div className="jl-v"><input id="o-prod" className="jl-in jl-date" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
-                  <label className="jl-k" htmlFor="o-del">Delivery</label>
+                  <label className="jl-k" htmlFor="o-due">In hands</label>
                   <div className="jl-v">
-                    <select id="o-del" className="jl-in" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && d.delivery_method !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
-                      <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option><option value="tbd">TBD: not told yet</option>
-                    </select>
+                    <input id="o-due" className="jl-in jl-date" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} />
+                    {o.due_time != null && <input className="jl-in jl-time" type="time" step={900} aria-label="Due by" value={`${String(Math.floor(o.due_time / 60)).padStart(2, "0")}:${String(o.due_time % 60).padStart(2, "0")}`} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) patch((d) => { d.due_time = h * 60 + (m || 0); d.firm = true; }); }} />}
+                    <button type="button" className={"jl-clock" + (o.due_time != null ? " on" : "")} aria-pressed={o.due_time != null} title={o.due_time != null ? "Clear the time" : "Set a time: needed by a set time that day (makes the date firm)"} onClick={() => patch((d) => { d.due_time = d.due_time != null ? null : 600; if (d.due_time != null) d.firm = true; })}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></button>
                   </div>
                 </div>
                 <div className="grid jd-grid">
                   <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
-                  {o.delivery_method === "ship" && (
-                    <div className="field"><label htmlFor="o-sm">Ship method</label>
-                      <select id="o-sm" value={matchShipMethod(o.ship_method) || (o.ship_method ? "__other" : "")} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; })}>
-                        <option value="">Choose…</option>
-                        <optgroup label="UPS">{SHIP_METHODS.filter((m) => m.startsWith("UPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
-                        <optgroup label="FedEx">{SHIP_METHODS.filter((m) => m.startsWith("FedEx")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
-                        <optgroup label="USPS">{SHIP_METHODS.filter((m) => m.startsWith("USPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
-                        <option value="__other">Other…</option>
-                      </select>
-                      {o.ship_method && !matchShipMethod(o.ship_method) && <input type="text" aria-label="Other ship method" placeholder="Freight, customer's account #…" value={o.ship_method.trim()} onChange={(e) => patch((d) => { d.ship_method = e.target.value || " "; })} style={{ marginTop: 4 }} />}
-                    </div>
-                  )}
                 </div>
-                {o.delivery_method !== "pickup" && o.delivery_method !== "tbd" && (
-                  <div className="grid g2">
-                    <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
-                    {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
-                  </div>
-                )}
+                {/* the job's type, standing out at the bottom: the dropdown, and what it means for this order under it */}
+                <div className="jd-typebox">
+                  <OrderTypeRow o={o} patch={patch} bare />
+                </div>
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>
-            </section>
+          </section>
           {!seesMoney && (
             <section className="panel">
               <div className="panel-h"><h2>Quantity</h2></div>
@@ -1731,12 +1710,36 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
-          {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
-              right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
-          {/* Goods, right under Totals (Oct 29, Nick): who ordered them, from where, the PO, arrival, tracking */}
-          {o.status !== "request" && <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale" && o.type === "invoice"} customerId={o.customer_id} />}
-          {o.status !== "request" && <OrderStages orderId={o.id} printavo={pvStatusOf(o as never)} bump={events.length} />}
-          {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
+          {/* Delivery: its own panel under Totals (Oct 29, Nick: "it should be delivery and should be its own panel so that you
+              can get the quote in there") */}
+          <section className="panel dl-panel">
+            <div className="panel-h"><h2>Delivery</h2>{o.due_date && <span className="faint">In hands {new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>}</div>
+            <div className="panel-b stack">
+              <div className="dl-seg" role="group" aria-label="Pickup, ship or delivery">
+                {([["pickup", "Pickup"], ["ship", "Ship"], ["deliver", "Deliver"], ["tbd", "TBD"]] as [Delivery, string][]).map(([k, l]) => <button key={k} type="button" className={(o.delivery_method || "pickup") === k ? "on" : ""} aria-pressed={(o.delivery_method || "pickup") === k}
+                  onClick={() => patch((d) => { d.delivery_method = k; if (k !== "pickup" && k !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (k === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>{l}</button>)}
+              </div>
+              <div className="grid jd-grid">
+                  {o.delivery_method === "ship" && (
+                    <div className="field"><label htmlFor="o-sm">Ship method</label>
+                      <select id="o-sm" value={matchShipMethod(o.ship_method) || (o.ship_method ? "__other" : "")} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; })}>
+                        <option value="">Choose…</option>
+                        <optgroup label="UPS">{SHIP_METHODS.filter((m) => m.startsWith("UPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <optgroup label="FedEx">{SHIP_METHODS.filter((m) => m.startsWith("FedEx")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <optgroup label="USPS">{SHIP_METHODS.filter((m) => m.startsWith("USPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <option value="__other">Other…</option>
+                      </select>
+                      {o.ship_method && !matchShipMethod(o.ship_method) && <input type="text" aria-label="Other ship method" placeholder="Freight, customer's account #…" value={o.ship_method.trim()} onChange={(e) => patch((d) => { d.ship_method = e.target.value || " "; })} style={{ marginTop: 4 }} />}
+                    </div>
+                  )}
+                  </div>
+                {o.delivery_method !== "pickup" && o.delivery_method !== "tbd" && (
+                  <div className="grid g2">
+                    <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
+                    {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
+                  </div>
+                )}
+              {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (
             <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}
               garments={o.groups.flatMap((g) => g.lines.map((l) => {
@@ -1761,6 +1764,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onTbd={(on) => patch((d) => { const i = d.fees.findIndex(isShipFee); if (i >= 0) { if (on) d.fees[i].tbd = true; else delete d.fees[i].tbd; } else if (on) d.fees.push({ label: "Shipping · to be decided", amount: 0, ship: true, tbd: true }); })}
               onClear={() => patch((d) => { d.fees = d.fees.filter((f) => !isShipFee(f)); d.ship_method = ""; })} />
           )}
+            </div>
+          </section>
+          {/* where the job is in the shop, its holds, and what the customer sees (Oct 21, the order statuses doc): on the
+              right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
+          {/* Goods, right under Totals (Oct 29, Nick): who ordered them, from where, the PO, arrival, tracking */}
           {/* Customer supplied goods: now inside the Goods panel above (Oct 29, Nick: "merge those together") */}
           {/* Printavo: at the very bottom (Oct 21, Nick: "the Printavo sync will go away shortly… move it to the very bottom") */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
@@ -1805,6 +1813,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Messages: the job's emails and texts, the customer's portal, calls & notes */}
+        {/* Goods: its own tab (Oct 29, Nick: "move the goods panel up into its own part of the toolbar… orders, art production,
+            then goods, messages") */}
+        <div className="ot-one" hidden={tab !== "goods"}>
+          {o.status !== "request" ? <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale" && o.type === "invoice"} customerId={o.customer_id} />
+            : <div className="faint" style={{ padding: 20 }}>Goods are tracked once the request is accepted.</div>}
+        </div>
         <div className="ed-grid" hidden={tab !== "msg"}>
           <div className="stack">
             <JobTalk jobRef={`o:${o.id}`} onCount={setTalkN} />

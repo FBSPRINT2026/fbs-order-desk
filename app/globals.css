@@ -16175,3 +16175,25 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
 /* Job details in the right column: the ship-to, tracking and project fields take the full width */
 .jd-panel .grid.g2,.jd-panel .grid.jd-grid{grid-template-columns:minmax(0,1fr)}
 .jd-panel textarea{min-height:84px}
+/* Job details and type: Firm / Rush checkboxes in the header, the clock beside the in-hands date, the job type standing out */
+.jd-flags{display:inline-flex;gap:12px}
+.jd-ck{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-3);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-weight:500}
+.jd-ck input{width:14px;height:14px;margin:0}
+.jd-ck.firm.on{color:var(--warn);font-weight:700}
+.jd-ck.rush.on{color:var(--danger);font-weight:700}
+.jl-clock{all:unset;cursor:pointer;display:grid;place-items:center;width:28px;height:28px;border-radius:6px;color:var(--ink-3);flex:none;margin-left:auto}
+.jl-clock:hover{background:var(--surface-2);color:var(--accent)}
+.jl-clock.on{color:var(--accent)}
+.jl-clock:focus-visible{outline:2px solid var(--accent)}
+.jd-typebox{background:var(--accent-soft);border-radius:var(--r);padding:10px 12px;margin-top:4px}
+.jd-typebox .ot-row{background:none;border:0;padding:0;margin:0}
+.jd-typebox .ot-row > .pt-l:first-child{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.jd-typebox .ot-sel{border-color:var(--accent);font-weight:600;color:var(--accent)}
+/* Delivery as its own panel */
+.dl-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.dl-seg button{all:unset;cursor:pointer;text-align:center;font-size:13px;font-weight:600;padding:7px 0;color:var(--ink-3);border-right:1px solid var(--line)}
+.dl-seg button:last-child{border-right:0}
+.dl-seg button.on{background:var(--accent-soft);color:var(--accent)}
+.dl-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.dl-panel .grid.g2,.dl-panel .grid.jd-grid{grid-template-columns:minmax(0,1fr)}
+.dl-panel .grid.jd-grid:empty{display:none}
