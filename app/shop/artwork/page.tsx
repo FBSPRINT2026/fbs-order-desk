@@ -329,13 +329,15 @@ export default function ArtworkPage() {
           {mocks.length ? (
             <div className="design-grid">
               {mockSets.slice(0, nM).map((g) => { const m = g[0]; return (
-                <div key={m.id} className={"design-card mk-saved" + (g.some((x) => x.starred) ? " starred" : "")}>
-                  <a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-img mock" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}{g.some((x) => x.starred) && <span className="dc-fav" title="Customer favorite">★</span>}</a>
+                // the customer page's mockup card (components/AccountAreas.tsx `mk-card`), not the Mockup Creator's saved strip
+                // (`mk-saved`), whose rules framed the picture and cut the text off (Oct 30, Nick: "spilling over and looks weird")
+                <div key={m.id} className={"design-card mk-card" + (g.some((x) => x.starred) ? " starred" : "")}>
+                  <div className="dc-img mock"><a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-open" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}</a>{g.some((x) => x.starred) && <span className="dc-fav" title="Customer favorite">★</span>}{g.length > 1 && <span className="mk-card-n">{g.length} colors</span>}</div>
                   <div className="dc-b"><b>{mockName(m)}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""} · {fmtDateLong(m.created_at.slice(0, 10))}</span>
                     {g.length > 1 || mockColor(m) ? <ul className="mk-colors-list">{g.map((x) => <li key={x.id}><a href={mUrls[x.id]?.full} target="_blank" rel="noreferrer" title="Open this color's picture">{mockColor(x) || "Picture"}</a></li>)}</ul> : null}
                     {/* edit it again in the Mockup Creator, like an order's (Oct 22, Nick); an order's mockup is edited from its order */}
-                    {m.order_id ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}${/ — Logo · /.test(String(m.title || "")) ? "&logo=1" : ""}`}>Edit on the order</a>
-                      : m.set ? <a className="btn sm mk-edit" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div>
+                    <div className="mk-card-acts">{m.order_id ? <a className="btn sm" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}${/ — Logo · /.test(String(m.title || "")) ? "&logo=1" : ""}`}>Edit on the order</a>
+                      : m.set ? <a className="btn sm" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div></div>
                 </div>
               ); })}
             </div>

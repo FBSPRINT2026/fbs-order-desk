@@ -12222,8 +12222,6 @@ body.cu-resizing{cursor:col-resize;user-select:none}
 .mk-imp.mk-imp-flash { animation: mkImpFlash 1.4s ease-out; border-radius: var(--r); }
 
 /* saved mockups: Edit opens them in the Mockup Creator (Oct 22) */
-.design-card.mk-saved .dc-img{display:block}
-.design-card.mk-saved .mk-edit{align-self:flex-start;margin-top:6px}
 .mk-colors-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px}
 .mk-colors-list a{color:var(--accent);text-decoration:none}
 .mk-colors-list a:hover{text-decoration:underline}
@@ -13101,6 +13099,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .mk-card-n{position:absolute;left:6px;bottom:6px;font-size:11px;font-weight:700;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
 .mk-card-acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .mk-card-acts .btn{flex:1 1 auto;justify-content:center;text-decoration:none}
+/* a mockup card's second line (customer · order · date) wraps instead of being cut off (Oct 30, Nick) */
+.design-card.mk-card .dc-b .faint{white-space:normal;overflow-wrap:anywhere}
+.design-card.mk-card .dc-b{flex:1 1 auto}
+.design-card.mk-card .mk-card-acts{margin-top:auto;padding-top:6px}
 .mk-ord-msg{font-size:12px}
 
 /* artwork: Active / Archive at the top; archive top left of a card, the star top right (Oct 24, Nick) */
