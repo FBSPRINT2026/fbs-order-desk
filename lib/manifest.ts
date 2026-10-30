@@ -400,7 +400,7 @@ async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Ope
   if (!custIds.length) return [];
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines").in("customer_id", custIds).not("status", "in", "(completed,quote)"),
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines").in("customer_id", custIds).neq("status", "completed"),
     admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).not("status_name", "ilike", "%job completed%").order("due_date", { ascending: false, nullsFirst: true }).limit(600),
   ]);
   const live = ((os || []) as (Candidate & { submitted_at: string | null; due_date: string | null; groups: unknown; lines: unknown })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
@@ -488,14 +488,17 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     if (!gs) return empty;
     return { customerId: null, alloc: lines.map((line) => ({ line, parts: [{ orderId: gs.orderId, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: gs.how };
   }
-  const orders = await openOrders(admin, custIds);
-  if (!orders.length) {
+  // a quote counts only when the PO names it (Oct 30, Nick on #40284: All My Sons' goods for PO 43146 came in before the
+  // order was a job, and the quote never got them): a PO's number is sure enough; nothing looser links goods to a quote
+  const all = await openOrders(admin, custIds);
+  const orders = all.filter((o) => o.status !== "quote");
+  if (!all.length) {
     // no open jobs at all (Agape: the job already printed): a recently completed one with the same count in every size
     // (not a current order: a suggestion, never linked on its own)
     const d = await doneTwin(admin, custIds, lines);
     return d ? { customerId, ...d, auto: false } : empty;
   }
-  const exact = orders.filter((o) => poHit(o, g));
+  const exact = all.filter((o) => poHit(o, g));
   if (exact.length === 1) {
     // one order carries this PO: it all goes there (anything it didn't list may be spares or a later change)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: exact[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: "PO matches the order" };
@@ -511,7 +514,7 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   // customer's orders ("MEI Store … Cart #93298390", "42992 ALL MY SONS CLEVELAND"): that order
   const pr = numRuns(g.customer_po);
   if (pr.length) {
-    const byNum = orders.filter((o) => numRuns(`${o.nickname} ${o.po_number}`).some((r) => pr.includes(r)));
+    const byNum = all.filter((o) => numRuns(`${o.nickname} ${o.po_number}`).some((r) => pr.includes(r)));
     if (byNum.length === 1) {
       const r = pr.find((x) => numRuns(`${byNum[0].nickname} ${byNum[0].po_number}`).includes(x));
       return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: byNum[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `PO number ${r} is on #${byNum[0].number}` };

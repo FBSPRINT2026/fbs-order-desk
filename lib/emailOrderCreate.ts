@@ -1,3 +1,4 @@
+import { resolvePending } from "@/lib/manifest";
 import "server-only";
 import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -273,6 +274,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
   }
+  // their goods may already be on a supplier's manifest (Oct 30, Nick on #40284: All My Sons' blanks came in days before
+  // the order was entered): match the waiting manifest lines now, not at the next hourly run
+  if (d.goods?.supplied) await resolvePending(admin, Date.now() + 15_000).catch((e) => console.warn("goods match", e));
   // a reorder of a portal order: our saved mockups come along (the latest of each group), so nothing is made again
   // (Oct 20, Nick: "when we've got a mock-up made in our new system, we don't need to recreate anything, just copy it")
   if (reorderOf?.startsWith("o:")) {
