@@ -2,6 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
+import { storedPath } from "@/lib/archive";
 
 /**
  * "Set up from Printavo" on a customer's Program tab (Oct 15, Nick: Amanda converts her clients herself, "like what we
@@ -79,7 +80,7 @@ export async function printavoSetup(input: { customerId: string; since: number }
       let ds = designs.get(k);
       if (!ds) {
         // the newest order's mockups (orders come newest first): the first two pictures on its lines, front then back
-        const pics = main.flatMap((l) => l.mockups || []).map((m) => (o.files || {})[m.full]).filter((p) => p && !["failed", "too-big"].includes(p));
+        const pics = main.flatMap((l) => l.mockups || []).map((m) => storedPath((o.files || {})[m.full])).filter(Boolean);
         ds = { key: k, name, orders: [], mode: "flat", tiers: [], front: pics[0] || "", back: pics[1] || "", frontUrl: "", backUrl: "", garment: [main[0].itemNumber, main[0].description].filter(Boolean).join(" ").slice(0, 60), extras: [], supplied: main.some((l) => SUPPLIED.test(`${l.description || ""} ${l.category || ""}`)), have: have.has(k), odd: false };
         designs.set(k, ds);
       }

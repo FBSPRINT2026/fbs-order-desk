@@ -2,7 +2,7 @@ import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fileUrls, forCustomer, type PvOrder } from "@/lib/archive";
+import { fileUrls, forCustomer, type PvOrder, storedPath } from "@/lib/archive";
 import ArchivedPortalView from "./view";
 import { pvHandle } from "@/lib/printavoNames";
 import { namesFor } from "@/lib/printavoFileMeta";
@@ -22,7 +22,7 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
   const o = forCustomer(data.data as PvOrder);
   // signed links to our copies of the mockups this customer can see
   const files = (data.files || {}) as Record<string, string>;
-  const wanted = fileUrls(o).filter((u) => files[u] && !["failed", "too-big"].includes(files[u]));
+  const wanted = fileUrls(o).filter((u) => storedPath(files[u]));
   let names: Record<string, string> = {};
   const urls: Record<string, string> = {}, paths: Record<string, string> = {};
   if (wanted.length) {

@@ -58,6 +58,17 @@ export function orderFiles(o: PvOrder): PvFile[] {
   ];
 }
 /** The URLs worth copying into our storage (full files and their thumbnails, and files attached to messages). */
+/**
+ * A Printavo file's state in archived_orders.files: our copy's path ("printavo/<order>/…"), or why there isn't one:
+ *   "failed" the download didn't work, "too-big" over the size we take, "from-original" a preview Filestack drew from a
+ *   file we did copy (Oct 30, Nick's "20 files that didn't download" were all 100px previews of saved files: nothing is
+ *   missing, and the preview is drawn from the original).
+ * Every reader goes through these two, so a new state can't be mistaken for a path.
+ */
+export const storedPath = (p?: string | null): string => (p && p.startsWith("printavo/") ? p : "");
+/** nothing left to copy for this file: we have it, or we have the original it was made from */
+export const fileDone = (p?: string | null) => !!storedPath(p) || p === "from-original";
+
 export function fileUrls(o: PvOrder): string[] {
   return [...new Set([...orderFiles(o).flatMap((f) => [f.full, f.thumb]), ...o.messages.flatMap((m) => (m.attachments || []).map((a) => a.url))]
     .filter((u): u is string => !!u && /^https?:\/\//.test(u)))];

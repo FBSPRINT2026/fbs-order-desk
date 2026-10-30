@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fileUrls, orderFiles, type PvOrder } from "@/lib/archive";
+import { fileUrls, orderFiles, type PvOrder, storedPath } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
           } catch { /* an odd record: just the files we have */ }
           for (const url of urls) {
             const p = map[url] || "";
-            const state = !p ? "not-copied-yet" : p === "failed" || p === "too-big" ? p : "copied";
+            const state = !p ? "not-copied-yet" : storedPath(p) ? "copied" : p;
             const name = names.get(url) || (state === "copied" ? p.split("/").pop() : (() => { try { return decodeURIComponent(url.split("?")[0].split("/").pop() || ""); } catch { return url.split("?")[0].split("/").pop() || ""; } })());
             fileLines.push([r.id, r.visual_id, r.order_date, state, name, state === "copied" ? `proofs/${p}` : "", url].map(csv).join(","));
           }

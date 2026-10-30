@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readDst } from "@/lib/dst";
 import { guessProdKind } from "@/lib/productionFileKinds";
+import { storedPath } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -38,10 +39,10 @@ export async function POST(req: Request) {
     // store only when a file never copied
     const ours = ((a.files || {}) as Record<string, string>)[f.full!];
     let buf: ArrayBuffer | null = null;
-    if (ours && !["failed", "too-big"].includes(ours)) { const { data: blob } = await admin.storage.from("proofs").download(ours); if (blob) buf = await blob.arrayBuffer(); }
+    if (storedPath(ours)) { const { data: blob } = await admin.storage.from("proofs").download(ours); if (blob) buf = await blob.arrayBuffer(); }
     if (!buf) { const r = await fetch(f.full!).catch(() => null); if (r?.ok) buf = await r.arrayBuffer(); }
     if (!buf) { out.push({ name, error: "couldn't open it" }); continue; }
-    const row: Record<string, unknown> = { name, bytes: buf.byteLength, from: ours && !["failed", "too-big"].includes(ours) ? "our storage" : "Printavo" };
+    const row: Record<string, unknown> = { name, bytes: buf.byteLength, from: storedPath(ours) ? "our storage" : "Printavo" };
     if (/\.dst$/i.test(name)) {
       try {
         const info = readDst(buf);

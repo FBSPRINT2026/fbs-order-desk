@@ -5,6 +5,7 @@ import { History } from "@/components/ArchivedOrderView";
 import { createClient } from "@/lib/supabase/client";
 import { downloadUrl } from "@/lib/printavoNames";
 import type { PvOrder } from "@/lib/archive";
+import { storedPath } from "@/lib/archive";
 
 /**
  * A job's emails and texts in one timeline (Oct 15, Nick, on Printavo invoice 27166: "a shop-side tab that shows the
@@ -127,7 +128,7 @@ export function OriginalJobTalk({ notes, orderId }: { notes: string | null | und
         const { data } = await sb.from("archived_orders").select("id, data, files").eq("visual_id", m[2]).maybeSingle();
         if (!data) return;
         setRef({ ref: `pv:${data.id}`, pv: data.data as PvOrder, files: (data.files || {}) as Record<string, string> });
-        const stored = Object.entries((data.files || {}) as Record<string, string>).filter(([, p]) => p && !["failed", "too-big"].includes(p));
+        const stored = Object.entries((data.files || {}) as Record<string, string>).filter(([, p]) => storedPath(p));
         if (stored.length) { const { data: s2 } = await sb.storage.from("proofs").createSignedUrls(stored.map(([, p]) => p), 3600); setSigned(Object.fromEntries(stored.map(([u], i) => [u, s2?.[i]?.signedUrl || ""]).filter(([, v]) => v))); }
       } else {
         const { data } = await sb.from("orders").select("id").eq("number", Number(m[2])).maybeSingle();

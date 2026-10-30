@@ -9,6 +9,7 @@ import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { groupsFromPrintavo, readFiles } from "@/lib/ai/emailOrder";
+import { storedPath } from "@/lib/archive";
 
 type Result = { ok: boolean; error?: string; id?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -597,7 +598,7 @@ export async function myReorderables(q = ""): Promise<Reorderable[]> {
     type PvFile = { thumb?: string; full?: string; mime?: string; name?: string };
     for (const r of (as || []) as { id: string; files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: PvFile[] }[]; lines?: { mockups?: PvFile[] }[] }[] } | null }[]) {
       const f = (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).filter((x) => /^image\//.test(x.mime || "") && !/barcode|label/i.test(x.name || ""));
-      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => p && !["failed", "too-big"].includes(p));
+      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => storedPath(p));
       if (hit) picOf.set(`a:${r.id}`, hit);
     }
     const paths = [...new Set(picOf.values())];

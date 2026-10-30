@@ -6,7 +6,7 @@ import JobFiles from "@/components/job/JobFiles";
 import JobTalk from "@/components/JobTalk";
 import { use, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { fileUrls, type ArchivedRow } from "@/lib/archive";
+import { fileUrls, type ArchivedRow, storedPath } from "@/lib/archive";
 import ArchivedOrderView, { History } from "@/components/ArchivedOrderView";
 import { downloadUrl, pvHandle } from "@/lib/printavoNames";
 import ArchiveReorder from "@/components/ArchiveReorder";
@@ -38,7 +38,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         sb.from("printavo_file_names").select("handle, filename").in("handle", handles.slice(i, i + 150)).not("filename", "is", null)
           .then(({ data: nm }) => { if (nm?.length) setNames((x) => ({ ...x, ...Object.fromEntries((nm as { handle: string; filename: string }[]).map((n) => [n.handle, n.filename])) })); });
       }
-      const stored = Object.entries(r.files || {}).filter(([, p]) => p && !["failed", "too-big"].includes(p));
+      const stored = Object.entries(r.files || {}).filter(([, p]) => storedPath(p));
       if (stored.length) {
         const { data: s } = await sb.storage.from("proofs").createSignedUrls(stored.map(([, p]) => p), 3600);
         setSigned(Object.fromEntries(stored.map(([u], i) => [u, s?.[i]?.signedUrl || ""]).filter(([, v]) => v)));

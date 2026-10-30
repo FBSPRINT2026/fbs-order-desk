@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCustomer, getOrder, PrintavoError, type PvCustomer } from "@/lib/printavo";
-import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archive";
+import { fileDone, fileUrls, orderFiles, storedPath, type PvAddress, type PvOrder } from "@/lib/archive";
 import { pvHandle } from "@/lib/printavoNames";
 import { fetchFileMeta, saveFileMeta } from "@/lib/printavoFileMeta";
 
@@ -110,7 +110,7 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   if (!cid) throw new Error("This order has no customer in Printavo.");
   const { data: prev } = await sb.from("archived_orders").select("id, files, data_hash").eq("printavo_id", o.id).maybeSingle();
   const urls = fileUrls(o);
-  const kept = Object.fromEntries(Object.entries((prev?.files || {}) as Record<string, string>).filter(([u, path]) => urls.includes(u) && path !== "failed"));
+  const kept = Object.fromEntries(Object.entries((prev?.files || {}) as Record<string, string>).filter(([u, path]) => urls.includes(u) && fileDone(path)));
   // nothing changed since the last import: don't rewrite the whole order (the database's heaviest write)
   const hash = createHash("sha1").update(JSON.stringify(o)).digest("hex");
   if (prev?.id && prev.data_hash === hash && cid) return { id: prev.id as string, visualId: o.visualId, filesLeft: urls.length - Object.keys(kept).length, warnings: o.warnings || [], order: o };
@@ -125,6 +125,14 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   if (error || !data) throw new Error("Couldn't save: " + (error?.message || "unknown"));
   return { id: data.id, visualId: o.visualId, filesLeft: urls.length - Object.keys(kept).length, warnings: o.warnings || [], order: o };
 }
+
+/** `url` is something Filestack made from a file (not the file itself) and that file's copy is in `files` */
+export function fromCopied(url: string, files: Record<string, string>): boolean {
+  const h = pvHandle(url);
+  if (!h || isOriginal(url, h)) return false;
+  return Object.entries(files).some(([u, p]) => u !== url && !!storedPath(p) && pvHandle(u) === h && isOriginal(u, h));
+}
+const isOriginal = (url: string, h: string) => new RegExp(`^https?://[^/]+/(?:api/file/)?${h}(?:[?+/]|$)`).test(url);
 
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg", "application/pdf": "pdf", "application/postscript": "ai", "application/illustrator": "ai", "image/vnd.adobe.photoshop": "psd", "application/zip": "zip" };
 
@@ -161,7 +169,7 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
       // mockups a name), kept in printavo_file_names and used for our copy's name
       let orig = names.get(url) || "";
       const h = pvHandle(url);
-      if (h && new RegExp(`^https?://[^/]+/(?:api/file/)?${h}(?:[?+/]|$)`).test(url)) {
+      if (h && isOriginal(url, h)) {
         try {
           const m = await fetchFileMeta(h, 6000);
           await saveFileMeta(sb, h, m);
@@ -182,13 +190,16 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
       }
       files[url] = path;
       // saved after every file, so a run that gets cut off never copies the same file twice
-      await sb.from("archived_orders").update({ files, files_copied: Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length }).eq("id", row.id);
+      await sb.from("archived_orders").update({ files, files_copied: Object.values(files).filter(fileDone).length }).eq("id", row.id);
     } catch (e) {
       if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) break; // out of time, not a bad file
       failed.push(`${url.slice(0, 80)}: ${e instanceof Error ? e.message : e}`); files[url] = "failed";
     }
   }
-  const copied = Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length;
+  // a preview or conversion Filestack makes from a file (…/resize=…/<handle>, …/output=format:png/…) that won't download
+  // isn't a missing file when the file itself is copied: it's marked "from-original" and the original stands in for it
+  for (const [u, p] of Object.entries(files)) if (p === "failed" && fromCopied(u, files)) files[u] = "from-original";
+  const copied = Object.values(files).filter(fileDone).length;
   await sb.from("archived_orders").update({ files, files_copied: copied }).eq("id", row.id);
   const left = fileUrls(o).filter((u) => !files[u]).length;
   return { copied, total: fileUrls(o).length, left, failed, ...(storageFull ? { storageFull } : {}) };

@@ -5,6 +5,7 @@
  * instead: Supabase signed links take `download=<name>`, which saves the file under that name.
  * Shared by the server and the browser.
  */
+import { storedPath } from "@/lib/archive";
 
 /** The Filestack handle in a Printavo file link: the LAST one (a thumbnail link wraps the original's link). */
 export function pvHandle(url?: string | null): string | null {
@@ -40,7 +41,7 @@ export function downloadUrl(signed: string | undefined | null, name?: string | n
 
 /** What a copied file from Printavo is called: Printavo's own name, else the original upload's, else our copy's. */
 export function pvFileName(o: { url?: string | null; name?: string | null; path?: string | null; names?: Record<string, string> | null }): string {
-  const path = o.path && !["failed", "too-big"].includes(o.path) ? o.path : "";
+  const path = storedPath(o.path);
   const h = pvHandle(o.url) || pathHandle(path);
   const orig = h ? o.names?.[h] : "";
   const given = (o.name || "").trim();
