@@ -17,3 +17,14 @@ export function thirdPartyLabel(tp: ThirdParty | null | undefined, full = false)
   const a = tp.account.replace(/\s+/g, "");
   return `bill third party (${tp.carrier ? `${tp.carrier} ` : ""}acct ${full ? a : `••••${a.slice(-4)}`}${tp.name ? `, ${tp.name}` : ""})`;
 }
+
+/**
+ * Shipped on the customer's own carrier account (customers.ship_on, Oct 30: Nine18 on "Nine18 FEDEX"): the ship method is
+ * the service plus the account's name, "FedEx Ground · Nine18 FEDEX". They pay the carrier: no rates, $0 shipping.
+ */
+export const ON_ACCOUNT = " · ";
+export const onAccountMethod = (service: string, account: string) => `${service}${ON_ACCOUNT}${account}`;
+/** the account named in a ship method ("FedEx Ground · Nine18 FEDEX" → "Nine18 FEDEX"), else "" */
+export const accountOfMethod = (method: string | null | undefined) => { const i = (method || "").indexOf(ON_ACCOUNT); return i > 0 ? (method || "").slice(i + ON_ACCOUNT.length).trim() : ""; };
+/** shipping paid by someone else: their own account picked in the ship method, or Bill third party */
+export const notOurShipping = (o: { delivery_method?: string | null; ship_method?: string | null; third_party?: ThirdParty | null }) => o.delivery_method === "ship" && (!!accountOfMethod(o.ship_method) || isThirdParty(o));

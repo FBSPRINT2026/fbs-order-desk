@@ -1,5 +1,5 @@
 "use client";
-import { carrierOf, isThirdParty, type ThirdParty } from "@/lib/thirdParty";
+import { accountOfMethod, carrierOf, isThirdParty, notOurShipping, onAccountMethod, type ThirdParty } from "@/lib/thirdParty";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
@@ -187,6 +187,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
+  // the customer's own carrier account (customers.ship_on, e.g. Nine18 FEDEX): its name and carrier, for the ship methods
+  const [ownAcct, setOwnAcct] = useState<{ id: string; name: string; carrier: string } | null>(null);
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
   type Tab = "order" | "prod" | "goods" | "msg" | "pay" | "act";
   const [tab, setTabS] = useState<Tab>("order");
@@ -1734,24 +1736,29 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </section>
           {/* Delivery: its own panel under Totals (Oct 29, Nick: "it should be delivery and should be its own panel so that you
               can get the quote in there") */}
+          {cust?.ship_on && ownAcct?.id !== cust.ship_on && <OwnAcctLoad id={cust.ship_on} onLoad={setOwnAcct} />}
           <section className="panel dl-panel">
             <div className="panel-h"><h2>Delivery</h2>{o.due_date && <span className="faint">In hands {new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>}</div>
             <div className="panel-b stack">
               <div className="dl-seg" role="group" aria-label="Pickup, ship or delivery">
                 {([["pickup", "Pickup"], ["ship", "Ship"], ["deliver", "Deliver"], ["tbd", "TBD"]] as [Delivery, string][]).map(([k, l]) => <button key={k} type="button" className={(o.delivery_method || "pickup") === k ? "on" : ""} aria-pressed={(o.delivery_method || "pickup") === k}
-                  onClick={() => patch((d) => { d.delivery_method = k; if (k !== "pickup" && k !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (k === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>{l}</button>)}
+                  onClick={() => patch((d) => { d.delivery_method = k; if (k !== "pickup" && k !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (k === "ship" && !d.ship_method) d.ship_method = ownAcct && cust?.ship_on === ownAcct.id ? onAccountMethod(`${ownAcct.carrier} Ground`, ownAcct.name) : "UPS Ground"; if (k === "ship" && accountOfMethod(d.ship_method)) d.fees = d.fees.filter((f) => !isShipFee(f)); })}>{l}</button>)}
               </div>
               <div className="grid jd-grid">
                   {o.delivery_method === "ship" && (
                     <div className="field"><label htmlFor="o-sm">Ship method</label>
-                      <select id="o-sm" value={matchShipMethod(o.ship_method) || (o.ship_method ? "__other" : "")} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; })}>
+                      <select id="o-sm" value={accountOfMethod(o.ship_method) ? o.ship_method : matchShipMethod(o.ship_method) || (o.ship_method ? "__other" : "")} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; if (accountOfMethod(d.ship_method)) d.fees = d.fees.filter((f) => !isShipFee(f)); })}>
                         <option value="">Choose…</option>
+                        {/* their own account first (Oct 30, Nick: "FedEx 918 ground account… just add it from the dropdown… $0") */}
+                        {ownAcct && cust?.ship_on === ownAcct.id && <optgroup label={`${ownAcct.name} (their account: $0)`}>{SHIP_METHODS.filter((m) => m.startsWith(ownAcct.carrier)).map((m) => <option key={m} value={onAccountMethod(m, ownAcct.name)}>{onAccountMethod(m, ownAcct.name)}</option>)}</optgroup>}
+                        {accountOfMethod(o.ship_method) && !(ownAcct && accountOfMethod(o.ship_method) === ownAcct.name) && <option value={o.ship_method}>{o.ship_method}</option>}
                         <optgroup label="UPS">{SHIP_METHODS.filter((m) => m.startsWith("UPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
                         <optgroup label="FedEx">{SHIP_METHODS.filter((m) => m.startsWith("FedEx")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
                         <optgroup label="USPS">{SHIP_METHODS.filter((m) => m.startsWith("USPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
                         <option value="__other">Other…</option>
                       </select>
-                      {o.ship_method && !matchShipMethod(o.ship_method) && <input type="text" aria-label="Other ship method" placeholder="Freight, customer's account #…" value={o.ship_method.trim()} onChange={(e) => patch((d) => { d.ship_method = e.target.value || " "; })} style={{ marginTop: 4 }} />}
+                      {accountOfMethod(o.ship_method) && <p className="faint" style={{ margin: "4px 0 0" }}>Ships on {accountOfMethod(o.ship_method)}: they pay FedEx, no shipping charge.</p>}
+                      {o.ship_method && !matchShipMethod(o.ship_method) && !accountOfMethod(o.ship_method) && <input type="text" aria-label="Other ship method" placeholder="Freight, customer's account #…" value={o.ship_method.trim()} onChange={(e) => patch((d) => { d.ship_method = e.target.value || " "; })} style={{ marginTop: 4 }} />}
                     </div>
                   )}
                   </div>
@@ -1799,7 +1806,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
               {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
-          {o.delivery_method === "ship" && !isThirdParty(o) && seesMoney && calc && (
+          {o.delivery_method === "ship" && !notOurShipping(o) && seesMoney && calc && (
             <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}
               garments={o.groups.flatMap((g) => g.lines.map((l) => {
                 // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
@@ -2019,4 +2026,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 /** QuickBooks' mark, small, in QuickBooks green (the order's "in QuickBooks" check and the delete question) */
 function QbMark() {
   return <QbLogo className="qb-mark" />;
+}
+
+/** loads the name and carrier of a customer's own EasyPost carrier account (customers.ship_on) once */
+function OwnAcctLoad({ id, onLoad }: { id: string; onLoad: (a: { id: string; name: string; carrier: string }) => void }) {
+  useEffect(() => {
+    let live = true;
+    fetch("/api/shipping/accounts").then((r) => r.json()).then((j) => {
+      const a = (j.accounts || []).find((x: { id: string }) => x.id === id) as { id: string; description: string; readable: string } | undefined;
+      if (live) onLoad({ id, name: a ? a.description || `${a.readable} account` : "their account", carrier: a && /ups/i.test(a.readable) ? "UPS" : "FedEx" });
+    }).catch(() => { if (live) onLoad({ id, name: "their account", carrier: "FedEx" }); });
+    return () => { live = false; };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }
