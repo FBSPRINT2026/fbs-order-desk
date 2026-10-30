@@ -16336,8 +16336,6 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 @media (max-width:900px){.pc-keyed-f{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pc-keyed-f .lbl{height:22px}
 .pc-keyed-st{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}
-.pc-per{display:inline-flex;align-items:center;gap:1px}
-.pc-per input{width:44px;height:24px;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px;text-align:right;color:var(--ink)}
 .pc-keyed-more{padding:0 16px 12px;font-size:12.5px}
 .pc-keyed-f .field{display:flex;flex-direction:column;gap:5px;margin:0}
 .pc-keyed-f .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0}

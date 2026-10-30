@@ -343,14 +343,12 @@ function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: 
   const k: Keyed = r.line?.keyed || {};
   const [hours, setHours] = useState(k.hours != null ? String(k.hours) : "");
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries((setup.extras || []).map((x) => { const v = k.extras?.[x.key]; return [x.key, v ? String((x.per != null && v.mode !== "dollars" ? v.miles : v.amount) ?? "") : ""]; })));
-  // the rate per mile, editable for this check (Oct 30, Nick: "edit the cost per mile… 25 cents or 40 cents")
-  const [pers, setPers] = useState<Record<string, string>>(() => Object.fromEntries((setup.extras || []).filter((x) => x.per != null).map((x) => [x.key, (k.extras?.[x.key]?.per ?? x.per ?? 0).toFixed(2)])));
   const [bonus, setBonus] = useState(r.line?.bonus != null ? String(r.line.bonus) : "");
   // the check's lines, shown when asked (Oct 30, Nick: "hidden unless you click show details")
   const [details, setDetails] = useSticky("payroll.keyedDetails", false);
   const num = (t: string) => (t.trim() === "" || isNaN(+t) ? null : +t);
   const save = (patch: Partial<Keyed>) => onSave({ ...k, ...patch, extras: { ...(k.extras || {}), ...(patch.extras || {}) } });
-  const setExtra = (key: string, v: { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null; per?: number | null }) => save({ extras: { [key]: { ...(k.extras?.[key] || {}), ...v } } });
+  const setExtra = (key: string, v: { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null }) => save({ extras: { [key]: { ...(k.extras?.[key] || {}), ...v } } });
   const rate = r.pay.rate;
   return (
     <div className="pc-keyed">
@@ -374,9 +372,7 @@ function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: 
               <span className="pc-in">{dollars && <i>$</i>}<input type="number" min="0" step={dollars ? "0.01" : "1"} inputMode="decimal" aria-label={dollars ? `${x.label} dollars` : `${x.label} miles`} value={vals[x.key] ?? ""} disabled={done} placeholder="0"
                 onChange={(e) => setVals((s) => ({ ...s, [x.key]: e.target.value }))}
                 onBlur={() => setExtra(x.key, dollars ? { mode: x.per != null ? "dollars" : undefined, amount: num(vals[x.key] || "") } : { mode: "miles", miles: num(vals[x.key] || "") })} />
-                {!dollars && <small className="pc-per">miles @ $<input type="number" min="0" step="0.01" inputMode="decimal" aria-label={`${x.label}: cost per mile`} title="Cost per mile for this check" value={pers[x.key] ?? ""} disabled={done}
-                  onChange={(e) => setPers((s) => ({ ...s, [x.key]: e.target.value }))}
-                  onBlur={() => { const n = num(pers[x.key] || ""); setExtra(x.key, { per: n != null && n > 0 && n !== x.per ? n : null }); if (n == null || n <= 0) setPers((s) => ({ ...s, [x.key]: (x.per || 0).toFixed(2) })); }} /></small>}
+                {!dollars && <small>miles @ ${(x.per || 0).toFixed(2)}</small>}
                 {dollars && x.per != null && <small>dollar amount</small>}</span>
               <span className="faint">{$(line.amount)}</span></div>
           );
