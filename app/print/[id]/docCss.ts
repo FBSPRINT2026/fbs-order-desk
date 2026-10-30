@@ -513,4 +513,20 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 /* no mockup for this color: the print's logo on the garment's color */
 .pdoc .iv2-th.none.lg{background:var(--sc);display:block;padding:.09in}
 .pdoc .iv2-th.none.lg img{width:100%;height:100%;object-fit:contain;display:block}
+/* the decoration method line: the same small type as the print lines, never shortened by InkFit */
+.pdoc .iv2-how span{font-size:var(--ikb);color:var(--ink2);line-height:1.35}
+/* setup charges, fees and 2XL+ materials sit in the totals box's column, label and amount together (Oct 30, Nick: "line up
+   with the totals box"); finishing (a note with no amount) keeps the full width */
+.pdoc .iv2-set{width:2.9in;margin-left:auto;grid-template-columns:minmax(0,1fr) auto}
+.pdoc .iv2-set.fin{width:auto;margin-left:0;grid-template-columns:1fr}
+.pdoc .iv2-set.fin span{white-space:normal;text-align:left}
+.pdoc .iv2-g.iv2-fees{border-top:0;margin-top:2px}
+/* big orders (t4): the decoration method once, in the group's heading, instead of on every garment */
+.pdoc .iv2-gm{display:none;font-family:"Public Sans",sans-serif;font-weight:600;font-size:9pt;color:var(--ink3)}
+.pdoc .sheet.iv2.t4 .iv2-gm{display:inline}
+.pdoc .sheet.iv2.t4 .iv2-how{display:none}
+.pdoc .sheet.iv2.t4 .iv2-how em,.pdoc .sheet.iv2.t4 .iv2-how span{display:none}
+.pdoc .sheet.iv2.t4 .iv2-sum{margin-top:8px}
+.pdoc .sheet.iv2.t4 .iv2-ln{padding:3px 0 4px}
+.pdoc .sheet.iv2.t4 .iv2-who{margin:6px 0 0}
 `;

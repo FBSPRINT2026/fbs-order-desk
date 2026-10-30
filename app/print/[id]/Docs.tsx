@@ -629,6 +629,8 @@ function invoiceSizes(sizes: Record<string, number> | undefined) {
   return SIZES.filter((z) => base.has(z) || has(z)).map((z) => ({ z, n: +(sizes?.[z] || 0), extra: base.size > 0 && !base.has(z) }));
 }
 const flat = (x: string | null | undefined) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/** a print's decoration method as the invoice says it */
+const DECO: Record<string, string> = { screen: "Screen printing", embroidery: "Embroidery", dtf: "Heat press", heat: "Heat press", transfer: "Heat press" };
 /** a ship-to address made tidy for the invoice's box (Oct 30, Nick: "it just looks like bad text in there"): a label someone
  *  typed into it ("Deliver-TO ADDRESS:") is dropped, a note in brackets ("(Will be couriered)") goes small under it, and
  *  ALL-CAPS lines are written normally (short words like TX, USA, PO keep their capitals); the first line is the name */
@@ -687,7 +689,7 @@ export function InvoiceDoc(p: DocData) {
         const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
           <div className="iv2-g" key={g.id}>
-            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
+            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => DECO[d.method] || METHODS[d.method] || d.method).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
             {lines.map(({ l, li, lc }) => {
@@ -710,6 +712,9 @@ export function InvoiceDoc(p: DocData) {
                       <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>
                       {prints.length > 0 && (
                         <div className="iv2-prs">
+                          {/* how it's decorated, then each spot (Oct 30, Nick: "right underneath sizes… screen printing, embroidery,
+                              or heat press, whatever it is, then go into the front") */}
+                          <div className="iv2-pr iv2-how"><em>Decoration</em><span>{[...new Set(prints.map(({ d }) => DECO[d.method] || METHODS[d.method] || d.method).filter(Boolean))].join(" + ")}</span></div>
                           {prints.map(({ d, inks }) => (
                             <div className="iv2-pr" key={d.id}>
                               <em>{d.location || "Print"}</em>
@@ -725,7 +730,7 @@ export function InvoiceDoc(p: DocData) {
                 </div>
               );
             })}
-            {gc.finishing.length > 0 && <div className="iv2-set"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span><span /></div>}
+            {gc.finishing.length > 0 && <div className="iv2-set fin"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span></div>}
             {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}
             {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
             {gc.materials > 0 && <div className="iv2-set"><span>2XL+ materials</span><span>{money(gc.materials)}</span></div>}
