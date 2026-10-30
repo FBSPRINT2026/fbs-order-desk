@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calcOrder, lineQty, mergeSettings, orderGroups, type Order } from "@/lib/pricing";
 import { accountOwners } from "@/lib/accountOwners";
+import { mailRows, type MailAct, type MailSug } from "@/lib/inbox";
 
 /**
  * The Job Center (Oct 29, Nick: "this is basically where I'm going to keep everything pre-production… it doesn't always
@@ -75,10 +76,22 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   // Incoming · Leads: orders the AI read in an email or a ClickUp job, not made yet
   type Lead = { id: string; title: string; body: string; customer_id: string | null; activity_id: string | null; created_at: string; customers?: { company?: string; name?: string } | null };
   const ls = (leads || []) as unknown as Lead[];
-  const acts = await inChunks<{ id: string; subject: string | null; kind: string }>(ls.map((l) => l.activity_id || "").filter(Boolean), (p) => admin.from("activities").select("id, subject, kind").in("id", p), 100);
+  type Act = MailAct & { subject: string | null; kind: string; order_id: string | null };
+  const acts = await inChunks<Act>(ls.map((l) => l.activity_id || "").filter(Boolean), (p) => admin.from("activities").select("id, subject, kind, order_id, direction, occurred_at, external_id, thread_id, customer_id, from_email, to_email, meta").in("id", p), 100);
   const actOf = new Map(acts.map((a) => [a.id, a]));
+  // a lead stays only while its source still waits on us, by the rules the Inbox and ClickUp Jobs already use: an email
+  // that still needs us (not answered, archived or marked no reply: lib/inbox.ts), a ClickUp job still waiting (not
+  // ticked In Printavo, not closed, no order: clickup_tasks.waiting); neither once an order was made from it
+  const mails = acts.filter((a) => a.kind === "email");
+  const mailFrom = mails.reduce((m, a) => (a.occurred_at < m ? a.occurred_at : m), new Date().toISOString());
+  const { data: outs } = mails.length ? await admin.from("activities").select("id, direction, occurred_at, external_id, thread_id, customer_id, from_email, to_email, meta").eq("kind", "email").eq("direction", "out").gte("occurred_at", mailFrom).limit(5000) : { data: [] };
+  const needs = new Set(mailRows([...mails, ...((outs || []) as MailAct[])], [] as MailSug[]).filter((r) => !r.answered && !r.archived && !r.ccOnly && !r.x.meta?.no_reply).map((r) => r.x.id));
+  const cuIds = acts.filter((a) => a.kind === "clickup").map((a) => String((a.meta as { clickup?: { id?: string } } | null)?.clickup?.id || "")).filter(Boolean);
+  const cuWaiting = new Set((await inChunks<{ id: string }>(cuIds, (p) => admin.from("clickup_tasks").select("id").in("id", p).eq("waiting", true), 100)).map((t) => t.id));
+  const stillOpen = (a?: Act) => !a ? true : a.order_id ? false : a.kind === "clickup" ? cuWaiting.has(String((a.meta as { clickup?: { id?: string } } | null)?.clickup?.id || "")) : a.kind === "email" ? needs.has(a.id) : true;
   for (const l of ls) {
     const a = l.activity_id ? actOf.get(l.activity_id) : undefined;
+    if (!stillOpen(a)) continue;
     const said = (l.body || "").split("\n")[0].trim();
     out.push({ key: `lead:${l.id}`, type: "lead", steps: ["leads"], at: l.created_at, due: null, customer: cust(l.customers) || l.title.replace(/^New order in (.*)'s email$/, "$1"), customerId: l.customer_id,
       title: a?.subject || said || l.title, sub: `${a?.kind === "clickup" ? "ClickUp" : "Email"}${said && a?.subject ? ` · ${said}` : ""}`, depts: [], tracks: (l.body || "").includes("Still need:") ? [{ k: "numbers", state: "needed", label: "Has questions to answer" }] : [],
