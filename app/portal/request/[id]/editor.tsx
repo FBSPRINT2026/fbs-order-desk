@@ -1,7 +1,7 @@
 "use client";
 import { bySupplierStyle } from "@/lib/garmentSup";
+import BackLink from "@/components/BackLink";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import type { NeckLabelSet } from "@/lib/neckLabels";
@@ -401,7 +401,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
       )}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
-          <div><Link href={backHref} className="back">← Dashboard</Link></div>
+          <BackLink href={backHref} label="Dashboard" trail={false} />
           <h1 style={{ margin: "6px 0 0" }}>Build Your Order</h1>
         </div>
         <div className="row"><span className="save-state">{state}</span>

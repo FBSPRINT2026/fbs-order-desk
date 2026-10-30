@@ -1,5 +1,5 @@
 import { proofViewed } from "@/lib/proofs";
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -57,7 +57,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s art review. Buttons are turned off in preview.</div>}
       <main className="p-main ar">
-        <Link className="back" href={back}>← Order #{o.number}</Link>
+        <BackLink href={back} label={`Order #${o.number}`} trail={false} />
         <div className="page-head" style={{ margin: 0 }}><div><h1>Review your artwork</h1>
           <div className="muted" style={{ marginTop: 10 }}>{g.name || o.nickname} · proof sent {sent} · look over the shirt, every print and its size, then tell us how to go ahead.</div></div></div>
 

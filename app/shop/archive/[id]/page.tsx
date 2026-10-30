@@ -5,7 +5,6 @@ import { bySizeOrder } from "@/lib/sizeOrder";
 import JobFiles from "@/components/job/JobFiles";
 import JobTalk from "@/components/JobTalk";
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { fileUrls, type ArchivedRow } from "@/lib/archive";
 import ArchivedOrderView, { History } from "@/components/ArchivedOrderView";
@@ -48,7 +47,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   }, [id, rev]);
 
   if (state === "loading") return <div className="empty">Loading…</div>;
-  if (!row) return <><Link className="back" href="/shop/customers">← Customers</Link><div className="empty">This archived order doesn&apos;t exist.</div></>;
+  if (!row) return <><BackLink href="/shop/customers" label="Customers" /><div className="empty">This archived order doesn&apos;t exist.</div></>;
   return (
     <>
       <BackLink href={`/shop/customers/${row.customer_id}?area=orders`} label={`${company || "Customer"} · Orders`} />

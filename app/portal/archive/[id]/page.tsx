@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,7 +37,7 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal.</div>}
       <main className="p-main">
-        <Link className="back" href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`}>← Your orders</Link>
+        <BackLink href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`} label="Your orders" trail={false} />
         <ArchivedPortalView o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} />
       </main>
     </>

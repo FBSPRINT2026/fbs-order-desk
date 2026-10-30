@@ -1,10 +1,10 @@
 import PortalGoods from "@/components/PortalGoods";
+import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { proofViewed } from "@/lib/proofs";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -121,7 +121,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
     <>
       {preview && <div className="preview-bar">Preview of {ctx.preview!.company || ctx.preview!.name}&apos;s portal. Buttons are turned off in preview.</div>}
       <main className="p-main">
-        <Link className="back" href={back}>← All orders</Link>
+        <BackLink href={back} label="All orders" trail={false} />
         <div className="page-head" style={{ margin: 0 }}>
           <div>
             <div className="eyebrow">{o.type === "quote" ? "Quote" : "Order"} #{o.number}</div>

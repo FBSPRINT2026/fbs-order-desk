@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,7 +43,7 @@ export default async function SewoutReview({ params, searchParams }: { params: P
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s sew-out approval. Buttons are turned off in preview.</div>}
       <main className="p-main ar">
-        <Link className="back" href={`/portal/orders/${id}${qs}`}>← Order #{o.number}</Link>
+        <BackLink href={`/portal/orders/${id}${qs}`} label={`Order #${o.number}`} trail={false} />
         <div className="page-head" style={{ margin: 0 }}><div><h1>Approve your sew-out</h1>
           <div className="muted" style={{ marginTop: 10 }}>{g?.name || o.nickname || `Order #${o.number}`} · version {s.version}{s.sent_at ? ` · sent ${fmtStamp(s.sent_at)}` : ""} · this is your logo stitched on our machine. Check it, then tell us how to go ahead.</div></div></div>
         {newer && <div className="ar-ann" style={{ marginTop: 12 }}>There&apos;s a newer sew-out of this logo. <Link href={`/portal/orders/${id}/sewout/${newer.id}${qs}`}>See the newest one</Link>.</div>}

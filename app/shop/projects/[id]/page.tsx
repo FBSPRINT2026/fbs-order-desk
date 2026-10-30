@@ -1,7 +1,6 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
 import BackLink from "@/components/BackLink";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useShopData } from "@/lib/shopData";
@@ -37,7 +36,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
   const [links, setLinks] = useState<Record<string, string | null>>({});
-  if (missing) return <><Link className="back" href="/shop/projects">← Projects</Link><div className="empty">This project doesn&apos;t exist.</div></>;
+  if (missing) return <><BackLink href="/shop/projects" label="Projects" /><div className="empty">This project doesn&apos;t exist.</div></>;
   if (!p) return <div className="empty">Loading…</div>;
   const cust = customers[p.customer_id];
   const mine = all.filter((o) => o.customer_id === p.customer_id);

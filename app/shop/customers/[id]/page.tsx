@@ -6,7 +6,6 @@ import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import CustomerBrands from "@/components/CustomerBrands";
 import { use, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/lib/pricing";
@@ -183,7 +182,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   }
 
   if (loading) return <div className="empty">Loading…</div>;
-  if (!c) return <><Link className="back" href="/shop/customers">← Customers</Link><div className="empty">This customer doesn&apos;t exist.</div></>;
+  if (!c) return <><BackLink href="/shop/customers" label="Customers" /><div className="empty">This customer doesn&apos;t exist.</div></>;
 
   return (
     <>

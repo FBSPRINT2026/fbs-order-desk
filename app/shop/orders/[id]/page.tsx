@@ -1152,7 +1152,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     sb.from("order_goods").select("status, updated_by").eq("order_id", o.id).maybeSingle().then(({ data }) => setGoodsSt((data as { status: string; updated_by: string | null } | null) || null), () => setGoodsSt(null));
   }, [o?.id, o?.price_type]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (missing) return <><Link className="back" href="/shop/orders">← Orders</Link><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
+  if (missing) return <><BackLink href="/shop/orders" label="Orders" /><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
   if (!o || !calc) return <div className="empty">Loading…</div>;
 
   const st = ST[o.status] || ST.quote;
@@ -1209,10 +1209,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {/* back to where you came from (Oct 23, Nick: "it's just supposed to go from wherever you were last… I was in the
           order screen, so it should go back to the order screen"): the page before this one in the tab's trail, the email
           (in Email, not Conversations) only when that's where you were or the order was opened on its own */}
+      {/* the back arrow beside the title (Oct 29, Nick: option A), saving first when it goes back to where you came from */}
       {backTo
-        ? <button type="button" className="back back-btn" title={`Saves this order, then goes back to ${backTo.label}`} onClick={async () => { if (timer.current) await save(); router.push(backTo.url); }}>← Save &amp; return to {/^\/shop\/(inbox|conversations)/.test(backTo.path) ? "the email" : backTo.label}</button>
+        ? <BackLink href={backTo.url} label={/^\/shop\/(inbox|conversations)/.test(backTo.path) ? "the email" : backTo.label} saves go={async () => { if (timer.current) await save(); router.push(backTo.url); }} />
         : fromEmail
-        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { if (timer.current) await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
+        ? <BackLink href={`/shop/inbox?open=${fromEmail}`} label="the email" saves go={async () => { if (timer.current) await save(); router.push(`/shop/inbox?open=${fromEmail}`); }} />
         : <BackLink href="/shop/orders" label="Orders" />}
       {/* a draft (Oct 24, Nick: "only assign a number… once it's either saved, sent… if they click not, then it exits,
           nothing happens to it"): every change is kept as you go, but it's not an order until it's saved or sent */}
@@ -1636,10 +1637,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <section className="panel jd-panel">
               {/* the job and its type (Oct 29, Nick: "job details and type… production date above the in-hands date… a clock
                   symbol to set a time… firm and rush… little check boxes… in the header… job type at the bottom… stand out") */}
-              <div className="panel-h"><h2>Job details and type</h2>
+              <div className="panel-h"><h2>Job details &amp; type</h2>
                 <span className="jd-flags">
-                  <label className={"jd-ck firm" + (o.firm ? " on" : "")} title="Firm in-hands date: it can't move (⛰️ on the production calendar)"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} />Firm</label>
-                  <label className={"jd-ck rush" + (o.rush ? " on" : "")} title="Rush job (🔥 on the production calendar)"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} />Rush</label>
+                  <label className={"jd-ck k-firm" + (o.firm ? " on" : "")} title="Firm in-hands date: it can't move (⛰️ on the production calendar)"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} />Firm</label>
+                  <label className={"jd-ck k-rush" + (o.rush ? " on" : "")} title="Rush job (🔥 on the production calendar)"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} />Rush</label>
                 </span>
               </div>
               <div className="panel-b stack">

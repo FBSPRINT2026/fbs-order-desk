@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import PortalSettings from "@/components/PortalSettings";
@@ -15,7 +15,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s settings. Saving is turned off in preview.</div>}
       <main className="p-main ps">
-        <Link href={`/portal${qs}`} className="back">← Dashboard</Link>
+        <BackLink href={`/portal${qs}`} label="Dashboard" trail={false} />
         <div className="page-head"><div><h1>Settings</h1><div className="eyebrow" data-notranslate>{c.company || c.name || "Your company"}</div></div></div>
         <PortalSettings staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} mailOn={(c as unknown as { message_email?: boolean }).message_email !== false} preview={!!ctx.preview} customerId={String(c.id)} logoUrl={logoUrl} shopName={ctx.settings.shop.name} c={{ address: c.address || "", ship_address: c.ship_address || "" }} />
       </main>

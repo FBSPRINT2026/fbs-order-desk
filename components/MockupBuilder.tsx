@@ -1,6 +1,6 @@
 "use client";
+import BackLink from "@/components/BackLink";
 import { bySupplierStyle } from "@/lib/garmentSup";
-import Link from "next/link";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
 import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
@@ -3465,8 +3465,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         );
       })()}
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
-      {!portal && orderId ? <a className="back" href={`/shop/orders/${orderId}`}>← Order #{order?.number || ""}</a>
-        : <Link className="back" href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"}>← {portal ? (requestId ? "Back to the order" : "Dashboard") : "Artwork"}</Link>}
+      {!portal && orderId ? <BackLink href={`/shop/orders/${orderId}`} label={`Order #${order?.number || ""}`} hard trail={false} />
+        : <BackLink href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"} label={portal ? (requestId ? "the order" : "Dashboard") : "Artwork"} trail={!portal} />}
       {portal && lock && <div className="mk-lockbar" role="note">
         <span className="mk-lockbar-l"><span className="mk-lockbar-fbs" aria-hidden>fbs</span><b>{lock.fbs ? "FBS made mockup" : "Ordered mockup"}</b></span>
         <span className="mk-lockbar-m"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>{lock.orderNo ? `On order #${lock.orderNo}` : "Only editable by FBS staff"}</span>
