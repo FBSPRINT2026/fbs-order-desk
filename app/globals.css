@@ -16274,3 +16274,27 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
   html body .ord .imp-mock > .btn.danger{grid-column:1 / 3}
   html body .ord .imp-mock > .mk-when{grid-column:3;white-space:nowrap}
 }
+
+/* ===== Payroll Center (Oct 30, Nick): payday in steps, contractor checks, paycheck advances ===== */
+.pc-tbl{border:0;border-radius:0}
+.pc-tbl td,.pc-tbl th{white-space:nowrap}
+.pc-tbl tr.flag td{background:var(--danger-soft)}
+.pc-tbl .bad,.pc-warn .bad{color:var(--danger)}
+.pc-tbl .sub.bad{font-size:12px}
+.pc-ot{color:var(--warn);font-weight:700}
+.pc-ok{color:var(--ok);font-weight:700}
+.pc-wait{color:var(--warn);font-weight:700}
+.pc-money{width:92px;height:32px;text-align:right;font-variant-numeric:tabular-nums}
+.pc-adv{display:inline-flex;align-items:center;gap:6px}
+.pc-adv small{font-size:12px}
+.pc-payee{height:32px;max-width:240px}
+.pc-note{font-size:12.5px;color:var(--ink-3)}
+.pc-warn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--danger);border-radius:var(--r);background:var(--danger-soft);color:var(--ink);font-size:14px}
+.pc-warn .btn{margin-left:auto}
+.pc-msg{padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);font-size:14px;margin-bottom:12px}
+.pc-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:var(--surface-2);border-bottom:1px solid var(--line-2)}
+.pc-form .field{min-width:180px}
+.pc-form .field.pc-sm{min-width:0;width:120px}
+.pc-form .field.pc-note-f{flex:1 1 200px}
+.pc-form .field input,.pc-form .field select{height:36px}
+.pc-check{display:flex;align-items:center;gap:8px;font-size:14px;height:36px}

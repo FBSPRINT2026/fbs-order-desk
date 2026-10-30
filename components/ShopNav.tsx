@@ -33,6 +33,8 @@ const ICONS: Record<string, React.ReactNode> = {
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
   necks: <svg viewBox="0 0 24 24"><path d="M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3" /><path d="M8 3c1 2.5 7 2.5 8 0" /><path d="M8.5 7.5h7" /></svg>,
   qb: <QbLogo />,
+  // a bank check: the Payroll Center (Oct 30, Nick: "a little dollar sign or a check symbol")
+  payroll: <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><path d="M5.5 14.5h6M14.5 14.5h3.5" /><path d="M8.6 8.6c-.4-.4-1-.6-1.6-.6-.9 0-1.6.5-1.6 1.2 0 1.6 3.3.9 3.3 2.5 0 .7-.7 1.2-1.7 1.2-.7 0-1.3-.3-1.7-.7M7 7.3v.7M7 12.3v.7" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
@@ -301,6 +303,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
     {link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
     {link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
+    {/* payday: W-2 hours for QuickBooks Payroll, contractor checks, paycheck advances (Oct 30, Nick) */}
+    {link(["/shop/payroll", "payroll", "Payroll Center"])}
     {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
     {link(["/shop/necklines", "necks", "Necklines"])}
     {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
