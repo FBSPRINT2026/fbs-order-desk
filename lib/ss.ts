@@ -1,5 +1,5 @@
 import "server-only";
-import { SIZES } from "@/lib/pricing";
+import { SIZES, waistOf } from "@/lib/pricing";
 import { fabricLines } from "@/lib/fabric";
 import { parseInches, type GarmentSpecs } from "@/lib/garmentBody";
 
@@ -30,6 +30,9 @@ const SIZE_MAP: Record<string, string> = {
   NB: "NB", "0-3M": "NB", "3-6M": "6M", "6M": "6M", "06M": "6M", "6-12M": "12M", "12M": "12M", "12-18M": "18M", "18M": "18M", "18-24M": "24M", "24M": "24M",
   "2T": "2T", "3T": "3T", "4T": "4T", "5T": "5T", "5/6": "5T", "5/6T": "5T",
 };
+
+/** S&S's size name as ours: letters by the map, a waist (30, 32x30) as its waist (lib/pricing.ts waistOf) */
+const ssSize = (raw: string | null | undefined): string | undefined => { const k = (raw || "").toUpperCase().trim(); return SIZE_MAP[k] || waistOf(k) || undefined; };
 
 function mode(nums: number[]) {
   const c = new Map<number, number>();
@@ -121,7 +124,7 @@ export async function ssSpecs(styleID: number, youth?: boolean): Promise<Garment
   const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
   const sizes: GarmentSpecs["sizes"] = {};
   for (const r of Array.isArray(rows) ? rows : []) {
-    const raw = SIZE_MAP[(r.sizeName || "").toUpperCase().trim()] || (r.sizeName || "").toUpperCase().trim();
+    const raw = ssSize(r.sizeName) || (r.sizeName || "").toUpperCase().trim();
     const z = youth && YOUTH[raw] ? YOUTH[raw] : raw;
     const v = parseInches(r.value), n = (r.specName || "").toLowerCase();
     if (!z || v == null || /sleeve|neck|shoulder|inseam|waist|hip|rise/.test(n)) continue;
@@ -152,7 +155,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
   const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
   const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
   for (const p of prods) {
-    const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()];
+    const raw = ssSize(p.sizeName);
     const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
     if (!z) continue;
     const price = +(p.customerPrice || p.piecePrice || 0);
@@ -164,7 +167,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
   // each color's own price by size (colors can cost more than the style's usual price)
   const color_size_costs: Record<string, Record<string, number>> = {};
   for (const p of prods) {
-    const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()];
+    const raw = ssSize(p.sizeName);
     const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
     const v = +(p.customerPrice || p.piecePrice || 0);
     if (!z || !p.colorName || !(v > 0)) continue;
@@ -217,7 +220,7 @@ export async function ssSkus(styleIdOrQuery: number | string): Promise<{ styleID
   return {
     styleID: st.styleID, brand: st.brandName, style: st.styleName,
     skus: (Array.isArray(prods) ? prods : []).map((p) => {
-      const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()] || p.sizeName;
+      const raw = ssSize(p.sizeName) || p.sizeName;
       return { sku: p.sku, skuID_Master: p.skuID_Master, colorName: p.colorName, sizeName: p.sizeName, size: youth && YOUTH[raw] ? YOUTH[raw] : raw, price: +(p.customerPrice || p.piecePrice || 0), qty: p.qty || 0, warehouses: (p.warehouses || []).map((w) => ({ warehouseAbbr: w.warehouseAbbr, qty: w.qty || 0 })) };
     }),
   };

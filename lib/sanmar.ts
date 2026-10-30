@@ -1,5 +1,6 @@
 import "server-only";
 import { fabricLines } from "@/lib/fabric";
+import { WAIST_SIZES, waistOf } from "@/lib/pricing";
 
 /**
  * SanMar web services (SOAP, https://ws.sanmar.com:8080). Product data only for now (styles, colors, sizes, our
@@ -53,8 +54,8 @@ const SIZE_MAP: Record<string, string> = { XS: "XS", S: "S", M: "M", L: "L", XL:
 // youth styles label sizes XS-XL; ours are YXS-YXL (same rule as S&S)
 const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
 const isYouth = (basic: string) => /youth|toddler|kids|infant/i.test(`${tag(basic, "productTitle")} ${tag(basic, "category")}`);
-const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(); return youth && YOUTH[z] ? YOUTH[z] : z; };
-const ORDER = ["NB", "6M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
+const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUpperCase()] || waistOf(raw) || raw.toUpperCase(); return youth && YOUTH[z] ? YOUTH[z] : z; };
+const ORDER = ["NB", "6M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", ...WAIST_SIZES, "OS"];
 const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0; };
 
 export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; /** the flat back and the back on a model, apart (Oct 26) */ backFlat: string; backModel: string; swatch: string; brand: string; title: string; description: string; status: string; /** SanMar's ids for ordering (PO service) */ inventoryKey?: string; sizeIndex?: string; };

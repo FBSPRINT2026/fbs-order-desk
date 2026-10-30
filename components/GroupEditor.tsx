@@ -2,7 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -323,17 +323,19 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const colsFor = (l: GLine): string[] => {
     const run = (l.sizeRun || []).filter((z) => z !== ONE_SIZE);
     const has = (list: readonly string[]) => list.some((z) => l.sizes?.[z as keyof GLine["sizes"]]);
-    if (run.length) return [...run, ...[...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES].filter((z) => !run.includes(z) && l.sizes?.[z as keyof GLine["sizes"]])];
+    if (run.length) return [...run, ...[...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES, ...WAIST_SIZES].filter((z) => !run.includes(z) && l.sizes?.[z as keyof GLine["sizes"]])];
     const baby = has(BABY_SIZES), tod = has(TODDLER_SIZES), youth = !!g.youth || has(YOUTH_SIZES);
+    // waist sizes (shorts, pants: Oct 30, Nick): the waists it has, from the smallest to the largest, no letter sizes
+    if (has(WAIST_SIZES) && !has(ADULT_SIZES)) return WAIST_SIZES.filter((z) => (+z % 2 === 0 && +z <= 44) || l.sizes?.[z as keyof GLine["sizes"]]);
     // little ones only: no adult columns to scroll past
     if ((baby || tod) && !has(ADULT_SIZES)) return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : [])];
-    return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
+    return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES, ...WAIST_SIZES.filter((z) => l.sizes?.[z as keyof GLine["sizes"]])];
   };
   // one set of size columns for the whole group, so S sits under S on every garment even when one style has no XS
   // (Oct 20, Nick: "the sizes line up across multiple garments"); a size a garment doesn't come in is an empty slot
   const groupCols: string[] = (() => {
     const all = new Set(g.lines.filter((l) => !l.oneSize).flatMap((l) => colsFor(l)));
-    const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as readonly string[];
+    const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES, ...WAIST_SIZES] as readonly string[];
     return [...order.filter((z) => all.has(z)), ...[...all].filter((z) => !order.includes(z))];
   })();
   // How the garment rows fit (Oct 22, Nick: "dynamic column widths so that as the page shrinks, everything shrinks… keep

@@ -5,7 +5,7 @@
  * style doesn't come in belongs on its sister style: youth ↔ adult, toddler, infant. Shared by the server
  * (lib/garmentSister.ts finds the sister) and every place an order's garments are set (components/SizeFit.tsx).
  */
-import { BABY_SIZES, TODDLER_SIZES, YOUTH_SIZES, ONE_SIZE, SIZES } from "@/lib/pricing";
+import { BABY_SIZES, TODDLER_SIZES, YOUTH_SIZES, ONE_SIZE, SIZES, isWaist } from "@/lib/pricing";
 import { sizeRank } from "@/lib/sizeOrder";
 
 export type SizeKind = "infant" | "toddler" | "youth" | "adult";
@@ -16,6 +16,8 @@ export function sizeKind(z: string): SizeKind | null {
   if ((BABY_SIZES as readonly string[]).includes(z)) return "infant";
   if ((TODDLER_SIZES as readonly string[]).includes(z)) return "toddler";
   if ((YOUTH_SIZES as readonly string[]).includes(z)) return "youth";
+  // waist sizes (shorts, pants) have no youth / adult sister style to move to
+  if (isWaist(z)) return null;
   return (SIZES as readonly string[]).includes(z) ? "adult" : null;
 }
 

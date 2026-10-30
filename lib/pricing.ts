@@ -10,12 +10,22 @@ export const BABY_SIZES = ["NB", "6M", "12M", "18M", "24M"] as const;
 export const TODDLER_SIZES = ["2T", "3T", "4T", "5T"] as const;
 export const YOUTH_SIZES = ["YXS", "YS", "YM", "YL", "YXL"] as const;
 export const ADULT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
+/** Waist sizes for shorts and pants (Oct 30, Nick on AMS Baton Rouge's 9820 Burnside shorts: "you're not building in
+ *  waist sizes like they are sizes like small, medium, large… there's going to be products in the catalogs that are
+ *  waist sizes like 30"). Stored as the waist in inches ("30"), shown as 30". A waist × inseam ("32x30") is its waist. */
+export const WAIST_SIZES = ["28", "29", "30", "31", "32", "33", "34", "35", "36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58", "60"] as const;
 /** Quantity for one-size items (hats, koozies, bags). */
 export const ONE_SIZE = "OS" as const;
-/** Every size, smallest first (baby, toddler, youth, adult), then one-size. Orders store quantities keyed by these names. */
-export const SIZES = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES, ONE_SIZE] as const;
+/** Every size, smallest first (baby, toddler, youth, adult, waist), then one-size. Orders store quantities keyed by these names. */
+export const SIZES = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES, ...WAIST_SIZES, ONE_SIZE] as const;
+/** a waist size however it's written (30, 30", W30, 30W, 30 waist, 32x30, 32/30) → "30"; anything else → null */
+export function waistOf(raw: string): (typeof WAIST_SIZES)[number] | null {
+  const m = /^\s*W?\s*(\d{2})\s*(?:"|''|W|IN|INCH(?:ES)?|WAIST)?\s*(?:[X\/×]\s*\d{2}\s*(?:"|L|IN)?)?\s*$/i.exec(String(raw || ""));
+  return m && (WAIST_SIZES as readonly string[]).includes(m[1]) ? (m[1] as (typeof WAIST_SIZES)[number]) : null;
+}
+export const isWaist = (z: string) => (WAIST_SIZES as readonly string[]).includes(z);
 /** How a size is shown to people. */
-export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : z);
+export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : isWaist(z) ? `${z}"` : z);
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =

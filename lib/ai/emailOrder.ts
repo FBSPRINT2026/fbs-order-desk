@@ -340,7 +340,7 @@ function tool(finishingIds: string[]) {
           description: { type: "string", description: "Only how this group is packed, bagged, labeled or tagged (one short sentence); usually empty. Never how it's decorated (logo, size, placement, thread or ink, 'same as the X job': that's the prints, or notes when there are none), never who supplies the garments or their tracking (that's goods)" },
           garments: { type: "array", items: { type: "object", properties: {
             style: { type: "string" }, brand: { type: "string" }, description: { type: "string" }, color: { type: "string" },
-            sizes: { type: "object", description: "Size code to quantity, e.g. {\"6M\":5,\"12M\":5,\"2T\":4}", additionalProperties: { type: "integer" } },
+            sizes: { type: "object", description: "Size code to quantity, e.g. {\"6M\":5,\"12M\":5,\"2T\":4}. Shorts and pants in waist sizes: the waist in inches is the size, e.g. {\"30\":2,\"34\":3,\"36\":3} (a waist x inseam like 32x30 is its waist, 32), never OS with the waists in a note", additionalProperties: { type: "integer" } },
             reorder_line: { type: ["integer", "null"], description: "For a reorder: the L number of the past job's line this is" },
             note: { type: "string", description: "A note for this line only: \"Extras\" for an extras / overage line, a product or design name the PO lists apart from the style, a size breakdown that doesn't fit our sizes (waist sizes). Empty if nothing" },
             called: { type: "string", description: "Rule 3c: only when the email and its files don't name the garment's style: what they called it, word for word (\"tees\", \"hoodies\", \"the shirts\"). Then style stays empty. Empty when the style is named" },
@@ -424,7 +424,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30j";
+export const READER_REV = "2026-10-30k";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {

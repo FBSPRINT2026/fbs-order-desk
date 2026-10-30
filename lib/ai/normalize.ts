@@ -3,7 +3,7 @@
 // methods and locations are mapped onto the shop's lists. No prices or costs ever come from the AI.
 
 import type { GarmentLook, StockKind } from "@/lib/stockGarments";
-import { FULL_COLOR, LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, type Group, type Method, type Size } from "@/lib/pricing";
+import { FULL_COLOR, LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, waistOf, type Group, type Method, type Size } from "@/lib/pricing";
 
 export type ProposedOrder = {
   nickname?: string;
@@ -42,7 +42,7 @@ const SIZE_ALIASES: Record<string, Size> = {
 export function normSize(raw: string): Size | null {
   const k = raw.trim().toUpperCase().replace(/\s+/g, " ").replace(/^SIZE_/, "");
   if ((SIZES as readonly string[]).includes(k)) return k as Size;
-  return SIZE_ALIASES[k] || SIZE_ALIASES[k.replace(/\s/g, "_")] || null;
+  return SIZE_ALIASES[k] || SIZE_ALIASES[k.replace(/\s/g, "_")] || waistOf(k) || null;
 }
 
 function normMethod(m?: string): Method {
