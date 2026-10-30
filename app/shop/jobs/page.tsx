@@ -87,12 +87,17 @@ export default function JobCenter() {
   const inDept = (it: JobItem) => dept === "all" || it.depts.includes(dept) || (it.type !== "order" && it.type !== "request");
   const match = (it: JobItem) => { const t = q.trim().toLowerCase(); return !t || `${it.number || ""} ${it.title} ${it.customer} ${it.sub || ""}`.toLowerCase().includes(t); };
   const flags = (it: JobItem) => (!cameBack || !!it.revised) && (!artOnly || step !== "mockups" || it.type === "artonly");
-  const base = (items || []).filter((it) => whose(it) && flags(it));
-  const count = (s: Step) => base.filter((it) => it.steps.includes(s) && inDept(it)).length;
-  const shown = useMemo(() => base.filter((it) => it.steps.includes(step) && inDept(it) && match(it))
+  // the Digitizing Center is the whole shop's: Sew-outs shows everyone's, whatever My accounts says (Oct 29, Nick: "I don't
+  // see… any of the digitizing center files under sew-outs")
+  const SHOP_WIDE: Step[] = ["sewouts"];
+  const flagged = (items || []).filter(flags);
+  const base = flagged.filter((it) => whose(it));
+  const pool = (s: Step) => (SHOP_WIDE.includes(s) ? flagged : base);
+  const count = (s: Step) => pool(s).filter((it) => it.steps.includes(s) && inDept(it)).length;
+  const shown = useMemo(() => pool(step).filter((it) => it.steps.includes(step) && inDept(it) && match(it))
     .sort((a, b) => (step === "approved" || step === "declined" || step === "leads" || step === "requests" ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""))), // eslint-disable-line react-hooks/exhaustive-deps
   [items, step, dept, q, mine, me, cameBack, artOnly]);
-  const deptCount = (d: Dept | "all") => base.filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
+  const deptCount = (d: Dept | "all") => pool(step).filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
   const picked = (items || []).find((it) => it.key === pick) || null;
   const go = (s: Step, key?: string) => { setStep(s); setAll(false); setPick(key || null); };
@@ -103,7 +108,7 @@ export default function JobCenter() {
     return GROUPS.map((g) => {
       const steps = g.steps.map((x) => x[0]).filter((k) => k !== "leads");
       const rows: { it: JobItem; s: Step }[] = [];
-      for (const k of steps) for (const it of base.filter((x) => x.steps.includes(k) && inDept(x) && match(x)).sort(sortIn(k))) { if (seen.has(it.key)) continue; seen.add(it.key); rows.push({ it, s: k }); }
+      for (const k of steps) for (const it of pool(k).filter((x) => x.steps.includes(k) && inDept(x) && match(x)).sort(sortIn(k))) { if (seen.has(it.key)) continue; seen.add(it.key); rows.push({ it, s: k }); }
       return { g, steps, rows, counts: steps.map((k) => [k, rows.filter((r) => r.s === k).length] as const) };
     }).filter((x) => x.steps.length);
   }, [items, dept, q, mine, me, cameBack]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -174,7 +179,7 @@ export default function JobCenter() {
         </section>
         <aside className="jc-side" aria-label={picked ? "The job" : "Where to start"}>
           {picked ? <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
-            : <StartHere items={base.filter(inDept)} loading={!items} mine={mine} go={go} />}
+            : <StartHere items={[...base, ...flagged.filter((x) => !base.includes(x) && x.steps.includes("sewouts")).map((x) => ({ ...x, steps: ["sewouts"] as Step[] }))].filter(inDept)} loading={!items} mine={mine} go={go} />}
         </aside>
       </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
