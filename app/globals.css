@@ -16267,7 +16267,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
   html body .ord .imp-mock{grid-template-columns:repeat(3,minmax(0,1fr))}
   html body .ord .imp-mock > .mk-big,html body .ord .imp-mock:has(> .mk-more > :nth-child(odd):last-child) > .mk-big{grid-column:1 / -1}
   html body .ord .imp-mock > .mk-tiles{display:contents}
-  html body .ord .imp-mock > .btn.mk-edit,html body .ord .imp-mock > .mk-tiles > .mk-tile{grid-column:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:auto!important;min-height:64px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:var(--r);font-size:13px;font-weight:600;line-height:1.2;text-align:center;white-space:normal}
+  html body .ord .imp-mock > .btn.mk-edit,html body .ord .imp-mock > .mk-tiles > .mk-tile{grid-column:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:auto!important;align-self:stretch;min-height:64px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:var(--r);font-size:13px;font-weight:600;line-height:1.2;text-align:center;white-space:normal}
   html body .ord .imp-mock > .btn.mk-edit:not(.primary){background:var(--surface);color:var(--ink)}
   html body .ord .imp-mock > .btn.mk-edit .mk-ic{display:block;color:var(--accent);flex:none}
   html body .ord .imp-mock > .btn.mk-edit.primary .mk-ic{color:inherit}
