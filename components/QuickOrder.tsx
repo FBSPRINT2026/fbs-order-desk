@@ -469,7 +469,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const k = ans.know?.[im.location];
         const vis = ans.mode === "visual";
         const patch: Partial<typeof im> = {};
-        if (k && im.method === "screen") Object.assign(patch, { colors: Math.max(1, k.colors), underbase: k.ub });
+        if (k && im.method === "screen") Object.assign(patch, { colors: Math.max(1, k.colors), underbase: im.puff ? undefined : k.ub }); // puff: no underbase unless set by hand
         if (vis) patch.visualOnly = true;
         if (!Object.keys(patch).length) continue;
         const note2 = k ? `You said: printed ${k.colors} color${k.colors === 1 ? "" : "s"}${k.ub ? " + underbase" : ", no underbase"}` : "";

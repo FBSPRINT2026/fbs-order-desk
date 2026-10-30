@@ -4213,7 +4213,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           embroidery's 3D puff): a raised print, charged per piece, slower on press with a flash */}
                       {im.method === "screen" && im.colors < FULL_COLOR && !portal && (
                         <label className="check mk-puff" title="Puff ink: the print rises when it's cured. Charged per piece and printed slower, with a flash">
-                          <input type="checkbox" checked={!!im.puff} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, puff: e.target.checked || undefined } : x)))} />
+                          <input type="checkbox" checked={!!im.puff} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, puff: e.target.checked || undefined, ...(e.target.checked ? { underbase: undefined } : {}) } : x)))} />
                           Puff print {puffCost != null && <span className="faint">+${puffCost.toFixed(2)} each</span>}
                         </label>
                       )}

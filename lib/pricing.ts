@@ -771,9 +771,10 @@ export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m 
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
   return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);
 }
-export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors"> & { printStyle?: Imprint["printStyle"] }): boolean {
+export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors"> & { printStyle?: Imprint["printStyle"]; puff?: boolean }): boolean {
   if (d.printStyle === "fashion") return false; // a fashion hit never gets one
   if (d.underbase != null) return d.underbase;
+  if (d.puff) return false; // puff ink prints on its own: no underbase unless someone turns it on (Oct 30, Nick)
   const names = inkNames(d.inks);
   if (!names.length) return true;
   return names.some((n) => { const L = inkL(n); return L == null || L > 40; });

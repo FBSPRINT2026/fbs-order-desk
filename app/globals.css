@@ -16318,3 +16318,6 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .sf-opts .chip small{color:var(--ink-3);font-size:12px;margin-left:4px}
 .sf-type input{height:36px;border-radius:6px;border:1px solid var(--line);font:inherit;font-size:14px;padding:0 10px;width:min(220px,100%);color:var(--ink);background:var(--surface)}
 .sf-note{font-size:12.5px;color:var(--warn);display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 4px}
+/* puff print on a screen print (Oct 30): its stamp in the print's specs, and its line under the screens */
+.pr-specs .pr-puff{font-weight:700;color:var(--accent)}
+.pr-puff-line .linkbtn{margin-left:auto}

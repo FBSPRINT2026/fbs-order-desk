@@ -2,7 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -495,6 +495,26 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   const tagOn = !!tagFin && (g.finishing || []).includes(tagFin.id);
   const [tagBusy, setTagBusy] = useState(false);
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
+  // puff ink (Oct 30, Nick: "like you have PMS match fee, you would have puff ink $1… it has to be indicated somewhere
+  // that it's a puff print"): its charge per piece on its own line, and a print whose notes say puff offered as one
+  const puffCtl = (d: Group["imprints"][number]) => {
+    if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
+    const di = g.imprints.indexOf(d);
+    const rate = puffEach(gc.wholesale ? settings.wholesale : prices);
+    if (d.puff) return (
+      <div className="pr-scr pr-cc-line pr-puff-line"><span className="pr-scr-l">Puff ink</span>
+        <span className="pr-scr-v">No underbase{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</span>
+        {!fixed && <button type="button" className="linkbtn" onClick={() => update((x) => { delete x.imprints[di].puff; })}>Not puff</button>}
+      </div>
+    );
+    if (fixed || !/\bpuff/i.test(`${d.notes || ""} ${d.inks || ""}`)) return null;
+    return (
+      <div className="pr-scr pr-puff-line"><span className="pr-scr-l">Puff?</span>
+        <span className="pr-scr-v">The notes say puff</span>
+        <button type="button" className="btn sm" onClick={() => update((x) => { x.imprints[di].puff = true; x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })}>Make it a puff print{!hidePrices && ` (+${money(rate)} each)`}</button>
+      </div>
+    );
+  };
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
     // embroidery: its thread change on the same kind of line (Oct 26, Nick: "thread change… exactly the same as color change")
@@ -901,7 +921,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -945,6 +965,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
                 {d.supplied && <SuppliedBox d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
+                {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
                 {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
                 {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (
@@ -1568,6 +1589,7 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
           {size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
+          {d.method === "screen" && d.puff && <span className="pr-puff">Puff print</span>}
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
