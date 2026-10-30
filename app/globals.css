@@ -15954,3 +15954,6 @@ table.tbl.jc td:last-child{text-align:right}
 table.tbl.jc th:last-child{text-align:right}
 @media (max-width:900px){.jc-groups{grid-template-columns:repeat(2,minmax(0,1fr))}.jc-g:nth-child(5){grid-column:1/-1}}
 @media (max-width:520px){.jc-gh span{display:none}.jc-st .dgz-ring{width:40px;height:40px}.jc-st .dgz-rail{top:21px}.jc-decl{flex-wrap:wrap}.jc-decl input{width:100%}}
+
+table.tbl.jc td:first-child .sub{max-width:min(520px,52vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.tbl.jc tr.prf-more td{text-align:left}
