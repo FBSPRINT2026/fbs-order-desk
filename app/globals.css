@@ -16345,8 +16345,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-keyed{border-top:3px solid var(--fbs-purple,#7c5cd6);background:var(--surface-2)}
 .pc-keyed-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 16px 4px;font-size:14px}
 .pc-keyed-tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;background:var(--accent-soft,#e6f3fb);color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-.pc-keyed-f{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:8px 16px 6px;align-items:start}
-@media (max-width:900px){.pc-keyed-f{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pc-keyed-f{display:grid;grid-template-columns:repeat(var(--kc,5),minmax(0,1fr));gap:12px;padding:8px 16px 6px;align-items:start}
 .pc-keyed-f .lbl{height:22px}
 .pc-keyed-st{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}
 .pc-keyed-more{padding:0 16px 12px;font-size:12.5px}
@@ -16366,3 +16365,13 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-keyed-p{margin:0 16px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 /* names wrap in the Payroll Center's tables so they fit (Oct 30: a long name pushed Step 3 sideways) */
 main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
+
+/* the Payroll Center's tables fit any width without scrolling sideways (Oct 30, Nick: "hide the QuickBooks payee… as it
+   gets smaller"): as the panel narrows, the payee goes first, then the pay columns (the check total stays), then the rate;
+   a keyed check's boxes go two to a row */
+.pc-tbl{overflow-x:hidden;container-type:inline-size}
+@container (max-width:1180px){.pc-c-payee{display:none}}
+@container (max-width:960px){.pc-c-pay{display:none}}
+@container (max-width:760px){.pc-c-rate{display:none}}
+.panel:has(.pc-keyed){container-type:inline-size}
+@container (max-width:760px){.pc-keyed-f{grid-template-columns:repeat(2,minmax(0,1fr))}.pc-keyed-h{flex-wrap:wrap}}

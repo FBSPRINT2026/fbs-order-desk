@@ -233,11 +233,11 @@ export default function PayrollCenter() {
             </div>
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
-                <thead><tr><th>Employee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th>{w2.some((r) => r.pay.offHours) && <th className="r">Time off hrs</th>}{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th className="r pc-c-rate">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th>{w2.some((r) => r.pay.offHours) && <th className="r">Time off hrs</th>}{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th>Status</th></tr></thead>
                 <tbody>{w2.map((r) => (
                   <tr key={r.e.id} className={r.issues ? "flag" : ""}>
                     <td><b>{nm(r)}</b>{asQb(r) && <div className="sub">In QuickBooks as {r.e.qbo_vendor_name}</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
-                    <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : r.line?.done_at ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
+                    <td className="r pc-c-rate">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : r.line?.done_at ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
                     {r.e.pay_type === "salary"
                       ? <td className="r faint" colSpan={2}>QuickBooks fills it</td>
                       : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
@@ -266,26 +266,26 @@ export default function PayrollCenter() {
             {qbErr && <div className="pv-err" style={{ margin: "10px 16px" }}>{qbErr}</div>}
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
-                <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r">Regular pay</th><th className="r">Overtime pay</th>{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th className="pc-c-payee">QuickBooks payee</th><th className="r pc-c-rate">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r pc-c-pay">Regular pay</th><th className="r pc-c-pay">Overtime pay</th>{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
                 <tbody>{cons.filter((r) => !r.keyed).map((r) => {
                   const pe = payeeOf(r), g = guesses.get(r.e.id), done = !!r.line?.qbo_purchase_id;
                   const reg = r.check.filter((l) => l.desc === "REGULAR PAY").reduce((s, l) => s + l.amount, 0), ot = r.check.filter((l) => l.desc === "OVERTIME").reduce((s, l) => s + l.amount, 0);
                   return (
                     <tr key={r.e.id} className={r.issues ? "flag" : ""}>
                       <td><b>{nm(r)}</b>{!r.e.active && <div className="sub">New from uAttend</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
-                      <td>{done || !qb ? (pe?.name || <span className="faint">—</span>) : (
+                      <td className="pc-c-payee">{done || !qb ? (pe?.name || <span className="faint">—</span>) : (
                         <select className="pc-payee" value={pe ? `${pe.type}:${pe.id}` : ""} onChange={(e) => { const v = e.target.value; if (v === "new") return newVendor(r); const [t, id] = v.split(":"); setPayee(r.e.id, qb.payees.find((x) => x.id === id && x.type === t) || null); }}>
                           <option value="">{g ? `Suggested: ${g.name}` : "Pick payee…"}</option>
                           {!g && <option value="new">+ Add {fullName(r.e)} to QuickBooks as a new vendor</option>}
                           <optgroup label="Vendors">{qb.payees.filter((x) => x.type === "Vendor").map((x) => <option key={"v" + x.id} value={`Vendor:${x.id}`}>{x.name}</option>)}</optgroup>
                           <optgroup label="Employees">{qb.payees.filter((x) => x.type === "Employee").map((x) => <option key={"e" + x.id} value={`Employee:${x.id}`}>{x.name}</option>)}</optgroup>
                         </select>)}</td>
-                      <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : done ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
+                      <td className="r pc-c-rate">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : done ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
                       {r.e.pay_type === "salary"
                         ? <td className="r faint" colSpan={2}>Salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}</td>
                         : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
-                      <td className="r">{r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="faint">—</span> : $(reg)}</td>
-                      <td className={"r" + (ot ? " pc-ot" : "")}>{ot ? $(ot) : <span className="faint">—</span>}</td>
+                      <td className="r pc-c-pay">{r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="faint">—</span> : $(reg)}</td>
+                      <td className={"r pc-c-pay" + (ot ? " pc-ot" : "")}>{ot ? $(ot) : <span className="faint">—</span>}</td>
                       {showBonus && <td className="r"><Money value={r.line?.bonus ?? null} disabled={done} onSave={(v) => saveLine(r, { bonus: v })} /></td>}
                       <td className="r"><AdvanceCell r={r} disabled={done} onSave={(v) => saveLine(r, { advance_amount: v })} neg /></td>
                       <td className="r"><b>{$(r.line?.check_total ?? r.total)}</b></td>
@@ -375,7 +375,7 @@ function KeyedCheck({ r, bonusOn, payee, done, onSave, onBonus, onSetup }: { r: 
           <div className="faint">Paid to {payee || "—"} · {rate != null ? `${$(rate)}/hr` : "no rate"}{setup.payAccount ? ` · pay on ${setup.payAccount}` : ""}{(setup.extras || []).length ? `, ${[...new Set((setup.extras || []).map((x) => x.account))].join(", ")} for the rest` : ""}</div></div>
         <div className="pc-keyed-st"><b className="num">{$(r.line?.check_total ?? r.total)}</b>{done ? <span className="pc-ok">Check made ✓</span> : !payee ? <span className="pc-wait">Needs payee</span> : rate == null ? <span className="pc-wait">Needs rate</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Type the hours</span>}</div>
       </div>
-      <div className="pc-keyed-f" style={{ gridTemplateColumns: `repeat(${1 + (setup.extras || []).length + (bonusOn ? 1 : 0)}, minmax(0, 1fr))` }}>
+      <div className="pc-keyed-f" style={{ ["--kc" as string]: 1 + (setup.extras || []).length + (bonusOn ? 1 : 0) }}>
         <div className="field"><span className="lbl"><span>Hours</span></span>
           <span className="pc-in"><input type="number" min="0" step="0.25" inputMode="decimal" aria-label="Hours" value={hours} disabled={done} placeholder="0" onChange={(e) => setHours(e.target.value)} onBlur={() => save({ hours: num(hours) })} /><small>× {rate != null ? $(rate) : "—"}</small></span>
           <span className="faint">Pay {$(r.pay.regPay ?? 0)}</span></div>
