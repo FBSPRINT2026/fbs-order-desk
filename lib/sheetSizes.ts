@@ -101,6 +101,14 @@ export function applySheetSizes<G extends { style?: string | null; color?: strin
     const pick = loose.length === 1 ? loose[0] : loose.length > 1 && st ? loose.find((s) => sk(s.product).includes(st)) || null : null;
     if (!pick) continue;
     used.add(pick);
+    // the same style and color split over several lines on purpose (the pieces getting names, a line per store or
+    // person, Oct 30): when those lines already add up to the sheet, size by size, they're right as they are
+    const sibs = garments.filter((h) => !got.has(h) && sk(String(h.style || "")) === st && sameColorSheet(String(h.color || ""), String(g.color || "")));
+    if (sibs.length > 1) {
+      const sum: Record<string, number> = {};
+      for (const h of sibs) for (const [k, v] of Object.entries(h.sizes || {})) { const z = normSize(k); if (z && +(v as number)) sum[z] = (sum[z] || 0) + +(v as number); }
+      if (JSON.stringify(Object.entries(sum).sort()) === JSON.stringify(Object.entries(pick.sizes).filter(([, v]) => +v).sort())) { sibs.forEach((h) => got.add(h)); continue; }
+    }
     const before = JSON.stringify(Object.entries(g.sizes || {}).map(([k, v]) => [normSize(k), +(v as number) || 0]).filter(([, v]) => v).sort());
     const after = JSON.stringify(Object.entries(pick.sizes).sort());
     if (before !== after) changed++;
