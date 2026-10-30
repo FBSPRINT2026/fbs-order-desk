@@ -167,6 +167,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [jdTab, setJdTab] = useState<"details" | "type">("details");
   const [pickCust, setPickCust] = useState(false); // the customer picker open to change who it is
   const [addrOpen, setAddrOpen] = useState(false);
+  // on a phone (Oct 29, Nick): the top buttons fold into one Actions button, the customer into just the name
+  const [actsOpen, setActsOpen] = useState(false);
+  const [cuOpen, setCuOpen] = useState(false);
   const [discEdit, setDiscEdit] = useState(false); // typing the discount // the customer's address, email and notes shown
   // Customer artwork (Oct 24): which group is bringing in a mockup from another of the customer's orders
   const [custArt, setCustArt] = useState<number | null>(null);
@@ -1269,7 +1272,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="ed-title">
           <h1>{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : <span className="ot-no"> – #{o.number}</span>}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
-        <div className="ed-actions">
+        <div className={"ed-actions" + (actsOpen ? " open" : "")}>
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
           {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
           {/* QuickBooks, beside the status (Oct 24, Nick: "grayed out… it's a quote… not available yet to sync. Once it goes
@@ -1297,6 +1300,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
+          {/* phone only: Ask AI, Documents, Production, QuickBooks, Send to Printavo and More behind one button */}
+          <button type="button" className="btn ed-acts-tog" aria-expanded={actsOpen} onClick={() => setActsOpen((v) => !v)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
+            {actsOpen ? "Close" : "Actions"}
+          </button>
           <span className="ed-br" aria-hidden />
           <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }}
             onDigitize={orderGroups(o).some((g) => g.imprints.some((d) => d.method === "embroidery" && d.design_id)) ? async () => { await save(); setDigitize(""); } : undefined} />
@@ -1439,7 +1447,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {/* the summary bar across the top was taken off (Oct 29, Nick: "just unneeded information") */}
       {/* the customer, a short strip under the job name (Oct 29, Nick: "the customer panel should be right underneath the job
           name… short and squatty… c") */}
-      <section className="panel cu-strip">
+      <section className={"panel cu-strip" + (cuOpen ? " open" : "")}>
               {/* the customer, quiet (Oct 29, Nick: "I don't need all of this info all the time… the customer name twice…
                   we don't need what they owe on other orders… terms… tax… we're never going to change… little symbols… address,
                   email, notes as a dropdown… pricing at the bottom… it's going to drop down to do program pricing") */}
@@ -1507,6 +1515,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                         {o.use_program && prog && <button type="button" className="pt-applied" onClick={() => setProgOpen(!progOpen)} aria-expanded={progOpen} title={progOpen ? "Hide the program pricing details" : "Show how the program prices this order"}><span className="pt-dot" aria-hidden />Applied<span className="pt-car" aria-hidden>{progOpen ? "▴" : "▾"}</span></button>}
                         <button type="button" className="linkbtn cu-chg" onClick={() => setPickCust(true)}>Change</button>
+                        {/* phone only: the name alone; this opens the contact, address, pricing and Change */}
+                        <button type="button" className="cu-tog" aria-expanded={cuOpen} aria-label={cuOpen ? "Hide customer details" : "Show customer details"} onClick={() => setCuOpen((v) => !v)}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6l6-6" /></svg>
+                        </button>
                       </div>
                     ) : null}
                     {o.use_program && !prog && <div className="pt-row money-only"><span className="faint pt-ch">No rate card on their Program tab</span></div>}
