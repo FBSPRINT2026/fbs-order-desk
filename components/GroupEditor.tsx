@@ -486,10 +486,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const embList = gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? (settings.wholesale.embExtras || []).filter((f) => !/personali[sz]/i.test(`${f.id} ${f.name}`) || (g.finishing || []).includes(f.id)) : [];
   // "Add personalization" on any group with embroidery (Oct 30, Nick): a name on one piece of a line, split onto its own line
   const hasEmb = g.imprints.some((d) => d.method === "embroidery") || g.lines.some((l) => persOf(l).length > 0);
-  const addPers = (lineId: string, size: Size | "", qty: number, text: string) => update((x) => {
+  const addPers = (lineId: string, size: Size | "", qty: number, text: string, loc: string) => update((x) => {
     const l = x.lines.find((y) => y.id === lineId);
     if (!l) return;
-    l.persList = [...persOf(l), { id: uid(), text, size, qty }];
+    l.persList = [...persOf(l), { id: uid(), text, size, qty, loc }];
     if (l.pers) { if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
   });
   const addPersMany = (adds: { lineId: string; entry: Omit<PersEntry, "id"> }[]) => update((x) => {
@@ -794,7 +794,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {persOf(l).length > PERS_SHOW && persOpen === l.id && <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{persOf(l).length} names</span><button type="button" className="linkbtn" onClick={() => setPersOpen(null)}>Hide list</button></div>}
                 {(persOf(l).length <= PERS_SHOW || persOpen === l.id) && persOf(l).map((e) => (
                   <div key={e.id} className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{e.text}</span>
-                    {e.size && <span className="faint">Size {e.size}</span>}<span className="faint">Qty {e.qty}</span>
+                    {e.size && <span className="faint">Size {e.size}</span>}<span className="faint">Qty {e.qty}</span><span className="faint">{e.loc || "Right Chest"}</span>
                     {!hidePrices && <span className="faint">{money(e.price != null ? e.price : persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail"))} each</span>}
                     {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label={`Remove the personalization ${e.text}`} title="Remove" onClick={() => removePers(l.id, e.id)}>✕</button>}</div>
                 ))}

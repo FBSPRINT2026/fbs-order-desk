@@ -360,8 +360,8 @@ function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][num
     <>
       <tr>
         <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}{persOf(l).length > PERS_SHOW
-          ? <div className="lnote"><b>Personalization:</b> {persOf(l).reduce((a, e) => a + (e.qty || 1), 0)} names ({SIZES.map((z) => [z, persOf(l).filter((e) => e.size === z).reduce((a, e) => a + (e.qty || 1), 0)] as const).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ")}): the list is in Production files{persOf(l).find((e) => e.list)?.list ? ` (${persOf(l).find((e) => e.list)!.list!.name})` : ""}</div>
-          : persOf(l).map((e) => <div key={e.id} className="lnote"><b>Personalization:</b> {e.text}{e.size ? ` · ${e.size}` : ""} · {e.qty}</div>)}</td>
+          ? <div className="lnote"><b>Personalization:</b> {persOf(l).reduce((a, e) => a + (e.qty || 1), 0)} names ({SIZES.map((z) => [z, persOf(l).filter((e) => e.size === z).reduce((a, e) => a + (e.qty || 1), 0)] as const).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ")}) on the {persOf(l)[0].loc || "Right Chest"}: the list is in Production files{persOf(l).find((e) => e.list)?.list ? ` (${persOf(l).find((e) => e.list)!.list!.name})` : ""}</div>
+          : persOf(l).map((e) => <div key={e.id} className="lnote"><b>Personalization:</b> {e.text}{e.size ? ` · ${e.size}` : ""} · {e.qty} · {e.loc || "Right Chest"}</div>)}</td>
         {sizes.map((z) => <td key={z} className="sz">{l.sizes?.[z as keyof typeof l.sizes] ? <b>{l.sizes[z as keyof typeof l.sizes]}</b> : ""}</td>)}
         <td className="tot"><b>{q}</b></td>
       </tr>

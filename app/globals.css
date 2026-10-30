@@ -16397,7 +16397,7 @@ main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
 .sbx-sec.pers{display:flex;flex-direction:column;gap:6px}
 .pers-r{gap:10px}
 /* one row: item · size · name · title · Add (Nick: "make it one line… it's never going to be that long") */
-.pers-add{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(80px,.5fr) 64px minmax(130px,1fr) minmax(130px,1fr) auto;gap:8px;align-items:end}
+.pers-add{display:grid;grid-template-columns:minmax(140px,1.1fr) minmax(76px,.45fr) 60px minmax(120px,1fr) minmax(120px,1fr) minmax(120px,.8fr) auto;gap:8px;align-items:end}
 @media (max-width:900px){.pers-add{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}}
 .pers-add .field{margin:0;min-width:0}
 .pers-add .field select,.pers-add .field input{width:100%;min-width:0}

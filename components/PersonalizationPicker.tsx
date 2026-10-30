@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { lineQty, persOf, SIZES, type GLine, type PersEntry, type Size } from "@/lib/pricing";
+import { LOCATIONS, lineQty, persOf, SIZES, type GLine, type PersEntry, type Size } from "@/lib/pricing";
 import type { PersRow } from "@/lib/persList";
 
 /**
@@ -11,7 +11,7 @@ import type { PersRow } from "@/lib/persList";
  */
 export default function PersonalizationPicker({ lines, price, hidePrices, disabled, onAdd, orderId, onAddMany }: {
   lines: GLine[]; price: number; hidePrices?: boolean; disabled?: boolean;
-  onAdd: (lineId: string, size: Size | "", qty: number, text: string) => void;
+  onAdd: (lineId: string, size: Size | "", qty: number, text: string, loc: string) => void;
   /** a whole name list at once (an uploaded spreadsheet): each row onto its line */
   orderId?: string; onAddMany?: (adds: { lineId: string; entry: Omit<PersEntry, "id"> }[]) => void;
 }) {
@@ -28,6 +28,8 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
   const [name, setName] = useState("");
   // a name, a title, or both (Nick: "sometimes it's one or the other, sometimes it's both"): kept as "Name / Title"
   const [title, setTitle] = useState("");
+  // where it's sewn: Right Chest unless typed or picked (a sleeve, the back…)
+  const [loc, setLoc] = useState("Right Chest");
   const text = [name.trim(), title.trim()].filter(Boolean).join(" / ");
   const line = pickable.find((l) => l.id === lineId) || (pickable.length === 1 ? pickable[0] : null);
   const sizes = line ? SIZES.filter((z) => +(line.sizes?.[z] || 0) > 0) : [];
@@ -36,7 +38,7 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
   const label = (l: GLine) => [l.style, l.color].filter(Boolean).join(" · ") || "Garment";
   const add = () => {
     if (!line || (sizes.length > 0 && !sz) || !text) return;
-    onAdd(line.id, sz, n, text);
+    onAdd(line.id, sz, n, text, loc.trim() || "Right Chest");
     setName(""); setTitle(""); setQty("1"); setOpen(false);
   };
   // a name list (Oct 30, Nick: "upload a spreadsheet by giving the sizes and the name… if you had a ton to do"): the file
@@ -58,7 +60,7 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
       const byStyle = row.style ? pickable.find((l) => key(l.style || "") && key(row.style).includes(key(l.style || ""))) : null;
       const target = byStyle || fallback;
       if (!target) { missed++; continue; }
-      adds.push({ lineId: target.id, entry: { text: [row.name, row.title].filter(Boolean).join(" / "), size: row.size, qty: row.qty, list: file } });
+      adds.push({ lineId: target.id, entry: { text: [row.name, row.title].filter(Boolean).join(" / "), size: row.size, qty: row.qty, loc: loc.trim() || "Right Chest", list: file } });
     }
     if (adds.length) { onAddMany(adds); setOpen(false); }
     if (missed) setListErr(`${missed} name${missed === 1 ? "" : "s"} didn't say which item: pick the item above and upload again for those.`);
@@ -89,6 +91,9 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
             <input id="pers-name" type="text" value={name} placeholder="John Doe" onChange={(e) => setName(e.target.value)} onKeyDown={enter} /></div>
           <div className="field"><label htmlFor="pers-title">Title</label>
             <input id="pers-title" type="text" value={title} placeholder="Position" onChange={(e) => setTitle(e.target.value)} onKeyDown={enter} /></div>
+          <div className="field"><label htmlFor="pers-loc">Location</label>
+            <input id="pers-loc" type="text" list="pers-locs" value={loc} onChange={(e) => setLoc(e.target.value)} onFocus={(e) => e.target.select()} onKeyDown={enter} />
+            <datalist id="pers-locs">{[...LOCATIONS, "Left Upper Arm", "Right Upper Arm", "Back Neck", "Front", "Side", "Back", "Cuff"].filter((x, i, a) => a.indexOf(x) === i).map((x) => <option key={x} value={x} />)}</datalist></div>
           <button type="button" className="btn sm" disabled={!line || (sizes.length > 0 && !sz) || !text} onClick={add}>Add</button>
         </div>
       ) : <p className="faint">Add the garments first: each name goes on a piece.</p>)}
