@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { cleanChange, COACH_SETTINGS, type CoachSetting } from "@/lib/sepCoach";
+import { cleanChange, COACH_SETTINGS, lessonDefaultFrom, settingApplies, settingsInUse, type CoachSetting, type LessonDefault, type SepJob } from "@/lib/sepCoach";
 
 /**
  * Learning from Separo (or any outside separation): when a job had to be separated elsewhere and the result comes back
@@ -37,6 +37,10 @@ export async function POST(req: Request) {
   const st = await aiState(admin);
   if (!st.ready) return NextResponse.json({ off: true, reason: st.reason });
 
+  // the job ours was: settings that do nothing on it (the highlight white on spot) are left out of what Claude reads,
+  // and a lesson can't start new jobs at one of them (Oct 29, S-57)
+  const job: SepJob = { method: b.ours?.method, dark: typeof b.art?.dark === "boolean" ? (b.art.dark as boolean) : undefined, underbase: typeof b.ours?.settings?.underbase === "string" ? (b.ours.settings.underbase as string) : undefined };
+  if (b.ours?.settings) b.ours.settings = settingsInUse(b.ours.settings, job);
   const { data: lessons } = await admin.from("sep_lessons").select("lesson, tags").eq("active", true).gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
   const images = (b.images || []).filter((x) => typeof x.data === "string" && x.data.length > 100 && x.data.length < 4_000_000).slice(0, 2)
     .map((x) => ({ media_type: "image/jpeg" as const, data: x.data!.replace(/^data:image\/\w+;base64,/, ""), label: String(x.label || "").slice(0, 200) }));
@@ -56,7 +60,7 @@ export async function POST(req: Request) {
     (lessons || []).length ? "ALREADY LEARNED (don't repeat; refine if this changes one):" : "",
     ...((lessons || []) as { lesson: string }[]).map((l) => `- ${l.lesson}`),
   ].join("\n");
-  const settingsDoc = (Object.keys(COACH_SETTINGS) as CoachSetting[]).filter((k) => k !== "addMiddle" && k !== "colors").map((k) => `- ${k}: ${COACH_SETTINGS[k].about}`).join("\n");
+  const settingsDoc = (Object.keys(COACH_SETTINGS) as CoachSetting[]).filter((k) => k !== "addMiddle" && k !== "colors" && settingApplies(k, job)).map((k) => `- ${k}: ${COACH_SETTINGS[k].about}`).join("\n");
 
   const r = await askClaude<Answer>({
     task: "sep_learn",
@@ -73,6 +77,7 @@ export async function POST(req: Request) {
       "engine_notes: 0–4 short notes for the developer who maintains the separation engine: what our automatic ink finding / fade handling / underbase should do differently to match a good separator. Be specific and testable.",
       "Settings a lesson can start new separations at:",
       settingsDoc,
+      "Only the settings that do something on this job are listed; a setting not shown is not in use here (spot color never prints a highlight white), so never call it a difference.",
       "Don't invent differences you can't see in the data. Never mention money.",
     ].join("\n"),
     prompt,
@@ -105,7 +110,8 @@ export async function POST(req: Request) {
     if (!L?.text?.trim()) continue;
     const d = L.default ? cleanChange({ setting: L.default.setting, value: L.default.value }) : null;
     const when = ["all", "spot", "sim", "dark", "light"].includes(L.default?.when || "") ? L.default!.when : "all";
-    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: ["separo", ...(L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 2)], default_setting: d ? { setting: d.setting, value: d.value, when } : null, by: v.email, feedback_id: fb.data?.id || null }).select("id, lesson").single();
+    const def = lessonDefaultFrom(d ? { setting: d.setting, value: d.value, when: when as LessonDefault["when"] } : null, job);
+    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: ["separo", ...(L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 2)], default_setting: def, by: v.email, feedback_id: fb.data?.id || null }).select("id, lesson").single();
     if (ins.data) saved.push(ins.data as { id: string; lesson: string });
   }
   return NextResponse.json({ id: fb.data?.id || null, summary: r.data.summary, lessons: saved, engine_notes: r.data.engine_notes || [] });
