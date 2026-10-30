@@ -34,7 +34,8 @@ const ICONS: Record<string, React.ReactNode> = {
   necks: <svg viewBox="0 0 24 24"><path d="M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3" /><path d="M8 3c1 2.5 7 2.5 8 0" /><path d="M8.5 7.5h7" /></svg>,
   qb: <QbLogo />,
   // a bank check: the Payroll Center (Oct 30, Nick: "a little dollar sign or a check symbol")
-  payroll: <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><path d="M5.5 14.5h6M14.5 14.5h3.5" /><path d="M8.6 8.6c-.4-.4-1-.6-1.6-.6-.9 0-1.6.5-1.6 1.2 0 1.6 3.3.9 3.3 2.5 0 .7-.7 1.2-1.7 1.2-.7 0-1.3-.3-1.7-.7M7 7.3v.7M7 12.3v.7" /></svg>,
+  // payday: a calendar page with a dollar sign (Oct 30, Nick picked it; the bill icon looked like the Artwork Builder's)
+  payroll: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /><path d="M13.7 12.3c-.3-.4-.9-.6-1.5-.6-.9 0-1.5.4-1.5 1.1 0 1.5 3.1.8 3.1 2.3 0 .7-.7 1.1-1.6 1.1-.7 0-1.2-.3-1.6-.7M12.2 11v.7M12.2 16.2v.7" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
