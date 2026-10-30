@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
-import { advanceLeft, guessPayee, loadPayday, planLabel, type PaydayRow } from "@/lib/payday";
+import { advanceLeft, extraLine, guessPayee, loadPayday, planLabel, type Keyed, type PaydayRow } from "@/lib/payday";
 import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, pullActuals, type Payee } from "./actions";
 
 /**
@@ -83,9 +83,9 @@ export default function PayrollCenter() {
   const conTotal = r2(cons.reduce((s, r) => s + (r.line?.check_total ?? r.total), 0));
   const openAdv = (d?.advances || []).filter((a) => !a.closed_at);
 
-  async function saveLine(r: PaydayRow, patch: { bonus?: number | null; advance_amount?: number | null }) {
+  async function saveLine(r: PaydayRow, patch: { bonus?: number | null; advance_amount?: number | null; keyed?: Keyed | null }) {
     if (!d) return;
-    const { error } = await createClient().from("payday_lines").upsert({ period_start: d.p.start, employee_id: r.e.id, bonus: r.line?.bonus ?? null, advance_amount: r.line?.advance_amount ?? null, ...patch, updated_at: new Date().toISOString() }, { onConflict: "period_start,employee_id" });
+    const { error } = await createClient().from("payday_lines").upsert({ period_start: d.p.start, employee_id: r.e.id, bonus: r.line?.bonus ?? null, advance_amount: r.line?.advance_amount ?? null, keyed: r.line?.keyed ?? null, ...patch, updated_at: new Date().toISOString() }, { onConflict: "period_start,employee_id" });
     if (error) setErr(error.message); else load();
   }
   async function setPayee(empId: string, p: Payee | null) {
@@ -256,7 +256,7 @@ export default function PayrollCenter() {
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
                 <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r">Regular pay</th><th className="r">Overtime pay</th><th className="r">Bonus</th><th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
-                <tbody>{cons.map((r) => {
+                <tbody>{cons.filter((r) => !r.keyed).map((r) => {
                   const pe = payeeOf(r), g = guesses.get(r.e.id), done = !!r.line?.qbo_purchase_id;
                   const reg = r.check.filter((l) => l.desc === "REGULAR PAY").reduce((s, l) => s + l.amount, 0), ot = r.check.filter((l) => l.desc === "OVERTIME").reduce((s, l) => s + l.amount, 0);
                   return (
@@ -284,6 +284,10 @@ export default function PayrollCenter() {
                 })}</tbody>
               </table>
             </div>
+            {/* their own check layout, last (Oct 30, Nick on Linda McCoy: "make her kind of stand out… the last one") */}
+            {cons.filter((r) => r.keyed).map((r) => (
+              <KeyedCheck key={r.e.id} r={r} payee={payeeOf(r)?.name || ""} done={!!r.line?.qbo_purchase_id} onSave={(k) => saveLine(r, { keyed: k })} onBonus={(v) => saveLine(r, { bonus: v })} />
+            ))}
             <div className="panel-b faint pc-note">Each check: Subcontractors - COS · REGULAR PAY, Subcontractors - COS · OVERTIME (time and a half past 40 hours a week), BONUS, and Repayment:Check Advance as a minus line for an advance. A salaried contractor&apos;s check is the salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}. Made only when you press the button, once per person per payday.</div>
           </section>
 
@@ -329,6 +333,61 @@ export default function PayrollCenter() {
 }
 
 /** a money box that saves when you leave it (empty = none) */
+/**
+ * A contractor with their own check layout (Oct 30, Nick on Linda McCoy): hours keyed in at their rate, each extra line
+ * as miles (at its rate per mile) or as dollars, tolls in dollars, a bonus, and the check as it'll be written in
+ * QuickBooks. Saved as it's typed (payday_lines.keyed); locked once the check is made.
+ */
+function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: string; done: boolean; onSave: (k: Keyed) => void; onBonus: (v: number | null) => void }) {
+  const setup = r.e.check_setup || {};
+  const k: Keyed = r.line?.keyed || {};
+  const [hours, setHours] = useState(k.hours != null ? String(k.hours) : "");
+  const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries((setup.extras || []).map((x) => { const v = k.extras?.[x.key]; return [x.key, v ? String((x.per != null && v.mode !== "dollars" ? v.miles : v.amount) ?? "") : ""]; })));
+  const num = (t: string) => (t.trim() === "" || isNaN(+t) ? null : +t);
+  const save = (patch: Partial<Keyed>) => onSave({ ...k, ...patch, extras: { ...(k.extras || {}), ...(patch.extras || {}) } });
+  const setExtra = (key: string, v: { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null }) => save({ extras: { [key]: { ...(k.extras?.[key] || {}), ...v } } });
+  const rate = r.pay.rate;
+  return (
+    <div className="pc-keyed">
+      <div className="pc-keyed-h">
+        <div><b>{nm(r)}</b><span className="pc-keyed-tag">Hours &amp; mileage keyed in</span>
+          <div className="faint">Paid to {payee || "—"} · {rate != null ? `${$(rate)}/hr` : "no rate"}{setup.payAccount ? ` · pay on ${setup.payAccount}` : ""}{(setup.extras || []).length ? `, ${[...new Set((setup.extras || []).map((x) => x.account))].join(", ")} for the rest` : ""}</div></div>
+        <div>{done ? <span className="pc-ok">Check made ✓</span> : !payee ? <span className="pc-wait">Needs payee</span> : rate == null ? <span className="pc-wait">Needs rate</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Type the hours</span>}</div>
+      </div>
+      <div className="pc-keyed-f">
+        <label className="field"><span className="lbl">Hours</span>
+          <span className="pc-in"><input type="number" min="0" step="0.25" inputMode="decimal" value={hours} disabled={done} placeholder="0" onChange={(e) => setHours(e.target.value)} onBlur={() => save({ hours: num(hours) })} /><small>× {rate != null ? $(rate) : "—"}</small></span>
+          <span className="faint">Pay {$(r.pay.regPay ?? 0)}</span></label>
+        {(setup.extras || []).map((x) => {
+          const v = k.extras?.[x.key] || {}, dollars = x.per == null || v.mode === "dollars", line = extraLine(x, v);
+          return (
+            <label key={x.key} className="field"><span className="lbl">{x.label.replace(/^Gas Reimbursement\s*/i, "") || x.label}
+              {x.per != null && <span className="pc-seg" role="radiogroup" aria-label={`${x.label}: miles or dollars`}>
+                <button type="button" className={!dollars ? "on" : ""} aria-pressed={!dollars} disabled={done} onClick={(e) => { e.preventDefault(); setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "miles", amount: null, miles: null }); }}>Miles</button>
+                <button type="button" className={dollars ? "on" : ""} aria-pressed={dollars} disabled={done} onClick={(e) => { e.preventDefault(); setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "dollars", miles: null, amount: null }); }}>$</button>
+              </span>}</span>
+              <span className="pc-in">{dollars && <i>$</i>}<input type="number" min="0" step={dollars ? "0.01" : "1"} inputMode="decimal" value={vals[x.key] ?? ""} disabled={done} placeholder="0"
+                onChange={(e) => setVals((s) => ({ ...s, [x.key]: e.target.value }))}
+                onBlur={() => setExtra(x.key, dollars ? { mode: x.per != null ? "dollars" : undefined, amount: num(vals[x.key] || "") } : { mode: "miles", miles: num(vals[x.key] || "") })} />
+                <small>{dollars ? (x.per != null ? "dollar amount" : "") : `miles @ $${(x.per || 0).toFixed(2)}`}</small></span>
+              <span className="faint">{x.label} · {$(line.amount)}</span></label>
+          );
+        })}
+        <label className="field"><span className="lbl">Bonus</span><Money value={r.line?.bonus ?? null} disabled={done} onSave={onBonus} /></label>
+      </div>
+      <div className="tbl-wrap pc-keyed-p">
+        <table className="tbl">
+          <thead><tr><th>Check line (as in QuickBooks)</th><th>Category</th><th className="r">Amount</th></tr></thead>
+          <tbody>{r.check.map((l, i) => (
+            <tr key={i}><td>{l.desc || <span className="faint">—</span>}</td><td>{l.account === "named" ? l.acct : l.account === "advance" ? "Repayment:Check Advance" : "Subcontractors - COS"}</td><td className="r">{$(l.amount)}</td></tr>
+          ))}
+            <tr className="pc-tot-sum"><td><b>Check total</b></td><td></td><td className="r"><b>{$(r.line?.check_total ?? r.total)}</b></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Money({ value, onSave, disabled, placeholder = "" }: { value: number | null; onSave: (v: number | null) => void; disabled?: boolean; placeholder?: string }) {
   const [v, setV] = useState(value == null ? "" : String(+value));
   useEffect(() => setV(value == null ? "" : String(+value)), [value]);

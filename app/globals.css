@@ -16328,3 +16328,18 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-tot{border-top:1px solid var(--line)}
 .pc-tot td.r{white-space:nowrap;width:1%}
 .pc-tot .pc-tot-sum td{border-top:2px solid var(--ink)}
+/* Payroll Center: a contractor with their own check layout, last in Step 3 (Oct 30, Linda McCoy) */
+.pc-keyed{border-top:3px solid var(--fbs-purple,#7c5cd6);background:var(--surface-2)}
+.pc-keyed-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 16px 4px;font-size:14px}
+.pc-keyed-tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;background:var(--accent-soft,#e6f3fb);color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.pc-keyed-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding:8px 16px 12px}
+.pc-keyed-f .field{display:flex;flex-direction:column;gap:5px;margin:0}
+.pc-keyed-f .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.pc-in{display:flex;align-items:center;gap:6px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:0 10px}
+.pc-in input{border:0;outline:0;background:none;font:inherit;font-size:14px;color:var(--ink);width:100%;min-width:0;height:34px;padding:0}
+.pc-in i{font-style:normal;color:var(--ink-3)}
+.pc-in small{color:var(--ink-3);font-size:12px;white-space:nowrap}
+.pc-seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.pc-seg button{border:0;background:var(--surface);font-size:11px;font-weight:700;padding:2px 8px;color:var(--ink-3);cursor:pointer;text-transform:none;letter-spacing:0}
+.pc-seg button.on{background:var(--accent-soft,#e6f3fb);color:var(--accent)}
+.pc-keyed-p{margin:0 16px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}

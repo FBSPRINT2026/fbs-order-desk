@@ -31,7 +31,7 @@ async function accounts(q: Qbo) {
   const out = { bank: find(PAY_ACCOUNTS.bank), labor: find(PAY_ACCOUNTS.labor), advance: find(PAY_ACCOUNTS.advance) };
   const missing = (Object.keys(out) as (keyof typeof out)[]).filter((k) => !out[k]).map((k) => PAY_ACCOUNTS[k]);
   if (missing.length) throw new Error(`QuickBooks has no account named ${missing.map((m) => `"${m}"`).join(" or ")}.`);
-  return out as { bank: Acct; labor: Acct; advance: Acct };
+  return { ...(out as { bank: Acct; labor: Acct; advance: Acct }), find };
 }
 
 /** QuickBooks' payees (contractors are Vendors; W-2 people are Employees) and whether the pay accounts are there */
@@ -113,6 +113,9 @@ export async function makeChecks(start: string, employeeIds: string[]): Promise<
       if (!r.e.qbo_vendor_id) { skipped.push(`${name}: pick their QuickBooks payee first`); continue; }
       if (r.issues > 0) { skipped.push(`${name}: fix their time clock problems first`); continue; }
       if (!(r.total > 0)) { skipped.push(`${name}: nothing to pay`); continue; }
+      // a line on an account by name (a person's own check layout): QuickBooks must have it
+      const lost = [...new Set(r.check.filter((l) => l.account === "named" && !ac.find(l.acct || "")).map((l) => l.acct))];
+      if (lost.length) { skipped.push(`${name}: QuickBooks has no account named ${lost.map((x) => `"${x}"`).join(" or ")}`); continue; }
       const body = {
         PaymentType: "Check",
         AccountRef: { value: ac.bank.Id },
@@ -121,8 +124,8 @@ export async function makeChecks(start: string, employeeIds: string[]): Promise<
         PrintStatus: "NeedToPrint",
         PrivateNote: `Pay period ${dayLabel(p.start)} – ${dayLabel(p.end)} (Payroll Center)`,
         Line: r.check.map((l) => ({
-          DetailType: "AccountBasedExpenseLineDetail", Amount: l.amount, Description: l.desc,
-          AccountBasedExpenseLineDetail: { AccountRef: { value: (l.account === "advance" ? ac.advance : ac.labor).Id } },
+          DetailType: "AccountBasedExpenseLineDetail", Amount: l.amount, ...(l.desc ? { Description: l.desc } : {}),
+          AccountBasedExpenseLineDetail: { AccountRef: { value: (l.account === "advance" ? ac.advance : l.account === "named" ? ac.find(l.acct || "")! : ac.labor).Id } },
         })),
       };
       const got = await q.with({ localId: r.e.id }).create<{ Id: string; DocNumber?: string; TotalAmt?: number }>("Purchase", body, `pd${p.start.replace(/-/g, "")}${r.e.id.replace(/-/g, "")}`.slice(0, 50));

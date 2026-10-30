@@ -17,9 +17,27 @@ export const PAY_ACCOUNTS = { bank: "Bank Of America", labor: "Subcontractors - 
 
 export type Advance = { id: string; employee_id: string; amount: number; given_on: string; per_check: number | null; checks: number | null; note: string; closed_at: string | null; qbo_purchase_id?: string | null; created_at?: string };
 export type AdvancePayment = { id?: string; advance_id: string; period_start: string; amount: number };
-export type PaydayLine = { period_start: string; employee_id: string; bonus: number | null; advance_amount: number | null; qbo_purchase_id: string | null; check_total: number | null; check_made_at: string | null; check_made_by?: string | null; done_at: string | null };
-export type PayEmployee = Employee & { payday_skip?: boolean; qbo_vendor_id?: string | null; qbo_vendor_name?: string | null; qbo_payee_type?: string | null };
-export type CheckLine = { account: "labor" | "advance"; desc: string; amount: number };
+export type PaydayLine = { period_start: string; employee_id: string; bonus: number | null; advance_amount: number | null; qbo_purchase_id: string | null; check_total: number | null; check_made_at: string | null; check_made_by?: string | null; done_at: string | null; keyed?: Keyed | null };
+export type PayEmployee = Employee & { payday_skip?: boolean; qbo_vendor_id?: string | null; qbo_vendor_name?: string | null; qbo_payee_type?: string | null; check_setup?: CheckSetup | null };
+/** a line on a check: Subcontractors - COS (labor), Repayment:Check Advance (advance), or a QuickBooks account by name */
+export type CheckLine = { account: "labor" | "advance" | "named"; acct?: string; desc: string; amount: number };
+/**
+ * A person's own check layout (Oct 30, Nick on Linda McCoy: "key in her hours… her miles on her truck and on her car, and
+ * then tolls… on the gas reimbursement, I should be able to key in the miles or the dollar amount"): hours typed in on
+ * payday instead of the time clock, the QuickBooks account their pay goes on, and extra lines. An extra with `per` is
+ * mileage ("Gas Reimbursement Car - 406 @ $0.15"), typed as miles or as dollars; without, a dollar amount ("Tolls").
+ */
+export type CheckSetup = { keyedHours?: boolean; payAccount?: string; payDesc?: string; extras?: { key: string; label: string; per?: number | null; account: string }[] };
+/** what was typed for one payday: the hours, and each extra as miles or dollars */
+export type Keyed = { hours?: number | null; extras?: Record<string, { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null }> };
+const money2 = (n: number) => `$${n.toFixed(2)}`;
+/** an extra line's description and amount, the way Nick writes them ("Gas Reimbursement Truck - 0 @ $0.20" for a dollar amount) */
+export function extraLine(x: NonNullable<CheckSetup["extras"]>[number], v: NonNullable<Keyed["extras"]>[string] | undefined): CheckLine {
+  if (x.per == null) return { account: "named", acct: x.account, desc: x.label, amount: r2(+(v?.amount || 0)) };
+  const miles = v?.mode === "dollars" ? 0 : Math.max(0, Math.round(+(v?.miles || 0) * 10) / 10);
+  const amount = v?.mode === "dollars" ? r2(+(v?.amount || 0)) : r2(miles * x.per);
+  return { account: "named", acct: x.account, desc: `${x.label} - ${miles} @ ${money2(x.per)}`, amount };
+}
 export type AdvanceDue = { advance: Advance; left: number; take: number };
 export type PaydayRow = {
   e: PayEmployee; kind: "payroll" | "contract"; pay: PayLine; issues: number;
@@ -28,6 +46,8 @@ export type PaydayRow = {
   advances: AdvanceDue[]; advance: number; planned: number;
   /** a contractor's check, line by line (empty for W-2) */
   check: CheckLine[]; total: number;
+  /** hours keyed in, with their own check layout (employees.check_setup) */
+  keyed: boolean;
 };
 
 /** a payday closed out in the Payroll Center (Payroll finished): who, when, what it paid */
@@ -74,6 +94,18 @@ export function checkLines(pay: PayLine, bonus: number, advance: number): CheckL
   return out;
 }
 
+/** a check in a person's own layout: their pay on their account (no description, as Nick writes it), each extra line, a bonus,
+ *  and an advance repayment as a minus line */
+export function setupLines(setup: CheckSetup, pay: PayLine, bonus: number, advance: number, keyed: Keyed | null): CheckLine[] {
+  const out: CheckLine[] = [];
+  const acct = setup.payAccount || "";
+  out.push(acct ? { account: "named", acct, desc: setup.payDesc || "", amount: r2(pay.regPay || 0) } : { account: "labor", desc: "REGULAR PAY", amount: r2(pay.regPay || 0) });
+  for (const x of setup.extras || []) out.push(extraLine(x, keyed?.extras?.[x.key]));
+  if (bonus > 0) out.push(acct ? { account: "named", acct, desc: "BONUS", amount: r2(bonus) } : { account: "labor", desc: "BONUS", amount: r2(bonus) });
+  if (advance > 0) out.push({ account: "advance", desc: "PAYCHECK ADVANCE REPAYMENT", amount: -r2(advance) });
+  return out;
+}
+
 /** everyone on this payday, W-2 in QuickBooks' list order (last name), then contractors */
 export function paydayRows(x: {
   settings: TimeSettings; start: string; end: string; employees: PayEmployee[]; punches: Punch[]; offs: TimeOff[];
@@ -84,19 +116,25 @@ export function paydayRows(x: {
   const owes = new Set(x.advances.filter((a) => !a.closed_at).map((a) => a.employee_id));
   const lineOf = new Map(x.lines.map((l) => [l.employee_id, l]));
   return x.employees
-    .filter((e) => !e.payday_skip && (worked.has(e.id) || lineOf.has(e.id) || (e.active && (e.pay_type === "salary" || owes.has(e.id)))))
+    // anyone whose hours are keyed in (their own check layout) is on every payday while active
+    .filter((e) => !e.payday_skip && (worked.has(e.id) || lineOf.has(e.id) || (e.active && (e.pay_type === "salary" || owes.has(e.id) || !!e.check_setup?.keyedHours))))
     .map((e) => {
-      const c = timecard(x.settings, e.id, x.punches, x.offs, x.start, x.end);
-      const pay = payFor(x.settings, c, x.rates[e.id], e.pay_type);
+      const setup = e.check_setup?.keyedHours ? e.check_setup : null;
       const line = lineOf.get(e.id) || null;
+      const c = timecard(x.settings, e.id, x.punches, x.offs, x.start, x.end);
+      const rate = x.rates[e.id]?.rate != null ? +x.rates[e.id].rate! : null;
+      // keyed hours: what was typed, at their rate; no overtime, and the time clock doesn't apply
+      const hrs = setup ? Math.max(0, r2(+(line?.keyed?.hours || 0))) : 0;
+      const pay: PayLine = setup ? { regHours: hrs, otHours: 0, offHours: 0, rate, salary: null, regPay: rate != null ? r2(hrs * rate) : null, otPay: 0, offPay: 0, total: rate != null ? r2(hrs * rate) : null } : payFor(x.settings, c, x.rates[e.id], e.pay_type);
       const bonus = line?.bonus ? +line.bonus : 0;
       const a = advancesFor(e.id, x.advances, x.pays, x.start, payDate, line?.advance_amount != null ? +line.advance_amount : null);
       const kind = (e.paid_by || "payroll") as PaydayRow["kind"];
-      const check = kind === "contract" ? checkLines(pay, bonus, a.take) : [];
-      return { e, kind, pay, issues: c.issues.length, bonus, line, advances: a.due, advance: a.take, planned: a.planned, check, total: r2(check.reduce((s, l) => s + l.amount, 0)) };
+      const check = kind !== "contract" ? [] : setup ? setupLines(setup, pay, bonus, a.take, line?.keyed || null) : checkLines(pay, bonus, a.take);
+      return { e, kind, pay, issues: setup ? 0 : c.issues.length, bonus, line, advances: a.due, advance: a.take, planned: a.planned, check, total: r2(check.reduce((s, l) => s + l.amount, 0)), keyed: !!setup };
     })
-    .filter((r) => r.pay.regHours + r.pay.otHours + r.pay.offHours > 0 || r.e.pay_type === "salary" || r.advance > 0 || r.line)
-    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "payroll" ? -1 : 1) || (a.e.last_name || a.e.first_name).localeCompare(b.e.last_name || b.e.first_name) || a.e.first_name.localeCompare(b.e.first_name));
+    .filter((r) => r.keyed || r.pay.regHours + r.pay.otHours + r.pay.offHours > 0 || r.e.pay_type === "salary" || r.advance > 0 || r.line)
+    // contractors with their own check layout come last (Oct 30, Nick: "make her the last one")
+    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "payroll" ? -1 : 1) || +a.keyed - +b.keyed || (a.e.last_name || a.e.first_name).localeCompare(b.e.last_name || b.e.first_name) || a.e.first_name.localeCompare(b.e.first_name));
 }
 
 /** a QuickBooks payee picked by name: every part of the person's first and last name appears in it ("Jose Garcia" → "Jose Isidro Garcia Gamez") */
