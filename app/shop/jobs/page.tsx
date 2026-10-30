@@ -45,11 +45,12 @@ const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
-  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "Every job has its mockups.", numbers: "Every job has its prices and sizes.",
+  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
   ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
-const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k !== "numbers" && t.state === "needed") : s === "numbers" ? (t.k === "numbers" && t.state === "needed")
+// Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round
+const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k !== "numbers" && t.state === "needed")
   : s === "ready" ? t.state === "made" : s === "sent" ? t.state === "sent" : s === "changes" ? t.state === "changes" : s === "approved" ? t.state === "done" : false);
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
 const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
@@ -83,7 +84,7 @@ export default function JobCenter() {
   const whose = (it: JobItem) => !mine || it.owner === me;
   const inDept = (it: JobItem) => dept === "all" || it.depts.includes(dept) || (it.type !== "order" && it.type !== "request");
   const match = (it: JobItem) => { const t = q.trim().toLowerCase(); return !t || `${it.number || ""} ${it.title} ${it.customer} ${it.sub || ""}`.toLowerCase().includes(t); };
-  const flags = (it: JobItem) => (!cameBack || !!it.revised) && (!artOnly || it.type === "artonly");
+  const flags = (it: JobItem) => (!cameBack || !!it.revised) && (!artOnly || step !== "mockups" || it.type === "artonly");
   const base = (items || []).filter((it) => whose(it) && flags(it));
   const count = (s: Step) => base.filter((it) => it.steps.includes(s) && inDept(it)).length;
   const shown = useMemo(() => base.filter((it) => it.steps.includes(step) && inDept(it) && match(it))
@@ -123,7 +124,7 @@ export default function JobCenter() {
             {step !== "leads" && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? deptCount(k) : "…"}</span></button>)}</div>}
             <div className="chips">
               <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
-              {step === "numbers" && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
+              {step === "mockups" && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
             </div>
             <SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>

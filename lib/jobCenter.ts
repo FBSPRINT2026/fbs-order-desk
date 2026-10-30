@@ -11,7 +11,9 @@ import { mailRows, type MailAct, type MailSug } from "@/lib/inbox";
  * A job isn't one status walking steps in order: it has tracks that move on their own (the art, a sew-out, the numbers),
  * and it shows at every step it's at:
  *  Incoming     · Leads (orders the AI found in email or ClickUp, not made yet) · Requests (portal orders sent in)
- *  In the works · Mockups (art or a sew-out to make) · Numbers (no price or no sizes yet; art made with no order)
+ *  In the works · Mockups (mockups without numbers: the art is made, the price or sizes aren't, or there's no order
+ *                 yet) · Numbers (numbers without mockups: priced and sized, no mockup or sew-out yet). A job with
+ *                 neither shows at both (Oct 29, Nick: "mockups without numbers… numbers without mockups")
  *  Quotes       · Ready (made, not sent) · Sent (with the customer)
  *  Revisions    · Make changes (changes asked on art or a sew-out, or the quote declined with why)
  *  Done         · Approved (everything approved; stays until the job is completed) · Declined (the customer walked
@@ -105,7 +107,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     const g = amByCust.get(key);
     if (g) g.ids.push(m.id); else amByCust.set(key, { ids: [m.id], at: m.created_at, title: (m.title || "Mockup").split(" — ")[0], c: cust(m.customers) });
   }
-  for (const [key, g] of amByCust) out.push({ key: `art:${key}`, type: "artonly", steps: ["numbers"], at: g.at, due: null, customer: g.c, customerId: key.split("|")[0], title: g.title, depts: [], tracks: [{ k: "art", state: "made", label: "Mockup made" }, { k: "numbers", state: "needed", label: "No order yet" }], mockupIds: g.ids });
+  for (const [key, g] of amByCust) out.push({ key: `art:${key}`, type: "artonly", steps: ["mockups"], at: g.at, due: null, customer: g.c, customerId: key.split("|")[0], title: g.title, depts: [], tracks: [{ k: "art", state: "made", label: "Mockup made" }, { k: "numbers", state: "needed", label: "No order yet" }], mockupIds: g.ids });
 
   for (const o of orders) {
     const gs = orderGroups(o);
@@ -151,8 +153,10 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     } else tracks.push({ k: "numbers", state: "done", label: "Order approved" });
 
     const steps: Step[] = [];
-    if (tracks.some((t) => (t.k === "art" || t.k === "sewout") && t.state === "needed")) steps.push("mockups");
-    if (tracks.some((t) => t.k === "numbers" && t.state === "needed")) steps.push("numbers");
+    // In the works: mockups without numbers, numbers without mockups; a job missing both is at both
+    const artNeed = tracks.some((t) => (t.k === "art" || t.k === "sewout") && t.state === "needed"), numNeed = tracks.some((t) => t.k === "numbers" && t.state === "needed");
+    if (numNeed) steps.push("mockups");
+    if (artNeed) steps.push("numbers");
     if (tracks.some((t) => t.state === "made")) steps.push("ready");
     if (tracks.some((t) => t.state === "sent")) steps.push("sent");
     if (tracks.some((t) => t.state === "changes")) steps.push("changes");
