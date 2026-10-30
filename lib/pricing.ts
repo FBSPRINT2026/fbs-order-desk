@@ -305,7 +305,7 @@ export type Group = { id: string; name?: string; /** priced by a program design'
   neckLabel?: string; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** the mockup was made in the logo builder (Add logo): Edit mockup opens it there (lib/mockupFresh.ts mockupHref) */ mockupKind?: "logo";
-  /** what the saved pictures were drawn from: when it changes they're drawn again by themselves (lib/mockupFresh.ts) */ mockupArt?: { k: string; d: Record<string, string> };
+  /** what the saved pictures were drawn from: when it changes they're drawn again by themselves (lib/mockupFresh.ts) */ mockupArt?: import("@/lib/mockupFresh").MockupArt;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
   /** the size the mockup is shown on (2T, 3T…), picked in the Mockup Creator; else the middle size of the run */ mockupSize?: string;
