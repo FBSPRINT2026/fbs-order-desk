@@ -660,7 +660,7 @@ export function InvoiceDoc(p: DocData) {
         {o.po_number && <div className="oc"><span>PO</span><b>{o.po_number}</b></div>}
         <div className="oc"><span>Pieces</span><b>{c.qty} · {prints} print{prints === 1 ? "" : "s"}</b></div>
         {o.approved_at && <div className="oc"><span>Approved</span><b>{new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</b></div>}
-        <div className={"oc due" + (paidUp ? " ok" : "")}><span>{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</span><b>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</b></div>
+        <div className={"oc obal" + (paidUp ? " ok" : "")}><span>{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</span><b>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</b></div>
       </div>
       {(cust.id || sh.terms) && <div className="oterms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
         {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <> 50% down to start: <b>{money(c.total / 2)}</b>.</>}{o.approved_at && o.approved_name ? ` Approved by ${o.approved_name}.` : ""}</div>}

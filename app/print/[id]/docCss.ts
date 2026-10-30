@@ -123,8 +123,8 @@ export const DOC_CSS = `
 .pdoc .ostrip .oc.grow{flex:1;min-width:0}
 .pdoc .ostrip .oc span{font-size:8pt;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
 .pdoc .ostrip .oc b{font-size:11pt;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
-.pdoc .ostrip .oc.due b{font-size:13pt}
-.pdoc .ostrip .oc.due.ok b{color:var(--ok)}
+.pdoc .ostrip .oc.obal b{font-size:13pt}
+.pdoc .ostrip .oc.obal.ok b{color:var(--ok)}
 .pdoc .oterms{font-size:9pt;color:var(--ink3);margin:0 0 16px 14px;white-space:nowrap}
 .pdoc .it .nm{white-space:nowrap}
 .pdoc .it .cl{display:flex;align-items:center;gap:7px;font-size:10pt;color:var(--ink2);margin-top:1px;white-space:nowrap}
