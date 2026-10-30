@@ -332,6 +332,7 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
+  /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string;
   /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | null;
   price_type: PriceType; /** priced by the customer's program rate card (the chip next to Retail / Wholesale) */ use_program?: boolean; /** which of the customer's rate cards (programs.rate_cards id, "main" = the first) */ program_card?: string | null; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };

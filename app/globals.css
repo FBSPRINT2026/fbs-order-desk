@@ -15934,3 +15934,23 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-chk input{margin-top:3px}
 .spt-chk b{display:block;font-size:14px}
 .spt-chk small{display:block;font-size:12.5px;color:var(--ink-3)}
+
+/* Job Center (app/shop/jobs): five groups, each a header with one line under it, its steps on a rail */
+.jc-groups{display:grid;grid-template-columns:2fr 2fr 2fr 1fr 2fr;gap:10px;align-items:stretch}
+.jc-g{border:1px solid var(--line);border-top:3px solid var(--c);border-radius:var(--r);padding:8px 6px 10px;display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--surface)}
+.jc-gh{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.25}
+.jc-gh b{font-size:13.5px;color:var(--ink)}
+.jc-gh span{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.jc-st{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:6px}
+.jc-st .dgz-rail{left:25%;right:25%;top:24px}
+.jc-st .dgz-ring{width:46px;height:46px}
+.jc-tags{display:flex;flex-wrap:wrap;gap:4px}
+.jc-tags.sm .pill{font-size:11.5px;padding:2px 8px 2px 7px}
+.jc-back{font-size:12px;align-self:center}
+.jc-decl{display:inline-flex;gap:6px;align-items:center}
+.jc-decl input{height:30px;width:200px}
+table.tbl.jc{min-width:0}
+table.tbl.jc td:last-child{text-align:right}
+table.tbl.jc th:last-child{text-align:right}
+@media (max-width:900px){.jc-groups{grid-template-columns:repeat(2,minmax(0,1fr))}.jc-g:nth-child(5){grid-column:1/-1}}
+@media (max-width:520px){.jc-gh span{display:none}.jc-st .dgz-ring{width:40px;height:40px}.jc-st .dgz-rail{top:21px}.jc-decl{flex-wrap:wrap}.jc-decl input{width:100%}}
