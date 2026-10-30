@@ -588,3 +588,44 @@ export async function sizeClickUp(admin: SupabaseClient, perTeam: number, deadli
   }));
   return { at: new Date().toISOString(), perTeam, workspaces: out, jobs3y: out.reduce((s, x) => s + x.jobs3y, 0), estFiles: out.reduce((s, x) => s + x.estFiles, 0), estGB: Math.round(out.reduce((s, x) => s + x.estGB, 0) * 10) / 10 };
 }
+
+/**
+ * The words in past jobs' paperwork (Oct 30, Nick: "look at the customer's POs… learn all the ways he might say
+ * things"): for jobs whose files were never listed (completed jobs are kept as job info only), the task is read once
+ * for its files and each PDF's text is kept on the job (`file_texts`). Picks jobs by workspace and name, newest
+ * first; stops at the deadline or ClickUp's per-token limit, and the next run carries on. Nothing in ClickUp changes.
+ */
+export async function readClickUpFileTexts(admin: SupabaseClient, o: { team?: string; name?: string; since?: string; limit?: number; deadline: number }) {
+  const { pdfTextServer } = await import("@/lib/pdfTextServer");
+  let q = admin.from("clickup_tasks").select("id, team_id, name, description, created_at_cu").is("file_texts_at", null).is("parent", null)
+    .order("created_at_cu", { ascending: false }).limit(Math.min(400, o.limit || 120));
+  if (o.team) q = q.eq("team_id", o.team);
+  if (o.since) q = q.gte("created_at_cu", o.since);
+  const { data: rows } = await q;
+  const re = o.name ? new RegExp(o.name, "i") : null;
+  const todo = (rows || []).filter((r) => !re || re.test(`${r.name} ${r.description || ""}`));
+  let done = 0, files = 0;
+  const errors: string[] = [];
+  for (const r of todo) {
+    if (Date.now() > o.deadline) break;
+    const tok = await tokenFor(admin, r.team_id as string);
+    if (used(tok) > 85) break;
+    try {
+      const t = await cu<CuTask>(tok, `/task/${r.id}`);
+      const atts = (t.attachments || []).filter((a) => a.id && a.url && !a.deleted && !a.is_folder).slice(0, 12);
+      const out: { id: string; name: string; url: string; text: string }[] = [];
+      for (const a of atts) {
+        const name = a.title || "file", ext = (a.extension || name.split(".").pop() || "").toLowerCase();
+        let text = "";
+        if (ext === "pdf" && Date.now() < o.deadline) {
+          const buf = await grab(a.url!, tok);
+          if (buf) { text = (await pdfTextServer(new Uint8Array(buf), 6)).slice(0, 20000); files++; }
+        }
+        out.push({ id: a.id, name, url: a.url!, text });
+      }
+      await admin.from("clickup_tasks").update({ file_texts: out, file_texts_at: new Date().toISOString() }).eq("id", r.id);
+      done++;
+    } catch (e) { errors.push(`${r.name}: ${e instanceof Error ? e.message : e}`); if (/slow down/.test(String(e))) break; }
+  }
+  return { ok: true, read: done, pdfs: files, left: todo.length - done, errors: errors.slice(0, 5) };
+}
