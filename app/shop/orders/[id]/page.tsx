@@ -83,7 +83,8 @@ const GOODS_WORD: Record<string, string> = { waiting: "Waiting on goods", on_way
 // the order tabs' icons: on a phone the tabs show these instead of their names (Oct 15, Nick: "the middle tool bar
 // has a horizontal scroll… just make those icons without words")
 const TAB_ICONS: Record<string, ReactNode> = {
-  goods: <><path d="M21 8 12 3 3 8v8l9 5 9-5z" /><path d="m3 8 9 5 9-5M12 13v8" /></>,
+  // goods is a t-shirt, the same as the left menu's Goods (Oct 29, Nick: "should be a T-shirt not a box")
+  goods: <path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" />,
   order: <><path d="M9 3.5h6v3H9z" /><path d="M7 5H5v15.5h14V5h-2" /><path d="M8.5 11h7M8.5 15h4.5" /></>,
   prod: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-9 8" /></>,
   msg: <path d="M4 5h16v11H10l-5 4v-4H4z" />,
