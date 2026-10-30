@@ -30,7 +30,10 @@ export async function getViewer(extra = "") {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, email: "", isStaff: false, role: "", staff: null as Record<string, unknown> | null };
   const email = (user.email || "").toLowerCase();
-  const { data } = await supabase.from("staff").select("email, role" + extra).eq("email", email).maybeSingle();
+  // extra staff columns, with or without the leading comma (Oct 30: getViewer("sees_pay") asked for "rolesees_pay" and
+  // the Payroll Center turned the owner away)
+  const more = extra.trim() ? (extra.trim().startsWith(",") ? extra : `, ${extra.trim()}`) : "";
+  const { data } = await supabase.from("staff").select("email, role" + more).eq("email", email).maybeSingle();
   const staff = (data || null) as Record<string, unknown> | null;
   return { supabase, user, email, isStaff: !!staff, role: ((staff?.role as string) || ""), staff };
 }

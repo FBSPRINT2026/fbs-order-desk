@@ -151,7 +151,7 @@ async function saveActuals(admin: ReturnType<typeof createAdminClient>, start: s
 /** "Get the totals from QuickBooks" on its own (after submitting, or to read them again) */
 export async function pullActuals(start: string): Promise<R<{ found: boolean }>> {
   try {
-    const v = await getViewer("sees_pay");
+    const v = await getViewer(", sees_pay");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const admin = createAdminClient();
     const { p, payDate } = await payday(admin, start);
@@ -164,7 +164,7 @@ export async function pullActuals(start: string): Promise<R<{ found: boolean }>>
  *  amounts back from QuickBooks when it's been submitted. */
 export async function markEntered(start: string, employeeIds: string[]): Promise<R<{ found: boolean }>> {
   try {
-    const v = await getViewer("sees_pay");
+    const v = await getViewer(", sees_pay");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const admin = createAdminClient();
     const { p, rows, payDate } = await payday(admin, start);
@@ -187,7 +187,7 @@ export async function markEntered(start: string, employeeIds: string[]): Promise
  */
 export async function closePayday(start: string, reopen = false): Promise<R<{ closedAt: string | null }>> {
   try {
-    const v = await getViewer("sees_pay, name");
+    const v = await getViewer(", sees_pay, name");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const admin = createAdminClient();
     const { p, rows, payDate } = await payday(admin, start);
@@ -226,7 +226,7 @@ export async function closePayday(start: string, reopen = false): Promise<R<{ cl
  */
 export async function issueAdvance(x: { employeeId: string; amount: number; givenOn: string; perCheck: number | null; checks: number | null; note: string; writeCheck: boolean }): Promise<R<{ doc?: string }>> {
   try {
-    const v = await getViewer("sees_pay");
+    const v = await getViewer(", sees_pay");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const amount = r2(+x.amount);
     if (!(amount > 0)) return { ok: false, error: "Enter the amount." };
