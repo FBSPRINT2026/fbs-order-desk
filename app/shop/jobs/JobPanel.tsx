@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import SendProofTool from "@/components/tools/SendProofTool";
 import { mockupHref } from "@/lib/mockupFresh";
+import { digitizingHref } from "@/lib/digitizeStatus";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobDetail, JobItem, JobPiece, PieceState, ProofVersion, Step } from "@/lib/jobCenter";
 import { jobPanel, markDeclined, notAJob } from "./actions";
@@ -129,7 +130,7 @@ function Hero({ p, d }: { p: JobPiece; d: JobDetail }) {
       {pdf && <a className="jp-pdf" href={pdf} target="_blank" rel="noreferrer">{I(IC.ext, 13)} {cur?.key === opts[0]?.key || p.k !== "art" ? "Open PDF" : "Open picture"}</a>}
       {pics.length ? <img src={pics[Math.min(i, pics.length - 1)]} alt={p.k === "art" ? `Mockup ${cur?.label || ""}` : "Sew-out photo"} />
         : p.k === "quote" ? <div className="jp-quote"><b>{money(p.total)}</b><span>{p.qty ? `${p.qty} pieces · ` : ""}{p.state === "needed" ? "not priced yet" : p.state === "done" ? `approved${p.decidedName ? ` by ${p.decidedName}` : ""}` : "quote"}</span></div>
-        : <div className="jp-empty">{I(p.k === "sewout" ? IC.needle : IC.shirt, 40)}<span>{p.k === "sewout" ? `No sew-out photo yet · ${p.where}` : "No mockup yet"}</span></div>}
+        : <div className="jp-empty">{I(p.k === "sewout" ? IC.needle : IC.shirt, 40)}<span>{p.k === "sewout" ? `${p.dz || "No sew-out photo yet"} · ${p.where}` : "No mockup yet"}</span></div>}
       {pics.length > 1 && <div className="jp-nav"><button type="button" aria-label="Previous picture" onClick={() => setI((x) => (x - 1 + pics.length) % pics.length)}>{I(IC.left)}</button><span>{i + 1} / {pics.length}</span><button type="button" aria-label="Next picture" onClick={() => setI((x) => (x + 1) % pics.length)}>{I(IC.right)}</button></div>}
       {d.declinedAt && <div className="jp-decl">Declined {day(d.declinedAt)}{d.declinedWhy ? `: ${d.declinedWhy}` : ""}</div>}
     </div>
@@ -156,7 +157,7 @@ function Now({ p, d, who, after, anyOut }: { p: JobPiece; d: JobDetail; who: str
   else if (p.state === "sent" && p.k === "art") main = <button type="button" className="btn primary" disabled={busy} title="Emails them a reminder" onClick={() => void go(() => remindProof(d.id), "Reminder sent.")}>{I(IC.bell, 14)} Remind {who}</button>;
   else if (p.state === "sent" && p.k === "sewout" && p.id) main = <button type="button" className="btn primary" disabled={busy} title="Emails them a reminder" onClick={() => void go(() => remindSewoutAction(p.id!), "Reminder sent.")}>{I(IC.bell, 14)} Remind {who}</button>;
   else if ((p.state === "needed" || p.state === "changes") && p.k === "art") main = d.mockGroup ? <Link className="btn primary" href={mockupHref(d.id, d.mockGroup)}>{p.state === "changes" ? "Make the changes" : "Make the mockup"}</Link> : null;
-  else if ((p.state === "needed" || p.state === "changes") && p.k === "sewout") main = <Link className="btn primary" href="/shop/digitizing">{p.state === "changes" ? "Make the changes" : "Take the sew-out"}</Link>;
+  else if ((p.state === "needed" || p.state === "changes") && p.k === "sewout") main = <Link className="btn primary" href={digitizingHref(d.id, p.imprintId)}>{p.state === "changes" ? "Make the changes" : p.dz === "The file is in: sew it out" ? "Take the sew-out" : "Open in Digitizing"}</Link>;
   else if ((p.state === "needed" || p.state === "changes") && p.k === "quote") main = <Link className="btn primary" href={`/shop/orders/${d.id}`}>{p.state === "changes" ? "Fix the quote" : p.qty ? "Price it" : "Add sizes"}</Link>;
   return (
     <div className="jp-sec">

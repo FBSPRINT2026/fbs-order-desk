@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calcOrder, lineQty, mergeSettings, orderGroups, type Order } from "@/lib/pricing";
+import { calcOrder, lineQty, mergeSettings, orderGroups, type Imprint, type Order } from "@/lib/pricing";
+import { digitizeState } from "@/lib/digitizeStatus";
 import { accountOwners } from "@/lib/accountOwners";
 import { mailRows, type MailAct, type MailSug } from "@/lib/inbox";
 
@@ -55,6 +56,18 @@ async function inChunks<T>(ids: string[], f: (part: string[]) => PromiseLike<{ d
   return out;
 }
 
+/** an embroidered print's sew-out track, from where it is in digitizing (lib/digitizeStatus.ts digitizeState) */
+function sewTrack(im: Imprint, d: { specs: unknown } | undefined, sws: { imprint_id: string; status: string; sent_at: string | null; customer_comment: string; order_id: string }[]): Track | null {
+  const where = im.location || "Embroidery";
+  const live = sws.find((x) => x.imprint_id === im.id);
+  if (live) return live.status === "approved" ? { k: "sewout", state: "done", label: `Sew-out approved · ${where}` }
+    : live.status === "changes" ? { k: "sewout", state: "changes", label: `Sew-out: changes · ${where}`, note: live.customer_comment || undefined }
+    : { k: "sewout", state: live.sent_at ? "sent" : "made", label: live.sent_at ? `Sew-out sent · ${where}` : `Sew-out taken, not sent · ${where}` };
+  const st = digitizeState(im, d as never, undefined);
+  if (st.state === "ok") return st.repeat ? null : { k: "sewout", state: "done", label: `Sew-out approved · ${where}` };
+  return { k: "sewout", state: "needed", label: `${st.state === "need" ? "Needs digitizing" : st.state === "asked" ? (st.changes ? "Changes asked of the digitizer" : "With the digitizer") : "File in, sew it out"} · ${where}` };
+}
+
 export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const now = Date.now();
   const since = new Date(now - TWO_WEEKS).toISOString();
@@ -75,6 +88,9 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     inChunks<{ id: string; order_id: string; imprint_id: string; status: string; sent_at: string | null; customer_comment: string; created_at: string }>(ids, (p) => admin.from("sewouts").select("id, order_id, imprint_id, status, sent_at, customer_comment, created_at").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "sent", "approved"]).order("created_at", { ascending: false })),
   ]);
+  // the logos on embroidered prints: where each is in digitizing comes from them (lib/digitizeStatus.ts)
+  const embDesignIds = [...new Set(orders.flatMap((o) => orderGroups(o).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id)))))];
+  const embDesigns = new Map((await inChunks<{ id: string; specs: unknown }>(embDesignIds, (p) => admin.from("designs").select("id, specs").in("id", p), 100)).map((d) => [d.id, d]));
   const cust = (c?: { company?: string; name?: string } | null) => c?.company || c?.name || "";
   const out: JobItem[] = [];
 
@@ -132,15 +148,12 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
       tracks.push({ k: "art", state: st, label: st === "sent" ? `Mockup v${live[0].version} sent` : st === "changes" ? "Mockup: changes asked" : `Mockup v${live[0].version} approved`, note: ch?.customer_comment || undefined });
     } else if (quoting && hasPrints) tracks.push({ k: "art", state: "needed", label: "No mockup yet" });
     else if (quoting && !hasPrints) tracks.push({ k: "art", state: "needed", label: "No prints yet" });
-    // each embroidered print with its stitch file in: its sew-out
+    // each embroidered print in the Digitizing Center: where it is there (Oct 29, Nick: "on sew-outs… a list of all of the
+    // jobs that are in the Digitizing Center right now"), by the same answer the Digitizing page and the order use
     for (const g of gs) for (const im of g.imprints || []) {
-      if (im.method !== "embroidery" || !im.emb?.file) continue;
-      const sw = sws.filter((x) => x.order_id === o.id && x.imprint_id === im.id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-      const where = im.location || "Embroidery";
-      if (!sw) { if (early) tracks.push({ k: "sewout", state: "needed", label: `Sew-out not taken · ${where}` }); }
-      else if (sw.status === "approved") tracks.push({ k: "sewout", state: "done", label: `Sew-out approved · ${where}` });
-      else if (sw.status === "changes") tracks.push({ k: "sewout", state: "changes", label: `Sew-out: changes · ${where}`, note: sw.customer_comment || undefined });
-      else tracks.push({ k: "sewout", state: sw.sent_at ? "sent" : "made", label: `Sew-out ${sw.sent_at ? "sent" : "taken"} · ${where}` });
+      if (im.method !== "embroidery") continue;
+      const t = sewTrack(im, embDesigns.get(String(im.design_id || "")), sws.filter((x) => x.order_id === o.id));
+      if (t) tracks.push(t);
     }
     // the numbers: the price and the sizes, the quote out with them, or declined
     const c = calcOrder(o, settings, []);
@@ -219,7 +232,7 @@ export type PieceState = "needed" | "made" | "sent" | "changes" | "done";
 export type ProofVersion = { v: number; state: PieceState | "replaced"; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pics: string[] };
 export type JobPiece =
   | { k: "art"; state: PieceState; versions: ProofVersion[]; next: string[] | null; pdf: string }
-  | { k: "sewout"; id: string | null; where: string; imprintId: string; state: PieceState; v: number; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pic: string; pdf: string }
+  | { k: "sewout"; id: string | null; where: string; imprintId: string; state: PieceState; /** before a sew-out: where it is in digitizing */ dz?: string; v: number; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pic: string; pdf: string }
   | { k: "quote"; state: PieceState; total: number; qty: number; sentAt: string | null; decidedAt: string | null; decidedName: string | null; comment: string; pdf: string };
 export type JobDetail = {
   id: string; number: number; title: string; status: string; due: string | null; qty: number; customer: string; contact: string; email: string;
@@ -269,12 +282,20 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   const unsent = early && mks.length > 0 && mks.some((m) => !live.some((p) => p.mockup_id === m.id));
   const hasPrints = gs.some((g) => (g.imprints || []).length);
   if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(mks.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
-  // each embroidered print's sew-out
+  // each embroidered print's sew-out, or where it is in digitizing before there is one (lib/digitizeStatus.ts)
+  const dIds = [...new Set(gs.flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id))))];
+  const { data: dzs } = dIds.length ? await admin.from("designs").select("id, specs").in("id", dIds) : { data: [] };
   for (const g of gs) for (const im of g.imprints || []) {
-    if (im.method !== "embroidery" || !im.emb?.file) continue;
+    if (im.method !== "embroidery") continue;
     const x = sws.find((y) => y.imprint_id === im.id);
     const where = `${im.location || "Embroidery"}${im.size ? `, ${im.size}` : ""}`;
-    if (!x) { if (early) pieces.push({ k: "sewout", id: null, where, imprintId: im.id, state: "needed", v: 0, sentAt: null, sentTo: null, viewedAt: null, views: 0, decidedAt: null, decidedName: null, comment: "", pic: "", pdf: "" }); continue; }
+    if (!x) {
+      const st = digitizeState(im, ((dzs || []) as { id: string; specs: unknown }[]).find((z) => z.id === im.design_id) as never, undefined);
+      if (st.state === "ok" && st.repeat) continue;
+      pieces.push({ k: "sewout", id: null, where, imprintId: im.id, state: st.state === "ok" ? "done" : "needed", v: 0, sentAt: null, sentTo: null, viewedAt: null, views: 0, decidedAt: null, decidedName: null, comment: "", pic: "", pdf: "",
+        dz: st.state === "need" ? "Needs digitizing" : st.state === "asked" ? (st.changes ? "Changes asked of the digitizer" : "With the digitizer") : st.state === "done" ? "The file is in: sew it out" : "" });
+      continue;
+    }
     pieces.push({ k: "sewout", id: x.id, where, imprintId: im.id, state: x.status === "approved" ? "done" : x.status === "changes" ? "changes" : x.sent_at ? "sent" : "made", v: x.version, sentAt: x.sent_at, sentTo: x.sent_to,
       viewedAt: x.viewed_at, views: x.view_count || 0, decidedAt: x.decided_at, decidedName: x.decided_name, comment: x.customer_comment || "", pic: url.get(x.photo_path) || "", pdf: `/print/${orderId}?sewout=${x.id}` });
   }
