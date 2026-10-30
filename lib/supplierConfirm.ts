@@ -68,3 +68,14 @@ export function supplierConfirms(texts: string[]): ConfirmRead {
   }
   return { lines: [...by.values()], pieces, rows };
 }
+
+/**
+ * Who a confirmation is from and its order number, with the pieces its rows add to (Oct 30: Pittsburgh's goods note said
+ * "SanMar 8 pcs" when SanMar's confirmation was 43): the goods on an order are written from these, not guessed.
+ */
+export function confirmMeta(text: string): { supplier: "sanmar" | "ss" | "alpha" | ""; order: string; pieces: number } {
+  const t = String(text || "").replace(/\s+/g, " ");
+  const supplier = /sanmar/i.test(t) ? "sanmar" : /s&s activewear/i.test(t) ? "ss" : /alphabroder/i.test(t) ? "alpha" : "";
+  const order = (t.match(/\b(SO-\d{6,12})\b/) || t.match(/Order Confirmation:?\s*#?\s*(\d{6,12})/i) || t.match(/Order (?:Number|#)\s*:?\s*([A-Z0-9-]{5,20})/i) || [])[1] || "";
+  return { supplier, order, pieces: supplierConfirmRows(text).reduce((a, r) => a + r.qty, 0) };
+}
