@@ -512,7 +512,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
         const extra0 = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
         // a personalized piece (GLine.pers): the program's own personalization price (Nine18 $5), else the list's
-        const own = prog!.card?.extraPrices || {}, pk = Object.keys(own).find((k) => /personal/i.test(k));
+        const own: Record<string, number> = (want0 && prog?.card?.extraPrices) || {}, pk = Object.keys(own).find((k) => /personal/i.test(k));
         const persP = want0 && l.pers ? (pk ? +own[pk] : persEach(settings, d.price_type || "retail")) : 0;
         const extra = persP ? { each: (extra0?.each || 0) + persP, names: [extra0?.names, "Personalization"].filter(Boolean).join(", ") } : extra0;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
