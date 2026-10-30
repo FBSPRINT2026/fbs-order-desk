@@ -11,7 +11,8 @@ import type { SheetLine } from "@/lib/sheetSizes";
  * (item # ("00708763", Under Armour's "134E2508"), brand - description - style, color, size, pieces, price, line total). A size split over two warehouses
  * (Mauve M 51 + 49) is added up. Every confirmation in the order is added together: one line per style + color.
  */
-const SIZE = "(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL|[2-6]X|Y?XS|YS|YM|YL|YXL|OSFA|OS|NB|\\d{1,2}T|\\d{1,2}-\\d{1,2}M|\\d{1,2}M)";
+// waist sizes too (Oct 30): 30, 32x30, and SanMar's waist+inseam run together (3232); lib/pricing.ts waistOf reads them
+const SIZE = "(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL|[2-6]X|Y?XS|YS|YM|YL|YXL|OSFA|OS|NB|\\d{1,2}T|\\d{1,2}-\\d{1,2}M|\\d{1,2}M|\\d{2}[xX/]\\d{2}|\\d{4}|\\d{2})";
 const ROW = new RegExp(`\\b(\\d[0-9A-Z]{5,8})\\s+(.+?)\\s+-\\s+([A-Z0-9][A-Z0-9-]{1,11})\\s+(.+?)\\s+(${SIZE})\\s+(\\d{1,5})\\s+\\$?(\\d{1,4}\\.\\d{2})\\s+\\$?([\\d,]{1,9}\\.\\d{2})(?=\\s|$)`, "g");
 
 /**
