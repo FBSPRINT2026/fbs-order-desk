@@ -13,7 +13,7 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
-import { fitLocation, LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { finishingList, fitLocation, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
@@ -421,7 +421,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-28b";
+export const READER_REV = "2026-10-30a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -516,7 +516,10 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   }
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
-  const fin = (settings.finishing || []).map((f) => `${f.id} = ${f.name}`).join("; ");
+  // the finishing and embroidery extras of THIS customer's price list (Oct 30: Nine18 is wholesale, whose list has
+  // personalization; the retail list the reader used before had none, so "Cody White / Ops Manager" was dropped)
+  const finAll = finishingList(settings as Settings, priceList(settings as Settings, ((cust?.price_type as PriceType) || "retail")));
+  const fin = finAll.map((f) => `${f.id} = ${f.name}`).join("; ");
   const system = `${SHOP_CONTEXT(settings as Settings)}
 More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like 3-6M or 6-12M are written as the top month (6M, 12M).
 
@@ -536,8 +539,9 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 4g. THEIR LOGOS ON FILE AND BRAND STANDARDS (Oct 27, Nick on Cedar Promos' ShipStation SO#73417: "I see the customer… I see their logo on file, I see he has polos… I know the brand standards, it's navy on one and white on another"): when THEIR LOGOS ON FILE are listed and the files, the subject or the job name show one of them (the same name, the same look in their photos), that's the art: set logo_on_file to its D-number and leave art_file null; the logo's sew file gives the size and stitches, so leave size empty. Decoration: "DECORATION: EMBROIDERY" on a sheet is method embroidery; a page or garment marked with another spot ("DECORATION: LEFT ARM/SLEEVE") prints there instead (a quarter-zip or long sleeve's left arm is Left Sleeve). Groups go by WHERE the logo goes: every garment with the logo at the same spot is ONE group, even when the thread differs by garment color; a different spot (the sleeve) is its own group. Threads: look at each garment's photo: the logo's color there is its thread; else the brand's standards (light goods get the light thread, dark goods the dark one: navy, black and charcoal are dark). The print's inks are the thread most of the group gets; the garments whose logo is another thread go in thread_changes with that thread's full name. When you can't tell which thread a garment gets (the photo is too small or unclear and the brand has no rule for it), check with staff (rule 11): one question, the brand's threads as the choices. When the photos or the brand's standard settle a garment's thread, don't ask about it (no question about light polos getting the light thread).
 13. WHERE THINGS GO (Oct 27, Nick: "you're putting the customer notes in the group description… and way too much information in the customer notes. Remember, that's what they're going to see"): how to decorate it (the logo's size and placement, "match the thread to the bag straps", "same size and placement as the flag from the Invitational job") goes on the print it's about (its size, inks and notes); when there are no prints yet, in notes (for staff). The supplier, tracking, SKU, reference and order numbers go in goods or notes. A group's description is only how it's packed or labeled. customer_notes is what the customer reads on their quote: one or two short lines at most, only a request of theirs nothing else on the order shows, and usually empty.
 5. Garments that share the same prints are one group, with the mockup files for them. Instructions for a whole group (rolled and rubber-banded, tagged with UPCs, boxed by location) go in that group's description.
-6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
-7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
+6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive). Read EVERY supplier order confirmation in the files (SanMar, S&S Activewear, alphabroder…): when the blanks come from more than one supplier, the supplier is the one sending the most pieces and goods.note names every supplier with its order number and pieces ("SanMar SO-167149318, 43 pcs + S&S 77288309, 35 pcs"), so staff track both; one supplier still gets its order number in the note.
+7. Finishing and embroidery extras (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
+7b. PERSONALIZATION (Oct 30, Nick on All My Sons' Pittsburgh PO: "Cody White / Ops Manager" under a jacket was dropped): a name, title, department or number to put on certain pieces ("PERSONALIZATION", "W/ NAME", a name under a garment line, "Cody White / Ops Manager", "names below", a list of names with sizes) is part of the order, never a note to skip. The personalized pieces are their OWN garment line (split them off the same style and color's other pieces) in their OWN group: the same prints as the pieces they came from, plus one print for the personalization at the place the paperwork names (the brand's standards say where; else Right Chest), the same method as the logo (embroidery when the logo is embroidered), and with the personalization extra ticked in finishing when this list has one. Put each piece's name exactly as written, with its size, in that line's note ("Cody White / Ops Manager (S)"), one per piece: the names must account for every personalized piece, and when the count or a size doesn't match, ask. Never personalize the whole group, only the pieces named.
 8. Read the WHOLE conversation, not just the newest email: customers decide over many emails (the garment and color picked from our options, the sizes, a price we agreed, the date they need it, then the art last). The latest decision wins (a size list sent later replaces an earlier one; the style they finally chose replaces the ones they considered). Prices and terms WE wrote are what was agreed: put them in the notes for staff, and don't ask the customer again for anything already settled in the conversation.
 ${PO_RULES}
 9. Art sent as a link (a file marked "from a link", e.g. a Canva design preview): use it as the art for the mockup. A Canva preview is a picture, not a print file: say in questions that we'll need the print file (PDF or SVG) unless a real file came with it.
@@ -573,7 +577,7 @@ ${staffSays}` : ""}`;
   const r = await askClaude<AiOrder>({
     task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 8000, timeoutMs: 58_000,
     ctx: { activity_id: C.id, customer_id: (a.customer_id as string) || null, by }, admin,
-    tool: tool((settings.finishing || []).map((f) => f.id)), system, prompt, images, documents,
+    tool: tool(finAll.map((f) => f.id)), system, prompt, images, documents,
   });
   if (!r.ok) return { ok: false, error: r.error };
   // the model sometimes wraps its answer as { order: { ... } } (Peticolas, Oct 8: an empty draft): unwrap it
@@ -683,7 +687,7 @@ ${staffSays}` : ""}`;
 
   const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
   const refNotes: string[] = [];
-  const finIds = new Set((settings.finishing || []).map((f) => f.id));
+  const finIds = new Set(finAll.map((f) => f.id));
   let groups: Group[] = [];
   /** groups merged into one (mergeLogoGroups): each reading group's new place, and the ones that went into another */
   let mergedFrom: number[] | null = null, mergedAway = new Set<number>();

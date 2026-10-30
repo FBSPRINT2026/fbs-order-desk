@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -492,7 +492,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // like personalization $5)
     const finishingExtra = (d: Order, g: Group, flat: boolean) => {
       const pl = priceList(settings, d.price_type || "retail");
-      const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
+      const list = finishingList(settings, pl, g.customFin);
       const own = prog!.card?.extraPrices || {};
       const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || !prog!.card?.designsAllIn || own[f.id] != null));
       // the tag print's price typed on the group wins, then the program's own price, then the list's

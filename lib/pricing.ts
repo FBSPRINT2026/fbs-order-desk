@@ -676,6 +676,12 @@ export function priceList(s: Settings, type: PriceType = "retail") {
   return { ...pl, markup: s.markup, useGarment: type !== "wholesale" };
 }
 
+/** every finishing and embroidery extra a group of this price list can have ticked (fold, tags… and specialty thread,
+ *  3D puff, personalization), plus the group's own: the one list pricing, the order page and the order reader use */
+export function finishingList(s: Settings, pl: PriceList, custom?: Finishing[] | null): Finishing[] {
+  return [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || []), ...(custom || [])];
+}
+
 export const r2 = (n: number) => Math.round((+n || 0) * 100) / 100;
 const num = (v: unknown) => (v === "" || v == null || isNaN(+(v as number)) ? 0 : +(v as number));
 
@@ -884,7 +890,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
     return { light, print: printCache.get(key) as number };
   };
-  const finList = [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || []), ...(g.customFin || [])];
+  const finList = finishingList(s, pl, g.customFin);
   const finishing = ((g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[])
     .map((f) => (f.id === "relabel" && g.tagPrice != null && !isNaN(+g.tagPrice) ? { ...f, price: +g.tagPrice } : f));
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
