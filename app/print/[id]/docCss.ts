@@ -113,7 +113,24 @@ export const DOC_CSS = `
 .pdoc .n2.hit{font-weight:600;color:var(--ink)}
 .pdoc .n2{font-size:10.5pt;color:var(--ink2);margin-top:8px;line-height:1.35;white-space:pre-wrap}
 
-/* invoice / quote */
+/* invoice / quote: each fact its own short line (Oct 29, Nick) */
+.pdoc .parties.iv{grid-template-columns:1fr 1fr;gap:32px;margin:20px 0 14px}
+.pdoc .parties.iv > div{white-space:normal;font-size:10.5pt;line-height:1.45}
+.pdoc .parties.iv > div > div,.pdoc .parties.iv > div > b{display:block}
+.pdoc .ostrip{display:flex;align-items:stretch;background:#f6f7f9;border-radius:10px;padding:9px 4px;margin:0 0 4px}
+.pdoc .ostrip .oc{display:flex;flex-direction:column;justify-content:center;padding:0 14px;border-left:1px solid #dfe3e8;white-space:nowrap}
+.pdoc .ostrip .oc:first-child{border-left:0}
+.pdoc .ostrip .oc.grow{flex:1;min-width:0}
+.pdoc .ostrip .oc span{font-size:8pt;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.pdoc .ostrip .oc b{font-size:11pt;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
+.pdoc .ostrip .oc.due b{font-size:13pt}
+.pdoc .ostrip .oc.due.ok b{color:var(--ok)}
+.pdoc .oterms{font-size:9pt;color:var(--ink3);margin:0 0 16px 14px;white-space:nowrap}
+.pdoc .it .nm{white-space:nowrap}
+.pdoc .it .cl{display:flex;align-items:center;gap:7px;font-size:10pt;color:var(--ink2);margin-top:1px;white-space:nowrap}
+.pdoc .sup{border:1px solid var(--ink3);color:var(--ink2);border-radius:4px;font-size:7pt;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:1px 5px;line-height:1.2}
+.pdoc .it tr.setup td{height:var(--row);box-sizing:border-box;padding-top:0;padding-bottom:0;vertical-align:middle}
+
 .pdoc .top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
 /* the shop's logo on the left, its own size (the left menu's .brand rule is a flex column that stretched it across, so the
    logo sat in the middle: Oct 29, Nick) */

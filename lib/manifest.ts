@@ -1,4 +1,5 @@
 import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
+import { orderSubject } from "@/lib/orderSubject";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
@@ -638,7 +639,7 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
   if (ids.length) await admin.from("supplier_manifest_lines").update({ order_id: orderId, kind, match_how: how }).in("id", ids);
   if (kind === "blanks") return applyBlanks(admin, supplier, g, orderId);
   if (kind !== "goods") return;
-  const { data: o } = await admin.from("orders").select("id, number, customer_id, due_date").eq("id", orderId).single();
+  const { data: o } = await admin.from("orders").select("id, number, nickname, customer_id, due_date").eq("id", orderId).single();
   if (!o) return;
   const { data: existing } = await admin.from("goods_shipments").select("tracking, note").eq("order_id", orderId);
   const have = new Set(((existing || []) as { tracking: string }[]).map((x) => x.tracking));
@@ -688,7 +689,7 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
   await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "staff", author_email: "", author_name: shop, body });
   if (short.length) {
     const { data: c } = o.customer_id ? await admin.from("customers").select("email").eq("id", o.customer_id).maybeSingle() : { data: null };
-    const subject = `Part of your goods for #${o.number} didn't ship`;
+    const subject = orderSubject(o.number, "Part of your goods didn't ship", (o as { nickname?: string | null }).nickname);
     if (c?.email) await sendEmail({ to: c.email, replyTo: SHOP_NOTIFY_EMAIL, subject, html: emailLayout(shop, subject, body, "Open your portal", `${siteUrl()}/portal?area=messages&c=${orderId}:goods`) }).catch(() => false);
     if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `[Goods] ${subject}`, html: emailLayout(shop, subject, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) }).catch(() => false);
   }
