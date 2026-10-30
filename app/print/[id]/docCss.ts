@@ -290,6 +290,19 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;position:relative;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
 .pdoc .pf-art{height:7in;margin-top:12px}
+.pdoc .pf-art.pf-art-cc{height:5.9in}
+.pdoc .pf-cc{margin-top:12px}
+.pdoc .pf-cc-row{display:flex;flex-wrap:wrap;gap:12px 36px;margin-top:6px}
+.pdoc .pf-cc-v{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.pdoc .pf-cc-pic{display:flex;flex-direction:column;gap:4px;flex:none}
+.pdoc .art.pf-cc-tile{width:1in;height:1in;border-radius:6px;border:1px solid var(--line)}
+.pdoc .pf-cc-blk{display:block;width:1in;height:0.16in;border-radius:3px;border:1px solid rgba(0,0,0,.2)}
+.pdoc .pf-cc-t{display:flex;flex-direction:column;gap:3px;font-size:10pt;color:var(--ink2);min-width:0}
+.pdoc .pf-cc-t>b{font-size:11pt;color:var(--ink)}
+.pdoc .pf-cc-ink{display:inline-flex;align-items:center;gap:6px;margin-top:3px}
+.pdoc .pf-cc-ink i{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.25);display:inline-block}
+.pdoc .pf-cc-ink b{color:var(--ink);font-size:11pt}
+.pdoc .pf-cc-t small{font-size:9.5pt;color:var(--ink3)}
 .pdoc .pf-chg ul{margin:3px 0 4px;padding-left:18px}
 .pdoc .pf-chg li{margin:1px 0}
 .pdoc .pf-specs{grid-template-columns:repeat(4,1fr)}

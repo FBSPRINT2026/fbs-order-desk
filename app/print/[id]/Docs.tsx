@@ -1,5 +1,5 @@
 import { threadByName } from "@/lib/embroidery";
-import { inkChanges, inkChangesText } from "@/lib/inkBy";
+import { changeVersions, inkChanges, inkChangesText } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
@@ -578,6 +578,10 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
+  // the color change's versions (A as printed, then each change) with the garments each goes on (lib/inkBy.ts)
+  const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : p.colorHexes?.[ckey(v.colors[0])] || guessHex(v.colors[0]) || "#9aa1ab" }));
+  // the tile: the art fit in a 1" square
+  const tileW = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.w) / sz.h) : 0.82, tileH = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.h) / sz.w) : 0.82;
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
   const specs: [string, string][] = d.visualOnly ? [["Location", d.location || "—"], ["Print", MATCH_PREV]] : [
     ["Location", d.location || "—"], ["Print size", sz.label || "—"], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
@@ -586,7 +590,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   return (
     <section className="sheet pf">
       <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">{variant ? <><b className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</b> · </> : null}Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
-      <div className={"art pf-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
+      <div className={"art pf-art" + (isDark(hex) ? " dark" : "") + (ccVers.length > 1 ? " pf-art-cc" : "")} style={{ background: hex }}>
         {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
         {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
@@ -599,8 +603,32 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
           <div className="pf-inklist">{inks.map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b></span>)}</div>
         </div>
       )}
-      {/* a color change is noted on the one proof page, not a second page (Oct 26) */}
-      {!variant && inkChanges(d).length > 0 && <div className="n2"><b>{changeWord(d.method)}:</b> {inkChangesText(d)}</div>}
+      {/* a color change is shown on the one proof page, not a second page (Oct 26): each version small, the art in its ink on
+          its garment color, a block of that ink under it (Oct 30, Nick: "show a small visual… a small block with the PMS
+          color underneath it") */}
+      {!variant && ccVers.length > 1 && (
+        <div className="pf-cc">
+          <div className="lbl">{changeWord(d.method)}</div>
+          <div className="pf-cc-row">
+            {ccVers.map((v) => (
+              <div className="pf-cc-v" key={v.letter}>
+                <div className="pf-cc-pic">
+                  <div className={"art pf-cc-tile" + (isDark(v.hex) ? " dark" : "")} style={{ background: v.hex }}>
+                    {pic ? <ArtPic d={d} des={des} pic={pic} swap={v.swap} style={{ top: `${(1 - tileH) / 2}in`, width: `${tileW}in`, height: `${tileH}in` }} /> : null}
+                  </div>
+                  <i className="pf-cc-blk" style={{ background: colorHex(v.ink) || "#ccc" }} />
+                </div>
+                <div className="pf-cc-t">
+                  <b>{v.letter} · {v.letter === "A" ? "As printed" : changeWord(d.method)}</b>
+                  <span>on {v.colors.join(", ")}{v.styles ? ` · ${v.styles}` : ""}</span>
+                  <span className="pf-cc-ink"><i style={{ background: colorHex(v.ink) || "#ccc" }} /><b>{v.ink}</b></span>
+                  {v.from && <small>instead of {v.from}</small>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* our own notes aren't the customer's (Oct 23, Nick: "on the PDF proof, we don't need… the notes"); what we changed
           in their art is, as a list */}
       {(d.artChanges || []).length > 0 && <div className="n2 pf-chg"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : "Changes we made to your art"}:</b>

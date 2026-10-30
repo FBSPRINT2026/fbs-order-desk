@@ -3,8 +3,8 @@ import BackLink from "@/components/BackLink";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { inkChanges, inksOnColor } from "@/lib/inkBy";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR } from "@/lib/pricing";
+import { changeVersions, inkChanges, inksOnColor } from "@/lib/inkBy";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2 } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -45,7 +45,7 @@ import { loadInkFormulas } from "@/lib/inkFormulas";
 import { levelBack } from "@/lib/levelBack";
 import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
-import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorHex, deltaE, detectColors, recolorTrim, suggestInk } from "@/lib/inkColors";
+import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { closestThread, isThreadName, threadLabel } from "@/lib/embroidery";
 import { loadThreadStock } from "@/lib/threadStock";
@@ -2668,7 +2668,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the art as big as the panel takes (6.6" × 5.7"), its real measurements drawn on
         const sz = sizeOf(im), max = spotFor(im.location);
         const APW = 6.6, APH = 5.7, s = sz.w && sz.h ? Math.min(APW / sz.w, APH / sz.h) : 0;
-        const aw = (s ? sz.w * s : APW) * IN, ah = (s ? sz.h * s : APH) * IN, top = 0.45 * IN, panelH = 7 * IN;
+        // a color change takes room under the blow-up for its versions (Oct 30), so the panel is a little shorter then
+        const vers = changeVersions(im, todo);
+        const aw = (s ? sz.w * s : APW) * IN, ah = (s ? sz.h * s : APH) * IN, top = 0.45 * IN, panelH = (vers.length > 1 ? 5.9 : 7) * IN;
         const cxm = L + CW / 2;
         x.save(); rrect(x, L, y, CW, panelH, 12 * PX); x.clip();
         x.fillStyle = hex; x.fillRect(L, y, CW, panelH);
@@ -2726,6 +2728,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             ix += w;
           }
           y += rowH + 12 * PX;
+        }
+        // the color change, small (Oct 30, Nick: "show a small visual… a small block with the PMS color underneath it"):
+        // each version's art in its ink on its shirt color, a block of that ink under it, and what it's on (lib/inkBy.ts)
+        if (vers.length > 1) {
+          lbl(x, changeWord(im.method), L, y + 9 * PT); y += 9 * PT * 1.35 + 6 * PX;
+          const T = 1 * IN, colW = CW / 2;
+          for (const [vi, v] of vers.entries()) {
+            const cx0 = L + (vi % 2) * colW;
+            if (vi > 0 && vi % 2 === 0) y += T + 0.16 * IN + 16 * PX;
+            if (y + T + 0.2 * IN > BOT - 8.5 * PT - 10 * PX) break;
+            const line = todo.find((l) => (l.color || "").trim().toLowerCase() === v.colors[0].trim().toLowerCase()) || first;
+            const bg = shirtHex(line);
+            x.save(); rrect(x, cx0, y, T, T, 6 * PX); x.clip(); x.fillStyle = bg; x.fillRect(cx0, y, T, T);
+            const pic = art;
+            if (pic) {
+              const src: CanvasImageSource = v.swap ? paintPrint(pic, colorChangeWant(pic, null, inkList2(im.inks || ""), v.swap), { maxSide: 700 }) : pic;
+              const iw = (src as HTMLImageElement).naturalWidth || (src as HTMLCanvasElement).width || 1, ih = (src as HTMLImageElement).naturalHeight || (src as HTMLCanvasElement).height || 1;
+              const k = Math.min((T * 0.82) / iw, (T * 0.82) / ih);
+              x.drawImage(src, cx0 + (T - iw * k) / 2, y + (T - ih * k) / 2, iw * k, ih * k);
+            }
+            x.restore(); x.strokeStyle = C.line; x.lineWidth = 1 * PX; rrect(x, cx0, y, T, T, 6 * PX); x.stroke();
+            x.fillStyle = colorHex(v.ink.split(",")[0].trim()) || "#cccccc"; x.fillRect(cx0, y + T + 4 * PX, T, 0.16 * IN); x.strokeStyle = "rgba(0,0,0,.2)"; x.strokeRect(cx0, y + T + 4 * PX, T, 0.16 * IN);
+            const tx = cx0 + T + 12 * PX, tw = colW - T - 24 * PX;
+            let ty = y + 11 * PT;
+            x.fillStyle = C.ink; x.font = body(700, 11); x.fillText(fit(x, `${v.letter} · ${v.letter === "A" ? "As printed" : changeWord(im.method)}`, tw), tx, ty);
+            ty += 4 * PX + 10 * PT; x.fillStyle = C.ink2; x.font = body(400, 10); x.fillText(fit(x, `on ${v.colors.join(", ")}${v.styles ? ` · ${v.styles}` : ""}`, tw), tx, ty);
+            ty += 8 * PX + 11 * PT; x.fillStyle = colorHex(v.ink.split(",")[0].trim()) || "#cccccc"; x.fillRect(tx, ty - 12 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.strokeRect(tx, ty - 12 * PX, 14 * PX, 14 * PX);
+            x.fillStyle = C.ink; x.font = body(700, 11); x.fillText(fit(x, v.ink, tw - 22 * PX), tx + 22 * PX, ty);
+            if (v.from) { ty += 4 * PX + 9.5 * PT; x.fillStyle = C.ink3; x.font = body(400, 9.5); x.fillText(fit(x, `instead of ${v.from}`, tw), tx, ty); }
+          }
+          y += T + 0.16 * IN + 18 * PX;
         }
         // the print's notes, and when its inks change with the shirt color
         const notes = [shopNotes(im.notes), paints[im.id]?.shirt ? "The ink colors change with the shirt color; each color's page shows its inks." : ""].filter(Boolean).join("  ");
