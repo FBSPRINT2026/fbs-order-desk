@@ -629,6 +629,21 @@ function invoiceSizes(sizes: Record<string, number> | undefined) {
   return SIZES.filter((z) => base.has(z) || has(z)).map((z) => ({ z, n: +(sizes?.[z] || 0), extra: base.size > 0 && !base.has(z) }));
 }
 const flat = (x: string | null | undefined) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/** a ship-to address made tidy for the invoice's box (Oct 30, Nick: "it just looks like bad text in there"): a label someone
+ *  typed into it ("Deliver-TO ADDRESS:") is dropped, a note in brackets ("(Will be couriered)") goes small under it, and
+ *  ALL-CAPS lines are written normally (short words like TX, USA, PO keep their capitals); the first line is the name */
+function shipLines(text: string): { lines: string[]; notes: string[] } {
+  const lines: string[] = [], notes: string[] = [];
+  for (let raw of text.split(/\n+/)) {
+    raw = raw.replace(/^\s*(deliver|ship)(ping)?[-\s]*to\s*(address)?\s*:?\s*/i, "").trim();
+    const note = raw.match(/\(([^)]+)\)\s*$/);
+    if (note) { notes.push(note[1].trim().replace(/^./, (c) => c.toUpperCase())); raw = raw.replace(/\([^)]*\)\s*$/, "").trim(); }
+    if (!raw) continue;
+    if (raw === raw.toUpperCase() && /[A-Z]{4}/.test(raw)) raw = raw.toLowerCase().replace(/\b([a-z])([a-z]*)/g, (w, a, b) => (w.length <= 3 && /^(tx|usa|po|llc|inc|ste|apt|ne|nw|se|sw|dfw)$/.test(w) ? w.toUpperCase() : a.toUpperCase() + b));
+    lines.push(raw.replace(/^attn\b:?/i, "Attn:"));
+  }
+  return { lines, notes };
+}
 
 /**
  * The quote / invoice (Oct 30, Nick: "the top part just takes up way too much space. The most important information is the
@@ -681,7 +696,7 @@ export function InvoiceDoc(p: DocData) {
               const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment";
               return (
                 <div className="iv2-ln" key={l.id}>
-                  <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
+                  <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}{l.garment && name !== l.garment && <small className="iv2-nsub"> {l.garment}</small>}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
                   {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
                   {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
                   {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
@@ -724,10 +739,13 @@ export function InvoiceDoc(p: DocData) {
           customer notes ("this is just an invoice") */}
       <div className="iv2-sum">
         <div className="iv2-left">
-          {shipTo && <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>{shipTo.split(/\n+/).map((x, i) => <div key={i}>{x.trim()}</div>)}</div>}
+          {shipTo && (() => { const sl = shipLines(shipTo); return (
+            <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
+              {sl.lines.map((x, k) => <div key={k} className={k === 0 ? "nm" : ""}>{x}</div>)}
+              {sl.notes.map((x, k) => <div key={"n" + k} className="nt">{x}</div>)}
+            </div>); })()}
           {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
           {isQ && o.notes && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
-          <div className="iv2-thanks">Thank you for your business.</div>
         </div>
         <div>
           <div className="tot">
@@ -742,7 +760,7 @@ export function InvoiceDoc(p: DocData) {
           <div className="iv2-pt">{cust.id ? termsText(cust.payment_terms, o.delivery_method === "pickup") : sh.terms}<span>Issued {issued}{o.approved_at && o.approved_name ? ` · approved by ${o.approved_name}` : ""}</span></div>
         </div>
       </div>
-      <div className="ifoot"><div className="fade" /><div><span>{[sh.name, sh.address, fmtPhone(sh.phone)].filter(Boolean).join(" · ").replace(/\n+/g, ", ")}</span><span>{kind} #{o.number}</span></div></div>
+      <div className="ifoot"><div className="fade" /><div><span>{[sh.name, sh.address, fmtPhone(sh.phone)].filter(Boolean).join(" · ").replace(/\n+/g, ", ")}</span><span className="iv2-ty disp">Thank you for your business</span></div></div>
       <InkFit />
     </section>
   );

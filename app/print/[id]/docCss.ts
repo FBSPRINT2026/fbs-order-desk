@@ -3,7 +3,6 @@
  * Rendered in a <style> tag on the print page only, so the letter-size @page rule never reaches other pages.
  */
 export const DOC_CSS = `
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&display=swap");
 /* iPhone Safari enlarges text in blocks it thinks are too small on a page wider than the phone (the letter-size sheet), so
    some lines came out huge and on top of each other (Oct 30, Nick, #40210's quote): the document's type is exactly as set */
 html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}
@@ -415,32 +414,32 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-no{text-align:right;display:flex;flex-direction:column;gap:2px}
 .pdoc .iv2-no b{font-size:21pt;line-height:1}
 .pdoc .iv2-no span{font-size:10pt;color:var(--ink3);white-space:nowrap}
-.pdoc .iv2-who{display:flex;justify-content:space-between;gap:24px;margin:14px 0 4px}
+.pdoc .iv2-who{display:flex;justify-content:space-between;gap:24px;margin:22px 0 8px}
 .pdoc .iv2-who > div{display:flex;flex-direction:column;min-width:0;font-size:10.5pt;line-height:1.35}
 .pdoc .iv2-who > div.r{text-align:right;align-items:flex-end}
 .pdoc .iv2-who b{font-weight:700}
 .pdoc .iv2-who span{color:var(--ink3);font-size:9.5pt}
-.pdoc .iv2-g{border-top:2px solid var(--ink);margin-top:14px;break-inside:auto}
-.pdoc .iv2-gh{display:flex;justify-content:space-between;align-items:baseline;font-size:13pt;padding:4px 0 0}
+.pdoc .iv2-g{border-top:2px solid var(--ink);margin-top:22px;break-inside:auto}
+.pdoc .iv2-gh{display:flex;justify-content:space-between;align-items:baseline;font-size:15pt;padding:5px 0 0}
 .pdoc .iv2-gh small{font-family:"Public Sans",sans-serif;font-size:9pt;font-weight:600;color:var(--ink3)}
 .pdoc .iv2-gd{font-size:9.5pt;color:var(--ink2);white-space:pre-wrap;margin-top:2px}
 .pdoc .iv2-cols,.pdoc .iv2-row{display:grid;grid-template-columns:minmax(0,1fr) .55in .8in .95in;column-gap:8px}
 .pdoc .iv2-cols{padding:6px 0 3px;border-bottom:1px solid var(--line);font-size:8pt}
 .pdoc .iv2-cols span:not(:first-child),.pdoc .iv2-row span:not(:first-child){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.pdoc .iv2-ln{padding:7px 0 8px;border-bottom:1px solid var(--line2);break-inside:avoid}
-.pdoc .iv2-row{align-items:baseline;font-size:11pt}
+.pdoc .iv2-ln{padding:11px 0 12px;border-bottom:1px solid var(--line2);break-inside:avoid}
+.pdoc .iv2-row{align-items:baseline;font-size:12pt}
 /* the garment's name wraps inside its own column, never into Qty (Oct 30, Nick: "Pepper" ran into the 36) */
 .pdoc .iv2-nm{min-width:0;white-space:normal;overflow-wrap:anywhere}
 .pdoc .iv2-nm b{font-weight:800}
-.pdoc .iv2-sub{font-size:9pt;color:var(--ink3);margin-top:0}
+.pdoc .iv2-sub{font-size:10pt;color:var(--ink3);margin-top:0}
 .pdoc .iv2-note{font-size:9pt;color:var(--ink2);font-style:italic;white-space:pre-wrap;margin-top:2px}
-.pdoc .iv2-det{display:flex;gap:8px;align-items:flex-start;margin-top:5px;min-width:0}
-.pdoc .iv2-th{width:.68in;height:.68in;flex:none;object-fit:contain;border-radius:7px;background:#f4f5f7;display:block}
+.pdoc .iv2-det{display:flex;gap:10px;align-items:flex-start;margin-top:8px;min-width:0}
+.pdoc .iv2-th{width:.95in;height:.95in;flex:none;object-fit:contain;border-radius:7px;background:#f4f5f7;display:block}
 .pdoc .iv2-th.none{background:linear-gradient(var(--sc),var(--sc)) center/45% 55% no-repeat,#f4f5f7}
-.pdoc .iv2-cs{width:.27in;height:.68in;flex:none;border:.75px solid var(--ink);border-radius:4px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6pt;font-weight:300;letter-spacing:.12em;line-height:1.15;text-align:center;text-transform:uppercase}
+.pdoc .iv2-cs{width:.27in;height:.95in;flex:none;border:.75px solid var(--ink);border-radius:4px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6pt;font-weight:300;letter-spacing:.12em;line-height:1.15;text-align:center;text-transform:uppercase}
 .pdoc .iv2-blk{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
-.pdoc .iv2-sz{display:flex;white-space:nowrap;font-size:10pt;line-height:1.6;font-variant-numeric:tabular-nums}
-.pdoc .iv2-sz.many{font-size:8.5pt}
+.pdoc .iv2-sz{display:flex;white-space:nowrap;font-size:11pt;line-height:1.6;font-variant-numeric:tabular-nums}
+.pdoc .iv2-sz.many{font-size:9pt}
 .pdoc .iv2-sz span{border-left:1px solid var(--line2);padding:0 7px}
 .pdoc .iv2-sz span:first-child{border-left:0;padding-left:0}
 .pdoc .iv2-sz b{font-weight:800;margin-left:3px}
@@ -449,8 +448,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-sz .x{color:#0b6fa4}
 .pdoc .iv2-prs{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:2px;align-items:baseline}
 .pdoc .iv2-pr{display:contents}
-.pdoc .iv2-pr em{font-style:normal;font-weight:700;font-size:8pt;color:var(--ink);white-space:nowrap}
-.pdoc .iv2-inks{display:flex;flex-wrap:wrap;column-gap:7px;row-gap:1px;min-width:0;font-size:var(--ik,8pt);line-height:1.35;color:var(--ink2)}
+.pdoc .iv2-pr em{font-style:normal;font-weight:700;font-size:var(--ikb);color:var(--ink);white-space:nowrap}
+.pdoc .iv2-inks{display:flex;flex-wrap:wrap;column-gap:7px;row-gap:1px;min-width:0;font-size:var(--ik,var(--ikb));line-height:1.35;color:var(--ink2)}
 .pdoc .iv2-inks > span{white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
 .pdoc .iv2-inks i{width:.72em;height:.72em;border-radius:50%;border:1px solid rgba(0,0,0,.28);display:inline-block;flex:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .pdoc .iv2-prs:not([data-m="short"]) .s,.pdoc .iv2-prs[data-m="short"] .f{display:none}
@@ -459,13 +458,56 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-fees{border-top-width:1px;padding-top:2px}
 /* the totals come up right under the items; delivery, payment and notes start level with them on the left (Oct 30, Nick:
    "the total should come up… you've got it hanging") */
-.pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:16px;align-items:start;break-inside:avoid}
+.pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:24px;align-items:start;break-inside:avoid}
 .pdoc .iv2-pt{font-size:9pt;color:var(--ink2);text-align:right;margin-top:6px;line-height:1.4}
 .pdoc .iv2-pt span{display:block;color:var(--ink3)}
-/* a quiet, classic thank-you in place of a stamp (Oct 30, Nick: "a nice thank you for your business, professional font") */
-.pdoc .iv2-thanks{font-family:"Cormorant Garamond","Libre Baskerville",Georgia,"Times New Roman",serif;font-style:italic;font-size:17pt;color:var(--ink);letter-spacing:.01em;margin-top:4px}
 .pdoc .iv2-left{display:flex;flex-direction:column;gap:10px;font-size:9.5pt;line-height:1.4;min-width:0}
 .pdoc .iv2-left .lbl{font-size:8pt;margin-bottom:1px}
-.pdoc .iv2-ship{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.pdoc .iv2-ship{background:#f3f4f6;border-radius:8px;padding:10px 13px;font-size:10pt;line-height:1.45;color:var(--ink2)}
+.pdoc .iv2-ship .lbl{margin-bottom:3px}
+.pdoc .iv2-ship .nm{font-weight:700;color:var(--ink);font-size:10.5pt}
+.pdoc .iv2-ship .nt{font-size:8.5pt;color:var(--ink3);font-style:italic;margin-top:3px}
 .pdoc .iv2-terms span{color:var(--ink3)}
+
+.pdoc .sheet.iv2{--ikb:9pt}
+/* the footer's thank-you, in the group titles' font (Oct 30, Nick) */
+.pdoc .iv2 .ifoot .iv2-ty{font-size:12pt;color:var(--ink);letter-spacing:.005em}
+.pdoc .iv2 .ifoot div:last-child{align-items:baseline}
+/* tightening steps, applied one at a time only when the page doesn't fit (InkFit) */
+.pdoc .sheet.iv2.t1 .iv2-who{margin:14px 0 4px}
+.pdoc .sheet.iv2.t1 .iv2-g{margin-top:14px}
+.pdoc .sheet.iv2.t1 .iv2-ln{padding:6px 0 7px}
+.pdoc .sheet.iv2.t1 .iv2-det{margin-top:5px}
+.pdoc .sheet.iv2.t1 .iv2-sum{margin-top:16px}
+.pdoc .sheet.iv2.t2 .iv2-th,.pdoc .sheet.iv2.t2 .iv2-cs{height:.68in}
+.pdoc .sheet.iv2.t2 .iv2-th{width:.68in}
+.pdoc .sheet.iv2.t3{--ikb:8pt}
+.pdoc .sheet.iv2.t3 .iv2-row{font-size:10.5pt}
+.pdoc .sheet.iv2.t3 .iv2-sz{font-size:9.5pt}
+.pdoc .sheet.iv2.t3 .iv2-sz.many{font-size:8pt}
+.pdoc .sheet.iv2.t3 .iv2-sub{font-size:9pt}
+.pdoc .sheet.iv2.t3 .iv2-gh{font-size:13pt}
+.pdoc .sheet.iv2.t4 .iv2-th,.pdoc .sheet.iv2.t4 .iv2-cs{height:.52in}
+.pdoc .sheet.iv2.t4 .iv2-th{width:.52in}
+.pdoc .sheet.iv2.t4 .iv2-cs{font-size:5pt}
+.pdoc .sheet.iv2.t4 .iv2-ln{padding:4px 0 5px}
+.pdoc .sheet.iv2.t4 .iv2-det{margin-top:3px;gap:7px}
+.pdoc .sheet.iv2.t4 .iv2-sz{line-height:1.4}
+.pdoc .sheet.iv2.t4 .iv2-who{margin:10px 0 2px}
+.pdoc .sheet.iv2.t4 .iv2-g{margin-top:10px}
+.pdoc .sheet.iv2.t4 .iv2-sum{margin-top:12px}
+.pdoc .iv2-nsub{display:none}
+.pdoc .sheet.iv2.t4 .iv2-nsub{display:inline;font-size:8.5pt;color:var(--ink3);font-weight:400}
+.pdoc .sheet.iv2.t4 .iv2-sub{display:none}
+.pdoc .sheet.iv2.t4 .tot .r{height:.27in}
+.pdoc .sheet.iv2.t4 .tot .r.big{font-size:13pt}
+.pdoc .sheet.iv2.t4 .iv2-logo{height:.5in}
+.pdoc .sheet.iv2.t4 .iv2-no b{font-size:18pt}
+.pdoc .sheet.iv2.t4 .ifoot{padding-top:10px}
+.pdoc .sheet.iv2.t4 .iv2-set{padding-top:2px;font-size:9pt}
+.pdoc .sheet.iv2.t4 .iv2-fees{margin-top:8px}
+.pdoc .sheet.iv2.t4 .iv2-cols{padding:3px 0 2px}
+.pdoc .sheet.iv2.t4 .iv2-gh{font-size:12pt;padding-top:2px}
+.pdoc .sheet.iv2.t4 .iv2-pt{margin-top:3px}
+.pdoc .sheet.iv2.t4{padding-top:.32in;padding-bottom:.24in}
 `;
