@@ -50,7 +50,7 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
         </ol>
         <div className="pfl-ans-wrap">
           {doneMsg ? <div className="pfl-done ok" role="status"><b>You&apos;re all set. Thank you!</b><span>{doneMsg}</span>
-              {steps.some((s) => s.kind === "deposit" && s.state === "todo") && <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38, marginTop: 6 }} href={`/portal/orders/${orderId}`}>Pay the deposit</a>}</div>
+              {(() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp ? <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38, marginTop: 6 }} href={`/portal/orders/${orderId}`}>{dp.title} · {m(dp.amount || 0)}</a> : null; })()}</div>
             : showFinal ? <Final key="final" id={id} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onDeclined={() => router.refresh()} />
             : (step.kind === "art" || step.kind === "sewout") && step.state === "todo"
               ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" ? "review the quote" : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={() => router.refresh()} />
@@ -60,8 +60,8 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
             : step.kind === "quote" ? <div className="pfl-done ok"><b>Quote approved. Thank you!</b><span>{step.who}{step.when ? ` · ${new Date(step.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
             : step.kind === "deposit" && (step.state === "done"
               ? <div className="pfl-done ok"><b>{step.title}</b><span>{step.sub}</span></div>
-              : <div className="pfl-ans"><div style={{ fontSize: 14 }}>Your deposit of <b>{m(step.amount || 0)}</b> starts production.</div>
-                  <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38 }} href={`/portal/orders/${orderId}`}>Pay the deposit</a>
+              : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
+                  <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38 }} href={`/portal/orders/${orderId}`}>{step.title}</a>
                   <div className="pfl-fine">Card or bank transfer. You&apos;ll sign in to your account with your email to pay.</div></div>)}
           {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>

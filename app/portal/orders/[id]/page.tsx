@@ -1,4 +1,5 @@
 import PortalGoods from "@/components/PortalGoods";
+import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
@@ -108,9 +109,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
   const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
   const pendingProofs = proofs.filter((x) => x.status === "pending");
-  const deposit = Math.min(c.balance, Math.round(c.total * ctx.settings.depositPct) / 100);
+  // the customer's payment terms decide what's paid up front (lib/payTerms.ts)
+  const terms = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt";
+  const tPct = termsPct(terms, ctx.settings.depositPct);
+  const deposit = Math.min(c.balance, Math.round(c.total * (tPct > 0 && tPct < 100 ? tPct : ctx.settings.depositPct)) / 100);
   // what can be paid now (Oct 24, Nick: not always the whole balance; lib/payReady.ts)
-  const ps = payState(o as typeof o & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: ctx.settings.depositPct });
+  const ps = payState(o as typeof o & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: ctx.settings.depositPct, terms });
   const canPay = c.balance > 0.004 && ps.can !== "none" && (o.type === "invoice" || o.status === "quote_sent");
 
   return (

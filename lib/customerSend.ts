@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, orderGroups, withoutShopPieces, type Order, type Payment, type Proof, type Settings } from "@/lib/pricing";
+import { calcOrder, mergeSettings, orderGroups, withoutShopPieces, type Order, type Payment, type PayTerms, type Proof, type Settings } from "@/lib/pricing";
+import { upFront } from "@/lib/payTerms";
 import { fmtPhone } from "@/lib/phone";
 import { fullColorWaiting } from "@/lib/fullColor";
 import { proofLinkFor, proofUrl } from "@/lib/proofLinks";
@@ -25,11 +26,11 @@ async function load(admin: SupabaseClient, orderId: string) {
   if (!od) throw new Error("Order not found.");
   const o = od as Order;
   const [{ data: cu }, { data: s }, { data: pays }] = await Promise.all([
-    o.customer_id ? admin.from("customers").select("id, name, company, email").eq("id", o.customer_id).maybeSingle() : Promise.resolve({ data: null }),
+    o.customer_id ? admin.from("customers").select("id, name, company, email, payment_terms").eq("id", o.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("payments").select("amount").eq("order_id", orderId),
   ]);
-  return { o, customer: cu as { id: string; name: string; company: string; email: string } | null, settings: mergeSettings(s?.data), pays: (pays || []) as Pick<Payment, "amount">[] };
+  return { o, customer: cu as { id: string; name: string; company: string; email: string; payment_terms?: PayTerms | null } | null, settings: mergeSettings(s?.data), pays: (pays || []) as Pick<Payment, "amount">[] };
 }
 
 /** what could go to the customer now, and what's ticked to start with (what's ready) */
@@ -51,13 +52,14 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   return {
     to: customer?.email || "", name: customer?.name || customer?.company || "",
     proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending") } : null,
-    quote: quoteOpen ? { total: c.total, status: o.status, deposit: Math.round(c.total * (settings.depositPct || 50)) / 100 } : null,
+    // what's due when they approve, by their terms (lib/payTerms.ts)
+    quote: quoteOpen ? { total: c.total, status: o.status, deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line } : null,
     sewouts: sews,
   };
 }
 
 /** the steps an email lists, from what was ticked */
-async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string } | null, settings: Settings, pick: Pick3, url: string) {
+async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string) {
   const sh = settings.shop;
   const groups = orderGroups(o);
   const blocks: { k: string; title: string; sub: string; pic?: string }[] = [];
@@ -76,19 +78,21 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   }
   if (pick.quote) {
     const c = calcOrder(o, settings, []);
-    const dep = Math.round(c.total * (settings.depositPct || 50)) / 100;
     const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-    blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: `Deposit to start: ${m(dep)}` });
+    // under the title, what's due when they approve, by their terms (Oct 29, Nick: "nothing due, due on receipt, half due today…")
+    blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: upFront(customer?.payment_terms, c.total, settings.depositPct).line });
   }
   const esc = (t: string) => (t || "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
   const has = (k: string) => blocks.some((b) => b.k === k);
   const head = has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and quote are ready` : has("quote") ? "Your quote is ready" : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
   const job = o.nickname || `order #${o.number}`;
+  const up = upFront(customer?.payment_terms, calcOrder(o, settings, []).total, settings.depositPct);
+  const payNow = up.kind === "full" ? "pay for it" : up.kind === "deposit" ? "pay the deposit" : "";
   const first = ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
   const many = blocks.length > 1;
   const logo = sh.logoUrl ? (/^https?:/.test(sh.logoUrl) ? sh.logoUrl : `${siteUrl()}${sh.logoUrl.startsWith("/") ? "" : "/"}${sh.logoUrl}`) : `${siteUrl()}/brand/fbs-logo.png`;
   const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr>${b.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><img src="${b.pic}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px" /></td>` : `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><div style="width:56px;height:56px;border-radius:6px;background:#F6F7F9;border:1px solid #E6EAF0;box-sizing:border-box;padding:9px 11px"><div style="height:4px;width:100%;background:#0E9BD8;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:100%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:70%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:85%;background:#C9D0DA;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:45%;background:#141D2B;border-radius:2px;margin-bottom:0px;font-size:0;line-height:0">&nbsp;</div></div></td>`}<td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div><div style="font-size:13px;color:#6B7686">${esc(b.sub)}</div></td></tr></table></td></tr>`).join("");
-  const intro = many ? `here's everything for <b>${esc(job)}</b> (order #${o.number}). You can approve it all${has("quote") ? " and pay the deposit" : ""} from one page.` : has("quote") ? `here's the quote for <b>${esc(job)}</b> (order #${o.number}). You can approve it and pay the deposit online.` : `here's the ${has("sewout") ? "sew-out" : "proof"} for <b>${esc(job)}</b> (order #${o.number}). Please look it over and approve it, or tell us what to change.`;
+  const intro = many ? `here's everything for <b>${esc(job)}</b> (order #${o.number}). You can approve it all${has("quote") && payNow ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `here's the quote for <b>${esc(job)}</b> (order #${o.number}). You can approve it${payNow ? ` and ${payNow}` : ""} online.` : `here's the ${has("sewout") ? "sew-out" : "proof"} for <b>${esc(job)}</b> (order #${o.number}). Please look it over and approve it, or tell us what to change.`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
@@ -220,12 +224,15 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
   const quoted = o.status === "quote_sent", approved = !["quote", "request", "quote_sent"].includes(o.status);
   if (quoted || (approved && raw.approved_at)) {
-    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: money(c.total), state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total });
+    const up = upFront(customer?.payment_terms, c.total, settings.depositPct);
+    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total });
   }
-  if (approved && c.total > 0) {
-    const dep = Math.round(c.total * (settings.depositPct || 50)) / 100;
+  // the payment up front, only when their terms ask for one (lib/payTerms.ts): none on receipt or net 30
+  const upNow = upFront(customer?.payment_terms, c.total, settings.depositPct);
+  if (approved && c.total > 0 && upNow.kind !== "none") {
+    const dep = Math.round(c.total * upNow.pct) / 100;
     const paid = c.paid || 0;
-    steps.push({ key: "deposit", kind: "deposit", title: paid >= dep - 0.005 ? (c.balance <= 0.005 ? "Paid in full" : "Deposit paid") : "Pay the deposit", sub: paid >= dep - 0.005 ? `Balance ${money(Math.max(0, c.balance))}` : `${money(dep)} to start`, state: paid >= dep - 0.005 ? "done" : "todo", pdf: `${base}?${q}`, amount: dep });
+    steps.push({ key: "deposit", kind: "deposit", title: paid >= dep - 0.005 ? (c.balance <= 0.005 ? "Paid in full" : "Deposit paid") : upNow.pay, sub: paid >= dep - 0.005 ? `Balance ${money(Math.max(0, c.balance))}` : upNow.kind === "full" ? `${money(dep)} due` : `${money(dep)} to start`, state: paid >= dep - 0.005 ? "done" : "todo", pdf: `${base}?${q}`, amount: dep });
   }
   return { link, o, customer, settings, steps, total: c.total };
 }
