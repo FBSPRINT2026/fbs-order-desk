@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
-import { advanceLeft, extraLine, guessPayee, loadPayday, planLabel, type Keyed, type PaydayRow } from "@/lib/payday";
+import { advanceLeft, extraLine, guessPayee, loadPayday, planLabel, type CheckSetup, type Keyed, type PaydayRow } from "@/lib/payday";
 import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, pullActuals, type Payee } from "./actions";
 
 /**
@@ -86,6 +86,11 @@ export default function PayrollCenter() {
   async function saveLine(r: PaydayRow, patch: { bonus?: number | null; advance_amount?: number | null; keyed?: Keyed | null }) {
     if (!d) return;
     const { error } = await createClient().from("payday_lines").upsert({ period_start: d.p.start, employee_id: r.e.id, bonus: r.line?.bonus ?? null, advance_amount: r.line?.advance_amount ?? null, keyed: r.line?.keyed ?? null, ...patch, updated_at: new Date().toISOString() }, { onConflict: "period_start,employee_id" });
+    if (error) setErr(error.message); else load();
+  }
+  /** a person's check layout changed (a new rate per mile, Oct 30): kept on them for every payday */
+  async function saveSetup(empId: string, setup: CheckSetup) {
+    const { error } = await createClient().from("employees").update({ check_setup: setup }).eq("id", empId);
     if (error) setErr(error.message); else load();
   }
   async function setPayee(empId: string, p: Payee | null) {
@@ -286,7 +291,7 @@ export default function PayrollCenter() {
             </div>
             {/* their own check layout, last (Oct 30, Nick on Linda McCoy: "make her kind of stand out… the last one") */}
             {cons.filter((r) => r.keyed).map((r) => (
-              <KeyedCheck key={r.e.id} r={r} payee={payeeOf(r)?.name || ""} done={!!r.line?.qbo_purchase_id} onSave={(k) => saveLine(r, { keyed: k })} onBonus={(v) => saveLine(r, { bonus: v })} />
+              <KeyedCheck key={r.e.id} r={r} payee={payeeOf(r)?.name || ""} done={!!r.line?.qbo_purchase_id} onSave={(k) => saveLine(r, { keyed: k })} onBonus={(v) => saveLine(r, { bonus: v })} onSetup={saveSetup} />
             ))}
             <div className="panel-b faint pc-note">Each check: Subcontractors - COS · REGULAR PAY, Subcontractors - COS · OVERTIME (time and a half past 40 hours a week), BONUS, and Repayment:Check Advance as a minus line for an advance. A salaried contractor&apos;s check is the salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}. Made only when you press the button, once per person per payday.</div>
           </section>
@@ -338,7 +343,7 @@ export default function PayrollCenter() {
  * as miles (at its rate per mile) or as dollars, tolls in dollars, a bonus, and the check as it'll be written in
  * QuickBooks. Saved as it's typed (payday_lines.keyed); locked once the check is made.
  */
-function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: string; done: boolean; onSave: (k: Keyed) => void; onBonus: (v: number | null) => void }) {
+function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow; payee: string; done: boolean; onSave: (k: Keyed) => void; onBonus: (v: number | null) => void; onSetup: (id: string, s: CheckSetup) => void }) {
   const setup = r.e.check_setup || {};
   const k: Keyed = r.line?.keyed || {};
   const [hours, setHours] = useState(k.hours != null ? String(k.hours) : "");
@@ -350,6 +355,13 @@ function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: 
   const save = (patch: Partial<Keyed>) => onSave({ ...k, ...patch, extras: { ...(k.extras || {}), ...(patch.extras || {}) } });
   const setExtra = (key: string, v: { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null }) => save({ extras: { [key]: { ...(k.extras?.[key] || {}), ...v } } });
   const rate = r.pay.rate;
+  // a mileage rate, changed for good with Edit (Oct 30, Nick: "by miles… put edit… a small plain text button")
+  const [editing, setEditing] = useState<string | null>(null), [perText, setPerText] = useState("");
+  const savePer = (key: string) => {
+    const n = num(perText); setEditing(null);
+    if (n == null || n <= 0) return;
+    onSetup(r.e.id, { ...setup, extras: (setup.extras || []).map((x) => (x.key === key ? { ...x, per: Math.round(n * 1000) / 1000 } : x)) });
+  };
   return (
     <div className="pc-keyed">
       <div className="pc-keyed-h">
@@ -365,6 +377,7 @@ function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: 
           const v = k.extras?.[x.key] || {}, dollars = x.per == null || v.mode === "dollars", line = extraLine(x, v);
           return (
             <div key={x.key} className="field"><span className="lbl"><span>{x.label.replace(/^Gas Reimbursement\s*/i, "") || x.label}</span>
+              {x.per != null && !done && <button type="button" className="linkbtn pc-edit" onClick={() => { setEditing(x.key); setPerText((x.per || 0).toFixed(2)); }} title={`Change the rate per mile for ${x.label}`}>Edit</button>}
               {x.per != null && <span className="pc-seg" role="radiogroup" aria-label={`${x.label}: miles or dollars`}>
                 <button type="button" className={!dollars ? "on" : ""} aria-pressed={!dollars} disabled={done} onClick={() => { setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "miles", amount: null, miles: null }); }}>Miles</button>
                 <button type="button" className={dollars ? "on" : ""} aria-pressed={dollars} disabled={done} onClick={() => { setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "dollars", miles: null, amount: null }); }}>$</button>
@@ -372,7 +385,9 @@ function KeyedCheck({ r, payee, done, onSave, onBonus }: { r: PaydayRow; payee: 
               <span className="pc-in">{dollars && <i>$</i>}<input type="number" min="0" step={dollars ? "0.01" : "1"} inputMode="decimal" aria-label={dollars ? `${x.label} dollars` : `${x.label} miles`} value={vals[x.key] ?? ""} disabled={done} placeholder="0"
                 onChange={(e) => setVals((s) => ({ ...s, [x.key]: e.target.value }))}
                 onBlur={() => setExtra(x.key, dollars ? { mode: x.per != null ? "dollars" : undefined, amount: num(vals[x.key] || "") } : { mode: "miles", miles: num(vals[x.key] || "") })} />
-                {!dollars && <small>miles @ ${(x.per || 0).toFixed(2)}</small>}
+                {!dollars && (editing === x.key
+                  ? <small className="pc-per">$<input type="number" min="0" step="0.01" inputMode="decimal" autoFocus aria-label={`${x.label}: rate per mile`} value={perText} onChange={(e) => setPerText(e.target.value)} onBlur={() => savePer(x.key)} onKeyDown={(e) => { if (e.key === "Enter") savePer(x.key); if (e.key === "Escape") setEditing(null); }} /> a mile</small>
+                  : <small>miles @ ${(x.per || 0).toFixed(2)}</small>)}
                 {dollars && x.per != null && <small>dollar amount</small>}</span>
               <span className="faint">{$(line.amount)}</span></div>
           );
