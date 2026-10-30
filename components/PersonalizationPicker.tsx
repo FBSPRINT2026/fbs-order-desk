@@ -19,14 +19,18 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
   const [lineId, setLineId] = useState("");
   const [size, setSize] = useState<Size | "">("");
   const [name, setName] = useState("");
+  // a name, a title, or both (Oct 30, Nick: "sometimes it's one or the other, sometimes it's both"): sewn name over title,
+  // kept on the line as "Name / Title"
+  const [title, setTitle] = useState("");
+  const text = [name.trim(), title.trim()].filter(Boolean).join(" / ");
   const line = pickable.find((l) => l.id === lineId) || (pickable.length === 1 ? pickable[0] : null);
   const sizes = line ? SIZES.filter((z) => +(line.sizes?.[z] || 0) > 0) : [];
   const sz = (size && sizes.includes(size as Size) ? size : sizes.length === 1 ? sizes[0] : "") as Size | "";
   const label = (l: GLine) => [l.style, l.color].filter(Boolean).join(" · ") || "Garment";
   const add = () => {
-    if (!line || !sz || !name.trim()) return;
-    onAdd(line.id, sz, name.trim());
-    setName("");
+    if (!line || !sz || !text) return;
+    onAdd(line.id, sz, text);
+    setName(""); setTitle("");
   };
   return (
     <div className="sbx-sec pers">
@@ -53,8 +57,10 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
                   {sizes.map((z) => <option key={z} value={z}>{z} ({line?.sizes?.[z]})</option>)}
                 </select></div>
               <div className="field pers-name"><label htmlFor="pers-name">Name</label>
-                <input id="pers-name" type="text" value={name} placeholder="Cody White / Ops Manager" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
-              <button type="button" className="btn sm" disabled={!line || !sz || !name.trim()} onClick={add}>Add</button>
+                <input id="pers-name" type="text" value={name} placeholder="Cody White" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
+              <div className="field pers-name"><label htmlFor="pers-title">Title</label>
+                <input id="pers-title" type="text" value={title} placeholder="Ops Manager" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
+              <button type="button" className="btn sm" disabled={!line || !sz || !text} onClick={add}>Add</button>
             </div>
           ) : <p className="faint">Add the garments first: each name goes on one piece.</p>)}
         </>

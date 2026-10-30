@@ -16398,7 +16398,7 @@ main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
 .pers-r{gap:10px}
 .pers-add{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .pers-add .field{margin:0;min-width:120px}
-.pers-add .pers-name{flex:1;min-width:200px}
+.pers-add .pers-name{flex:1;min-width:160px}
 .pers-add .btn{height:36px}
 
 /* Bill third party in the order's Delivery panel (Oct 30) */
