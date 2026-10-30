@@ -29,8 +29,8 @@ const GROUPS: G[] = [
   { t: "Incoming", line: "Leads and requests", c: "var(--fbs-violet)", steps: [
     ["leads", "Leads", ic(<><path d="M4 4h16v16H4z" /><path d="m4 6 8 7 8-7" /></>)],
     ["requests", "Requests", ic(<><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></>)]] },
-  { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
-    ["mockups", "Mockups", ic(<><path d="M20.4 7.6 16 3l-4 2-4-2-4.4 4.6L6 11v10h12V11z" /></>)],
+  { t: "In the works", line: "Mockups, sew-outs and numbers", c: "var(--warn)", steps: [
+    ["mockups", "Mockups & sew-outs", ic(<><path d="M20.4 7.6 16 3l-4 2-4-2-4.4 4.6L6 11v10h12V11z" /></>)],
     ["numbers", "Numbers", ic(<><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></>)]] },
   { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
     ["ready", "Ready", ic(<><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></>)],
@@ -45,7 +45,7 @@ const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
-  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
+  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups or sew-outs waiting on numbers.", numbers: "No numbers waiting on mockups.",
   ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
