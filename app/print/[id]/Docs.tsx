@@ -719,24 +719,27 @@ export function InvoiceDoc(p: DocData) {
           {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd).map((f, i) => <div className="iv2-set" key={i}><span>{(f as { tbd?: boolean }).tbd ? "Shipping" : f.label || "Fee"}</span><span>{(f as { tbd?: boolean }).tbd ? "TBD" : (f as { free?: boolean }).free ? "Free" : money(+f.amount)}</span></div>)}
         </div>
       )}
+      {/* the bottom (Oct 30, Nick): the totals right under the items with the payment terms under them; on the left the
+          delivery address (only when it's somewhere else), payments, a quote's notes, and a thank-you. An invoice carries no
+          customer notes ("this is just an invoice") */}
       <div className="iv2-sum">
         <div className="iv2-left">
           {shipTo && <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>{shipTo.split(/\n+/).map((x, i) => <div key={i}>{x.trim()}</div>)}</div>}
-          <div className="iv2-terms"><div className="lbl">Payment</div>
-            <div>{cust.id ? termsText(cust.payment_terms, o.delivery_method === "pickup") : sh.terms}</div>
-            <span>Issued {issued}{o.approved_at && o.approved_name ? ` · approved by ${o.approved_name}` : ""}</span>
-          </div>
           {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
-          {o.notes && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
+          {isQ && o.notes && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
+          <div className="iv2-thanks">Thank you for your business.</div>
         </div>
-        <div className="tot">
-          <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
-          {c.discount ? <div className="r"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
-          <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
-          <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
-          {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
-          {deposit > 0 && <div className="r bal2"><span>Deposit due to start</span><span>{money(deposit)}</span></div>}
-          {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
+        <div>
+          <div className="tot">
+            <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
+            {c.discount ? <div className="r"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
+            <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
+            <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
+            {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
+            {deposit > 0 && <div className="r bal2"><span>Deposit due to start</span><span>{money(deposit)}</span></div>}
+            {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
+          </div>
+          <div className="iv2-pt">{cust.id ? termsText(cust.payment_terms, o.delivery_method === "pickup") : sh.terms}<span>Issued {issued}{o.approved_at && o.approved_name ? ` · approved by ${o.approved_name}` : ""}</span></div>
         </div>
       </div>
       <div className="ifoot"><div className="fade" /><div><span>{[sh.name, sh.address, fmtPhone(sh.phone)].filter(Boolean).join(" · ").replace(/\n+/g, ", ")}</span><span>{kind} #{o.number}</span></div></div>

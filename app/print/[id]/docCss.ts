@@ -3,6 +3,7 @@
  * Rendered in a <style> tag on the print page only, so the letter-size @page rule never reaches other pages.
  */
 export const DOC_CSS = `
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&display=swap");
 /* iPhone Safari enlarges text in blocks it thinks are too small on a page wider than the phone (the letter-size sheet), so
    some lines came out huge and on top of each other (Oct 30, Nick, #40210's quote): the document's type is exactly as set */
 html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}
@@ -459,8 +460,10 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 /* the totals come up right under the items; delivery, payment and notes start level with them on the left (Oct 30, Nick:
    "the total should come up… you've got it hanging") */
 .pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:16px;align-items:start;break-inside:avoid}
-.pdoc .iv2-sum .tot{grid-column:2;grid-row:1}
-.pdoc .iv2-left{grid-column:1;grid-row:1}
+.pdoc .iv2-pt{font-size:9pt;color:var(--ink2);text-align:right;margin-top:6px;line-height:1.4}
+.pdoc .iv2-pt span{display:block;color:var(--ink3)}
+/* a quiet, classic thank-you in place of a stamp (Oct 30, Nick: "a nice thank you for your business, professional font") */
+.pdoc .iv2-thanks{font-family:"Cormorant Garamond","Libre Baskerville",Georgia,"Times New Roman",serif;font-style:italic;font-size:17pt;color:var(--ink);letter-spacing:.01em;margin-top:4px}
 .pdoc .iv2-left{display:flex;flex-direction:column;gap:10px;font-size:9.5pt;line-height:1.4;min-width:0}
 .pdoc .iv2-left .lbl{font-size:8pt;margin-bottom:1px}
 .pdoc .iv2-ship{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
