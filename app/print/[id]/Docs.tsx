@@ -135,7 +135,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
     // for placement"): one placement page, no press sheets
     const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
-    const mk = (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
+    // a logo mockup (our logo on the shirt color, made in the logo builder) is the same picture as the close-ups: no page
+    // of its own (Oct 30, Nick: "you've got too many boxes… the same thing repeating like 5 times")
+    const mk = g.mockupKind === "logo" && !allSup ? [] : (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
     // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
     const veryLong = noteText.length + extra * 120 > 650 || noteText.split("\n").length + extra > 9;
     const notesPage = longNotes && (!mk.length || veryLong);
@@ -143,7 +145,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
     // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
     // doesn't change, you just need one close-up")
-    const printPages = allSup ? 0 : g.imprints.length;
+    // two close-ups a page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it, close-up of
+    // the full back"): a front and back print share one page
+    const printPages = allSup ? 0 : Math.ceil(g.imprints.length / 2);
     return { lines, noteParts, longNotes, more, mk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
@@ -175,7 +179,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
         const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
         // each print's press sheet, then one more for each color change
         const printPg: number[] = [];
-        g.imprints.reduce((a, _d, di) => { printPg[di] = a; return a + 1; }, pgPrint);
+        g.imprints.forEach((_d, di) => { printPg[di] = pgPrint + Math.floor(di / 2); });
         // their transfers: the print box points at the placement page
         if (allSup) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
         const where = g.imprints.map((d) => d.supplied?.where || "").find(Boolean) || "";
@@ -292,11 +296,14 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               </section>
             )}
             {/* 4. each print's press sheet */}
-            {!allSup && g.imprints.map((d, di) => (
-              <div key={d.id} style={{ display: "contents" }}>
-                <CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} />
-              </div>
-            ))}
+            {!allSup && g.imprints.map((d, di) => (di % 2 ? null : g.imprints[di + 1]
+              ? (
+                <section key={d.id} className="sheet cu-pair">
+                  {[d, g.imprints[di + 1]].map((x, k) => <CloseUp key={x.id} half d={x} di={di + k} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} />)}
+                  <div className="foot"><span>{footL}</span><span>Page {printPg[di]} of {total}</span></div>
+                </section>
+              )
+              : <div key={d.id} style={{ display: "contents" }}><CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} /></div>))}
           </div>
         );
       })}
@@ -372,7 +379,7 @@ function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][num
   );
 }
 
-function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, variant }: { d: Imprint; di: number; n: number; p: DocData; gi: number; allLight: boolean; colors: string; qty: number; page: number; total: number; footL: string; /** this print's color change on another garment color (Oct 26) */ variant?: Variant }) {
+function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, variant, half }: { d: Imprint; di: number; n: number; p: DocData; gi: number; allLight: boolean; colors: string; qty: number; page: number; total: number; footL: string; /** one of two close-ups on a page (CloseUpPair): no page of its own, no footer */ half?: boolean; /** this print's color change on another garment color (Oct 26) */ variant?: Variant }) {
   const { o, groups } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
   const sz0 = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
@@ -398,7 +405,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
   const inkRows = d.method === "dtf" ? [] : inks.length ? inks : Array.from({ length: d.colors >= FULL_COLOR ? 0 : Math.max(1, d.colors || 1) }, () => "");
   return (
-    <section className="sheet">
+    <Wrap half={half}>
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
       <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
       {d.supplied ? (
@@ -461,9 +468,13 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
       {shopNotes(d.notes) && <div className="n2"><b>Notes:</b> {shopNotes(d.notes)}</div>}
       {(d.artChanges || []).length > 0 && <div className="n2"><b>Art changed for this print:</b> {d.artChanges!.join("; ")}</div>}
-      <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>
-    </section>
+      {!half && <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>}
+    </Wrap>
   );
+}
+/** a close-up as its own page, or half of a page shared with the next print's */
+function Wrap({ half, children }: { half?: boolean; children?: ReactNode }) {
+  return half ? <div className="cu-half">{children}</div> : <section className="sheet">{children}</section>;
 }
 
 // ───────────────────────────── art proof ─────────────────────────────

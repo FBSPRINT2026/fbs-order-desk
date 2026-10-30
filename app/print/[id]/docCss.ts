@@ -404,6 +404,12 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .cc-tag{display:inline-block;font-size:9.5pt;font-weight:800;letter-spacing:.04em;color:#b3261e;background:#fdecea;border-radius:999px;padding:2px 10px;margin-top:4px}
 .pdoc .wo-cube .a{position:relative}
 .pdoc .wo-cube .s .wo-cc{display:inline-block;font-size:8pt;font-weight:800;color:#b3261e;background:#fdecea;border-radius:999px;padding:0 7px;margin-left:4px;vertical-align:1px}
+/* two close-ups on one page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it,
+   close-up of the full back"): each half drawn smaller, WoFit.tsx shrinks them more until both fit */
+.pdoc .sheet.cu-pair{height:11in;overflow:hidden}
+.pdoc .cu-pair .cu-half{zoom:var(--cu,.6);margin:0 auto .12in}
+.pdoc .cu-pair .cu-half + .cu-half .p2h{display:none}
+.pdoc .cu-pair .foot{margin-top:auto}
 /* the first page's fit steps (WoFit.tsx) */
 .pdoc .sheet.wo1{padding-bottom:.6in}
 .pdoc .wo-first.f1 .cnt td{padding:3px 6px}
@@ -421,6 +427,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
   .pdoc{background:#fff;padding:0;min-height:0;overflow:visible}
   .pdoc .print-bar{display:none}
   .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page;zoom:1!important}
+  .pdoc .sheet.cu-pair{height:10.1in}
   .pdoc .sheet:last-child{break-after:auto}
   .pdoc .sheet.pf{height:10.1in;min-height:0}
   .pdoc .sheet.wo1{height:10.1in;min-height:0;padding-bottom:.15in}

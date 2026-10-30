@@ -266,7 +266,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       try {
         const raw = localStorage.getItem(`fbs:unsaved:${d.id}`);
         const keep = raw ? (JSON.parse(raw) as { at: number; o: Order }) : null;
-        if (keep?.o && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + keep.o.nickname + JSON.stringify(keep.o.fees) !== JSON.stringify(d.groups) + d.nickname + JSON.stringify(d.fees)) setRecover(keep);
+        // only changes newer than the order's last save count (Oct 30, Nick: "this warning keeps popping up over and over
+        // again… even though I click save or ignore"): a copy from before a later save (this tab, another tab, another
+        // computer) is stale, not unsaved
+        const savedAt = Date.parse(String((d as Order & { updated_at?: string }).updated_at || "")) || 0;
+        if (keep?.o && keep.at > savedAt + 2000 && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + keep.o.nickname + JSON.stringify(keep.o.fees) !== JSON.stringify(d.groups) + d.nickname + JSON.stringify(d.fees)) setRecover(keep);
         else if (raw) localStorage.removeItem(`fbs:unsaved:${d.id}`);
       } catch { /* storage off */ }
       await side;
