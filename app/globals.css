@@ -15936,7 +15936,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-chk small{display:block;font-size:12.5px;color:var(--ink-3)}
 
 /* Job Center (app/shop/jobs): five groups, each a header with one line under it, its steps on a rail */
-.jc-groups{display:grid;grid-template-columns:2fr 2fr 2fr 1fr 2fr;gap:10px;align-items:stretch}
+.jc-groups{display:grid;grid-template-columns:2fr 2fr 2fr 1fr 1fr 2fr;gap:10px;align-items:stretch}
 .jc-g{border:1px solid var(--line);border-top:3px solid var(--c);border-radius:var(--r);padding:8px 6px 10px;display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--surface)}
 .jc-gh{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.25}
 .jc-gh b{font-size:13.5px;color:var(--ink)}
@@ -15952,7 +15952,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 table.tbl.jc{min-width:0}
 table.tbl.jc td:last-child{text-align:right}
 table.tbl.jc th:last-child{text-align:right}
-@media (max-width:900px){.jc-groups{grid-template-columns:repeat(2,minmax(0,1fr))}.jc-g:nth-child(5){grid-column:1/-1}}
+@media (max-width:900px){.jc-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:520px){.jc-gh span{display:none}.jc-st .dgz-ring{width:40px;height:40px}.jc-st .dgz-rail{top:21px}.jc-decl{flex-wrap:wrap}.jc-decl input{width:100%}}
 
 table.tbl.jc td:first-child .sub{max-width:min(520px,52vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

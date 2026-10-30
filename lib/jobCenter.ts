@@ -12,17 +12,19 @@ import { mailRows, type MailAct, type MailSug } from "@/lib/inbox";
  * and it shows at every step it's at:
  *  Incoming     · Leads (orders the AI found in email or ClickUp, not made yet) · Requests (portal orders sent in)
  *  In the works · Mockups (mockups without numbers: the art is made, the price or sizes aren't, or there's no order
- *                 yet) · Numbers (numbers without mockups: priced and sized, no mockup or sew-out yet). A job with
- *                 neither shows at both (Oct 29, Nick: "mockups without numbers… numbers without mockups")
+ *                 yet) · Numbers (numbers without mockups: priced and sized, no mockup yet). A job with neither shows at
+ *                 both (Oct 29, Nick: "mockups without numbers… numbers without mockups")
  *  Quotes       · Ready (made, not sent) · Sent (with the customer)
- *  Revisions    · Make changes (changes asked on art or a sew-out, or the quote declined with why)
+ *  Revisions    · Make changes (changes asked on the art, or the quote declined with why)
+ *  Sew-outs     · Sew-outs (embroidery only: the stitched sample to take, send and get approved, its own step after the
+ *                 quote; Oct 29, Nick: "a small step in there between quotes and approval")
  *  Done         · Approved (everything approved; stays until the job is completed) · Declined (the customer walked
  *                 away; two weeks)
  * Each job carries its account owner (lib/accountOwners.ts) for the My accounts / Everyone switch.
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
-export type Step = "leads" | "requests" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "approved" | "declined";
+export type Step = "leads" | "requests" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
 export type Track = { k: "art" | "sewout" | "numbers"; state: TrackState; label: string; note?: string };
 export type Dept = "screen" | "embroidery" | "heat";
@@ -155,12 +157,15 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
 
     const steps: Step[] = [];
     // In the works: mockups without numbers, numbers without mockups; a job missing both is at both
-    const artNeed = tracks.some((t) => (t.k === "art" || t.k === "sewout") && t.state === "needed"), numNeed = tracks.some((t) => t.k === "numbers" && t.state === "needed");
+    const artNeed = tracks.some((t) => t.k === "art" && t.state === "needed"), numNeed = tracks.some((t) => t.k === "numbers" && t.state === "needed");
     if (numNeed) steps.push("mockups");
     if (artNeed) steps.push("numbers");
-    if (tracks.some((t) => t.state === "made")) steps.push("ready");
-    if (tracks.some((t) => t.state === "sent")) steps.push("sent");
-    if (tracks.some((t) => t.state === "changes")) steps.push("changes");
+    // the mockup and the quote go through Ready, Sent and Make changes; a sew-out is its own step (Sew-outs)
+    const mq = tracks.filter((t) => t.k !== "sewout");
+    if (mq.some((t) => t.state === "made")) steps.push("ready");
+    if (mq.some((t) => t.state === "sent")) steps.push("sent");
+    if (mq.some((t) => t.state === "changes")) steps.push("changes");
+    if (tracks.some((t) => t.k === "sewout" && t.state !== "done")) steps.push("sewouts");
     const allDone = tracks.every((t) => t.state === "done");
     const appr = o.approved_at || evs.find((e) => e.order_id === o.id && e.kind === "approved")?.created_at || "";
     // approved, with nothing left out with the customer: stays under Approved until the job is completed

@@ -25,14 +25,16 @@ const GROUPS: G[] = [
   { t: "Incoming", line: "Leads and requests", c: "var(--fbs-violet)", steps: [
     ["leads", "Leads", ic(<><path d="M4 4h16v16H4z" /><path d="m4 6 8 7 8-7" /></>)],
     ["requests", "Requests", ic(<><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></>)]] },
-  { t: "In the works", line: "Mockups, sew-outs and numbers", c: "var(--warn)", steps: [
-    ["mockups", "Mockups & sew-outs", ic(<><path d="M20.4 7.6 16 3l-4 2-4-2-4.4 4.6L6 11v10h12V11z" /></>)],
+  { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
+    ["mockups", "Mockups", ic(<><path d="M20.4 7.6 16 3l-4 2-4-2-4.4 4.6L6 11v10h12V11z" /></>)],
     ["numbers", "Numbers", ic(<><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></>)]] },
   { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
     ["ready", "Ready", ic(<><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></>)],
     ["sent", "Sent", ic(<><path d="M6 2h12M6 22h12M7 2c0 5 10 7 10 10S7 17 7 22M17 2c0 5-10 7-10 10s10 5 10 10" /></>)]] },
   { t: "Revisions", line: "Make changes", c: "var(--danger)", steps: [
     ["changes", "Make changes", ic(<><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>)]] },
+  { t: "Sew-outs", line: "Embroidery only", c: "var(--ink-2)", steps: [
+    ["sewouts", "Sew-outs", ic(<><path d="M5 19 19 5" /><circle cx="18" cy="6" r="2" /><path d="M4 20c2-1 3-3 2-5" /></>)]] },
   { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
     ["approved", "Approved", ic(<><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6M9 9l6 6" /></>)]] },
@@ -41,13 +43,14 @@ const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
-  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups or sew-outs waiting on numbers.", numbers: "No numbers waiting on mockups.",
-  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
+  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
+  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
 // Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round
-const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k !== "numbers" && t.state === "needed")
-  : s === "ready" ? t.state === "made" : s === "sent" ? t.state === "sent" : s === "changes" ? t.state === "changes" : s === "approved" ? t.state === "done" : false);
+const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k === "art" && t.state === "needed")
+  : s === "sewouts" ? (t.k === "sewout" && t.state !== "done")
+  : s === "ready" ? (t.k !== "sewout" && t.state === "made") : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
 const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
 const ago = (s: string) => { const d = Math.floor((Date.now() - new Date(s).getTime()) / 864e5); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };

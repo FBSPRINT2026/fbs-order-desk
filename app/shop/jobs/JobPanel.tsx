@@ -65,13 +65,14 @@ export default function JobPanel({ it, step, after, onClose, onLead, onUndo }: {
 function Detail({ d, rows, it, step, after, close, onUndo }: { d: JobDetail; rows: Row[]; it: JobItem; step: Step; after: (m: string) => void; close: ReactNode; onUndo: () => void }) {
   // the piece this step is about, to start with
   const want: PieceState[] = step === "changes" ? ["changes"] : step === "ready" ? ["made"] : step === "sent" ? ["sent"] : step === "numbers" ? ["needed"] : ["needed", "made", "sent", "changes"];
-  const start = Math.max(0, d.pieces.findIndex((p) => want.includes(p.state) && (step !== "numbers" || p.k !== "quote") && (step !== "mockups" || p.k === "quote" || p.state !== "needed")));
+  const start = Math.max(0, step === "sewouts" ? d.pieces.findIndex((p) => p.k === "sewout" && p.state !== "done")
+    : d.pieces.findIndex((p) => p.k !== "sewout" && want.includes(p.state) && (step !== "numbers" || p.k === "art") && (step !== "mockups" || p.k === "quote" || p.state !== "needed")));
   const [sel, setSel] = useState(start);
   const p = d.pieces[sel] || d.pieces[0];
   const who = first(d.contact) || d.customer;
   const anyOut = d.pieces.some((x) => x.state === "sent" || x.state === "changes" || x.state === "done") || !!d.link;
   const status: [string, string] = d.declinedAt ? ["Declined", "var(--ink-3)"] : it.steps.includes("changes") ? ["Changes asked", "var(--danger)"] : it.steps.includes("ready") ? ["Ready to send", "var(--fbs-blue)"]
-    : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("mockups") || it.steps.includes("numbers") ? ["In the works", "var(--warn)"]
+    : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("mockups") || it.steps.includes("numbers") ? ["In the works", "var(--warn)"] : it.steps.includes("sewouts") ? ["Sew-out", "var(--ink-2)"]
     : [ST[d.status]?.label || d.status, "var(--ok)"];
   return (
     <div className="jp">
@@ -198,7 +199,8 @@ export function StartHere({ items, loading, mine, go }: { items: JobItem[]; load
     { n: fix.length, icon: IC.pencil, c: "var(--danger)", t: `${fix.length} to fix`, sub: fix[0] ? `Customers asked for changes · start with #${fix[0].number}` : "", cta: "Make changes", act: () => go("changes", fix[0]?.key) },
     { n: ready.length, icon: IC.send, c: "var(--fbs-blue)", t: `${ready.length} ready to send`, sub: ready[0] ? `Due soonest: #${ready[0].number}${ready[0].due ? `, ${day(ready[0].due)}` : ""}` : "", cta: ready[0] ? `Start with #${ready[0].number}` : "", act: () => go("ready", ready[0]?.key) },
     { n: stale.length, icon: IC.hour, c: "var(--warn)", t: `${stale.length} waiting 3+ days`, sub: stale[0] ? `Longest: #${stale[0].number}, sent ${day(stale[0].sentAt)}` : "", cta: "Remind", act: () => go("sent", stale[0]?.key) },
-    { n: works.length, icon: IC.shirt, c: "var(--warn)", t: `${works.length} in the works`, sub: "Mockups, sew-outs or numbers to finish", cta: "", act: () => go(at("mockups").length ? "mockups" : "numbers") },
+    { n: works.length, icon: IC.shirt, c: "var(--warn)", t: `${works.length} in the works`, sub: "Mockups or numbers to finish", cta: "", act: () => go(at("mockups").length ? "mockups" : "numbers") },
+    { n: at("sewouts").length, icon: IC.needle, c: "var(--ink-2)", t: `${at("sewouts").length} sew-out${at("sewouts").length === 1 ? "" : "s"}`, sub: "Embroidery: take them, send them, get them approved", cta: "", act: () => go("sewouts", byDue(at("sewouts"))[0]?.key) },
     { n: leads.length, icon: IC.mail, c: "var(--fbs-violet)", t: `${leads.length} new lead${leads.length === 1 ? "" : "s"}`, sub: today.length ? `${today.length} from today` : "From email and ClickUp", cta: "", act: () => go("leads") },
   ];
   const rowsOn = rowsAll.filter((r) => r.n > 0);
