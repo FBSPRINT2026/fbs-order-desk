@@ -102,7 +102,7 @@ export async function linkViewed(admin: SupabaseClient, p: LinkPage) {
 }
 
 /** The customer's answer on the link's page. */
-export async function decideByLink(admin: SupabaseClient, id: string, decision: LinkDecision, name: string, note: string, step?: Step) {
+export async function decideByLink(admin: SupabaseClient, id: string, decision: LinkDecision, name: string, note: string, step?: Step, /** one shop email for several answers at once (the caller sends it) */ quiet = false) {
   const p = await linkPage(admin, id, step);
   if (!p) return { ok: false as const, error: "This proof link doesn't work anymore. Ask us for a new one." };
   if (p.status === "replaced") return { ok: false as const, error: "A newer proof was sent after this one. Please open the newest proof email." };
@@ -120,12 +120,12 @@ export async function decideByLink(admin: SupabaseClient, id: string, decision: 
     await admin.from("order_events").insert({ order_id: p.o.id, kind: status === "approved" ? "proof_approved" : "proof_changes", detail: `${label}${decision === "approved_changes" ? " (with a small change, no new proof)" : decision === "changes" ? " (send a new proof)" : ""} on the proof link${text ? `: ${text.slice(0, 300)}` : ""}`, actor });
   } else {
     const { decideSewout } = await import("@/lib/sewouts");
-    const r = await decideSewout(admin, p.sewout as never, p.o, decision === "changes" ? "changes" : "approved", who, text, actor);
+    const r = await decideSewout(admin, p.sewout as never, p.o, decision === "changes" ? "changes" : "approved", who, text, actor, quiet);
     if (!r.ok) return r;
   }
   // what they wrote goes in the order's Messages too, where the team reads the customer
   if (text) await admin.from("messages").insert({ order_id: p.o.id, author_type: "customer", author_email: actor, author_name: who || p.customer?.name || "Customer", body: `${label}: ${decision === "approved_changes" ? "approved with a small change (no new proof)" : decision === "changes" ? "changes, send a new proof" : "approved"}. ${text}` });
-  if (p.link.kind === "art" && SHOP_NOTIFY_EMAIL) {
+  if (p.link.kind === "art" && SHOP_NOTIFY_EMAIL && !quiet) {
     const head = decision === "approved" ? `${who} approved ${label.toLowerCase()}` : decision === "approved_changes" ? `${who} approved ${label.toLowerCase()} with a small change` : `${who || "The customer"} wants changes to ${label.toLowerCase()}`;
     await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `${decision === "changes" ? "Proof changes" : decision === "approved_changes" ? "Proof approved with a change" : "Proof approved"} on #${p.o.number}`, html: emailLayout(p.settings.shop.name, head, decision === "approved_changes" ? `Make this change before production (no new proof):\n\n${text}` : text || "No comment.", "Open order", `${siteUrl()}/shop/orders/${p.o.id}`) });
   }
