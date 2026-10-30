@@ -16043,3 +16043,11 @@ table.tbl.jc tbody tr:focus-visible{outline:2px solid var(--accent);outline-offs
 .pfl-sum b{font-weight:700}
 .pfl-sum small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
 .pfl-tick{width:20px;height:20px;border-radius:50%;background:var(--ok);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
+/* Job Center: View all (the header's switches; a section row per group) */
+.jc-hd-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.jc-hd-r .chip{display:inline-flex;align-items:center;gap:5px}
+table.tbl.jc tr.jc-sec td{background:var(--surface-2);font-size:12.5px;color:var(--ink-3);padding-top:7px;padding-bottom:7px;cursor:default}
+table.tbl.jc tr.jc-sec td b{color:var(--ink)}
+table.tbl.jc tr.jc-sec i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
+table.tbl.jc tbody tr.jc-sec,table.tbl.jc tbody tr.jc-more{cursor:default}
+table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}

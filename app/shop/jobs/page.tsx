@@ -67,6 +67,10 @@ export default function JobCenter() {
   const [artOnly, setArtOnly] = useSticky<boolean>("jobs.artOnly", false);
   const [q, setQ] = useState("");
   const [pick, setPick] = useState<string | null>(null); // the job open in the right panel
+  // View all (Oct 29, Nick: "when you first go onto the job center, you got to see everything… everything but leads,
+  // just requests all the way through… all the symbols would be selected"): every step at once, in sections
+  const [all, setAll] = useSticky<boolean>("jobs.all", false);
+  const [more, setMore] = useState<Record<string, boolean>>({}); // sections opened past their first few
   const [n, setN] = useState(0);
   const [lead, setLead] = useState<JobItem | null>(null);
 
@@ -91,15 +95,31 @@ export default function JobCenter() {
   const deptCount = (d: Dept | "all") => base.filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
   const picked = (items || []).find((it) => it.key === pick) || null;
-  const go = (s: Step, key?: string) => { setStep(s); setPick(key || null); };
+  const go = (s: Step, key?: string) => { setStep(s); setAll(false); setPick(key || null); };
+  // View all: each job once, in the first step it's at (Requests through Declined; not Leads)
+  const sortIn = (s: Step) => (a: JobItem, b: JobItem) => (s === "approved" || s === "declined" || s === "requests" ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""));
+  const sections = useMemo(() => {
+    const seen = new Set<string>();
+    return GROUPS.map((g) => {
+      const steps = g.steps.map((x) => x[0]).filter((k) => k !== "leads");
+      const rows: { it: JobItem; s: Step }[] = [];
+      for (const k of steps) for (const it of base.filter((x) => x.steps.includes(k) && inDept(x) && match(x)).sort(sortIn(k))) { if (seen.has(it.key)) continue; seen.add(it.key); rows.push({ it, s: k }); }
+      return { g, steps, rows, counts: steps.map((k) => [k, rows.filter((r) => r.s === k).length] as const) };
+    }).filter((x) => x.steps.length);
+  }, [items, dept, q, mine, me, cameBack]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allCount = sections.reduce((a, x) => a + x.rows.length, 0);
 
   return (
     <>
       <div className="page-head">
         <div><h1>Job Center</h1><div className="eyebrow">Every job before production: where it is and what&apos;s next</div></div>
-        {hasAcc && <div className="chips" role="group" aria-label="Whose jobs">
-          {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (mineOn === k ? " on" : "")} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
-        </div>}
+        <div className="jc-hd-r">
+          <button type="button" className={"chip" + (all ? " on" : "")} aria-pressed={all} title="Every job from Requests to Declined at once" onClick={() => { setAll(!all); setPick(null); }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" /></svg> View all</button>
+          {hasAcc && <div className="chips" role="group" aria-label="Whose jobs">
+            {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (mineOn === k ? " on" : "")} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
+          </div>}
+        </div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
@@ -112,7 +132,7 @@ export default function JobCenter() {
                 <div className="jc-st">
                   {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
                   {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
-                    <button key={k} type="button" role="tab" aria-selected={step === k} className={"dgz-stn" + (step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
+                    <button key={k} type="button" role="tab" aria-selected={all ? k !== "leads" : step === k} className={"dgz-stn" + ((all ? k !== "leads" : step === k) ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
                       <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
                       <span className="dgz-nm">{l}</span>
                     </button>); })}
@@ -126,14 +146,23 @@ export default function JobCenter() {
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
             <div className="toolbar" data-toolbar>
-              {step !== "leads" && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? deptCount(k) : "…"}</span></button>)}</div>}
+              {(all || step !== "leads") && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? (all ? base.filter((it) => !it.steps.every((x) => x === "leads") && (k === "all" || it.depts.includes(k))).length : deptCount(k)) : "…"}</span></button>)}</div>}
               <div className="chips">
                 <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
-                {step === "mockups" && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
+                {step === "mockups" && !all && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
               </div>
               <SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {!items ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{q ? `No matches for “${q}”.` : EMPTY[step]}</div> : (
+            {!items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+              <div className="tbl-wrap"><table className="tbl jc">
+                <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
+                <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
+                  <tr key={x.g.t} className="jc-sec" style={{ ["--c" as string]: x.g.c }}><td colSpan={5}><i aria-hidden /><b>{x.g.t}</b> · {x.counts.filter(([, n]) => n).map(([k, n]) => `${GROUPS.flatMap((g) => g.steps).find((y) => y[0] === k)![1]} ${n}`).join(" · ")}</td></tr>,
+                  ...(open ? x.rows : x.rows.slice(0, 5)).map(({ it, s: st }) => <Row key={it.key} it={it} step={st} wide on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />),
+                  ...(open ? [] : [<tr key={x.g.t + "+"} className="jc-more"><td colSpan={5}><button type="button" className="linkbtn" onClick={() => setMore((m) => ({ ...m, [x.g.t]: true }))}>+ {x.rows.length - 5} more in {x.g.t.toLowerCase()}</button></td></tr>]),
+                ]; })}</tbody>
+              </table></div>
+            )) : !shown.length ? <div className="faint">{q ? `No matches for “${q}”.` : EMPTY[step]}</div> : (
               <div className="tbl-wrap"><table className="tbl jc">
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
@@ -154,7 +183,7 @@ export default function JobCenter() {
   );
 }
 
-function Row({ it, step, on, onPick, after, onLead }: { it: JobItem; step: Step; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void }) {
+function Row({ it, step, wide, on, onPick, after, onLead }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void }) {
   const [busy, setBusy] = useState(false);
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
@@ -169,13 +198,14 @@ function Row({ it, step, on, onPick, after, onLead }: { it: JobItem; step: Step;
         <button type="button" className="btn sm" disabled={busy} onClick={() => { setBusy(true); void notAJob(it.suggestionId!).then((r) => { setBusy(false); after(r.ok ? "Taken off the leads." : r.error); }); }}>Not a job</button>
       </td>
     </tr>);
-  if (step === "declined") return (
-    <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>);
+  if (step === "declined") return wide
+    ? <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td><td><span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }}><span className="pill-t">Declined</span></span>{it.declined && <div className="sub">{it.declined}</div>}</td><td /><td className="nowrap">{day(it.at)}</td></tr>
+    : <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>;
   return (
     <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
-      <td>{step === "requests" ? <span className="nowrap">{it.qty || 0} pcs</span> : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
+      <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
         : <div className="jc-tags">{here.map(tag)}</div>}</td>
       <td><div className="jc-tags sm">{(step === "approved" ? [] : also).map(tag)}{it.revised && step !== "changes" && <span className="faint jc-back">came back once</span>}</div></td>
       <td className="nowrap">{step === "requests" ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
