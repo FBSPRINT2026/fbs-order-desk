@@ -60,7 +60,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, Math.max(1, g.lines.length));
   });
   // the logos' pictures: the work order, the proof, and the sew-out's "compared to the original file"
-  const dPaths = work0 || proof0 || !!sewout ? Object.values(designs).filter((d) => d.preview_path) : [];
+  // (the quote / invoice too: a garment color with no mockup of its own shows its print's logo on that color, Oct 30)
+  const dPaths = Object.values(designs).filter((d) => d.preview_path);
   const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();

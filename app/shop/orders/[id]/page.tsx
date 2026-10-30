@@ -377,7 +377,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       price_type: d.price_type || "retail", order_type: d.order_type || null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
-      waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
+      waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
     }).eq("id", d.id);
     setSaveState(error ? "Save failed: " + error.message : "Saved");
     if (!error) try { localStorage.removeItem(`fbs:unsaved:${d.id}`); } catch { /* storage off */ }
@@ -1641,7 +1641,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <section className="panel">
               <div className="panel-h"><h2>Customer notes</h2></div>
               <div className="panel-b stack">
-                <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+                <div className="field"><label htmlFor="o-notes">Customer notes</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+                {/* off unless it matters (Oct 30, Nick: "check a box… if it is important we will add it to the invoice. If not, it doesn't show") */}
+                <label className="check"><input type="checkbox" checked={!!o.notes_on_invoice} onChange={(e) => patch((d) => { d.notes_on_invoice = e.target.checked; })} /> Add customer notes to the invoice</label>
               </div>
             </section>
             </div>

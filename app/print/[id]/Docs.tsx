@@ -691,7 +691,10 @@ export function InvoiceDoc(p: DocData) {
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
             {lines.map(({ l, li, lc }) => {
-              const pic = p.byLine?.[gi]?.[li] || p.mockups[gi]?.[0] || "";
+              // the line's own mockup; the group's first only for its own color (never another color's picture); else the print's logo
+              // on the garment's color
+              const pic = p.byLine?.[gi]?.[li] || (lineColor(l) === lineColor(g.lines[0]) ? p.mockups[gi]?.[0] : "") || "";
+              const logo = g.imprints.map((d) => (d.design_id ? p.designUrls[d.design_id] : "")).find(Boolean) || "";
               const sz = invoiceSizes(l.sizes as Record<string, number>);
               const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment";
               return (
@@ -702,7 +705,7 @@ export function InvoiceDoc(p: DocData) {
                   {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
                   <div className="iv2-det">
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
-                    {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className="iv2-th none" style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }} />}
+                    {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
                     <div className="iv2-blk">
                       <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>
                       {prints.length > 0 && (
@@ -735,17 +738,16 @@ export function InvoiceDoc(p: DocData) {
         </div>
       )}
       {/* the bottom (Oct 30, Nick): the totals right under the items with the payment terms under them; on the left the
-          delivery address (only when it's somewhere else), payments, a quote's notes, and a thank-you. An invoice carries no
-          customer notes ("this is just an invoice") */}
+          delivery address (only when it's somewhere else), payments, and the customer notes only when "Add customer notes to
+          the invoice" is ticked on the order */}
       <div className="iv2-sum">
         <div className="iv2-left">
           {shipTo && (() => { const sl = shipLines(shipTo); return (
             <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
               {sl.lines.map((x, k) => <div key={k} className={k === 0 ? "nm" : ""}>{x}</div>)}
-              {sl.notes.map((x, k) => <div key={"n" + k} className="nt">{x}</div>)}
             </div>); })()}
           {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
-          {isQ && o.notes && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
+          {o.notes_on_invoice && o.notes?.trim() && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
         </div>
         <div>
           <div className="tot">

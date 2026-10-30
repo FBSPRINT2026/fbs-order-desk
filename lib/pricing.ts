@@ -330,7 +330,7 @@ export type Order = {
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
   /** started, not saved or sent yet: no real number, in no list (Oct 24; migration 209) */ draft?: boolean; discarded_at?: string | null;
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
-  waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
+  waive_setup: boolean; notes: string; /** print the customer notes on the quote / invoice (Oct 30, Nick: a checkbox) */ notes_on_invoice?: boolean; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
   /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string;
   /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | null;

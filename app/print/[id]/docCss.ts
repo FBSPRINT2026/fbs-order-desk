@@ -510,4 +510,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .sheet.iv2.t4 .iv2-gh{font-size:12pt;padding-top:2px}
 .pdoc .sheet.iv2.t4 .iv2-pt{margin-top:3px}
 .pdoc .sheet.iv2.t4{padding-top:.32in;padding-bottom:.24in}
+/* no mockup for this color: the print's logo on the garment's color */
+.pdoc .iv2-th.none.lg{background:var(--sc);display:grid;place-items:center;padding:14%}
+.pdoc .iv2-th.none.lg img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 `;
