@@ -529,4 +529,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .sheet.iv2.t4 .iv2-sum{margin-top:8px}
 .pdoc .sheet.iv2.t4 .iv2-ln{padding:3px 0 4px}
 .pdoc .sheet.iv2.t4 .iv2-who{margin:6px 0 0}
+/* a payment row in the totals: green, its date and how it was paid small beside the word (Oct 30, Nick) */
+.pdoc .tot .r.iv2-pay{color:var(--ok)}
+.pdoc .tot .r.iv2-pay small{font-size:8.5pt;color:var(--ink3);margin-left:7px;font-weight:400}
+.pdoc .iv2-full{align-self:flex-start;font-size:8pt;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
 `;

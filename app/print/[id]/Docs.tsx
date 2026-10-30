@@ -672,6 +672,15 @@ export function InvoiceDoc(p: DocData) {
   // ship to: a box at the bottom, only when it goes somewhere other than their own address (Oct 30, Nick)
   const shipTo = (o.delivery_method === "ship" || o.delivery_method === "deliver") && (o.ship_to || "").trim() && flat(o.ship_to) !== flat(cust.address) ? String(o.ship_to).trim() : "";
   const deposit = cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 ? c.total / 2 - c.paid : 0;
+  // the payments in the totals, oldest first, each with its date and how it was paid (only when they add up to what's paid)
+  const sorted = pays.slice().sort((a, b) => (a.paid_on || a.created_at || "").localeCompare(b.paid_on || b.created_at || ""));
+  const payRows = Math.abs(sorted.reduce((a, x) => a + (+x.amount || 0), 0) - c.paid) < 0.01 ? sorted.map((x, k) => {
+    const amt = +x.amount || 0, m = (x.method || "").trim();
+    const ref = /check/i.test(m) && (x.note || "").match(/#?\s*(\d{3,})/) ? ` #${(x.note || "").match(/#?\s*(\d{3,})/)![1]}` : "";
+    const on = day(x.paid_on || x.created_at, { month: "short", day: "numeric" });
+    const first = k === 0 && amt > 0 && cust.payment_terms === "deposit" && amt < c.total - 0.005;
+    return { id: x.id, amount: amt, on, label: amt < 0 ? "Refunded" : first ? "Deposit paid" : "Paid", how: [on, m ? m.replace(/^./, (ch) => ch.toUpperCase()) + ref : ""].filter(Boolean).join(" · ") };
+  }) : [];
   return (
     <section className="sheet iv2">
       <div className="iv2-head">
@@ -747,11 +756,11 @@ export function InvoiceDoc(p: DocData) {
           the invoice" is ticked on the order */}
       <div className="iv2-sum">
         <div className="iv2-left">
+          {paidUp && <div className="iv2-full">Paid in full{payRows.length ? ` · ${payRows[payRows.length - 1].on}` : ""}</div>}
           {shipTo && (() => { const sl = shipLines(shipTo); return (
             <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
               {sl.lines.map((x, k) => <div key={k} className={k === 0 ? "nm" : ""}>{x}</div>)}
             </div>); })()}
-          {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
           {o.notes_on_invoice && o.notes?.trim() && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
         </div>
         <div>
@@ -760,7 +769,10 @@ export function InvoiceDoc(p: DocData) {
             {c.discount ? <div className="r"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
             <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
             <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
-            {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
+            {/* each payment its own dated row (Oct 30, Nick: "put the date in the payment… if they paid half down… payment paid
+                10/30"): "Deposit paid · Oct 30 · Card", a check with its number; a refund as a refund */}
+            {payRows.length ? payRows.map((x) => <div className="r iv2-pay" key={x.id}><span>{x.label}<small>{x.how}</small></span><span>{x.amount < 0 ? "+" : "−"}{money(Math.abs(x.amount))}</span></div>)
+              : c.paid > 0 && <div className="r iv2-pay"><span>Paid</span><span>−{money(c.paid)}</span></div>}
             {deposit > 0 && <div className="r bal2"><span>Deposit due to start</span><span>{money(deposit)}</span></div>}
             {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
           </div>
