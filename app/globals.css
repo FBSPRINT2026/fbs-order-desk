@@ -16242,6 +16242,8 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
   .ord .ed-grid:has(.jd-panel) > .ed-aside > *{order:1}
   .ord .ed-grid:has(.jd-panel) > .ed-aside > .jd-panel{order:-1}
   .ord .ed-grid:has(.jd-panel) > :not(.ed-aside){order:0;min-width:0}
+  /* the group explainer under + Add line item group isn't needed on a phone (Oct 29, Nick) */
+  .ord .grp-hint{display:none}
   /* customer notes (and fees) go under the totals (Oct 29, Nick), then delivery */
   .ord .ed-grid:has(.jd-panel) > .stack{display:contents}
   .ord .ed-grid:has(.jd-panel) > .stack > *{order:0;min-width:0}
