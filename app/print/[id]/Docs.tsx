@@ -633,7 +633,7 @@ const flat = (x: string | null | undefined) => (x || "").toLowerCase().replace(/
 const DECO: Record<string, string> = { screen: "Screen printing", embroidery: "Embroidery", dtf: "Heat press", heat: "Heat press", transfer: "Heat press" };
 /** a ship-to address made tidy for the invoice's box (Oct 30, Nick: "it just looks like bad text in there"): a label someone
  *  typed into it ("Deliver-TO ADDRESS:") is dropped, a note in brackets ("(Will be couriered)") goes small under it, and
- *  ALL-CAPS lines are written normally (short words like TX, USA, PO keep their capitals); the first line is the name */
+ *  ALL-CAPS lines are written normally (short words like TX, USA, PO and initials with no vowels like PSWM keep their capitals); the first line is the name */
 function shipLines(text: string): { lines: string[]; notes: string[] } {
   const lines: string[] = [], notes: string[] = [];
   for (let raw of text.split(/\n+/)) {
@@ -641,7 +641,7 @@ function shipLines(text: string): { lines: string[]; notes: string[] } {
     const note = raw.match(/\(([^)]+)\)\s*$/);
     if (note) { notes.push(note[1].trim().replace(/^./, (c) => c.toUpperCase())); raw = raw.replace(/\([^)]*\)\s*$/, "").trim(); }
     if (!raw) continue;
-    if (raw === raw.toUpperCase() && /[A-Z]{4}/.test(raw)) raw = raw.toLowerCase().replace(/\b([a-z])([a-z]*)/g, (w, a, b) => (w.length <= 3 && /^(tx|usa|po|llc|inc|ste|apt|ne|nw|se|sw|dfw)$/.test(w) ? w.toUpperCase() : a.toUpperCase() + b));
+    if (raw === raw.toUpperCase() && /[A-Z]{4}/.test(raw)) raw = raw.toLowerCase().replace(/\b([a-z])([a-z]*)/g, (w, a, b) => ((w.length <= 3 && /^(tx|usa|po|llc|inc|ste|apt|ne|nw|se|sw|dfw)$/.test(w)) || /^[bcdfghjklmnpqrstvwxz]{2,}$/.test(w) ? w.toUpperCase() : a.toUpperCase() + b));
     lines.push(raw.replace(/^attn\b:?/i, "Attn:"));
   }
   return { lines, notes };
