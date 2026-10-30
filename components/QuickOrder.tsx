@@ -533,11 +533,17 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (d.kind !== "reorder" || theirs.size || !sentArt.length) {
       const used = new Set([...Object.values(d.art || {}), ...Object.values(d.mockups || {}).flat()]);
       const sb0 = createClient();
+      const helperGot = new Map<string, Pulled | null>();
       for (const f of d.files.filter((x) => used.has(x.path) && (/pdf/i.test(x.type) || /\.pdf$/i.test(x.name)))) {
         guard();
         const { data: blob } = await sb0.storage.from("proofs").download(f.path);
         if (!blob) continue;
         const buf = await blob.arrayBuffer();
+        // the Helper first (Oct 30, Nick: our own FBS proof, VBALL GLAC, was cut up as a mockup sheet and the proof's
+        // shirt came along as art): a file with the art on a garment (our sized proof, their mockup, a drawn shirt) is the
+        // Helper's to pull apart below, never the sheet cutter's
+        if (!helperGot.has(f.path)) helperGot.set(f.path, await pullOffMockup(new File([buf.slice(0)], f.name, { type: blob.type || "application/pdf" }), f.name, { drawn: true }).catch(() => null));
+        if (helperGot.get(f.path)?.pieces.length) continue;
         const pages = f.sheet || (await looksLikeSheet(buf));
         if (!pages) continue;
         step(`${of}Reading their mockup sheet ${f.name}…`);
@@ -592,7 +598,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         const { data: blob } = await sb0.storage.from("proofs").download(f.path);
         if (!blob) continue;
         step(`${of}Is the art in ${f.name} on a shirt? Checking with the Helper…`);
-        const got: Pulled | null = await pullOffMockup(blob, f.name, { drawn: true }).catch(() => null);
+        const got: Pulled | null = helperGot.has(f.path) ? helperGot.get(f.path)! : await pullOffMockup(blob, f.name, { drawn: true }).catch(() => null);
         guard();
         if (!got) continue;
         const used = new Set<ArtPiece>();
