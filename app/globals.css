@@ -117,7 +117,10 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .toolbar select{width:auto}
 /* tables */
 .tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
-table.tbl{width:100%;border-collapse:collapse;min-width:720px}
+/* no sideways scrolling anywhere (Oct 30, Nick: "by default, we don't want that anywhere on the site"): a list table fits its
+   panel; text wraps, and narrower screens get tighter cells */
+table.tbl{width:100%;border-collapse:collapse;min-width:0}
+@media (max-width:1400px){.tbl th{padding:9px 10px}.tbl td{padding:10px 10px}}
 .tbl th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);white-space:nowrap}
 .tbl td{padding:11px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 .tbl tbody tr{cursor:pointer}
@@ -16277,7 +16280,17 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 
 /* ===== Payroll Center (Oct 30, Nick): payday in steps, contractor checks, paycheck advances ===== */
 .pc-tbl{border:0;border-radius:0}
-.pc-tbl td,.pc-tbl th{white-space:nowrap}
+.pc-tbl td,.pc-tbl th{padding-left:8px;padding-right:8px}
+.pc-tbl td.r,.pc-tbl td .pc-ok,.pc-tbl td .pc-wait{white-space:nowrap}
+.pc-tbl th{white-space:normal;line-height:1.25}
+.pc-tbl .pc-payee{width:100%;min-width:120px;max-width:190px}
+.pc-adv-t{display:inline-flex;flex-direction:column;align-items:flex-end;gap:2px}
+.pc-adv-in{display:inline-flex;align-items:center;gap:4px}
+.pc-adv-t .pc-money{width:64px}
+.pc-adv-t small{white-space:nowrap;font-size:11.5px}
+.pc-adv-t small .linkish{font-size:11.5px}
+.pc-tbl .pc-money{width:72px}
+.pc-bonus-t{font-size:12.5px;align-self:center}
 .pc-tbl tr.flag td{background:var(--danger-soft)}
 .pc-tbl .bad,.pc-warn .bad{color:var(--danger)}
 .pc-tbl .sub.bad{font-size:12px}
@@ -16288,7 +16301,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-adv{display:inline-flex;align-items:center;gap:6px}
 .pc-adv small{font-size:12px}
 .pc-adv .linkish{background:none;border:0;padding:0;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}
-.pc-payee{height:32px;max-width:240px}
+.pc-payee{height:32px}
 .pc-note{font-size:12.5px;color:var(--ink-3)}
 .pc-warn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--danger);border-radius:var(--r);background:var(--danger-soft);color:var(--ink);font-size:14px}
 .pc-warn .btn{margin-left:auto}

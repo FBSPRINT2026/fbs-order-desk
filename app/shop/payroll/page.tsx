@@ -66,6 +66,10 @@ export default function PayrollCenter() {
   }, [role]);
 
   const rows = d?.rows || [];
+  // the Bonus column only when asked for, or when someone has one (Oct 30, Nick: "hide the bonus… click a button… add
+  // that column back")
+  const [bonusOn, setBonusOn] = useSticky("payroll.bonus", false);
+  const showBonus = bonusOn || rows.some((r) => r.bonus > 0);
   const w2 = rows.filter((r) => r.kind === "payroll"), cons = rows.filter((r) => r.kind === "contract");
   const toFix = rows.filter((r) => r.issues > 0);
   const payeeOf = (r: PaydayRow) => (r.e.qbo_vendor_id ? { id: r.e.qbo_vendor_id, name: r.e.qbo_vendor_name || r.e.qbo_vendor_id, type: (r.e.qbo_payee_type || "Vendor") as Payee["type"], saved: true } : null);
@@ -220,6 +224,7 @@ export default function PayrollCenter() {
             <div className="panel-h">
               <div><h2>Step 2 · W-2 payroll</h2><span className="faint">QuickBooks Payroll, in its list order. Salaries are filled by QuickBooks.</span></div>
               <div className="row" style={{ gap: 8 }}>
+                {!rows.some((r) => r.bonus > 0) && <button type="button" className="linkbtn pc-bonus-t" onClick={() => setBonusOn(!bonusOn)}>{bonusOn ? "Hide bonus" : "+ Add bonus"}</button>}
                 <button type="button" className="btn" onClick={copyList} disabled={!w2.length}>Copy as list</button>
                 {w2Open.length > 0 && (confirm === "entered"
                   ? <><button type="button" className="btn primary" onClick={entered}>Yes, it&apos;s saved in QuickBooks</button><button type="button" className="btn" onClick={() => setConfirm("")}>Cancel</button></>
@@ -228,7 +233,7 @@ export default function PayrollCenter() {
             </div>
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
-                <thead><tr><th>Employee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th>{w2.some((r) => r.pay.offHours) && <th className="r">Time off hrs</th>}<th className="r">Bonus</th><th className="r">Advance to deduct</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th>{w2.some((r) => r.pay.offHours) && <th className="r">Time off hrs</th>}{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th>Status</th></tr></thead>
                 <tbody>{w2.map((r) => (
                   <tr key={r.e.id} className={r.issues ? "flag" : ""}>
                     <td><b>{nm(r)}</b>{asQb(r) && <div className="sub">In QuickBooks as {r.e.qbo_vendor_name}</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
@@ -237,7 +242,7 @@ export default function PayrollCenter() {
                       ? <td className="r faint" colSpan={2}>QuickBooks fills it</td>
                       : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
                     {w2.some((x) => x.pay.offHours) && <td className="r">{h2(r.pay.offHours)}</td>}
-                    <td className="r"><Money value={r.line?.bonus ?? null} disabled={!!r.line?.done_at} onSave={(v) => saveLine(r, { bonus: v })} /></td>
+                    {showBonus && <td className="r"><Money value={r.line?.bonus ?? null} disabled={!!r.line?.done_at} onSave={(v) => saveLine(r, { bonus: v })} /></td>}
                     <td className="r"><AdvanceCell r={r} disabled={!!r.line?.done_at} onSave={(v) => saveLine(r, { advance_amount: v })} /></td>
                     <td>{r.line?.done_at ? <span className="pc-ok">Entered ✓</span> : <span className="faint">To enter</span>}</td>
                   </tr>
@@ -251,6 +256,7 @@ export default function PayrollCenter() {
             <div className="panel-h">
               <div><h2>Step 3 · Contractor checks</h2><span className="faint">Print later, from {qb?.accounts[0] || "Bank Of America"}, dated {dayLabel(d.payDate)}</span></div>
               <div className="row" style={{ gap: 8 }}>
+                {!rows.some((r) => r.bonus > 0) && <button type="button" className="linkbtn pc-bonus-t" onClick={() => setBonusOn(!bonusOn)}>{bonusOn ? "Hide bonus" : "+ Add bonus"}</button>}
                 {guesses.size > 0 && <button type="button" className="btn" onClick={useGuesses} disabled={!!busy}>Use {guesses.size} suggested payee{guesses.size > 1 ? "s" : ""}</button>}
                 {role === "owner" && ready.length > 0 && (confirm === "checks"
                   ? <><button type="button" className="btn primary" onClick={createChecks}>Yes, create {ready.length} checks · {$(r2(ready.reduce((s, r) => s + r.total, 0)))}</button><button type="button" className="btn" onClick={() => setConfirm("")}>Cancel</button></>
@@ -260,7 +266,7 @@ export default function PayrollCenter() {
             {qbErr && <div className="pv-err" style={{ margin: "10px 16px" }}>{qbErr}</div>}
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
-                <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r">Regular pay</th><th className="r">Overtime pay</th><th className="r">Bonus</th><th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r">Regular pay</th><th className="r">Overtime pay</th>{showBonus && <th className="r">Bonus</th>}<th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
                 <tbody>{cons.filter((r) => !r.keyed).map((r) => {
                   const pe = payeeOf(r), g = guesses.get(r.e.id), done = !!r.line?.qbo_purchase_id;
                   const reg = r.check.filter((l) => l.desc === "REGULAR PAY").reduce((s, l) => s + l.amount, 0), ot = r.check.filter((l) => l.desc === "OVERTIME").reduce((s, l) => s + l.amount, 0);
@@ -280,7 +286,7 @@ export default function PayrollCenter() {
                         : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
                       <td className="r">{r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="faint">—</span> : $(reg)}</td>
                       <td className={"r" + (ot ? " pc-ot" : "")}>{ot ? $(ot) : <span className="faint">—</span>}</td>
-                      <td className="r"><Money value={r.line?.bonus ?? null} disabled={done} onSave={(v) => saveLine(r, { bonus: v })} /></td>
+                      {showBonus && <td className="r"><Money value={r.line?.bonus ?? null} disabled={done} onSave={(v) => saveLine(r, { bonus: v })} /></td>}
                       <td className="r"><AdvanceCell r={r} disabled={done} onSave={(v) => saveLine(r, { advance_amount: v })} neg /></td>
                       <td className="r"><b>{$(r.line?.check_total ?? r.total)}</b></td>
                       <td>{done ? <span className="pc-ok">Check made ✓</span> : r.issues ? <span className="bad">Fix clock first</span> : r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="pc-wait">Needs rate</span> : !pe ? <span className="pc-wait">Needs payee</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Nothing to pay</span>}</td>
@@ -291,7 +297,7 @@ export default function PayrollCenter() {
             </div>
             {/* their own check layout, last (Oct 30, Nick on Linda McCoy: "make her kind of stand out… the last one") */}
             {cons.filter((r) => r.keyed).map((r) => (
-              <KeyedCheck key={r.e.id} r={r} payee={payeeOf(r)?.name || ""} done={!!r.line?.qbo_purchase_id} onSave={(k) => saveLine(r, { keyed: k })} onBonus={(v) => saveLine(r, { bonus: v })} onSetup={saveSetup} />
+              <KeyedCheck key={r.e.id} r={r} bonusOn={showBonus} payee={payeeOf(r)?.name || ""} done={!!r.line?.qbo_purchase_id} onSave={(k) => saveLine(r, { keyed: k })} onBonus={(v) => saveLine(r, { bonus: v })} onSetup={saveSetup} />
             ))}
             <div className="panel-b faint pc-note">Each check: Subcontractors - COS · REGULAR PAY, Subcontractors - COS · OVERTIME (time and a half past 40 hours a week), BONUS, and Repayment:Check Advance as a minus line for an advance. A salaried contractor&apos;s check is the salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}. Made only when you press the button, once per person per payday.</div>
           </section>
@@ -343,7 +349,7 @@ export default function PayrollCenter() {
  * as miles (at its rate per mile) or as dollars, tolls in dollars, a bonus, and the check as it'll be written in
  * QuickBooks. Saved as it's typed (payday_lines.keyed); locked once the check is made.
  */
-function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow; payee: string; done: boolean; onSave: (k: Keyed) => void; onBonus: (v: number | null) => void; onSetup: (id: string, s: CheckSetup) => void }) {
+function KeyedCheck({ r, bonusOn, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow; bonusOn: boolean; payee: string; done: boolean; onSave: (k: Keyed) => void; onBonus: (v: number | null) => void; onSetup: (id: string, s: CheckSetup) => void }) {
   const setup = r.e.check_setup || {};
   const k: Keyed = r.line?.keyed || {};
   const [hours, setHours] = useState(k.hours != null ? String(k.hours) : "");
@@ -369,7 +375,7 @@ function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow
           <div className="faint">Paid to {payee || "—"} · {rate != null ? `${$(rate)}/hr` : "no rate"}{setup.payAccount ? ` · pay on ${setup.payAccount}` : ""}{(setup.extras || []).length ? `, ${[...new Set((setup.extras || []).map((x) => x.account))].join(", ")} for the rest` : ""}</div></div>
         <div className="pc-keyed-st"><b className="num">{$(r.line?.check_total ?? r.total)}</b>{done ? <span className="pc-ok">Check made ✓</span> : !payee ? <span className="pc-wait">Needs payee</span> : rate == null ? <span className="pc-wait">Needs rate</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Type the hours</span>}</div>
       </div>
-      <div className="pc-keyed-f">
+      <div className="pc-keyed-f" style={{ gridTemplateColumns: `repeat(${1 + (setup.extras || []).length + (bonusOn ? 1 : 0)}, minmax(0, 1fr))` }}>
         <div className="field"><span className="lbl"><span>Hours</span></span>
           <span className="pc-in"><input type="number" min="0" step="0.25" inputMode="decimal" aria-label="Hours" value={hours} disabled={done} placeholder="0" onChange={(e) => setHours(e.target.value)} onBlur={() => save({ hours: num(hours) })} /><small>× {rate != null ? $(rate) : "—"}</small></span>
           <span className="faint">Pay {$(r.pay.regPay ?? 0)}</span></div>
@@ -392,9 +398,9 @@ function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow
               <span className="faint">{$(line.amount)}</span></div>
           );
         })}
-        <div className="field"><span className="lbl"><span>Bonus</span></span>
+        {bonusOn && <div className="field"><span className="lbl"><span>Bonus</span></span>
           <span className="pc-in"><i>$</i><input type="number" min="0" step="0.01" inputMode="decimal" aria-label="Bonus" value={bonus} disabled={done} placeholder="0.00" onChange={(e) => setBonus(e.target.value)} onBlur={() => onBonus(num(bonus))} /></span>
-          <span className="faint">&nbsp;</span></div>
+          <span className="faint">&nbsp;</span></div>}
       </div>
       {done && <div className="pc-keyed-lock faint">The check is made in QuickBooks, so this payday&apos;s boxes are locked. Edit changes the rate per mile from now on.</div>}
       <div className="pc-keyed-more"><button type="button" className="linkbtn" aria-expanded={details} onClick={() => setDetails(!details)}>{details ? "Hide check details" : "Show check details"}</button></div>
@@ -441,12 +447,11 @@ function AdvanceCell({ r, onSave, disabled, neg }: { r: PaydayRow; onSave: (v: n
   if (skipped) return (
     <span className="pc-adv"><span className="faint">Skipped</span>{!disabled && <button type="button" className="linkish" onClick={() => onSave(null)}>Undo</button>}<small className="faint">{$(left)} left</small></span>
   );
+  // tight (Oct 30, Nick: "the advance takes up a lot of space"): the amount, and under it what's left and Skip
   return (
-    <span className="pc-adv" title={`${$(left)} left · ${r.advances.map((a) => planLabel(a.advance)).join(", ")}`}>
-      {!disabled && r.planned > 0 && <button type="button" className="linkish" title="Take nothing out this payday; the plan starts again next payday" onClick={() => onSave(0)}>Skip</button>}
-      {neg && <span className="bad">−</span>}
-      <Money value={r.line?.advance_amount != null ? +r.line.advance_amount : r.planned} disabled={disabled} onSave={(v) => onSave(v == null || v === r.planned ? null : v)} />
-      <small className="faint">of {$(left)}</small>
+    <span className="pc-adv pc-adv-t" title={`${$(left)} left · ${r.advances.map((a) => planLabel(a.advance)).join(", ")}`}>
+      <span className="pc-adv-in">{neg && <span className="bad">−</span>}<Money value={r.line?.advance_amount != null ? +r.line.advance_amount : r.planned} disabled={disabled} onSave={(v) => onSave(v == null || v === r.planned ? null : v)} /></span>
+      <small className="faint">of {$(left).replace(/\.00$/, "")}{!disabled && r.planned > 0 && <> · <button type="button" className="linkish" title="Take nothing out this payday; the plan starts again next payday" onClick={() => onSave(0)}>Skip</button></>}</small>
     </span>
   );
 }

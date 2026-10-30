@@ -36,8 +36,12 @@
   anything that must stay exactly as written (codes, a signature, legal text). Inputs, selects and textareas are never touched.
 - **Toolbars never scroll sideways** (Nicholas, Oct 15 2026). A row of tabs or buttons must fit: when it doesn't, the
   buttons show icons only, then the row wraps. `components/ToolbarFit.tsx` does this for `.aa-nav`, `.ot-nav`,
-  `.ibx2-tabs`, `.mf-bar` and anything with `data-toolbar`; give new toolbars icons and one of those hooks. Tables and
-  calendars may still scroll.
+  `.ibx2-tabs`, `.mf-bar` and anything with `data-toolbar`; give new toolbars icons and one of those hooks.
+- **Nothing scrolls sideways, tables included** (Nick, Oct 30 2026: "remove the horizontal scroll bars… by default, we
+  don't want that anywhere on the site, so you would never build that"). A table fits its panel: text cells wrap (money,
+  numbers, dates and statuses stay on one line), cells tighten on narrower screens (`table.tbl` has no min-width), and a
+  column that's only sometimes needed is hidden behind a small button that adds it back (the Payroll Center's
+  "+ Add bonus"), or two values share a cell on two lines. Never fix a too-wide table with a scroll bar.
 - **Each AI tool is ONE tool, used in many places** (Nicholas, Oct 23 2026: "think of each of these as an individual
   tool that just gets applied multiple places in the site… the create order is in email, it's in the ClickUp thing, it's
   in the projects area… one uniform tool that works throughout the site"). Every AI tool is listed in `lib/aiTools.ts`
