@@ -31,9 +31,9 @@ const GROUPS: G[] = [
   { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
     ["ready", "Ready", ic(<><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></>)],
     ["sent", "Sent", ic(<><path d="M6 2h12M6 22h12M7 2c0 5 10 7 10 10S7 17 7 22M17 2c0 5-10 7-10 10s10 5 10 10" /></>)]] },
-  { t: "Revisions", line: "Make changes", c: "var(--danger)", steps: [
+  { t: "Revisions", line: "On hold", c: "var(--danger)", steps: [
     ["changes", "Make changes", ic(<><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>)]] },
-  { t: "Sew-outs", line: "Embroidery only", c: "var(--ink-2)", steps: [
+  { t: "Digitizing", line: "Embroidery only", c: "var(--ink-2)", steps: [
     ["sewouts", "Sew-outs", ic(<><path d="M5 19 19 5" /><circle cx="18" cy="6" r="2" /><path d="M4 20c2-1 3-3 2-5" /></>)]] },
   { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
     ["approved", "Approved", ic(<><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3" /></>)],
