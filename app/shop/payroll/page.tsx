@@ -22,6 +22,13 @@ type Data = Awaited<ReturnType<typeof loadPayday>>;
 const $ = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US", { style: "currency", currency: "USD" }));
 const h2 = (n: number) => n.toFixed(2);
 const nm = (r: { e: { first_name: string; last_name: string } }) => `${r.e.last_name}, ${r.e.first_name}`.replace(/^, /, "");
+/** paid in QuickBooks under another name (Sept 30 rule: Ana Guzman is "Miguel Rodriguez" there): the name to look for */
+const asQb = (r: { e: { first_name: string; last_name: string; qbo_vendor_name?: string | null } }) => {
+  const w = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+  const q = w(r.e.qbo_vendor_name || "");
+  // only when it's really another name: their first name and every part of their last name aren't all in it
+  return q.length > 0 && !(q.includes(w(r.e.first_name)[0]) && w(r.e.last_name).every((x) => q.includes(x)));
+};
 
 export default function PayrollCenter() {
   const today = localDay(new Date());
@@ -118,7 +125,7 @@ export default function PayrollCenter() {
   // "the whole point… is so that you enter it so I don't make mistakes"); read with document.getElementById("payroll-data")
   const feed = d && p ? JSON.stringify({
     period: { start: p.start, end: p.end }, payDate: d.payDate, clockProblems: toFix.map((r) => ({ name: nm(r), count: r.issues })),
-    w2: w2.map((r) => ({ id: r.e.id, name: nm(r), salary: r.e.pay_type === "salary", rate: r.pay.rate, regularHours: r.pay.regHours, overtimeHours: r.pay.otHours, timeOffHours: r.pay.offHours, bonus: r.bonus, advance: r.advance, entered: !!r.line?.done_at })),
+    w2: w2.map((r) => ({ id: r.e.id, name: nm(r), quickbooksName: r.e.qbo_vendor_name || null, salary: r.e.pay_type === "salary", rate: r.pay.rate, regularHours: r.pay.regHours, overtimeHours: r.pay.otHours, timeOffHours: r.pay.offHours, bonus: r.bonus, advance: r.advance, entered: !!r.line?.done_at })),
     contractors: cons.map((r) => ({ id: r.e.id, name: nm(r), payee: r.e.qbo_vendor_name || null, lines: r.check, total: r.line?.check_total ?? r.total, checkMade: !!r.line?.qbo_purchase_id, ready: ready.includes(r) })),
   }).replace(/</g, "\\u003c") : "";
   return (
@@ -179,7 +186,7 @@ export default function PayrollCenter() {
                 <thead><tr><th>Employee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th>{w2.some((r) => r.pay.offHours) && <th className="r">Time off hrs</th>}<th className="r">Bonus</th><th className="r">Advance to deduct</th><th>Status</th></tr></thead>
                 <tbody>{w2.map((r) => (
                   <tr key={r.e.id} className={r.issues ? "flag" : ""}>
-                    <td><b>{nm(r)}</b>{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
+                    <td><b>{nm(r)}</b>{asQb(r) && <div className="sub">In QuickBooks as {r.e.qbo_vendor_name}</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
                     <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : <span className="bad">no rate</span>}</td>
                     {r.e.pay_type === "salary"
                       ? <td className="r faint" colSpan={2}>QuickBooks fills it</td>
