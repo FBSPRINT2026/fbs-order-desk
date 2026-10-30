@@ -16052,3 +16052,5 @@ table.tbl.jc tr.jc-sec i{display:inline-block;width:8px;height:8px;border-radius
 table.tbl.jc tbody tr.jc-sec,table.tbl.jc tbody tr.jc-more{cursor:default}
 table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .jc-list .toolbar .jc-search{margin-left:auto}
+.pfl-sub-ok{font-size:13px;font-weight:700;color:var(--ink);text-align:center;margin-top:-2px}
+.pfl-big.btn{text-transform:none}

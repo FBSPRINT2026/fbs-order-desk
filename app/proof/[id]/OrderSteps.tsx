@@ -147,7 +147,9 @@ function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: S
         </ul>
         <label className="pfl-lbl" htmlFor="pfl-fn">Your name</label>
         <input id="pfl-fn" type="text" autoComplete="name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2} onClick={submit}>{pending ? "Sending…" : `Submit final approval for ${label}`}</button>
+        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2} onClick={submit}>{pending ? "Sending…" : "Submit approval"}</button>
+        {/* short on the button, what it means under it (Oct 29, Nick: "just say submit for approve, and something says below… submit final approval for invoice") */}
+        <div className="pfl-sub-ok">Final approval for the {label}</div>
         <div className="pfl-fine">Typing your name approves {quote ? `the ${priceWord} and says the art is ready to make as shown` : "it as shown"}.</div>
         {quote && !isInv && <button type="button" className="linkbtn" style={{ alignSelf: "flex-start" }} onClick={() => setMode("decline")}>Decline the quote</button>}
       </> : <div className="pfl-step">
