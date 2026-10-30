@@ -16213,16 +16213,17 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
   html body main.main .ord .ed-head{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px}
   html body main.main .ord .ed-head .ed-title h1{white-space:normal;font-size:22px;line-height:1.25}
   html body main.main .ord .ed-head h1::after{width:100%;min-width:0}
-  html body main.main .ord .ed-actions{margin-left:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%}
-  html body main.main .ord .ed-actions > *{display:none}
-  html body main.main .ord .ed-actions > .status-select{display:block;flex:1 1 auto;min-width:0;max-width:none}
-  html body main.main .ord .ed-actions > .pv-st{display:inline-flex;flex:1 1 auto;min-width:0}
-  html body main.main .ord .ed-actions > .ed-acts-tog{display:inline-flex;align-items:center;gap:6px;flex:none}
-  html body main.main .ord .ed-actions > .save-state{display:inline}
-  html body main.main .ord .ed-actions.open{padding-bottom:10px;border-bottom:1px solid var(--line-2)}
-  html body main.main .ord .ed-actions.open > :not(.ed-br):not(.status-select):not(.pv-st):not(.ed-acts-tog):not(.save-state){display:flex;flex:1 1 calc(50% - 4px);min-width:0;justify-content:center}
-  html body main.main .ord .ed-actions.open > details > summary{width:100%;justify-content:center}
-  html body main.main .ord .ed-actions.open > .qb-wrap{flex:0 0 auto}
+  html body main.main .ord .ed-head .ed-actions{margin-left:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;width:100%;max-width:none}
+  html body main.main .ord .ed-head .ed-actions > *{display:none}
+  html body main.main .ord .ed-head .ed-actions > .status-select{display:block;order:1;flex:1 1 0;min-width:0;max-width:none}
+  html body main.main .ord .ed-head .ed-actions > .pv-st{display:inline-flex}
+  html body main.main .ord .ed-head .ed-actions > .ed-acts-tog{display:inline-flex;align-items:center;gap:6px;flex:none;order:2;padding:7px 12px;font-size:13.5px}
+  html body main.main .ord .ed-head .ed-actions > .save-state{display:inline;order:2}
+  html body main.main .ord .ed-head .ed-actions.open{padding-bottom:10px;border-bottom:1px solid var(--line-2)}
+  html body main.main .ord .ed-head .ed-actions.open > .ed-br{display:block;order:3;flex-basis:100%;height:0}
+  html body main.main .ord .ed-head .ed-actions.open > :not(.ed-br):not(.status-select):not(.ed-acts-tog):not(.save-state){display:flex;order:4;flex:1 1 calc(50% - 4px);min-width:0;justify-content:center}
+  html body main.main .ord .ed-head .ed-actions.open > details > summary{width:100%;justify-content:center}
+  html body main.main .ord .ed-head .ed-actions.open > .qb-wrap{flex:0 0 auto;align-items:center}
   /* the customer: just the name, the rest behind the arrow */
   .ord .cu-strip .cu{flex-wrap:wrap;align-items:center}
   .ord .cu-strip .cu-tog{display:grid;place-items:center;width:36px;height:36px;margin-left:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;flex:none;order:2}
