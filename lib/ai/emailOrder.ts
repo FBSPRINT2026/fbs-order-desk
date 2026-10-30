@@ -421,7 +421,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30b";
+export const READER_REV = "2026-10-30c";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -541,7 +541,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 5. Garments that share the same prints are one group, with the mockup files for them. Instructions for a whole group (rolled and rubber-banded, tagged with UPCs, boxed by location) go in that group's description.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive). Read EVERY supplier order confirmation in the files (SanMar, S&S Activewear, alphabroder…): when the blanks come from more than one supplier, the supplier is the one sending the most pieces and goods.note names every supplier with its order number and pieces ("SanMar SO-167149318, 43 pcs + S&S 77288309, 35 pcs"), so staff track both; one supplier still gets its order number in the note.
 7. Finishing and embroidery extras (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
-7b. PERSONALIZATION (Oct 30, Nick on All My Sons' Pittsburgh PO: "Cody White / Ops Manager" under a jacket was dropped): a name, title, department or number to put on certain pieces ("PERSONALIZATION", "W/ NAME", a name under a garment line, "Cody White / Ops Manager", "names below", a list of names with sizes) is part of the order, never a note to skip. The personalized pieces are their OWN garment line (split them off the same style and color's other pieces) in their OWN group: the same prints as the pieces they came from, plus one print for the personalization at the place the paperwork names (else where the brand's standards say; else Right Chest), by the method the paperwork or the brand's standards give (embroidered names on a screen-printed hoodie are still embroidered when the standards say so; when nothing says, ask), and with the personalization extra ticked in finishing when this list has one. Put each piece's name exactly as written, with its size, in that line's note ("Cody White / Ops Manager (S)"), one per piece: the names must account for every personalized piece, and when the count or a size doesn't match, ask. Never personalize the whole group, only the pieces named. A name can be a first name, a nickname ("Will-Da-Beast"), a name and a title ("Aaron Nixon Operations Manager": two lines, name over title) or only a title ("TRAINER"); the paperwork's own words, capitals and all. "NO PERSONALIZATION ON BLACK" and the like limit it to the garments it names.
+7b. PERSONALIZATION (Oct 30, Nick on All My Sons' Pittsburgh PO: "Cody White / Ops Manager" under a jacket was dropped): a name, title, department or number to put on certain pieces ("PERSONALIZATION", "W/ NAME", a name under a garment line, "Cody White / Ops Manager", "names below", a list of names with sizes) is part of the order, never a note to skip. The personalized pieces are their OWN garment line (split them off the same style and color's other pieces) in their OWN group: the same prints as the pieces they came from, plus one print for the personalization at the place the paperwork names (else where the brand's standards say; else the chest opposite the logo: Right Chest when the logo is on the Left Chest, Nick Oct 30), by the method the paperwork or the brand's standards give (embroidered names on a screen-printed hoodie are still embroidered when the standards say so; when nothing says, ask), and with the personalization extra ticked in finishing when this list has one. Put each piece's name exactly as written, with its size, in that line's note ("Cody White / Ops Manager (S)"), one per piece: the names must account for every personalized piece, and when the count or a size doesn't match, ask. Never personalize the whole group, only the pieces named. A name can be a first name, a nickname ("Will-Da-Beast"), a name and a title ("Aaron Nixon Operations Manager": two lines, name over title) or only a title ("TRAINER"); the paperwork's own words, capitals and all. "NO PERSONALIZATION ON BLACK" and the like limit it to the garments it names.
 8. Read the WHOLE conversation, not just the newest email: customers decide over many emails (the garment and color picked from our options, the sizes, a price we agreed, the date they need it, then the art last). The latest decision wins (a size list sent later replaces an earlier one; the style they finally chose replaces the ones they considered). Prices and terms WE wrote are what was agreed: put them in the notes for staff, and don't ask the customer again for anything already settled in the conversation.
 ${PO_RULES}
 9. Art sent as a link (a file marked "from a link", e.g. a Canva design preview): use it as the art for the mockup. A Canva preview is a picture, not a print file: say in questions that we'll need the print file (PDF or SVG) unless a real file came with it.
@@ -574,15 +574,23 @@ ${memText}` : ""}${staffSays ? `
 
 WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them; put looked-up ink colors on the prints' inks):
 ${staffSays}` : ""}`;
-  const r = await askClaude<AiOrder>({
+  const ask = (nudge = "") => askClaude<AiOrder>({
     task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 8000, timeoutMs: 58_000,
     ctx: { activity_id: C.id, customer_id: (a.customer_id as string) || null, by }, admin,
-    tool: tool(finAll.map((f) => f.id)), system, prompt, images, documents,
+    tool: tool(finAll.map((f) => f.id)), system, prompt: prompt + nudge, images, documents,
   });
-  if (!r.ok) return { ok: false, error: r.error };
   // the model sometimes wraps its answer as { order: { ... } } (Peticolas, Oct 8: an empty draft): unwrap it
-  const raw = r.data as AiOrder & { order?: AiOrder };
-  const p: AiOrder = !raw.kind && raw.order && typeof raw.order === "object" ? raw.order : raw;
+  const unwrap = (raw: AiOrder & { order?: AiOrder }): AiOrder => (!raw.kind && raw.order && typeof raw.order === "object" ? raw.order : raw);
+  const empty = (x: AiOrder) => !(x.groups || []).some((g) => (g.garments || []).length || (g.prints || []).length) && !(x.questions || []).length;
+  let r = await ask();
+  if (!r.ok) return { ok: false, error: r.error };
+  // an empty answer (Oct 30: the first reading of All My Sons' Pittsburgh PO came back as 34 tokens, nothing in it, and
+  // Create order showed an order with no garments; pressing Read It Again gave the whole order): asked once more, told so
+  if (empty(unwrap(r.data as AiOrder & { order?: AiOrder }))) {
+    const again = await ask("\n\nYour last answer came back empty. Read every file again and fill in the WHOLE order: every garment line with its sizes, every print, the goods, and any questions.");
+    if (again.ok) r = again;
+  }
+  const p: AiOrder = unwrap(r.data as AiOrder & { order?: AiOrder });
   // the quantities straight off a size-breakdown spreadsheet, not the AI's reading of it (lib/sheetSizes.ts)
   {
     const sheets = listing.map((x) => /contents:\n"""\n([\s\S]*)\n"""$/.exec(x)?.[1] || "").filter(Boolean);
