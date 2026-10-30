@@ -138,7 +138,8 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
           else if (st === "failed") { setLink("failed"); setState("waiting"); }
         });
         screen.current?.getTracks().forEach((t) => p.addTrack(t, screen.current!));
-        mic.current?.getTracks().forEach((t) => p.addTrack(t, mic.current!));
+        mic.current?.getTracks().forEach((t) => { micSender.current = p.addTrack(t, mic.current!); });
+        if (mutedRef.current) applyMute(true);
         p.addTransceiver("audio", { direction: "recvonly" });
         const offer = await p.createOffer(); await p.setLocalDescription(offer);
         send({ t: "offer", sdp: p.localDescription!.toJSON() });
@@ -183,7 +184,8 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
             else if (st === "failed") { setLink("failed"); setState("waiting"); if (tries.current++ < 2) send({ t: "join" }); }
           });
           await p.setRemoteDescription(m.sdp);
-          mic.current?.getTracks().forEach((t) => p.addTrack(t, mic.current!));
+          mic.current?.getTracks().forEach((t) => { micSender.current = p.addTrack(t, mic.current!); });
+          if (mutedRef.current) applyMute(true);
           const ans = await p.createAnswer(); await p.setLocalDescription(ans);
           send({ t: "answer", sdp: p.localDescription!.toJSON() });
           await flushIce();
@@ -205,17 +207,27 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
     const bye = () => send({ t: "bye" });
     window.addEventListener("pagehide", bye); return () => window.removeEventListener("pagehide", bye);
   }, [send]);
-  const mute = () => { const m = !muted; mic.current?.getAudioTracks().forEach((t) => { t.enabled = !m; }); setMuted(m); };
+  // Mute really stops your voice going out (Oct 30, Nick: "when I click mute, it doesn't actually mute my side"): the mic
+  // is switched off AND taken off the call (the sender sends nothing), and stays off if the call reconnects; Unmute puts it back
+  const mutedRef = useRef(false);
+  const applyMute = (m: boolean) => {
+    const track = mic.current?.getAudioTracks()[0] || null;
+    mic.current?.getAudioTracks().forEach((t) => { t.enabled = !m; });
+    const x = micSender.current;
+    if (x && pc.current?.getSenders().includes(x)) void x.replaceTrack(m ? null : track).catch(() => null);
+  };
+  const micSender = useRef<RTCRtpSender | null>(null);
+  const mute = () => { const m = !mutedRef.current; mutedRef.current = m; applyMute(m); setMuted(m); };
 
   if (mode === "watch") return (
     <div className="ss-view ss-page">
       <div className="ss-bar">
         <span className={"ss-live" + (state === "live" ? " on" : "")} aria-hidden />
         <b data-notranslate>{who ? `${who}'s screen` : "Their screen"}</b>
-        <span className="faint">{state === "waiting" ? (link === "failed" ? "Can't get their picture through from this network" : "Connecting…") : state === "away" ? "They stopped sharing. This window waits in case they come back." : state === "ended" ? "This share has ended." : hasMic ? "Live · you can talk, your mic is on" : "Live"}</span>
+        <span className="faint">{state === "waiting" ? (link === "failed" ? "Can't get their picture through from this network" : "Connecting…") : state === "away" ? "They stopped sharing. This window waits in case they come back." : state === "ended" ? "This share has ended." : hasMic ? (muted ? "Live · you're muted" : "Live · you can talk, your mic is on") : "Live"}</span>
         <span className="spacer" />
         {soundOff && <button type="button" className="btn sm primary" onClick={() => { void vid.current?.play(); setSoundOff(false); }}>Turn on sound</button>}
-        {hasMic && state !== "ended" && <button type="button" className="btn sm" onClick={mute}>{muted ? "Unmute" : "Mute"}</button>}
+        {hasMic && state !== "ended" && <button type="button" className={"btn sm" + (muted ? " primary" : "")} aria-pressed={muted} onClick={mute}>{muted ? "Unmute (you're muted)" : "Mute"}</button>}
         <button type="button" className="btn sm" onClick={() => void leave()}>{state === "ended" ? "Close" : "Leave"}</button>
       </div>
       <div className="ss-stage">
@@ -241,7 +253,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
         <p className="ss-status">{state === "live" ? <><b>{who || "Nick"} is watching.</b> You&apos;re live.</> : link === "trying" ? `${who || "Nick"} is joining…` : link === "failed" ? `${who || "Nick"} couldn't connect from where he is. He can try joining again.` : "Waiting for Nick to join…"}</p>
         <p className="faint">Keep this little window open. You can go back to the portal, click around and even refresh it: the call keeps going here.</p>
         <div className="row" style={{ gap: 8 }}>
-          {hasMic && <button type="button" className="btn" onClick={mute}>{muted ? "Unmute" : "Mute"}</button>}
+          {hasMic && <button type="button" className={"btn" + (muted ? " primary" : "")} aria-pressed={muted} onClick={mute}>{muted ? "Unmute (you're muted)" : "Mute"}</button>}
           <button type="button" className="btn" onClick={() => void stop()}>Stop sharing</button>
         </div>
       </>}
