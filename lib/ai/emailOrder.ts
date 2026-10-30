@@ -18,6 +18,7 @@ import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
 import { loadMemories, memoryText, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
+import { examplesText, loadExamples } from "@/lib/ai/orderExamples";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import { isPicture, looksLikeSignature, oldNoteText, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
@@ -421,7 +422,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30g";
+export const READER_REV = "2026-10-30h";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -480,6 +481,8 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   const memText = [memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
+  // orders staff finished from this customer's past emails, the closest first (lib/ai/orderExamples.ts): read the same way
+  const exText = examplesText(await loadExamples(admin, (a.customer_id as string) || null, `${told} ${said}`).catch(() => []), String(cust?.company || cust?.name || "this customer"));
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   // the past job whose mockup is the picture in their email (app/api/inbox/order/look): first, and said so
   const lookRef = ((a as { meta?: { look?: { ref?: string; why?: string } } }).meta?.look?.ref) || "";
@@ -570,7 +573,9 @@ Subject: ${a.subject || ""}
 ${String(a.body || "").slice(0, 12000)}
 """${memText ? `
 
-${memText}` : ""}${staffSays ? `
+${memText}` : ""}${exText ? `
+
+${exText}` : ""}${staffSays ? `
 
 WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them; put looked-up ink colors on the prints' inks):
 ${staffSays}` : ""}`;

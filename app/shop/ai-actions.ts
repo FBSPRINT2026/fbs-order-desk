@@ -518,6 +518,9 @@ export async function markOrderChecked(orderId: string) {
   try {
     const { admin, email } = await staff();
     await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: "Checked after it was made: everything right", actor: email });
+    // what came in and the order staff say is right: Create order's worked example for this customer's next one
+    const { saveExample } = await import("@/lib/ai/orderExamples");
+    await saveExample(admin, orderId, email).catch((e) => console.warn("saveExample", e));
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }

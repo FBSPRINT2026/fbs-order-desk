@@ -68,6 +68,8 @@ export async function bundleSend(orderId: string, pick: Pick3) {
   try {
     const who = await me(); const { sendTogether } = await import("@/lib/customerSend");
     const r = await sendTogether(createAdminClient(), orderId, pick, who, true);
+    // sent to the customer: the order is what we'd make, so it teaches Create order (lib/ai/orderExamples.ts)
+    if (r.ok) { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(createAdminClient(), orderId, who.email).catch((e) => console.warn("saveExample", e)); }
     return r.ok ? { ok: true as const, msg: r.emailed ? `Sent: ${r.done.join(", ")}.` : `Made ${r.done.join(", ")}, but the email didn't go out. Copy the link and send it yourself.`, url: r.url } : r;
   } catch (e) { return fail(e); }
 }

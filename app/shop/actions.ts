@@ -41,6 +41,8 @@ export async function sendToCustomer(orderId: string, note: string) {
   await admin.from("orders").update(patch).eq("id", orderId);
   if (patch.status) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "quote_sent", actor: staffEmail });
   await admin.from("order_events").insert({ order_id: orderId, kind: "sent", detail: customer.email, actor: staffEmail });
+  // sent to the customer: the order teaches Create order (lib/ai/orderExamples.ts)
+  { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(admin, orderId, staffEmail).catch((e) => console.warn("saveExample", e)); }
   // the note also starts the message thread the customer sees in their portal
   if (note.trim()) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: note.trim() });
   const link = `${siteUrl()}/portal/orders/${orderId}`;
