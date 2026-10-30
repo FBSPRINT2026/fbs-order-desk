@@ -80,3 +80,32 @@ export const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "S&S freight", "SanMar",
 /** Wholesale jobs whose goods matter: from the moment the order is sent in (request) until it's completed. */
 export const needsGoods = (o: { price_type?: string | null; type: string; status: string; submitted_at?: string | null }) =>
   o.price_type === "wholesale" && o.status !== "completed" && o.status !== "quote" && !(o.status === "request" && !o.submitted_at);
+
+/**
+ * Which supplier order a shipment belongs to, from the line the supplier's manifest writes on it ("SanMar order
+ * SO-167149318 · 31 pcs · JST73, ST350", lib/manifest.ts). Tracking a person added has no supplier order: null.
+ */
+export function shipFrom(s: Pick<Shipment, "note" | "source">): { supplier: string; order: string; pcs: number; what: string } | null {
+  if (s.source !== "manifest") return null;
+  const m = /^(.+?) (?:local truck \([^)]*\) · )?order (\S+)(?: · (.*))?$/.exec((s.note || "").trim());
+  if (!m) return null;
+  const rest = (m[3] || "").split(" · ");
+  const n = /^(\d+) pcs$/.exec(rest[0] || "");
+  return { supplier: m[1], order: m[2], pcs: n ? +n[1] : 0, what: (n ? rest.slice(1) : rest).join(" · ") };
+}
+
+/**
+ * An order's shipments by where they come from (Oct 30, Nick: "it's coming from SanMar and S&S… those should be busted
+ * into two"): one group per supplier order, then anything tracked by hand.
+ */
+export function shipGroups(ships: Shipment[]): { supplier: string; order: string; pcs: number; ships: Shipment[] }[] {
+  const out: { supplier: string; order: string; pcs: number; ships: Shipment[] }[] = [];
+  for (const s of ships) {
+    const f = shipFrom(s);
+    const k = f ? `${f.supplier}|${f.order}` : "";
+    let g = out.find((x) => `${x.supplier}|${x.order}` === k || (!f && !x.supplier && !x.order));
+    if (!g) { g = { supplier: f?.supplier || "", order: f?.order || "", pcs: 0, ships: [] }; out.push(g); }
+    g.ships.push(s); g.pcs += f?.pcs || 0;
+  }
+  return out.sort((a, b) => (a.supplier ? 0 : 1) - (b.supplier ? 0 : 1));
+}

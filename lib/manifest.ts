@@ -671,7 +671,9 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
   // goods record: supplier, their order #, ship date; on the way
   const { data: cur } = await admin.from("order_goods").select("status, supplier, supplier_po, ship_date").eq("order_id", orderId).maybeSingle();
   await admin.from("order_goods").upsert({
-    order_id: orderId, supplier: cur?.supplier || supplier, supplier_po: cur?.supplier_po || g.supplier_order, ship_date: cur?.ship_date || g.lines[0].ship_date,
+    // another supplier's order number never goes under this one's name (Oct 30, #40284: SanMar with S&S's 77288309);
+    // the order's shipments carry each supplier's own order (lib/goods.ts shipGroups)
+    order_id: orderId, supplier: cur?.supplier || supplier, supplier_po: cur?.supplier_po || (!cur?.supplier || cur.supplier === supplier ? g.supplier_order : ""), ship_date: cur?.ship_date || g.lines[0].ship_date,
     ...(!cur || cur.status === "waiting" ? { status: "on_way" } : {}), updated_by: "manifest", updated_at: new Date().toISOString(),
   }, { onConflict: "order_id" });
   // tell the customer (and flag anything the supplier didn't ship)

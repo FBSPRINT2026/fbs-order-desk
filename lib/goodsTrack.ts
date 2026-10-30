@@ -118,7 +118,7 @@ export async function goodsCheck(admin: SupabaseClient, deadline: number) {
   }
 
   // open wholesale jobs and their goods
-  const { data: os } = await admin.from("orders").select("id, number, nickname, status, due_date, customer_id, price_type, submitted_at").eq("price_type", "wholesale").not("status", "in", "(completed,quote)").limit(500);
+  const { data: os } = await admin.from("orders").select("id, number, nickname, status, due_date, customer_id, price_type, submitted_at").eq("price_type", "wholesale").neq("status", "completed").limit(500); // quotes too: their goods can ship before the order goes ahead (Oct 30, #40284)
   const orders = ((os || []) as { id: string; number: number; nickname: string; status: string; due_date: string | null; customer_id: string | null; submitted_at: string | null }[]).filter((o) => !(o.status === "request" && !o.submitted_at));
   if (!orders.length) return done;
   const ids = orders.map((o) => o.id);

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { bySizeOrder } from "@/lib/sizeOrder";
 import Link from "next/link";
-import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, supplierLabel, TRACK, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, shipFrom, shipGroups, supplierLabel, TRACK, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
 import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 import type { Attachment } from "@/lib/messages";
 import { fmtDateLong } from "@/lib/format";
@@ -48,6 +48,10 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const stepAt = STEPS.findIndex((s) => s.k.includes(it.goods.status));
+  // where the goods come from: the suppliers on the manifest shipments when there are any (each with its own order, Oct
+  // 30, #40284 said "Coming from SanMar · order 77288309", S&S's order), else what was typed in
+  const groups = shipGroups(it.shipments), fromShips = groups.map((x) => x.supplier).filter(Boolean);
+  const named = fromShips.length ? [...new Set([supplierLabel(it.goods.supplier), ...fromShips].filter(Boolean))] : [];
   const run = async (p: Promise<{ ok: boolean; error?: string }>, done: string) => { setBusy(true); setNote(""); const r = await p; setBusy(false); if (!r.ok) setNote(r.error || "Couldn't save."); else { setNote(done); setPanel(""); act.changed(); } };
   return (
     <article className={"gc" + (it.goods.status === "issue" ? " issue" : "")} style={{ ["--gc" as string]: g.c }}>
@@ -69,7 +73,9 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
         : !compact && <p className="gc-help">{mode === "portal" ? g.help : ""}</p>}
 
       <div className={"gc-from" + (needInfo ? " need" : "")}>
-        {it.goods.supplier
+        {named.length
+          ? <span>Coming from {named.map((n, i) => <span key={n}>{i ? (i === named.length - 1 ? " and " : ", ") : ""}<b>{n}</b></span>)}{it.goods.ship_date ? <> · ships {when(it.goods.ship_date)}</> : null}</span>
+          : it.goods.supplier
           ? <span>Coming from <b>{supplierLabel(it.goods.supplier)}</b>{it.goods.supplier_po ? <> · order/PO {it.goods.supplier_po}</> : null}{it.goods.ship_date ? <> · ships {when(it.goods.ship_date)}</> : null}</span>
           : <span>{mode === "portal" ? "Where are these goods coming from? SanMar, S&S Activewear…" : "Supplier not known yet."}</span>}
         {act.saveInfo && <button type="button" className="linkbtn" disabled={!canAct} onClick={() => setPanel(panel === "info" ? "" : "info")}>{it.goods.supplier ? "Change" : "Add"}</button>}
@@ -81,27 +87,44 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
         </div>
       )}
 
-      {it.shipments.length > 0 && (
-        <ul className="gc-ships">
-          {it.shipments.map((s) => (
-            <li key={s.id}>
-              <span className="gc-ship-ic">🚚</span>
-              <div>
-                {s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer"><b>{s.carrier || carrierOf(s.tracking) || "Tracking"}</b> {s.tracking}</a> : <b>Shipment note</b>}
-                {s.track_status && (
-                  <div className={"gc-track t-" + s.track_status}>
-                    <b title={TRACK[s.track_status] || ""}>{trackWord(s.track_status)}</b>
-                    {s.track_status === "delivered" ? (s.delivered_at ? ` ${when(s.delivered_at)}` : "") : s.est_delivery ? ` · arrives ${when(s.est_delivery)}` : ""}
-                    {s.track_detail ? <span> · {s.track_detail}</span> : null}
-                  </div>
-                )}
-                <small>{[s.source === "manifest" ? "from the supplier's manifest" : "", s.boxes ? `${s.boxes} box${s.boxes === 1 ? "" : "es"}` : "", s.eta && !s.est_delivery ? `expected ${when(s.eta)}` : "", `added ${ago(s.created_at)}${mode === "shop" ? ` by ${s.added_by === "staff" ? "shop" : s.author_name || "customer"}` : s.added_by === "staff" ? " by us" : ""}`].filter(Boolean).join(" · ")}</small>
-                {s.note && <p>{s.note}</p>}
-                {s.files.length > 0 && <div className="gc-files">{s.files.map((f, k) => <a key={k} href={f.url || undefined} target="_blank" rel="noreferrer">{/^image\//.test(f.mime) && f.url ? <img src={f.url} alt={f.name} /> : <span>📄 {f.name}</span>}</a>)}</div>}
-              </div>
-            </li>
-          ))}
-        </ul>
+      {/* one line a package, grouped by supplier order (Oct 30, Nick: "this goods area is going to get really long…
+          put the tracking number, then… delivered and what was in it… two lines max"); the latest scan on hover */}
+      {groups.length > 0 && (
+        <div className="gc-sgs">
+          {groups.map((gr) => {
+            const del = gr.ships.filter((s) => s.track_status === "delivered"), all = del.length > 0 && del.length === gr.ships.length;
+            const last = del.map((s) => s.delivered_at || "").filter(Boolean).sort().pop();
+            const eta = gr.ships.map((s) => s.est_delivery || s.eta || "").filter(Boolean).sort().pop();
+            const sum = all ? `Delivered${last ? ` ${when(last)}` : ""}` : del.length ? `${del.length} of ${gr.ships.length} delivered` : eta ? `Arrives ${when(eta)}` : "";
+            return (
+              <section className="gc-sg" key={gr.supplier + "|" + gr.order}>
+                <div className="gc-sg-h">
+                  <b>{gr.supplier || "Tracking"}</b>{gr.order ? <span> · order <span className="nw">{gr.order}</span></span> : null}
+                  <span className="faint"> · {[gr.pcs ? `${gr.pcs} pcs` : "", `${gr.ships.length} package${gr.ships.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</span>
+                  {sum && <span className={"gc-sg-st" + (all ? " ok" : "")}>{sum}</span>}
+                </div>
+                <ul className="gc-ships">
+                  {gr.ships.map((s) => {
+                    const f = shipFrom(s), by = s.added_by === "staff" ? (mode === "shop" ? "shop" : "us") : s.author_name || "customer";
+                    return (
+                      <li key={s.id}>
+                        <span className="gc-ln">
+                          {s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer" className="nw"><b>{s.carrier || carrierOf(s.tracking) || "Tracking"}</b> {s.tracking}</a> : <b>{f ? s.carrier || "Local truck" : "Shipment note"}</b>}
+                          {s.track_status && <span className={"gc-track t-" + s.track_status} title={[TRACK[s.track_status] || "", s.track_detail || ""].filter(Boolean).join(" · ")}><b>{trackWord(s.track_status)}</b>{s.track_status === "delivered" ? (s.delivered_at ? ` ${when(s.delivered_at)}` : "") : s.est_delivery ? ` · arrives ${when(s.est_delivery)}` : ""}</span>}
+                          {!s.track_status && s.eta && <span className="faint">expected {when(s.eta)}</span>}
+                          {f ? <span className="faint">{[f.pcs ? `${f.pcs} pcs` : "", f.what, s.boxes && s.boxes > 1 ? `${s.boxes} boxes` : ""].filter(Boolean).join(" · ")}</span>
+                            : <span className="faint">{[s.boxes ? `${s.boxes} box${s.boxes === 1 ? "" : "es"}` : "", `added ${ago(s.created_at)} by ${by}`].filter(Boolean).join(" · ")}</span>}
+                        </span>
+                        {!f && s.note && <p>{s.note}</p>}
+                        {s.files.length > 0 && <div className="gc-files">{s.files.map((x, k) => <a key={k} href={x.url || undefined} target="_blank" rel="noreferrer">{/^image\//.test(x.mime) && x.url ? <img src={x.url} alt={x.name} /> : <span>📄 {x.name}</span>}</a>)}</div>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
 
       {it.last && (

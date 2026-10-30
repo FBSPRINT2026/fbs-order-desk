@@ -16431,3 +16431,17 @@ html body table:is(.tbl, .rv-tbl){min-width:0!important;max-width:100%}
 html body table:is(.tbl, .rv-tbl) :is(td, th){min-width:0}
 html body table:is(.tbl, .rv-tbl) td{overflow-wrap:anywhere}
 html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%;min-width:0;box-sizing:border-box}
+
+/* goods: one line a package, grouped by supplier order (Oct 30, Nick: "condense it… one line, maybe two lines max") */
+.gc-sgs{display:flex;flex-direction:column;gap:8px}
+.gc-sg{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:var(--surface-2);font-size:13px}
+.gc-sg-h{color:var(--ink)}
+.gc-sg-h .faint{color:var(--ink-3)}
+.gc-sg-st{margin-left:8px;white-space:nowrap;font-weight:700;color:var(--accent)}
+.gc-sg-st.ok{color:var(--ok)}
+.gc-sg .gc-ships{gap:2px}
+.gc-sg .gc-ships li{display:block;padding:0;background:none;border-radius:0}
+.gc-ln{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+.gc-ln .gc-track{margin:0;white-space:nowrap}
+.gc-ln .faint{color:var(--ink-3);font-size:12.5px}
+.gc-sg .nw,.gc-ln .nw{white-space:nowrap}
