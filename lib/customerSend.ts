@@ -33,6 +33,14 @@ async function load(admin: SupabaseClient, orderId: string) {
   return { o, customer: cu as { id: string; name: string; company: string; email: string; payment_terms?: PayTerms | null } | null, settings: mergeSettings(s?.data), pays: (pays || []) as Pick<Payment, "amount">[] };
 }
 
+/** the final invoice's terms line, under its title */
+function invoiceTerms(terms: PayTerms | null | undefined, c: { total: number; paid: number; balance: number }, depositPct: number) {
+  const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  if (c.paid > 0.005) return `${m(c.paid)} paid · ${m(Math.max(0, c.balance))} balance`;
+  const up = upFront(terms, c.total, depositPct);
+  return terms === "net30" ? "Net 30 terms" : up.kind === "full" ? "Paid up front" : up.kind === "deposit" ? `${up.pct === 50 ? "Half" : `${up.pct}%`} to start, the rest when it's ready` : "Due on receipt";
+}
+
 /** what could go to the customer now, and what's ticked to start with (what's ready) */
 export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const { o, customer, settings, pays } = await load(admin, orderId);
@@ -47,13 +55,18 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const nextV = (proofs.length ? Math.max(...proofs.map((p) => p.version || 0)) : 0) + 1;
   const c = calcOrder(o, settings, pays);
   const quoteOpen = ["quote", "request", "quote_sent"].includes(o.status);
+  // after the quote's approved, the price goes as the final invoice: embroidery isn't final until the sew-out gives the
+  // stitch count (Oct 29, Nick: "now that you've got the sew-out… you know exactly what it's going to cost, you send")
+  const invoiceOpen = !quoteOpen && !["completed", "void"].includes(o.status);
+  const { data: invSent } = invoiceOpen ? await admin.from("order_events").select("id").eq("order_id", orderId).eq("kind", "invoice_sent").limit(1) : { data: [] };
   const where = (imprintId: string) => { for (const g of orderGroups(o)) for (const im of g.imprints || []) if (im.id === imprintId) return `${im.location}${im.size ? `, ${im.size}` : ""}`; return "Sew-out"; };
   const sews = ((sw || []) as SewRow[]).filter((x) => x.status === "pending").map((x) => ({ id: x.id, label: `Sew-out v${x.version} · ${where(x.imprint_id)}`, sent: !!x.sent_at }));
   return {
     to: customer?.email || "", name: customer?.name || customer?.company || "",
     proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending") } : null,
     // what's due when they approve, by their terms (lib/payTerms.ts)
-    quote: quoteOpen ? { total: c.total, status: o.status, deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line } : null,
+    quote: quoteOpen ? { kind: "quote" as const, total: c.total, status: o.status, sent: o.status === "quote_sent", deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line }
+      : invoiceOpen ? { kind: "invoice" as const, total: c.total, status: o.status, sent: !!(invSent || []).length, deposit: 0, due: invoiceTerms(customer?.payment_terms, c, settings.depositPct) } : null,
     sewouts: sews,
   };
 }
@@ -80,11 +93,13 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
     const c = calcOrder(o, settings, []);
     const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
     // under the title, what's due when they approve, by their terms (Oct 29, Nick: "nothing due, due on receipt, half due today…")
-    blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: upFront(customer?.payment_terms, c.total, settings.depositPct).line });
+    if (["quote", "request", "quote_sent"].includes(o.status)) blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: upFront(customer?.payment_terms, c.total, settings.depositPct).line });
+    else blocks.push({ k: "quote", title: `Review your final invoice · ${m(c.total)}`, sub: `${(pick.sewouts || []).length ? "With the stitch count from your sew-out · " : ""}${invoiceTerms(customer?.payment_terms, c, settings.depositPct)}` });
   }
   const esc = (t: string) => (t || "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
   const has = (k: string) => blocks.some((b) => b.k === k);
-  const head = has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and quote are ready` : has("quote") ? "Your quote is ready" : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
+  const inv = has("quote") && !["quote", "request", "quote_sent"].includes(o.status), price = inv ? "final invoice" : "quote";
+  const head = has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price} are ready` : has("quote") ? `Your ${price} is ready` : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
   const job = o.nickname || `order #${o.number}`;
   const up = upFront(customer?.payment_terms, calcOrder(o, settings, []).total, settings.depositPct);
   const payNow = up.kind === "full" ? "pay for it" : up.kind === "deposit" ? "pay the deposit" : "";
@@ -92,7 +107,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const many = blocks.length > 1;
   const logo = sh.logoUrl ? (/^https?:/.test(sh.logoUrl) ? sh.logoUrl : `${siteUrl()}${sh.logoUrl.startsWith("/") ? "" : "/"}${sh.logoUrl}`) : `${siteUrl()}/brand/fbs-logo.png`;
   const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr>${b.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><img src="${b.pic}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px" /></td>` : `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><div style="width:56px;height:56px;border-radius:6px;background:#F6F7F9;border:1px solid #E6EAF0;box-sizing:border-box;padding:9px 11px"><div style="height:4px;width:100%;background:#0E9BD8;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:100%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:70%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:85%;background:#C9D0DA;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:45%;background:#141D2B;border-radius:2px;margin-bottom:0px;font-size:0;line-height:0">&nbsp;</div></div></td>`}<td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div><div style="font-size:13px;color:#6B7686">${esc(b.sub)}</div></td></tr></table></td></tr>`).join("");
-  const intro = many ? `here's everything for <b>${esc(job)}</b> (order #${o.number}). You can approve it all${has("quote") && payNow ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `here's the quote for <b>${esc(job)}</b> (order #${o.number}). You can approve it${payNow ? ` and ${payNow}` : ""} online.` : `here's the ${has("sewout") ? "sew-out" : "proof"} for <b>${esc(job)}</b> (order #${o.number}). Please look it over and approve it, or tell us what to change.`;
+  const intro = many ? `here's everything for <b>${esc(job)}</b> (order #${o.number}). You can approve it all${has("quote") && payNow && !inv ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `here's the ${price} for <b>${esc(job)}</b> (order #${o.number}). You can approve it${payNow && !inv ? ` and ${payNow}` : ""} online.` : `here's the ${has("sewout") ? "sew-out" : "proof"} for <b>${esc(job)}</b> (order #${o.number}). Please look it over and approve it, or tell us what to change.`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
@@ -105,7 +120,7 @@ ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;
 <tr><td style="padding:8px 24px 18px;text-align:center;font-size:12px;color:#6B7686">Please use the button, not a reply, so it goes straight onto your order.</td></tr>
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;
-  const what = has("quote") && (has("proof") || has("sewout")) ? "Proof and quote" : has("quote") ? "Quote" : has("sewout") && !has("proof") ? "Sew-out" : "Proof";
+  const what = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "Sew-out" : "Proof"} and ${inv ? "invoice" : "quote"}` : has("quote") ? (inv ? "Invoice" : "Quote") : has("sewout") && !has("proof") ? "Sew-out" : "Proof";
   return { subject: `${what} ready for your approval: order #${o.number}${o.nickname ? `, ${o.nickname}` : ""}`, html };
 }
 
@@ -130,7 +145,7 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   // a full color print waits for production's colors (and so the price) before the quote goes out (Oct 26, Nick)
   if (pick.quote && orderGroups(o).some((g) => (g.imprints || []).some(fullColorWaiting)))
     return { ok: false as const, error: "Production hasn't confirmed the full color print yet (its colors set the price). Send the proof now, and the quote after that." };
-  if (pick.quote && !["quote", "request", "quote_sent"].includes(o.status)) return { ok: false as const, error: "This order's quote was already approved." };
+  if (pick.quote && ["completed", "void"].includes(o.status)) return { ok: false as const, error: "This order is closed." };
   const done: string[] = [];
   if (pick.proof) {
     const { sendProofs } = await import("@/lib/proofs");
@@ -145,8 +160,11 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     await admin.from("order_events").insert({ order_id: orderId, kind: "sewout_sent", detail: `Sew-out v${sw.version} ${email ? `to ${to}` : "(link copied to send yourself)"}`, actor: me.email });
     done.push(`sew-out v${sw.version}`);
   }
-  if (pick.quote) {
-    if (!["quote", "request", "quote_sent"].includes(o.status)) return { ok: false as const, error: "This order's quote was already approved." };
+  if (pick.quote && !["quote", "request", "quote_sent"].includes(o.status)) {
+    // approved already: the final invoice goes for them to look over (and approve, on their order page)
+    await admin.from("order_events").insert({ order_id: orderId, kind: "invoice_sent", detail: email ? to : "link copied", actor: me.email });
+    done.push("the invoice");
+  } else if (pick.quote) {
     const patch: Record<string, unknown> = { sent_at: new Date().toISOString() };
     if (o.status !== "quote_sent") patch.status = "quote_sent";
     await admin.from("orders").update(patch).eq("id", orderId);
@@ -190,7 +208,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
 }
 
 export type StepView = {
-  key: string; kind: "art" | "sewout" | "quote" | "deposit"; title: string; sub: string;
+  key: string; kind: "art" | "sewout" | "quote" | "invoice" | "deposit"; title: string; sub: string;
   state: "todo" | "done" | "changes" | "locked"; pdf: string; sewoutId?: string;
   who?: string; when?: string; comment?: string; amount?: number;
 };
@@ -226,6 +244,16 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   if (quoted || (approved && raw.approved_at)) {
     const up = upFront(customer?.payment_terms, c.total, settings.depositPct);
     steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total });
+  }
+  // the final invoice, once it's been sent after approval (embroidery: the price is final with the sew-out's stitch count)
+  if (approved && !["completed", "void"].includes(o.status)) {
+    const { data: iev } = await admin.from("order_events").select("kind, detail, created_at").eq("order_id", o.id).in("kind", ["invoice_sent", "invoice_approved"]).order("created_at");
+    const evs = (iev || []) as { kind: string; detail: string; created_at: string }[];
+    const lastSent = [...evs].reverse().find((e) => e.kind === "invoice_sent");
+    if (lastSent) {
+      const ok = [...evs].reverse().find((e) => e.kind === "invoice_approved" && e.created_at > lastSent.created_at);
+      steps.push({ key: "invoice", kind: "invoice", title: ok ? "Invoice approved" : "Review your final invoice", sub: `${money(c.total)} · ${invoiceTerms(customer?.payment_terms, c, settings.depositPct)}`, state: ok ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: ok ? ok.detail.replace(/^Signed "(.*)".*$/, "$1") : "", when: ok?.created_at || "", amount: c.total });
+    }
   }
   // the payment up front, only when their terms ask for one (lib/payTerms.ts): none on receipt or net 30
   const upNow = upFront(customer?.payment_terms, c.total, settings.depositPct);

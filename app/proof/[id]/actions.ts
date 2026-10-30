@@ -28,7 +28,7 @@ export async function answerQuote(id: string, decision: "approve" | "decline", n
  * confirmation"). Everything the customer looked over and said looks good, approved together under their name: the
  * proof (with their note as a small change, no new proof), each sew-out, then the quote.
  */
-export async function approveAll(id: string, name: string, pick: { art?: { note: string } | null; sewouts?: { id: string; note: string }[]; quote?: boolean }) {
+export async function approveAll(id: string, name: string, pick: { art?: { note: string } | null; sewouts?: { id: string; note: string }[]; quote?: boolean; /** the final invoice sent after approval */ invoice?: boolean }) {
   try {
     const admin = createAdminClient();
     const link = await openLink(admin, id);
@@ -47,11 +47,14 @@ export async function approveAll(id: string, name: string, pick: { art?: { note:
       const r = await decideQuote(admin, link.order_id, "approve", who, "", link.sent_to || "customer", true);
       if (!r.ok) return r;
     }
+    if (pick.invoice) {
+      await admin.from("order_events").insert({ order_id: link.order_id, kind: "invoice_approved", detail: `Signed "${who}" on their order page`, actor: link.sent_to || "customer" });
+    }
     // one email to the shop with everything they approved
     if (SHOP_NOTIFY_EMAIL) {
       const { data: o } = await admin.from("orders").select("number, nickname").eq("id", link.order_id).maybeSingle();
       const s = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-      const what = [pick.art ? "the proof" : "", ...(pick.sewouts || []).map(() => "the sew-out"), pick.quote ? "the quote" : ""].filter(Boolean);
+      const what = [pick.art ? "the proof" : "", ...(pick.sewouts || []).map(() => "the sew-out"), pick.quote ? "the quote" : "", pick.invoice ? "the final invoice" : ""].filter(Boolean);
       const notes = [pick.art?.note.trim() ? `Proof: ${pick.art.note.trim()}` : "", ...(pick.sewouts || []).filter((x) => x.note.trim()).map((x) => `Sew-out: ${x.note.trim()}`)].filter(Boolean);
       const list = what.length > 1 ? `${what.slice(0, -1).join(", ")} and ${what[what.length - 1]}` : what[0] || "it";
       await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `#${o?.number} approved: ${list}`, html: emailLayout(mergeSettings(s.data?.data).shop.name, `${who} approved ${list} on #${o?.number}`,

@@ -205,7 +205,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
 
 /** One job's timeline: what was sent, opened, answered, from the order's history and its proofs. */
 export async function jobTimeline(admin: SupabaseClient, orderId: string) {
-  const KINDS = ["created", "request_submitted", "accepted", "sent", "approved", "quote_declined", "proofs_requested", "proof_reminder", "proof_approved", "proof_changes", "art_approved", "sewout_saved", "sewout_sent", "sewout_reminder", "sewout_approved", "sewout_changes", "job_declined", "job_reopened"];
+  const KINDS = ["created", "request_submitted", "accepted", "sent", "approved", "quote_declined", "proofs_requested", "proof_reminder", "proof_approved", "proof_changes", "art_approved", "sewout_saved", "sewout_sent", "sewout_reminder", "sewout_approved", "sewout_changes", "job_declined", "job_reopened", "invoice_sent", "invoice_approved"];
   const [{ data: ev }, { data: pf }, { data: sw }] = await Promise.all([
     admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", KINDS).order("created_at").limit(200),
     admin.from("proofs").select("version, viewed_at, view_count").eq("order_id", orderId).not("viewed_at", "is", null).order("version"),
@@ -214,7 +214,7 @@ export async function jobTimeline(admin: SupabaseClient, orderId: string) {
   const WORD: Record<string, string> = {
     created: "Order made", request_submitted: "Request came in", accepted: "Request accepted", sent: "Quote sent", approved: "Quote approved", quote_declined: "Quote declined",
     proofs_requested: "Mockup sent", proof_reminder: "Reminder sent", proof_approved: "Mockup approved", proof_changes: "Mockup: changes asked", art_approved: "Art approved",
-    sewout_saved: "Sew-out photo taken", sewout_sent: "Sew-out sent", sewout_reminder: "Sew-out reminder sent", sewout_approved: "Sew-out approved", sewout_changes: "Sew-out: changes asked", job_declined: "Marked declined", job_reopened: "Back on (not declined)",
+    sewout_saved: "Sew-out photo taken", sewout_sent: "Sew-out sent", sewout_reminder: "Sew-out reminder sent", sewout_approved: "Sew-out approved", sewout_changes: "Sew-out: changes asked", job_declined: "Marked declined", job_reopened: "Back on (not declined)", invoice_sent: "Final invoice sent", invoice_approved: "Final invoice approved",
   };
   const rows = ((ev || []) as { kind: string; detail: string; actor: string; created_at: string }[])
     .map((e) => ({ at: e.created_at, what: WORD[e.kind] || e.kind, detail: e.kind === "sent" ? (e.detail === "link copied" ? "link copied" : `to ${e.detail}`) : e.detail, who: e.actor, tone: /approved/.test(e.kind) ? "ok" : /changes|declined/.test(e.kind) ? "bad" : "" }));
