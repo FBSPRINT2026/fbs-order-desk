@@ -254,18 +254,8 @@ export async function jobDates(fromDay: string, toDay: string, today: string, by
     // whose account each job is (Oct 27, Nick: "by default make it just your jobs… as the account manager"): the account
     // owner set on the customer (Settings → Staff → Account owners), else the owner on the customer's latest Printavo
     // order, the same rule as the dashboard's "My accounts"
-    const allCust = [...new Set([...custIds, ...((ours || []) as { customer_id: string | null }[]).map((r) => r.customer_id).filter(Boolean) as string[]])];
-    const first = (x: string | null | undefined) => String(x || "").trim().split(/[\s._@-]+/)[0].toLowerCase();
-    const acct = new Map<string, string>();
-    for (let i = 0; i < allCust.length; i += 200) {
-      const ids = allCust.slice(i, i + 200);
-      const [{ data: last }, { data: ao }] = await Promise.all([
-        admin.from("archived_orders").select("customer_id, owner:data->>owner").in("customer_id", ids).not("data->>owner", "is", null).order("order_date", { ascending: false }).limit(4000),
-        admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
-      ]);
-      for (const r of (last || []) as { customer_id: string; owner: string | null }[]) if (r.owner && !acct.has(r.customer_id)) acct.set(r.customer_id, first(r.owner));
-      for (const r of (ao || []) as { customer_id: string; account_owner: string }[]) acct.set(r.customer_id, first(r.account_owner));
-    }
+    const { accountOwners, firstName: first } = await import("@/lib/accountOwners");
+    const acct = await accountOwners(admin, [...custIds, ...((ours || []) as { customer_id: string | null }[]).map((r) => r.customer_id || "")]);
     const meFirst = first(myName) || first(myEmail);
     const names = new Map<string, string>();
     for (let i = 0; i < custIds.length; i += 200) {
