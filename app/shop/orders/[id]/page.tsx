@@ -1720,16 +1720,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     {calc.hasShipping && !calc.shippingTbd && <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={calc.freeShipping} onChange={(e) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.free = e.target.checked || undefined; })} /> Free shipping</label>}</span>
                     <span>{!calc.hasShipping ? <span className="faint">not added</span> : calc.shippingTbd ? <b title="Shipping to be decided: not in the total yet">TBD</b> : calc.freeShipping ? "Free" : money(calc.shipping)}</span></div>
                 )}
-                <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
-                  <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
+                {/* discount and tax in line, no boxes until you use them (Oct 29, Nick: "tax is never not 8.25%… you either click
+                    exempt or not… discount… a toggle… percent or a dollar sign… the entry right in line… only when you click it") */}
+                <div className="tr"><span className="row tt-row">Discount
+                  <span className="tt-seg" role="group" aria-label="Discount in">
+                    {(["pct", "amt"] as const).map((k) => <button key={k} type="button" className={(o.discount_type === "amt" ? "amt" : "pct") === k ? "on" : ""} aria-pressed={(o.discount_type === "amt" ? "amt" : "pct") === k}
+                      onClick={() => patch((d) => { const v = d.discount_type === "amt" ? d.discount_amt || 0 : d.discount_pct || 0; d.discount_type = k; if (k === "amt") { d.discount_amt = v; d.discount_pct = 0; } else { d.discount_pct = Math.min(100, v); d.discount_amt = 0; } })}>{k === "pct" ? "%" : "$"}</button>)}
+                  </span>
+                  <input type="number" step="0.01" min="0" className="tt-in" aria-label="Discount" placeholder="0"
                     value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}
                     onChange={(e) => patch((d) => { const v = Math.max(0, +e.target.value || 0); if (d.discount_type === "amt") d.discount_amt = v; else d.discount_pct = Math.min(100, v); })} />
-                  <select aria-label="Discount type" style={{ width: 52, padding: "3px 4px" }} value={o.discount_type === "amt" ? "amt" : "pct"}
-                    onChange={(e) => patch((d) => { const v = d.discount_type === "amt" ? d.discount_amt || 0 : d.discount_pct || 0; d.discount_type = e.target.value === "amt" ? "amt" : "pct"; if (d.discount_type === "amt") { d.discount_amt = v; d.discount_pct = 0; } else { d.discount_pct = Math.min(100, v); d.discount_amt = 0; } })}>
-                    <option value="pct">%</option><option value="amt">$</option>
-                  </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
-                <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
-                <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
+                </span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
+                <div className="tr"><span className="row tt-row">Tax <span className="faint">{o.tax_rate ?? settings.taxRate}%</span>
+                  <button type="button" className={"tt-ex" + (o.tax_exempt ? " on" : "")} aria-pressed={o.tax_exempt} title={o.tax_exempt ? "Tax exempt: click to charge tax" : "Click if this order is tax exempt"} onClick={() => patch((d) => { d.tax_exempt = !d.tax_exempt; })}>Exempt</button>
+                </span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
                 <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>

@@ -16124,3 +16124,19 @@ select.jl-in{flex:0 1 auto;cursor:pointer}
 .jd-type:focus-visible{outline:2px solid var(--accent)}
 @media (max-width:1280px){.cu-ic span{display:none}.cu-ic{padding:2px 5px}}
 @media (max-width:560px){.jl{grid-template-columns:86px minmax(0,1fr)}.jl-v{flex-wrap:wrap}.jl-tg{margin-left:0}}
+/* Totals: discount and tax in line (Oct 29, Nick) */
+.totals .tt-row{gap:8px;align-items:center}
+.tt-seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tt-seg button{all:unset;cursor:pointer;font-size:12px;font-weight:700;width:22px;height:20px;display:grid;place-items:center;color:var(--ink-3)}
+.tt-seg button.on{background:var(--accent-soft);color:var(--accent)}
+.tt-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tt-in{width:64px;height:26px;border:1px solid transparent!important;background:transparent!important;border-radius:6px;padding:0 6px!important;font-size:14px;box-shadow:none!important}
+.tt-in:hover{background:var(--surface-2)!important}
+.tt-in:focus{border-color:var(--accent)!important;background:var(--surface)!important;outline:none}
+.tt-ex{all:unset;cursor:pointer;font-size:11.5px;font-weight:600;padding:1px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-3);line-height:18px}
+.tt-ex:hover{border-color:var(--accent);color:var(--accent)}
+.tt-ex.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tt-ex:focus-visible{outline:2px solid var(--accent)}
+/* "+ Add group description" only when you point at the group's line (Oct 29, Nick) */
+html body .ord .line-h .grp-desc-in:placeholder-shown::placeholder{color:transparent}
+html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html body .ord .line-h .grp-desc-in:focus::placeholder{color:var(--accent)}
