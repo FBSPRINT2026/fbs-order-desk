@@ -164,6 +164,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
   const [jdTab, setJdTab] = useState<"details" | "type">("details");
+  const [pickCust, setPickCust] = useState(false); // the customer picker open to change who it is
   // Customer artwork (Oct 24): which group is bringing in a mockup from another of the customer's orders
   const [custArt, setCustArt] = useState<number | null>(null);
   // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
@@ -1446,10 +1447,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 Resolution Center asks, Reorder Details confirms, the print row's stamp says what's waiting */}
           <div className="top2">
             <section className="panel">
+              {/* the customer, quiet (Oct 29, Nick: "I don't need all of this info all the time… the customer name twice…
+                  we don't need what they owe on other orders… terms… tax… we're never going to change… little symbols… address,
+                  email, notes as a dropdown… pricing at the bottom… it's going to drop down to do program pricing") */}
               <div className="panel-h"><h2>Customer</h2>
-                {!newCust && <button className="btn sm" type="button" onClick={() => setNewCust({ company: "", name: "", email: "", phone: "", price_type: "retail" })}>+ New customer</button>}
+                <span className="row" style={{ gap: 12 }}>
+                  {cust && !newCust && <button type="button" className="linkbtn" onClick={() => setPickCust((v) => !v)}>{pickCust ? "Done" : "Change customer"}</button>}
+                  {!newCust && <button className="linkbtn" type="button" onClick={() => setNewCust({ company: "", name: "", email: "", phone: "", price_type: "retail" })}>+ New</button>}
+                </span>
               </div>
-              <div className="panel-b stack">
+              <div className="panel-b stack cu-b">
                 {newCust ? (
                   <div className="stack" style={{ gap: 8 }}>
                     <div className="grid g2">
@@ -1464,38 +1471,54 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ) : (
                   <>
-                    {/* type to find (Oct 22, Nick: "type PET and then select Peticolas") */}
-                    <CustomerPick field value={o.customer_id || null} options={custOpts} placeholder="Type a customer: company, name or email" onPick={(v) => {
+                    {/* type to find (Oct 22, Nick: "type PET and then select Peticolas"): shown until one's picked, or to change it */}
+                    {(!cust || pickCust) && <CustomerPick field value={o.customer_id || null} options={custOpts} placeholder="Type a customer: company, name or email" onPick={(v) => {
                       const c = customers.find((x) => x.id === v);
                       patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; if (c) d.price_type = c.price_type || "retail"; });
-                    }} />
-                    <div className="cust-row">
-                      {cust ? (
-                        <div className="cust-card">
-                          {cust.company && <div className="cc-co">{cust.company}</div>}
-                          {cust.name && <div>{cust.name}</div>}
-                          {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
-                          {cust.email && <div className="sub">{cust.email}</div>}
-                          {cust.phone && <div className="sub">{fmtPhone(cust.phone)}</div>}
-                          <div className="cc-extra">
-                            <div className="sub money-only">{PAY_TERMS[cust.payment_terms || "receipt"]}{cust.tax_exempt ? " · tax exempt" : ""}{custOwed?.n ? <> · <b style={{ color: "var(--danger)" }}>owes {money(custOwed.owed)}</b> on {custOwed.n} other order{custOwed.n === 1 ? "" : "s"}</> : null}</div>
+                      if (v) setPickCust(false);
+                    }} />}
+                    {cust ? (
+                      <div className="cu">
+                        <div className="cu-top">
+                          <div className="cu-who">
+                            <div className="cu-co">{custLabel(cust)}<Link className="cu-pen" href={`/shop/customers/${cust.id}`} title="Edit customer" aria-label="Edit customer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg></Link></div>
+                            <div className="sub">{[cust.company && cust.name && cust.name !== cust.company ? cust.name : "", fmtPhone(cust.phone)].filter(Boolean).join(" · ")}</div>
+                          </div>
+                          {/* tax and terms as two small stacked symbols: set once for a customer, rarely looked at */}
+                          <div className="cu-sym money-only">
+                            {o.tax_exempt && <span className="cu-ic" title="Tax exempt on this order"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2z" /><path d="m9 14 6-6M9.5 8.5h.01M14.5 13.5h.01" /></svg><span>Exempt</span></span>}
+                            <span className="cu-ic" title={`Payment terms: ${PAY_TERMS[cust.payment_terms || "receipt"]} (set on the customer)`}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2z" /><path d="M9 8h6M9 12h6" /></svg><span>{({ receipt: "On receipt", net30: "Net 30", deposit: "50/50", prepay: "Pre-pay" } as Record<string, string>)[cust.payment_terms || "receipt"]}</span></span>
+                          </div>
+                        </div>
+                        {(cust.address || cust.email || cust.notes || (cust.tags || []).length > 0) && (
+                          <details className="cu-more">
+                            <summary>Address, email and notes</summary>
+                            {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
+                            {cust.email && <div>{cust.email}</div>}
                             {(cust.tags || []).length > 0 && <div className="row" style={{ gap: 4 }}>{(cust.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>}
                             {cust.notes && <div className="cc-note" title="Customer notes (shop only)">{cust.notes}</div>}
-                          </div>
-                          <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
-                        </div>
-                      ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
-                    </div>
-                    {/* pricing on its own line under the customer (Oct 21, Nick: "that little retail wholesale program thing is
-                        screwing up this whole box… put program underneath"): Retail / Wholesale / Program, their program notes under it */}
-                    <div className="pt-row money-only">
-                      <span className="pt-l">Pricing</span>
-                      <div className="chips">
-                        <button type="button" className={"chip" + (o.price_type !== "wholesale" && !o.use_program ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; d.use_program = false; }); }}>Retail</button>
-                        <button type="button" className={"chip" + (o.price_type === "wholesale" && !o.use_program ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }}>Wholesale</button>
-                        {(prog || o.use_program) && <button type="button" className={"chip" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Program</button>}
+                          </details>
+                        )}
                       </div>
-                      {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <span className="faint pt-ch">Changed for this order</span>}
+                    ) : <div className="faint" style={{ fontSize: 13 }}>Pick a customer, or add a new one without leaving this order.</div>}
+                    {/* pricing at the bottom: Retail, Wholesale, or their program's rate card (it opens the program pricing) */}
+                    <div className="jl cu-price money-only">
+                      <label className="jl-k" htmlFor="o-pt">Pricing</label>
+                      <div className="jl-v">
+                        <select id="o-pt" className="jl-in" value={o.use_program ? "program" : o.price_type === "wholesale" ? "wholesale" : "retail"} onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "program") { setConfirmRetail(false); patch((d) => { d.use_program = true; }); setProgOpen(true); }
+                          else if (v === "wholesale") { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }
+                          else if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true);
+                          else patch((d) => { d.price_type = "retail"; d.use_program = false; });
+                        }}>
+                          <option value="retail">Retail</option><option value="wholesale">Wholesale</option>
+                          {(prog || o.use_program) && <option value="program">Program{progCard ? `: ${progCard.name}` : ""}</option>}
+                        </select>
+                        {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <span className="faint pt-ch">Changed for this order</span>}
+                      </div>
+                    </div>
+                    <div className="pt-row money-only" style={{ marginTop: -4 }}>
                       {o.use_program && progAll && progAll.cards.length > 1 && (
                         <label className="prg-pick">Rate card
                           <select value={progCard?.id || ""} onChange={(e) => patch((d) => { d.program_card = e.target.value; })}>
@@ -1530,37 +1553,39 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </section>
 
             <section className="panel">
+              {/* the job, as lines (Oct 29, Nick: "a lot of boxes for not so much information… PO with the number sign… production
+                  date… specific time on the in hands… Firm and Rush") */}
               <div className="panel-h"><h2>Job details</h2>
-                <span className="row" style={{ gap: 14 }}>
-                  <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }} title="Rush job: 🔥 on the production calendar"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> 🔥 Rush</label>
-                  <label className="check" style={{ fontSize: 13, color: o.firm ? "#8a4b00" : undefined, fontWeight: o.firm ? 700 : 400 }} title="Firm in-hands date: it can't move. ⛰️ on the production calendar"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} /> ⛰️ Firm date</label>
-                </span>
+                <button type="button" className={"jd-type" + (jdTab === "type" ? " on" : "")} aria-expanded={jdTab === "type"} title="Order type" onClick={() => setJdTab(jdTab === "type" ? "details" : "type")}>{ORDER_TYPE_LABEL[orderTypeOf(o)]}<span aria-hidden> ▾</span></button>
               </div>
               <div className="panel-b stack">
-                {/* two tabs (Oct 24, Nick: "under job details… job details information, and then the next one says order
-                    type… by default, you'll always be on new order"): opens on Job details every time */}
-                <div className="toolbar jd-tabs"><div className="chips">
-                  <button type="button" className={"chip" + (jdTab === "details" ? " on" : "")} onClick={() => setJdTab("details")}>Job details</button>
-                  <button type="button" className={"chip" + (jdTab === "type" ? " on" : "")} onClick={() => setJdTab("type")}>Order type <span className="faint">· {ORDER_TYPE_LABEL[orderTypeOf(o)]}</span></button>
-                </div></div>
-                {jdTab === "type" ? <OrderTypeRow o={o} patch={patch} bare /> : (<>
-                <div className="grid jd-grid">
-                  <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
-                  <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
-                  <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
-                  <div className="field"><label htmlFor="o-prod">Production date</label><input id="o-prod" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
-                  <div className="field"><label htmlFor="o-due">In-hands date{o.firm ? " (firm)" : ""}</label>
-                    <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} style={{ flex: "1 1 140px", minWidth: 0 }} />
-                      {o.due_time != null && <input type="time" step={900} aria-label="Due by" value={`${String(Math.floor(o.due_time / 60)).padStart(2, "0")}:${String(o.due_time % 60).padStart(2, "0")}`} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) patch((d) => { d.due_time = h * 60 + (m || 0); d.firm = true; }); }} style={{ flex: "0 1 130px" }} />}
-                    </div>
-                    <label className="check" style={{ fontSize: 12.5, marginTop: 4 }} title="Needed by a set time that day. Makes the date firm (⛰️) on the production calendar."><input type="checkbox" checked={o.due_time != null} onChange={(e) => patch((d) => { d.due_time = e.target.checked ? 600 : null; if (e.target.checked) d.firm = true; })} /> Specific time</label>
+                {jdTab === "type" && <OrderTypeRow o={o} patch={patch} bare />}
+                <div className="jl">
+                  <label className="jl-k" htmlFor="o-nick">Job name</label>
+                  <div className="jl-v"><input id="o-nick" className="jl-in" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
+                  <label className="jl-k" htmlFor="o-po">PO #</label>
+                  <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
+                  <label className="jl-k" htmlFor="o-due">In hands</label>
+                  <div className="jl-v">
+                    <input id="o-due" className="jl-in jl-date" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} />
+                    {o.due_time != null && <input className="jl-in jl-time" type="time" step={900} aria-label="Due by" value={`${String(Math.floor(o.due_time / 60)).padStart(2, "0")}:${String(o.due_time % 60).padStart(2, "0")}`} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) patch((d) => { d.due_time = h * 60 + (m || 0); d.firm = true; }); }} />}
+                    <span className="jl-tg">
+                      <button type="button" className={"jl-t" + (o.due_time != null ? " on" : "")} aria-pressed={o.due_time != null} title="Needed by a set time that day (makes the date firm)" onClick={() => patch((d) => { d.due_time = d.due_time != null ? null : 600; if (d.due_time != null) d.firm = true; })}>Time</button>
+                      <button type="button" className={"jl-t firm" + (o.firm ? " on" : "")} aria-pressed={!!o.firm} title="Firm in-hands date: it can't move (⛰️ on the production calendar)" onClick={() => patch((d) => { d.firm = !d.firm; })}>Firm</button>
+                      <button type="button" className={"jl-t rush" + (o.rush ? " on" : "")} aria-pressed={!!o.rush} title="Rush job (🔥 on the production calendar)" onClick={() => patch((d) => { d.rush = !d.rush; })}>Rush</button>
+                    </span>
                   </div>
-                  <div className="field"><label htmlFor="o-del">Pickup, ship or delivery</label>
-                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && d.delivery_method !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
+                  <label className="jl-k" htmlFor="o-prod">Production</label>
+                  <div className="jl-v"><input id="o-prod" className="jl-in jl-date" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
+                  <label className="jl-k" htmlFor="o-del">Delivery</label>
+                  <div className="jl-v">
+                    <select id="o-del" className="jl-in" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && d.delivery_method !== "tbd" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
                       <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option><option value="tbd">TBD: not told yet</option>
                     </select>
                   </div>
+                </div>
+                <div className="grid jd-grid">
+                  <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
                   {o.delivery_method === "ship" && (
                     <div className="field"><label htmlFor="o-sm">Ship method</label>
                       <select id="o-sm" value={matchShipMethod(o.ship_method) || (o.ship_method ? "__other" : "")} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; })}>
@@ -1581,7 +1606,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
-                </>)}
               </div>
             </section>
           </div>

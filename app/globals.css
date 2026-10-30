@@ -16085,3 +16085,42 @@ table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .pfl-alt{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
 .pfl-alt .btn{text-transform:none}
 .pfl-sum li small{display:block;font-size:12.5px;color:var(--ink-3)}
+
+/* Order page: Customer and Job details as quiet lines (Oct 29, Nick: "a lot of boxes for not so much information") */
+.cu{display:flex;flex-direction:column;gap:6px}
+.cu-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.cu-who{min-width:0}
+.cu-co{font-family:var(--display);font-size:17px;font-weight:700;color:var(--ink);line-height:1.25;display:flex;align-items:center;gap:6px}
+.cu-pen{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;color:var(--ink-3);flex:none}
+.cu-pen:hover{background:var(--surface-2);color:var(--accent)}
+.cu-sym{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
+.cu-ic{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;line-height:18px;padding:0 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);white-space:nowrap}
+.cu-more{font-size:13px;color:var(--ink);margin-top:2px}
+.cu-more summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600;list-style:none}
+.cu-more summary::-webkit-details-marker{display:none}
+.cu-more summary::before{content:"▸ ";}
+.cu-more[open] summary::before{content:"▾ "}
+.cu-more[open]{display:flex;flex-direction:column;gap:4px}
+.cu-price{margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.jl{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 12px;align-items:center}
+.jl-k{font-size:12.5px;color:var(--ink-3);font-weight:400;text-transform:none;letter-spacing:0;margin:0}
+.jl-v{display:flex;align-items:center;gap:8px;min-width:0;border-bottom:1px dashed var(--line);min-height:36px}
+.jl-in{border:1px solid transparent!important;background:transparent!important;height:34px;padding:0 6px;margin-left:-6px;font-size:14px;color:var(--ink);border-radius:6px;min-width:0;flex:1 1 auto;box-shadow:none!important}
+.jl-in:hover{background:var(--surface-2)!important}
+.jl-in:focus{border-color:var(--accent)!important;background:var(--surface)!important;outline:none}
+select.jl-in{flex:0 1 auto;cursor:pointer}
+.jl-in::placeholder{color:var(--ink-3)}
+.jl-date{flex:0 1 160px}
+.jl-time{flex:0 1 120px}
+.jl-tg{display:inline-flex;gap:4px;margin-left:auto;flex:none}
+.jl-t{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-3);line-height:18px}
+.jl-t:hover{border-color:var(--accent);color:var(--accent)}
+.jl-t:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.jl-t.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.jl-t.firm.on{background:color-mix(in srgb,var(--warn) 14%,transparent);border-color:var(--warn);color:var(--warn)}
+.jl-t.rush.on{background:color-mix(in srgb,var(--danger) 12%,transparent);border-color:var(--danger);color:var(--danger)}
+.jd-type{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2,var(--ink-3));white-space:nowrap}
+.jd-type.on,.jd-type:hover{border-color:var(--accent);color:var(--accent)}
+.jd-type:focus-visible{outline:2px solid var(--accent)}
+@media (max-width:1280px){.cu-ic span{display:none}.cu-ic{padding:2px 5px}}
+@media (max-width:560px){.jl{grid-template-columns:86px minmax(0,1fr)}.jl-v{flex-wrap:wrap}.jl-tg{margin-left:0}}
