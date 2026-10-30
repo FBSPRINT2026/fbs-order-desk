@@ -18,9 +18,42 @@ export type Worksheet = {
 
 const num = (s: string | undefined) => (s ? +s.replace(/,/g, "") || 0 : 0);
 
+/** each thread once, in the order it first sews */
+function threadsOf(seq: Stop[]): SheetThread[] {
+  const threads: SheetThread[] = [];
+  for (const s of seq) {
+    const k = threads.find((x) => x.code === s.code && x.chart === s.chart);
+    if (k) { k.stitches += s.stitches; k.stops++; if (!k.name && s.name) k.name = s.name; }
+    else threads.push({ needle: s.needle, code: s.code, name: s.name, chart: s.chart, stitches: s.stitches, stops: 1 });
+  }
+  return threads;
+}
+
+/**
+ * Hatch Embroidery's worksheet (Oct 30, Nick's All My Sons AMS01AP: "Design Worksheet… Color Sequence… Color: 1 Stop: 1
+ * Code: 1800 Name: Black Chart: Madeira PolyNeon 40 Stitches: 902"): one block per stop, the color number as the needle.
+ * Its header prints the labels apart from the values ("Height: Width: Stitches: … 1.18 in 4.21 in 11,833 3 10 18").
+ */
+function parseHatch(t: string): Worksheet | null {
+  if (!/Hatch Embroidery|Color Sequence/i.test(t)) return null;
+  const stop = /Color:\s*(\d{1,3})\s+Stop:\s*(\d{1,4})\s+Element:.*?Code:\s*(\S+)\s+Name:\s*(.*?)\s+Chart:\s*(.*?)\s+Stitches:\s*([\d,]+)/gi;
+  const seen = new Set<number>(), seq: Stop[] = [];
+  for (const m of t.matchAll(stop)) { const n = +m[2]; if (seen.has(n)) continue; seen.add(n); seq.push({ n, needle: +m[1], stitches: num(m[6]), code: m[3], name: m[4].trim(), chart: m[5].trim() }); }
+  if (!seq.length) return null;
+  seq.sort((a, b) => a.n - b.n);
+  const threads = threadsOf(seq);
+  // the header's values, in order: height, width, stitches, colors, color changes, trims
+  const h = /([\d.]+)\s*in\s+([\d.]+)\s*in\s+([\d,]+)\s+(\d+)\s+(\d+)\s+(\d+)/.exec(t);
+  return {
+    stitches: h ? num(h[3]) : seq.reduce((a, s) => a + s.stitches, 0), wIn: h ? num(h[2]) : 0, hIn: h ? num(h[1]) : 0,
+    colors: threads.length, changes: h ? num(h[5]) : Math.max(0, seq.length - 1), stops: seq.length, trims: h ? num(h[6]) : 0,
+    sequence: seq, threads, real: threads.some((x) => !/^default$/i.test(x.chart)),
+  };
+}
+
 export function parseWorksheet(text: string): Worksheet | null {
   const t = text.replace(/\s+/g, " ");
-  if (!/Stop Sequence/i.test(t)) return null;
+  if (!/Stop Sequence/i.test(t)) return parseHatch(t);
   const head = (re: RegExp) => num(re.exec(t)?.[1]);
   const sequence: Stop[] = [];
   const body = t.slice(t.search(/Stop Sequence/i));
