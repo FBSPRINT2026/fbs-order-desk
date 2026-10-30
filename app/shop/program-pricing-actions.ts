@@ -257,3 +257,39 @@ export async function addPriceBreak(input: { itemId: string; min: number; price:
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * The rate card's numbers (Oct 30, Nick: "think up a new rate card design for this client"): for each end client (the
+ * design prices' `match.who`), the jobs, pieces and dollars in the last 6 months, and for each style the design prices
+ * name, how many jobs had it. From the customer's jobs (Printavo history and our own orders), by the words in them.
+ */
+export type CardStats = { since: string; who: Record<string, { jobs: number; pcs: number; total: number }>; styles: Record<string, Record<string, number>> };
+export async function programCardStats(customerId: string): Promise<{ ok: true; stats: CardStats } | { ok: false; error: string }> {
+  try {
+    const { admin } = await me();
+    const since = new Date(Date.now() - 183 * 864e5).toISOString().slice(0, 10);
+    const { data: p } = await admin.from("programs").select("id").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
+    if (!p) return { ok: true, stats: { since, who: {}, styles: {} } };
+    const { data: its } = await admin.from("program_items").select("match").eq("program_id", p.id).eq("active", true).is("archived_at", null);
+    const [{ data: ar }, { data: os }] = await Promise.all([
+      admin.from("archived_orders").select("nickname, qty, total, search_text").eq("customer_id", customerId).gte("order_date", since).limit(5000),
+      admin.from("orders").select("nickname, qty, total, groups, po_number").eq("customer_id", customerId).gte("created_at", since).neq("status", "request").limit(2000),
+    ]);
+    const jobs = [
+      ...((ar || []) as { nickname: string; qty: number; total: number; search_text: string }[]).map((j) => ({ name: j.nickname || "", qty: +j.qty || 0, total: +j.total || 0, text: ` ${(j.search_text || "").toLowerCase()} ` })),
+      ...((os || []) as { nickname: string; qty: number; total: number; groups: { lines?: { style?: string }[] }[] | null; po_number: string }[]).map((o) => ({ name: `${o.nickname || ""} ${o.po_number || ""}`, qty: +o.qty || 0, total: +o.total || 0, text: ` ${`${o.nickname || ""} ${(o.groups || []).flatMap((g) => (g.lines || []).map((l) => l.style || "")).join(" ")}`.toLowerCase()} ` })),
+    ];
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const has = (text: string, word: string) => new RegExp(`(^|[^a-z0-9])${norm(word).replace(/ /g, "[^a-z0-9]+")}([^a-z0-9]|$)`, "i").test(text);
+    const whoSets = [...new Set(((its || []) as { match: { who?: string[] } | null }[]).map((x) => (x.match?.who || []).join("|")).filter(Boolean))];
+    const stats: CardStats = { since, who: {}, styles: {} };
+    for (const ws of whoSets) {
+      const words = ws.split("|");
+      const mine = jobs.filter((j) => words.some((w) => has(norm(j.name), w)));
+      stats.who[ws] = { jobs: mine.length, pcs: mine.reduce((a, j) => a + j.qty, 0), total: Math.round(mine.reduce((a, j) => a + j.total, 0)) };
+      const styles = new Set(((its || []) as { match: { who?: string[]; what?: string[] } | null }[]).filter((x) => (x.match?.who || []).join("|") === ws).flatMap((x) => (x.match?.what || []).filter((w) => /\d/.test(w))));
+      stats.styles[ws] = Object.fromEntries([...styles].map((s) => [s, mine.filter((j) => has(j.text, s)).length]));
+    }
+    return { ok: true, stats };
+  } catch (e) { return fail(e); }
+}
