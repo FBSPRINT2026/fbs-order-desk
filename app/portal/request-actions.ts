@@ -11,7 +11,7 @@ import { proposalToGroups } from "@/lib/ai/normalize";
 import { groupsFromPrintavo, readFiles } from "@/lib/ai/emailOrder";
 import { storedPath } from "@/lib/archive";
 
-type Result = { ok: boolean; error?: string; id?: string };
+type Result = { ok: boolean; error?: string; id?: string; updated_at?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
 
 /** The signed-in customer's account (their first one). Staff previews can't build orders. */
@@ -92,9 +92,9 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
     if (patch.delivery_method !== undefined && ["pickup", "ship", "deliver"].includes(patch.delivery_method)) row.delivery_method = patch.delivery_method;
     if (patch.po_number !== undefined) row.po_number = patch.po_number.slice(0, 60);
     if (patch.ship_to !== undefined) row.ship_to = patch.ship_to.slice(0, 1000);
-    const { error } = await admin.from("orders").update(row).eq("id", id);
+    const { data: saved, error } = await admin.from("orders").update(row).eq("id", id).select("updated_at").maybeSingle();
     if (error) return { ok: false, error: error.message };
-    return { ok: true };
+    return { ok: true, updated_at: String((saved as { updated_at?: string } | null)?.updated_at || "") };
   } catch (e) { return fail(e); }
 }
 

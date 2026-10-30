@@ -231,7 +231,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                 return <button key={s.name} type="button" tabIndex={-1} className={"chip" + (on ? " on" : "")} onClick={() => sizeAll(s)}>{s.name} {s.length}×{s.width}×{s.height}{s.name === settings.defaultBox ? " · default" : ""}</button>;
               })}</div>
             </div>
-            <div style={{ overflowX: "auto" }}><table className="sw-boxes">
+            <div className="fit-wrap"><table className="sw-boxes">
               <thead><tr><th>Box</th><th>Length</th><th>Width</th><th>Height</th><th>Weight</th>{tracking && <th>Tracking #</th>}<th /></tr></thead>
               <tbody>
                 {boxes.map((b, i) => (

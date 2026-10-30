@@ -248,7 +248,7 @@ function OrderGoods() {
           )}
 
           {lines.length > 0 ? (
-            <div style={{ overflowX: "auto" }}><table className="rv-tbl">
+            <div className="fit-wrap"><table className="rv-tbl">
               <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th title="Live from S&S stock, by the Warehouses choice below">Ships from{whBusy ? " …" : ""}</th><th /></tr></thead>
               <tbody>{sorted.map(({ l, i }) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
@@ -308,7 +308,7 @@ function OrderGoods() {
         <div className="panel-h"><h2>Ordered here lately</h2></div>
         <div className="panel-b">
           {recentErr ? <div className="banner">{recentErr}</div> : !recent ? <div className="faint">Loading…</div> : !recent.length ? <div className="faint">Nothing ordered through S&amp;S here yet.</div> : (
-            <div style={{ overflowX: "auto" }}><table className="rv-tbl">
+            <div className="fit-wrap"><table className="rv-tbl">
               <thead><tr><th>Ordered</th><th>PO</th><th>S&amp;S order</th><th className="r">Pcs</th><th className="r">Total</th><th>Arrives</th><th>Order</th></tr></thead>
               <tbody>{recent.map((b) => (
                 <tr key={b.id}>

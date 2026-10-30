@@ -16416,3 +16416,16 @@ html body .ord .line-b .gl > .gl-pers{grid-column:1/-1}
 .gl-pers .gl-pers-x{margin-left:auto}
 .pers-h{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .pers-list{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* ===== Nothing scrolls sideways (Nick, Oct 30 2026: "another sideways scroll to remove… remove all sideways scrolls
+   from our site"; CLAUDE.md). Every table and grid wrapper fits its panel: no horizontal scroll bar anywhere; tables
+   take the panel's width, text cells wrap (money, numbers, dates and statuses stay on one line by their own rules),
+   and fields and buttons inside cells shrink with them. Rows of tabs/buttons fit through ToolbarFit (icons, then wrap).
+   Only real picture swipes (a photo carousel) and the PDF viewer keep their own scrolling. ===== */
+html body :is(.tbl-wrap, .fit-wrap, .cal-wrap, .sizes-wrap, .matrix-wrap, .pv-scroll, .rv-grid-wrap, .tmx-sched-card, .ms-grid-wrap, .ms-lw, .ms-dv, .ms-split-col.r .ms-lw.compact, .it-wrap, .rc-grid-wrap, .prc-wrap, .tk-tbl-wrap, .pl-wrap, .ckg-wrap, .ck-grid, .board, .stepper, .orv-rsc-list, .mf-look-strip, .dc-views, .ibx2-sugs, .tx-starters){overflow-x:visible!important}
+html body :is(.board){grid-auto-flow:row!important;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+html body :is(.stepper, .orv-rsc-list, .mf-look-strip, .dc-views, .ibx2-sugs, .tx-starters){flex-wrap:wrap}
+html body table:is(.tbl, .rv-tbl){min-width:0!important;max-width:100%}
+html body table:is(.tbl, .rv-tbl) :is(td, th){min-width:0}
+html body table:is(.tbl, .rv-tbl) td{overflow-wrap:anywhere}
+html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%;min-width:0;box-sizing:border-box}

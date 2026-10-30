@@ -169,7 +169,7 @@ function ResolveRow({ g, onDone }: { g: PendingShipment; onDone: () => void }) {
                 </label>
               </div>
               {open && (
-                <div style={{ overflowX: "auto" }}><table className="rv-tbl in-tbl">
+                <div className="fit-wrap"><table className="rv-tbl in-tbl">
                   <thead><tr><th>Garment</th><th>Color</th><th>Size</th><th className="r">Shipped</th><th>Order</th></tr></thead>
                   <tbody>{g.lines.map((l) => (
                     <tr key={l.id} className={!sel[l.id] ? "miss" : ""}>

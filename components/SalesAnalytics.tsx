@@ -185,7 +185,7 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
             <button type="button" className="linkbtn" onClick={() => setTable((x) => !x)}>{table ? "Show chart" : "Show as table"}</button>
           </div>
           {table ? (
-            <div style={{ overflowX: "auto" }}><table className="rv-tbl an-tbl">
+            <div className="fit-wrap"><table className="rv-tbl an-tbl">
               <thead><tr><th>Month</th><th className="r">{y}</th><th className="r">{y - 1}</th><th className="r">Change</th></tr></thead>
               <tbody>{MONTHS.map((mm, i) => { const p = pct(v.thisYear[i].sales, v.lastYear[i].sales); return (
                 <tr key={mm}><td>{mm}</td><td className="r">{i <= m ? money0(v.thisYear[i].sales) : "—"}</td><td className="r">{money0(v.lastYear[i].sales)}</td><td className="r">{i <= m && p !== null ? `${p >= 0 ? "+" : ""}${p}%` : "—"}</td></tr>

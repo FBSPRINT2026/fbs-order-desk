@@ -2,6 +2,7 @@
 import { bySupplierStyle } from "@/lib/garmentSup";
 import BackLink from "@/components/BackLink";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { dropUnsaved, keepUnsaved, readUnsaved, savedUnsaved, watchPerson } from "@/lib/unsavedCopy";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import type { NeckLabelSet } from "@/lib/neckLabels";
@@ -48,6 +49,8 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
   const [upBusy, setUpBusy] = useState("");
   const router = useRouter();
   const [o, setO] = useState<Order>(initial);
+  // the saved version on screen (its updated_at): an unsaved copy belongs to it
+  const baseAt = useRef(String((initial as Order & { updated_at?: string }).updated_at || ""));
   const [catalog, setCatalog] = useState(cat0);
   const [designs, setDesigns] = useState(d0);
   const [urls, setUrls] = useState(u0);
@@ -79,16 +82,18 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const x = latest.current;
     setState("Saving…");
+    const startedAt = Date.now();
     const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "" });
     setState(r.ok ? "Saved" : "");
-    if (r.ok) try { localStorage.removeItem(`fbs:unsaved:${x.id}`); } catch { /* storage off */ }
+    if (r.ok) { if (r.updated_at) baseAt.current = r.updated_at; savedUnsaved(x.id, startedAt, r.updated_at); }
     if (!r.ok) setErr(r.error || "Couldn't save.");
   }
   function patch(fn: (d: Order) => void) {
     setO((prev) => {
       const n = structuredClone(prev); fn(n); latest.current = n;
-      // a copy in this browser until the server has it (Oct 24, Nick: a dropped connection shouldn't lose their order)
-      try { localStorage.setItem(`fbs:unsaved:${n.id}`, JSON.stringify({ at: Date.now(), o: n })); } catch { /* storage off */ }
+      // a copy in this browser until the server has it (Oct 24, Nick: a dropped connection shouldn't lose their order):
+      // only what the customer did, on the version they're looking at (lib/unsavedCopy)
+      keepUnsaved(n, baseAt.current);
       return n;
     });
     setState("Editing…");
@@ -99,12 +104,9 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
   // changes that never reached us (the connection dropped): offered back on the next open
   const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`fbs:unsaved:${initial.id}`);
-      const keep = raw ? (JSON.parse(raw) as { at: number; o: Order }) : null;
-      if (keep?.o && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + (keep.o.nickname || "") !== JSON.stringify(initial.groups) + (initial.nickname || "")) setRecover(keep);
-      else if (raw) localStorage.removeItem(`fbs:unsaved:${initial.id}`);
-    } catch { /* storage off */ }
+    watchPerson();
+    const keep = readUnsaved<Order>(initial.id, baseAt.current, (k) => JSON.stringify(k.groups) + (k.nickname || "") === JSON.stringify(initial.groups) + (initial.nickname || ""));
+    if (keep) setRecover(keep);
   }, [initial.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
@@ -317,7 +319,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     await flush();
     const r = await sendSimpleOrder(o.id, { name: o.nickname || "Reorder", about: re.text, files: [], delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "" });
     if (!r.ok) { setRe((x) => (x ? { ...x, busy: "" } : x)); return setErr(r.error || "Couldn't send it."); }
-    try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ }
+    dropUnsaved(o.id);
     router.push(`/portal/orders/${o.id}?sent=1`);
   }
   async function uploadPo(list: File[]) {
@@ -358,7 +360,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     if (goods && simple.goodsOn) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
     const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, po: simple.po, method: simple.method, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files });
     if (!r.ok) { setSimpleBusy(""); return setErr(r.error || "Couldn't send it."); }
-    try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ }
+    dropUnsaved(o.id);
     router.push(`/portal/orders/${o.id}?sent=1`);
   }
 
@@ -419,7 +421,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
         <div className="draft-bar" role="alert">
           <span><b>We found changes that didn&apos;t save.</b> From {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}; the connection may have dropped. Bring them back?</span>
           <span className="spacer" />
-          <button type="button" className="btn ghost" onClick={() => { try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ } setRecover(null); }}>Throw them away</button>
+          <button type="button" className="btn ghost" onClick={() => { dropUnsaved(o.id); setRecover(null); }}>Throw them away</button>
           <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { d.groups = r.o.groups; d.nickname = r.o.nickname; d.due_date = r.o.due_date; d.notes = r.o.notes; d.po_number = r.o.po_number; d.delivery_method = r.o.delivery_method; d.ship_to = r.o.ship_to; }); }}>Bring them back</button>
         </div>
       )}

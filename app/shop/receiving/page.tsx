@@ -696,7 +696,7 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
         <div style={{ padding: "14px 22px" }} className="stack">
           {!plan ? <div className="faint">{err || "Checking S&S for stock and price…"}</div> : (
             <>
-              <div style={{ overflowX: "auto" }}><table className="rv-tbl">
+              <div className="fit-wrap"><table className="rv-tbl">
                 <thead><tr><th>Garment</th><th>Color</th><th>Size</th><th className="r">Qty</th><th>S&amp;S</th><th className="r">Price</th><th className="r">In stock</th></tr></thead>
                 <tbody>{lines.map((l) => (
                   <tr key={l.key} className={!l.found ? "miss" : l.stock < (qty[l.key] || 0) ? "low" : ""}>
@@ -790,7 +790,7 @@ function TruckModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: st
                 <button type="button" className="linkbtn" onClick={() => setOn(Object.fromEntries(stops.map((x) => [x.key, true])))}>Tick all</button>
                 <button type="button" className="linkbtn" onClick={() => setOn({})}>Clear</button>
               </div>
-              <div style={{ overflowX: "auto", maxHeight: "45vh" }}><table className="rv-tbl">
+              <div className="fit-wrap" style={{ maxHeight: "45vh", overflowY: "auto" }}><table className="rv-tbl">
                 <thead><tr><th></th><th>For</th><th>Order</th><th>S&amp;S order</th><th>PO</th><th className="r">Boxes</th><th className="r">Pcs</th><th>Shipped</th></tr></thead>
                 <tbody>{stops.map((x) => (
                   <tr key={x.key} onClick={() => setOn({ ...on, [x.key]: !on[x.key] })} style={{ cursor: "pointer" }}>

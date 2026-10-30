@@ -199,7 +199,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div className="stack">
             <section className="panel">
               <div className="panel-h"><h2>Items</h2></div>
-              <div style={{ overflowX: "auto" }}>
+              <div className="fit-wrap">
                 <table className="items">
                   <thead><tr><th>Item</th><th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Amount</th>}</tr></thead>
                   <tbody>

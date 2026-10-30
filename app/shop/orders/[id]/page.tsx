@@ -50,6 +50,7 @@ import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
+import { dropUnsaved, keepUnsaved, readUnsaved, savedUnsaved, watchPerson } from "@/lib/unsavedCopy";
 import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
 import { FillFromText, type StatusLine } from "@/components/OrderAssist";
@@ -98,6 +99,8 @@ const TAB_ICONS: Record<string, ReactNode> = {
  * closing on the spot pulled the menu away before the tap landed (Oct 26, Nick: "click like work order… it's not pulling
  * it… doesn't pop up").
  */
+/** An unsaved copy that matches the server has nothing to bring back. */
+const sameEdits = (k: Order, d: Order) => JSON.stringify(k.groups) + k.nickname + JSON.stringify(k.fees) === JSON.stringify(d.groups) + d.nickname + JSON.stringify(d.fees);
 const closeSoon = (e: FocusEvent<HTMLDetailsElement>) => { const d = e.currentTarget; setTimeout(() => { if (!d.contains(document.activeElement)) d.open = false; }, 250); };
 
 export default function OrderEditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -187,6 +190,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
+  // the saved version of the order on screen (its updated_at): an unsaved copy belongs to it (lib/unsavedCopy)
+  const baseAt = useRef("");
+  useEffect(() => { watchPerson(); }, []);
   // the customer's own carrier account (customers.ship_on, e.g. Nine18 FEDEX): its name and carrier, for the ship methods
   const [ownAcct, setOwnAcct] = useState<{ id: string; name: string; carrier: string } | null>(null);
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
@@ -262,17 +268,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setSaveState("Saved");
       // the shop has now seen the customer's sent order: from here they can only ask us to cancel it (Oct 24, Nick)
       { const x = d as Order & { submitted_at?: string | null; staff_seen_at?: string | null }; if (x.submitted_at && !x.staff_seen_at) void sb.from("orders").update({ staff_seen_at: new Date().toISOString() }).eq("id", id).is("staff_seen_at", null); }
-      // changes that never reached the server (the connection dropped, the tab closed mid-save): offer them back
-      try {
-        const raw = localStorage.getItem(`fbs:unsaved:${d.id}`);
-        const keep = raw ? (JSON.parse(raw) as { at: number; o: Order }) : null;
-        // only changes newer than the order's last save count (Oct 30, Nick: "this warning keeps popping up over and over
-        // again… even though I click save or ignore"): a copy from before a later save (this tab, another tab, another
-        // computer) is stale, not unsaved
-        const savedAt = Date.parse(String((d as Order & { updated_at?: string }).updated_at || "")) || 0;
-        if (keep?.o && keep.at > savedAt + 2000 && Date.now() - keep.at < 7 * 864e5 && JSON.stringify(keep.o.groups) + keep.o.nickname + JSON.stringify(keep.o.fees) !== JSON.stringify(d.groups) + d.nickname + JSON.stringify(d.fees)) setRecover(keep);
-        else if (raw) localStorage.removeItem(`fbs:unsaved:${d.id}`);
-      } catch { /* storage off */ }
+      // changes a person made that never reached the server (the connection dropped, the tab closed mid-save): offer
+      // them back, only while the server still has the version they were made on (lib/unsavedCopy)
+      baseAt.current = String((d as Order & { updated_at?: string }).updated_at || "");
+      { const keep = readUnsaved<Order>(d.id, baseAt.current, (k) => sameEdits(k, d)); if (keep) setRecover(keep); }
       await side;
       // mark customer messages read
       await sb.from("messages").update({ read_at: new Date().toISOString() }).eq("order_id", id).eq("author_type", "customer").is("read_at", null);
@@ -379,15 +378,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (k.changed) { d.groups = k.groups; latest.current = d; setO((x) => (x && x.id === d.id ? { ...x, groups: k.groups } : x)); }
     }
     const c = calcOrder(d, settings);
-    const { error } = await sb.from("orders").update({
+    const startedAt = Date.now();
+    const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
       price_type: d.price_type || "retail", order_type: d.order_type || null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
-    }).eq("id", d.id);
+    }).eq("id", d.id).select("updated_at").maybeSingle();
     setSaveState(error ? "Save failed: " + error.message : "Saved");
-    if (!error) try { localStorage.removeItem(`fbs:unsaved:${d.id}`); } catch { /* storage off */ }
+    if (!error) { const at = String((savedRow as { updated_at?: string } | null)?.updated_at || ""); if (at) baseAt.current = at; savedUnsaved(d.id, startedAt, at); }
   }, [sb, settings]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
@@ -415,6 +415,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.delivery_method = d.delivery_method || "pickup";
       d.price_type = d.price_type || "retail";
       setO(d); latest.current = d;
+      // the server's copy is on screen now: a person's change that didn't reach it is offered back right here
+      baseAt.current = String((d as Order & { updated_at?: string }).updated_at || "");
+      { const keep = readUnsaved<Order>(d.id, baseAt.current, (k) => sameEdits(k, d)); if (keep) setRecover(keep); }
       void loadDesigns(); void loadSide();
     };
     // coming back to this tab from another page (the production view, the Mockup Creator, Reorder Details): the order as
@@ -613,7 +616,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       latest.current = n;
       // a copy in this browser until the server has it (Oct 24, Nick: "maybe somebody loses their internet connection"):
       // offered back on the next open if it never got saved
-      try { localStorage.setItem(`fbs:unsaved:${n.id}`, JSON.stringify({ at: Date.now(), o: n })); } catch { /* storage full or off */ }
+      keepUnsaved(n, baseAt.current);
       return n;
     });
     setSaveState("Editing…");
@@ -1270,7 +1273,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="draft-bar" role="alert">
           <span><b>Unsaved changes found.</b> Changes from {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} didn&apos;t reach the server (the connection may have dropped). Bring them back?</span>
           <span className="spacer" />
-          <button type="button" className="btn ghost" onClick={() => { try { localStorage.removeItem(`fbs:unsaved:${o.id}`); } catch { /* off */ } setRecover(null); }}>Throw them away</button>
+          <button type="button" className="btn ghost" onClick={() => { dropUnsaved(o.id); setRecover(null); }}>Throw them away</button>
           <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { Object.assign(d, { ...r.o, id: d.id, number: d.number, draft: d.draft, status: d.status, type: d.type }); }); }}>Bring them back</button>
         </div>
       )}

@@ -92,7 +92,7 @@ function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
             <span className="rv-st" title={TRACK[l.track_status] || ""}> {trackWord(l.track_status)}</span>{l.est_delivery && l.track_status !== "delivered" ? <span className="faint"> · arrives {day(l.est_delivery)}</span> : null}{l.track_detail ? <span className="faint"> · {l.track_detail}</span> : null}</li>
         ))}</ul>
         {want.length > 0 && (
-          <div style={{ overflowX: "auto" }}><table className="rv-tbl">
+          <div className="fit-wrap"><table className="rv-tbl">
             <thead><tr><th>Garment</th><th>Color</th><th>Size</th><th className="r">On the order</th><th className="r">Shipped</th></tr></thead>
             <tbody>{want.map((w, i) => { const g = got(w); return (
               <tr key={i} className={g < w.qty ? "low" : ""}><td>{w.style}</td><td>{w.color}</td><td>{w.size}</td><td className="r">{w.qty}</td><td className="r">{g}{g < w.qty ? <span className="bad"> ({w.qty - g} not shipped)</span> : null}</td></tr>
