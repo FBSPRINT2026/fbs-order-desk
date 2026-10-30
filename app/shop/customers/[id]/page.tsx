@@ -264,6 +264,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
             <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} />
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+              {/* Create order training (Oct 30, Nick: "it's okay to have special training for All My Sons… one of our top 10
+                  clients"): how this customer's orders are made, read in full every time Create order reads one of theirs */}
+              <div className="field"><label htmlFor="cu-training">Create order training</label><textarea id="cu-training" rows={6} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping… Create order reads all of it for every one of their orders." value={c.order_training || ""} onChange={(e) => set("order_training", e.target.value)} /></div>
             </div>
           </form>
           <div className="stack">

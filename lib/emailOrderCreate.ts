@@ -56,7 +56,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const d = input.draft;
   const custId = (a?.customer_id as string) || input.customerId || "";
   if (!custId) return { ok: false, error: "No customer." };
-  const { data: cust } = await admin.from("customers").select("price_type, tax_exempt").eq("id", custId).maybeSingle();
+  const { data: cust } = await admin.from("customers").select("price_type, tax_exempt, ship_on").eq("id", custId).maybeSingle();
   // staff may have edited the groups in the panel: run them through the same checks as the AI's
   const groups: Group[] = (d.groups || []).slice(0, 12).map((g) => {
     const clean = proposalToGroups({ groups: [{ name: g.name, garments: g.lines.map((l) => ({ style: l.style, brand: l.brand, description: l.garment, color: l.color, sizes: l.sizes as Record<string, number> })), prints: [] }] })[0];
@@ -236,6 +236,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     ...(d.firm && d.due_date ? { firm: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
+    // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
+    // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
+    ...(d.delivery === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : {}),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
   };
   const { data: o, error } = intoId
@@ -374,4 +377,12 @@ export async function customerUsesProgram(admin: SupabaseClient, customerId: str
   if (prog.rate_card) return true;
   const { count } = await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", prog.id).eq("active", true).is("archived_at", null);
   return !!count;
+}
+
+/** "FedEx Ground · Nine18 FEDEX": the customer's own carrier account as a ship method (lib/thirdParty.ts onAccountMethod) */
+async function ownAccountMethod(id: string): Promise<string> {
+  const { carrierAccountsCached } = await import("@/lib/easypost");
+  const { onAccountMethod } = await import("@/lib/thirdParty");
+  const a = (await carrierAccountsCached().catch(() => [])).find((x) => x.id === id);
+  return onAccountMethod(`${a && /ups/i.test(a.readable || a.type) ? "UPS" : "FedEx"} Ground`, a ? a.description || `${a.readable} account` : "their account");
 }
