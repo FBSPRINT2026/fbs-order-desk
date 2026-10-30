@@ -16172,3 +16172,6 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
 .cu-strip .cu-ic span{display:inline}
 .cu-strip .cu-ic{padding:0 8px}
 @media (max-width:760px){.cu-strip .cu-ic span{display:none}}
+/* Job details in the right column: the ship-to, tracking and project fields take the full width */
+.jd-panel .grid.g2,.jd-panel .grid.jd-grid{grid-template-columns:minmax(0,1fr)}
+.jd-panel textarea{min-height:84px}
