@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import PrintavoSync from "@/components/PrintavoSync";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { PrintavoBackup, PrintavoMissedFiles } from "@/components/PrintavoKeep";
@@ -88,7 +89,7 @@ export default function ImportPage() {
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
   return (
     <>
-      <Link className="back" href="/shop/customers">← Customers</Link>
+      <BackLink href="/shop/customers" label="Customers" />
       <SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" />
       <SettingsTabs />
       <p className="faint" style={{ maxWidth: 720, marginTop: -6 }}>

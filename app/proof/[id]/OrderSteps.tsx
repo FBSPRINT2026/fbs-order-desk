@@ -14,6 +14,7 @@ import { answerProof, answerQuote, approveAll } from "./actions";
  * their name once for all of it (actions.ts approveAll). Then the confirmation, and the deposit.
  */
 const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 
 export default function OrderSteps({ id, orderId, steps }: { id: string; orderId: string; steps: StepView[] }) {
@@ -23,6 +24,8 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
   const [ok, setOk] = useState<Record<string, string>>({}); // looked over and good, with their note
   const [final, setFinal] = useState(false);
   const [doneMsg, setDoneMsg] = useState("");
+  // what they sent back from this page (changes, or the quote declined), so the right side shows it at once
+  const [back, setBack] = useState<Record<string, { kind: "changes" | "declined"; note: string }>>({});
   const step = steps.find((s) => s.key === cur) || steps[0];
   if (!step) return <div className="pfl-body"><aside className="pfl-side"><p>Nothing is waiting on you right now.</p></aside></div>;
   const idx = todo.findIndex((s) => s.key === step.key);
@@ -32,6 +35,12 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
   const showFinal = !doneMsg && (final || ((step.kind === "quote" || step.kind === "invoice") && (step.state === "todo" || step.state === "locked")));
   const pdfStep = showFinal && quote ? quote : step;
   const name0 = (s: StepView) => (s.kind === "art" ? "the proof" : s.kind === "sewout" ? "the sew-out" : s.kind === "invoice" ? "the invoice" : "the quote");
+  // the right side follows what they did on the left (Oct 29, Nick: "when you do something on the left, it needs to affect
+  // the view on the right, whether it's approved, revisions"): sent back → grayed with what they asked; approved or looked
+  // over → the approved check across it
+  const sentBack = back[pdfStep.key] || (pdfStep.state === "changes" ? { kind: /declined/i.test(pdfStep.title) ? "declined" as const : "changes" as const, note: pdfStep.comment || "" } : null);
+  const pane: "" | "ok" | "looks" | "changes" | "declined" = sentBack ? sentBack.kind : doneMsg || pdfStep.state === "done" ? "ok" : pdfStep.key in ok ? "looks" : "";
+  const what0 = pdfStep.kind === "art" ? "proof" : pdfStep.kind === "sewout" ? "sew-out" : pdfStep.kind === "invoice" ? "invoice" : "quote";
   const goNext = (note: string) => {
     setOk((o) => ({ ...o, [step.key]: note }));
     if (next) { setCur(next.key); setFinal(false); } else setFinal(true);
@@ -49,42 +58,53 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
             </li>); })}
         </ol>
         <div className="pfl-ans-wrap">
-          {doneMsg ? <div className="pfl-done ok" role="status"><b>You&apos;re all set. Thank you!</b><span>{doneMsg}</span>
-              {(() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp ? <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38, marginTop: 6 }} href={`/portal/orders/${orderId}`}>{dp.title} · {m(dp.amount || 0)}</a> : null; })()}</div>
-            : showFinal ? <Final key="final" id={id} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onDeclined={() => router.refresh()} />
+          {doneMsg ? <><Result tone="ok" title="You're all set. Thank you!" line={doneMsg} />
+              {(() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp ? <a className="btn primary pfl-ok pfl-big" style={{ marginTop: 10 }} href={`/portal/orders/${orderId}`}>{dp.title} · {m(dp.amount || 0)}</a> : null; })()}</>
+            : showFinal ? <Final key="final" id={id} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onBack={(kind, note) => { if (quote) setBack((b) => ({ ...b, [quote.key]: { kind, note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout") && step.state === "todo"
-              ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" || next.kind === "invoice" ? `review ${name0(next)}` : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={() => router.refresh()} />
+              ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" || next.kind === "invoice" ? `review ${name0(next)}` : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={(note) => { setBack((b) => ({ ...b, [step.key]: { kind: "changes", note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout")
               ? <ProofAnswer key={step.key} id={id} kind={step.kind} status={step.state === "done" ? "approved" : step.state === "changes" ? "changes" : "pending"} decidedName={step.who || ""} decidedAt={step.when || ""} comment={step.comment || ""}
                   target={step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! }} onAnswered={() => router.refresh()} />
-            : step.kind === "quote" || step.kind === "invoice" ? <div className="pfl-done ok"><b>{step.kind === "invoice" ? "Invoice approved" : "Quote approved"}. Thank you!</b><span>{step.who}{step.when ? ` · ${new Date(step.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
+            : step.kind === "quote" || step.kind === "invoice" ? (step.state === "changes"
+              ? <Result tone={/declined/i.test(step.title) ? "no" : "chg"} title={step.title} line={/declined/i.test(step.title) ? "We'll look at what you said and get back to you." : `We're making the changes and will send you a new ${step.kind === "invoice" ? "invoice" : "quote"}.`} note={step.comment} who={whoWhen(step)} />
+              : <Result tone="ok" title={step.kind === "invoice" ? "Invoice approved" : "Quote approved"} line="Thank you!" who={whoWhen(step)} />)
             : step.kind === "deposit" && (step.state === "done"
-              ? <div className="pfl-done ok"><b>{step.title}</b><span>{step.sub}</span></div>
+              ? <Result tone="ok" title={step.title} line={step.sub} />
               : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
                   <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38 }} href={`/portal/orders/${orderId}`}>{step.title}</a>
                   <div className="pfl-fine">Card or bank transfer. You&apos;ll sign in to your account with your email to pay.</div></div>)}
           {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>
       </aside>
-      <section className="pfl-pdf">
+      <section className={"pfl-pdf" + (pane ? ` is-${pane}` : "")}>
         <div className="pfl-bar"><span>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><a href={pdfStep.pdf} target="_blank" rel="noreferrer">Open the PDF</a></div>
-        <iframe key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} />
+        <div className="pfl-frame">
+          <iframe key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} aria-hidden={pane === "changes" || pane === "declined"} />
+          {(pane === "changes" || pane === "declined") && <div className="pfl-over" role="status">
+            <span className="pfl-over-i" aria-hidden>{pane === "declined" ? "×" : "✎"}</span>
+            <b>{pane === "declined" ? "Quote declined" : "Changes requested"}</b>
+            {sentBack?.note && <q>{sentBack.note}</q>}
+            <span>{pane === "declined" ? "We'll look at what you said and get back to you." : `We'll make the changes and send you a new ${what0} to look over.`}</span>
+          </div>}
+          {(pane === "ok" || pane === "looks") && <div className="pfl-stamp" aria-hidden><span>✓</span>{pane === "ok" ? "Approved" : "Looks good"}</div>}
+        </div>
       </section>
     </div>
   );
 }
 
 /** one proof or sew-out: Looks good (a note is a small change, no new proof), or Needs changes (a new one comes) */
-function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { id: string; step: StepView; note0: string; nextLabel: string; isLast: boolean; onGood: (note: string) => void; onChanges: () => void }) {
+function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { id: string; step: StepView; note0: string; nextLabel: string; isLast: boolean; onGood: (note: string) => void; onChanges: (note: string) => void }) {
   const what = step.kind === "art" ? "proof" : "sew-out";
   const [note, setNote] = useState(note0), [mode, setMode] = useState<"" | "changes">(""), [err, setErr] = useState(""), [sent, setSent] = useState(false);
   const [pending, start] = useTransition();
-  if (sent) return <div className="pfl-done chg" role="status"><b>Thanks, we&apos;ve got your changes.</b><span>We&apos;ll make them and send you a new {what} to look over.</span></div>;
+  if (sent) return <Result tone="chg" title="Changes sent" line={`We'll make them and send you a new ${what} to look over.`} note={note} />;
   const sendChanges = () => start(async () => {
     setErr("");
     const r = await answerProof(id, "changes", "", note, step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! });
     if (!r.ok) { setErr(r.error); return; }
-    setSent(true); onChanges();
+    setSent(true); onChanges(note.trim());
   });
   return (
     <div className="pfl-ans">
@@ -108,9 +128,10 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
   );
 }
 
-/** the last screen: what they looked over, their name once, and Submit final approval (or decline the quote) */
-function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onDeclined: () => void }) {
-  const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "decline">(""), [why, setWhy] = useState(""), [declined, setDeclined] = useState(false);
+/** the last screen: what they looked over, their name once, Submit approval; under it, Request changes and Decline the
+ *  quote (Oct 29, Nick: "two small buttons under submit approval… request changes… decline the quote") */
+function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onBack: (kind: "changes" | "declined", note: string) => void }) {
+  const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "changes" | "decline">(""), [why, setWhy] = useState(""), [sent, setSent] = useState<"" | "changes" | "declined">("");
   const [pending, start] = useTransition();
   const quote = todo.find((s) => s.kind === "quote" || s.kind === "invoice");
   const isInv = quote?.kind === "invoice";
@@ -119,7 +140,7 @@ function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: S
   const parts = [...(looks.some((s) => s.kind === "art") ? ["art"] : []), ...(looks.some((s) => s.kind === "sewout") ? ["sew-out"] : [])];
   const priceWord = isInv ? "invoice" : "quote";
   const label = quote ? (parts.length ? `${priceWord} and ${listOf(parts)}` : priceWord) : listOf(parts);
-  if (declined) return <div className="pfl-done chg" role="status"><b>Thanks, we&apos;ve got it.</b><span>We&apos;ll look at what you said and send you an updated quote.</span></div>;
+  if (sent) return <Result tone={sent === "declined" ? "no" : "chg"} title={sent === "declined" ? "Quote declined" : "Changes sent"} line={sent === "declined" ? "Thanks for letting us know. We'll look at what you said and get back to you." : `We'll fix the ${priceWord} and send you a new one to approve.`} note={why} />;
   const submit = () => start(async () => {
     setErr("");
     const art = looks.find((s) => s.kind === "art");
@@ -127,11 +148,12 @@ function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: S
     if (!r.ok) { setErr(r.error); return; }
     onDone(`We've got your approval for the ${label}. We'll take it from here.`);
   });
-  const decline = () => start(async () => {
+  const sendBack = (decision: "changes" | "decline") => start(async () => {
     setErr("");
-    const r = await answerQuote(id, "decline", name, why);
+    const r = await answerQuote(id, decision, name, why);
     if (!r.ok) { setErr(r.error); return; }
-    setDeclined(true); onDeclined();
+    const k = decision === "decline" ? "declined" : "changes";
+    setSent(k); onBack(k, why.trim());
   });
   if (missing) return (
     <div className="pfl-ans"><div className="pfl-q">Look over {missing.kind === "art" ? "your proof" : "your sew-out"} first, then come back to approve everything together.</div>
@@ -142,8 +164,8 @@ function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: S
       {mode === "" ? <>
         <div className="pfl-q">{quote ? `Review your ${isInv ? "final invoice" : "quote"}, then approve everything.` : "Ready to approve?"}</div>
         <ul className="pfl-sum">
-          {looks.map((s) => <li key={s.key}><span className="pfl-tick">✓</span><span><b>{s.kind === "art" ? "Proof" : "Sew-out"}</b> · {s.sub}{ok[s.key] ? <small>Your note: “{ok[s.key]}”</small> : null}</span><button type="button" className="linkbtn" onClick={() => goTo(s.key)}>View</button></li>)}
-          {quote && <li><span className="pfl-tick">✓</span><span><b>{isInv ? "Final invoice" : "Quote"}</b> · {quote.sub}</span></li>}
+          {looks.map((s) => <li key={s.key}><span className="pfl-tick">✓</span><span><b>{s.kind === "art" ? "Proof" : "Sew-out"}</b><small>{s.sub}</small>{ok[s.key] ? <small>Your note: “{ok[s.key]}”</small> : null}</span><button type="button" className="linkbtn" onClick={() => goTo(s.key)}>View</button></li>)}
+          {quote && <li><span className="pfl-tick">✓</span><span><b>{isInv ? "Final invoice" : "Quote"}</b>{quote.sub.split(" · ").map((x, i) => <small key={i}>{x}</small>)}</span></li>}
         </ul>
         <label className="pfl-lbl" htmlFor="pfl-fn">Your name</label>
         <input id="pfl-fn" type="text" autoComplete="name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -151,15 +173,28 @@ function Final({ id, todo, ok, goTo, onDone, onDeclined }: { id: string; todo: S
         {/* short on the button, what it means under it (Oct 29, Nick: "just say submit for approve, and something says below… submit final approval for invoice") */}
         <div className="pfl-sub-ok">Final approval for the {label}</div>
         <div className="pfl-fine">Typing your name approves {quote ? `the ${priceWord} and says the art is ready to make as shown` : "it as shown"}.</div>
-        {quote && !isInv && <button type="button" className="linkbtn" style={{ alignSelf: "flex-start" }} onClick={() => setMode("decline")}>Decline the quote</button>}
+        {quote && <div className="pfl-alt">
+          <button type="button" className="btn sm" onClick={() => setMode("changes")}>Request changes</button>
+          {!isInv && <button type="button" className="btn sm" onClick={() => setMode("decline")}>Decline the quote</button>}
+        </div>}
       </> : <div className="pfl-step">
-        <label className="pfl-lbl" htmlFor="pfq-why">Why are you declining?</label>
-        <textarea id="pfq-why" rows={4} autoFocus placeholder="Tell us what's not right, and we'll send an updated quote" value={why} onChange={(e) => setWhy(e.target.value)} />
+        <label className="pfl-lbl" htmlFor="pfq-why">{mode === "changes" ? `What should we change on the ${priceWord}?` : "Why are you declining?"}</label>
+        <textarea id="pfq-why" rows={4} autoFocus placeholder={mode === "changes" ? "e.g. The sizes are wrong: it should be 5 2XLs" : "Tell us what's not right"} value={why} onChange={(e) => setWhy(e.target.value)} />
         <input type="text" autoComplete="name" placeholder="Your name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
         <div className="pfl-btns"><button type="button" className="btn" onClick={() => setMode("")}>Back</button>
-          <button type="button" className="btn primary" disabled={pending || !why.trim()} onClick={decline}>{pending ? "Sending…" : "Decline quote"}</button></div>
+          <button type="button" className="btn primary" disabled={pending || !why.trim()} onClick={() => sendBack(mode === "changes" ? "changes" : "decline")}>{pending ? "Sending…" : mode === "changes" ? "Send my changes" : "Decline quote"}</button></div>
       </div>}
       {err && <div className="pv-err">{err}</div>}
+    </div>
+  );
+}
+
+/** what happened, after they answer: an icon, one line, their note (Oct 29, Nick: "don't love this little box… rethink") */
+function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; title: string; line: string; note?: string; who?: string }) {
+  return (
+    <div className={"pfl-res " + tone} role="status">
+      <span className="pfl-res-i" aria-hidden>{tone === "ok" ? "✓" : tone === "no" ? "×" : "✎"}</span>
+      <div><b>{title}</b><span>{line}</span>{note?.trim() && <q>{note.trim()}</q>}{who && <small>{who}</small>}</div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { orderSubject } from "@/lib/orderSubject";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
@@ -179,7 +180,7 @@ ${x.note ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:
 <tr><td style="padding:8px 24px 18px;text-align:center;font-size:12px;color:#6B7686">Please use the button to approve, not a reply, so it goes straight onto your order.</td></tr>
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;
-  const subject = `${x.reminder ? "Reminder: " : ""}${x.kind === "art" ? "Proof" : "Sew-out"} ready for your approval: order #${x.o.number}${x.o.nickname ? `, ${x.o.nickname}` : ""}`;
+  const subject = orderSubject(x.o.number, `${x.reminder ? "Reminder: " : ""}${x.kind === "art" ? "Proof" : "Sew-out"} ready for approval`, x.o.nickname);
   return { subject, html };
 }
 

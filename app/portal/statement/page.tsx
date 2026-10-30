@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { openInvoices } from "@/lib/statementServer";
@@ -31,7 +32,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s statement.</div>}
       <main className="p-main st">
         <div className="st-bar no-print">
-          <Link className="back" href={`/portal${qs}${qs ? "&" : "?"}area=payments`}>← Payments</Link>
+          <BackLink href={`/portal${qs}${qs ? "&" : "?"}area=payments`} label="Payments" trail={false} />
           <span className="spacer" />
           <PrintButton />
           {open.length > 0 && <Link className="btn primary" href={payHref}>Pay this statement ({money(total)})</Link>}

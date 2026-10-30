@@ -86,7 +86,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     inChunks<{ id: string; order_id: string; group_id: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; version: number; status: string; mockup_id: string | null; sent_at: string | null; decided_at: string | null; customer_comment: string; archived_at: string | null }>(ids, (p) => admin.from("proofs").select("order_id, version, status, mockup_id, sent_at, decided_at, customer_comment, archived_at").in("order_id", p).not("version", "is", null)),
     inChunks<{ id: string; order_id: string; imprint_id: string; status: string; sent_at: string | null; customer_comment: string; created_at: string }>(ids, (p) => admin.from("sewouts").select("id, order_id, imprint_id, status, sent_at, customer_comment, created_at").in("order_id", p).is("archived_at", null)),
-    inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "sent", "approved"]).order("created_at", { ascending: false })),
+    inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "quote_changes", "sent", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at", { ascending: false })),
   ]);
   // the logos on embroidered prints: where each is in digitizing comes from them (lib/digitizeStatus.ts)
   const embDesignIds = [...new Set(orders.flatMap((o) => orderGroups(o).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id)))))];
@@ -158,15 +158,18 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     // the numbers: the price and the sizes, the quote out with them, or declined
     const c = calcOrder(o, settings, []);
     const sized = gs.some((g) => g.lines.some((l) => lineQty(l) > 0));
-    const lastDecl = evs.find((e) => e.order_id === o.id && e.kind === "quote_declined");
+    const lastDecl = evs.find((e) => e.order_id === o.id && (e.kind === "quote_declined" || e.kind === "quote_changes"));
+    const invSent = evs.find((e) => e.order_id === o.id && e.kind === "invoice_sent"), invBack = evs.find((e) => e.order_id === o.id && e.kind === "invoice_changes" && (!invSent || e.created_at > invSent.created_at)), invOk = evs.find((e) => e.order_id === o.id && e.kind === "invoice_approved" && (!invSent || e.created_at > invSent.created_at));
     const lastSent = evs.find((e) => e.order_id === o.id && e.kind === "sent");
     if (o.status === "quote_sent") tracks.push({ k: "numbers", state: "sent", label: "Quote sent" });
     else if (o.status === "quote") {
-      if (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at)) tracks.push({ k: "numbers", state: "changes", label: "Quote declined", note: lastDecl.detail.replace(/^[^:]*:\s*/, "") });
+      if (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at)) tracks.push({ k: "numbers", state: "changes", label: lastDecl.kind === "quote_changes" ? "Quote: changes asked" : "Quote declined", note: lastDecl.detail.replace(/^[^:]*:\s*/, "") });
       else if (!sized) tracks.push({ k: "numbers", state: "needed", label: "No sizes yet" });
       else if (!(c.total > 0)) tracks.push({ k: "numbers", state: "needed", label: "No price yet" });
       else tracks.push({ k: "numbers", state: "made", label: "Quote ready" });
-    } else tracks.push({ k: "numbers", state: "done", label: "Order approved" });
+    } else if (invSent && invBack && !invOk) tracks.push({ k: "numbers", state: "changes", label: "Invoice: changes asked", note: invBack.detail.replace(/^[^:]*:\s*/, "") });
+    else if (invSent && !invOk) tracks.push({ k: "numbers", state: "sent", label: "Final invoice sent" });
+    else tracks.push({ k: "numbers", state: "done", label: "Order approved" });
 
     const steps: Step[] = [];
     // In the works: mockups without numbers, numbers without mockups; a job missing both is at both
@@ -205,7 +208,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
 
 /** One job's timeline: what was sent, opened, answered, from the order's history and its proofs. */
 export async function jobTimeline(admin: SupabaseClient, orderId: string) {
-  const KINDS = ["created", "request_submitted", "accepted", "sent", "approved", "quote_declined", "proofs_requested", "proof_reminder", "proof_approved", "proof_changes", "art_approved", "sewout_saved", "sewout_sent", "sewout_reminder", "sewout_approved", "sewout_changes", "job_declined", "job_reopened", "invoice_sent", "invoice_approved"];
+  const KINDS = ["created", "request_submitted", "accepted", "sent", "approved", "quote_declined", "proofs_requested", "proof_reminder", "proof_approved", "proof_changes", "art_approved", "sewout_saved", "sewout_sent", "sewout_reminder", "sewout_approved", "sewout_changes", "job_declined", "job_reopened", "invoice_sent", "invoice_approved", "invoice_changes", "quote_changes"];
   const [{ data: ev }, { data: pf }, { data: sw }] = await Promise.all([
     admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", KINDS).order("created_at").limit(200),
     admin.from("proofs").select("version, viewed_at, view_count").eq("order_id", orderId).not("viewed_at", "is", null).order("version"),
@@ -214,7 +217,7 @@ export async function jobTimeline(admin: SupabaseClient, orderId: string) {
   const WORD: Record<string, string> = {
     created: "Order made", request_submitted: "Request came in", accepted: "Request accepted", sent: "Quote sent", approved: "Quote approved", quote_declined: "Quote declined",
     proofs_requested: "Mockup sent", proof_reminder: "Reminder sent", proof_approved: "Mockup approved", proof_changes: "Mockup: changes asked", art_approved: "Art approved",
-    sewout_saved: "Sew-out photo taken", sewout_sent: "Sew-out sent", sewout_reminder: "Sew-out reminder sent", sewout_approved: "Sew-out approved", sewout_changes: "Sew-out: changes asked", job_declined: "Marked declined", job_reopened: "Back on (not declined)", invoice_sent: "Final invoice sent", invoice_approved: "Final invoice approved",
+    sewout_saved: "Sew-out photo taken", sewout_sent: "Sew-out sent", sewout_reminder: "Sew-out reminder sent", sewout_approved: "Sew-out approved", sewout_changes: "Sew-out: changes asked", job_declined: "Marked declined", job_reopened: "Back on (not declined)", invoice_sent: "Final invoice sent", invoice_approved: "Final invoice approved", invoice_changes: "Invoice: changes asked", quote_changes: "Quote: changes asked",
   };
   const rows = ((ev || []) as { kind: string; detail: string; actor: string; created_at: string }[])
     .map((e) => ({ at: e.created_at, what: WORD[e.kind] || e.kind, detail: e.kind === "sent" ? (e.detail === "link copied" ? "link copied" : `to ${e.detail}`) : e.detail, who: e.actor, tone: /approved/.test(e.kind) ? "ok" : /changes|declined/.test(e.kind) ? "bad" : "" }));
@@ -250,7 +253,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     admin.from("proofs").select("version, status, file_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, archived_at, mockup_id, created_at").eq("order_id", orderId).not("version", "is", null).order("created_at"),
     admin.from("mockups").select("id, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("sewouts").select("id, imprint_id, version, status, photo_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, created_at").eq("order_id", orderId).is("archived_at", null).order("version", { ascending: false }),
-    admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "approved"]).order("created_at"),
+    admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "quote_changes", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at"),
     admin.from("messages").select("author_type, author_name, author_email, body, created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(8),
     admin.from("proof_links").select("id").eq("order_id", orderId).eq("kind", "order").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
@@ -302,17 +305,18 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   // the quote
   const c = calcOrder(o, settings, []);
   const sized = gs.some((g) => g.lines.some((l) => lineQty(l) > 0));
-  const lastSent = [...evs].reverse().find((e) => e.kind === "sent"), lastDecl = [...evs].reverse().find((e) => e.kind === "quote_declined");
-  const qState: PieceState = o.status === "quote_sent" ? "sent" : o.status === "quote" ? (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at) ? "changes" : !sized || !(c.total > 0) ? "needed" : "made") : "done";
-  pieces.push({ k: "quote", state: qState, total: c.total, qty: o.qty || 0, sentAt: lastSent?.created_at || o.sent_at || null, decidedAt: qState === "changes" ? lastDecl!.created_at : o.approved_at, decidedName: qState === "changes" ? lastDecl!.detail.split(":")[0] : o.approved_name,
-    comment: qState === "changes" ? lastDecl!.detail.replace(/^[^:]*:\s*/, "") : "", pdf: `/print/${orderId}` });
+  const lastSent = [...evs].reverse().find((e) => e.kind === "sent"), lastDecl = [...evs].reverse().find((e) => e.kind === "quote_declined" || e.kind === "quote_changes");
+  const invSent = [...evs].reverse().find((e) => e.kind === "invoice_sent"), invBack = invSent && [...evs].reverse().find((e) => e.kind === "invoice_changes" && e.created_at > invSent.created_at), invOk = invSent && [...evs].reverse().find((e) => e.kind === "invoice_approved" && e.created_at > invSent.created_at);
+  const qState: PieceState = o.status === "quote_sent" ? "sent" : o.status === "quote" ? (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at) ? "changes" : !sized || !(c.total > 0) ? "needed" : "made") : invBack && !invOk ? "changes" : invSent && !invOk ? "sent" : "done";
+  pieces.push({ k: "quote", state: qState, total: c.total, qty: o.qty || 0, sentAt: lastSent?.created_at || o.sent_at || null, decidedAt: qState === "changes" ? (invBack || lastDecl)!.created_at : o.approved_at, decidedName: qState === "changes" ? (invBack || lastDecl)!.detail.split(":")[0] : o.approved_name,
+    comment: qState === "changes" ? (invBack || lastDecl)!.detail.replace(/^[^:]*:\s*/, "") : "", pdf: `/print/${orderId}` });
 
   // what the customer said last: a proof or sew-out answer, a declined quote, or a message
   const words: { who: string; at: string; text: string; on: string }[] = [
     ...vs.filter((v) => v.comment && v.decidedAt).map((v) => ({ who: v.decidedName || "The customer", at: v.decidedAt!, text: v.comment, on: `${v.state === "changes" ? "Changes asked" : "Approved with a change"} on mockup v${v.v}` })),
     ...pieces.filter((p): p is Extract<JobPiece, { k: "sewout" }> => p.k === "sewout" && !!p.comment && !!p.decidedAt).map((p) => ({ who: p.decidedName || "The customer", at: p.decidedAt!, text: p.comment, on: `On the sew-out, ${p.where}` })),
-    ...evs.filter((e) => e.kind === "quote_declined").map((e) => ({ who: e.detail.split(":")[0], at: e.created_at, text: e.detail.replace(/^[^:]*:\s*/, ""), on: "Declined the quote" })),
-    ...((ms || []) as { author_type: string; author_name: string; body: string; created_at: string }[]).filter((m) => m.author_type === "customer" && !/^Declined the quote:/.test(m.body)).map((m) => ({ who: m.author_name || "The customer", at: m.created_at, text: m.body, on: "Message" })),
+    ...evs.filter((e) => e.kind === "quote_declined" || e.kind === "quote_changes" || e.kind === "invoice_changes").map((e) => ({ who: e.detail.split(":")[0], at: e.created_at, text: e.detail.replace(/^[^:]*:\s*/, ""), on: e.kind === "quote_declined" ? "Declined the quote" : e.kind === "quote_changes" ? "Changes to the quote" : "Changes to the final invoice" })),
+    ...((ms || []) as { author_type: string; author_name: string; body: string; created_at: string }[]).filter((m) => m.author_type === "customer" && !/^(Declined the quote|Changes to the quote|Changes to the final invoice):/.test(m.body)).map((m) => ({ who: m.author_name || "The customer", at: m.created_at, text: m.body, on: "Message" })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const said0 = words[0];
   const sentAfter = said0 ? evs.find((e) => e.created_at > said0.at && (e.kind === "proofs_requested" || e.kind === "sewout_sent" || e.kind === "sent")) : undefined;

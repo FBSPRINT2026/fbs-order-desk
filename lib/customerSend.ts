@@ -1,4 +1,5 @@
 import "server-only";
+import { orderSubject } from "@/lib/orderSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
@@ -75,26 +76,26 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
 async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string) {
   const sh = settings.shop;
   const groups = orderGroups(o);
-  const blocks: { k: string; title: string; sub: string; pic?: string }[] = [];
+  const blocks: { k: string; title: string; /** each its own line (Oct 29, Nick: "no cutoffs… everything should be its own kind of line") */ sub: string[]; pic?: string }[] = [];
   if (pick.proof) {
     const { data: mk } = await admin.from("mockups").select("file_path").eq("order_id", o.id).is("archived_at", null).order("created_at").limit(1).maybeSingle();
     const { data: su } = mk ? await admin.storage.from("proofs").createSignedUrl(String(mk.file_path).replace(/\.png$/, "-thumb.png"), 60 * 60 * 24 * 30) : { data: null };
     const prints = [...new Set(groups.flatMap((g) => (g.imprints || []).map((d) => d.location).filter(Boolean)))].join(", ");
-    blocks.push({ k: "proof", title: "Approve your proof", sub: prints, pic: su?.signedUrl || undefined });
+    blocks.push({ k: "proof", title: "Approve your proof", sub: [prints], pic: su?.signedUrl || undefined });
   }
   for (const id of pick.sewouts || []) {
     const { data: sw } = await admin.from("sewouts").select("imprint_id, version, photo_path").eq("id", id).maybeSingle();
     if (!sw) continue;
     const { data: su } = await admin.storage.from("proofs").createSignedUrl(sw.photo_path, 60 * 60 * 24 * 30);
     let where = ""; for (const g of groups) for (const im of g.imprints || []) if (im.id === sw.imprint_id) where = `${im.location}${im.size ? `, ${im.size}` : ""}`;
-    blocks.push({ k: "sewout", title: "Approve your sew-out", sub: `A photo of your logo stitched on our machine${where ? ` · ${where}` : ""}`, pic: su?.signedUrl || undefined });
+    blocks.push({ k: "sewout", title: "Approve your sew-out", sub: ["A photo of your logo stitched on our machine", where], pic: su?.signedUrl || undefined });
   }
   if (pick.quote) {
     const c = calcOrder(o, settings, []);
     const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
     // under the title, what's due when they approve, by their terms (Oct 29, Nick: "nothing due, due on receipt, half due today…")
-    if (["quote", "request", "quote_sent"].includes(o.status)) blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: upFront(customer?.payment_terms, c.total, settings.depositPct).line });
-    else blocks.push({ k: "quote", title: `Review your final invoice · ${m(c.total)}`, sub: `${(pick.sewouts || []).length ? "With the stitch count from your sew-out · " : ""}${invoiceTerms(customer?.payment_terms, c, settings.depositPct)}` });
+    if (["quote", "request", "quote_sent"].includes(o.status)) blocks.push({ k: "quote", title: `Approve your quote · ${m(c.total)}`, sub: upFront(customer?.payment_terms, c.total, settings.depositPct).line.split(" · ") });
+    else blocks.push({ k: "quote", title: `Review your final invoice · ${m(c.total)}`, sub: [(pick.sewouts || []).length ? "With the stitch count from your sew-out" : "", invoiceTerms(customer?.payment_terms, c, settings.depositPct)] });
   }
   const esc = (t: string) => (t || "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
   const has = (k: string) => blocks.some((b) => b.k === k);
@@ -106,14 +107,17 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const first = ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
   const many = blocks.length > 1;
   const logo = sh.logoUrl ? (/^https?:/.test(sh.logoUrl) ? sh.logoUrl : `${siteUrl()}${sh.logoUrl.startsWith("/") ? "" : "/"}${sh.logoUrl}`) : `${siteUrl()}/brand/fbs-logo.png`;
-  const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr>${b.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><img src="${b.pic}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px" /></td>` : `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><div style="width:56px;height:56px;border-radius:6px;background:#F6F7F9;border:1px solid #E6EAF0;box-sizing:border-box;padding:9px 11px"><div style="height:4px;width:100%;background:#0E9BD8;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:100%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:70%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:85%;background:#C9D0DA;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:45%;background:#141D2B;border-radius:2px;margin-bottom:0px;font-size:0;line-height:0">&nbsp;</div></div></td>`}<td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div><div style="font-size:13px;color:#6B7686">${esc(b.sub)}</div></td></tr></table></td></tr>`).join("");
-  const intro = many ? `here's everything for <b>${esc(job)}</b> (order #${o.number}). You can approve it all${has("quote") && payNow && !inv ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `here's the ${price} for <b>${esc(job)}</b> (order #${o.number}). You can approve it${payNow && !inv ? ` and ${payNow}` : ""} online.` : `here's the ${has("sewout") ? "sew-out" : "proof"} for <b>${esc(job)}</b> (order #${o.number}). Please look it over and approve it, or tell us what to change.`;
+  const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr>${b.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><img src="${b.pic}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px" /></td>` : `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><div style="width:56px;height:56px;border-radius:6px;background:#F6F7F9;border:1px solid #E6EAF0;box-sizing:border-box;padding:9px 11px"><div style="height:4px;width:100%;background:#0E9BD8;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:100%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:70%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:85%;background:#C9D0DA;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:45%;background:#141D2B;border-radius:2px;margin-bottom:0px;font-size:0;line-height:0">&nbsp;</div></div></td>`}<td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div>${b.sub.filter(Boolean).map((x) => `<div style="font-size:13px;color:#6B7686">${esc(x)}</div>`).join("")}</td></tr></table></td></tr>`).join("");
+  // the greeting, what's ready, the order, what to do: each its own line
+  const lead = many ? "Everything for your order is ready." : has("quote") ? `Your ${price} is ready.` : `Your ${has("sewout") ? "sew-out" : "proof"} is ready.`;
+  const ending = many ? `You can approve it all${has("quote") && payNow && !inv ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `You can approve it${payNow && !inv ? ` and ${payNow}` : ""} online.` : "Look it over and approve it, or tell us what to change.";
+  const intro = `<div>${esc(lead)}</div><div style="margin-top:12px;padding:10px 12px;background:#F6F7F9;border-radius:8px"><div style="font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:13px;color:#6B7686">Order #${o.number}</div></div><div style="margin-top:12px">${esc(ending)}</div>`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
 <tr><td style="padding:18px 24px;border-bottom:1px solid #EEF1F5"><img src="${logo}" alt="${esc(sh.name)}" height="34" style="display:block;height:34px" /></td></tr>
 <tr><td style="padding:22px 24px 4px;color:#141D2B"><div style="font-size:20px;font-weight:700;margin:0 0 10px">${esc(head)}</div>
-<div style="font-size:15px;line-height:1.5;color:#3C475A">Hi ${esc(first)}, ${intro}</div>
+<div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)},</div>${intro}</div>
 ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:10px;white-space:pre-line">${esc(pick.note.trim())}</div>` : ""}</td></tr>
 <tr><td style="padding:10px 24px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
 <tr><td style="padding:10px 24px 6px;text-align:center"><a href="${url}" style="display:inline-block;background:#0E9BD8;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:6px;font-weight:700;font-size:15px">Review and approve</a></td></tr>
@@ -121,7 +125,7 @@ ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;
   const what = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "Sew-out" : "Proof"} and ${inv ? "invoice" : "quote"}` : has("quote") ? (inv ? "Invoice" : "Quote") : has("sewout") && !has("proof") ? "Sew-out" : "Proof";
-  return { subject: `${what} ready for your approval: order #${o.number}${o.nickname ? `, ${o.nickname}` : ""}`, html };
+  return { subject: orderSubject(o.number, `${what} ready for approval`, o.nickname), html };
 }
 
 /** the preview: the email as it would go, before anything is made */
@@ -182,28 +186,47 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   return { ok: true as const, url, emailed, done };
 }
 
-/** The customer's answer on the quote, from their order page: approved (signed) or declined with why. */
-export async function decideQuote(admin: SupabaseClient, orderId: string, decision: "approve" | "decline", name: string, reason: string, actor: string, /** the caller sends one shop email for everything */ quiet = false) {
+/**
+ * The customer's answer on the price, from their order page (Oct 29, Nick: "two small buttons under submit approval, one
+ * that should say request changes and one that should say decline the quote… you got the sizes wrong"):
+ *  approve  · the quote signed (the order's approved)
+ *  changes  · the quote, or the final invoice, back to us with what to change (Revisions in the Job Center)
+ *  decline  · they don't want it: back to us as a quote, marked declined with why (Declined in the Job Center)
+ */
+export async function decideQuote(admin: SupabaseClient, orderId: string, decision: "approve" | "changes" | "decline", name: string, reason: string, actor: string, /** the caller sends one shop email for everything */ quiet = false) {
   const { o, settings } = await load(admin, orderId);
-  if (o.status !== "quote_sent") return { ok: false as const, error: "This quote was already answered or changed. Refresh the page." };
   const who = name.trim().slice(0, 120), why = reason.trim().slice(0, 2000);
   const now = new Date().toISOString();
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const shop = (subject: string, head: string, body: string) => SHOP_NOTIFY_EMAIL && !quiet ? sendEmail({ to: SHOP_NOTIFY_EMAIL, subject, html: emailLayout(settings.shop.name, head, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) }) : Promise.resolve(false);
+  // changes on the final invoice (the order's already approved): it stays approved, the shop fixes the invoice
+  if (decision === "changes" && o.status !== "quote_sent") {
+    if (["quote", "request", "completed", "void"].includes(o.status)) return { ok: false as const, error: "This was already answered or changed. Refresh the page." };
+    if (!why) return { ok: false as const, error: "Tell us what to change." };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "invoice_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor });
+    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `Changes to the final invoice: ${why}` });
+    await shop(`#${o.number} Invoice: changes asked`, `${who || "The customer"} asked for changes to the final invoice on #${o.number}`, why);
+    return { ok: true as const };
+  }
+  if (o.status !== "quote_sent") return { ok: false as const, error: "This quote was already answered or changed. Refresh the page." };
   if (decision === "approve") {
     if (who.length < 2) return { ok: false as const, error: "Type your full name to approve." };
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: who }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false as const, error: error.message };
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
-    if (SHOP_NOTIFY_EMAIL && !quiet) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Quote #${o.number} approved`, html: emailLayout(settings.shop.name, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`, "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
+    await shop(`Quote #${o.number} approved`, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
     return { ok: true as const };
   }
-  // declined: back to us as a quote to fix, with their reason (Oct 29, Nick: "approve or decline and give the reason for
-  // the decline, and then it'll send this back to us")
-  if (!why) return { ok: false as const, error: "Tell us why, so we can fix it." };
-  await admin.from("orders").update({ status: "quote" }).eq("id", orderId).eq("status", "quote_sent");
-  await admin.from("order_events").insert([{ order_id: orderId, kind: "quote_declined", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor }, { order_id: orderId, kind: "status", detail: "quote", actor }]);
-  await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `Declined the quote: ${why}` });
-  if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Quote #${o.number} declined`, html: emailLayout(settings.shop.name, `${who || "The customer"} declined quote #${o.number}`, `Why: ${why}`, "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
+  if (!why) return { ok: false as const, error: decision === "changes" ? "Tell us what to change." : "Tell us why, so we can fix it." };
+  // either way the quote comes back to us to work on; a decline also marks the job declined
+  await admin.from("orders").update(decision === "decline" ? { status: "quote", declined_at: now, declined_reason: why.slice(0, 500) } : { status: "quote" }).eq("id", orderId).eq("status", "quote_sent");
+  await admin.from("order_events").insert([
+    { order_id: orderId, kind: decision === "decline" ? "quote_declined" : "quote_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor },
+    { order_id: orderId, kind: "status", detail: "quote", actor },
+    ...(decision === "decline" ? [{ order_id: orderId, kind: "job_declined", detail: `By the customer: ${why.slice(0, 300)}`, actor }] : []),
+  ]);
+  await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `${decision === "decline" ? "Declined the quote" : "Changes to the quote"}: ${why}` });
+  await shop(`Quote #${o.number} ${decision === "decline" ? "declined" : "changes asked"}`, `${who || "The customer"} ${decision === "decline" ? "declined" : "asked for changes to"} quote #${o.number}`, `${decision === "decline" ? "Why" : "What to change"}: ${why}`);
   return { ok: true as const };
 }
 
@@ -241,6 +264,14 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   const c = calcOrder(o, settings, pays);
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
   const quoted = o.status === "quote_sent", approved = !["quote", "request", "quote_sent"].includes(o.status);
+  // the quote sent back (changes asked, or declined): the customer's page says so rather than dropping the step
+  const { data: qev } = await admin.from("order_events").select("kind, detail, created_at").eq("order_id", o.id).in("kind", ["sent", "quote_changes", "quote_declined", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at");
+  const qevs = (qev || []) as { kind: string; detail: string; created_at: string }[];
+  const qSent = [...qevs].reverse().find((e) => e.kind === "sent");
+  const qBack = [...qevs].reverse().find((e) => (e.kind === "quote_changes" || e.kind === "quote_declined") && (!qSent || e.created_at > qSent.created_at));
+  if (o.status === "quote" && qSent && qBack) {
+    steps.push({ key: "quote", kind: "quote", title: qBack.kind === "quote_declined" ? "Quote declined" : "Quote: changes requested", sub: money(c.total), state: "changes", pdf: `${base}?${q}`, who: qBack.detail.split(":")[0], when: qBack.created_at, comment: qBack.detail.replace(/^[^:]*:\s*/, "") });
+  }
   if (quoted || (approved && raw.approved_at)) {
     const up = upFront(customer?.payment_terms, c.total, settings.depositPct);
     steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total });
@@ -252,7 +283,8 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
     const lastSent = [...evs].reverse().find((e) => e.kind === "invoice_sent");
     if (lastSent) {
       const ok = [...evs].reverse().find((e) => e.kind === "invoice_approved" && e.created_at > lastSent.created_at);
-      steps.push({ key: "invoice", kind: "invoice", title: ok ? "Invoice approved" : "Review your final invoice", sub: `${money(c.total)} · ${invoiceTerms(customer?.payment_terms, c, settings.depositPct)}`, state: ok ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: ok ? ok.detail.replace(/^Signed "(.*)".*$/, "$1") : "", when: ok?.created_at || "", amount: c.total });
+      const back = [...qevs].reverse().find((e) => e.kind === "invoice_changes" && e.created_at > lastSent.created_at);
+      steps.push({ key: "invoice", kind: "invoice", title: ok ? "Invoice approved" : back ? "Invoice: changes requested" : "Review your final invoice", sub: `${money(c.total)} · ${invoiceTerms(customer?.payment_terms, c, settings.depositPct)}`, state: ok ? "done" : back ? "changes" : proofOpen ? "locked" : "todo", comment: back ? back.detail.replace(/^[^:]*:\s*/, "") : undefined, pdf: `${base}?${q}`, who: ok ? ok.detail.replace(/^Signed "(.*)".*$/, "$1") : "", when: ok?.created_at || "", amount: c.total });
     }
   }
   // the payment up front, only when their terms ask for one (lib/payTerms.ts): none on receipt or net 30

@@ -14,47 +14,47 @@ export type TemplateVars = {
 export const TEMPLATES: Record<TemplateKey, { label: string; subject: string; body: string }> = {
   quote_followup: {
     label: "Quote follow-up",
-    subject: "Checking in on quote #{number}",
+    subject: "#{number} Checking in on your quote",
     body: "Hi {first},\n\nJust checking in on quote #{number} for {job} ({total}). Any questions, or anything you'd like changed? When it looks right, you can approve it in your portal and we'll get started.\n\nThanks!",
   },
   quote_followup_soon: {
     label: "Quote follow-up (date coming up)",
-    subject: "Quote #{number}: approve by soon to make {due}",
+    subject: "#{number} Approve soon to make {due}",
     body: "Hi {first},\n\nQuick heads-up on quote #{number} for {job}. To have everything in hand by {due}, we need your approval in the next day or two so we can order garments and set up screens. You can approve it in your portal, or let us know what to change.\n\nThanks!",
   },
   proof_ready: {
     label: "Proof is ready",
-    subject: "Your artwork proof for #{number} is ready",
+    subject: "#{number} Artwork proof ready",
     body: "Hi {first},\n\nYour proof for {job} is ready in your portal. Please check spelling, colors, size and placement, then approve it or tell us what to change. We start printing as soon as it's approved.\n\nThanks!",
   },
   proof_followup: {
     label: "Proof reminder",
-    subject: "Waiting on your proof approval for #{number}",
+    subject: "#{number} Waiting on your proof approval",
     body: "Hi {first},\n\nYour artwork proof for {job} has been waiting {days} days. We can't start printing until it's approved, so please take a quick look in your portal when you get a minute.{dueLine}\n\nThanks!",
   },
   payment_reminder: {
     label: "Payment reminder",
-    subject: "Balance due on order #{number}",
+    subject: "#{number} Balance due",
     body: "Hi {first},\n\nA friendly reminder that order #{number} ({job}) has a balance of {balance}{dueText}. You can pay it online in your portal.\n\nThank you!",
   },
   deposit_request: {
     label: "Deposit to start",
-    subject: "Deposit for order #{number}",
+    subject: "#{number} Deposit to start",
     body: "Hi {first},\n\nThanks for approving order #{number}! To get it into production we just need the deposit. You can pay it online in your portal.\n\nThanks!",
   },
   ready_pickup: {
     label: "Ready for pickup",
-    subject: "Order #{number} is ready!",
+    subject: "#{number} Your order is ready",
     body: "Hi {first},\n\nGood news: {job} (#{number}) is ready for pickup.{balanceLine} Let us know when you're coming by.\n\nThanks!",
   },
   shipped: {
     label: "Shipped",
-    subject: "Order #{number} has shipped",
+    subject: "#{number} Shipped",
     body: "Hi {first},\n\n{job} (#{number}) is on its way. Tracking: {tracking}\n\nThanks for your order!",
   },
   request_received: {
     label: "Got your request",
-    subject: "We got your order request #{number}",
+    subject: "#{number} We got your order request",
     body: "Hi {first},\n\nThanks for sending in {job}! We're checking the garments and artwork now and will send it back priced for your OK shortly.\n\nThanks!",
   },
   reorder_checkin: {

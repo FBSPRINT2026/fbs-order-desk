@@ -13,7 +13,7 @@ export async function answerProof(id: string, decision: LinkDecision, name: stri
 }
 
 /** Approve the quote (signed) or decline it with why, on the order page. */
-export async function answerQuote(id: string, decision: "approve" | "decline", name: string, reason: string) {
+export async function answerQuote(id: string, decision: "approve" | "changes" | "decline", name: string, reason: string) {
   try {
     const admin = createAdminClient();
     const link = await openLink(admin, id);

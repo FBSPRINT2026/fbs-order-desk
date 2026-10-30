@@ -8171,7 +8171,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mk-tile svg{color:var(--accent);flex:none}
 .mk-tile:hover{border-color:var(--accent);background:var(--accent-soft)}
 .mk-tile:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-@media (max-width:760px){ .mk-tiles{flex:1;min-width:200px} }
+@media (max-width:760px){ .mk-tiles{flex:1 1 0;min-width:0} .mk-tile{min-width:0;overflow-wrap:anywhere} }
 @media (max-width:1100px){ .imp-wrap{grid-template-columns:140px minmax(0,1fr);gap:12px} }
 @media (max-width:760px){ .imp-wrap{grid-template-columns:1fr} .imp-mock{flex-direction:row;flex-wrap:wrap;align-items:center} .mk-big{width:140px} .mk-none{height:90px;flex:1} }
 /* wholesale garment rows: the settings page's own ".ws" (a stacked column, 18px apart) was also landing on a group's
@@ -16054,3 +16054,223 @@ table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .jc-list .toolbar .jc-search{margin-left:auto}
 .pfl-sub-ok{font-size:13px;font-weight:700;color:var(--ink);text-align:center;margin-top:-2px}
 .pfl-big.btn{text-transform:none}
+/* the customer's order page: the right side follows what they did (sent back → grayed with what they asked; approved →
+   the check across it), and one calm result after each answer (Oct 29, Nick) */
+.pfl-frame{position:relative;flex:1;display:flex;min-height:0}
+.pfl-frame iframe{flex:1}
+.pfl-pdf.is-changes iframe,.pfl-pdf.is-declined iframe{filter:grayscale(1);opacity:.22;pointer-events:none}
+.pfl-over{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;color:#fff}
+.pfl-over-i{width:58px;height:58px;border-radius:50%;background:var(--warn);color:#fff;font-size:26px;font-weight:800;display:grid;place-items:center}
+.pfl-pdf.is-declined .pfl-over-i{background:var(--ink-3)}
+.pfl-over b{font-family:var(--display);font-size:24px}
+.pfl-over q{max-width:440px;font-size:15px;line-height:1.45;background:rgba(255,255,255,.14);border-radius:8px;padding:8px 14px}
+.pfl-over span{font-size:14px;opacity:.9;max-width:440px}
+.pfl-pdf.is-ok .pfl-bar,.pfl-pdf.is-looks .pfl-bar{background:var(--ok)}
+.pfl-pdf.is-changes .pfl-bar{background:var(--warn)}
+.pfl-pdf.is-ok .pfl-frame,.pfl-pdf.is-looks .pfl-frame{box-shadow:inset 0 0 0 4px var(--ok)}
+.pfl-stamp{position:absolute;top:24px;right:30px;transform:rotate(-7deg);border:4px solid var(--ok);color:var(--ok);background:rgba(255,255,255,.94);border-radius:10px;padding:6px 18px 6px 12px;font-weight:800;font-size:22px;letter-spacing:.08em;text-transform:uppercase;display:flex;gap:8px;align-items:center;pointer-events:none}
+.pfl-stamp span{width:30px;height:30px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:18px;letter-spacing:0}
+.pfl-res{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;align-items:start;padding:2px 0}
+.pfl-res-i{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;background:var(--ok)}
+.pfl-res.chg .pfl-res-i{background:var(--warn)}
+.pfl-res.no .pfl-res-i{background:var(--ink-3)}
+.pfl-res b{display:block;font-family:var(--display);font-size:16px;color:var(--ink);line-height:1.3}
+.pfl-res span{display:block;font-size:13.5px;line-height:1.45;color:var(--ink);margin-top:2px}
+.pfl-res q{display:block;margin-top:8px;font-size:13.5px;line-height:1.45;color:var(--ink);border-left:3px solid var(--line);padding-left:10px}
+.pfl-res small{display:block;margin-top:6px;font-size:12px;color:var(--ink-3)}
+.pfl-done{background:none!important;color:var(--ink)!important;padding:2px 0 2px 50px!important;position:relative;min-height:38px}
+.pfl-done::before{content:"✓";position:absolute;left:0;top:0;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;background:var(--ok)}
+.pfl-done.chg::before{content:"✎";background:var(--warn)}
+.pfl-done b{font-family:var(--display);font-size:16px;color:var(--ink)}
+.pfl-alt{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+.pfl-alt .btn{text-transform:none}
+.pfl-sum li small{display:block;font-size:12.5px;color:var(--ink-3)}
+
+/* Order page: Customer and Job details as quiet lines (Oct 29, Nick: "a lot of boxes for not so much information") */
+.cu{display:flex;flex-direction:column;gap:6px}
+.cu-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.cu-who{min-width:0}
+.cu-co{font-family:var(--display);font-size:17px;font-weight:700;color:var(--ink);line-height:1.25;display:flex;align-items:center;gap:6px}
+.cu-pen{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;color:var(--ink-3);flex:none}
+.cu-pen:hover{background:var(--surface-2);color:var(--accent)}
+.cu-sym{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
+.cu-ic{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;line-height:18px;padding:0 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);white-space:nowrap}
+.cu-more{font-size:13px;color:var(--ink);margin-top:2px}
+.cu-more summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600;list-style:none}
+.cu-more summary::-webkit-details-marker{display:none}
+.cu-more summary::before{content:"▸ ";}
+.cu-more[open] summary::before{content:"▾ "}
+.cu-more[open]{display:flex;flex-direction:column;gap:4px}
+.cu-price{margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.jl{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 12px;align-items:center}
+.jl-k{font-size:12.5px;color:var(--ink-3);font-weight:400;text-transform:none;letter-spacing:0;margin:0}
+.jl-v{display:flex;align-items:center;gap:8px;min-width:0;border-bottom:1px dashed var(--line);min-height:36px}
+.jl-in{border:1px solid transparent!important;background:transparent!important;height:34px;padding:0 6px;margin-left:-6px;font-size:14px;color:var(--ink);border-radius:6px;min-width:0;flex:1 1 auto;box-shadow:none!important}
+.jl-in:hover{background:var(--surface-2)!important}
+.jl-in:focus{border-color:var(--accent)!important;background:var(--surface)!important;outline:none}
+select.jl-in{flex:0 1 auto;cursor:pointer}
+.jl-in::placeholder{color:var(--ink-3)}
+.jl-date{flex:0 1 160px}
+.jl-time{flex:0 1 120px}
+.jl-tg{display:inline-flex;gap:4px;margin-left:auto;flex:none}
+.jl-t{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-3);line-height:18px}
+.jl-t:hover{border-color:var(--accent);color:var(--accent)}
+.jl-t:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.jl-t.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.jl-t.firm.on{background:color-mix(in srgb,var(--warn) 14%,transparent);border-color:var(--warn);color:var(--warn)}
+.jl-t.rush.on{background:color-mix(in srgb,var(--danger) 12%,transparent);border-color:var(--danger);color:var(--danger)}
+.jd-type{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2,var(--ink-3));white-space:nowrap}
+.jd-type.on,.jd-type:hover{border-color:var(--accent);color:var(--accent)}
+.jd-type:focus-visible{outline:2px solid var(--accent)}
+@media (max-width:1280px){.cu-ic span{display:none}.cu-ic{padding:2px 5px}}
+@media (max-width:560px){.jl{grid-template-columns:86px minmax(0,1fr)}.jl-v{flex-wrap:wrap}.jl-tg{margin-left:0}}
+/* Totals: discount and tax in line (Oct 29, Nick) */
+.totals .tt-row{gap:8px;align-items:center}
+.tt-seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tt-seg button{all:unset;cursor:pointer;font-size:12px;font-weight:700;width:22px;height:20px;display:grid;place-items:center;color:var(--ink-3)}
+.tt-seg button.on{background:var(--accent-soft);color:var(--accent)}
+.tt-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tt-in{width:64px;height:26px;border:1px solid transparent!important;background:transparent!important;border-radius:6px;padding:0 6px!important;font-size:14px;box-shadow:none!important}
+.tt-in:hover{background:var(--surface-2)!important}
+.tt-in:focus{border-color:var(--accent)!important;background:var(--surface)!important;outline:none}
+.tt-ex{all:unset;cursor:pointer;font-size:11.5px;font-weight:600;padding:1px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-3);line-height:18px}
+.tt-ex:hover{border-color:var(--accent);color:var(--accent)}
+.tt-ex.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tt-ex:focus-visible{outline:2px solid var(--accent)}
+/* "+ Add group description" only when you point at the group's line (Oct 29, Nick) */
+html body .ord .line-h .grp-desc-in:placeholder-shown::placeholder{color:transparent}
+html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html body .ord .line-h .grp-desc-in:focus::placeholder{color:var(--accent)}
+/* In hands: the date on top, Time / Firm / Rush under it (Oct 29, Nick: "not look compressed") */
+.jl-v.jl-stack{flex-direction:column;align-items:flex-start;gap:4px;padding:3px 0 6px}
+.jl-dt{display:flex;gap:6px;align-items:center;width:100%}
+.jl-stack .jl-tg{margin-left:0}
+/* the discount amount you click to type */
+.tt-val{all:unset;cursor:pointer;border-radius:6px;padding:1px 6px;margin-right:-6px;text-align:right}
+.tt-val:hover{background:var(--surface-2);color:var(--accent)}
+.tt-val:focus-visible{outline:2px solid var(--accent)}
+.totals .tt-in{width:80px;text-align:right}
+/* the customer strip under the job name (C) */
+.cu-strip{margin-bottom:12px}
+.cu-strip .cu-b{padding:10px 14px}
+.cu-strip .cu{display:flex;align-items:center;gap:12px;flex-direction:row}
+.cu-av{width:36px;height:36px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none;align-self:flex-start}
+.cu-strip .cu-who{flex:1 1 auto;min-width:0}
+.cu-strip .cu-co{font-size:17px}
+.cu-strip .cu-sym{flex-direction:row;gap:4px;margin-left:6px}
+.cu-line{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--ink-3);align-items:center}
+.cu-addr{all:unset;cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600}
+.cu-addr:focus-visible{outline:2px solid var(--accent)}
+.cu-strip .cu-more{display:flex;flex-direction:column;gap:3px;font-size:13px;margin-top:6px;padding:8px 10px;background:var(--surface-2);border-radius:6px}
+.cu-strip .cu-price{display:flex;flex-direction:column;gap:0;margin:0;padding:0;border:0;flex:none;align-self:flex-start}
+.cu-k{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin:0}
+.cu-pv{display:flex;align-items:center;gap:6px;border-bottom:1px dashed var(--line);min-width:170px}
+.cu-strip .pt-applied{align-self:center}
+.cu-chg{align-self:center;white-space:nowrap}
+.cu-pick{display:flex;gap:12px;align-items:center}
+.cu-pick > :first-child{flex:1 1 auto;min-width:0}
+@media (max-width:760px){.cu-strip .cu{flex-wrap:wrap}.cu-strip .cu-price{order:5}}
+.cu-strip .cu-ic span{display:inline}
+.cu-strip .cu-ic{padding:0 8px}
+/* the Exempt and terms words stay on a phone: hiding them left two empty dashes */
+/* Job details in the right column: the ship-to, tracking and project fields take the full width */
+.jd-panel .grid.g2,.jd-panel .grid.jd-grid{grid-template-columns:minmax(0,1fr)}
+.jd-panel textarea{min-height:84px}
+/* Job details and type: Firm / Rush checkboxes in the header, the clock beside the in-hands date, the job type standing out */
+.jd-flags{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;margin-left:auto}
+.jd-ck{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-3);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-weight:500}
+.jd-ck input{width:14px;height:14px;margin:0}
+/* k-firm / k-rush, never .rush or .firm: those are the red RUSH badge elsewhere (Oct 29, Nick: no red outline) */
+.jd-ck.k-firm.on,.jd-ck.k-rush.on{color:var(--ink);font-weight:700}
+.jd-ck input{accent-color:var(--accent)}
+.jl-clock{all:unset;cursor:pointer;display:grid;place-items:center;width:28px;height:28px;border-radius:6px;color:var(--ink-3);flex:none;margin-left:auto}
+.jl-clock:hover{background:var(--surface-2);color:var(--accent)}
+.jl-clock.on{color:var(--accent)}
+.jl-clock:focus-visible{outline:2px solid var(--accent)}
+.jd-typebox{background:var(--accent-soft);border-radius:var(--r);padding:10px 12px;margin-top:4px}
+.jd-typebox .ot-row{background:none;border:0;padding:0;margin:0}
+.jd-typebox .ot-row > .pt-l:first-child{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.jd-typebox .ot-sel{border-color:var(--accent);font-weight:600;color:var(--accent)}
+/* Delivery as its own panel */
+.dl-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.dl-seg button{all:unset;cursor:pointer;text-align:center;font-size:13px;font-weight:600;padding:7px 0;color:var(--ink-3);border-right:1px solid var(--line)}
+.dl-seg button:last-child{border-right:0}
+.dl-seg button.on{background:var(--accent-soft);color:var(--accent)}
+.dl-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.dl-panel .grid.g2,.dl-panel .grid.jd-grid{grid-template-columns:minmax(0,1fr)}
+.dl-panel .grid.jd-grid:empty{display:none}
+/* The back arrow beside every page's title (Oct 29, Nick: breadcrumbs option A, "keep the style the same on every page"):
+   components/BackLink.tsx puts it in front of the page's h1; pointing at it says where it goes */
+.back-slot{display:inline-block;vertical-align:middle;margin:0 12px 0 0;line-height:0;position:relative;top:-.08em}
+.back-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink-3);text-decoration:none;box-sizing:border-box;transition:color .12s,border-color .12s,background .12s}
+.back-ic:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.back-ic:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.back-row{margin:0 0 10px}
+@media print{.back-slot,.back-ic,.back-row{display:none!important}}
+/* ── The order page on a phone (Oct 29, Nick: "the customer information should be basically nothing… just the name…
+   the buttons should collapse into one button… job details first, then groups, then totals and shipping") ── */
+.ed-acts-tog,.cu-tog{display:none}
+@media (max-width:760px){
+  html body main.main .ord .ed-head{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px}
+  html body main.main .ord .ed-head .ed-title h1{white-space:normal;font-size:22px;line-height:1.25}
+  html body main.main .ord .ed-head h1::after{width:100%;min-width:0}
+  html body main.main .ord .ed-head .ed-actions{margin-left:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;width:100%;max-width:none}
+  html body main.main .ord .ed-head .ed-actions > *{display:none}
+  html body main.main .ord .ed-head .ed-actions > .status-select{display:block;order:1;flex:1 1 0;min-width:0;max-width:none}
+  html body main.main .ord .ed-head .ed-actions > .pv-st{display:inline-flex}
+  html body main.main .ord .ed-head .ed-actions > .ed-acts-tog{display:inline-flex;align-items:center;gap:6px;flex:none;order:2;padding:7px 12px;font-size:13.5px}
+  html body main.main .ord .ed-head .ed-actions > .save-state{display:inline;order:2}
+  html body main.main .ord .ed-head .ed-actions.open{padding-bottom:10px;border-bottom:1px solid var(--line-2)}
+  html body main.main .ord .ed-head .ed-actions.open > .ed-br{display:block;order:3;flex-basis:100%;height:0}
+  html body main.main .ord .ed-head .ed-actions.open > :not(.ed-br):not(.status-select):not(.ed-acts-tog):not(.save-state){display:flex;order:4;flex:1 1 calc(50% - 4px);min-width:0;justify-content:center}
+  html body main.main .ord .ed-head .ed-actions.open > details > summary{width:100%;justify-content:center}
+  html body main.main .ord .ed-head .ed-actions.open > .qb-wrap{flex:0 0 auto;align-items:center}
+  /* the customer: just the name, the rest behind the arrow */
+  .ord .cu-strip .cu{flex-wrap:wrap;align-items:center}
+  .ord .cu-strip .cu-tog{display:grid;place-items:center;width:36px;height:36px;margin-left:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;flex:none;order:2}
+  .ord .cu-strip.open .cu-tog svg{transform:rotate(180deg)}
+  .ord .cu-strip .cu-who{flex:1 1 0;min-width:0;order:1}
+  .ord .cu-strip .cu-av{order:0}
+  .ord .cu-strip .cu-co{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ord .cu-strip:not(.open) .cu-line,.ord .cu-strip:not(.open) .cu-more,.ord .cu-strip:not(.open) .cu-sym,.ord .cu-strip:not(.open) .cu-price,.ord .cu-strip:not(.open) .pt-applied,.ord .cu-strip:not(.open) .cu-chg,.ord .cu-strip:not(.open) .cu-pen{display:none}
+  .ord .cu-strip.open .cu-price,.ord .cu-strip.open .pt-applied,.ord .cu-strip.open .cu-chg{order:3}
+  .ord .cu-strip.open .cu-price{flex:1 1 100%}
+  .ord .cu-strip .panel-b.cu-b{padding:8px 12px}
+  /* the Order tab: Job details & type, then the groups, then Totals and Delivery */
+  .ord .ed-grid:not([hidden]):has(.jd-panel){display:flex;flex-direction:column;align-items:stretch;gap:14px}
+  .ord .ed-grid:has(.jd-panel) > *, .ord .ed-grid:has(.jd-panel) > .ed-aside > *{width:auto;max-width:100%;align-self:stretch}
+  .ord .ed-grid:has(.jd-panel) > .ed-aside{display:contents}
+  .ord .ed-grid:has(.jd-panel) > .ed-aside > *{order:1}
+  .ord .ed-grid:has(.jd-panel) > .ed-aside > .jd-panel{order:-1}
+  .ord .ed-grid:has(.jd-panel) > :not(.ed-aside){order:0;min-width:0}
+  /* the group explainer under + Add line item group isn't needed on a phone (Oct 29, Nick) */
+  .ord .grp-hint{display:none}
+  /* ✦ Fill from an email sits right beside + Add line item group (Oct 29, Nick) */
+  .ord .grp-add:not(:has(.ai-box)){flex-wrap:nowrap}
+  .ord .grp-add > .btn{white-space:nowrap;flex:none}
+  /* customer notes (and fees) go under the totals (Oct 29, Nick), then delivery */
+  .ord .ed-grid:has(.jd-panel) > .stack{display:contents}
+  .ord .ed-grid:has(.jd-panel) > .stack > *{order:0;min-width:0}
+  .ord .ed-grid:has(.jd-panel) > .stack > .fees-notes{order:2;grid-template-columns:minmax(0,1fr)}
+  .ord .ed-grid:has(.jd-panel) > .ed-aside > .dl-panel,.ord .ed-grid:has(.jd-panel) > .ed-aside > .pv-panel{order:3}
+}
+/* A print's Inks / Threads / Screens rows (Oct 29, Nick: "the word Inks up on the top left, then the little swatches to the
+   right"): the label sits on the first line beside the first swatch, never floating in the middle of a tall row; the pencil
+   sits at the top right */
+html body .pr .pr-scr{align-items:baseline}
+html body .pr .pr-scr > .pr-scr-l{padding-top:0;align-self:baseline}
+html body .pr .pr-scr > .pr-scr-v{align-items:baseline;align-self:baseline}
+html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
+/* The mockup's buttons on a phone (Oct 29, Nick: "the buttons under the mockup are all different sizes"): Edit mockup,
+   Add logo and Customer artwork are three matching tiles in one row, icon over the words */
+.mk-edit .mk-ic{display:none}
+@media (max-width:760px){
+  html body .ord .imp-mock{grid-template-columns:repeat(3,minmax(0,1fr))}
+  html body .ord .imp-mock > .mk-big,html body .ord .imp-mock:has(> .mk-more > :nth-child(odd):last-child) > .mk-big{grid-column:1 / -1}
+  html body .ord .imp-mock > .mk-tiles{display:contents}
+  html body .ord .imp-mock > .btn.mk-edit,html body .ord .imp-mock > .mk-tiles > .mk-tile{grid-column:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:auto!important;align-self:stretch;min-height:64px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:var(--r);font-size:13px;font-weight:600;line-height:1.2;text-align:center;white-space:normal}
+  html body .ord .imp-mock > .btn.mk-edit:not(.primary){background:var(--surface);color:var(--ink)}
+  html body .ord .imp-mock > .btn.mk-edit .mk-ic{display:block;color:var(--accent);flex:none}
+  html body .ord .imp-mock > .btn.mk-edit.primary .mk-ic{color:inherit}
+  html body .ord .imp-mock > .btn.danger{grid-column:1 / 3}
+  html body .ord .imp-mock > .mk-when{grid-column:3;white-space:nowrap}
+}

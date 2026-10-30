@@ -615,9 +615,6 @@ const SETUP_LABEL = (k: string, q: number, thread = false) => ({
   pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `${thread ? "Thread changes" : "Ink changes"}${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
 } as Record<string, string>)[k] || "Setup";
 
-/** an email address that wraps after its @ when the column is narrow, never in the middle of a word */
-const emailBreak = (e: string) => { const i = e.indexOf("@"); return i > 0 ? <>{e.slice(0, i + 1)}<wbr />{e.slice(i + 1)}</> : e; };
-
 export function InvoiceDoc(p: DocData) {
   const { o, cust, groups, c, settings, pays } = p;
   const sh = settings.shop, isQ = o.type === "quote", kind = isQ ? "Quote" : "Invoice";
@@ -628,39 +625,45 @@ export function InvoiceDoc(p: DocData) {
   const contact = [cust.company && cust.name && cust.name !== cust.company ? cust.name : "", cust.address].filter(Boolean).join("\n");
   return (
     <section className="sheet">
+      {/* every fact on its own short line, nothing wrapping onto a second line (Oct 29, Nick: "on invoices, I don't want any
+          lines carrying over… the build to, deliver… looks crammed") */}
       <div className="top">
         <div className="brand">
           <img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
-          {(sh.address || sh.phone || sh.email) && <div className="sub">{[sh.address, [fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}</div>}
+          {(sh.address || sh.phone || sh.email) && <div className="sub">{[sh.address, fmtPhone(sh.phone), sh.email].filter(Boolean).join("\n")}</div>}
         </div>
         <div className="doc">
           <div className="k disp">{kind}</div>
           <div className="n">#{o.number}</div>
-          <div className="meta">Issued {issued}{due && <><br />In hands {due} · {DELIVERY[o.delivery_method] || "Pickup"}</>}</div>
+          <div className="meta">Issued {issued}{due && <><br />In hands {due}</>}<br />{DELIVERY[o.delivery_method] || "Pickup"}</div>
         </div>
       </div>
-      <div className="parties three">
-        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{emailBreak(cust.email)}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
+      <div className="parties iv">
+        <div><div className="lbl">Bill to</div>
+          <b>{cust.company || cust.name || "—"}</b>
+          {[cust.company && cust.name && cust.name !== cust.company ? cust.name : "", ...String(cust.address || "").split(/\n+/)].map((x) => x.trim()).filter(Boolean).map((x, i) => <div key={i}>{x}</div>)}
+          {cust.email && <div className="faint">{cust.email}</div>}
+          {cust.phone && <div className="faint">{fmtPhone(cust.phone)}</div>}
+        </div>
         {o.delivery_method === "tbd"
-          ? <div><div className="lbl">Pickup or ship</div>To be decided{due && <><br /><span className="faint">{due}</span></>}</div>
+          ? <div><div className="lbl">Pickup or ship</div><div>To be decided</div></div>
           : o.delivery_method === "pickup"
-          ? <div><div className="lbl">Pickup</div>Pickup at {sh.name}{due && <><br /><span className="faint">{due}</span></>}</div>
-          : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>{o.ship_to || "—"}{o.ship_method && <><br /><span className="faint">{o.ship_method}</span></>}</div>}
-        {/* the order at a glance (Oct 16, Nick): PO, name, summary, balance due and terms. Quiet, not a billboard. */}
-        <div className="osum">
-          <div className="lbl">Order</div>
-          {/* the job name gets the box's full width, so a long one doesn't wrap (Oct 16, Nick) */}
-          <div className="osum-name">{o.nickname}</div>
-          <dl>
-            {o.po_number && <><dt>PO</dt><dd>{o.po_number}</dd></>}
-            <dt>Summary</dt><dd className="nw">{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</dd>
-            {o.approved_at && <><dt>Approved</dt><dd>{o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</dd></>}
-            <dt className="bd">{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</dt><dd className={"bd" + (paidUp ? " ok" : "")}>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</dd>
-          </dl>
-          {(cust.id || sh.terms) && <div className="osum-terms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
-            {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <> 50% down to start: <b>{money(c.total / 2)}</b>.</>}</div>}
-        </div>
+          ? <div><div className="lbl">Pickup</div><div>At {sh.name}</div>{sh.address && <div className="faint">{sh.address}</div>}</div>
+          : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>
+              {String(o.ship_to || "—").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x, i) => <div key={i}>{x}</div>)}
+              {o.ship_method && <div className="faint">{o.ship_method}</div>}
+            </div>}
       </div>
+      {/* the order at a glance, one strip: each fact its own cell */}
+      <div className="ostrip">
+        <div className="oc grow"><span>Order</span><b>{o.nickname || `#${o.number}`}</b></div>
+        {o.po_number && <div className="oc"><span>PO</span><b>{o.po_number}</b></div>}
+        <div className="oc"><span>Pieces</span><b>{c.qty} · {prints} print{prints === 1 ? "" : "s"}</b></div>
+        {o.approved_at && <div className="oc"><span>Approved</span><b>{new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</b></div>}
+        <div className={"oc obal" + (paidUp ? " ok" : "")}><span>{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</span><b>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</b></div>
+      </div>
+      {(cust.id || sh.terms) && <div className="oterms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
+        {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <> 50% down to start: <b>{money(c.total / 2)}</b>.</>}{o.approved_at && o.approved_name ? ` Approved by ${o.approved_name}.` : ""}</div>}
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
         if (!gc) return null;
@@ -679,7 +682,8 @@ export function InvoiceDoc(p: DocData) {
                   {lines.map(({ l, lc }, i) => (
                     <tr key={l.id}>
                       <td>
-                        <b>{[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc.wholesale && <span className="faint"> (your garments)</span>}
+                        <div className="nm"><b>{[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment"}</b></div>
+                        {(l.color || gc.wholesale) && <div className="cl">{l.color}{gc.wholesale && <span className="sup">Customer supplied</span>}</div>}
                         {l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
                         <div className="chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span className="chip" key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                         {i === lines.length - 1 && g.imprints.map((d) => {
@@ -689,7 +693,7 @@ export function InvoiceDoc(p: DocData) {
                           // across the line and looked messy)
                           return (
                             <div className="prl" key={d.id}>
-                              <div><b>{d.location}</b> · {how}{sz.label && !d.visualOnly ? ` · ${sz.label}` : ""}</div>
+                              <div className="nm"><b>{d.location}</b> · {how}{sz.label && !d.visualOnly ? ` · ${sz.label}` : ""}</div>
                               {(d.artChanges || []).length > 0 && <div className="lnote">Changes we made to your art: {d.artChanges!.join("; ")}</div>}
                               {ink.length > 0 && <div className="prl-inks">{ink.map((n) => { const hx = colorHex(n); return <span className="prl-ink" key={n}><i style={{ background: hx || "transparent" }} />{n}</span>; })}</div>}
                             </div>
@@ -700,14 +704,11 @@ export function InvoiceDoc(p: DocData) {
                       <td className="r">{lc.qty}</td><td className="r">{money(lc.each)}</td><td className="r"><b>{money(lc.sub)}</b></td>
                     </tr>
                   ))}
+                  {/* setup (screens, digitizing) and 2XL+ materials as rows of the same table, so their amounts line up */}
+                  {gc.setupItems.map((s, i) => <tr className="setup" key={`s${i}`}><td>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</td><td /><td /><td className="r">{money(s.amount)}</td></tr>)}
+                  {gc.materials > 0 && <tr className="setup"><td>2XL+ materials</td><td /><td /><td className="r">{money(gc.materials)}</td></tr>}
                 </tbody>
               </table>
-              {(gc.setupItems.length > 0 || gc.materials > 0) && (
-                <table className="extra"><tbody>
-                  {gc.setupItems.map((s, i) => <tr key={i}><td>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</td><td className="r">{money(s.amount)}</td></tr>)}
-                  {gc.materials > 0 && <tr><td>2XL+ materials</td><td className="r">{money(gc.materials)}</td></tr>}
-                </tbody></table>
-              )}
             </div>
           </div>
         );

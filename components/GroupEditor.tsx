@@ -804,7 +804,10 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
                 return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
-          {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+          {onMockup && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
+            {/* the shirt icon shows on a phone, where the three buttons are matching tiles (Oct 29, Nick) */}
+            <svg className="mk-ic" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>
+            <span>{g.mockupAt ? "Edit mockup" : "Create mockup"}</span></button>}
           {/* the logo on its spot without the garment (Oct 27, Nick: "just below… create mockup… say add logo") */}
           {/* Add logo and Customer artwork side by side under Create mockup (Oct 27, Nick: "three buttons… create mockup,
               add logo, and then customer artwork" → option B). Customer artwork opens on the customer's brands when they

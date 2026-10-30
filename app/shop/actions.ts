@@ -1,4 +1,5 @@
 "use server";
+import { orderSubject } from "@/lib/orderSubject";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,7 +48,7 @@ export async function sendToCustomer(orderId: string, note: string) {
   const emailed = await sendEmail({
     to: customer.email,
     replyTo: SHOP_NOTIFY_EMAIL,
-    subject: `${isQuote ? "Your quote" : "Your order"} #${order.number} from ${settings.shop.name}`,
+    subject: orderSubject(order.number, isQuote ? "Quote ready for approval" : "Order update", order.nickname),
     html: emailLayout(
       settings.shop.name,
       isQuote ? `Quote #${order.number} is ready for your review` : `An update on order #${order.number}`,
@@ -70,7 +71,7 @@ export async function requestProofApproval(orderId: string) {
   const emailed = await sendEmail({
     to: customer.email,
     replyTo: SHOP_NOTIFY_EMAIL,
-    subject: `Artwork proof ready for order #${order.number}`,
+    subject: orderSubject(order.number, "Artwork proof ready", order.nickname),
     html: emailLayout(settings.shop.name, "Your artwork proof is ready", `Please look over the proof for "${order.nickname || "your order"}" and approve it or tell us what to change. We start printing once it's approved.`, "Review artwork", link),
   });
   return { ok: true, link, emailed };
@@ -92,7 +93,7 @@ export async function staffMessage(orderId: string, body: string, files: Attachm
     emailed = await sendEmail({
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
-      subject: `New message about ${tp ? "the goods for " : ""}order #${order.number}`,
+      subject: orderSubject(order.number, tp ? "New message about the goods" : "New message", order.nickname),
       html: emailLayout(settings.shop.name, `Message about #${order.number}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages&c=${orderId}${tp ? ":goods" : ""}`),
     });
   }

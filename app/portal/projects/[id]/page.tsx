@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -41,7 +41,7 @@ export default async function PortalProjectPage({ params, searchParams }: { para
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s project. Buttons are turned off in preview.</div>}
       <main className="p-main">
-        <Link className="back" href={`/portal${qs}${qs ? "&" : "?"}area=projects`}>← Projects</Link>
+        <BackLink href={`/portal${qs}${qs ? "&" : "?"}area=projects`} label="Projects" trail={false} />
         <PortalProject project={pr as Project} tasks={(ts || []) as ProjectTask[]} orders={orders} linkable={linkable} messages={messages} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} />
       </main>
     </>
