@@ -30,6 +30,9 @@ export type PaydayRow = {
   check: CheckLine[]; total: number;
 };
 
+/** a payday closed out in the Payroll Center (Payroll finished): who, when, what it paid */
+export type Payday = { period_start: string; pay_date: string; closed_at: string | null; closed_by: string; w2_count: number; checks: number; checks_total: number; advances_total: number; note: string };
+
 /** the pay date: the day after the period ends (Oct 16 – Oct 29 → Fri Oct 30) */
 export const payDateOf = (periodEnd: string) => addDays(periodEnd, 1);
 
@@ -117,13 +120,15 @@ export async function loadPayday(sb: SupabaseClient, start: string) {
     punches.push(...((data || []) as Punch[]));
     if (!data || data.length < 1000) break;
   }
-  const [{ data: emps }, { data: offs }, { data: rates }, { data: lines }, { data: advs }, { data: pays }] = await Promise.all([
+  const [{ data: emps }, { data: offs }, { data: rates }, { data: lines }, { data: advs }, { data: pays }, { data: closed }] = await Promise.all([
     sb.from("employees").select("*").order("last_name").order("first_name"),
     sb.from("time_off").select("*").lte("starts_on", p.end).gte("ends_on", p.start),
     sb.from("employee_pay").select("employee_id, rate, salary"),
     sb.from("payday_lines").select("*").eq("period_start", p.start),
     sb.from("pay_advances").select("*").order("given_on", { ascending: false }),
     sb.from("pay_advance_payments").select("*"),
+    // closed out (Payroll finished, Oct 30): who and when
+    sb.from("paydays").select("*").eq("period_start", p.start).maybeSingle(),
   ]);
   const employees = (emps || []) as PayEmployee[], advances = (advs || []) as Advance[], payments = (pays || []) as AdvancePayment[];
   const rows = paydayRows({
@@ -131,5 +136,5 @@ export async function loadPayday(sb: SupabaseClient, start: string) {
     rates: Object.fromEntries(((rates || []) as { employee_id: string; rate: number | null; salary: number | null }[]).map((x) => [x.employee_id, x])),
     lines: (lines || []) as PaydayLine[], advances, pays: payments,
   });
-  return { settings, p, payDate: payDateOf(p.end), rows, employees, advances, payments };
+  return { settings, p, payDate: payDateOf(p.end), rows, employees, advances, payments, closed: (closed as Payday | null)?.closed_at ? (closed as Payday) : null };
 }

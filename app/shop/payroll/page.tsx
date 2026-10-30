@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
 import { advanceLeft, guessPayee, loadPayday, planLabel, type PaydayRow } from "@/lib/payday";
-import { addVendor, issueAdvance, makeChecks, markEntered, payrollQbo, type Payee } from "./actions";
+import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, type Payee } from "./actions";
 
 /**
  * Payroll Center (Admin Tools, Oct 30, Nick: "make a payday tool… create checks from the time clock… paycheck
@@ -38,7 +38,7 @@ export default function PayrollCenter() {
   const [err, setErr] = useState(""), [msg, setMsg] = useState("");
   const [role, setRole] = useState("");
   const [qb, setQb] = useState<{ payees: Payee[]; accounts: string[] } | null>(null), [qbErr, setQbErr] = useState("");
-  const [busy, setBusy] = useState(""), [confirm, setConfirm] = useState<"" | "checks" | "entered">("");
+  const [busy, setBusy] = useState(""), [confirm, setConfirm] = useState<"" | "checks" | "entered" | "close">("");
   const [newAdv, setNewAdv] = useState(false);
 
   // first: the last finished pay period
@@ -116,6 +116,18 @@ export default function PayrollCenter() {
     else setMsg(`${r.data?.made.length || 0} check${r.data?.made.length === 1 ? "" : "s"} made in QuickBooks (Print later)${r.data?.skipped.length ? `. Skipped: ${r.data.skipped.join("; ")}` : "."}`);
     load();
   }
+  // Payroll finished (Oct 30, Nick: "something… that says payroll finished and we'll just close it out")
+  const closed = d?.closed || null;
+  const conOpen = cons.filter((r) => r.total > 0 && !r.line?.qbo_purchase_id);
+  const canClose = !toFix.length && !conOpen.length;
+  async function closeOut(reopen = false) {
+    if (!d) return;
+    setConfirm(""); setBusy(reopen ? "Reopening…" : "Closing out this payday…"); setErr(""); setMsg("");
+    const r = await closePayday(d.p.start, reopen);
+    setBusy("");
+    if (!r.ok) setErr(r.error); else setMsg(reopen ? "Payday reopened." : `Payroll finished for ${dayLabel(d.payDate)}. It's closed out.`);
+    load();
+  }
   async function entered() {
     if (!d) return;
     setConfirm(""); setBusy("Saving…");
@@ -144,7 +156,7 @@ export default function PayrollCenter() {
       <div className="page-head">
         <div>
           <h1>Payroll Center</h1>
-          <div className="eyebrow">{p ? <>Pay period {dayLabel(p.start)} – {dayLabel(p.end)} · pay date {dayLabel(d!.payDate)} · overtime past {d!.settings.otWeekly} hrs a week</> : "Loading…"}</div>
+          <div className="eyebrow">{p ? <>Pay period {dayLabel(p.start)} – {dayLabel(p.end)} · pay date {dayLabel(d!.payDate)} · overtime past {d!.settings.otWeekly} hrs a week{closed && <> · <span className="pc-ok">Payroll finished ✓</span></>}</> : "Loading…"}</div>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn" disabled={!p} onClick={() => p && setStart(periodOf(d!.settings, addDays(p.start, -1)).start)} aria-label="Previous pay period" title="Previous pay period">←</button>
@@ -255,6 +267,25 @@ export default function PayrollCenter() {
               </table>
             </div>
             <div className="panel-b faint pc-note">Each check: Subcontractors - COS · REGULAR PAY, Subcontractors - COS · OVERTIME (time and a half past 40 hours a week), BONUS, and Repayment:Check Advance as a minus line for an advance. A salaried contractor&apos;s check is the salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}. Made only when you press the button, once per person per payday.</div>
+          </section>
+
+          {/* Step 4: payroll finished, closed out (Oct 30, Nick) */}
+          <section className={"panel" + (closed ? " pc-done" : "")}>
+            <div className="panel-h">
+              <div><h2>Step 4 · Finish payroll</h2><span className="faint">{closed ? `Closed out ${new Date(closed.closed_at!).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${closed.closed_by ? ` by ${closed.closed_by}` : ""}.` : "When the W-2 payroll is submitted in QuickBooks and the checks are printed."}</span></div>
+              <div className="row" style={{ gap: 8 }}>
+                {closed ? (role === "owner" && <button type="button" className="btn" onClick={() => closeOut(true)} disabled={!!busy}>Reopen</button>)
+                  : confirm === "close"
+                    ? <><button type="button" className="btn primary" onClick={() => closeOut()}>Yes, payroll is finished</button><button type="button" className="btn" onClick={() => setConfirm("")}>Cancel</button></>
+                    : <button type="button" className="btn primary" onClick={() => setConfirm("close")} disabled={!!busy || !canClose}>Payroll finished · close it out</button>}
+              </div>
+            </div>
+            <div className="panel-b pc-close">
+              <span className={toFix.length ? "bad" : "pc-ok"}>{toFix.length ? `${toFix.length} with clock problems` : "Time clock ✓"}</span>
+              <span className={conOpen.length ? "pc-wait" : "pc-ok"}>{conOpen.length ? `${conOpen.length} contractor check${conOpen.length > 1 ? "s" : ""} to make` : `${made.length} contractor checks made ✓ · ${$(r2(made.reduce((s, r) => s + +(r.line?.check_total || 0), 0)))}`}</span>
+              <span className={w2Open.length && !closed ? "faint" : "pc-ok"}>{closed || !w2Open.length ? `W-2 payroll entered ✓ · ${w2.length}` : `W-2 payroll: ${w2.length} to submit in QuickBooks (closing marks them entered)`}</span>
+              {closed && closed.advances_total > 0 && <span className="pc-ok">Advances repaid {$(closed.advances_total)}</span>}
+            </div>
           </section>
         </div>
       ) : tab === "advances" ? (
@@ -384,17 +415,19 @@ function Advances({ d, role, open, setOpen, onDone }: { d: Data; role: string; o
 
 /** every payday the Payroll Center ran: checks made, W-2 entered, totals */
 function PastPaydays() {
-  const [rows, setRows] = useState<{ period_start: string; checks: number; total: number; w2: number }[] | null>(null);
+  const [rows, setRows] = useState<{ period_start: string; checks: number; total: number; w2: number; closed?: string }[] | null>(null);
   useEffect(() => {
-    createClient().from("payday_lines").select("period_start, qbo_purchase_id, check_total, done_at").order("period_start", { ascending: false }).limit(2000).then(({ data }) => {
-      const m = new Map<string, { period_start: string; checks: number; total: number; w2: number }>();
+    const sb = createClient();
+    Promise.all([sb.from("payday_lines").select("period_start, qbo_purchase_id, check_total, done_at").order("period_start", { ascending: false }).limit(2000), sb.from("paydays").select("period_start, closed_at, closed_by")]).then(([{ data }, { data: pd }]) => {
+      const fin = new Map(((pd || []) as { period_start: string; closed_at: string | null; closed_by: string }[]).filter((x) => x.closed_at).map((x) => [x.period_start, `${dayLabel(x.closed_at!.slice(0, 10))}${x.closed_by ? ` · ${x.closed_by}` : ""}`]));
+      const m = new Map<string, { period_start: string; checks: number; total: number; w2: number; closed?: string }>();
       for (const l of (data || []) as { period_start: string; qbo_purchase_id: string | null; check_total: number | null; done_at: string | null }[]) {
         const x = m.get(l.period_start) || { period_start: l.period_start, checks: 0, total: 0, w2: 0 };
         if (l.qbo_purchase_id) { x.checks++; x.total = r2(x.total + +(l.check_total || 0)); }
         if (l.done_at) x.w2++;
         m.set(l.period_start, x);
       }
-      setRows([...m.values()].filter((x) => x.checks || x.w2));
+      setRows([...m.values()].filter((x) => x.checks || x.w2).map((x) => ({ ...x, closed: fin.get(x.period_start) })));
     });
   }, []);
   return (
@@ -402,9 +435,9 @@ function PastPaydays() {
       <div className="panel-h"><div><h2>Past paydays</h2><span className="faint">What each payday paid through the Payroll Center</span></div></div>
       <div className="tbl-wrap pc-tbl">
         <table className="tbl">
-          <thead><tr><th>Pay period starting</th><th className="r">Contractor checks</th><th className="r">Checks total</th><th className="r">W-2 entered</th></tr></thead>
-          <tbody>{!rows ? <tr><td colSpan={4} className="faint">Loading…</td></tr> : !rows.length ? <tr><td colSpan={4} className="faint">Nothing yet. This fills in as paydays are run here.</td></tr> : rows.map((r) => (
-            <tr key={r.period_start}><td>{dayLabel(r.period_start)}</td><td className="r">{r.checks}</td><td className="r">{$(r.total)}</td><td className="r">{r.w2}</td></tr>
+          <thead><tr><th>Pay period starting</th><th className="r">Contractor checks</th><th className="r">Checks total</th><th className="r">W-2 entered</th><th>Finished</th></tr></thead>
+          <tbody>{!rows ? <tr><td colSpan={5} className="faint">Loading…</td></tr> : !rows.length ? <tr><td colSpan={5} className="faint">Nothing yet. This fills in as paydays are run here.</td></tr> : rows.map((r) => (
+            <tr key={r.period_start}><td>{dayLabel(r.period_start)}</td><td className="r">{r.checks}</td><td className="r">{$(r.total)}</td><td className="r">{r.w2}</td><td>{r.closed ? <span className="pc-ok">Closed {r.closed}</span> : <span className="faint">Open</span>}</td></tr>
           ))}</tbody>
         </table>
       </div>

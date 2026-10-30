@@ -153,6 +153,45 @@ export async function markEntered(start: string, employeeIds: string[]): Promise
 }
 
 /**
+ * Payroll finished (Oct 30, Nick: "something in the payroll center that says payroll finished and we'll just close it
+ * out"): checked again here (no clock problems, every contractor with pay has a check), the W-2 side recorded as entered
+ * (its advance repayments too), and the payday stamped closed with who, when and what it paid. `reopen` clears the stamp.
+ */
+export async function closePayday(start: string, reopen = false): Promise<R<{ closedAt: string | null }>> {
+  try {
+    const v = await getViewer("sees_pay, name");
+    if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
+    const admin = createAdminClient();
+    const { p, rows, payDate } = await payday(admin, start);
+    if (reopen) {
+      const { error } = await admin.from("paydays").update({ closed_at: null, updated_at: new Date().toISOString() }).eq("period_start", p.start);
+      if (error) throw new Error(error.message);
+      return { ok: true, data: { closedAt: null } };
+    }
+    const clock = rows.filter((r) => r.issues > 0);
+    if (clock.length) throw new Error(`Fix the time clock first: ${clock.map((r) => `${r.e.first_name} ${r.e.last_name}`).join(", ")}.`);
+    const noCheck = rows.filter((r) => r.kind === "contract" && r.total > 0 && !r.line?.qbo_purchase_id);
+    if (noCheck.length) throw new Error(`Contractor checks still to make: ${noCheck.map((r) => `${r.e.first_name} ${r.e.last_name}`).join(", ")}.`);
+    // the W-2 side: submitted in QuickBooks, so it's entered (and its advance repayments recorded)
+    const now = new Date().toISOString();
+    for (const r of rows.filter((x) => x.kind === "payroll" && !x.line?.done_at)) {
+      const { error } = await admin.from("payday_lines").upsert({ period_start: p.start, employee_id: r.e.id, bonus: r.bonus || null, advance_amount: r.line?.advance_amount ?? null, done_at: now, updated_at: now }, { onConflict: "period_start,employee_id" });
+      if (error) throw new Error(error.message);
+      await recordRepayments(admin, p.start, r.advances);
+    }
+    const cons = rows.filter((r) => r.kind === "contract" && r.line?.qbo_purchase_id);
+    const by = String(v.staff?.name || "") || v.email.split("@")[0];
+    const { error } = await admin.from("paydays").upsert({
+      period_start: p.start, pay_date: payDate, closed_at: now, closed_by: by,
+      w2_count: rows.filter((r) => r.kind === "payroll").length, checks: cons.length,
+      checks_total: r2(cons.reduce((s, r) => s + +(r.line?.check_total || 0), 0)), advances_total: r2(rows.reduce((s, r) => s + r.advance, 0)), updated_at: now,
+    }, { onConflict: "period_start" });
+    if (error) throw new Error(/paydays/.test(error.message) ? "Run supabase/migrations/237_paydays_closed.sql first." : error.message);
+    return { ok: true, data: { closedAt: now } };
+  } catch (e) { return fail(e); }
+}
+
+/**
  * A new paycheck advance. With `writeCheck`, the advance check itself is made in QuickBooks too (Print later, from
  * Bank Of America, on Repayment:Check Advance), paid to the person's QuickBooks payee.
  */

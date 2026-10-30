@@ -16321,3 +16321,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 /* puff print on a screen print (Oct 30): its stamp in the print's specs, and its line under the screens */
 .pr-specs .pr-puff{font-weight:700;color:var(--accent)}
 .pr-puff-line .linkbtn{margin-left:auto}
+/* Payroll Center, Step 4 · Finish payroll (Oct 30): the checklist on one line, the panel green-edged when closed */
+.pc-close{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px}
+.pc-close>span{white-space:nowrap}
+.panel.pc-done{border-color:var(--ok)}
