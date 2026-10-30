@@ -3,7 +3,7 @@ import BackLink from "@/components/BackLink";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges } from "@/lib/pricing";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -4213,7 +4213,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         return (
                           <div className={"mk-bs" + (bsOpen ? " on" : "")}>
                             <button type="button" className="mk-bs-h" onClick={() => setBsOpen(!bsOpen)} aria-expanded={bsOpen}>
-                              <b>Brand standards</b><span className="mk-bs-who">{brandPrint || brandMask ? who : "none set"}</span>
+                              <b>Brand standards</b><span className="mk-bs-who">{hasBrandPrint(brandPrint) || brandMask ? who : "none set"}</span>
                               {!bsOpen && (soft || disOn) && <span className="faint">{[soft && "Soft Hand (Fashion)", disOn && "Distress"].filter(Boolean).join(" · ")}</span>}
                               <span className="mk-bs-a" aria-hidden>{bsOpen ? "▾" : "▸"}</span>
                             </button>
@@ -4233,7 +4233,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                   }} /> {distressing === im.id ? "Putting the distress on…" : "Distress (their mask)"}</label>
                                 {brandMask && <div className="mk-bs-mask"><img src={brandMask.url} alt="" /><span className="faint">{brandMask.name} · the shirt shows through · films get {brandMask.layers || 3} layers</span></div>}
                               </>}
-                              <p className="faint mk-bs-n">{brandPrint || brandMask ? `Set from ${who}'s brand standards. Change it here for just this print.` : "No brand standards saved for this customer."}</p>
+                              <p className="faint mk-bs-n">{hasBrandPrint(brandPrint) || brandMask ? `Set from ${who}'s brand standards. Change it here for just this print.` : "No brand standards saved for this customer."}</p>
                             </div>}
                           </div>
                         );

@@ -8,6 +8,7 @@ import CustomerBrandColors from "@/components/CustomerBrandColors";
 import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import CustomerNeckLabels from "@/components/CustomerNeckLabels";
 import CustomerPreferredGoods from "@/components/CustomerPreferredGoods";
+import { hasBrandPrint, type BrandPrint } from "@/lib/pricing";
 
 /**
  * A customer's Brand standards, showing only what's on file (Oct 21, Nick: "if we didn't specify anything other than
@@ -32,8 +33,7 @@ export default function BrandSections({ customerId, company }: { customerId: str
       if ((d.preferred_goods || []).length) on.add("goods");
       if ((d.style_guides || []).some((g) => g?.path && !g.archived)) on.add("guides");
       if ((d.brand_colors || []).length) on.add("colors");
-      const bp = d.brand_print || {};
-      if ((bp.sizes || []).length || bp.hit || bp.soft || (bp.rules || []).length) on.add("print");
+      if (hasBrandPrint(d.brand_print as BrandPrint | undefined)) on.add("print");
       if ((d.neck_labels || []).some((s) => s?.id && !s.archived)) on.add("neck");
       setHas(on);
     });

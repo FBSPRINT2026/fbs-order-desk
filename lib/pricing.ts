@@ -355,6 +355,13 @@ export type BrandPrint = { sizes?: BrandSize[]; hit?: "standard" | "fashion" | "
   /** their other rules, in plain words ("never on red shirts", "0.5\" clear space around the circle"): shown in the Mockup Creator and on the work order */ rules?: string[];
   /** their distress texture (Oct 22, Peticolas_Film_Mask): a mask picture (white = texture) laid over their art; the film
    *  stacks it `layers` times (3), the mockup shows one layer (the shirt shows through) */ distress?: { path: string; name?: string; layers?: number } };
+/** the customer has print standards on file: a size, a print style, soft hand, a rule or a distress mask. An empty record
+ *  ({} left by opening the editor, Oct 30: A Premier Brand showed "Set from A Premier Brand's brand standards" with none
+ *  made) is none. Every place that says a customer has standards asks this. */
+export function hasBrandPrint(bp: BrandPrint | null | undefined): boolean {
+  if (!bp) return false;
+  return (bp.sizes || []).some((r) => r && +r.width > 0) || (!!bp.hit && bp.hit !== "ask") || !!bp.soft || (bp.rules || []).some((r) => String(r || "").trim()) || !!bp.distress?.path;
+}
 /** a logo's shape by its width ÷ height: round (about as tall as wide), wide or tall */
 export const logoShape = (ratio: number | null | undefined): "round" | "wide" | "tall" | "" => (!ratio ? "" : ratio > 1.18 ? "wide" : ratio < 0.85 ? "tall" : "round");
 /** the customer's size for this logo on this location: a rule for that logo first, then its shape, then any logo */
