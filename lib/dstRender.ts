@@ -165,3 +165,56 @@ export function renderThreads(info: DstInfo, colors: string[], opts: { width?: n
   g.putImageData(img, 0, 0);
   return c;
 }
+
+/**
+ * Which thread each color stop sews, read off the logo's own picture (Oct 30, Nick on #40284's work order: "why does it
+ * look faded out or washed out?"). With no digitizer's worksheet and no sew-out saying which thread goes on which stop,
+ * the threads used to be dealt out to the stops in turn (stop 1 black, 2 green, 3 white, 4 black…), so a letter's fill
+ * could get the green that vanishes into a green shirt. Now each stop's stitches are laid over the logo's picture and
+ * vote for the print's thread nearest the art's color under them; the stop takes the winner. Works for any logo, any
+ * number of stops, as long as the picture is the same logo (the DST and the art cover the same box).
+ * `threads` are the print's thread colors (hex); returns one color per stop, or null if the picture can't be read.
+ */
+export function stopThreadsFromArt(info: DstInfo, threads: string[], art: HTMLImageElement): string[] | null {
+  const th = [...new Set(threads.filter(Boolean))];
+  if (th.length < 2 || !art.naturalWidth || !art.naturalHeight) return null;
+  const segs = stitchesOf(info);
+  if (!segs.length) return null;
+  const k = 360 / Math.max(art.naturalWidth, art.naturalHeight);
+  const W = Math.max(1, Math.round(art.naturalWidth * k)), H = Math.max(1, Math.round(art.naturalHeight * k));
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(art, 0, 0, W, H);
+  let px: Uint8ClampedArray;
+  try { px = g.getImageData(0, 0, W, H).data; } catch { return null; } // a picture from another site can't be read
+  // the logo's own pixels: opaque ones on a clear picture, else the ones unlike the corners (its background)
+  const at = (x: number, y: number) => (y * W + x) * 4;
+  const corners = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)];
+  const clear = corners.every((i) => px[i + 3] < 30);
+  const bg = corners.reduce((a, i) => [a[0] + px[i] / 4, a[1] + px[i + 1] / 4, a[2] + px[i + 2] / 4], [0, 0, 0]);
+  const ink = (i: number) => (clear ? px[i + 3] >= 128 : px[i + 3] >= 128 && Math.hypot(px[i] - bg[0], px[i + 1] - bg[1], px[i + 2] - bg[2]) > 40);
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ink(at(x, y))) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 <= x0 || y1 <= y0) return null;
+  const xs = segs.flatMap((s) => [s.x0, s.x1]), ys = segs.flatMap((s) => [s.y0, s.y1]);
+  const mx = Math.min(...xs), Mx = Math.max(...xs), my = Math.min(...ys), My = Math.max(...ys);
+  const tc = th.map((h) => rgb(h).map((v) => v * 255));
+  const votes = info.blocks.map(() => new Array(th.length).fill(0) as number[]);
+  const per = new Map<number, Seg[]>();
+  for (const s of segs) per.set(s.block, [...(per.get(s.block) || []), s]);
+  for (const [b, ss] of per) {
+    const step = Math.max(1, Math.floor(ss.length / 600));
+    for (let i = 0; i < ss.length; i += step) {
+      const s = ss[i];
+      const ax = Math.round(x0 + ((s.x1 - mx) / Math.max(1, Mx - mx)) * (x1 - x0)), ay = Math.round(y0 + ((s.y1 - my) / Math.max(1, My - my)) * (y1 - y0));
+      if (ax < 0 || ay < 0 || ax >= W || ay >= H) continue;
+      const p = at(ax, ay);
+      if (!ink(p)) continue;
+      let best = 0, bd = Infinity;
+      tc.forEach((t, j) => { const d = Math.hypot(px[p] - t[0], px[p + 1] - t[1], px[p + 2] - t[2]); if (d < bd) { bd = d; best = j; } });
+      votes[b][best]++;
+    }
+  }
+  return votes.map((v, b) => { const n = Math.max(...v); return n > 0 ? th[v.indexOf(n)] : th[b % th.length]; });
+}

@@ -422,7 +422,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
         {pic && d.method === "embroidery" && emb?.file?.path
           // embroidery with its DST: the logo as it sews, thread by thread (Oct 27, Nick), the art until it's drawn
-          ? <DstPicture path={emb.file.path} colors={dstColorsOf(d)} className="wo-dst" style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: `${top}in`, width: `${aw}in`, height: `${ah}in` }}
+          ? <DstPicture path={emb.file.path} colors={dstColorsOf(d)} art={pic} className="wo-dst" style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: `${top}in`, width: `${aw}in`, height: `${ah}in` }}
               fallback={<ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} />} />
           : pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
