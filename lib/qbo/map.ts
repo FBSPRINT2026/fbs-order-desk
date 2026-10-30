@@ -299,6 +299,8 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
       }
       const desc = [(g.name?.trim() ? `${g.name.trim()}: ` : "") + title, sizes, ...extra].filter(Boolean).join("\n");
       add(title, desc, key, lc!.qty, lc!.each, lc!.sub);
+      // its personalizations, each its own line (they're in the group's total, not the line's price)
+      for (const x of (gc?.persItems || []).filter((p) => p.lineId === l.id)) add("Personalization", `Personalization: ${x.text}${x.size ? ` (${sizeLabel(x.size)})` : ""}`, key, x.qty, x.unit, x.amount);
     });
   });
 

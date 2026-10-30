@@ -268,7 +268,19 @@ export type GLine = {
    *  personalized? …you type the name, and then it adds it to the line item"): one piece per name, its own line, the
    *  personalization price added to the piece (`persEach`), "Personalization: <name>" as the line's note */
   pers?: string;
+  /** the names sewn on pieces of this line (Oct 30, Nick: "if there's multiple personalizations within an item, you would
+   *  just say… size small, quantity one… medium… "): each its size, how many and the price each (the program's own, set
+   *  by the order page; else the price list's). Shown under the line; charged on top of the line (group sub). */
+  persList?: PersEntry[];
 };
+export type PersEntry = { id: string; text: string; size: Size | ""; qty: number; price?: number };
+/** a line's personalizations (the older single `pers`, a whole one-piece line, read the same way) */
+export function persOf(l: Pick<GLine, "pers" | "persList" | "sizes" | "id">): PersEntry[] {
+  if (l.persList?.length) return l.persList;
+  if (!l.pers) return [];
+  const z = SIZES.find((x) => +(l.sizes?.[x] || 0) > 0) || "";
+  return [{ id: `${l.id}-p`, text: l.pers, size: z, qty: Object.values(l.sizes || {}).reduce((a: number, n) => a + (+(n || 0)), 0) || 1 }];
+}
 /** the personalization price on a piece: the price list's own (embroidery extras), else the contract list's, else $5 */
 export function persEach(s: Settings, type: PriceType = "retail"): number {
   const find = (pl: PriceList) => [...(pl.embExtras || []), ...(pl.finishing || [])].find((f) => /personali[sz]/i.test(`${f.id} ${f.name}`));
@@ -276,7 +288,7 @@ export function persEach(s: Settings, type: PriceType = "retail"): number {
   return f && !isNaN(+f.price) ? +f.price : 5;
 }
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; name?: string;
+export type Group = { id: string; name?: string; /** priced by a program design's flat price, which is everything in: no setup (screens, digitizing, PMS, minimum) on this group (Oct 30, Nick: "the program pricing overrides the setup… zero setups") */ allIn?: boolean;
   /** a longer description of everything in the group (Oct 22, Nick: "a more detailed description for a group… that's
    *  not just the group name"): under the name on the order, the quote, the invoice and the work order */
   description?: string;
@@ -913,7 +925,10 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
   const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
-  const persRate = (g.lines || []).some((l) => l.pers) ? persEach(s, o.price_type || "retail") : 0;
+  const persRate = (g.lines || []).some((l) => l.pers || l.persList?.length) ? persEach(s, o.price_type || "retail") : 0;
+  // personalizations: each name its own charge, on top of its line (not in the line's price each)
+  const persItems = (g.lines || []).filter((l) => !l.shopUse).flatMap((l) => persOf(l).map((e) => ({ lineId: l.id, text: e.text, size: e.size, qty: num(e.qty) || 1, unit: e.price != null ? num(e.price) : persRate, amount: r2((num(e.qty) || 1) * (e.price != null ? num(e.price) : persRate)) })));
+  const persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
@@ -921,7 +936,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const garmentEach = r2(garmentRaw);
     const { light, print: basePrint } = printLine(l.color);
     const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
-    const calcEach = r2(garmentRaw + linePrint + finishEach + (l.pers ? persRate : 0));
+    const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
     const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;
@@ -952,16 +967,17 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (seen.has(k)) return { ...d, setup: 0, shared: true };
     seen.add(k); return d;
   });
-  const screens = o.waive_setup ? 0 : setups.reduce((a, d) => a + d.setup, 0);
-  const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
-  const sub = r2(lines.reduce((a, l) => a + l.sub, 0));
+  const noSetup = !!o.waive_setup || !!g.allIn;
+  const screens = noSetup ? 0 : setups.reduce((a, d) => a + d.setup, 0);
+  const inkFees = g.allIn ? 0 : imprints.reduce((a, d) => a + d.inkFee, 0);
+  const sub = r2(lines.reduce((a, l) => a + l.sub, 0) + persTotal);
   // contract minimum: a job under minQty pieces is charged as minQty pieces (the missing pieces at the average price)
   // (screen printing: embroidery has its own 6-11 break)
-  const minCharge = pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
+  const minCharge = !g.allIn && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
   const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean }[] = [];
-  if (!o.waive_setup) setups.forEach((d, i) => {
+  if (!noSetup) setups.forEach((d, i) => {
     const im = (g.imprints || [])[i];
     if (!im || !d.setup) return;
     if (im.method === "screen") {
@@ -969,14 +985,14 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       setupItems.push({ kind: (im.remake ?? ix.remake) && pl.remakeFee != null ? "remake" : "screens", qty: n, unit: r2(d.setup / n), amount: r2(d.setup) });
     } else setupItems.push({ kind: "digitize", qty: 1, unit: r2(d.setup), amount: r2(d.setup) });
   });
-  imprints.forEach((_, i) => {
+  if (!g.allIn) imprints.forEach((_, i) => {
     const im = (g.imprints || [])[i]; if (!im) return;
     const pms = pmsFresh[i] ?? (im.method === "screen" ? pmsCount(im) : num(im.pms)), ic = num(im.inkChanges);
     if (pms && num(pl.pmsFee)) setupItems.push({ kind: "pms", qty: pms, unit: num(pl.pmsFee), amount: r2(pms * num(pl.pmsFee)) });
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, qty, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, qty, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;

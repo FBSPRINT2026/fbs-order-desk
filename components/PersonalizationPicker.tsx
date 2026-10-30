@@ -1,70 +1,63 @@
 "use client";
 import { useState } from "react";
-import { lineQty, SIZES, type GLine, type Size } from "@/lib/pricing";
+import { lineQty, persOf, SIZES, type GLine, type Size } from "@/lib/pricing";
 
 /**
  * "Add personalization" on a group with embroidery (Oct 30, Nick: "put a check mark for add personalization… what item
  * should we have personalized? …you select it from the dropdown, you type the name, and then it adds it to the line
- * item"). Each name is one piece: it comes off the picked line (one of the size picked) onto its own line, marked
- * "Personalization: <name>", and that piece is charged the personalization price (lib/pricing.ts persEach).
+ * item… size small, quantity one… if you had a medium, you go medium"). One row: item · size · qty · name · title · Add.
+ * Each one goes under its line item (GroupEditor) with its size and quantity, charged per piece on top of the line.
  */
-export default function PersonalizationPicker({ lines, price, hidePrices, disabled, onAdd, onRemove }: {
+export default function PersonalizationPicker({ lines, price, hidePrices, disabled, onAdd }: {
   lines: GLine[]; price: number; hidePrices?: boolean; disabled?: boolean;
-  onAdd: (lineId: string, size: Size, name: string) => void; onRemove: (lineId: string) => void;
+  onAdd: (lineId: string, size: Size | "", qty: number, text: string) => void;
 }) {
-  const named = lines.filter((l) => l.pers);
+  const named = lines.some((l) => persOf(l).length);
   const [open, setOpen] = useState(false);
-  const on = open || named.length > 0;
-  const pickable = lines.filter((l) => !l.pers && !l.extras && !l.shopUse && lineQty(l) > 0);
+  const on = open || named;
+  const pickable = lines.filter((l) => !l.extras && !l.shopUse && lineQty(l) > 0);
   const [lineId, setLineId] = useState("");
   const [size, setSize] = useState<Size | "">("");
+  const [qty, setQty] = useState("1");
   const [name, setName] = useState("");
-  // a name, a title, or both (Oct 30, Nick: "sometimes it's one or the other, sometimes it's both"): sewn name over title,
-  // kept on the line as "Name / Title"
+  // a name, a title, or both (Nick: "sometimes it's one or the other, sometimes it's both"): kept as "Name / Title"
   const [title, setTitle] = useState("");
   const text = [name.trim(), title.trim()].filter(Boolean).join(" / ");
   const line = pickable.find((l) => l.id === lineId) || (pickable.length === 1 ? pickable[0] : null);
   const sizes = line ? SIZES.filter((z) => +(line.sizes?.[z] || 0) > 0) : [];
   const sz = (size && sizes.includes(size as Size) ? size : sizes.length === 1 ? sizes[0] : "") as Size | "";
+  const n = Math.max(1, Math.floor(+qty || 1));
   const label = (l: GLine) => [l.style, l.color].filter(Boolean).join(" · ") || "Garment";
   const add = () => {
-    if (!line || !sz || !text) return;
-    onAdd(line.id, sz, text);
-    setName(""); setTitle("");
+    if (!line || (sizes.length > 0 && !sz) || !text) return;
+    onAdd(line.id, sz, n, text);
+    setName(""); setTitle(""); setQty("1");
   };
+  const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
   return (
     <div className="sbx-sec pers">
-      <label className="check"><input type="checkbox" checked={on} disabled={disabled || (named.length > 0 && on)} onChange={(e) => setOpen(e.target.checked)} />Add personalization{!hidePrices && <span className="faint"> ${price.toFixed(2)}/name</span>}</label>
-      {on && (
-        <>
-          {named.map((l) => (
-            <div key={l.id} className="sbx-r pers-r">
-              <span className="sbx-loc">{label(l)} · {SIZES.find((z) => +(l.sizes?.[z] || 0) > 0) || ""}</span>
-              <span><b>Personalization:</b> {l.pers}</span>
-              {!disabled && <button className="btn icon ghost sbx-end" type="button" aria-label={`Remove the personalization ${l.pers}`} title="Remove" onClick={() => onRemove(l.id)}>✕</button>}
-            </div>
-          ))}
-          {!disabled && (pickable.length ? (
-            <div className="pers-add">
-              <div className="field"><label htmlFor="pers-item">Item to personalize</label>
-                <select id="pers-item" value={line?.id || ""} onChange={(e) => { setLineId(e.target.value); setSize(""); }}>
-                  {pickable.length > 1 && <option value="">Pick the item…</option>}
-                  {pickable.map((l) => <option key={l.id} value={l.id}>{label(l)}</option>)}
-                </select></div>
-              <div className="field"><label htmlFor="pers-size">Size</label>
-                <select id="pers-size" value={sz} onChange={(e) => setSize(e.target.value as Size)} disabled={!line}>
-                  {sizes.length !== 1 && <option value="">Size…</option>}
-                  {sizes.map((z) => <option key={z} value={z}>{z} ({line?.sizes?.[z]})</option>)}
-                </select></div>
-              <div className="field"><label htmlFor="pers-name">Name</label>
-                <input id="pers-name" type="text" value={name} placeholder="John Doe" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
-              <div className="field"><label htmlFor="pers-title">Title</label>
-                <input id="pers-title" type="text" value={title} placeholder="Position" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
-              <button type="button" className="btn sm" disabled={!line || !sz || !text} onClick={add}>Add</button>
-            </div>
-          ) : <p className="faint">Add the garments first: each name goes on one piece.</p>)}
-        </>
-      )}
+      <label className="check"><input type="checkbox" checked={on} disabled={disabled || named} onChange={(e) => setOpen(e.target.checked)} />Add personalization{!hidePrices && <span className="faint"> ${price.toFixed(2)} each</span>}{named && <span className="faint"> · listed under each item</span>}</label>
+      {on && !disabled && (pickable.length ? (
+        <div className="pers-add">
+          <div className="field"><label htmlFor="pers-item">Item</label>
+            <select id="pers-item" value={line?.id || ""} onChange={(e) => { setLineId(e.target.value); setSize(""); }}>
+              {pickable.length > 1 && <option value="">Pick the item…</option>}
+              {pickable.map((l) => <option key={l.id} value={l.id}>{label(l)}</option>)}
+            </select></div>
+          <div className="field"><label htmlFor="pers-size">Size</label>
+            <select id="pers-size" value={sz} onChange={(e) => setSize(e.target.value as Size)} disabled={!line}>
+              {sizes.length !== 1 && <option value="">Size…</option>}
+              {sizes.map((z) => <option key={z} value={z}>{z}</option>)}
+            </select></div>
+          <div className="field"><label htmlFor="pers-qty">Qty</label>
+            <input id="pers-qty" type="number" min={1} step={1} value={qty} onChange={(e) => setQty(e.target.value)} onKeyDown={enter} /></div>
+          <div className="field"><label htmlFor="pers-name">Name</label>
+            <input id="pers-name" type="text" value={name} placeholder="John Doe" onChange={(e) => setName(e.target.value)} onKeyDown={enter} /></div>
+          <div className="field"><label htmlFor="pers-title">Title</label>
+            <input id="pers-title" type="text" value={title} placeholder="Position" onChange={(e) => setTitle(e.target.value)} onKeyDown={enter} /></div>
+          <button type="button" className="btn sm" disabled={!line || (sizes.length > 0 && !sz) || !text} onClick={add}>Add</button>
+        </div>
+      ) : <p className="faint">Add the garments first: each name goes on a piece.</p>)}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -483,24 +483,19 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   // (personalization isn't one of them any more: it's per piece, on the line it's for, PersonalizationPicker below)
   const embList = gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? (settings.wholesale.embExtras || []).filter((f) => !/personali[sz]/i.test(`${f.id} ${f.name}`) || (g.finishing || []).includes(f.id)) : [];
   // "Add personalization" on any group with embroidery (Oct 30, Nick): a name on one piece of a line, split onto its own line
-  const hasEmb = g.imprints.some((d) => d.method === "embroidery") || g.lines.some((l) => l.pers);
-  const addPers = (lineId: string, size: Size, name: string) => update((x) => {
-    const i = x.lines.findIndex((l) => l.id === lineId), src = x.lines[i];
-    if (!src) return;
-    if (lineQty(src) === 1) { src.pers = name; src.note = `Personalization: ${name}`; return; }
-    src.sizes = { ...src.sizes, [size]: Math.max(0, (+(src.sizes[size] || 0)) - 1) };
-    if (!src.sizes[size]) delete src.sizes[size];
-    const nl: GLine = { ...JSON.parse(JSON.stringify(src)), id: uid(), sizes: { [size]: 1 }, pers: name, note: `Personalization: ${name}`, priceOverride: null };
-    delete nl.prog; delete nl.progOff;
-    let at = i + 1; while (x.lines[at]?.pers) at++;
-    x.lines.splice(at, 0, nl);
+  const hasEmb = g.imprints.some((d) => d.method === "embroidery") || g.lines.some((l) => persOf(l).length > 0);
+  const addPers = (lineId: string, size: Size | "", qty: number, text: string) => update((x) => {
+    const l = x.lines.find((y) => y.id === lineId);
+    if (!l) return;
+    l.persList = [...persOf(l), { id: uid(), text, size, qty }];
+    if (l.pers) { if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
   });
-  const removePers = (lineId: string) => update((x) => {
-    const i = x.lines.findIndex((l) => l.id === lineId), pl0 = x.lines[i];
-    if (!pl0) return;
-    const home = x.lines.find((l) => l !== pl0 && !l.pers && !l.extras && !l.shopUse && (l.style || "").trim().toLowerCase() === (pl0.style || "").trim().toLowerCase() && (l.color || "").trim().toLowerCase() === (pl0.color || "").trim().toLowerCase());
-    if (home) { for (const [z, q] of Object.entries(pl0.sizes || {})) home.sizes = { ...home.sizes, [z]: (+(home.sizes[z as Size] || 0)) + (+(q || 0)) }; x.lines.splice(i, 1); return; }
-    delete pl0.pers; if (/^Personalization:/.test(pl0.note || "")) delete pl0.note;
+  const removePers = (lineId: string, entryId: string) => update((x) => {
+    const l = x.lines.find((y) => y.id === lineId);
+    if (!l) return;
+    const left = persOf(l).filter((e) => e.id !== entryId);
+    if (l.pers) { if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
+    if (left.length) l.persList = left; else delete l.persList;
   });
   // screens (contract jobs): per screen print, its colors + the underbase when it gets one, or set by hand
   const wpl = settings.wholesale;
@@ -772,10 +767,12 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 })()}
                 {/* the name on this piece, right under its line (Oct 30, Nick: "once we input the personalization… put it below
                     the line item… JST73… Cody White Ops Manager") */}
-                {l.pers && (
-                  <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span>{l.pers}</span>
-                    {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label={`Remove the personalization ${l.pers}`} title="Remove" onClick={() => removePers(l.id)}>✕</button>}</div>
-                )}
+                {persOf(l).map((e) => (
+                  <div key={e.id} className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{e.text}</span>
+                    {e.size && <span className="faint">Size {e.size}</span>}<span className="faint">Qty {e.qty}</span>
+                    {!hidePrices && <span className="faint">{money(e.price != null ? e.price : persEach(settings, gc.wholesale ? "wholesale" : "retail"))} each</span>}
+                    {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label={`Remove the personalization ${e.text}`} title="Remove" onClick={() => removePers(l.id, e.id)}>✕</button>}</div>
+                ))}
                 {((l.note != null && !(l.pers && l.note === `Personalization: ${l.pers}`)) || noteOpen === l.id) && (
                   <div className="gl-note">
                     <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="Line description: ship-to, packing, a name…" value={l.note || ""}
@@ -1150,7 +1147,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
                 </div>}
-                {hasEmb && <PersonalizationPicker lines={g.lines} price={persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} onRemove={removePers} />}
+                {hasEmb && <PersonalizationPicker lines={g.lines} price={persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} />}
               </div>
             )}
             {finishingAt === "group" && finList.length > 0 && (

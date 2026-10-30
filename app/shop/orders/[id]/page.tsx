@@ -23,7 +23,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persEach, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -504,6 +504,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     };
     const apply = (d: Order) => {
       const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
+      // personalizations (Oct 30): a line made by the first version (its own one-piece line, `pers`) becomes a name under
+      // the line like the rest; each name priced at the program's own personalization price (Nine18 $5), else the list's
+      const ownX: Record<string, number> = (on && prog?.card?.extraPrices) || {}, pk = Object.keys(ownX).find((k) => /personal/i.test(k));
+      d.groups.forEach((g) => g.lines.forEach((l) => {
+        if (l.pers && !l.persList?.length) { l.persList = persOf(l); if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
+        for (const e of l.persList || []) { const want = pk ? +ownX[pk] : undefined; if (want == null) { if (e.price != null) delete e.price; } else if (e.price !== want) e.price = want; }
+      }));
+      // a group priced by a program design's flat price is everything in: no setup on it (Oct 30, Nick: "the program
+      // pricing overrides the setup… zero setups")
+      d.groups.forEach((g, gi) => { const all = !!(on && plans[gi]?.ok && plans[gi]?.flat); if (all) { if (!g.allIn) g.allIn = true; } else if (g.allIn) delete g.allIn; });
       d.groups.forEach((g, gi) => g.lines.forEach((l) => {
         // their extras print free: never priced by the program
         if (l.extras) return;
@@ -512,11 +522,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const want0 = on ? plans[gi]?.lines[l.id] || null : null;
         // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
-        const extra0 = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
-        // a personalized piece (GLine.pers): the program's own personalization price (Nine18 $5), else the list's
-        const own: Record<string, number> = (want0 && prog?.card?.extraPrices) || {}, pk = Object.keys(own).find((k) => /personal/i.test(k));
-        const persP = want0 && l.pers ? (pk ? +own[pk] : persEach(settings, d.price_type || "retail")) : 0;
-        const extra = persP ? { each: (extra0?.each || 0) + persP, names: [extra0?.names, "Personalization"].filter(Boolean).join(", ") } : extra0;
+        const extra = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};
