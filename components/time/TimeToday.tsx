@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KIND_LABEL, withLunch, addDays, dayLabel, daysBetween, fullName, hm, localDay, localMinutes, localToIso, nextKinds, periodOf, timeLabel, timecard, weekOf, type Employee, type Punch, type Shift } from "@/lib/timeclock";
 import { timeIssues } from "@/lib/timeIssues";
@@ -140,6 +140,7 @@ function IssuesByPeriod({ d, current, onFixed }: { d: TimeData; current: { start
   const prev = periodOf(d.settings, addDays(current.start, -1));
   const [list, setList] = useState<ReturnType<typeof timeIssues> | null>(null);
   const [prevCount, setPrevCount] = useState(0);
+  const autoPrev = useRef(false);
   const load = useCallback(async () => {
     const sb = createClient();
     const read = (a: string, b: string) => sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(addDays(a, -1), 0)).lt("at", localToIso(addDays(b, 2), 0)).order("at").limit(8000);
@@ -152,7 +153,14 @@ function IssuesByPeriod({ d, current, onFixed }: { d: TimeData; current: { start
     const dis = new Set(((dm || []) as { key: string }[]).map((x) => x.key));
     setList(timeIssues(d.settings, d.employees, (ps || []) as Punch[], p.start, dis, new Date(), p.end));
     // the last period's leftovers, shown as a button while looking at this one
-    if (onCur) setPrevCount(timeIssues(d.settings, d.employees, (pv.data || []) as Punch[], prev.start, dis, new Date(), prev.end).length);
+    if (onCur) {
+      const left = timeIssues(d.settings, d.employees, (pv.data || []) as Punch[], prev.start, dis, new Date(), prev.end).length;
+      setPrevCount(left);
+      // payday (Oct 30, Nick: the badge said "28 to fix", the page said "Nothing to fix"): a new period has just started
+      // and the one being paid still has problems, so open on that one; the badge counts both periods
+      const mine = timeIssues(d.settings, d.employees, (ps || []) as Punch[], p.start, dis, new Date(), p.end).length;
+      if (!mine && left && !autoPrev.current) { autoPrev.current = true; setStart(prev.start); }
+    }
   }, [p.start, p.end, prev.start, prev.end, current.start, d.settings, d.employees]);
   useEffect(() => { load(); const re = () => load(); window.addEventListener("fbs:time-changed", re); return () => window.removeEventListener("fbs:time-changed", re); }, [load]);
   const isCur = p.start === current.start, isPrev = p.start === prev.start;
