@@ -16253,3 +16253,10 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
   .ord .ed-grid:has(.jd-panel) > .stack > .fees-notes{order:2;grid-template-columns:minmax(0,1fr)}
   .ord .ed-grid:has(.jd-panel) > .ed-aside > .dl-panel,.ord .ed-grid:has(.jd-panel) > .ed-aside > .pv-panel{order:3}
 }
+/* A print's Inks / Threads / Screens rows (Oct 29, Nick: "the word Inks up on the top left, then the little swatches to the
+   right"): the label sits on the first line beside the first swatch, never floating in the middle of a tall row; the pencil
+   sits at the top right */
+html body .pr .pr-scr{align-items:baseline}
+html body .pr .pr-scr > .pr-scr-l{padding-top:0;align-self:baseline}
+html body .pr .pr-scr > .pr-scr-v{align-items:baseline;align-self:baseline}
+html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
