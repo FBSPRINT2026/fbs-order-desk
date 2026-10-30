@@ -8171,7 +8171,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mk-tile svg{color:var(--accent);flex:none}
 .mk-tile:hover{border-color:var(--accent);background:var(--accent-soft)}
 .mk-tile:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-@media (max-width:760px){ .mk-tiles{flex:1;min-width:200px} }
+@media (max-width:760px){ .mk-tiles{flex:1 1 0;min-width:0} .mk-tile{min-width:0;overflow-wrap:anywhere} }
 @media (max-width:1100px){ .imp-wrap{grid-template-columns:140px minmax(0,1fr);gap:12px} }
 @media (max-width:760px){ .imp-wrap{grid-template-columns:1fr} .imp-mock{flex-direction:row;flex-wrap:wrap;align-items:center} .mk-big{width:140px} .mk-none{height:90px;flex:1} }
 /* wholesale garment rows: the settings page's own ".ws" (a stacked column, 18px apart) was also landing on a group's
