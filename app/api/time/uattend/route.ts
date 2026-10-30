@@ -15,7 +15,7 @@ export const maxDuration = 60;
  *   POST (an owner/admin on Time Clock → Import): { from, to } brings history over, a month at a time; {} = the same
  *        quick sync now.
  * Employees are matched by uAttend user ID, then by name (the ID is saved on the match). Anyone uAttend has who isn't on
- * our list is added as a former employee, so every punch is kept (Nick, Oct 20: "I'm audited… I have to be able to go
+ * our list is added (active in uAttend: a new hire; otherwise a former employee), so every punch is kept (Nick, Oct 20: "I'm audited… I have to be able to go
  * back the last three years and show everybody's punches"); they're reported so they can be linked or brought back.
  * A punch changed in uAttend is voided here and the new one added (unless someone edited it here).
  * Status (last run, last success, last error, counts) is kept in uattend_sync for the pages to show.
@@ -44,9 +44,10 @@ async function matchUsers(admin: Admin, users: UaUser[]) {
     if (!hit && ln) { const c = free.filter((e) => norm(e.last_name) === ln && fn && norm(e.first_name).slice(0, 3) === fn.slice(0, 3)); if (c.length === 1) hit = c[0]; }
     if (!hit && !ln && fn) { const c = free.filter((e) => norm(e.first_name) === fn); if (c.length === 1) hit = c[0]; }
     if (hit) { await take(u, hit); continue; }
-    // keep their punches: a former employee record, linked by uAttend ID
-    const { data: made } = await admin.from("employees").insert({ first_name: u.first || "uAttend", last_name: u.last || `#${u.id}`, email: u.email || "", uattend_id: u.id, active: false, end_date: null,
-      notes: `Added from uAttend (#${u.id}) on ${new Date().toISOString().slice(0, 10)} to keep their punch history. Not on the employee list${u.active ? "; still active in uAttend" : ""}.` }).select("id").maybeSingle();
+    // keep their punches, linked by uAttend ID. Someone still active in uAttend is a new hire (Oct 30, Nick: "Terena
+    // Nino is a new person"): on the list and in the Payroll Center, waiting for a pay rate; anyone else is a former employee
+    const { data: made } = await admin.from("employees").insert({ first_name: u.first || "uAttend", last_name: u.last || `#${u.id}`, email: u.email || "", uattend_id: u.id, active: !!u.active, end_date: null,
+      notes: u.active ? `New from uAttend (#${u.id}) on ${new Date().toISOString().slice(0, 10)}. Set their pay rate and how they're paid.` : `Added from uAttend (#${u.id}) on ${new Date().toISOString().slice(0, 10)} to keep their punch history. Not on the employee list.` }).select("id").maybeSingle();
     if (made?.id) { byUa.set(u.id, made.id as string); added++; }
     unmatched.push(`${u.first} ${u.last}`.trim() + ` (uAttend #${u.id})${u.active ? "" : " · former"}`);
   }
@@ -67,7 +68,8 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
     summary.punches += ps.length;
     if (!ps.length) continue;
     if (!map || (!usersDone && ps.some((p) => !map!.has(p.user)))) {
-      const fromPunches = [...new Map(ps.map((p) => [p.user, { id: p.user, first: p.first, last: p.last, active: true, email: "" }])).values()];
+      // (whether they're still active isn't known from a punch: they come in as former until someone checks)
+      const fromPunches = [...new Map(ps.map((p) => [p.user, { id: p.user, first: p.first, last: p.last, active: false, email: "" }])).values()];
       const r = await matchUsers(admin, await users(fromPunches)); map = r.byUa; summary.linked += r.linked; summary.newEmployees += r.added; summary.unmatched = r.unmatched; usersDone = !usersBlocked;
     }
     const keys = [...new Set(ps.map((p) => p.key))], have = new Set<string>();

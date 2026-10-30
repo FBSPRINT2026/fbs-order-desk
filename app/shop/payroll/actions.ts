@@ -50,6 +50,30 @@ export async function payrollQbo(): Promise<R<{ payees: Payee[]; accounts: strin
   } catch (e) { return fail(e); }
 }
 
+/**
+ * A new contractor (Oct 30, Nick: "how are we going to create a new one… Terena Nino is a new person"): add them to
+ * QuickBooks as a 1099 vendor under their name and save it as their payee. If QuickBooks already has a vendor by that
+ * exact name, that one is used instead (never a twin). Only when the owner picks it.
+ */
+export async function addVendor(employeeId: string): Promise<R<Payee>> {
+  try {
+    const { admin } = await owner();
+    if (!(await qboConnected(admin))) return { ok: false, error: "QuickBooks isn't connected (Admin Tools → QuickBooks)." };
+    const { data: e } = await admin.from("employees").select("id, first_name, last_name, email, phone, qbo_vendor_id").eq("id", employeeId).maybeSingle();
+    if (!e) return { ok: false, error: "That person isn't on the employee list." };
+    const name = `${e.first_name} ${e.last_name}`.replace(/\s+/g, " ").trim();
+    if (!name) return { ok: false, error: "They need a name first." };
+    const q = new Qbo(admin, { entity: "Vendor", localId: employeeId });
+    const same = await q.query<{ Id: string; DisplayName: string }>("Vendor", `WHERE DisplayName = '${name.replace(/'/g, "\\'")}'`, 5, "Id, DisplayName");
+    const v = same[0] || await q.create<{ Id: string; DisplayName: string }>("Vendor", {
+      DisplayName: name, GivenName: e.first_name || undefined, FamilyName: e.last_name || undefined, PrintOnCheckName: name, Vendor1099: true,
+      ...(e.email ? { PrimaryEmailAddr: { Address: e.email } } : {}), ...(e.phone ? { PrimaryPhone: { FreeFormNumber: e.phone } } : {}),
+    }, `vend${employeeId.replace(/-/g, "").slice(0, 28)}`);
+    await admin.from("employees").update({ qbo_vendor_id: v.Id, qbo_vendor_name: v.DisplayName, qbo_payee_type: "Vendor" }).eq("id", employeeId);
+    return { ok: true, data: { id: v.Id, name: v.DisplayName, type: "Vendor" } };
+  } catch (e) { return fail(e); }
+}
+
 /** the payday as the page shows it, read again here so a check is built from our numbers, not the browser's */
 async function payday(admin: ReturnType<typeof createAdminClient>, start: string) {
   const d = await loadPayday(admin, start);

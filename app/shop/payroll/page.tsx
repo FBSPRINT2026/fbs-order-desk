@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
 import { advanceLeft, guessPayee, loadPayday, planLabel, type PaydayRow } from "@/lib/payday";
-import { issueAdvance, makeChecks, markEntered, payrollQbo, type Payee } from "./actions";
+import { addVendor, issueAdvance, makeChecks, markEntered, payrollQbo, type Payee } from "./actions";
 
 /**
  * Payroll Center (Admin Tools, Oct 30, Nick: "make a payday tool… create checks from the time clock… paycheck
@@ -76,7 +76,7 @@ export default function PayrollCenter() {
     for (const r of cons) if (!r.e.qbo_vendor_id) { const g = guessPayee<Payee>(r.e, vendors); if (g) m.set(r.e.id, g); }
     return m;
   }, [qb, cons]);
-  const ready = cons.filter((r) => !r.line?.qbo_purchase_id && r.e.qbo_vendor_id && r.issues === 0 && r.total > 0);
+  const ready = cons.filter((r) => !r.line?.qbo_purchase_id && r.e.qbo_vendor_id && r.issues === 0 && r.total > 0 && (r.pay.rate != null || r.e.pay_type === "salary"));
   const made = cons.filter((r) => r.line?.qbo_purchase_id);
   const w2Open = w2.filter((r) => !r.line?.done_at);
   const advTotal = r2(rows.reduce((s, r) => s + r.advance, 0));
@@ -91,6 +91,16 @@ export default function PayrollCenter() {
   async function setPayee(empId: string, p: Payee | null) {
     const { error } = await createClient().from("employees").update({ qbo_vendor_id: p?.id || null, qbo_vendor_name: p?.name || null, qbo_payee_type: p?.type || null }).eq("id", empId);
     if (error) setErr(error.message); else load();
+  }
+  /** a new contractor with no payee in QuickBooks yet (Oct 30, Nick: "Terena Nino is a new person"): add them as a 1099 vendor */
+  async function newVendor(r: PaydayRow) {
+    setBusy(`Adding ${fullName(r.e)} to QuickBooks…`); setErr(""); setMsg("");
+    const res = await addVendor(r.e.id);
+    setBusy("");
+    if (!res.ok) { setErr(res.error); return; }
+    setMsg(`${res.data?.name} added to QuickBooks as a vendor (1099) and set as ${r.e.first_name}'s payee.`);
+    const p = await payrollQbo(); if (p.ok) setQb(p.data || null);
+    load();
   }
   async function useGuesses() {
     setBusy("Saving payees…");
@@ -187,7 +197,7 @@ export default function PayrollCenter() {
                 <tbody>{w2.map((r) => (
                   <tr key={r.e.id} className={r.issues ? "flag" : ""}>
                     <td><b>{nm(r)}</b>{asQb(r) && <div className="sub">In QuickBooks as {r.e.qbo_vendor_name}</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
-                    <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : <span className="bad">no rate</span>}</td>
+                    <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : r.line?.done_at ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
                     {r.e.pay_type === "salary"
                       ? <td className="r faint" colSpan={2}>QuickBooks fills it</td>
                       : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
@@ -215,26 +225,30 @@ export default function PayrollCenter() {
             {qbErr && <div className="pv-err" style={{ margin: "10px 16px" }}>{qbErr}</div>}
             <div className="tbl-wrap pc-tbl">
               <table className="tbl">
-                <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Hours</th><th className="r">Regular</th><th className="r">Overtime</th><th className="r">Bonus</th><th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th>QuickBooks payee</th><th className="r">Rate</th><th className="r">Regular hrs</th><th className="r">Overtime hrs</th><th className="r">Regular pay</th><th className="r">Overtime pay</th><th className="r">Bonus</th><th className="r">Advance</th><th className="r">Check</th><th>Status</th></tr></thead>
                 <tbody>{cons.map((r) => {
                   const pe = payeeOf(r), g = guesses.get(r.e.id), done = !!r.line?.qbo_purchase_id;
                   const reg = r.check.filter((l) => l.desc === "REGULAR PAY").reduce((s, l) => s + l.amount, 0), ot = r.check.filter((l) => l.desc === "OVERTIME").reduce((s, l) => s + l.amount, 0);
                   return (
                     <tr key={r.e.id} className={r.issues ? "flag" : ""}>
-                      <td><b>{nm(r)}</b>{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
+                      <td><b>{nm(r)}</b>{!r.e.active && <div className="sub">New from uAttend</div>}{r.issues > 0 && <div className="sub bad">{r.issues} clock problem{r.issues > 1 ? "s" : ""}</div>}</td>
                       <td>{done || !qb ? (pe?.name || <span className="faint">—</span>) : (
-                        <select className="pc-payee" value={pe ? `${pe.type}:${pe.id}` : ""} onChange={(e) => { const [t, id] = e.target.value.split(":"); setPayee(r.e.id, qb.payees.find((x) => x.id === id && x.type === t) || null); }}>
+                        <select className="pc-payee" value={pe ? `${pe.type}:${pe.id}` : ""} onChange={(e) => { const v = e.target.value; if (v === "new") return newVendor(r); const [t, id] = v.split(":"); setPayee(r.e.id, qb.payees.find((x) => x.id === id && x.type === t) || null); }}>
                           <option value="">{g ? `Suggested: ${g.name}` : "Pick payee…"}</option>
+                          {!g && <option value="new">+ Add {fullName(r.e)} to QuickBooks as a new vendor</option>}
                           <optgroup label="Vendors">{qb.payees.filter((x) => x.type === "Vendor").map((x) => <option key={"v" + x.id} value={`Vendor:${x.id}`}>{x.name}</option>)}</optgroup>
                           <optgroup label="Employees">{qb.payees.filter((x) => x.type === "Employee").map((x) => <option key={"e" + x.id} value={`Employee:${x.id}`}>{x.name}</option>)}</optgroup>
                         </select>)}</td>
-                      <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : <>{h2(r.pay.regHours)}{r.pay.otHours ? <span className="pc-ot"> + {h2(r.pay.otHours)}</span> : ""}</>}</td>
-                      <td className="r">{r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="bad">no rate</span> : $(reg)}</td>
+                      <td className="r">{r.e.pay_type === "salary" ? <span className="faint">Salary</span> : r.pay.rate != null ? $(r.pay.rate) : done ? <span className="bad">no rate</span> : <RateCell id={r.e.id} onSaved={load} />}</td>
+                      {r.e.pay_type === "salary"
+                        ? <td className="r faint" colSpan={2}>Salary ÷ {d.settings.period === "biweekly" ? 26 : d.settings.period === "weekly" ? 52 : 24}</td>
+                        : <><td className="r">{h2(r.pay.regHours)}</td><td className={"r" + (r.pay.otHours ? " pc-ot" : "")}>{h2(r.pay.otHours)}</td></>}
+                      <td className="r">{r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="faint">—</span> : $(reg)}</td>
                       <td className={"r" + (ot ? " pc-ot" : "")}>{ot ? $(ot) : <span className="faint">—</span>}</td>
                       <td className="r"><Money value={r.line?.bonus ?? null} disabled={done} onSave={(v) => saveLine(r, { bonus: v })} /></td>
                       <td className="r"><AdvanceCell r={r} disabled={done} onSave={(v) => saveLine(r, { advance_amount: v })} neg /></td>
                       <td className="r"><b>{$(r.line?.check_total ?? r.total)}</b></td>
-                      <td>{done ? <span className="pc-ok">Check made ✓</span> : r.issues ? <span className="bad">Fix clock first</span> : !pe ? <span className="pc-wait">Needs payee</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Nothing to pay</span>}</td>
+                      <td>{done ? <span className="pc-ok">Check made ✓</span> : r.issues ? <span className="bad">Fix clock first</span> : r.pay.rate == null && r.e.pay_type !== "salary" ? <span className="pc-wait">Needs rate</span> : !pe ? <span className="pc-wait">Needs payee</span> : r.total > 0 ? <span className="faint">Ready</span> : <span className="faint">Nothing to pay</span>}</td>
                     </tr>
                   );
                 })}</tbody>
@@ -259,12 +273,33 @@ function Money({ value, onSave, disabled, placeholder = "" }: { value: number | 
   return <input className="pc-money" inputMode="decimal" value={v} placeholder={placeholder} disabled={disabled} onChange={(e) => setV(e.target.value)}
     onBlur={() => { const n = v.trim() === "" ? null : r2(parseFloat(v.replace(/[$,]/g, ""))); if (n !== (value == null ? null : +value) && (n == null || Number.isFinite(n))) onSave(n); }} />;
 }
+/** an hourly rate for someone who has none yet (a new person from uAttend), saved to their pay like Time Clock → Employees */
+function RateCell({ id, onSaved }: { id: string; onSaved: () => void }) {
+  const [err, setErr] = useState("");
+  return (
+    <span className="pc-adv" title="Their hourly rate (saved on the employee)">
+      <Money value={null} placeholder="Rate" onSave={async (v) => {
+        if (v == null || !(v > 0)) return;
+        const { error } = await createClient().from("employee_pay").upsert({ employee_id: id, rate: v, updated_at: new Date().toISOString() }, { onConflict: "employee_id" });
+        if (error) setErr(error.message); else onSaved();
+      }} />
+      {err ? <small className="bad">{err}</small> : <small className="bad">needs a rate</small>}
+    </span>
+  );
+}
 /** this check's advance: the plan's amount, or what's typed in (0 to skip this payday) */
 function AdvanceCell({ r, onSave, disabled, neg }: { r: PaydayRow; onSave: (v: number | null) => void; disabled?: boolean; neg?: boolean }) {
   if (!r.advances.length) return <span className="faint">—</span>;
   const left = r2(r.advances.reduce((s, a) => s + a.left, 0));
+  // skip this payday (Oct 30, Nick: "sometimes employees tell me to skip… an advance payment"): nothing comes out this
+  // time, the plan picks up again next payday
+  const skipped = r.line?.advance_amount != null && +r.line.advance_amount === 0 && r.planned > 0;
+  if (skipped) return (
+    <span className="pc-adv"><span className="faint">Skipped</span>{!disabled && <button type="button" className="linkish" onClick={() => onSave(null)}>Undo</button>}<small className="faint">{$(left)} left</small></span>
+  );
   return (
     <span className="pc-adv" title={`${$(left)} left · ${r.advances.map((a) => planLabel(a.advance)).join(", ")}`}>
+      {!disabled && r.planned > 0 && <button type="button" className="linkish" title="Take nothing out this payday; the plan starts again next payday" onClick={() => onSave(0)}>Skip</button>}
       {neg && <span className="bad">−</span>}
       <Money value={r.line?.advance_amount != null ? +r.line.advance_amount : r.planned} disabled={disabled} onSave={(v) => onSave(v == null || v === r.planned ? null : v)} />
       <small className="faint">of {$(left)}</small>
