@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persEach, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -509,7 +509,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const want0 = on ? plans[gi]?.lines[l.id] || null : null;
         // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
-        const extra = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
+        const extra0 = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
+        // a personalized piece (GLine.pers): the program's own personalization price (Nine18 $5), else the list's
+        const own = prog!.card?.extraPrices || {}, pk = Object.keys(own).find((k) => /personal/i.test(k));
+        const persP = want0 && l.pers ? (pk ? +own[pk] : persEach(settings, d.price_type || "retail")) : 0;
+        const extra = persP ? { each: (extra0?.each || 0) + persP, names: [extra0?.names, "Personalization"].filter(Boolean).join(", ") } : extra0;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};

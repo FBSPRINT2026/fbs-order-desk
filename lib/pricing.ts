@@ -264,7 +264,17 @@ export type GLine = {
   prog?: { each: number; note: string; base?: number; adds?: string };
   /** staff typed their own price over the program price: the program leaves this line alone */
   progOff?: boolean;
+  /** an embroidered name on this line's piece (Oct 30, Nick: "add personalization… what item should we have
+   *  personalized? …you type the name, and then it adds it to the line item"): one piece per name, its own line, the
+   *  personalization price added to the piece (`persEach`), "Personalization: <name>" as the line's note */
+  pers?: string;
 };
+/** the personalization price on a piece: the price list's own (embroidery extras), else the contract list's, else $5 */
+export function persEach(s: Settings, type: PriceType = "retail"): number {
+  const find = (pl: PriceList) => [...(pl.embExtras || []), ...(pl.finishing || [])].find((f) => /personali[sz]/i.test(`${f.id} ${f.name}`));
+  const f = find(priceList(s, type)) || find(s.wholesale);
+  return f && !isNaN(+f.price) ? +f.price : 5;
+}
 /** Garments that share the same imprints. Quantity breaks use the group total. */
 export type Group = { id: string; name?: string;
   /** a longer description of everything in the group (Oct 22, Nick: "a more detailed description for a group… that's
@@ -903,6 +913,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
   const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
+  const persRate = (g.lines || []).some((l) => l.pers) ? persEach(s, o.price_type || "retail") : 0;
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
@@ -910,7 +921,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const garmentEach = r2(garmentRaw);
     const { light, print: basePrint } = printLine(l.color);
     const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
-    const calcEach = r2(garmentRaw + linePrint + finishEach);
+    const calcEach = r2(garmentRaw + linePrint + finishEach + (l.pers ? persRate : 0));
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
     const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;

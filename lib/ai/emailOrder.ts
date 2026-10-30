@@ -421,7 +421,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30f";
+export const READER_REV = "2026-10-30g";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -987,6 +987,25 @@ ${staffSays}` : ""}`;
   for (const g of groups) for (const im of g.imprints || []) { const was = im.location; im.location = fitLocation(im.location, g.lines); if (was !== im.location && g.name === was && g.imprints.length === 1) g.name = im.location; }
   const wholesale = cust?.price_type === "wholesale";
   const supplied = p.garments_supplied_by === "customer" || (wholesale && p.garments_supplied_by !== "shop");
+  // personalized pieces read into their own group (rule 7b) become the order's own personalization (GLine.pers, what
+  // "Add personalization" on the order makes): one piece per name on the line, charged per name, not per group
+  {
+    const persIds = new Set(finAll.filter((f) => /personali[sz]/i.test(`${f.id} ${f.name}`)).map((f) => f.id));
+    for (const g of groups) {
+      if (!(g.finishing || []).some((id) => persIds.has(id))) continue;
+      const out: typeof g.lines = [];
+      let all = true;
+      for (const l of g.lines) {
+        const names = (l.note || "").replace(/^personali[sz]ation:\s*/i, "").split(/\s*[;\n]\s*/).map((n) => n.replace(/\s*\((?:[A-Z0-9]{1,4}|OSFA|OS)\)\s*$/i, "").trim()).filter(Boolean);
+        const sized = Object.entries(l.sizes || {}).flatMap(([z, q]) => Array.from({ length: +(q || 0) }, () => z));
+        if (!names.length || names.length !== sized.length) { all = false; out.push(l); continue; }
+        sized.forEach((z, k) => out.push({ ...l, id: k ? uid() : l.id, sizes: { [z]: 1 }, pers: names[k], note: `Personalization: ${names[k]}` }));
+      }
+      g.lines = out;
+      // the name needs no print of its own (Nick: "we don't need a proof or anything. Our team will know what to do")
+      if (all) { g.finishing = (g.finishing || []).filter((id) => !persIds.has(id)); g.imprints = (g.imprints || []).filter((d) => !/personali[sz]|\bname\b/i.test(`${d.notes || ""} ${d.location === "Right Chest" && g.imprints.length > 1 ? "name" : ""}`)); }
+    }
+  }
   const draft: EODraft = {
     v: 2, kind: job ? "reorder" : "new", summary: (p.summary || "").slice(0, 400), confidence: p.confidence || "medium",
     nickname: (p.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "").slice(0, 120),

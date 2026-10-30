@@ -2,7 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -25,6 +25,7 @@ export const saveFinishing = (wholesale: boolean) => async (f: { name: string; p
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { digitizeStamp, digitizeState, digitizingHref, embSpecsOf, type DgzSewout } from "@/lib/digitizeStatus";
 import DigitizedFinder from "@/components/DigitizedFinder";
+import PersonalizationPicker from "@/components/PersonalizationPicker";
 import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 import { offRun, pcsOf, sizesText } from "@/lib/sizeFit";
 
@@ -479,7 +480,28 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
   // wholesale (contract) jobs use the contract's own finishing list and prices
   const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   // embroidery extras (specialty thread, 3D puff…): only on a group with embroidery
-  const embList = gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? settings.wholesale.embExtras || [] : [];
+  // (personalization isn't one of them any more: it's per piece, on the line it's for, PersonalizationPicker below)
+  const embList = gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? (settings.wholesale.embExtras || []).filter((f) => !/personali[sz]/i.test(`${f.id} ${f.name}`) || (g.finishing || []).includes(f.id)) : [];
+  // "Add personalization" on any group with embroidery (Oct 30, Nick): a name on one piece of a line, split onto its own line
+  const hasEmb = g.imprints.some((d) => d.method === "embroidery") || g.lines.some((l) => l.pers);
+  const addPers = (lineId: string, size: Size, name: string) => update((x) => {
+    const i = x.lines.findIndex((l) => l.id === lineId), src = x.lines[i];
+    if (!src) return;
+    if (lineQty(src) === 1) { src.pers = name; src.note = `Personalization: ${name}`; return; }
+    src.sizes = { ...src.sizes, [size]: Math.max(0, (+(src.sizes[size] || 0)) - 1) };
+    if (!src.sizes[size]) delete src.sizes[size];
+    const nl: GLine = { ...JSON.parse(JSON.stringify(src)), id: uid(), sizes: { [size]: 1 }, pers: name, note: `Personalization: ${name}`, priceOverride: null };
+    delete nl.prog; delete nl.progOff;
+    let at = i + 1; while (x.lines[at]?.pers) at++;
+    x.lines.splice(at, 0, nl);
+  });
+  const removePers = (lineId: string) => update((x) => {
+    const i = x.lines.findIndex((l) => l.id === lineId), pl0 = x.lines[i];
+    if (!pl0) return;
+    const home = x.lines.find((l) => l !== pl0 && !l.pers && !l.extras && !l.shopUse && (l.style || "").trim().toLowerCase() === (pl0.style || "").trim().toLowerCase() && (l.color || "").trim().toLowerCase() === (pl0.color || "").trim().toLowerCase());
+    if (home) { for (const [z, q] of Object.entries(pl0.sizes || {})) home.sizes = { ...home.sizes, [z]: (+(home.sizes[z as Size] || 0)) + (+(q || 0)) }; x.lines.splice(i, 1); return; }
+    delete pl0.pers; if (/^Personalization:/.test(pl0.note || "")) delete pl0.note;
+  });
   // screens (contract jobs): per screen print, its colors + the underbase when it gets one, or set by hand
   const wpl = settings.wholesale;
   const scrImps = gc.wholesale ? g.imprints.filter((d) => d.method === "screen" && d.colors < FULL_COLOR) : [];
@@ -1088,7 +1110,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => { if (!needMockup) setAskSkip(true); }} />}
             <div inert={locked || fixed || undefined} className="mk-body">
-            {(inksSec || embImps.length > 0) && (
+            {(inksSec || embImps.length > 0 || hasEmb) && (
               <div className="sbx">
                 {inksSec ? <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Inks</span></div>
@@ -1122,6 +1144,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
                 </div>}
+                {hasEmb && <PersonalizationPicker lines={g.lines} price={persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} onRemove={removePers} />}
               </div>
             )}
             {finishingAt === "group" && finList.length > 0 && (
