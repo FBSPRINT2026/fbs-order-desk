@@ -126,8 +126,10 @@ export default function PayrollCenter() {
   const hasW2 = rec?.w2_gross != null;
   const checksTotal = r2(made.reduce((s, r) => s + +(r.line?.check_total || 0), 0));
   const w2Cost = hasW2 ? r2(+(rec!.w2_gross || 0) + +(rec!.w2_employer_taxes || 0)) : 0;
-  const otCon = r2(cons.reduce((s, r) => s + (r.pay.otPay || 0), 0)), otConH = r2(cons.reduce((s, r) => s + r.pay.otHours, 0));
-  const otW2 = r2(w2.reduce((s, r) => s + (r.pay.otPay || 0), 0)), otW2H = r2(w2.reduce((s, r) => s + r.pay.otHours, 0));
+  // overtime's extra cost (Oct 30, Nick: "I just want the cost extra for the overtime… that extra half of pay"): the half on
+  // top of straight time, overtime hours × half the rate, everyone on this payday
+  const otHalf = r2(rows.reduce((s, r) => s + (r.pay.rate != null ? r.pay.otHours * r.pay.rate * ((d?.settings.otRate || 1.5) - 1) : 0), 0));
+  const otHours = r2(rows.reduce((s, r) => s + r.pay.otHours, 0));
   async function getActuals() {
     if (!d) return;
     setBusy("Reading the payroll from QuickBooks…"); setErr(""); setMsg("");
@@ -311,7 +313,7 @@ export default function PayrollCenter() {
                     <td className="r">{hasW2 ? $(+(rec!.w2_gross || 0)) : <button type="button" className="btn sm" onClick={getActuals} disabled={!!busy}>Get totals from QuickBooks</button>}</td></tr>
                   <tr><td><b>FBS taxes</b><div className="sub">Social Security and Medicare match, federal and Texas unemployment</div></td><td className="r">{hasW2 ? $(+(rec!.w2_employer_taxes || 0)) : <span className="faint">—</span>}</td></tr>
                   <tr className="pc-tot-sum"><td><b>Total payroll</b>{hasW2 && <div className="sub">W-2 with FBS taxes {$(w2Cost)}{rec?.qbo_pulled_at ? <> · from QuickBooks {new Date(rec.qbo_pulled_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · <button type="button" className="linkbtn" onClick={getActuals} disabled={!!busy}>Read again</button></> : null}</div>}</td><td className="r"><b>{hasW2 ? $(r2(checksTotal + w2Cost)) : `${$(checksTotal)} + W-2`}</b></td></tr>
-                  <tr><td><b>Overtime on this payroll</b><div className="sub">{h2(r2(otConH + otW2H))} overtime hours at time and a half</div></td><td className="r pc-ot">{$(r2(otCon + otW2))}</td></tr>
+                  <tr><td><b>Overtime's extra half</b><div className="sub">What overtime cost on top of straight time ({h2(otHours)} overtime hours × half the rate)</div></td><td className="r pc-ot">{$(otHalf)}</td></tr>
                 </tbody>
               </table>
             </div>
