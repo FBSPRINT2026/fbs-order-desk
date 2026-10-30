@@ -56,7 +56,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     // top of the work order")
     const placed = g.imprints.map((d) => d.supplied?.picture?.path || d.placeRef?.path || "").filter(Boolean);
     const all = g.mockupThumbs?.length ? g.mockupThumbs : placed.length ? placed : (g.customerMockups || []).map((m) => m.path);
-    return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, 1);
+    // the quote / invoice: each garment line's own picture (Oct 30, Nick: a thumbnail on every garment)
+    return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, Math.max(1, g.lines.length));
   });
   // the logos' pictures: the work order, the proof, and the sew-out's "compared to the original file"
   const dPaths = work0 || proof0 || !!sewout ? Object.values(designs).filter((d) => d.preview_path) : [];
@@ -65,6 +66,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const urlOf = new Map<string, string>();
   toSign.forEach((x, i) => { if (signed[i]?.signedUrl) urlOf.set(x, signed[i].signedUrl!); });
   const mockups = mkPaths.map((ps) => ps.map((x) => urlOf.get(x) || "").filter(Boolean));
+  const byLine = mkPaths.map((ps) => ps.map((x) => urlOf.get(x) || ""));
   const designUrls: Record<string, string> = {};
   dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
   // vector art's own file, so the saved PDF can draw it sharp at any size (Oct 20, Nick: "really high-resolution")
@@ -76,7 +78,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       (vs || []).forEach((r, i) => { if (r.signedUrl) designFiles[vec[i].id] = r.signedUrl; });
     }
   }
-  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, hexes, colorHexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, byLine, hexes, colorHexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
   // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };

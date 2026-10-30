@@ -403,4 +403,59 @@ export const DOC_CSS = `
   .pdoc .sheet.pf{height:10.1in;min-height:0}
   .pdoc .sheet.wo1{height:10.1in;min-height:0;padding-bottom:.15in}
 }
+
+/* ── The quote / invoice, Oct 30 (Nick approved the layout): a two-line top, a row per garment with its thumbnail, sizes and
+   short print lines; everything stays inside the page (InkFit) ── */
+.pdoc .iv2-head{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.pdoc .iv2-logo{height:.62in;width:auto;display:block}
+.pdoc .iv2-no{text-align:right;display:flex;flex-direction:column;gap:2px}
+.pdoc .iv2-no b{font-size:21pt;line-height:1}
+.pdoc .iv2-no span{font-size:10pt;color:var(--ink3);white-space:nowrap}
+.pdoc .iv2-who{display:flex;justify-content:space-between;gap:24px;margin:14px 0 4px}
+.pdoc .iv2-who > div{display:flex;flex-direction:column;min-width:0;font-size:10.5pt;line-height:1.35}
+.pdoc .iv2-who > div.r{text-align:right;align-items:flex-end}
+.pdoc .iv2-who b{font-weight:700}
+.pdoc .iv2-who span{color:var(--ink3);font-size:9.5pt}
+.pdoc .iv2-g{border-top:2px solid var(--ink);margin-top:14px;break-inside:auto}
+.pdoc .iv2-gh{display:flex;justify-content:space-between;align-items:baseline;font-size:13pt;padding:4px 0 0}
+.pdoc .iv2-gh small{font-family:"Public Sans",sans-serif;font-size:9pt;font-weight:600;color:var(--ink3)}
+.pdoc .iv2-gd{font-size:9.5pt;color:var(--ink2);white-space:pre-wrap;margin-top:2px}
+.pdoc .iv2-cols,.pdoc .iv2-row{display:grid;grid-template-columns:minmax(0,1fr) .55in .8in .95in;column-gap:8px}
+.pdoc .iv2-cols{padding:6px 0 3px;border-bottom:1px solid var(--line);font-size:8pt}
+.pdoc .iv2-cols span:not(:first-child),.pdoc .iv2-row span:not(:first-child){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pdoc .iv2-ln{padding:7px 0 8px;border-bottom:1px solid var(--line2);break-inside:avoid}
+.pdoc .iv2-row{align-items:baseline;font-size:11pt}
+/* the garment's name wraps inside its own column, never into Qty (Oct 30, Nick: "Pepper" ran into the 36) */
+.pdoc .iv2-nm{min-width:0;white-space:normal;overflow-wrap:anywhere}
+.pdoc .iv2-nm b{font-weight:800}
+.pdoc .iv2-sub{font-size:9pt;color:var(--ink3);margin-top:0}
+.pdoc .iv2-note{font-size:9pt;color:var(--ink2);font-style:italic;white-space:pre-wrap;margin-top:2px}
+.pdoc .iv2-det{display:flex;gap:8px;align-items:flex-start;margin-top:5px;min-width:0}
+.pdoc .iv2-th{width:.68in;height:.68in;flex:none;object-fit:contain;border-radius:7px;background:#f4f5f7;display:block}
+.pdoc .iv2-th.none{background:linear-gradient(var(--sc),var(--sc)) center/45% 55% no-repeat,#f4f5f7}
+.pdoc .iv2-cs{width:.27in;height:.68in;flex:none;border:.75px solid var(--ink);border-radius:4px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6pt;font-weight:300;letter-spacing:.12em;line-height:1.15;text-align:center;text-transform:uppercase}
+.pdoc .iv2-blk{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.pdoc .iv2-sz{display:flex;white-space:nowrap;font-size:10pt;line-height:1.6;font-variant-numeric:tabular-nums}
+.pdoc .iv2-sz.many{font-size:8.5pt}
+.pdoc .iv2-sz span{border-left:1px solid var(--line2);padding:0 7px}
+.pdoc .iv2-sz span:first-child{border-left:0;padding-left:0}
+.pdoc .iv2-sz b{font-weight:800;margin-left:3px}
+.pdoc .iv2-sz .z{color:#b6bec6}
+.pdoc .iv2-sz .z b{font-weight:400}
+.pdoc .iv2-sz .x{color:#0b6fa4}
+.pdoc .iv2-prs{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:2px;align-items:baseline}
+.pdoc .iv2-pr{display:contents}
+.pdoc .iv2-pr em{font-style:normal;font-weight:700;font-size:8pt;color:var(--ink);white-space:nowrap}
+.pdoc .iv2-inks{display:flex;flex-wrap:wrap;column-gap:7px;row-gap:1px;min-width:0;font-size:var(--ik,8pt);line-height:1.35;color:var(--ink2)}
+.pdoc .iv2-inks > span{white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+.pdoc .iv2-inks i{width:.72em;height:.72em;border-radius:50%;border:1px solid rgba(0,0,0,.28);display:inline-block;flex:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pdoc .iv2-prs:not([data-m="short"]) .s,.pdoc .iv2-prs[data-m="short"] .f{display:none}
+.pdoc .iv2-set{display:grid;grid-template-columns:minmax(0,1fr) .95in;column-gap:8px;font-size:9.5pt;color:var(--ink2);padding:4px 0 0}
+.pdoc .iv2-set span:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pdoc .iv2-fees{border-top-width:1px;padding-top:2px}
+.pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:16px;align-items:end;break-inside:avoid}
+.pdoc .iv2-left{display:flex;flex-direction:column;gap:10px;font-size:9.5pt;line-height:1.4;min-width:0}
+.pdoc .iv2-left .lbl{font-size:8pt;margin-bottom:1px}
+.pdoc .iv2-ship{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.pdoc .iv2-terms span{color:var(--ink3)}
 `;

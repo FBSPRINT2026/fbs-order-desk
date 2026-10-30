@@ -1,7 +1,7 @@
 import { threadByName } from "@/lib/embroidery";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -10,6 +10,8 @@ import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
 import WoFit from "./WoFit";
+import InkFit from "./InkFit";
+import { inkShort } from "@/lib/inkShort";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
 import DstPicture from "@/components/DstPicture";
@@ -28,6 +30,7 @@ export type DocData = {
   designs: Record<string, Design>; designUrls: Record<string, string>;
   /** vector art (EPS / PDF / AI / SVG): a signed link to the original file, drawn at full resolution in the saved PDF */ designFiles?: Record<string, string>;
   /** per group: signed mockup pictures (photos only), the first is the big one */ mockups: string[][];
+  /** per group, per garment line: that line's own mockup picture ("" when it has none) */ byLine?: string[][];
   /** per group: the shirt color behind the art */ hexes: string[];
   /** each garment color's shirt color (lower-case letters and digits → hex) */ colorHexes?: Record<string, string>;
   /** per group, per print: the largest it can print (inches) and on which size */ maxes: ({ w: number; h: number; on: string } | null)[][];
@@ -615,113 +618,114 @@ const SETUP_LABEL = (k: string, q: number, thread = false) => ({
   pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `${thread ? "Thread changes" : "Ink changes"}${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
 } as Record<string, string>)[k] || "Setup";
 
+/** a garment's sizes on the quote / invoice, one line (Oct 30, Nick): S to 3XL always (a size not ordered shows 0), YS to YXL
+ *  the same for youth, any other size (XS, 4XL, 5XL, baby, toddler, one size) only when it's ordered */
+function invoiceSizes(sizes: Record<string, number> | undefined) {
+  const has = (z: string) => +(sizes?.[z] || 0) > 0;
+  const youth = YOUTH_SIZES.some(has), adult = ADULT_SIZES.some(has) || !SIZES.some(has);
+  const base = new Set<string>([...(adult ? ["S", "M", "L", "XL", "2XL", "3XL"] : []), ...(youth ? ["YS", "YM", "YL", "YXL"] : [])]);
+  return SIZES.filter((z) => base.has(z) || has(z)).map((z) => ({ z, n: +(sizes?.[z] || 0), extra: !base.has(z) }));
+}
+const flat = (x: string | null | undefined) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * The quote / invoice (Oct 30, Nick: "the top part just takes up way too much space. The most important information is the
+ * bottom part"), approved as shown:
+ *  - top: the logo; on the right two lines, "Quote #40214" and "PO 2231 · Due Fri Nov 14" (the in-hands date);
+ *  - Bill to (the company and the contact, no address) and Job (name, pieces, pickup / ship method) side by side;
+ *  - each group: its name and pieces, then a row per garment: brand and style in bold · color, Qty / Each / Amount on the
+ *    same line (the name wraps inside its column, never into Qty); the garment's name small under it; then the
+ *    thumbnail beside one line of sizes and a short line per print (Front, Back…) with its inks as dots and names that
+ *    fit inside the page (InkFit: full names, then short names, then two lines, then smaller type; never cut off);
+ *    customer supplied garments get a thin "Customer / supplied" stamp up the left of their thumbnail;
+ *  - setup charges under each group; the ship-to box (only when it isn't their own address) and the payment terms at the
+ *    bottom left, the totals at the bottom right.
+ * The same component draws the quote, the invoice, the saved PDF and the customer's view of it.
+ */
 export function InvoiceDoc(p: DocData) {
   const { o, cust, groups, c, settings, pays } = p;
   const sh = settings.shop, isQ = o.type === "quote", kind = isQ ? "Quote" : "Invoice";
   const issued = new Date(o.sent_at || o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" });
-  const prints = groups.reduce((a, g) => a + g.imprints.length, 0);
   const paidUp = !isQ && c.paid > 0 && c.balance <= 0.005;
-  const contact = [cust.company && cust.name && cust.name !== cust.company ? cust.name : "", cust.address].filter(Boolean).join("\n");
+  const contact = cust.company && cust.name && cust.name !== cust.company ? cust.name : "";
+  const how = o.delivery_method === "ship" ? (o.ship_method || "Ship") : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup or ship TBD" : "Pickup";
+  // ship to: a box at the bottom, only when it goes somewhere other than their own address (Oct 30, Nick)
+  const shipTo = (o.delivery_method === "ship" || o.delivery_method === "deliver") && (o.ship_to || "").trim() && flat(o.ship_to) !== flat(cust.address) ? String(o.ship_to).trim() : "";
+  const deposit = cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 ? c.total / 2 - c.paid : 0;
   return (
-    <section className="sheet">
-      {/* every fact on its own short line, nothing wrapping onto a second line (Oct 29, Nick: "on invoices, I don't want any
-          lines carrying over… the build to, deliver… looks crammed") */}
-      <div className="top">
-        <div className="brand">
-          <img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
-          {(sh.address || sh.phone || sh.email) && <div className="sub">{[sh.address, fmtPhone(sh.phone), sh.email].filter(Boolean).join("\n")}</div>}
-        </div>
-        <div className="doc">
-          <div className="k disp">{kind}</div>
-          <div className="n">#{o.number}</div>
-          <div className="meta">Issued {issued}{due && <><br />In hands {due}</>}<br />{DELIVERY[o.delivery_method] || "Pickup"}</div>
-        </div>
+    <section className="sheet iv2">
+      <div className="iv2-head">
+        <img className="iv2-logo" src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
+        <div className="iv2-no"><b className="disp">{kind} #{o.number}</b>{(o.po_number || due) && <span>{[o.po_number ? `PO ${o.po_number}` : "", due ? `Due ${due}` : ""].filter(Boolean).join(" · ")}</span>}</div>
       </div>
-      <div className="parties iv">
-        <div><div className="lbl">Bill to</div>
-          <b>{cust.company || cust.name || "—"}</b>
-          {[cust.company && cust.name && cust.name !== cust.company ? cust.name : "", ...String(cust.address || "").split(/\n+/)].map((x) => x.trim()).filter(Boolean).map((x, i) => <div key={i}>{x}</div>)}
-          {cust.email && <div className="faint">{cust.email}</div>}
-          {cust.phone && <div className="faint">{fmtPhone(cust.phone)}</div>}
-        </div>
-        {o.delivery_method === "tbd"
-          ? <div><div className="lbl">Pickup or ship</div><div>To be decided</div></div>
-          : o.delivery_method === "pickup"
-          ? <div><div className="lbl">Pickup</div><div>At {sh.name}</div>{sh.address && <div className="faint">{sh.address}</div>}</div>
-          : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>
-              {String(o.ship_to || "—").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x, i) => <div key={i}>{x}</div>)}
-              {o.ship_method && <div className="faint">{o.ship_method}</div>}
-            </div>}
+      <div className="iv2-who">
+        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && <span>{contact}</span>}</div>
+        <div className="r"><div className="lbl">Job</div><b>{o.nickname || `#${o.number}`}</b><span>{c.qty} pcs · {how}</span></div>
       </div>
-      {/* the order at a glance, one strip: each fact its own cell */}
-      <div className="ostrip">
-        <div className="oc grow"><span>Order</span><b>{o.nickname || `#${o.number}`}</b></div>
-        {o.po_number && <div className="oc"><span>PO</span><b>{o.po_number}</b></div>}
-        <div className="oc"><span>Pieces</span><b>{c.qty} · {prints} print{prints === 1 ? "" : "s"}</b></div>
-        {o.approved_at && <div className="oc"><span>Approved</span><b>{new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</b></div>}
-        <div className={"oc obal" + (paidUp ? " ok" : "")}><span>{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</span><b>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</b></div>
-      </div>
-      {(cust.id || sh.terms) && <div className="oterms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
-        {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <> 50% down to start: <b>{money(c.total / 2)}</b>.</>}{o.approved_at && o.approved_name ? ` Approved by ${o.approved_name}.` : ""}</div>}
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
         if (!gc) return null;
-        const lines = g.lines.map((l, li) => ({ l, lc: gc.lines[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
-        const pic = p.mockups[gi]?.[0];
+        const lines = g.lines.map((l, li) => ({ l, li, lc: gc.lines[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
+        const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
-          <div className="job" key={g.id}>
-            {/* the group's name across the top, the mockup level with the items table (Oct 16, Nick) */}
-            <div className="t disp">{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname)}</div>
-            {g.description?.trim() && <div className="gdesc">{g.description.trim()}</div>}
-            {pic ? <img className="pic" src={pic} alt="Mockup" /> : <div className="pic none">Mockup coming</div>}
-            <div>
-              <table className="it">
-                <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Each</th><th className="r">Amount</th></tr></thead>
-                <tbody>
-                  {lines.map(({ l, lc }, i) => (
-                    <tr key={l.id}>
-                      <td>
-                        <div className="nm"><b>{[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment"}</b></div>
-                        {(l.color || gc.wholesale) && <div className="cl">{l.color}{gc.wholesale && <span className="sup">Customer supplied</span>}</div>}
-                        {l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
-                        <div className="chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span className="chip" key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
-                        {i === lines.length - 1 && g.imprints.map((d) => {
-                          const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = d.visualOnly ? [] : inkNames(d.inks);
-                          const how = d.visualOnly ? MATCH_PREV : printHow(d);
-                          // the print on one line, its inks as small swatches under it (Oct 16, Nick: the ink names wrapped
-                          // across the line and looked messy)
-                          return (
-                            <div className="prl" key={d.id}>
-                              <div className="nm"><b>{d.location}</b> · {how}{sz.label && !d.visualOnly ? ` · ${sz.label}` : ""}</div>
-                              {(d.artChanges || []).length > 0 && <div className="lnote">Changes we made to your art: {d.artChanges!.join("; ")}</div>}
-                              {ink.length > 0 && <div className="prl-inks">{ink.map((n) => { const hx = colorHex(n); return <span className="prl-ink" key={n}><i style={{ background: hx || "transparent" }} />{n}</span>; })}</div>}
+          <div className="iv2-g" key={g.id}>
+            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
+            {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
+            <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
+            {lines.map(({ l, li, lc }) => {
+              const pic = p.byLine?.[gi]?.[li] || p.mockups[gi]?.[0] || "";
+              const sz = invoiceSizes(l.sizes as Record<string, number>);
+              const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment";
+              return (
+                <div className="iv2-ln" key={l.id}>
+                  <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
+                  {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
+                  {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
+                  {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
+                  <div className="iv2-det">
+                    {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
+                    {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className="iv2-th none" style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }} />}
+                    <div className="iv2-blk">
+                      <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>
+                      {prints.length > 0 && (
+                        <div className="iv2-prs">
+                          {prints.map(({ d, inks }) => (
+                            <div className="iv2-pr" key={d.id}>
+                              <em>{d.location || "Print"}</em>
+                              {inks.length
+                                ? <span className="iv2-inks">{inks.map((n) => { const hx = colorHex(n) || guessHex(n); return <span key={n}><i style={{ background: hx || "transparent" }} /><span className="f">{n}</span><span className="s">{inkShort(n)}</span></span>; })}</span>
+                                : <span className="iv2-inks"><span>{d.visualOnly ? MATCH_PREV : printHow(d)}</span></span>}
                             </div>
-                          );
-                        })}
-                        {i === lines.length - 1 && gc.finishing.length > 0 && <div className="prl">Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</div>}
-                      </td>
-                      <td className="r">{lc.qty}</td><td className="r">{money(lc.each)}</td><td className="r"><b>{money(lc.sub)}</b></td>
-                    </tr>
-                  ))}
-                  {/* setup (screens, digitizing) and 2XL+ materials as rows of the same table, so their amounts line up */}
-                  {gc.setupItems.map((s, i) => <tr className="setup" key={`s${i}`}><td>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</td><td /><td /><td className="r">{money(s.amount)}</td></tr>)}
-                  {gc.materials > 0 && <tr className="setup"><td>2XL+ materials</td><td /><td /><td className="r">{money(gc.materials)}</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {gc.finishing.length > 0 && <div className="iv2-set"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span><span /></div>}
+            {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}
+            {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
+            {gc.materials > 0 && <div className="iv2-set"><span>2XL+ materials</span><span>{money(gc.materials)}</span></div>}
           </div>
         );
       })}
       {o.fees.some((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd) && (
-        <div className="others"><table className="extra"><tbody>
-          {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd).map((f, i) => <tr key={i}><td>{(f as { tbd?: boolean }).tbd ? "Shipping" : f.label || "Fee"}</td><td className="r">{(f as { tbd?: boolean }).tbd ? "TBD" : (f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
-        </tbody></table></div>
+        <div className="iv2-g iv2-fees">
+          {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free || (f as { tbd?: boolean }).tbd).map((f, i) => <div className="iv2-set" key={i}><span>{(f as { tbd?: boolean }).tbd ? "Shipping" : f.label || "Fee"}</span><span>{(f as { tbd?: boolean }).tbd ? "TBD" : (f as { free?: boolean }).free ? "Free" : money(+f.amount)}</span></div>)}
+        </div>
       )}
-      <div className="sumw">
-        <div className={"pay" + (pays.length || o.notes ? "" : " empty")}>
-          {pays.length > 0 && <p><b>Payments</b>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x) => `\n${day(x.paid_on, { month: "short", day: "numeric" })} · ${x.method} · ${money(x.amount)}`).join("")}</p>}
-          {o.notes && <p><b>Notes</b>{`\n${o.notes}`}</p>}
+      <div className="iv2-sum">
+        <div className="iv2-left">
+          {shipTo && <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>{shipTo.split(/\n+/).map((x, i) => <div key={i}>{x.trim()}</div>)}</div>}
+          <div className="iv2-terms"><div className="lbl">Payment</div>
+            <div>{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}</div>
+            <span>Issued {issued}{o.approved_at && o.approved_name ? ` · approved by ${o.approved_name}` : ""}</span>
+          </div>
+          {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
+          {o.notes && <div className="iv2-terms"><div className="lbl">Notes</div><div style={{ whiteSpace: "pre-wrap" }}>{o.notes}</div></div>}
         </div>
         <div className="tot">
           <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
@@ -729,10 +733,12 @@ export function InvoiceDoc(p: DocData) {
           <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
           <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
           {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
+          {deposit > 0 && <div className="r bal2"><span>Deposit due to start</span><span>{money(deposit)}</span></div>}
           {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
         </div>
       </div>
-      <div className="ifoot"><div className="fade" /><div><span>Thank you for printing with {sh.name}!</span><span>{kind} #{o.number}</span></div></div>
+      <div className="ifoot"><div className="fade" /><div><span>{[sh.name, sh.address, fmtPhone(sh.phone)].filter(Boolean).join(" · ").replace(/\n+/g, ", ")}</span><span>{kind} #{o.number}</span></div></div>
+      <InkFit />
     </section>
   );
 }
