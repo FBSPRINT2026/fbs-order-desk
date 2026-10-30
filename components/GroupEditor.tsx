@@ -65,6 +65,8 @@ type Props = {
   lookingUp?: string;
   /** customer-built orders: no costs, prices or totals anywhere */
   hidePrices?: boolean;
+  /** the personalization price each when the customer's program sets its own (Nine18 $5); else the price list's */
+  persPrice?: number;
   /** don't gray out imprints waiting on a mockup (customer requests come with their own details) */
   noLock?: boolean;
   /** the portal: the prints stay grayed out until the group has a mockup (made, uploaded or picked), with this note
@@ -94,7 +96,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts }: Props) {
+export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts }: Props) {
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -770,7 +772,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                 {persOf(l).map((e) => (
                   <div key={e.id} className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{e.text}</span>
                     {e.size && <span className="faint">Size {e.size}</span>}<span className="faint">Qty {e.qty}</span>
-                    {!hidePrices && <span className="faint">{money(e.price != null ? e.price : persEach(settings, gc.wholesale ? "wholesale" : "retail"))} each</span>}
+                    {!hidePrices && <span className="faint">{money(e.price != null ? e.price : persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail"))} each</span>}
                     {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label={`Remove the personalization ${e.text}`} title="Remove" onClick={() => removePers(l.id, e.id)}>✕</button>}</div>
                 ))}
                 {((l.note != null && !(l.pers && l.note === `Personalization: ${l.pers}`)) || noteOpen === l.id) && (
@@ -1147,7 +1149,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                   })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
                 </div>}
-                {hasEmb && <PersonalizationPicker lines={g.lines} price={persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} />}
+                {hasEmb && <PersonalizationPicker lines={g.lines} price={persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} />}
               </div>
             )}
             {finishingAt === "group" && finList.length > 0 && (

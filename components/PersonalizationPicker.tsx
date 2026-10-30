@@ -12,7 +12,9 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
   lines: GLine[]; price: number; hidePrices?: boolean; disabled?: boolean;
   onAdd: (lineId: string, size: Size | "", qty: number, text: string) => void;
 }) {
-  const named = lines.some((l) => persOf(l).length);
+  const count = lines.reduce((a, l) => a + persOf(l).length, 0), named = count > 0;
+  // the form drops down when the box is ticked or "+ Add another name" is pressed, and closes after Add (Oct 30, Nick:
+  // "it drops down… then you add and it just goes away and the add personalization stays checked")
   const [open, setOpen] = useState(false);
   const on = open || named;
   const pickable = lines.filter((l) => !l.extras && !l.shopUse && lineQty(l) > 0);
@@ -31,13 +33,17 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
   const add = () => {
     if (!line || (sizes.length > 0 && !sz) || !text) return;
     onAdd(line.id, sz, n, text);
-    setName(""); setTitle(""); setQty("1");
+    setName(""); setTitle(""); setQty("1"); setOpen(false);
   };
   const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
   return (
     <div className="sbx-sec pers">
-      <label className="check"><input type="checkbox" checked={on} disabled={disabled || named} onChange={(e) => setOpen(e.target.checked)} />Add personalization{!hidePrices && <span className="faint"> ${price.toFixed(2)} each</span>}{named && <span className="faint"> · listed under each item</span>}</label>
-      {on && !disabled && (pickable.length ? (
+      <div className="pers-h">
+        <label className="check"><input type="checkbox" checked={on} disabled={disabled || named} onChange={(e) => setOpen(e.target.checked)} />Add personalization{!hidePrices && <span className="faint"> ${price.toFixed(2)} each</span>}{named && <span className="faint"> · {count} name{count === 1 ? "" : "s"}</span>}</label>
+        {named && !open && !disabled && <button type="button" className="linkbtn" onClick={() => setOpen(true)}>+ Add another name</button>}
+        {named && open && <button type="button" className="linkbtn" onClick={() => setOpen(false)}>Close</button>}
+      </div>
+      {open && !disabled && (pickable.length ? (
         <div className="pers-add">
           <div className="field"><label htmlFor="pers-item">Item</label>
             <select id="pers-item" value={line?.id || ""} onChange={(e) => { setLineId(e.target.value); setSize(""); }}>
