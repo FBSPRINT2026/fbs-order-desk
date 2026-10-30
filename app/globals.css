@@ -16236,7 +16236,8 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
   .ord .cu-strip.open .cu-price{flex:1 1 100%}
   .ord .cu-strip .panel-b.cu-b{padding:8px 12px}
   /* the Order tab: Job details & type, then the groups, then Totals and Delivery */
-  .ord .ed-grid:not([hidden]):has(.jd-panel){display:flex;flex-direction:column;gap:14px}
+  .ord .ed-grid:not([hidden]):has(.jd-panel){display:flex;flex-direction:column;align-items:stretch;gap:14px}
+  .ord .ed-grid:has(.jd-panel) > *, .ord .ed-grid:has(.jd-panel) > .ed-aside > *{width:auto;max-width:100%;align-self:stretch}
   .ord .ed-grid:has(.jd-panel) > .ed-aside{display:contents}
   .ord .ed-grid:has(.jd-panel) > .ed-aside > *{order:1}
   .ord .ed-grid:has(.jd-panel) > .ed-aside > .jd-panel{order:-1}
