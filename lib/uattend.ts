@@ -57,6 +57,15 @@ export async function uaUserFields(): Promise<string[]> {
   return [...new Set(us.flatMap((u) => Object.keys(u)))].sort();
 }
 
+/** what the punch report sent that wasn't taken as a punch (a sample per kind, names left out): for checking lunch lines */
+let skipped: Record<string, { n: number; sample: Record<string, unknown> }> = {};
+function noteSkipped(x: Record<string, unknown>, as?: string) {
+  const sig = as || Object.entries(x).filter(([k]) => /paycode|dept|department|type|break|lunch/i.test(k)).map(([k, v]) => `${k}=${v}`).join("|") || "other";
+  const s = (skipped[sig] ||= { n: 0, sample: Object.fromEntries(Object.entries(x).filter(([k]) => !/name|email|phone/i.test(k))) });
+  s.n++;
+}
+export function uaSkipped() { const s = skipped; skipped = {}; return s; }
+
 export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out"; at: string };
 /** wall time in the shop's zone → an instant; InTime may be "07:02 AM", "07:02:00" or a full date-time */
 function when(day: unknown, time: unknown): string | null {
@@ -84,8 +93,10 @@ export async function uaPunches(from: string, to: string): Promise<UaPunch[]> {
     firstPrev = first;
     for (const x of items) {
       const code = Number(f(x, "PaycodeId") ?? 1);
-      if (code && code !== 1) continue; // vacation / sick / holiday entries aren't punches
+      if (code && code !== 1) { noteSkipped(x); continue; } // vacation / sick / holiday entries aren't punches
       const id = f(x, "Id", "PunchId"); if (id == null) continue;
+      // a sample of an ordinary line too, and every line that carries anything about a break or lunch
+      if (!skipped._line || Object.keys(x).some((k) => /break|lunch|meal/i.test(k) && x[k] != null && x[k] !== "" && x[k] !== 0)) noteSkipped(x, skipped._line ? "_break" : "_line");
       const user = String(f(x, "UserId") ?? ""), first = String(f(x, "FirstName") ?? ""), last = String(f(x, "LastName") ?? "");
       const day = f(x, "PunchDate");
       const inAt = when(f(x, "InDate") ?? day, f(x, "InTime")), outAt = when(f(x, "OutDate") ?? f(x, "InDate") ?? day, f(x, "OutTime"));
