@@ -145,7 +145,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
         const it = g.items[0];
         const code = nextSewCode(files), name = tajimaName(d.number, Number(code.slice(1)));
         const named = await Promise.all([it.path, it.emb, it.sheet].filter(Boolean).map(async (p) => tajimaFile(await file(p!), name)));
-        const { set } = await takeDigitized(sb, d.id, named);
+        const { set } = await takeDigitized(sb, d.id, named, { link: false });
         files.push({ ...set, code, kind: /hat|cap/i.test(where) ? "cap" : "flat", source: it.path, ...(where ? { placement: where } : {}), lastUsed: { job: newest.j.visual_id, date: newest.j.order_date, name: newest.j.nickname.trim(), where } } as Sew);
         done.push(`${name} added (${g.f.wIn}" × ${g.f.hIn}")`);
       }

@@ -7,6 +7,7 @@ import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
 import type { Design } from "@/lib/pricing";
 import { colorwaysOf, LANES, laneState, nextSewCode, SEW_KINDS, sewFilesOf, tajimaName, type Brand, type BrandColor, type Lane, type SewFile, type SewKind } from "@/lib/brands";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * A customer's brands (Oct 27, Nick: Cedar Promos manages MEI, ShipStation / WWEX, Embark… "like a design firm"). Each
@@ -175,7 +176,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
                   </td>
                   <td className="cb-row-acts">
                     {lane === "embroidery" && <label className={"btn sm" + (busy === "sew" + d.id ? " disabled" : "")} title={`Add a DST (with its EMB and worksheet, or the digitizer's zip). Named ${tajimaName(d.number, Number(nextSewCode(sews).slice(1)))} for the Tajima.`}>
-                      {busy === "sew" + d.id ? "Adding…" : `Add sew file ${nextSewCode(sews)}`}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" onChange={(e) => { void addSew(d, e.target.files); e.target.value = ""; }} /></label>}
+                      {busy === "sew" + d.id ? "Adding…" : `Add sew file ${nextSewCode(sews)}`}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" onChange={(e) => { void addSew(d, heldFiles(e.target.files)); e.target.value = ""; }} /></label>}
                     {!embroideryOnly && <select aria-label="Brand" value={d.brand_id || ""} onChange={(e) => void moveLogo(d, e.target.value || null)}>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}<option value="">No brand</option></select>}
                   </td>
                 </tr>

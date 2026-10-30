@@ -480,7 +480,7 @@ function BringInArt() {
         const files = await Promise.all([it.path, it.emb, it.sheet].filter(Boolean).map((x) => file(x!)));
         const named = await Promise.all(files.map((f) => tajimaFile(f, name)));
         const { takeDigitized } = await import("@/lib/digitizedFiles");
-        const { set: s } = await takeDigitized(sb, id, named);
+        const { set: s } = await takeDigitized(sb, id, named, { link: false });
         const sew = { ...s, code, kind: /hat|cap/i.test(p.where || "") ? "cap" : "flat", source: it.path, ...(p.where?.trim() ? { placement: p.where.trim() } : {}),
           lastUsed: it.job.dbx ? { dropbox: it.job.dbx } : { job: it.job.visual_id, date: it.job.order_date, name: it.job.nickname, where: p.where?.trim() || "" } } as SewFile & { source: string };
         const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), sew] } };

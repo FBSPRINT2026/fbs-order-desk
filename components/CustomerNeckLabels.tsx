@@ -7,6 +7,7 @@ import { uid } from "@/lib/pricing";
 import { SIZE_GROUPS, TAG_GRAY, isPicture, picturePath, type NeckFile, type NeckLabelSet } from "@/lib/neckLabels";
 import { makePreview } from "@/lib/artPrep";
 import NeckLabelView, { neckFileUrl } from "@/components/NeckLabelView";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * Neck labels (customer → Artwork → Brand standards), Oct 20, Nick: "we take the manufacturer's tag… cut it out, and
@@ -196,7 +197,7 @@ function MainFile({ file, upload, onSet }: { file: NeckFile | null; upload: (f: 
             <span><button type="button" className="linkbtn" onClick={() => inp.current?.click()}>Replace</button> · <button type="button" className="linkbtn" onClick={() => onSet(null)}>Remove</button></span></span>
         </>
       ) : <button type="button" className="nl-main-add" onClick={() => inp.current?.click()}>+ Upload their tag (PDF, AI, PNG…) or drop it here</button>}
-      <input ref={inp} type="file" hidden accept="image/*,.pdf,.ai,.eps,.svg" onChange={(e) => { void take(e.target.files); e.target.value = ""; }} />
+      <input ref={inp} type="file" hidden accept="image/*,.pdf,.ai,.eps,.svg" onChange={(e) => { void take(heldFiles(e.target.files)); e.target.value = ""; }} />
     </div>
   );
 }

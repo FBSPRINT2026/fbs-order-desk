@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MAX_ATTACH, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
 import SearchInput from "@/components/SearchInput";
+import { heldFiles } from "@/lib/heldFiles";
 
 type Convo = { key: string; orderId: string | null; projectId?: string | null; topic: string; title: string; sub: string; order?: HubOrder; msgs: HubMsg[]; last: HubMsg | null; unread: number };
 type Pending = { id: string; name: string; size: number; mime: string; done?: Attachment; error?: string };
@@ -252,7 +253,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
               <button type="button" className="mh-send" onClick={doSend} disabled={!canAct || busy || uploading || (!text.trim() && !files.some((f) => f.done))} aria-label="Send"><Ico d={SEND} s={18} /><span>{busy ? "Sending…" : "Send"}</span></button>
             </div>
             <div className="mh-hint">{err ? <span className="bad">{err}</span> : <>Enter to send · Shift+Enter for a new line · Drop or paste files</>}</div>
-            <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) addFiles(heldFiles(e.target.files)); e.target.value = ""; }} />
           </div>
           {over && <div className="mh-drop">Drop files to attach</div>}
         </>}

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
+import { heldFiles } from "@/lib/heldFiles";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
 export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled or removed here (a job photo) */ readOnly?: boolean };
@@ -70,7 +71,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             )}
             {!onUpload && !files.length && <div className="faint" style={{ fontSize: 13 }}>No production files.</div>}
           </div>
-          {onUpload && <input ref={input} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) onUpload(e.target.files); e.target.value = ""; }} />}
+          {onUpload && <input ref={input} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) onUpload(heldFiles(e.target.files)); e.target.value = ""; }} />}
           {onUpload && <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>Separations, vector art, placement sheets, customer files… any file type.</div>}
         </div>
         {children}

@@ -24,7 +24,7 @@ export async function expandFiles(list: File[]): Promise<File[]> {
 }
 
 const safe = (n: string) => n.replace(/[^\w.-]+/g, "_");
-export async function takeDigitized(sb: SupabaseClient, designId: string | null, list: File[], o: { save?: boolean } = {}): Promise<{ set: DigitizedSet; info: DstInfo }> {
+export async function takeDigitized(sb: SupabaseClient, designId: string | null, list: File[], o: { save?: boolean; /** false: the caller files the set on the logo itself (with its code, E1/E2), so it isn't added twice */ link?: boolean } = {}): Promise<{ set: DigitizedSet; info: DstInfo }> {
   const files = await expandFiles(list);
   const dst = files.find((f) => /\.dst$/i.test(f.name));
   if (!dst) throw new Error("No DST in those files. The digitizer's zip should have one (the machine file).");
@@ -44,7 +44,7 @@ export async function takeDigitized(sb: SupabaseClient, designId: string | null,
     try { const { pdfText } = await import("@/lib/printavoArt"); ws = parseWorksheet(await pdfText(await sheet.arrayBuffer())); } catch { ws = null; }
   }
   const set: DigitizedSet = { path: d?.path || "", name: dst.name, stitches: info.stitches, colors: ws?.threads.length || info.colors, wIn: info.wIn, hIn: info.hIn, at, ...(e ? { emb: e } : {}), ...(s ? { sheet: s } : {}), ...(ws ? { ws } : {}) };
-  if (designId && d && o.save !== false) {
+  if (designId && d && o.save !== false && o.link !== false) {
     const { data } = await sb.from("designs").select("specs").eq("id", designId).maybeSingle();
     const sp = (data?.specs || {}) as Record<string, unknown>;
     const em = (sp.embroidery || {}) as { files?: unknown[] };

@@ -9,6 +9,7 @@ import CustomerPick from "@/components/CustomerPick";
 import BackLink from "@/components/BackLink";
 import { packFill, type PackItem } from "@/lib/gangPack";
 import { lineQty, orderGroups, type Order } from "@/lib/pricing";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * Gang sheet builder (Heat press; Oct 26, Nick).
@@ -837,7 +838,7 @@ export default function GangSheet() {
           {/* 2. the art: always here; drop or upload, or a customer's artwork */}
           <section className={"panel gang-art" + (dragOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void add(e.dataTransfer.files); }}>
             <div className="panel-h gang-ph"><div className="gang-pt"><h2>Art</h2><span className="faint">sizes, how many, colors to knock out</span></div><span className="spacer" />
-              <label className="btn sm">Upload<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>
+              <label className="btn sm">Upload<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(heldFiles(e.target.files)); e.target.value = ""; }} /></label>
             </div>
             <div className="panel-b stack" style={{ gap: 10 }}>
               {logos.map((lg) => (
@@ -884,7 +885,7 @@ export default function GangSheet() {
               ))}
               <label className={"gang-drop" + (logos.length ? "" : " big")}>
                 <span><b>Drop or upload art here</b><br /><span className="faint">PNG, JPG, PDF, AI</span></span>
-                <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+                <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,.ai,.pdf" hidden onChange={(e) => { void add(heldFiles(e.target.files)); e.target.value = ""; }} />
               </label>
               <div className="gang-cust">
                 <span className="faint">or pick from a customer&apos;s artwork</span>

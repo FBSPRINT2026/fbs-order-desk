@@ -15,6 +15,7 @@ import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
 import LogoResearch, { type LogoHistory, type Sew } from "@/components/LogoResearch";
 import { LogoFace, onShirtsOf } from "@/components/LogoOnShirts";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * One logo, everything about it by department (Oct 28, Nick: "a layout that'll have… the separations for that logo… film
@@ -138,7 +139,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
       const { expandFiles, takeDigitized } = await import("@/lib/digitizedFiles");
       const have = sewFilesOf(d), code = nextSewCode(have), name = tajimaName(d.number, Number(code.slice(1)));
       const named = await Promise.all((await expandFiles([...files])).map((f) => tajimaFile(f, name)));
-      const { set } = await takeDigitized(sb, d.id, named);
+      const { set } = await takeDigitized(sb, d.id, named, { link: false });
       const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
       const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
       const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), { ...set, code, kind: "flat" }] } };
@@ -231,7 +232,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           {tab === "emb" && (
             <section className="panel">
               <div className="panel-h"><h2>Embroidery</h2><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
-                <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(e.target.files); e.target.value = ""; }} /></label></div>
+                <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
                 <thead><tr><th>Sew file</th><th>Size</th><th>Stitches</th><th>Kind</th><th>Where it goes</th><th>Last used</th><th>Files</th></tr></thead>
                 <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (b.f.wIn || 0) - (a.f.wIn || 0)).map(({ f, i }) => (

@@ -21,6 +21,7 @@ import { useSticky } from "@/lib/useSticky";
 import { Pill } from "@/components/bits";
 import { StarOrder } from "@/components/PortalDashBits";
 import PortalSwitch from "@/components/PortalSwitch";
+import { heldFiles } from "@/lib/heldFiles";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -1149,7 +1150,7 @@ function LogoUpload({ onUpload }: { onUpload: (files: File[], star: boolean, pro
     <span className={"aa-up" + (over ? " over" : "")}>
       {msg && <span className="aa-up-msg">{msg}</span>}
       <label className="check aa-up-star" title="Star the logos as they're added"><input type="checkbox" checked={star} onChange={(e) => setStar(e.target.checked)} /> Star</label>
-      <label className="btn sm aa-up-btn" title="Add logos (AI, EPS, PDF, SVG, PNG); or drop the files on the page">{busy ? `Uploading ${busy.done}/${busy.of}…` : over ? "Drop to upload" : "+ Upload"}<input type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp" hidden disabled={!!busy} onChange={(e) => { go(e.target.files); e.target.value = ""; }} /></label>
+      <label className="btn sm aa-up-btn" title="Add logos (AI, EPS, PDF, SVG, PNG); or drop the files on the page">{busy ? `Uploading ${busy.done}/${busy.of}…` : over ? "Drop to upload" : "+ Upload"}<input type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp" hidden disabled={!!busy} onChange={(e) => { go(heldFiles(e.target.files)); e.target.value = ""; }} /></label>
     </span>
   );
 }

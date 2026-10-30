@@ -7,6 +7,7 @@ import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import { AI_TOOLS, type AiTool } from "@/lib/aiTools";
 import { uploadTarget } from "@/app/shop/ai/actions";
 import { orderSources, sourceFromFiles, type OrderSource } from "@/app/shop/ai/tool-actions";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * AI Workbench → Tools (Oct 23, Nick: "have the tools also available as a button in the AI workbench… start thinking of
@@ -117,7 +118,7 @@ function CreateOrderLauncher({ onClose }: { onClose: () => void }) {
           onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) void add(e.dataTransfer.files); }}>
           <div className="mk-f"><span>Customer</span><CustomerPick field value={cust?.id || null} label={cust?.label} onPick={(id, label) => setCust(id ? { id, label } : null)} /></div>
           <button type="button" className="btn sm" onClick={() => pick.current?.click()}>Add files…</button> <span className="faint">or drop them here</span>
-          <input ref={pick} type="file" multiple hidden onChange={(e) => { if (e.target.files) void add(e.target.files); e.target.value = ""; }} />
+          <input ref={pick} type="file" multiple hidden onChange={(e) => { if (heldFiles(e.target.files)) void add(heldFiles(e.target.files)); e.target.value = ""; }} />
           {files.length > 0 && <ul className="ait-fl">{files.map((f) => <li key={f.id}><span data-notranslate>{f.name}</span> <span className={f.err ? "err" : "faint"}>{f.err || (f.busy ? "Uploading…" : "Ready")}</span> <button type="button" className="lc-link" onClick={() => setFiles((x) => x.filter((y) => y.id !== f.id))}>Remove</button></li>)}</ul>}
           <label className="mk-f"><span>Anything to know first (optional)</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder='e.g. "Reorder of 31174" or "Same as last time but navy"' /></label>
         </div>}

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { SepRow } from "@/components/SeparationStudio";
 import { ARCHIVE_DAYS, SEP_STATUS, sepStage } from "@/lib/sepStatus";
 import { useJobFiles } from "@/components/job/JobFiles";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * A customer's production files, under their Artwork (staff only, never in the portal): what we print or sew from,
@@ -127,7 +128,7 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
 
       <div className="pf-h"><h4>Other files</h4><span className="faint">Digitized embroidery files (DST, EMB, PES…), films, anything kept for repeats.</span></div>
       <label className={"pf-drop" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files); }}>
-        <input type="file" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+        <input type="file" multiple hidden onChange={(e) => { upload(heldFiles(e.target.files)); e.target.value = ""; }} />
         <span>{busy || <>Drop files here or <u>choose files</u></>}</span>
       </label>
       {err && <div className="pv-err">{err}</div>}

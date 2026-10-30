@@ -7,6 +7,7 @@ import { renderMockup } from "@/lib/mockupRender";
 import { METHODS, FULL_COLOR, sizeLabel } from "@/lib/pricing";
 import { createQuote, getChat, listChats, mockupTargets, saveMockups, searchCustomers, uploadTarget, type ChatRow } from "@/app/shop/ai/actions";
 import { isArtDoc, isArtPicture, type WBCard, type WBEvent, type WBFile, type WBMockItem, type WBMsg } from "@/lib/ai/workbenchShared";
+import { heldFiles } from "@/lib/heldFiles";
 
 /**
  * AI Workbench (Oct 13, Nick: "upload two logos and say make me mockups in these different colors, or here's a
@@ -189,7 +190,7 @@ export default function AiWorkbench({ name }: { name: string }) {
             <button type="button" className="wb-attach" onClick={() => pick.current?.click()} aria-label="Add files" title="Add files (or drop them anywhere here, or paste a picture)">
               <svg viewBox="0 0 24 24" aria-hidden><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>
             </button>
-            <input ref={pick} type="file" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={pick} type="file" multiple hidden onChange={(e) => { if (heldFiles(e.target.files)) void addFiles(heldFiles(e.target.files)); e.target.value = ""; }} />
             <textarea ref={box} value={text} rows={1} placeholder={drag ? "Drop the files here" : "Ask, or drop in files and say what you need…"} aria-label="Message the AI"
               onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(220, e.target.scrollHeight) + "px"; }}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
