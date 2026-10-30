@@ -13,7 +13,7 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
-import { finishingList, fitLocation, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { finishingList, fitLocation, lineQty, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
@@ -424,7 +424,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30i";
+export const READER_REV = "2026-10-30j";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -893,7 +893,10 @@ ${staffSays}` : ""}`;
         if (im.method === "embroidery" && spots.length) {
           const by: Record<string, string> = {};
           for (const x of spots) { const l = g.lines.find((y) => (y.style || "").replace(/[^a-z0-9]/gi, "").toLowerCase() === String(x.style).replace(/[^a-z0-9]/gi, "").toLowerCase()); const loc = l ? fitLocation(String(x.location).trim(), [l]) : ""; if (l && loc && loc !== im.location) by[spotKey(l)] = loc; }
-          if (Object.keys(by).length) im.spotBy = by;
+          // a change is only for SOME garments: when every garment got another spot the reading contradicts itself (Oct 30,
+          // AMS Birmingham: beanies only, the print on the Cuff and both beanies "moved" to the Front): the print's own spot stays
+          const all = g.lines.filter((l) => lineQty(l) > 0).every((l) => by[spotKey(l)]);
+          if (Object.keys(by).length && !all) im.spotBy = by;
         }
         if (lfd && onFile) {
           fillFromLogo(im, { design: lfd, brands: onFile.brands, lines: g.lines, changes: (pr as { thread_changes?: { garment_colors?: string[]; inks?: string }[] | null }).thread_changes });
