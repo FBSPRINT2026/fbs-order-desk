@@ -15555,6 +15555,8 @@ html body .as .as-brand.on::before{background:var(--accent)}
 .lg-art{aspect-ratio:1/1;border-radius:var(--r);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;transition:background .15s}
 .lg-art img{max-width:82%;max-height:82%;object-fit:contain}
 .lg-art.dark{background:var(--ink)}
+.lg-art.on-shirt{position:relative;border:0}
+.lg-art.on-shirt .lv.main{position:absolute;inset:0;width:100%;height:100%;border-radius:var(--r)}
 .lg-cws{display:flex;flex-wrap:wrap;gap:6px}
 .lg-cws .lg-pill{border:1px solid var(--line);cursor:pointer;font:12px var(--body)}
 .lg-cws .lg-pill.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}

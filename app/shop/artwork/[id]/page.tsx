@@ -14,6 +14,7 @@ import { colorwaysOf, nextSewCode, SEW_KINDS, sewFilesOf, tajimaName, type Brand
 import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
 import LogoResearch, { type LogoHistory, type Sew } from "@/components/LogoResearch";
+import { LogoFace, onShirtsOf } from "@/components/LogoOnShirts";
 
 /**
  * One logo, everything about it by department (Oct 28, Nick: "a layout that'll have… the separations for that logo… film
@@ -67,6 +68,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [armed, setArmed] = useState(false);
   const [tab, setTab] = useSticky<Tab>("logo.tab", "emb");
   const [cwUrls, setCwUrls] = useState<string[]>([]);
+  // the logo on the shirt picked for it (Edit logo → Backgrounds / Put on a shirt): its saved picture's link
+  const [shirtUrl, setShirtUrl] = useState("");
   const [shown, setShown] = useState(-1); // -1: the logo's own art; else that colorway
   const [lightArt, setLightArt] = useState(false);
   const [research, setResearch] = useState(false);
@@ -88,6 +91,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     const cwp = colorwaysOf(des).map((c) => c.preview || "");
     const { data: cu } = cwp.some(Boolean) ? await sb.storage.from("proofs").createSignedUrls(cwp.map((x) => x || des.preview_path || "x"), 3600) : { data: [] };
     setCwUrls(cwp.map((x, i) => (x ? cu?.[i]?.signedUrl || "" : "")));
+    const sv = onShirtsOf(des)[0]?.path || "";
+    setShirtUrl(sv ? (await sb.storage.from("proofs").createSignedUrl(sv, 3600)).data?.signedUrl || "" : "");
     const [c, o, s, so, b, g] = await Promise.all([
       sb.from("customers").select("*"),
       des.customer_id ? sb.from("orders").select("*").eq("customer_id", des.customer_id).order("number", { ascending: false }) : Promise.resolve({ data: [] }),
@@ -183,7 +188,11 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
         <div className="stack">
           <section className="panel">
             <div className="panel-b stack">
-              <div className={"lg-art" + (lightArt || ((d.specs as { onShirts?: unknown[] } | null)?.onShirts?.length && shown < 0) ? " dark" : "")}>{shownUrl ? <img src={shownUrl} alt={d.name} /> : <span className="faint">No preview</span>}</div>
+              {/* the logo's own art on the shirt picked for it, the same picture as its tiles everywhere (LogoFace; Oct 30, Nick:
+                  "I set it to Forest… it still comes back with this box"); a colorway, or no shirt picked: the art alone */}
+              <div className={"lg-art" + (shown < 0 && onShirtsOf(d).length && pv ? " on-shirt" : lightArt ? " dark" : "")}>{shown < 0 && onShirtsOf(d).length && pv
+                ? <LogoFace d={d} urls={{ [d.id]: pv, ...(shirtUrl ? { [onShirtsOf(d)[0].path as string]: shirtUrl } : {}) }} />
+                : shownUrl ? <img src={shownUrl} alt={d.name} /> : <span className="faint">No preview</span>}</div>
               {cws.length > 0 && <div className="lg-cws" role="group" aria-label="Colorways"><button type="button" className={"lg-pill" + (shown < 0 ? " on" : "")} onClick={() => setShown(-1)}>As on file</button>{cws.map((c, i) => <button key={c.name + i} type="button" className={"lg-pill" + (shown === i ? " on" : "")} title={c.inks.join(", ")} onClick={() => setShown(i)}>{c.name}</button>)}</div>}
               {ps?.wIn ? <div className="lg-size"><b>Prints {ps.wIn}&quot;{ps.hIn ? ` × ${ps.hIn}"` : " wide"}</b>{ps.location ? <span className="faint"> · {ps.location}</span> : null}</div> : null}
               <div className="sub">{/\.(svg|ai|eps|pdf)$/i.test(d.file_name) ? "Vector" : "Picture"} · {d.colors} color{d.colors === 1 ? "" : "s"}{d.inks ? ` · ${d.inks}` : ""}{ratio ? ` · 1 : ${ratio.toFixed(2)}` : ""}</div>
