@@ -195,7 +195,7 @@ export async function closePayday(start: string, reopen = false): Promise<R<{ cl
     const v = await getViewer(", sees_pay, name");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const admin = createAdminClient();
-    const { p, rows, payDate } = await payday(admin, start);
+    const { p, rows, payDate, settings } = await payday(admin, start);
     if (reopen) {
       const { error } = await admin.from("paydays").update({ closed_at: null, updated_at: new Date().toISOString() }).eq("period_start", p.start);
       if (error) throw new Error(error.message);
@@ -218,6 +218,11 @@ export async function closePayday(start: string, reopen = false): Promise<R<{ cl
       period_start: p.start, pay_date: payDate, closed_at: now, closed_by: by,
       w2_count: rows.filter((r) => r.kind === "payroll").length, checks: cons.length,
       checks_total: r2(cons.reduce((s, r) => s + +(r.line?.check_total || 0), 0)), advances_total: r2(rows.reduce((s, r) => s + r.advance, 0)), updated_at: now,
+      // the summary for Past paydays: who was paid, the overtime and its extra half, who repaid an advance
+      people: rows.filter((r) => r.kind === "payroll" || r.line?.qbo_purchase_id).length,
+      ot_hours: r2(rows.reduce((s, r) => s + r.pay.otHours, 0)),
+      ot_extra: r2(rows.reduce((s, r) => s + (r.pay.rate != null ? r.pay.otHours * r.pay.rate * ((settings.otRate || 1.5) - 1) : 0), 0)),
+      advance_people: rows.filter((r) => r.advance > 0).length,
     }, { onConflict: "period_start" });
     if (error) throw new Error(/paydays/.test(error.message) ? "Run supabase/migrations/237_paydays_closed.sql first." : error.message);
     await saveActuals(admin, p.start, payDate).catch(() => null);

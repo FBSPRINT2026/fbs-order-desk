@@ -57,7 +57,7 @@ export type PaydayRow = {
 export type Payday = { period_start: string; pay_date: string; closed_at: string | null; closed_by: string; w2_count: number; checks: number; checks_total: number; advances_total: number; note: string;
   /** read back from QuickBooks after the W-2 payroll is submitted (Oct 30): its paychecks, gross, the taxes withheld, other
    *  deductions, the net, and FBS's own (employer) taxes */
-  w2_paychecks?: number | null; w2_gross?: number | null; w2_employee_taxes?: number | null; w2_deductions?: number | null; w2_net?: number | null; w2_employer_taxes?: number | null; qbo_pulled_at?: string | null };
+  people?: number | null; ot_hours?: number | null; ot_extra?: number | null; advance_people?: number | null; w2_paychecks?: number | null; w2_gross?: number | null; w2_employee_taxes?: number | null; w2_deductions?: number | null; w2_net?: number | null; w2_employer_taxes?: number | null; qbo_pulled_at?: string | null };
 
 /** the pay date: the day after the period ends (Oct 16 – Oct 29 → Fri Oct 30) */
 export const payDateOf = (periodEnd: string) => addDays(periodEnd, 1);

@@ -16375,3 +16375,18 @@ main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
 @container (max-width:760px){.pc-c-rate{display:none}}
 .panel:has(.pc-keyed){container-type:inline-size}
 @container (max-width:760px){.pc-keyed-f{grid-template-columns:repeat(2,minmax(0,1fr))}.pc-keyed-h{flex-wrap:wrap}}
+/* Payroll Center: a closed payday's summary (Oct 30, Nick: "you're all done, next payday… a thumbs up") */
+.pc-alldone{padding:34px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.pc-alldone h2{font-family:var(--display);font-size:22px;margin:0}
+.pc-alldone>p{margin:0;color:var(--ink-2);font-size:14px}
+.pc-thumb{width:64px;height:64px;border-radius:50%;background:color-mix(in srgb,var(--ok) 14%,var(--surface));display:grid;place-items:center;font-size:30px;margin-bottom:6px}
+.pc-sum{display:grid;grid-template-columns:repeat(4,auto);margin-top:16px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;text-align:left}
+.pc-sum>div{padding:10px 18px;border-right:1px solid var(--line-2);display:flex;flex-direction:column;gap:2px}
+.pc-sum>div:last-child{border-right:0}
+.pc-sum span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.pc-sum b{font-size:18px;white-space:nowrap}
+.pc-sum small{font-size:12px;color:var(--ink-3);white-space:nowrap}
+@media (max-width:760px){.pc-sum{grid-template-columns:repeat(2,auto)}.pc-sum>div:nth-child(2){border-right:0}}
+.pc-next{display:inline-flex;gap:10px;align-items:center;margin-top:14px;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);font-size:14px;flex-wrap:wrap;justify-content:center}
+.pc-done-links{margin-top:10px;font-size:13px}
+.pc-done-links .linkbtn{font-size:13px}
