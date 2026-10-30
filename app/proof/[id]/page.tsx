@@ -8,7 +8,7 @@ import OrderSteps from "./OrderSteps";
 import { orderSteps } from "@/lib/customerSend";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Your proof · FBS Print", robots: { index: false } };
+export const metadata: Metadata = { title: "Your order · FBS Print", robots: { index: false } };
 
 /**
  * The customer's proof page (lib/proofLinks.ts; Oct 29, Nick: "you send a link to the customer… this screen pops up. You
@@ -29,7 +29,7 @@ export default async function ProofPage({ params }: { params: Promise<{ id: stri
       <div className="pfl">
         <header className="pfl-top">
           <img src={sh0.logoUrl || "/brand/fbs-logo.svg"} alt={sh0.name} />
-          <div className="pfl-ttl"><b data-notranslate>{os.o.nickname || `Order #${os.o.number}`}</b><span>Order #{os.o.number}</span></div>
+          <div className="pfl-ttl" data-page-title={`${os.o.nickname ? `${os.o.nickname} ` : ""}#${os.o.number}`}><b data-notranslate>{os.o.nickname || `Order #${os.o.number}`}</b><span>Order #{os.o.number}</span></div>
           <span className="pfl-sp" />
           {sh0.phone && <a href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
         </header>

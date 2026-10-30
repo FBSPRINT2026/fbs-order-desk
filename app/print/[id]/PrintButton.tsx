@@ -97,7 +97,7 @@ async function cropAtFullSize(src: string, shown: HTMLImageElement, r: NonNullab
   return blob ? { bytes: await blob.arrayBuffer(), png: art } : null;
 }
 
-export default function PrintButton({ fileName }: { fileName?: string }) {
+export default function PrintButton({ fileName, framed }: { fileName?: string; /** inside the customer's page: no Close (it can't close a frame) */ framed?: boolean }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   // on a phone the letter-size sheets are shrunk to fit the screen (printing is unchanged)
@@ -195,7 +195,7 @@ export default function PrintButton({ fileName }: { fileName?: string }) {
     <>
       <button className="btn primary" type="button" onClick={save} disabled={!!busy}>{busy || "Save PDF"}</button>
       <button className="btn" type="button" onClick={() => window.print()}>Print</button>
-      <button className="btn ghost" type="button" onClick={() => window.close()}>Close</button>
+      {!framed && <button className="btn ghost" type="button" onClick={() => window.close()}>Close</button>}
       {err && <span style={{ color: "#b3261e", fontSize: 13, alignSelf: "center" }}>{err}</span>}
     </>
   );

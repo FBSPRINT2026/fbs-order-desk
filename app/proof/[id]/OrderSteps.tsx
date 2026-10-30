@@ -1,9 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { StepView } from "@/lib/customerSend";
 import ProofAnswer from "./ProofAnswer";
-import { answerProof, answerQuote, approveAll } from "./actions";
+import { answerProof, answerQuote, approveAll, payByLink } from "./actions";
 
 /**
  * The order's customer page, one screen at a time (Oct 29, Nick: "you would click on the first thing, the proof, when it
@@ -17,7 +17,7 @@ const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency
 const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 
-export default function OrderSteps({ id, orderId, steps }: { id: string; orderId: string; steps: StepView[] }) {
+export default function OrderSteps({ id, steps }: { id: string; orderId?: string; steps: StepView[] }) {
   const router = useRouter();
   const todo = steps.filter((s) => (s.state === "todo" || s.state === "locked") && s.kind !== "deposit");
   const [cur, setCur] = useState((todo[0] || steps.find((s) => s.state === "todo") || steps[0])?.key || "");
@@ -26,6 +26,14 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
   const [doneMsg, setDoneMsg] = useState("");
   // what they sent back from this page (changes, or the quote declined), so the right side shows it at once
   const [back, setBack] = useState<Record<string, { kind: "changes" | "declined"; note: string }>>({});
+  const frame = useRef<HTMLIFrameElement | null>(null), paneNow = useRef("");
+  // the stamp sits in the document's own top row (app/print/[id]/StampSlot.tsx): tell it what to show, and answer when it asks
+  const tell = () => frame.current?.contentWindow?.postMessage({ fbsStamp: paneNow.current }, location.origin);
+  useEffect(() => {
+    const on = (e: MessageEvent) => { if (e.origin === location.origin && e.data?.fbsStampAsk && e.source === frame.current?.contentWindow) tell(); };
+    addEventListener("message", on);
+    return () => removeEventListener("message", on);
+  }, []);
   const step = steps.find((s) => s.key === cur) || steps[0];
   if (!step) return <div className="pfl-body"><aside className="pfl-side"><p>Nothing is waiting on you right now.</p></aside></div>;
   const idx = todo.findIndex((s) => s.key === step.key);
@@ -40,6 +48,8 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
   // over → the approved check across it
   const sentBack = back[pdfStep.key] || (pdfStep.state === "changes" ? { kind: /declined/i.test(pdfStep.title) ? "declined" as const : "changes" as const, note: pdfStep.comment || "" } : null);
   const pane: "" | "ok" | "looks" | "changes" | "declined" = sentBack ? sentBack.kind : doneMsg || pdfStep.state === "done" ? "ok" : pdfStep.key in ok ? "looks" : "";
+  paneNow.current = pane;
+  if (typeof window !== "undefined") queueMicrotask(tell);
   const what0 = pdfStep.kind === "art" ? "proof" : pdfStep.kind === "sewout" ? "sew-out" : pdfStep.kind === "invoice" ? "invoice" : "quote";
   const goNext = (note: string) => {
     setOk((o) => ({ ...o, [step.key]: note }));
@@ -58,8 +68,9 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
             </li>); })}
         </ol>
         <div className="pfl-ans-wrap">
-          {doneMsg ? <><Result tone="ok" title="You're all set. Thank you!" line={doneMsg} />
-              {(() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp ? <a className="btn primary pfl-ok pfl-big" style={{ marginTop: 10 }} href={`/portal/orders/${orderId}`}>{dp.title} · {m(dp.amount || 0)}</a> : null; })()}</>
+          {doneMsg ? (() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp
+              ? <><Result tone="ok" title="Thank you for your approval!" line={`Here's your ${dp.title === "Pay now" ? "payment" : "deposit"} of ${m(dp.amount || 0)}. Once we have it, we'll get started.`} /><PayNow id={id} label={`${dp.title} · ${m(dp.amount || 0)}`} /></>
+              : <Result tone="ok" title="You're all set. Thank you!" line={doneMsg} />; })()
             : showFinal ? <Final key="final" id={id} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onBack={(kind, note) => { if (quote) setBack((b) => ({ ...b, [quote.key]: { kind, note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout") && step.state === "todo"
               ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" || next.kind === "invoice" ? `review ${name0(next)}` : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={(note) => { setBack((b) => ({ ...b, [step.key]: { kind: "changes", note } })); router.refresh(); }} />
@@ -68,26 +79,24 @@ export default function OrderSteps({ id, orderId, steps }: { id: string; orderId
                   target={step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! }} onAnswered={() => router.refresh()} />
             : step.kind === "quote" || step.kind === "invoice" ? (step.state === "changes"
               ? <Result tone={/declined/i.test(step.title) ? "no" : "chg"} title={step.title} line={/declined/i.test(step.title) ? "We'll look at what you said and get back to you." : `We're making the changes and will send you a new ${step.kind === "invoice" ? "invoice" : "quote"}.`} note={step.comment} who={whoWhen(step)} />
-              : <Result tone="ok" title={step.kind === "invoice" ? "Invoice approved" : "Quote approved"} line="Thank you!" who={whoWhen(step)} />)
+              : <Result tone="ok" title="All approved" line="Thank you!" who={whoWhen(step)} />)
             : step.kind === "deposit" && (step.state === "done"
               ? <Result tone="ok" title={step.title} line={step.sub} />
               : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
-                  <a className="btn primary pfl-ok" style={{ justifyContent: "center", height: 38 }} href={`/portal/orders/${orderId}`}>{step.title}</a>
-                  <div className="pfl-fine">Card or bank transfer. You&apos;ll sign in to your account with your email to pay.</div></div>)}
+                  <PayNow id={id} label={step.title} /></div>)}
           {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>
       </aside>
       <section className={"pfl-pdf" + (pane ? ` is-${pane}` : "")}>
         <div className="pfl-bar"><span>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><a href={pdfStep.pdf} target="_blank" rel="noreferrer">Open the PDF</a></div>
         <div className="pfl-frame">
-          <iframe key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} aria-hidden={pane === "changes" || pane === "declined"} />
+          <iframe ref={frame} onLoad={tell} key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} aria-hidden={pane === "changes" || pane === "declined"} />
           {(pane === "changes" || pane === "declined") && <div className="pfl-over" role="status">
             <span className="pfl-over-i" aria-hidden>{pane === "declined" ? "×" : "✎"}</span>
             <b>{pane === "declined" ? "Quote declined" : "Changes requested"}</b>
             {sentBack?.note && <q>{sentBack.note}</q>}
             <span>{pane === "declined" ? "We'll look at what you said and get back to you." : `We'll make the changes and send you a new ${what0} to look over.`}</span>
           </div>}
-          {(pane === "ok" || pane === "looks") && <div className="pfl-stamp" aria-hidden><span>✓</span>{pane === "ok" ? "Approved" : "Looks good"}</div>}
         </div>
       </section>
     </div>
@@ -195,6 +204,24 @@ function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; t
     <div className={"pfl-res " + tone} role="status">
       <span className="pfl-res-i" aria-hidden>{tone === "ok" ? "✓" : tone === "no" ? "×" : "✎"}</span>
       <div><b>{title}</b><span>{line}</span>{note?.trim() && <q>{note.trim()}</q>}{who && <small>{who}</small>}</div>
+    </div>
+  );
+}
+
+/** pay what's due now by card, right here (no sign-in): opens Stripe, and the payment lands on the order by itself */
+function PayNow({ id, label }: { id: string; label: string }) {
+  const [err, setErr] = useState(""), [pending, start] = useTransition();
+  const go = () => start(async () => {
+    setErr("");
+    const r = await payByLink(id);
+    if (!r.ok) { setErr(r.error); return; }
+    window.location.href = r.url;
+  });
+  return (
+    <div className="pfl-pay">
+      <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending} onClick={go}>{pending ? "Opening the payment page…" : label}</button>
+      <div className="pfl-fine">Secure card payment through Stripe.</div>
+      {err && <div className="pv-err">{err}</div>}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { calcOrder, withoutShopPieces, mergeSettings, orderGroups, type Customer
 import { loadGroupLook } from "@/lib/groupLook";
 import { addStockInks } from "@/lib/inkColors";
 import PrintButton from "./PrintButton";
+import StampSlot from "./StampSlot";
 import { DOC_CSS } from "./docCss";
 import { openLink } from "@/lib/proofLinks";
 import { InvoiceDoc, ProofDoc, SewoutDoc, WorkOrderDoc, type DocData, type SewoutRow } from "./Docs";
@@ -25,7 +26,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const isStaff = byLink ? false : viewer.isStaff;
   const db = isStaff || byLink ? createAdminClient() : viewer.supabase; // customers read through row security
   // inside the proof page: no buttons, and the pages fit the frame's width
-  const bar = (n: string) => embed ? <script dangerouslySetInnerHTML={{ __html: "(function(){function f(){var w=document.documentElement.clientWidth;document.body.style.zoom=Math.min(1,(w-16)/830)}f();addEventListener('resize',f)})()" }} /> : <div className="print-bar"><PrintButton fileName={n} /></div>;
+  // framed in the customer's page: the approval stamp on the top row (StampSlot), right side
+  const bar = (n: string) => embed ? <><script dangerouslySetInnerHTML={{ __html: "(function(){function f(){var w=document.documentElement.clientWidth;document.body.style.zoom=Math.min(1,(w-16)/830)}f();addEventListener('resize',f)})()" }} /><div className="print-bar"><PrintButton fileName={n} framed /><StampSlot /></div></> : <div className="print-bar"><PrintButton fileName={n} /></div>;
   const { data: od } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
   // the customer's documents (invoice, quote, proof, sew-out) never show the shop's own pieces; the work order does
@@ -150,7 +152,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     <div className="pdoc">
       <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
       <title>{nameOf(o.type === "quote" ? "Quote" : "Invoice")}</title>
-      <div className="print-bar"><PrintButton fileName={nameOf(o.type === "quote" ? "Quote" : "Invoice")} /></div>
+      {embed ? bar(nameOf(o.type === "quote" ? "Quote" : "Invoice")) : <div className="print-bar"><PrintButton fileName={nameOf(o.type === "quote" ? "Quote" : "Invoice")} /></div>}
       <InvoiceDoc {...data} />
     </div>
   );

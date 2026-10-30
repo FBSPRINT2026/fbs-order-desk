@@ -1,7 +1,8 @@
 "use server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decideByLink, openLink, type LinkDecision, type Step } from "@/lib/proofLinks";
-import { decideQuote } from "@/lib/customerSend";
+import Stripe from "stripe";
+import { decideQuote, orderSteps } from "@/lib/customerSend";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings } from "@/lib/pricing";
@@ -62,4 +63,39 @@ export async function approveAll(id: string, name: string, pick: { art?: { note:
     }
     return { ok: true as const };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong. Try again." }; }
+}
+
+/**
+ * Pay right after approving (Oct 30, Nick: "if their term is due up front… it says approve, and then it says thank you
+ * for your approval… here's the link for your deposit… once we have this, we'll get started"). A Stripe card checkout
+ * for what their terms say is due now (the deposit, or the whole order when it's paid up front), less anything already
+ * paid. No sign-in: the link is the key, the amount is worked out here (never taken from the browser), and the Stripe
+ * webhook records the payment on the order (app/api/stripe/webhook).
+ */
+export async function payByLink(id: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    if (!process.env.STRIPE_SECRET_KEY) return { ok: false, error: "Online payments aren't set up yet. Please call us." };
+    const admin = createAdminClient();
+    const os = await orderSteps(admin, id);
+    if (!os) return { ok: false, error: "This link doesn't work anymore. Ask us for a new one." };
+    const dep = os.steps.find((s) => s.kind === "deposit" && s.state === "todo");
+    if (!dep) return { ok: false, error: "Nothing is due right now. Thank you!" };
+    const { data: pays } = await admin.from("payments").select("amount").eq("order_id", os.o.id);
+    const paid = (pays || []).reduce((s, p) => s + +(p.amount || 0), 0);
+    const cents = Math.round(Math.max(0, (dep.amount || 0) - paid) * 100);
+    if (cents < 50) return { ok: false, error: "Nothing is due right now. Thank you!" };
+    const full = dep.amount != null && Math.abs((dep.amount || 0) - os.total) < 0.005;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: (os.customer?.email as string | undefined) || undefined,
+      line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name: `${os.settings.shop.name} order #${os.o.number}${full ? "" : " deposit"}`, description: os.o.nickname || undefined } } }],
+      metadata: { order_id: os.o.id, kind: full ? "balance" : "deposit", link: id },
+      payment_intent_data: { metadata: { order_id: os.o.id, order_number: String(os.o.number) } },
+      success_url: `${siteUrl()}/proof/${id}?paid=1`,
+      cancel_url: `${siteUrl()}/proof/${id}`,
+    });
+    if (!session.url) return { ok: false, error: "Couldn't open the payment page. Try again." };
+    return { ok: true, url: session.url };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." }; }
 }

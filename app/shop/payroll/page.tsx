@@ -114,8 +114,16 @@ export default function PayrollCenter() {
   }
 
   const p = d?.p;
+  // the payday as data, for the Run payroll skill (Claude fills QuickBooks Payroll from exactly these numbers, Oct 30, Nick:
+  // "the whole point… is so that you enter it so I don't make mistakes"); read with document.getElementById("payroll-data")
+  const feed = d && p ? JSON.stringify({
+    period: { start: p.start, end: p.end }, payDate: d.payDate, clockProblems: toFix.map((r) => ({ name: nm(r), count: r.issues })),
+    w2: w2.map((r) => ({ id: r.e.id, name: nm(r), salary: r.e.pay_type === "salary", rate: r.pay.rate, regularHours: r.pay.regHours, overtimeHours: r.pay.otHours, timeOffHours: r.pay.offHours, bonus: r.bonus, advance: r.advance, entered: !!r.line?.done_at })),
+    contractors: cons.map((r) => ({ id: r.e.id, name: nm(r), payee: r.e.qbo_vendor_name || null, lines: r.check, total: r.line?.check_total ?? r.total, checkMade: !!r.line?.qbo_purchase_id, ready: ready.includes(r) })),
+  }).replace(/</g, "\\u003c") : "";
   return (
     <>
+      {feed && <script type="application/json" id="payroll-data" dangerouslySetInnerHTML={{ __html: feed }} />}
       <div className="page-head">
         <div>
           <h1>Payroll Center</h1>

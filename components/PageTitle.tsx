@@ -11,7 +11,8 @@ import { usePathname } from "next/navigation";
  */
 const WORDS: Record<string, string> = { shop: "", portal: "", orders: "Orders", customers: "Customers", inbox: "Email", email: "Email", artwork: "Artwork", mockup: "Mockup Creator", production: "Production", details: "Reorder Details", settings: "Settings", calendar: "Calendar", projects: "Projects", goods: "Goods", statement: "Statement", request: "Order", archive: "Old order", designs: "Designs", separations: "Separations", employees: "Employees", "ink-room": "Ink Room", "merch-stores": "Merch Stores", "my-day": "My Day" };
 const fromPath = (p: string) => {
-  const parts = p.split("/").filter((x) => x && !/^[0-9a-f-]{20,}$/i.test(x));
+  // ids and link keys never make a title ("7Q1TEc7f21yX2pYTbliwayK0 · Proof"): a uuid, or a long run of letters and digits
+  const parts = p.split("/").filter((x) => x && !/^[0-9a-f-]{20,}$/i.test(x) && !(/^[A-Za-z0-9_-]{16,}$/.test(x) && /\d/.test(x) && /[A-Za-z]/.test(x)));
   const named = parts.map((x) => (x in WORDS ? WORDS[x] : x.replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase()))).filter(Boolean);
   return named.slice(-2).reverse().join(" · ");
 };
@@ -21,10 +22,13 @@ export default function PageTitle() {
   const path = usePathname() || "/";
   useEffect(() => {
     if (path.startsWith("/print")) return;
-    const site = path.startsWith("/portal") ? "FBS Print" : "FBS Order Desk";
+    // what customers see (their portal, their proof and approval pages) says the shop's name
+    const site = /^\/(portal|proof|s)(\/|$)/.test(path) ? "FBS Print" : "FBS Order Desk";
     const set = () => {
+      // a page can name itself where it has no h1 (the customer's approval page: "Fedex Shirts #40209")
+      const named = document.querySelector<HTMLElement>("[data-page-title]")?.dataset.pageTitle || "";
       const h = document.querySelector(".page-head h1, main h1, h1");
-      const t = clean(h?.textContent || "") || fromPath(path);
+      const t = clean(named || h?.textContent || "") || fromPath(path);
       const want = t ? `${t} · ${site}` : site;
       if (document.title !== want) document.title = want;
     };

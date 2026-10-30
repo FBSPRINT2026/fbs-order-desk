@@ -10,7 +10,11 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
   background:#c9ced6;min-height:100vh;padding:0 12px 24px;color:var(--ink);font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:11pt;line-height:1.35;
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow-x:auto}
 .pdoc *{box-sizing:border-box}
-.pdoc .print-bar{max-width:8.5in;margin:0 auto;padding:14px 0;display:flex;gap:8px}
+.pdoc .print-bar{max-width:8.5in;margin:0 auto;padding:14px 0;display:flex;gap:8px;align-items:center}
+.doc-stamp{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2.5px solid var(--ok);color:var(--ok);background:#fff;border-radius:7px;padding:4px 12px 4px 6px;font-weight:800;font-size:14px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.doc-stamp>span{width:20px;height:20px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:12px;letter-spacing:0}
+.doc-stamp.changes{border-color:#C27C00;color:#C27C00}.doc-stamp.changes>span{background:#C27C00}
+.doc-stamp.declined{border-color:#6B7280;color:#6B7280}.doc-stamp.declined>span{background:#6B7280}
 .pdoc .sheet{width:8.5in;min-height:11in;background:#fff;margin:0 auto 18px;padding:.42in .45in .32in;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(20,29,43,.18);position:relative}
 .pdoc .disp{font-family:"Archivo","Arial Narrow",sans-serif;font-weight:800;font-stretch:88%;letter-spacing:-.01em}
 .pdoc .fade{height:5px;border-radius:5px;background:var(--fade)}
@@ -144,7 +148,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .doc .k{font-size:30pt;line-height:1}
 .pdoc .doc .n{font-size:14pt;color:var(--ink2);margin-top:4px}
 .pdoc .doc .meta{font-size:10.5pt;color:var(--ink3);margin-top:6px;line-height:1.45}
-.pdoc .stamp{display:inline-block;margin-top:8px;border:2.5px solid var(--ok);color:var(--ok);font-weight:800;font-size:13pt;letter-spacing:.12em;padding:3px 12px;border-radius:6px;transform:rotate(-3deg)}
+.pdoc .stamp{display:inline-block;border:2.5px solid var(--ok);color:var(--ok);font-weight:800;font-size:13pt;letter-spacing:.12em;padding:3px 12px;border-radius:6px}
+.pdoc .top{position:relative}
+.pdoc .top>.stamp{position:absolute;left:50%;top:6px;transform:translateX(-50%);margin:0}
 .pdoc .parties{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:22px 0 18px}
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
@@ -215,7 +221,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .hero.wide .hp>.lbl{grid-column:1/-1;margin-bottom:-4px}
 .pdoc .hero.wide .pp .t{font-size:18pt}
 /* art proof (Oct 20) */
-.pdoc .pf .stamp{margin-top:8px}
+.pdoc .pf .top>.stamp{margin:0}
 .pdoc .pf-who{display:grid;grid-template-columns:1.6fr 1.2fr .9fr;gap:16px;margin:12px 0 8px;padding:8px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
 .pdoc .pf-who b{font-size:12pt}
 .pdoc .pf-who .faint{font-size:10pt;margin-top:2px}
