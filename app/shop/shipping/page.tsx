@@ -74,12 +74,12 @@ export default function ShippingCenter() {
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];
         return { kind: "order", printavo: false, id: o.id, number: String(o.number), job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipment: shipOf("order_id", o.id) };
+          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id) };
       }),
       ...pvs.map((o): Item => {
         const c = cust[o.customer_id];
         return { kind: "archived", printavo: true, id: o.id, number: o.visual_id, job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: fromPv(o.ship, o.contact, c?.company || ""), service: /ups|fedex|usps/i.test(o.delivery || "") ? o.delivery || "" : "", ...billOf(c), shipment: shipOf("archived_order_id", o.id) };
+          to: fromPv(o.ship, o.contact, c?.company || ""), service: /ups|fedex|usps/i.test(o.delivery || "") ? o.delivery || "" : "", ...billOf(c), shipOn: c?.ship_on || "", shipment: shipOf("archived_order_id", o.id) };
       }),
     ].filter((x) => x.shipment?.status !== "shipped");
     setItems(list);

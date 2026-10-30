@@ -31,11 +31,13 @@ const addr = (a: ShipAddress) => ({ name: a.name || undefined, company: a.compan
 type EpRate = { id: string; carrier: string; service: string; rate: string; delivery_days: number | null; delivery_date: string | null };
 
 /** Rates for a multi-box shipment (one EasyPost "order" with a shipment per box). */
-export async function rateShipment(p: { from: ShipAddress; to: ShipAddress; boxes: Box[]; bill: BillTo; account: string; zip: string; reference: string }): Promise<{ orderId: string; rates: Omit<Rate, "price">[] }> {
+export async function rateShipment(p: { from: ShipAddress; to: ShipAddress; boxes: Box[]; bill: BillTo; account: string; zip: string; reference: string;
+  /** the carrier accounts to rate on (EasyPost ids): a customer's own account, else FBS's; none = every connected one */ carrierAccounts?: string[] }): Promise<{ orderId: string; rates: Omit<Rate, "price">[] }> {
   const payment = p.bill === "fbs" ? undefined : { type: "THIRD_PARTY", account: p.account, country: "US", postal_code: p.zip };
   const o = await ep<{ id: string; rates: EpRate[]; messages?: { carrier: string; message: string }[] }>("/orders", {
     order: {
       reference: p.reference,
+      ...(p.carrierAccounts?.length ? { carrier_accounts: p.carrierAccounts.map((id) => ({ id })) } : {}),
       to_address: addr(p.to), from_address: addr(p.from),
       shipments: p.boxes.map((b) => ({
         parcel: { length: +b.length, width: +b.width, height: +b.height, weight: Math.round(+b.weight * 16 * 10) / 10 }, // weight in ounces
@@ -67,6 +69,14 @@ export async function rateParcel(p: { from: ShipAddress; to: ShipAddress; parcel
  * into our FedEx Ship Manager… we have to ship from a separate, a new account number through EasyPost… can you check?").
  * Only what identifies each account (its id, carrier, description and account number); never its credentials.
  */
+let acctCache: { at: number; list: Awaited<ReturnType<typeof carrierAccounts>> } | null = null;
+/** carrierAccounts, kept 10 minutes (every rate request asks which accounts are FBS's) */
+export async function carrierAccountsCached() {
+  if (acctCache && Date.now() - acctCache.at < 600_000) return acctCache.list;
+  const list = await carrierAccounts();
+  acctCache = { at: Date.now(), list };
+  return list;
+}
 export async function carrierAccounts(): Promise<{ id: string; type: string; description: string; reference: string; account: string; readable: string }[]> {
   const key = process.env.EASYPOST_API_KEY?.trim();
   if (!key) throw new Error("EasyPost isn't connected yet (EASYPOST_API_KEY is missing in Vercel).");

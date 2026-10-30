@@ -36,7 +36,7 @@ export default function MobileShip({ t: tg, existing, settings, box }: { t: Ship
 
   async function getRates() {
     setBusy("rates"); setMsg(null);
-    const r = await fetch("/api/shipping/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, boxes, bill, account, zip, reference: `#${tg.number}` }) }).catch(() => null);
+    const r = await fetch("/api/shipping/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, boxes, bill, account, zip, reference: `#${tg.number}`, customerId: tg.customerId }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Offline" };
     setBusy("");
     if (!r?.ok || j.error) return setMsg({ ok: false, text: t(j.error || "Couldn't get rates.") });

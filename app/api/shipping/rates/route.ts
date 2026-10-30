@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
-import { easypostConfigured, rateShipment } from "@/lib/easypost";
+import { carrierAccountsCached, easypostConfigured, rateShipment } from "@/lib/easypost";
 import { mergeSettings } from "@/lib/pricing";
 import { addressReady, boxReady, shippingPrice, type BillTo, type Box } from "@/lib/shipping";
 
@@ -31,7 +31,17 @@ export async function POST(req: Request) {
     // the rate calculator can price from another ZIP too (a drop-ship from a supplier, a second location)
     const fromZip = String(b.fromZip || "").trim();
     const from = b.quick && /^\d{5}$/.test(fromZip) && fromZip !== s.from.zip ? { ...s.from, street1: "", street2: "", city: "", state: "", zip: fromZip } : s.from;
-    const r = await rateShipment({ from, to: b.to, boxes, bill, account: String(b.account || "").trim(), zip: String(b.zip || "").trim(), reference: String(b.reference || "") });
-    return NextResponse.json({ easypostOrder: r.orderId, rates: r.rates.map((x) => ({ ...x, price: shippingPrice(x.cost, boxes.length, bill, s) })) });
+    // which carrier accounts (Oct 30): a customer who ships on its own account (customers.ship_on: Nine18 FEDEX) is rated on
+    // that one only, and it pays the carrier, so nothing is billed to them through us; everyone else on FBS's accounts,
+    // never on an account that's a customer's own
+    const { data: owned } = await v.supabase.from("customers").select("id, ship_on").neq("ship_on", "");
+    const theirs = new Set((owned || []).map((c) => c.ship_on as string));
+    const wanted = typeof b.shipOn === "string" ? b.shipOn : b.customerId ? ((owned || []).find((c) => c.id === b.customerId)?.ship_on as string) || "" : "";
+    const shipOn = wanted && wanted !== "fbs" ? wanted : "";
+    let carrierAccounts: string[] | undefined;
+    if (shipOn) carrierAccounts = [shipOn];
+    else if (theirs.size) carrierAccounts = (await carrierAccountsCached()).map((a) => a.id).filter((id) => !theirs.has(id));
+    const r = await rateShipment({ from, to: b.to, boxes, bill: shipOn ? "fbs" : bill, account: String(b.account || "").trim(), zip: String(b.zip || "").trim(), reference: String(b.reference || ""), carrierAccounts });
+    return NextResponse.json({ easypostOrder: r.orderId, shipOn, rates: r.rates.map((x) => ({ ...x, price: shippingPrice(x.cost, boxes.length, shipOn ? "fedex" : bill, s) })) });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
 }

@@ -9,6 +9,7 @@ export type ShipTarget = {
   kind: "order" | "archived"; id: string; number: string; job: string; customerId: string | null; customer: string;
   pieces: number; due: string | null; to: ShipAddress; service: string;
   bill: BillTo; account: string; zip: string;
+  /** the customer's own carrier account to ship on (EasyPost id, customers.ship_on); empty = FBS's */ shipOn?: string;
 };
 
 /** When a rate arrives: the carrier's date, else business days from today. */
@@ -62,6 +63,12 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [account, setAccount] = useState(existing?.bill_account || t.account);
   const [zip, setZip] = useState(existing?.bill_zip || t.zip);
   const [remember, setRemember] = useState(false);
+  // which carrier account it ships on (Oct 30, Nick: Nine18 ships on its own FedEx, "Nine18 FEDEX"): theirs, else FBS's
+  const [shipOn, setShipOn] = useState(existing?.ship_on ?? t.shipOn ?? "");
+  const [accts, setAccts] = useState<{ id: string; description: string; readable: string; account: string }[]>([]);
+  useEffect(() => { fetch("/api/shipping/accounts").then((r) => r.json()).then((j) => setAccts(j.accounts || [])).catch(() => {}); }, []);
+  const onAcct = accts.find((a) => a.id === shipOn) || null;
+  const acctName = (a: { description: string; readable: string; account: string }) => `${a.description || a.readable}${a.account ? ` (${a.readable} ${a.account})` : ""}`;
   const [service, setService] = useState(existing?.service || t.service || "");
   const [note, setNote] = useState(existing?.note || "");
   const [rates, setRates] = useState<Rate[] | null>(existing?.rates || null);
@@ -107,7 +114,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const ready = boxes.length > 0 && boxes.every(boxReady);
   const perBox = t.pieces ? Math.ceil(t.pieces / Math.max(1, boxes.length)) : 0;
   const chosen = useMemo(() => rates?.find((r) => `${r.carrier}|${r.service}` === pick) || null, [rates, pick]);
-  const canRate = ready && !!(to.zip && to.city && to.state && to.street1) && (bill === "fbs" || !!(account.trim() && zip.trim()));
+  const canRate = ready && !!(to.zip && to.city && to.state && to.street1) && (bill === "fbs" || !!shipOn || !!(account.trim() && zip.trim()));
 
   /**
    * The options, arranged: Cheapest and Fastest up top, then every useful option by arrival day. An option is grayed out
@@ -160,7 +167,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 
   const row = (): Partial<Shipment> & Record<string, unknown> => ({
     order_id: t.kind === "order" ? t.id : null, archived_order_id: t.kind === "archived" ? t.id : null, customer_id: t.customerId,
-    ship_to: to, bill_to: bill, bill_account: bill === "fbs" ? "" : account.trim(), bill_zip: bill === "fbs" ? "" : zip.trim(),
+    ship_to: to, bill_to: shipOn ? "fbs" : bill, bill_account: bill === "fbs" || shipOn ? "" : account.trim(), bill_zip: bill === "fbs" || shipOn ? "" : zip.trim(), ship_on: shipOn,
     carrier: chosen?.carrier || existing?.carrier || (service.split(" ")[0] || ""), service: chosen?.service || service,
     boxes, rates, cost: chosen && bill === "fbs" ? chosen.cost : existing?.cost ?? null, price: chosen ? chosen.price : existing?.price ?? null, note,
     updated_at: new Date().toISOString(),
@@ -168,7 +175,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 
   async function saveCustomer() {
     if (!remember || !t.customerId) return;
-    await sb.from("customers").update(bill === "fbs" ? { ship_bill: "fbs" } : { ship_bill: bill, ship_bill_zip: zip.trim(), ...(bill === "ups" ? { ship_ups_account: account.trim() } : { ship_fedex_account: account.trim() }) }).eq("id", t.customerId);
+    await sb.from("customers").update(shipOn ? { ship_on: shipOn } : bill === "fbs" ? { ship_bill: "fbs", ship_on: "" } : { ship_on: "", ship_bill: bill, ship_bill_zip: zip.trim(), ...(bill === "ups" ? { ship_ups_account: account.trim() } : { ship_fedex_account: account.trim() }) }).eq("id", t.customerId);
   }
 
   async function save(status: Shipment["status"] = "draft") {
@@ -190,7 +197,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     tried.current = rateKey;
     setBusy("rates"); setErr(""); setRates(null);
     try {
-      const r = await fetch("/api/shipping/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, boxes, bill, account, zip, reference: `#${t.number}` }) });
+      const r = await fetch("/api/shipping/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, boxes, bill: shipOn ? "fbs" : bill, account, zip, reference: `#${t.number}`, customerId: t.customerId, shipOn: shipOn || "fbs" }) });
       const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
       setPick(""); // the recommendation is picked when the rates arrive
@@ -377,13 +384,24 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
             </div>
             {!addressReady(to) && <div className="sw-warn">The address needs a street, city, state and ZIP.</div>}
 
-            <div className="sw-h">Shipping paid by</div>
+            {accts.length > 0 && (shipOn || accts.some((a) => a.id !== shipOn && /fedex|ups/i.test(a.readable))) && (
+              <>
+                <div className="sw-h">Ship on</div>
+                <select value={shipOn} onChange={(e) => { setShipOn(e.target.value); setRates(null); }} aria-label="Carrier account it ships on">
+                  <option value="">FBS&apos;s accounts</option>
+                  {accts.filter((a) => /fedex|ups/i.test(a.readable)).map((a) => <option key={a.id} value={a.id}>{acctName(a)}</option>)}
+                </select>
+                {onAcct && <div className="faint" style={{ fontSize: 12.5 }}>Rated and shipped on {acctName(onAcct)}: they pay the carrier, so no shipping is charged through us.</div>}
+              </>
+            )}
+            {!shipOn && <><div className="sw-h">Shipping paid by</div>
             <div className="sw-bill">
               {(["fbs", "ups", "fedex"] as BillTo[]).map((k) => (
                 <label key={k} className={"sw-billopt" + (bill === k ? " on" : "")}><input type="radio" name="bill" checked={bill === k} onChange={() => { setBill(k); setRates(null); if (k !== "fbs") setAccount(k === t.bill ? t.account : ""); }} /> {BILL_LABEL[k]}</label>
               ))}
             </div>
-            {bill !== "fbs" && (
+            </>}
+            {bill !== "fbs" && !shipOn && (
               <div className="sw-acct">
                 <label>{bill === "ups" ? "UPS" : "FedEx"} account #<input type="text" value={account} onChange={(e) => { setAccount(e.target.value); setRates(null); }} /></label>
                 <label>Billing ZIP<input type="text" value={zip} onChange={(e) => { setZip(e.target.value); setRates(null); }} /></label>

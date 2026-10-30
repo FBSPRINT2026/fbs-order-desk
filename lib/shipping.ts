@@ -8,7 +8,7 @@ export type Rate = { id?: string; carrier: string; service: string; cost: number
 export type Shipment = {
   id: string; order_id: string | null; archived_order_id: string | null; customer_id: string | null;
   status: "draft" | "labeled" | "shipped" | "void";
-  ship_to: ShipAddress; bill_to: BillTo; bill_account: string; bill_zip: string; carrier: string; service: string;
+  ship_to: ShipAddress; bill_to: BillTo; bill_account: string; bill_zip: string; /** the customer's own carrier account it shipped on (EasyPost id); empty = FBS's */ ship_on?: string; carrier: string; service: string;
   boxes: Box[]; rates: Rate[] | null; cost: number | null; price: number | null; note: string;
   created_by: string; created_at: string; updated_at: string; shipped_at: string | null;
 };
