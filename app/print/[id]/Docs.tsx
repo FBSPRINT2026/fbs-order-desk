@@ -137,7 +137,10 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
     // a logo mockup (our logo on the shirt color, made in the logo builder) is the same picture as the close-ups: no page
     // of its own (Oct 30, Nick: "you've got too many boxes… the same thing repeating like 5 times")
-    const mk = g.mockupKind === "logo" && !allSup ? [] : (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
+    const logoMk = g.mockupKind === "logo" && !allSup;
+    const mk = logoMk ? [] : (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
+    // …but it still shows on the first page (Oct 30, #40284 said "No mockup yet" with a mockup made): the picture, no page
+    const firstMk = logoMk ? (p.mockups[gi] || []).slice(0, 1) : mk;
     // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
     const veryLong = noteText.length + extra * 120 > 650 || noteText.split("\n").length + extra > 9;
     const notesPage = longNotes && (!mk.length || veryLong);
@@ -148,7 +151,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
     // two close-ups a page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it, close-up of
     // the full back"): a front and back print share one page
     const printPages = allSup ? 0 : Math.ceil(g.imprints.length / 2);
-    return { lines, noteParts, longNotes, more, mk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -163,7 +166,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
       <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, notesPage, vars, allSup } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -206,22 +209,23 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                   <div className="lbl">Work order · #{o.number}{groups.length > 1 ? ` · group ${gi + 1} of ${groups.length}` : ""}</div>
                   <h1 className="disp">{o.nickname || "Untitled job"}</h1>
                   {who.length > 0 && <div className="who"><b>{who[0]}</b>{who.slice(1).map((x) => ` · ${x}`).join("")}</div>}
-                  <div className="flags">
-                    {o.rush && <span className="flag rush">RUSH</span>}
-                    {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
-                    {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
-                    {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}
-                    {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
-                  </div>
-                  {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
                 </div>
                 <div className="due"><div className="lbl">In hands</div><div className="d disp">{due || "NOT SET"}</div>{dueSub && <small>{dueSub}</small>}</div>
                 <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
               </div>
-              <div className="fade" style={{ margin: "10px 0 0" }} />
+              {/* the tags on one line across the page, under the header (Oct 30, Nick: "these can be on the same line"); no
+                  color bar here (Nick: "why does this page have the rainbow banner?") */}
+              <div className="flags">
+                {o.rush && <span className="flag rush">RUSH</span>}
+                {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
+                {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
+                {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}
+                {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
+              </div>
+              {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
               {/* the mockups take whatever room the rest leaves (never under ~2.6"); up to 4 here, all of them big on their own pages */}
-              <div className={"wo-mks n" + Math.min(4, Math.max(1, mk.length))}>
-                {mk.length ? mk.slice(0, 4).map((u, i) => (
+              <div className={"wo-mks n" + Math.min(4, Math.max(1, firstMk.length))}>
+                {firstMk.length ? firstMk.slice(0, 4).map((u, i) => (
                   <div className="wo-m" key={u}>
                     <img src={u} alt="Mockup" />
                     {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}

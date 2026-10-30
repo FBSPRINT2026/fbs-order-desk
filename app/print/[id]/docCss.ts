@@ -31,6 +31,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .hd .who{font-size:13pt;margin-top:6px;color:var(--ink2)}
 .pdoc .hd .who b{color:var(--ink)}
 .pdoc .flags{display:flex;gap:8px;margin:10px 0 0;flex-wrap:wrap}
+/* the work order's tags on one line under the header, across the full width (Oct 30, Nick: "these can be on the same line") */
+.pdoc .wo-first > .flags{flex-shrink:0}
 .pdoc .flag{white-space:nowrap;font-size:9.5pt;font-weight:800;padding:3px 10px;border-radius:6px;letter-spacing:.04em}
 .pdoc .flag.cs{background:#e7f5fc;color:#0a6f9c;border:1.5px solid var(--blue)}
 .pdoc .flag.pv{background:#fff4e0;color:#8a5a00;border:1.5px solid var(--orange)}
@@ -344,7 +346,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 /* work order (Oct 26, Nick): every page exactly letter size; on the first page the mockups fill whatever room is left */
 .pdoc .sheet.wo1{height:11in;min-height:0;overflow:hidden}
 .pdoc .wo1 h2{margin:10px 0 4px}
-.pdoc .wo-mks{flex:1 1 0;min-height:2.6in;display:grid;gap:10px;margin-top:10px}
+.pdoc .wo-mks{flex:1 1 0;min-height:2.6in;display:grid;gap:10px;margin-top:12px}
+/* the notes keep their height: a squeezed box let the ship-to run over the footer, and the page's fit steps (WoFit) never saw it */
+.pdoc .wo-first .notes{flex-shrink:0}
 .pdoc .wo-mks.n2{grid-template-columns:1fr 1fr}
 .pdoc .wo-mks.n3,.pdoc .wo-mks.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
 .pdoc .wo-m{min-height:0;display:flex;flex-direction:column;align-items:center;background:#f4f5f7;border-radius:12px;padding:8px}
@@ -394,7 +398,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-pc .kv>i{font-style:normal;font-size:8pt;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
 .pdoc .wo-pc .kv b{color:var(--ink)}
 .pdoc .wo-pc .inks.two{display:grid;grid-template-columns:1fr 1fr;gap:1px 10px}
-.pdoc .wo-pc .inks span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* a thread or ink name is never cut short ("1 Madeira 1800 …"): one a line when two don't fit */
+.pdoc .wo-pc .inks.two{grid-template-columns:repeat(auto-fill,minmax(1.55in,1fr))}
+.pdoc .wo-pc .inks span{white-space:normal}
 .pdoc .wo-pc .sw{width:10px;height:10px;margin-right:4px;vertical-align:-1px}
 .pdoc .wo-pc .warn{padding:0 10px 6px;font-size:8.5pt}
 .pdoc .wo-plist{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;margin-top:8px;font-size:10pt}
@@ -407,7 +413,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 /* two close-ups on one page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it,
    close-up of the full back"): each half drawn smaller, WoFit.tsx shrinks them more until both fit */
 .pdoc .sheet.cu-pair{height:11in;overflow:hidden}
-.pdoc .cu-pair .cu-half{zoom:var(--cu,.6);margin:0 auto .12in}
+/* full width, never centered: Save PDF pictures the page apart from its art, and a centered half inside zoom came out
+   left-aligned there while the art went where the screen had it (Oct 30, #40284: the logo off the shirt) */
+.pdoc .cu-pair .cu-half{zoom:var(--cu,.6);width:100%;margin:0 0 .12in}
 .pdoc .cu-pair .cu-half + .cu-half .p2h{display:none}
 .pdoc .cu-pair .foot{margin-top:auto}
 /* the first page's fit steps (WoFit.tsx) */
