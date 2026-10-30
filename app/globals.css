@@ -16404,9 +16404,9 @@ main.main .pc-tbl .tbl td:first-child{white-space:normal;max-width:200px}
 /* Bill third party in the order's Delivery panel (Oct 30) */
 .tp-wrap{display:flex;flex-direction:column;gap:8px}
 .tp-box{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)}
-.tp-row{display:grid;grid-template-columns:120px 1fr 120px;gap:10px}
-.tp-box .field{margin:0}
-@media (max-width:640px){.tp-row{grid-template-columns:1fr}}
+.tp-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.tp-box .field{margin:0;min-width:0}
+.tp-box .field input,.tp-box .field select{width:100%;min-width:0}
 /* a personalized piece's name under its line on the order (Oct 30) */
 .gl-pers{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 6px;padding:6px 10px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--r);background:var(--surface-2);font-size:13px}
 .gl-pers-k{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
