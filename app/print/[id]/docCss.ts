@@ -456,7 +456,11 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-set{display:grid;grid-template-columns:minmax(0,1fr) .95in;column-gap:8px;font-size:9.5pt;color:var(--ink2);padding:4px 0 0}
 .pdoc .iv2-set span:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pdoc .iv2-fees{border-top-width:1px;padding-top:2px}
-.pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:16px;align-items:end;break-inside:avoid}
+/* the totals come up right under the items; delivery, payment and notes start level with them on the left (Oct 30, Nick:
+   "the total should come up… you've got it hanging") */
+.pdoc .iv2-sum{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:16px;align-items:start;break-inside:avoid}
+.pdoc .iv2-sum .tot{grid-column:2;grid-row:1}
+.pdoc .iv2-left{grid-column:1;grid-row:1}
 .pdoc .iv2-left{display:flex;flex-direction:column;gap:10px;font-size:9.5pt;line-height:1.4;min-width:0}
 .pdoc .iv2-left .lbl{font-size:8pt;margin-bottom:1px}
 .pdoc .iv2-ship{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
