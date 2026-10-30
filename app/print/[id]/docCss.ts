@@ -115,7 +115,10 @@ export const DOC_CSS = `
 
 /* invoice / quote */
 .pdoc .top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
-.pdoc .brand img{height:.7in;display:block}
+/* the shop's logo on the left, its own size (the left menu's .brand rule is a flex column that stretched it across, so the
+   logo sat in the middle: Oct 29, Nick) */
+.pdoc .brand{display:block;padding:0;border:0;gap:0}
+.pdoc .brand img{height:.7in;width:auto;display:block}
 .pdoc .brand .sub{font-size:9pt;color:var(--ink3);margin-top:6px;white-space:pre-line}
 .pdoc .doc{text-align:right}
 .pdoc .doc .k{font-size:30pt;line-height:1}
@@ -125,7 +128,7 @@ export const DOC_CSS = `
 .pdoc .parties{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:22px 0 18px}
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
-.pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
+.pdoc .parties > div{font-size:10.5pt;line-height:1.4;white-space:pre-line;overflow-wrap:break-word;min-width:0}
 .pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:0 16px;border-top:2px solid var(--ink);padding-top:0;margin-bottom:0;break-inside:avoid}
 .pdoc .job + .job{margin-top:var(--row)}
 .pdoc .job .pic{width:1.45in;border-radius:10px;background:#f6f7f9;padding:6px;align-self:start}
@@ -168,7 +171,7 @@ export const DOC_CSS = `
 .pdoc .tot .bal.due{background:#fdeceb}
 .pdoc .tot .bal.due span:last-child{color:#b3261e}
 .pdoc .tot .bal2{font-weight:800}
-.pdoc .parties.three{grid-template-columns:1fr 1fr 3.3in;gap:22px}
+.pdoc .parties.three{grid-template-columns:1.1fr 1fr 2.85in;gap:20px}
 .pdoc .parties .osum{background:#f6f7f9;border-radius:10px;padding:10px 14px 11px;white-space:normal}
 .pdoc .osum dl{display:grid;grid-template-columns:auto 1fr;gap:3px 0;margin:4px 0 0;font-size:10.5pt;line-height:1.35}
 .pdoc .osum-name{text-align:right;font-weight:800;font-size:12pt;line-height:1.25;margin-top:3px;color:var(--ink)}

@@ -16,7 +16,7 @@ import { bundleCopy, bundlePreview, bundleSend, orderLinkAction, sendOptionsActi
  * mode "copy": just the two copy buttons, for the order's page as it is (nothing new sent).
  */
 type Target = { kind: "art" | "sewout" | "order"; orderId: string; sewoutId?: string; note?: string; live?: boolean };
-type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean } | null; quote: { total: number; status: string; deposit: number } | null; sewouts: { id: string; label: string; sent: boolean }[] };
+type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean } | null; quote: { kind?: "quote" | "invoice"; total: number; status: string; sent?: boolean; deposit: number; /** what's due when they approve, by their terms */ due?: string } | null; sewouts: { id: string; label: string; sent: boolean }[] };
 type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string };
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -42,7 +42,9 @@ export default function SendProofTool({ target, label = "Send to customer", mode
     // what's ready, and what this button is for
     setPick({
       proof: !!r.proof && (target.kind === "art" ? true : target.kind === "order" ? r.proof.unsent : false) && (r.proof.unsent || target.kind === "art"),
-      quote: !!r.quote && r.quote.status !== "quote_sent" && target.kind !== "sewout",
+      // the price goes with whatever's sent, like a mockup's quote: a sew-out takes the final invoice (Oct 29, Nick: "check
+      // sew-out and then also estimate, just like you do with a normal mock-up")
+      quote: !!r.quote && !r.quote.sent && r.quote.status !== "quote_sent" && (r.quote.kind !== "invoice" || target.kind === "sewout"),
       sewouts: target.kind === "sewout" && target.sewoutId ? [target.sewoutId] : target.kind === "order" ? r.sewouts.filter((s) => !s.sent).map((s) => s.id) : [],
       note: target.note || "",
     });
@@ -104,7 +106,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
             {!opts && <div className="faint">{busy === "load" ? "Loading…" : ""}</div>}
             {opts && <div className="spt-picks">
               {opts.proof && tick(!!pick.proof, (v) => setPick((p) => ({ ...p, proof: v })), `Proof, version ${opts.proof.version}`, `${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`, "proof")}
-              {opts.quote && tick(!!pick.quote, (v) => setPick((p) => ({ ...p, quote: v })), `Quote · ${money(opts.quote.total)}`, `Deposit to start: ${money(opts.quote.deposit)}${opts.quote.status === "quote_sent" ? " · already sent" : ""}`, "quote")}
+              {opts.quote && tick(!!pick.quote, (v) => setPick((p) => ({ ...p, quote: v })), `${opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · ${money(opts.quote.total)}`, `${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`, "quote")}
               {opts.sewouts.map((s) => tick((pick.sewouts || []).includes(s.id), (v) => setPick((p) => ({ ...p, sewouts: v ? [...(p.sewouts || []), s.id] : (p.sewouts || []).filter((x) => x !== s.id) })), s.label, s.sent ? "already sent" : "photo saved, not sent yet", s.id))}
               {!opts.proof && !opts.quote && !opts.sewouts.length && <div className="faint">Nothing to send yet: make a mockup, or the quote, first.</div>}
             </div>}

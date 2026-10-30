@@ -1,10 +1,11 @@
 "use server";
+import { termsPct } from "@/lib/payTerms";
 import { revalidatePath } from "next/cache";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, receiptHtml, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, r2, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, mergeSettings, r2, type Order, type Payment, type PayTerms } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { allocateOldest } from "@/lib/paySelect";
 import { payState } from "@/lib/payReady";
@@ -37,9 +38,12 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const o = orders.find((x) => x.id === it.orderId)!;
     const c = calcOrder(o, settings, ((pays || []) as Payment[]).filter((p) => p.order_id === o.id));
     // only what the shop has opened up for paying (lib/payReady.ts): never the whole balance before it's ready
-    const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: settings.depositPct });
+    // the customer's payment terms decide what's paid up front (lib/payTerms.ts)
+    const terms = ((cs || []) as { id: string; payment_terms?: PayTerms }[]).find((x) => x.id === o.customer_id)?.payment_terms || "receipt";
+    const tPct = termsPct(terms, settings.depositPct);
+    const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: settings.depositPct, terms });
     if (ps.can === "none") throw new Error(`#${o.number} isn't ready to pay yet. ${ps.why}`);
-    const deposit = Math.min(c.balance, r2((c.total * settings.depositPct) / 100));
+    const deposit = Math.min(c.balance, r2((c.total * (tPct > 0 && tPct < 100 ? tPct : settings.depositPct)) / 100));
     const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005) ? deposit : c.balance);
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
     return { o, amount };

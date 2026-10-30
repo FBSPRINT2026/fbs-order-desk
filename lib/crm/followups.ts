@@ -5,6 +5,7 @@
 // Every item has a stable `key`. Dismissing or snoozing an item saves that key in ai_suggestions,
 // so it stays hidden until the situation changes (e.g. the quote is sent again gives a new key).
 
+import { termsPct } from "@/lib/payTerms";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { payDueDate, ST, type Customer, type Order, type Settings, type StatusKey } from "@/lib/pricing";
 import { custLabel, fmtDateLong, money } from "@/lib/format";
@@ -236,9 +237,10 @@ export function computeFollowUps(data: AssistantData, s: Settings, now = Date.no
         push(o, c, { key: `overdue:${o.id}:${payBy}`, kind: "overdue", priority: late > 14 ? 1 : 2,
           title: `Collect ${money(bal)} on #${o.number}`, body: `${custLabel(c)} was due ${fmtDateLong(payBy)} (${plural(late, "day")} ago).`,
           template: "payment_reminder", draft: renderTemplate("payment_reminder", { ...v, dueText: ` (it was due ${fmtDateLong(payBy)})` }), channel: "order", since: payBy });
-      } else if (terms === "receipt" && s.depositPct > 0 && EARLY.includes(o.status) && (paid.get(o.id) || 0) < 0.005 && +o.total > 0 && ageDays(o.approved_at || o.updated_at, now) >= 1) {
+      } else if (termsPct(terms, s.depositPct) > 0 && EARLY.includes(o.status) && (paid.get(o.id) || 0) < 0.005 && +o.total > 0 && ageDays(o.approved_at || o.updated_at, now) >= 1) {
+        // only when their terms ask for money up front (50/50 or pre-pay; lib/payTerms.ts): never on receipt or net 30
         push(o, c, { key: `deposit:${o.id}`, kind: "deposit", priority: 3,
-          title: `No deposit on #${o.number} yet`, body: `Approved${o.approved_at ? ` ${fmtDateLong(o.approved_at.slice(0, 10))}` : ""}, ${money(o.total)} total. Your terms ask for ${s.depositPct}% to start.`,
+          title: `No ${terms === "prepay" ? "payment" : "deposit"} on #${o.number} yet`, body: `Approved${o.approved_at ? ` ${fmtDateLong(o.approved_at.slice(0, 10))}` : ""}, ${money(o.total)} total. Their terms ask for ${termsPct(terms, s.depositPct)}% to start.`,
           template: "deposit_request", draft: renderTemplate("deposit_request", v), channel: "order", since: o.approved_at || o.updated_at });
       }
     }

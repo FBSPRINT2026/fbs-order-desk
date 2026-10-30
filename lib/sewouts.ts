@@ -245,7 +245,7 @@ async function keepOnLogo(admin: SupabaseClient, s: Sewout, name: string, number
 }
 
 /** The customer's answer (from their portal): approved with their typed name, or changes with what to change. */
-export async function decideSewout(admin: SupabaseClient, s: Sewout, o: Order, decision: "approved" | "changes", name: string, comment: string, actor: string) {
+export async function decideSewout(admin: SupabaseClient, s: Sewout, o: Order, decision: "approved" | "changes", name: string, comment: string, actor: string, /** one shop email for several answers at once (the caller sends it) */ quiet = false) {
   if (s.archived_at) return { ok: false as const, error: "This sew-out was replaced by a newer one. Refresh the page." };
   if (s.status !== "pending") return { ok: false as const, error: "This sew-out was already reviewed. Refresh the page." };
   const who = name.trim().slice(0, 120), note = comment.trim().slice(0, 2000);
@@ -256,7 +256,7 @@ export async function decideSewout(admin: SupabaseClient, s: Sewout, o: Order, d
   await admin.from("order_events").insert({ order_id: o.id, kind: decision === "approved" ? "sewout_approved" : "sewout_changes", detail: `Sew-out v${s.version}${note ? `: ${note.slice(0, 200)}` : ""}`, actor });
   if (decision === "approved") await keepOnLogo(admin, s, who, o.number);
   const { settings } = await load(admin, o.id);
-  if (SHOP_NOTIFY_EMAIL) await sendEmail({
+  if (SHOP_NOTIFY_EMAIL && !quiet) await sendEmail({
     to: SHOP_NOTIFY_EMAIL,
     subject: decision === "approved" ? `Sew-out approved on #${o.number}` : `Sew-out changes on #${o.number}`,
     html: emailLayout(settings.shop.name, decision === "approved" ? `${who} approved the sew-out` : `${who || "The customer"} wants changes to the sew-out`, note || (decision === "approved" ? "Good to run." : "No comment."), "Open order", `${siteUrl()}/shop/orders/${o.id}`),

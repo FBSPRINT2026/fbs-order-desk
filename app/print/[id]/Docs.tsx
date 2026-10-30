@@ -615,6 +615,9 @@ const SETUP_LABEL = (k: string, q: number, thread = false) => ({
   pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `${thread ? "Thread changes" : "Ink changes"}${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
 } as Record<string, string>)[k] || "Setup";
 
+/** an email address that wraps after its @ when the column is narrow, never in the middle of a word */
+const emailBreak = (e: string) => { const i = e.indexOf("@"); return i > 0 ? <>{e.slice(0, i + 1)}<wbr />{e.slice(i + 1)}</> : e; };
+
 export function InvoiceDoc(p: DocData) {
   const { o, cust, groups, c, settings, pays } = p;
   const sh = settings.shop, isQ = o.type === "quote", kind = isQ ? "Quote" : "Invoice";
@@ -637,7 +640,7 @@ export function InvoiceDoc(p: DocData) {
         </div>
       </div>
       <div className="parties three">
-        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
+        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{emailBreak(cust.email)}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
         {o.delivery_method === "tbd"
           ? <div><div className="lbl">Pickup or ship</div>To be decided{due && <><br /><span className="faint">{due}</span></>}</div>
           : o.delivery_method === "pickup"

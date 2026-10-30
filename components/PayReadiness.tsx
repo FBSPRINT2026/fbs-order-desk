@@ -3,15 +3,16 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { payState, type PayMode } from "@/lib/payReady";
+import type { PayTerms } from "@/lib/pricing";
 
 /**
  * Shop order page → Payments: when the customer can pay it online (Oct 24, Nick: "You can't pay an invoice just all the
  * time"). Auto follows where the order is (lib/payReady.ts); Not yet / Deposit only / Full balance set it by hand.
  * "Charges may still change" lets them pay with a note that the total isn't final (shipping later, extras).
  */
-export default function PayReadiness({ order, paid, depositPct, deposit }: {
+export default function PayReadiness({ order, paid, depositPct, deposit, terms }: {
   order: { id: string; status: string; type?: string | null; pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null };
-  paid: number; depositPct: number; deposit: number;
+  paid: number; depositPct: number; deposit: number; /** the customer's payment terms: Auto follows them (lib/payTerms.ts) */ terms?: PayTerms;
 }) {
   const [mode, setMode] = useState<PayMode>((order.pay_mode as PayMode) || "auto");
   const [nf, setNf] = useState(!!order.pay_not_final);
@@ -23,8 +24,8 @@ export default function PayReadiness({ order, paid, depositPct, deposit }: {
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
     setTimeout(() => setState(""), 2000);
   };
-  const ps = payState({ ...order, pay_mode: mode === "auto" ? null : mode, pay_not_final: nf, pay_note: note }, { paid, depositPct });
-  const auto = payState({ ...order, pay_mode: null }, { paid, depositPct });
+  const ps = payState({ ...order, pay_mode: mode === "auto" ? null : mode, pay_not_final: nf, pay_note: note }, { paid, depositPct, terms });
+  const auto = payState({ ...order, pay_mode: null }, { paid, depositPct, terms });
   const sees = ps.can === "none" ? `Not ready to pay · ${ps.why}` : ps.can === "deposit" ? `Can pay the deposit (${money(deposit)})` : "Can pay the full balance";
   const autoLabel = auto.can === "none" ? "not yet" : auto.can === "deposit" ? "deposit" : "full balance";
   return (
