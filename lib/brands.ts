@@ -81,6 +81,19 @@ export function pickSewFile(files: SewFile[], kind: SewKind, wantW?: number): Se
   return [...pool].sort((a, b) => Math.abs(a.wIn - wantW) - Math.abs(b.wIn - wantW))[0];
 }
 
+/**
+ * The print with the sew file it sews (Oct 30, #40284: D10303E1.DST and its worksheet were added to the logo after the
+ * print was made, so the work order painted the flat art in thread colors and said "7,500 (est.)"). A print with its own
+ * file keeps it; one without takes its logo's file for its goods and size (pickSewFile), with that file's stitches.
+ */
+export function withSewFile<T extends Pick<Imprint, "method" | "emb" | "size" | "stitches">>(im: T, design: Pick<Design, "specs"> | null | undefined, lines: Pick<GLine, "garment" | "style" | "brand">[]): T {
+  if (im.method !== "embroidery" || im.emb?.file || !design) return im;
+  const w = /(\d+(?:\.\d+)?)/.exec(im.size || "");
+  const f = pickSewFile(sewFilesOf(design), sewKindOf(lines), w ? +w[1] : undefined);
+  if (!f) return im;
+  return { ...im, emb: { ...(im.emb || {}), file: f, stitchesFrom: "file" }, stitches: f.stitches || im.stitches };
+}
+
 /** the kind of sew file a group's goods take (caps, bags, fleece; else flat) */
 export function sewKindOf(lines: Pick<GLine, "garment" | "style" | "brand">[]): SewKind {
   const t = lines.map((l) => `${l.garment || ""} ${l.style || ""} ${l.brand || ""}`).join(" ").toLowerCase();
