@@ -16325,3 +16325,6 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-close{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px}
 .pc-close>span{white-space:nowrap}
 .panel.pc-done{border-color:var(--ok)}
+.pc-tot{border-top:1px solid var(--line)}
+.pc-tot td.r{white-space:nowrap;width:1%}
+.pc-tot .pc-tot-sum td{border-top:2px solid var(--ink)}

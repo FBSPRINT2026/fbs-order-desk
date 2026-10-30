@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
 import { advanceLeft, guessPayee, loadPayday, planLabel, type PaydayRow } from "@/lib/payday";
-import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, type Payee } from "./actions";
+import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, pullActuals, type Payee } from "./actions";
 
 /**
  * Payroll Center (Admin Tools, Oct 30, Nick: "make a payday tool… create checks from the time clock… paycheck
@@ -120,6 +120,22 @@ export default function PayrollCenter() {
   const closed = d?.closed || null;
   const conOpen = cons.filter((r) => r.total > 0 && !r.line?.qbo_purchase_id);
   const canClose = !toFix.length && !conOpen.length;
+  // the payday's totals (Oct 30, Nick: "contractor checks, the total for the W-2 employees plus the FBS taxes equals this…
+  // and how much of it was overtime"): W-2 amounts as QuickBooks actually paid them, once read back
+  const rec = d?.record || null;
+  const hasW2 = rec?.w2_gross != null;
+  const checksTotal = r2(made.reduce((s, r) => s + +(r.line?.check_total || 0), 0));
+  const w2Cost = hasW2 ? r2(+(rec!.w2_gross || 0) + +(rec!.w2_employer_taxes || 0)) : 0;
+  const otCon = r2(cons.reduce((s, r) => s + (r.pay.otPay || 0), 0)), otConH = r2(cons.reduce((s, r) => s + r.pay.otHours, 0));
+  const otW2 = r2(w2.reduce((s, r) => s + (r.pay.otPay || 0), 0)), otW2H = r2(w2.reduce((s, r) => s + r.pay.otHours, 0));
+  async function getActuals() {
+    if (!d) return;
+    setBusy("Reading the payroll from QuickBooks…"); setErr(""); setMsg("");
+    const r = await pullActuals(d.p.start);
+    setBusy("");
+    if (!r.ok) setErr(r.error); else if (!r.data?.found) setMsg(`QuickBooks has no paychecks dated ${dayLabel(d.payDate)} yet. Submit the payroll there, then try again.`); else setMsg("The actual W-2 amounts came in from QuickBooks.");
+    load();
+  }
   async function closeOut(reopen = false) {
     if (!d) return;
     setConfirm(""); setBusy(reopen ? "Reopening…" : "Closing out this payday…"); setErr(""); setMsg("");
@@ -133,7 +149,7 @@ export default function PayrollCenter() {
     setConfirm(""); setBusy("Saving…");
     const r = await markEntered(d.p.start, w2Open.map((x) => x.e.id));
     setBusy("");
-    if (!r.ok) setErr(r.error); else setMsg("W-2 payroll marked as entered in QuickBooks. Their advance repayments are recorded.");
+    if (!r.ok) setErr(r.error); else setMsg(r.data?.found ? "W-2 payroll entered. The actual amounts came in from QuickBooks (Step 4). Advance repayments are recorded." : `W-2 payroll marked as entered; advance repayments recorded. QuickBooks has no paychecks dated ${dayLabel(d.payDate)} yet: once it's submitted, press "Get totals from QuickBooks" in Step 4.`);
     load();
   }
   function copyList() {
@@ -285,6 +301,19 @@ export default function PayrollCenter() {
               <span className={conOpen.length ? "pc-wait" : "pc-ok"}>{conOpen.length ? `${conOpen.length} contractor check${conOpen.length > 1 ? "s" : ""} to make` : `${made.length} contractor checks made ✓ · ${$(r2(made.reduce((s, r) => s + +(r.line?.check_total || 0), 0)))}`}</span>
               <span className={w2Open.length && !closed ? "faint" : "pc-ok"}>{closed || !w2Open.length ? `W-2 payroll entered ✓ · ${w2.length}` : `W-2 payroll: ${w2.length} to submit in QuickBooks (closing marks them entered)`}</span>
               {closed && closed.advances_total > 0 && <span className="pc-ok">Advances repaid {$(closed.advances_total)}</span>}
+            </div>
+            {/* the payday's total: contractor checks + W-2 gross + FBS taxes, and the overtime in it (Oct 30, Nick) */}
+            <div className="tbl-wrap pc-tbl pc-tot">
+              <table className="tbl">
+                <tbody>
+                  <tr><td><b>Contractor checks</b><div className="sub">{made.length} check{made.length === 1 ? "" : "s"} made{advTotal ? ` · after ${$(advTotal)} in advance repayments` : ""}</div></td><td className="r">{$(checksTotal)}</td></tr>
+                  <tr><td><b>W-2 employees, gross pay</b><div className="sub">{hasW2 ? <>{rec!.w2_paychecks} paychecks from QuickBooks · net {$(+(rec!.w2_net || 0))} · employee taxes withheld {$(+(rec!.w2_employee_taxes || 0))}{+(rec!.w2_deductions || 0) > 0 ? ` · other deductions ${$(+(rec!.w2_deductions || 0))}` : ""}</> : "From QuickBooks once the payroll is submitted"}</div></td>
+                    <td className="r">{hasW2 ? $(+(rec!.w2_gross || 0)) : <button type="button" className="btn sm" onClick={getActuals} disabled={!!busy}>Get totals from QuickBooks</button>}</td></tr>
+                  <tr><td><b>FBS taxes</b><div className="sub">Social Security and Medicare match, federal and Texas unemployment</div></td><td className="r">{hasW2 ? $(+(rec!.w2_employer_taxes || 0)) : <span className="faint">—</span>}</td></tr>
+                  <tr className="pc-tot-sum"><td><b>Total payroll</b>{hasW2 && <div className="sub">W-2 with FBS taxes {$(w2Cost)}{rec?.qbo_pulled_at ? <> · from QuickBooks {new Date(rec.qbo_pulled_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · <button type="button" className="linkbtn" onClick={getActuals} disabled={!!busy}>Read again</button></> : null}</div>}</td><td className="r"><b>{hasW2 ? $(r2(checksTotal + w2Cost)) : `${$(checksTotal)} + W-2`}</b></td></tr>
+                  <tr><td><b>Overtime on this payroll</b><div className="sub">{h2(r2(otConH + otW2H))} overtime hours at time and a half</div></td><td className="r pc-ot">{$(r2(otCon + otW2))}</td></tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </div>

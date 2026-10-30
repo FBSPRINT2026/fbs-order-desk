@@ -31,7 +31,10 @@ export type PaydayRow = {
 };
 
 /** a payday closed out in the Payroll Center (Payroll finished): who, when, what it paid */
-export type Payday = { period_start: string; pay_date: string; closed_at: string | null; closed_by: string; w2_count: number; checks: number; checks_total: number; advances_total: number; note: string };
+export type Payday = { period_start: string; pay_date: string; closed_at: string | null; closed_by: string; w2_count: number; checks: number; checks_total: number; advances_total: number; note: string;
+  /** read back from QuickBooks after the W-2 payroll is submitted (Oct 30): its paychecks, gross, the taxes withheld, other
+   *  deductions, the net, and FBS's own (employer) taxes */
+  w2_paychecks?: number | null; w2_gross?: number | null; w2_employee_taxes?: number | null; w2_deductions?: number | null; w2_net?: number | null; w2_employer_taxes?: number | null; qbo_pulled_at?: string | null };
 
 /** the pay date: the day after the period ends (Oct 16 – Oct 29 → Fri Oct 30) */
 export const payDateOf = (periodEnd: string) => addDays(periodEnd, 1);
@@ -136,5 +139,5 @@ export async function loadPayday(sb: SupabaseClient, start: string) {
     rates: Object.fromEntries(((rates || []) as { employee_id: string; rate: number | null; salary: number | null }[]).map((x) => [x.employee_id, x])),
     lines: (lines || []) as PaydayLine[], advances, pays: payments,
   });
-  return { settings, p, payDate: payDateOf(p.end), rows, employees, advances, payments, closed: (closed as Payday | null)?.closed_at ? (closed as Payday) : null };
+  return { settings, p, payDate: payDateOf(p.end), rows, employees, advances, payments, closed: (closed as Payday | null)?.closed_at ? (closed as Payday) : null, record: (closed as Payday | null) || null };
 }

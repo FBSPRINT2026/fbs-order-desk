@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Qbo, qboConnected } from "@/lib/qbo/client";
 import { dayLabel, r2 } from "@/lib/timeclock";
 import { PAY_ACCOUNTS, loadPayday, type Advance, type PayEmployee } from "@/lib/payday";
+import { payrollActuals } from "@/lib/qbo/payrollActuals";
 
 /**
  * Payroll Center, the QuickBooks side (Oct 30, Nick). Reading payees and accounts changes nothing. Writing makes only
@@ -134,13 +135,39 @@ export async function makeChecks(start: string, employeeIds: string[]): Promise<
   } catch (e) { return fail(e); }
 }
 
-/** W-2: the hours are in QuickBooks Payroll (Saved for later). Records the advance repayments taken on those checks. */
-export async function markEntered(start: string, employeeIds: string[]): Promise<R> {
+/**
+ * What the W-2 payroll actually cost, read from QuickBooks once it's submitted (Oct 30, Nick: "when I say mark entered in
+ * QuickBooks, it'll go in and figure out the actual amounts… employee taxes, matching"), saved on the payday. Read-only
+ * in QuickBooks. Null when QuickBooks has no paychecks on the pay date yet (not submitted).
+ */
+async function saveActuals(admin: ReturnType<typeof createAdminClient>, start: string, payDate: string) {
+  if (!(await qboConnected(admin))) return null;
+  const a = await payrollActuals(admin, payDate, PAY_ACCOUNTS.bank);
+  if (!a) return null;
+  const { error } = await admin.from("paydays").upsert({ period_start: start, pay_date: payDate, w2_paychecks: a.paychecks, w2_gross: a.gross, w2_employee_taxes: a.employeeTaxes, w2_deductions: a.deductions, w2_net: a.net, w2_employer_taxes: a.employerTaxes, qbo_pulled_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "period_start" });
+  if (error) throw new Error(/w2_gross|paydays/.test(error.message) ? "Run supabase/migrations/237 and 238 first." : error.message);
+  return a;
+}
+/** "Get the totals from QuickBooks" on its own (after submitting, or to read them again) */
+export async function pullActuals(start: string): Promise<R<{ found: boolean }>> {
   try {
     const v = await getViewer("sees_pay");
     if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
     const admin = createAdminClient();
-    const { p, rows } = await payday(admin, start);
+    const { p, payDate } = await payday(admin, start);
+    const a = await saveActuals(admin, p.start, payDate);
+    return { ok: true, data: { found: !!a } };
+  } catch (e) { return fail(e); }
+}
+
+/** W-2: entered in QuickBooks Payroll. Records the advance repayments taken on those checks, and reads the actual
+ *  amounts back from QuickBooks when it's been submitted. */
+export async function markEntered(start: string, employeeIds: string[]): Promise<R<{ found: boolean }>> {
+  try {
+    const v = await getViewer("sees_pay");
+    if (!v.user || !(v.role === "owner" || v.role === "admin" || v.staff?.sees_pay)) throw new Error("Only payroll managers can do this.");
+    const admin = createAdminClient();
+    const { p, rows, payDate } = await payday(admin, start);
     for (const id of employeeIds) {
       const r = rows.find((x) => x.e.id === id);
       if (!r || r.kind !== "payroll") continue;
@@ -148,7 +175,8 @@ export async function markEntered(start: string, employeeIds: string[]): Promise
       if (error) throw new Error(error.message);
       await recordRepayments(admin, p.start, r.advances);
     }
-    return { ok: true };
+    const found = await saveActuals(admin, p.start, payDate).catch(() => null);
+    return { ok: true, data: { found: !!found } };
   } catch (e) { return fail(e); }
 }
 
@@ -187,6 +215,7 @@ export async function closePayday(start: string, reopen = false): Promise<R<{ cl
       checks_total: r2(cons.reduce((s, r) => s + +(r.line?.check_total || 0), 0)), advances_total: r2(rows.reduce((s, r) => s + r.advance, 0)), updated_at: now,
     }, { onConflict: "period_start" });
     if (error) throw new Error(/paydays/.test(error.message) ? "Run supabase/migrations/237_paydays_closed.sql first." : error.message);
+    await saveActuals(admin, p.start, payDate).catch(() => null);
     return { ok: true, data: { closedAt: now } };
   } catch (e) { return fail(e); }
 }
