@@ -42,6 +42,12 @@
   numbers, dates and statuses stay on one line), cells tighten on narrower screens (`table.tbl` has no min-width), and a
   column that's only sometimes needed is hidden behind a small button that adds it back (the Payroll Center's
   "+ Add bonus"), or two values share a cell on two lines. Never fix a too-wide table with a scroll bar.
+- **Nothing gets squished** (Nick, Oct 30 2026: "same thing here… keeps writing that way. Can we not do that moving
+  forward?", a name wrapping one word per line under a line item, an account # box squeezed to a sliver). Before
+  shipping any new piece of a page, look at it in the narrowest place it shows (the order page's side panels, a phone):
+  text never wraps a word per line, a row added under a grid line spans the full width (`grid-column:1/-1`), and fields
+  keep a readable width (`minmax(…)` / wrap the row, never fixed pixel columns that crush the middle one). A short form
+  (a few fields and a button) sits on one line when there's room.
 - **Each AI tool is ONE tool, used in many places** (Nicholas, Oct 23 2026: "think of each of these as an individual
   tool that just gets applied multiple places in the site… the create order is in email, it's in the ClickUp thing, it's
   in the projects area… one uniform tool that works throughout the site"). Every AI tool is listed in `lib/aiTools.ts`

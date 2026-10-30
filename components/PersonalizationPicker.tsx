@@ -56,10 +56,10 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
                   {sizes.length !== 1 && <option value="">Size…</option>}
                   {sizes.map((z) => <option key={z} value={z}>{z} ({line?.sizes?.[z]})</option>)}
                 </select></div>
-              <div className="field pers-name"><label htmlFor="pers-name">Name</label>
-                <input id="pers-name" type="text" value={name} placeholder="Cody White" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
-              <div className="field pers-name"><label htmlFor="pers-title">Title</label>
-                <input id="pers-title" type="text" value={title} placeholder="Ops Manager" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
+              <div className="field"><label htmlFor="pers-name">Name</label>
+                <input id="pers-name" type="text" value={name} placeholder="John Doe" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
+              <div className="field"><label htmlFor="pers-title">Title</label>
+                <input id="pers-title" type="text" value={title} placeholder="Position" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></div>
               <button type="button" className="btn sm" disabled={!line || !sz || !text} onClick={add}>Add</button>
             </div>
           ) : <p className="faint">Add the garments first: each name goes on one piece.</p>)}
