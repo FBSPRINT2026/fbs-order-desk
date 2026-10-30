@@ -29,14 +29,17 @@ export type CheckLine = { account: "labor" | "advance" | "named"; acct?: string;
  */
 export type CheckSetup = { keyedHours?: boolean; payAccount?: string; payDesc?: string; extras?: { key: string; label: string; per?: number | null; account: string }[] };
 /** what was typed for one payday: the hours, and each extra as miles or dollars */
-export type Keyed = { hours?: number | null; extras?: Record<string, { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null }> };
+/** what was typed for one payday: the hours, and each extra as miles (at its rate, or a rate typed for this check) or dollars */
+export type Keyed = { hours?: number | null; extras?: Record<string, { mode?: "miles" | "dollars"; miles?: number | null; amount?: number | null; per?: number | null }> };
 const money2 = (n: number) => `$${n.toFixed(2)}`;
 /** an extra line's description and amount, the way Nick writes them ("Gas Reimbursement Truck - 0 @ $0.20" for a dollar amount) */
 export function extraLine(x: NonNullable<CheckSetup["extras"]>[number], v: NonNullable<Keyed["extras"]>[string] | undefined): CheckLine {
   if (x.per == null) return { account: "named", acct: x.account, desc: x.label, amount: r2(+(v?.amount || 0)) };
+  // the rate per mile: their usual, or one typed for this check (Oct 30, Nick: "edit the cost per mile… 25 cents or 40 cents")
+  const per = v?.per != null && +v.per > 0 ? +v.per : x.per;
   const miles = v?.mode === "dollars" ? 0 : Math.max(0, Math.round(+(v?.miles || 0) * 10) / 10);
-  const amount = v?.mode === "dollars" ? r2(+(v?.amount || 0)) : r2(miles * x.per);
-  return { account: "named", acct: x.account, desc: `${x.label} - ${miles} @ ${money2(x.per)}`, amount };
+  const amount = v?.mode === "dollars" ? r2(+(v?.amount || 0)) : r2(miles * per);
+  return { account: "named", acct: x.account, desc: `${x.label} - ${miles} @ ${money2(per)}`, amount };
 }
 export type AdvanceDue = { advance: Advance; left: number; take: number };
 export type PaydayRow = {
