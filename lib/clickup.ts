@@ -597,6 +597,8 @@ export async function sizeClickUp(admin: SupabaseClient, perTeam: number, deadli
  */
 export async function readClickUpFileTexts(admin: SupabaseClient, o: { team?: string; name?: string; since?: string; limit?: number; deadline: number }) {
   const { pdfTextServer } = await import("@/lib/pdfTextServer");
+  // this run's own count; it shares each token's 100 a minute with the 3-minute sync, so it stays under 60
+  calls.clear();
   let q = admin.from("clickup_tasks").select("id, team_id, name, description, created_at_cu").is("file_texts_at", null).is("parent", null)
     .order("created_at_cu", { ascending: false }).limit(Math.min(400, o.limit || 120));
   if (o.team) q = q.eq("team_id", o.team);
@@ -609,7 +611,7 @@ export async function readClickUpFileTexts(admin: SupabaseClient, o: { team?: st
   for (const r of todo) {
     if (Date.now() > o.deadline) break;
     const tok = await tokenFor(admin, r.team_id as string);
-    if (used(tok) > 85) break;
+    if (used(tok) > 60) break;
     try {
       const t = await cu<CuTask>(tok, `/task/${r.id}`);
       const atts = (t.attachments || []).filter((a) => a.id && a.url && !a.deleted && !a.is_folder).slice(0, 12);
