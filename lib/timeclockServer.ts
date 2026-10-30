@@ -22,6 +22,36 @@ export function checkPin(pin: string, stored: string) {
 }
 export const validPin = (pin: string) => /^\d{4,6}$/.test(pin);
 
+/**
+ * One clock-in or clock-out entered twice from two places (Oct 30, Nick: Miguel and Lluliana still showed issues after
+ * he'd fixed them). A shift gets fixed in uAttend after someone already put in a stand-in here (a missed clock-out
+ * added on the issues list, a test scan on the wall clock), or the other way round, and the day ends up reading
+ * in, in or out, out: flagged, and an in, in drops the hours before the second in. When two punches of the same kind
+ * sit next to each other on one day and came from different places, the one entered later is the correction and wins;
+ * the other is voided (never deleted) with a note saying what replaced it. Runs after every uAttend sync, for everyone.
+ */
+export async function settleDoubleEntries(admin: SupabaseClient, fromIso: string, toIso: string) {
+  type Row = { id: string; employee_id: string; kind: Punch["kind"]; at: string; source: string; created_at: string };
+  const rows: Row[] = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await admin.from("time_punches").select("id, employee_id, kind, at, source, created_at").eq("voided", false).gte("at", fromIso).lt("at", toIso).order("employee_id").order("at").range(i, i + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...((data || []) as Row[]));
+    if (!data || data.length < 1000) break;
+  }
+  const where = (src: string) => (src === "uattend" ? "uAttend" : src === "zkteco" ? "the wall clock" : src === "manual" ? "the time clock page" : src);
+  const drop: { id: string; note: string }[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1], b = rows[i];
+    if (a.employee_id !== b.employee_id || a.kind !== b.kind || (a.kind !== "in" && a.kind !== "out") || a.source === b.source || localDay(a.at) !== localDay(b.at)) continue;
+    const [keep, lose] = a.created_at > b.created_at ? [a, b] : [b, a];
+    drop.push({ id: lose.id, note: `Entered twice: replaced by the ${keep.kind === "in" ? "clock-in" : "clock-out"} at ${new Date(keep.at).toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" })} from ${where(keep.source)}` });
+    rows.splice(rows.indexOf(lose), 1); i--; // the survivor is compared with the next punch
+  }
+  for (const d of drop) await admin.from("time_punches").update({ voided: true, note: d.note }).eq("id", d.id);
+  return drop.length;
+}
+
 export async function timeSettings(admin: SupabaseClient): Promise<TimeSettings> {
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   return mergeTime((data?.data as { time?: unknown } | null)?.time);

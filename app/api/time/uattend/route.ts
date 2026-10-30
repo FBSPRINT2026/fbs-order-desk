@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uaPunches, uaRaw, uaUserFields, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
 import { addDays, localDay, localToIso } from "@/lib/timeclock";
+import { settleDoubleEntries } from "@/lib/timeclockServer";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -97,7 +98,10 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
       summary.added += (data || []).length;
     }
   }
-  return { ...summary, usersBlocked: usersBlocked || undefined };
+  // a clock-in / clock-out now entered both in uAttend and here (a stand-in added on the issues list, a wall-clock
+  // scan): the later entry wins, the other is voided
+  const doubles = await settleDoubleEntries(admin, localToIso(addDays(from, -1), 0), localToIso(addDays(to, 2), 0));
+  return { ...summary, doubles, usersBlocked: usersBlocked || undefined };
 }
 
 async function record(admin: Admin, ok: boolean, info: unknown, error = "") {
