@@ -16260,3 +16260,17 @@ html body .pr .pr-scr{align-items:baseline}
 html body .pr .pr-scr > .pr-scr-l{padding-top:0;align-self:baseline}
 html body .pr .pr-scr > .pr-scr-v{align-items:baseline;align-self:baseline}
 html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
+/* The mockup's buttons on a phone (Oct 29, Nick: "the buttons under the mockup are all different sizes"): Edit mockup,
+   Add logo and Customer artwork are three matching tiles in one row, icon over the words */
+.mk-edit .mk-ic{display:none}
+@media (max-width:760px){
+  html body .ord .imp-mock{grid-template-columns:repeat(3,minmax(0,1fr))}
+  html body .ord .imp-mock > .mk-big,html body .ord .imp-mock:has(> .mk-more > :nth-child(odd):last-child) > .mk-big{grid-column:1 / -1}
+  html body .ord .imp-mock > .mk-tiles{display:contents}
+  html body .ord .imp-mock > .btn.mk-edit,html body .ord .imp-mock > .mk-tiles > .mk-tile{grid-column:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:auto!important;min-height:64px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:var(--r);font-size:13px;font-weight:600;line-height:1.2;text-align:center;white-space:normal}
+  html body .ord .imp-mock > .btn.mk-edit:not(.primary){background:var(--surface);color:var(--ink)}
+  html body .ord .imp-mock > .btn.mk-edit .mk-ic{display:block;color:var(--accent);flex:none}
+  html body .ord .imp-mock > .btn.mk-edit.primary .mk-ic{color:inherit}
+  html body .ord .imp-mock > .btn.danger{grid-column:1 / 3}
+  html body .ord .imp-mock > .mk-when{grid-column:3;white-space:nowrap}
+}
