@@ -114,7 +114,7 @@ export default function JobCenter() {
       <div className="page-head">
         <div><h1>Job Center</h1><div className="eyebrow">Every job before production: where it is and what&apos;s next</div></div>
         <div className="jc-hd-r">
-          <button type="button" className={"chip" + (all ? " on" : "")} aria-pressed={all} title="Every job from Requests to Declined at once" onClick={() => { setAll(!all); setPick(null); }}>
+          <button type="button" className={"chip" + (all ? " on" : "")} aria-pressed={all} title="Every job from Requests to Declined at once" onClick={() => { const on = !all; setAll(on); setPick(null); if (on) { setDept("all"); setCameBack(false); setQ(""); } }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" /></svg> View all</button>
           {hasAcc && <div className="chips" role="group" aria-label="Whose jobs">
             {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (mineOn === k ? " on" : "")} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
@@ -151,7 +151,7 @@ export default function JobCenter() {
                 <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
                 {step === "mockups" && !all && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
               </div>
-              <SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} />
+              <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
             {!items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc">

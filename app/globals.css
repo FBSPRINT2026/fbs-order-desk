@@ -16051,3 +16051,4 @@ table.tbl.jc tr.jc-sec td b{color:var(--ink)}
 table.tbl.jc tr.jc-sec i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
 table.tbl.jc tbody tr.jc-sec,table.tbl.jc tbody tr.jc-more{cursor:default}
 table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
+.jc-list .toolbar .jc-search{margin-left:auto}
