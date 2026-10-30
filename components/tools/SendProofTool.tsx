@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { emailButton } from "@/lib/emailParts";
 import { bundleCopy, bundlePreview, bundleSend, orderLinkAction, sendOptionsAction } from "@/app/shop/proof-send-actions";
 
 /**
@@ -62,7 +63,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
 
   async function copyText(url: string, as: "link" | "button") {
     if (as === "button" && typeof ClipboardItem !== "undefined") {
-      const html = `<a href="${url}" style="display:inline-block;background:#0E9BD8;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:6px;font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:15px">Review and approve</a>`;
+      const html = emailButton(url, "Review and approve").replace('align="center" style="margin:0 auto"', 'style="margin:0"');
       await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([url], { type: "text/plain" }) })]);
     } else await navigator.clipboard.writeText(url);
   }

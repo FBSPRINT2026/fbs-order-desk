@@ -73,12 +73,16 @@ export function siteUrl() {
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** Simple branded email body with one button. */
+export { emailButton, emailThumb } from "@/lib/emailParts";
+import { emailButton } from "@/lib/emailParts";
+export const EMAIL_DOC_PIC = () => `${siteUrl()}/email/quote-doc.png`;
+
 export function emailLayout(shopName: string, heading: string, body: string, buttonLabel: string, url: string) {
   return `<div style="font-family:Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#141D2B">
   <div style="font-weight:800;font-size:18px;letter-spacing:.02em;margin-bottom:18px">${escape(shopName)}</div>
   <h1 style="font-size:20px;margin:0 0 10px">${escape(heading)}</h1>
   <div style="font-size:15px;line-height:1.5;color:#3C475A;white-space:pre-line">${escape(body)}</div>
-  <p style="margin:24px 0"><a href="${url}" style="background:#0A7BA6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;display:inline-block">${escape(buttonLabel)}</a></p>
+  <div style="margin:24px 0;text-align:left">${emailButton(url, buttonLabel, "#0A7BA6").replace('align="center" style="margin:0 auto"', 'style="margin:0"')}</div>
   <div style="font-size:12px;color:#7A8599">Or open this link: ${url}</div>
 </div>`;
 }
@@ -107,7 +111,7 @@ export function receiptHtml(r: {
     ${r.fee > 0.004 ? `<tr><td colspan="2" style="padding:2px 8px;color:#5B6576">Credit card fee</td><td style="padding:2px 8px;text-align:right">${m(r.fee)}</td><td></td></tr>` : ""}
     <tr><td colspan="2" style="padding:8px;font-weight:800;border-top:2px solid #d5dbe3">Total paid</td><td style="padding:8px;text-align:right;font-weight:800;border-top:2px solid #d5dbe3">${m(r.total)}</td><td style="border-top:2px solid #d5dbe3"></td></tr>
   </table>
-  <p style="margin:24px 0"><a href="${r.url}" style="background:#0A7BA6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;display:inline-block">View your payments</a></p>
+  <div style="margin:24px 0">${emailButton(r.url, "View your payments", "#0A7BA6").replace('align="center" style="margin:0 auto"', 'style="margin:0"')}</div>
   <div style="font-size:12px;color:#7A8599">Keep this email for your records.</div>
 </div>`;
 }

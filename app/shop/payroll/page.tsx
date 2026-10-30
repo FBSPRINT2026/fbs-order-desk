@@ -155,17 +155,18 @@ export default function PayrollCenter() {
 
       {!d ? <div className="empty">{err ? "" : "Loading…"}</div> : tab === "payday" ? (
         <div className="stack">
-          {toFix.length > 0 && (
-            <div className="pc-warn">
-              <b>Step 1: {toFix.reduce((s, r) => s + r.issues, 0)} time clock problems.</b>{" "}
-              {toFix.map((r) => `${r.e.first_name}${r.issues > 1 ? ` ×${r.issues}` : ""}`).join(", ")}. Their hours are short until they&apos;re fixed; their checks wait.
-              <Link className="btn sm" href="/shop/time">Fix in Time Clock</Link>
+          {/* Step 1: the time clock problems, the same panel as steps 2 and 3 (Oct 30, Nick) */}
+          <section className={"panel" + (toFix.length ? " pc-bad" : "")}>
+            <div className="panel-h">
+              <div><h2>Step 1 · Time clock problems</h2><span className="faint">{toFix.length ? "Their hours are short until they're fixed; their checks wait." : "None. Everyone's hours are complete."}</span></div>
+              {toFix.length > 0 && <Link className="btn primary" href="/shop/time">Fix in Time Clock</Link>}
             </div>
-          )}
+            {toFix.length > 0 && <div className="panel-b pc-fix">{toFix.map((r) => <span key={r.e.id} className="pc-fix-p"><b>{nm(r)}</b> <span className="bad">{r.issues} problem{r.issues > 1 ? "s" : ""}</span></span>)}</div>}
+          </section>
 
           <section className="panel">
             <div className="panel-h">
-              <div><h2>{toFix.length ? "Step 2 · " : ""}W-2 payroll</h2><span className="faint">QuickBooks Payroll, in its list order. Salaries are filled by QuickBooks.</span></div>
+              <div><h2>Step 2 · W-2 payroll</h2><span className="faint">QuickBooks Payroll, in its list order. Salaries are filled by QuickBooks.</span></div>
               <div className="row" style={{ gap: 8 }}>
                 <button type="button" className="btn" onClick={copyList} disabled={!w2.length}>Copy as list</button>
                 {w2Open.length > 0 && (confirm === "entered"
@@ -196,7 +197,7 @@ export default function PayrollCenter() {
 
           <section className="panel">
             <div className="panel-h">
-              <div><h2>{toFix.length ? "Step 3 · " : ""}Contractor checks</h2><span className="faint">Print later, from {qb?.accounts[0] || "Bank Of America"}, dated {dayLabel(d.payDate)}</span></div>
+              <div><h2>Step 3 · Contractor checks</h2><span className="faint">Print later, from {qb?.accounts[0] || "Bank Of America"}, dated {dayLabel(d.payDate)}</span></div>
               <div className="row" style={{ gap: 8 }}>
                 {guesses.size > 0 && <button type="button" className="btn" onClick={useGuesses} disabled={!!busy}>Use {guesses.size} suggested payee{guesses.size > 1 ? "s" : ""}</button>}
                 {role === "owner" && ready.length > 0 && (confirm === "checks"

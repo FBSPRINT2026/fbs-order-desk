@@ -16284,7 +16284,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-ot{color:var(--warn);font-weight:700}
 .pc-ok{color:var(--ok);font-weight:700}
 .pc-wait{color:var(--warn);font-weight:700}
-.pc-money{width:92px;height:32px;text-align:right;font-variant-numeric:tabular-nums}
+.pc-money{width:92px;height:32px;text-align:right;font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
 .pc-adv{display:inline-flex;align-items:center;gap:6px}
 .pc-adv small{font-size:12px}
 .pc-payee{height:32px;max-width:240px}
@@ -16301,3 +16301,8 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 /* the result's round check, same as the steps' checks above it (the .pfl-res span rule was turning it into a block) */
 .pfl-res>.pfl-res-i{display:grid;place-items:center;margin:0;font-size:18px;line-height:1;color:#fff}
 .pfl-pay{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.panel.pc-bad{border-color:var(--danger)}
+.panel.pc-bad .panel-h{background:var(--danger-soft)}
+.pc-fix{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px}
+.pc-fix-p{white-space:nowrap}
+.pc-fix-p .bad{color:var(--danger);font-size:12.5px}

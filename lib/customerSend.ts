@@ -2,7 +2,7 @@ import "server-only";
 import { orderSubject } from "@/lib/orderSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
-import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
+import { EMAIL_DOC_PIC, emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
 import { calcOrder, mergeSettings, orderGroups, withoutShopPieces, type Order, type Payment, type PayTerms, type Proof, type Settings } from "@/lib/pricing";
 import { upFront } from "@/lib/payTerms";
 import { fmtPhone } from "@/lib/phone";
@@ -107,7 +107,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const first = ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
   const many = blocks.length > 1;
   const logo = sh.logoUrl ? (/^https?:/.test(sh.logoUrl) ? sh.logoUrl : `${siteUrl()}${sh.logoUrl.startsWith("/") ? "" : "/"}${sh.logoUrl}`) : `${siteUrl()}/brand/fbs-logo.png`;
-  const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr>${b.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><img src="${b.pic}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px" /></td>` : `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:top"><div style="width:56px;height:56px;border-radius:6px;background:#F6F7F9;border:1px solid #E6EAF0;box-sizing:border-box;padding:9px 11px"><div style="height:4px;width:100%;background:#0E9BD8;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:100%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:70%;background:#C9D0DA;border-radius:2px;margin-bottom:4px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:85%;background:#C9D0DA;border-radius:2px;margin-bottom:6px;font-size:0;line-height:0">&nbsp;</div><div style="height:3px;width:45%;background:#141D2B;border-radius:2px;margin-bottom:0px;font-size:0;line-height:0">&nbsp;</div></div></td>`}<td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div>${b.sub.filter(Boolean).map((x) => `<div style="font-size:13px;color:#6B7686">${esc(x)}</div>`).join("")}</td></tr></table></td></tr>`).join("");
+  const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr><td style="width:60px;padding:10px 0 10px 10px;vertical-align:top">${emailThumb(b.pic || EMAIL_DOC_PIC(), 56)}</td><td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div>${b.sub.filter(Boolean).map((x) => `<div style="font-size:13px;color:#6B7686">${esc(x)}</div>`).join("")}</td></tr></table></td></tr>`).join("");
   // the greeting, what's ready, the order, what to do: each its own line
   const lead = many ? "Everything for your order is ready." : has("quote") ? `Your ${price} is ready.` : `Your ${has("sewout") ? "sew-out" : "proof"} is ready.`;
   const ending = many ? `You can approve it all${has("quote") && payNow && !inv ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `You can approve it${payNow && !inv ? ` and ${payNow}` : ""} online.` : "Look it over and approve it, or tell us what to change.";
@@ -120,7 +120,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
 <div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)},</div>${intro}</div>
 ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:10px;white-space:pre-line">${esc(pick.note.trim())}</div>` : ""}</td></tr>
 <tr><td style="padding:10px 24px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
-<tr><td style="padding:10px 24px 6px;text-align:center"><a href="${url}" style="display:inline-block;background:#0E9BD8;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:6px;font-weight:700;font-size:15px">Review and approve</a></td></tr>
+<tr><td style="padding:10px 24px 6px;text-align:center">${emailButton(url, "Review and approve")}</td></tr>
 <tr><td style="padding:8px 24px 18px;text-align:center;font-size:12px;color:#6B7686">Please use the button, not a reply, so it goes straight onto your order.</td></tr>
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;

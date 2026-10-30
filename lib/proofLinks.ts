@@ -3,7 +3,7 @@ import { orderSubject } from "@/lib/orderSubject";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
-import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
+import { emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
 import { lineQty, mergeSettings, orderGroups, withoutShopPieces, type Order, type Proof, type Settings } from "@/lib/pricing";
 import { fmtPhone } from "@/lib/phone";
 
@@ -165,7 +165,7 @@ export function proofEmail(x: { settings: Settings; first: string; kind: LinkKin
     ? `here's the proof for <b>${esc(job)}</b> (order #${x.o.number}). Please look it over and approve it, or tell us what to change. We start once it's approved.`
     : `here's a photo of your logo stitched on our machine for <b>${esc(job)}</b> (order #${x.o.number}), the same way the whole run will sew. Please approve it, or tell us what to change.`;
   const rows = x.rows.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#6B7686;font-size:13px;white-space:nowrap">${esc(k)}</td><td style="padding:2px 0;font-size:13px;font-weight:600;color:#141D2B">${esc(v)}</td></tr>`).join("");
-  const pic = x.picture ? `<td style="width:84px;padding-right:14px;vertical-align:top"><a href="${x.url}"><img src="${x.picture}" width="84" height="84" alt="" style="display:block;width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid #E3E7EE" /></a></td>` : "";
+  const pic = x.picture ? `<td style="width:84px;padding-right:14px;vertical-align:top">${emailThumb(x.picture, 84, x.url)}</td>` : "";
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
@@ -176,7 +176,7 @@ export function proofEmail(x: { settings: Settings; first: string; kind: LinkKin
 ${x.note ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:10px;white-space:pre-line">${esc(x.note)}</div>` : ""}
 </td></tr>
 <tr><td style="padding:12px 24px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#F6F7F9;border-radius:8px"><tr><td style="padding:12px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>${pic}<td style="vertical-align:top"><table role="presentation" cellpadding="0" cellspacing="0">${rows}</table></td></tr></table></td></tr></table></td></tr>
-<tr><td style="padding:10px 24px 6px;text-align:center"><a href="${x.url}" style="display:inline-block;background:#0E9BD8;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:6px;font-weight:700;font-size:15px">Review and approve</a></td></tr>
+<tr><td style="padding:10px 24px 6px;text-align:center">${emailButton(x.url, "Review and approve")}</td></tr>
 <tr><td style="padding:8px 24px 18px;text-align:center;font-size:12px;color:#6B7686">Please use the button to approve, not a reply, so it goes straight onto your order.</td></tr>
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;

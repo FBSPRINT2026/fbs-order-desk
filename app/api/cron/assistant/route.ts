@@ -5,7 +5,7 @@ import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } fr
 import { mergeSettings } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { processEmailActivity } from "@/lib/ai/email";
-import { sendEmail, siteUrl } from "@/lib/email";
+import { emailButton, sendEmail, siteUrl } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export async function GET(req: Request) {
       ${sec("Today", open.filter((x) => x.priority === 2).map((x) => li(x.title, x.href, x.body)))}
       ${sec("Assistant & to-dos", (extra || []).map((x) => li(x.title as string, x.order_id ? `/shop/orders/${x.order_id}` : x.customer_id ? `/shop/customers/${x.customer_id}` : "/shop/assistant")))}
       ${sec("When you can", open.filter((x) => x.priority === 3).slice(0, 15).map((x) => li(x.title, x.href)))}
-      <p style="margin:24px 0"><a href="${siteUrl()}/shop/assistant" style="background:#0A7BA6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;display:inline-block">Open the Assistant</a></p>
+      <div style="margin:24px 0">${emailButton(`${siteUrl()}/shop/assistant`, "Open the Assistant", "#0A7BA6").replace('align="center" style="margin:0 auto"', 'style="margin:0"')}</div>
     </div>`;
     out.digest = await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `${open.filter((x) => x.priority === 1).length ? `${open.filter((x) => x.priority === 1).length} urgent · ` : ""}${open.length + (extra?.length || 0)} follow-ups today`, html });
   }
