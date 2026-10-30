@@ -770,7 +770,13 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                     </div>
                   );
                 })()}
-                {(l.note != null || noteOpen === l.id) && (
+                {/* the name on this piece, right under its line (Oct 30, Nick: "once we input the personalization… put it below
+                    the line item… JST73… Cody White Ops Manager") */}
+                {l.pers && (
+                  <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span>{l.pers}</span>
+                    {!fixed && <button type="button" className="linkbtn" onClick={() => removePers(l.id)}>Remove</button>}</div>
+                )}
+                {((l.note != null && !(l.pers && l.note === `Personalization: ${l.pers}`)) || noteOpen === l.id) && (
                   <div className="gl-note">
                     <textarea rows={1} autoFocus={noteOpen === l.id && l.note == null} aria-label="Line note" placeholder="Line description: ship-to, packing, a name…" value={l.note || ""}
                       onChange={(e) => update((x) => { x.lines[li].note = e.target.value; })}
