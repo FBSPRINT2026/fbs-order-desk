@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { viewerPerms } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { cleanChange, COACH_SETTINGS, type CoachSetting, type LessonDefault } from "@/lib/sepCoach";
+import { cleanChange, COACH_SETTINGS, feedbackJob, lessonDefaultFrom, type CoachSetting, type LessonDefault } from "@/lib/sepCoach";
 
 /**
  * "Make Separations Better": the production manager tells the Separation Studio how a separation came out ("good, but
@@ -107,7 +107,8 @@ export async function POST(req: Request) {
   if (L?.text?.trim()) {
     const d = L.default ? cleanChange({ setting: L.default.setting, value: L.default.value }) : null;
     const when = ["all", "spot", "sim", "dark", "light"].includes(L.default?.when || "") ? L.default!.when : "all";
-    const def = d && d.setting !== "addMiddle" && d.setting !== "colors" ? { setting: d.setting, value: d.value, when } : null;
+    // a starting setting that does nothing on this job (the highlight white on spot) can't be what fixed it
+    const def = lessonDefaultFrom(d && d.setting !== "addMiddle" && d.setting !== "colors" ? { setting: d.setting, value: d.value, when: when as LessonDefault["when"] } : null, feedbackJob(b.context));
     const tags = (L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 3);
     // a preset stays until someone turns it off (ten years); everything else is learned for 30 days
     const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: L.preset ? ["preset", ...tags.slice(0, 2)] : tags, default_setting: def, by: v.email, feedback_id: fb.data?.id || null, ...(L.preset ? { expires_at: new Date(Date.now() + 3650 * 86400000).toISOString() } : {}) })

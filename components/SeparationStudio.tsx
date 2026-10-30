@@ -30,7 +30,7 @@ import SepCoach from "@/components/SepCoach";
 import { holdsUm, meshFor, smallestDetail } from "@/lib/meshPlan";
 import { inkNamesFromFiles } from "@/lib/sepInkNames";
 import { useRole } from "@/components/RoleContext";
-import { lessonFits, type CoachChange, type LessonDefault } from "@/lib/sepCoach";
+import { feedbackJob, lessonFits, settingsInUse, type CoachChange, type LessonDefault } from "@/lib/sepCoach";
 
 /**
  * Separation Studio: our own separations, in the browser. Pick the method (spot color or simulated process), the
@@ -509,10 +509,12 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (fashion) setMsg(`Fashion hit on the order: no underbase. Each color prints, flashes and prints again through the same screen${im?.softHand ? ", with soft hand additive" : ""}.`);
     // a new separation starts from what the coach has learned (Make Separations Better, last 30 days)
     if (!saved.inks?.length) {
-      const { data: ls } = await sb.from("sep_lessons").select("lesson, default_setting").eq("active", true).gt("expires_at", new Date().toISOString()).not("default_setting", "is", null).order("created_at");
+      // with the job each lesson was learned on: a starting setting that did nothing there isn't used
+      const { data: ls } = await sb.from("sep_lessons").select("lesson, default_setting, sep_feedback(context)").eq("active", true).gt("expires_at", new Date().toISOString()).not("default_setting", "is", null).order("created_at");
       const meth = (saved.method as string) || "spot", dk = isDark(garment), p: Partial<Studio> = {}, used: string[] = [];
-      for (const l of (ls || []) as { lesson: string; default_setting: LessonDefault }[]) {
-        const d = l.default_setting; if (!d || !lessonFits(d, meth, dk) || d.setting === "method" || d.setting === "addMiddle" || d.setting === "colors") continue;
+      for (const l of (ls || []) as unknown as { lesson: string; default_setting: LessonDefault; sep_feedback?: { context?: unknown } | null }[]) {
+        const d = l.default_setting, from = l.sep_feedback ? feedbackJob(l.sep_feedback.context) : undefined;
+        if (!d || !lessonFits(d, meth, dk, from) || d.setting === "method" || d.setting === "addMiddle" || d.setting === "colors") continue;
         (p as Record<string, unknown>)[d.setting] = d.value; used.push(l.lesson);
       }
       if (used.length) { setSt((s) => ({ ...s, ...p })); lessonNote.current = `Started from what the coach learned: ${used.join(" · ")}`; setMsg(lessonNote.current); }
@@ -645,7 +647,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     shirt: st.garment ? { color: st.garment, name: row?.garment_color, dark: isDark(st.garment) } : "none picked: every color prints",
     method: st.method, art: vart?.ok ? "vector" : img ? `picture ${img.naturalWidth}×${img.naturalHeight} px (${Math.round((img.naturalWidth || 0) / st.widthIn)} ppi at the print size)` : "none",
     print_width_in: st.widthIn,
-    settings: { colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
+    // only the settings that do something on this job: one that does nothing here (the highlight white on a spot job)
+    // gets read as a choice we made (Oct 29, S-57: Separo comparison took it for an extra white pass)
+    settings: settingsInUse({ colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
+      { method: st.method, dark: isDark(shirtOf(st)), underbase: st.underbase, halftones: st.method === "sim" || plates.some((p) => p.tonal) }),
     inks: inks.map((k) => ({ name: k.name, art_color: k.hex, ...(k.also?.length ? { combined_with: k.also } : {}), ...(k.fadeTo?.length ? { fades_to: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}) })),
     plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal })),
     fades: fadeRows.map((f) => ({ from: f.a.name, to: f.b.name, middle: f.midWord, muddy_middle_risk: !!f.risky })),
