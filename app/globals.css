@@ -16337,6 +16337,7 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 .pc-keyed-f .lbl{height:22px}
 .pc-keyed-st{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}
 .pc-keyed-more{padding:0 16px 12px;font-size:12.5px}
+.pc-keyed-lock{padding:0 16px 6px;font-size:12.5px}
 .pc-keyed-f .lbl .pc-edit{margin-left:auto;font-size:12px;text-transform:none;letter-spacing:0;font-weight:400}
 .pc-per{display:inline-flex;align-items:center;gap:2px}
 .pc-per input{width:52px;height:24px;border:1px solid var(--line);border-radius:4px;padding:0 4px;font:inherit;font-size:12px;text-align:right;color:var(--ink)}

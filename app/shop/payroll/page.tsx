@@ -377,7 +377,7 @@ function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow
           const v = k.extras?.[x.key] || {}, dollars = x.per == null || v.mode === "dollars", line = extraLine(x, v);
           return (
             <div key={x.key} className="field"><span className="lbl"><span>{x.label.replace(/^Gas Reimbursement\s*/i, "") || x.label}</span>
-              {x.per != null && !done && <button type="button" className="linkbtn pc-edit" onClick={() => { setEditing(x.key); setPerText((x.per || 0).toFixed(2)); }} title={`Change the rate per mile for ${x.label}`}>Edit</button>}
+              {x.per != null && <button type="button" className="linkbtn pc-edit" onClick={() => { setEditing(x.key); setPerText((x.per || 0).toFixed(2)); }} title={`Change the rate per mile for ${x.label}`}>Edit</button>}
               {x.per != null && <span className="pc-seg" role="radiogroup" aria-label={`${x.label}: miles or dollars`}>
                 <button type="button" className={!dollars ? "on" : ""} aria-pressed={!dollars} disabled={done} onClick={() => { setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "miles", amount: null, miles: null }); }}>Miles</button>
                 <button type="button" className={dollars ? "on" : ""} aria-pressed={dollars} disabled={done} onClick={() => { setVals((s) => ({ ...s, [x.key]: "" })); setExtra(x.key, { mode: "dollars", miles: null, amount: null }); }}>$</button>
@@ -385,10 +385,10 @@ function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow
               <span className="pc-in">{dollars && <i>$</i>}<input type="number" min="0" step={dollars ? "0.01" : "1"} inputMode="decimal" aria-label={dollars ? `${x.label} dollars` : `${x.label} miles`} value={vals[x.key] ?? ""} disabled={done} placeholder="0"
                 onChange={(e) => setVals((s) => ({ ...s, [x.key]: e.target.value }))}
                 onBlur={() => setExtra(x.key, dollars ? { mode: x.per != null ? "dollars" : undefined, amount: num(vals[x.key] || "") } : { mode: "miles", miles: num(vals[x.key] || "") })} />
-                {!dollars && (editing === x.key
+                {(!dollars || editing === x.key) && (editing === x.key
                   ? <small className="pc-per">$<input type="number" min="0" step="0.01" inputMode="decimal" autoFocus aria-label={`${x.label}: rate per mile`} value={perText} onChange={(e) => setPerText(e.target.value)} onBlur={() => savePer(x.key)} onKeyDown={(e) => { if (e.key === "Enter") savePer(x.key); if (e.key === "Escape") setEditing(null); }} /> a mile</small>
                   : <small>miles @ ${(x.per || 0).toFixed(2)}</small>)}
-                {dollars && x.per != null && <small>dollar amount</small>}</span>
+                {dollars && x.per != null && editing !== x.key && <small>dollar amount</small>}</span>
               <span className="faint">{$(line.amount)}</span></div>
           );
         })}
@@ -396,6 +396,7 @@ function KeyedCheck({ r, payee, done, onSave, onBonus, onSetup }: { r: PaydayRow
           <span className="pc-in"><i>$</i><input type="number" min="0" step="0.01" inputMode="decimal" aria-label="Bonus" value={bonus} disabled={done} placeholder="0.00" onChange={(e) => setBonus(e.target.value)} onBlur={() => onBonus(num(bonus))} /></span>
           <span className="faint">&nbsp;</span></div>
       </div>
+      {done && <div className="pc-keyed-lock faint">The check is made in QuickBooks, so this payday&apos;s boxes are locked. Edit changes the rate per mile from now on.</div>}
       <div className="pc-keyed-more"><button type="button" className="linkbtn" aria-expanded={details} onClick={() => setDetails(!details)}>{details ? "Hide check details" : "Show check details"}</button></div>
       {details && <div className="tbl-wrap pc-keyed-p">
         <table className="tbl">
