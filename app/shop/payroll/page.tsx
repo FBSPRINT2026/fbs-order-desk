@@ -313,7 +313,7 @@ export default function PayrollCenter() {
                     <td className="r">{hasW2 ? $(+(rec!.w2_gross || 0)) : <button type="button" className="btn sm" onClick={getActuals} disabled={!!busy}>Get totals from QuickBooks</button>}</td></tr>
                   <tr><td><b>FBS taxes</b><div className="sub">Social Security and Medicare match, federal and Texas unemployment</div></td><td className="r">{hasW2 ? $(+(rec!.w2_employer_taxes || 0)) : <span className="faint">—</span>}</td></tr>
                   <tr className="pc-tot-sum"><td><b>Total payroll</b>{hasW2 && <div className="sub">W-2 with FBS taxes {$(w2Cost)}{rec?.qbo_pulled_at ? <> · from QuickBooks {new Date(rec.qbo_pulled_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · <button type="button" className="linkbtn" onClick={getActuals} disabled={!!busy}>Read again</button></> : null}</div>}</td><td className="r"><b>{hasW2 ? $(r2(checksTotal + w2Cost)) : `${$(checksTotal)} + W-2`}</b></td></tr>
-                  <tr><td><b>Overtime's extra half</b><div className="sub">What overtime cost on top of straight time ({h2(otHours)} overtime hours × half the rate)</div></td><td className="r pc-ot">{$(otHalf)}</td></tr>
+                  <tr className="pc-tot-ot"><td><b>Total overtime, extra paid</b><div className="sub">The extra half on {h2(otHours)} overtime hours: what overtime cost on top of straight time</div></td><td className="r pc-ot">{$(otHalf)}</td></tr>
                 </tbody>
               </table>
             </div>
