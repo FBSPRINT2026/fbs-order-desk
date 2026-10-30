@@ -16415,3 +16415,4 @@ html body .ord .line-b .gl > .gl-pers{grid-column:1/-1}
 .gl-pers-k{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .gl-pers .gl-pers-x{margin-left:auto}
 .pers-h{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pers-list{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

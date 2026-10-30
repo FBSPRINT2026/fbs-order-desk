@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { lineQty, persOf, SIZES, type GLine, type Size } from "@/lib/pricing";
+import { lineQty, persOf, SIZES, type GLine, type PersEntry, type Size } from "@/lib/pricing";
+import type { PersRow } from "@/lib/persList";
 
 /**
  * "Add personalization" on a group with embroidery (Oct 30, Nick: "put a check mark for add personalization… what item
@@ -8,10 +9,13 @@ import { lineQty, persOf, SIZES, type GLine, type Size } from "@/lib/pricing";
  * item… size small, quantity one… if you had a medium, you go medium"). One row: item · size · qty · name · title · Add.
  * Each one goes under its line item (GroupEditor) with its size and quantity, charged per piece on top of the line.
  */
-export default function PersonalizationPicker({ lines, price, hidePrices, disabled, onAdd }: {
+export default function PersonalizationPicker({ lines, price, hidePrices, disabled, onAdd, orderId, onAddMany }: {
   lines: GLine[]; price: number; hidePrices?: boolean; disabled?: boolean;
   onAdd: (lineId: string, size: Size | "", qty: number, text: string) => void;
+  /** a whole name list at once (an uploaded spreadsheet): each row onto its line */
+  orderId?: string; onAddMany?: (adds: { lineId: string; entry: Omit<PersEntry, "id"> }[]) => void;
 }) {
+  const [listBusy, setListBusy] = useState(""), [listErr, setListErr] = useState("");
   const count = lines.reduce((a, l) => a + persOf(l).length, 0), named = count > 0;
   // the form drops down when the box is ticked or "+ Add another name" is pressed, and closes after Add (Oct 30, Nick:
   // "it drops down… then you add and it just goes away and the add personalization stays checked")
@@ -34,6 +38,30 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
     if (!line || (sizes.length > 0 && !sz) || !text) return;
     onAdd(line.id, sz, n, text);
     setName(""); setTitle(""); setQty("1"); setOpen(false);
+  };
+  // a name list (Oct 30, Nick: "upload a spreadsheet by giving the sizes and the name… if you had a ton to do"): the file
+  // goes in Production files; each row goes on the line whose style it names, else the item picked here (or the only one)
+  const upload = async (f: File | null | undefined) => {
+    if (!f || !orderId || !onAddMany) return;
+    setListBusy(`Reading ${f.name}…`); setListErr("");
+    const fd = new FormData(); fd.append("file", f); fd.append("orderId", orderId);
+    const r = await fetch("/api/personalization/list", { method: "POST", body: fd }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setListBusy("");
+    if (!r?.ok || j.error) { setListErr(j.error || "Couldn't read that list."); return; }
+    const rows = j.rows as PersRow[], file = j.file as { path: string; name: string };
+    const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const fallback = line || (pickable.length === 1 ? pickable[0] : null);
+    const adds: { lineId: string; entry: Omit<PersEntry, "id"> }[] = [];
+    let missed = 0;
+    for (const row of rows) {
+      const byStyle = row.style ? pickable.find((l) => key(l.style || "") && key(row.style).includes(key(l.style || ""))) : null;
+      const target = byStyle || fallback;
+      if (!target) { missed++; continue; }
+      adds.push({ lineId: target.id, entry: { text: [row.name, row.title].filter(Boolean).join(" / "), size: row.size, qty: row.qty, list: file } });
+    }
+    if (adds.length) { onAddMany(adds); setOpen(false); }
+    if (missed) setListErr(`${missed} name${missed === 1 ? "" : "s"} didn't say which item: pick the item above and upload again for those.`);
   };
   const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
   return (
@@ -64,6 +92,14 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
           <button type="button" className="btn sm" disabled={!line || (sizes.length > 0 && !sz) || !text} onClick={add}>Add</button>
         </div>
       ) : <p className="faint">Add the garments first: each name goes on a piece.</p>)}
+      {open && !disabled && pickable.length > 0 && orderId && onAddMany && (
+        <div className="pers-list">
+          <label className="btn sm">{listBusy ? "Reading…" : "Upload a name list"}<input type="file" hidden accept=".xlsx,.xlsm,.csv,.tsv,.txt" disabled={!!listBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void upload(f); }} /></label>
+          <span className="faint">A spreadsheet of names (and titles, sizes, quantities{pickable.length > 1 ? ", the style" : ""}). It goes in Production files too.</span>
+        </div>
+      )}
+      {listBusy && <p className="faint">{listBusy}</p>}
+      {listErr && <p className="emb-warn-1">{listErr}</p>}
     </div>
   );
 }

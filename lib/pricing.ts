@@ -273,7 +273,9 @@ export type GLine = {
    *  by the order page; else the price list's). Shown under the line; charged on top of the line (group sub). */
   persList?: PersEntry[];
 };
-export type PersEntry = { id: string; text: string; size: Size | ""; qty: number; price?: number };
+export type PersEntry = { id: string; text: string; size: Size | ""; qty: number; price?: number; /** from an uploaded name list (its file, in the order's Production files) */ list?: { path: string; name: string } };
+/** over this many names on a line, the order, invoice and QuickBooks show one summary line, with the list in Production files */
+export const PERS_SHOW = 10;
 /** a line's personalizations (the older single `pers`, a whole one-piece line, read the same way) */
 export function persOf(l: Pick<GLine, "pers" | "persList" | "sizes" | "id">): PersEntry[] {
   if (l.persList?.length) return l.persList;

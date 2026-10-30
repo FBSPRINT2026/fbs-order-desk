@@ -2,7 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -492,6 +492,16 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     l.persList = [...persOf(l), { id: uid(), text, size, qty }];
     if (l.pers) { if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
   });
+  const addPersMany = (adds: { lineId: string; entry: Omit<PersEntry, "id"> }[]) => update((x) => {
+    for (const a of adds) {
+      const l = x.lines.find((y) => y.id === a.lineId);
+      if (!l) continue;
+      l.persList = [...persOf(l), { id: uid(), ...a.entry }];
+      if (l.pers) { if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
+    }
+  });
+  const clearPers = (lineId: string) => update((x) => { const l = x.lines.find((y) => y.id === lineId); if (l) { delete l.persList; delete l.pers; } });
+  const [persOpen, setPersOpen] = useState<string | null>(null);
   const removePers = (lineId: string, entryId: string) => update((x) => {
     const l = x.lines.find((y) => y.id === lineId);
     if (!l) return;
@@ -769,7 +779,20 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 })()}
                 {/* the name on this piece, right under its line (Oct 30, Nick: "once we input the personalization… put it below
                     the line item… JST73… Cody White Ops Manager") */}
-                {persOf(l).map((e) => (
+                {persOf(l).length > PERS_SHOW && persOpen !== l.id && (() => {
+                  // a long list (Oct 30, Nick: "after 10… multiple names, 21 selected, view list here"): one summary row
+                  const es = persOf(l), n = es.reduce((a, e) => a + (e.qty || 1), 0), file = es.find((e) => e.list)?.list;
+                  const bySize = SIZES.map((z) => [z, es.filter((e) => e.size === z).reduce((a, e) => a + (e.qty || 1), 0)] as const).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ");
+                  return (
+                    <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">Multiple names: {n}</span>
+                      {bySize && <span className="faint">{bySize}</span>}
+                      <button type="button" className="linkbtn" onClick={() => setPersOpen(l.id)}>View list</button>
+                      {file && <span className="faint">· list in Production files</span>}
+                      {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label="Remove all the names on this line" title="Remove all" onClick={() => clearPers(l.id)}>✕</button>}</div>
+                  );
+                })()}
+                {persOf(l).length > PERS_SHOW && persOpen === l.id && <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{persOf(l).length} names</span><button type="button" className="linkbtn" onClick={() => setPersOpen(null)}>Hide list</button></div>}
+                {(persOf(l).length <= PERS_SHOW || persOpen === l.id) && persOf(l).map((e) => (
                   <div key={e.id} className="gl-pers"><span className="gl-pers-k">Personalization</span><span className="gl-pers-t">{e.text}</span>
                     {e.size && <span className="faint">Size {e.size}</span>}<span className="faint">Qty {e.qty}</span>
                     {!hidePrices && <span className="faint">{money(e.price != null ? e.price : persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail"))} each</span>}
@@ -1149,7 +1172,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
                 </div>}
-                {hasEmb && <PersonalizationPicker lines={g.lines} price={persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} />}
+                {hasEmb && <PersonalizationPicker lines={g.lines} price={persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} orderId={orderId} onAddMany={addPersMany} />}
               </div>
             )}
             {finishingAt === "group" && finList.length > 0 && (

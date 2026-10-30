@@ -1,4 +1,4 @@
-import { persOf } from "@/lib/pricing";
+import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, inkChangesText } from "@/lib/inkBy";
@@ -359,7 +359,9 @@ function LineRows({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][num
   return (
     <>
       <tr>
-        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}{persOf(l).map((e) => <div key={e.id} className="lnote"><b>Personalization:</b> {e.text}{e.size ? ` · ${e.size}` : ""} · {e.qty}</div>)}</td>
+        <td className="g"><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b><br /><Swatch c={single ? hex : own || "#c9ced6"} />{[l.color, l.garment].filter(Boolean).join(" · ")}{l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}{l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}{persOf(l).length > PERS_SHOW
+          ? <div className="lnote"><b>Personalization:</b> {persOf(l).reduce((a, e) => a + (e.qty || 1), 0)} names ({SIZES.map((z) => [z, persOf(l).filter((e) => e.size === z).reduce((a, e) => a + (e.qty || 1), 0)] as const).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ")}): the list is in Production files{persOf(l).find((e) => e.list)?.list ? ` (${persOf(l).find((e) => e.list)!.list!.name})` : ""}</div>
+          : persOf(l).map((e) => <div key={e.id} className="lnote"><b>Personalization:</b> {e.text}{e.size ? ` · ${e.size}` : ""} · {e.qty}</div>)}</td>
         {sizes.map((z) => <td key={z} className="sz">{l.sizes?.[z as keyof typeof l.sizes] ? <b>{l.sizes[z as keyof typeof l.sizes]}</b> : ""}</td>)}
         <td className="tot"><b>{q}</b></td>
       </tr>
@@ -743,7 +745,9 @@ export function InvoiceDoc(p: DocData) {
                   {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
                   {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
                   {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
-                  {(gc.persItems || []).filter((x) => x.lineId === l.id).map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>)}
+                  {(() => { const its = (gc.persItems || []).filter((x) => x.lineId === l.id); if (!its.length) return null;
+                    if (its.length > PERS_SHOW) { const q = its.reduce((a, x) => a + x.qty, 0), amt = its.reduce((a, x) => a + x.amount, 0); return <div className="iv2-note"><b>Personalization:</b> {q} names · {money(its[0].unit)} each = {money(amt)}</div>; }
+                    return its.map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>); })()}
                   <div className="iv2-det">
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
                     {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}

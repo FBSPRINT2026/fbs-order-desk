@@ -1,4 +1,4 @@
-import { calcOrder, imprintLabel, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
+import { calcOrder, imprintLabel, PERS_SHOW, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
 
 /**
  * QuickBooks Online: what we send, built from our records. Pure functions (no database, no network), so they can be
@@ -300,7 +300,10 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
       const desc = [(g.name?.trim() ? `${g.name.trim()}: ` : "") + title, sizes, ...extra].filter(Boolean).join("\n");
       add(title, desc, key, lc!.qty, lc!.each, lc!.sub);
       // its personalizations, each its own line (they're in the group's total, not the line's price)
-      for (const x of (gc?.persItems || []).filter((p) => p.lineId === l.id)) add("Personalization", `Personalization: ${x.text}${x.size ? ` (${sizeLabel(x.size)})` : ""}`, key, x.qty, x.unit, x.amount);
+      const its = (gc?.persItems || []).filter((p) => p.lineId === l.id);
+      // a long name list is one line (the names are in the order's Production files)
+      if (its.length > PERS_SHOW && its.every((x) => x.unit === its[0].unit)) { const q = its.reduce((a, x) => a + x.qty, 0); add("Personalization", `Personalization: ${q} names`, key, q, its[0].unit, r2(q * its[0].unit)); }
+      else for (const x of its) add("Personalization", `Personalization: ${x.text}${x.size ? ` (${sizeLabel(x.size)})` : ""}`, key, x.qty, x.unit, x.amount);
     });
   });
 
