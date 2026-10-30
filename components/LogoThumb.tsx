@@ -20,9 +20,9 @@ export default function LogoThumb({ d, url, shirt, inkMap, className }: {
   /** the print's ink map (Imprint.inkMap.map): the logo painted in its inks */ inkMap?: Record<string, { hex: string; name: string }> | null;
   className?: string;
 }) {
-  if (!url) return <span className={"lt " + (className || "")} />;
+  if (!url) return <span className={"logo-thumb " + (className || "")} />;
   return (
-    <span className={"lt " + (className || "")}>
+    <span className={"logo-thumb " + (className || "")}>
       {inkMap && Object.keys(inkMap).length && shirt
         ? <PaintedPic url={url} map={inkMap} shirt={shirt} alt={d.name} />
         : shirt || onShirtsOf(d).length
