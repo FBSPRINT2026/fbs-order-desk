@@ -623,8 +623,10 @@ const SETUP_LABEL = (k: string, q: number, thread = false) => ({
 function invoiceSizes(sizes: Record<string, number> | undefined) {
   const has = (z: string) => +(sizes?.[z] || 0) > 0;
   const youth = YOUTH_SIZES.some(has), adult = ADULT_SIZES.some(has) || !SIZES.some(has);
+  // baby, toddler and one-size items have no fixed run: only the sizes ordered
   const base = new Set<string>([...(adult ? ["S", "M", "L", "XL", "2XL", "3XL"] : []), ...(youth ? ["YS", "YM", "YL", "YXL"] : [])]);
-  return SIZES.filter((z) => base.has(z) || has(z)).map((z) => ({ z, n: +(sizes?.[z] || 0), extra: !base.has(z) }));
+  // "extra" (blue) only beside the usual run; a baby or one-size item just shows what was ordered
+  return SIZES.filter((z) => base.has(z) || has(z)).map((z) => ({ z, n: +(sizes?.[z] || 0), extra: base.size > 0 && !base.has(z) }));
 }
 const flat = (x: string | null | undefined) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -721,7 +723,7 @@ export function InvoiceDoc(p: DocData) {
         <div className="iv2-left">
           {shipTo && <div className="iv2-ship"><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>{shipTo.split(/\n+/).map((x, i) => <div key={i}>{x.trim()}</div>)}</div>}
           <div className="iv2-terms"><div className="lbl">Payment</div>
-            <div>{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}</div>
+            <div>{cust.id ? termsText(cust.payment_terms, o.delivery_method === "pickup") : sh.terms}</div>
             <span>Issued {issued}{o.approved_at && o.approved_name ? ` · approved by ${o.approved_name}` : ""}</span>
           </div>
           {pays.length > 0 && <div className="iv2-terms"><div className="lbl">Payments</div>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x, i) => <div key={i}>{day(x.paid_on, { month: "short", day: "numeric" })} · {x.method} · {money(x.amount)}</div>)}</div>}
