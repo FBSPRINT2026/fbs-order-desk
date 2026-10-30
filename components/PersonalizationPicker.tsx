@@ -41,7 +41,7 @@ export default function PersonalizationPicker({ lines, price, hidePrices, disabl
             <div key={l.id} className="sbx-r pers-r">
               <span className="sbx-loc">{label(l)} · {SIZES.find((z) => +(l.sizes?.[z] || 0) > 0) || ""}</span>
               <span><b>Personalization:</b> {l.pers}</span>
-              {!disabled && <button type="button" className="linkbtn sbx-end" onClick={() => onRemove(l.id)}>Remove</button>}
+              {!disabled && <button className="btn icon ghost sbx-end" type="button" aria-label={`Remove the personalization ${l.pers}`} title="Remove" onClick={() => onRemove(l.id)}>✕</button>}
             </div>
           ))}
           {!disabled && (pickable.length ? (

@@ -774,7 +774,7 @@ export default function GroupEditor({ onLogo, printsFixed = false, onUploadTag, 
                     the line item… JST73… Cody White Ops Manager") */}
                 {l.pers && (
                   <div className="gl-pers"><span className="gl-pers-k">Personalization</span><span>{l.pers}</span>
-                    {!fixed && <button type="button" className="linkbtn" onClick={() => removePers(l.id)}>Remove</button>}</div>
+                    {!fixed && <button className="btn icon ghost gl-pers-x" type="button" aria-label={`Remove the personalization ${l.pers}`} title="Remove" onClick={() => removePers(l.id)}>✕</button>}</div>
                 )}
                 {((l.note != null && !(l.pers && l.note === `Personalization: ${l.pers}`)) || noteOpen === l.id) && (
                   <div className="gl-note">
