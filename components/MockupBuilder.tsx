@@ -3,6 +3,7 @@ import BackLink from "@/components/BackLink";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
+import { inkChanges, inksOnColor } from "@/lib/inkBy";
 import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -2564,8 +2565,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const okY = BOT - 8.5 * PT - 6 * PX;
 
         // the prints (left) and the garments (right)
-        const rowsP = prints.map((im) => ({ im, inks: inkNamesOf(im) }));
-        const hP = rowsP.reduce((a, r) => a + 3 * PX + 10.5 * PT * 1.3 + (r.inks.length ? 3 * PX + 10 * PT * 1.3 : 0), 0);
+        // each print's color changes too (Oct 30, Nick: "nowhere on the proof does it show the color change… PMS 230"):
+        // "Color change · on Navy: ■ PMS 230 instead of Contact Blue", one row each (lib/inkBy.ts)
+        const rowsP = prints.map((im) => ({ im, inks: inkNamesOf(im), changes: inkChanges(im, todo.map((l) => l.color || "")) }));
+        const hP = rowsP.reduce((a, r) => a + 3 * PX + 10.5 * PT * 1.3 + (r.inks.length ? 3 * PX + 10 * PT * 1.3 : 0) + r.changes.length * (3 * PX + 10 * PT * 1.3), 0);
         // the garments: each style once with its colors under it, each with a swatch, wrapping (Oct 22: 11 colors cut off)
         const garm = todo.filter((l, i) => todo.findIndex((y2) => `${y2.brand}|${y2.style}|${y2.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i);
         const pw = (CW - 20 * PX) * (1.4 / 2.4), gx = L + pw + 20 * PX, gw = CW - pw - 20 * PX, rowG = 10.5 * PT * 1.3 + 3 * PX;
@@ -2608,6 +2611,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               x.fillStyle = C.ink2; x.fillText(t.name, ix + 20 * PX, py); ix += w;
             }
           }
+          for (const c of r.changes) {
+            py += 3 * PX + 10 * PT * 1.3; let ix = L;
+            x.fillStyle = C.ink; x.font = body(700, 10); const head = `${changeWord(r.im.method)} · on ${c.colors.join(", ")}: `;
+            x.fillText(fit(x, head, pw * 0.6), ix, py); ix += Math.min(x.measureText(head).width, pw * 0.6);
+            const sw = colorHex(c.to) || "#cccccc";
+            x.fillStyle = sw; x.fillRect(ix, py - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(ix, py - 11 * PX, 14 * PX, 14 * PX);
+            ix += 20 * PX; x.font = body(400, 10); x.fillStyle = C.ink2; x.fillText(fit(x, `${c.to} instead of ${c.from}`, L + pw - ix), ix, py);
+          }
         }
         if (!rowsP.length) { x.fillStyle = C.ink; x.font = body(400, 10.5); x.fillText("No prints yet.", L, py + 3 * PX + 10.5 * PT * 1.3); }
         for (const g of byStyle) {
@@ -2629,7 +2640,22 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // ── the other shirt colors, one to a page, full width ──
       for (const l of shirts.slice(1)) {
         const pg = newPage(), x = pg.x;
-        const y = head2(x, capOf(l) || "Mockup", order ? `#${order.number} · ${order.nickname || ""}` : groupName) + 12 * PX;
+        let y = head2(x, capOf(l) || "Mockup", order ? `#${order.number} · ${order.nickname || ""}` : groupName) + 12 * PX;
+        // this shirt's inks where a print changes on it (Oct 30: the Navy page showed pink art with no word of PMS 230)
+        for (const im of prints) {
+          const on = inksOnColor(im, l.color || "");
+          if (!on.some((t) => t.changed)) continue;
+          y += 10.5 * PT; let ix = L;
+          x.fillStyle = C.ink; x.font = body(700, 10.5); const head = `${im.location} · ${changeWord(im.method).toLowerCase()} on ${l.color}: `;
+          x.fillText(head, ix, y); ix += x.measureText(head).width;
+          x.font = body(400, 10.5);
+          for (const t of on) {
+            x.fillStyle = colorHex(t.name) || "#cccccc"; x.fillRect(ix, y - 11 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.lineWidth = 1 * PX; x.strokeRect(ix, y - 11 * PX, 14 * PX, 14 * PX);
+            const word = t.name + (t.changed && t.from ? ` (instead of ${t.from})` : "");
+            x.fillStyle = C.ink2; x.fillText(fit(x, word, PW - L - ix - 20 * PX), ix + 20 * PX, y); ix += 20 * PX + x.measureText(word).width + 14 * PX;
+          }
+          y += 6 * PX;
+        }
         await shirtsIn(x, l, L, y, CW, Math.min(8.6 * IN, BOT - 8.5 * PT - 14 * PX - y));
         await done(pg);
       }

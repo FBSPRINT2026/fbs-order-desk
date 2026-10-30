@@ -1,4 +1,5 @@
 import { threadByName } from "@/lib/embroidery";
+import { inkChanges, inkChangesText } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
@@ -440,10 +441,10 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       ) : null}
       {/* a fashion hit / soft hand: what the press does differently (Oct 16, Nick) */}
       {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
+      {/* puff ink (Oct 30): what the press does differently */}
+      {d.method === "screen" && d.puff && <div className="n2 hit"><span className="flag">PUFF INK</span> Puff print. {needsUnderbase(d) ? "Underbase set on this print." : "No underbase."}</div>}
       {/* a color change (Oct 24): this print in another ink on a garment color */}
-      {!d.visualOnly && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())) && (
-        <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).map(([a, b]) => `on ${k}, ${b} instead of ${a}`)).join("; ")}</div>
-      )}
+      {inkChanges(d).length > 0 && <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {inkChangesText(d)}</div>}
       {/* a color change across variations (Oct 27): the same screens as a print in another group */}
       {!d.visualOnly && d.changeOf && (() => {
         const g = p.groups.find((x) => (x.imprints || []).some((y) => y.id === d.changeOf!.imprint));
@@ -599,9 +600,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
         </div>
       )}
       {/* a color change is noted on the one proof page, not a second page (Oct 26) */}
-      {!variant && Object.entries(d.inkBy || {}).some(([, m]) => Object.entries(m || {}).some(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase())) && (
-        <div className="n2"><b>{changeWord(d.method)}:</b> {Object.entries(d.inkBy || {}).flatMap(([k, m]) => Object.entries(m || {}).filter(([x, y]) => y && y.trim().toLowerCase() !== x.trim().toLowerCase()).map(([x, y]) => `on ${k.charAt(0).toUpperCase() + k.slice(1)}, ${y} instead of ${x}`)).join("; ")}</div>
-      )}
+      {!variant && inkChanges(d).length > 0 && <div className="n2"><b>{changeWord(d.method)}:</b> {inkChangesText(d)}</div>}
       {/* our own notes aren't the customer's (Oct 23, Nick: "on the PDF proof, we don't need… the notes"); what we changed
           in their art is, as a list */}
       {(d.artChanges || []).length > 0 && <div className="n2 pf-chg"><b>{d.artChanges!.length === 1 ? "A change we made to your art" : "Changes we made to your art"}:</b>
