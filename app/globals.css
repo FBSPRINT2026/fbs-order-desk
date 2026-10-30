@@ -16301,8 +16301,8 @@ html body .pr .pr-scr > .pr-scr-ed{align-self:flex-start;margin-top:-2px}
 /* the result's round check, same as the steps' checks above it (the .pfl-res span rule was turning it into a block) */
 .pfl-res>.pfl-res-i{display:grid;place-items:center;margin:0;font-size:18px;line-height:1;color:#fff}
 .pfl-pay{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.panel.pc-bad{border-color:var(--danger)}
-.panel.pc-bad .panel-h{background:var(--danger-soft)}
+/* step 1: the header looks like every other step; the problems underneath are the pink part, like their rows below */
+.panel.pc-bad .pc-fix{background:var(--danger-soft)}
 .pc-fix{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px}
 .pc-fix-p{white-space:nowrap}
 .pc-fix-p .bad{color:var(--danger);font-size:12.5px}
