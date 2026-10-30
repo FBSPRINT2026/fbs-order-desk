@@ -1,0 +1,255 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import LogoThumb from "@/components/LogoThumb";
+import { createClient } from "@/lib/supabase/client";
+import { money } from "@/lib/format";
+import { useSticky } from "@/lib/useSticky";
+import { previewUrls } from "@/lib/designs";
+import { LANES, laneState, type Lane } from "@/lib/brands";
+import type { Design } from "@/lib/pricing";
+import { cardsOf, tiersOf, type Program, type ProgramItem, type RateCard } from "@/lib/programs";
+import { programCardStats, type CardStats } from "@/app/shop/program-pricing-actions";
+
+/**
+ * The Program tab's rate card (Oct 30, Nick: the tab was "almost unreadable", a wall of form fields). Read only, from the
+ * program's own design prices: one tab per end client (the prices' `match.who`), what the deal is (who it applies to,
+ * whose garments, setup, the last 6 months), then each decoration's products with the styles we see on their jobs and
+ * the price each, the extras the program prices itself, and what's not on the program. Nothing here is set per customer:
+ * any program's items draw their own card. The settings stay in ProgramAdmin, behind "Edit the rules".
+ */
+type D = Design & { brand_id?: string | null };
+type Extra = { id: string; name: string; price: number };
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** one name has the other as whole words ("All My Sons" ~ "all my sons moving"; "AMS" doesn't hit "Williams") */
+const sameWords = (a: string, b: string) => { const x = ` ${norm(a)} `, y = ` ${norm(b)} `; return x.trim() !== "" && y.trim() !== "" && (x.includes(y) || y.includes(x)); };
+/** the end client's key: the same as programCardStats' (`match.who` joined by "|") */
+const whoKey = (it: ProgramItem) => (it.match?.who || []).join("|");
+const laneOf = (m: string | undefined): Lane => (m === "embroidery" || m === "dtf" ? m : "screen");
+const laneLabel = (l: Lane) => LANES.find((x) => x.id === l)?.label || "Screen print";
+const plural = (n: number, w: string) => `${n.toLocaleString("en-US")} ${w}${n === 1 ? "" : "s"}`;
+const uniq = (xs: string[]) => { const seen = new Set<string>(); return xs.filter((x) => { const k = norm(x); if (!k || seen.has(k)) return false; seen.add(k); return true; }); };
+
+export default function ProgramPricingCard({ customerId, program, items, ver, editing, onToggleEdit, onEditItem, onAdd }: {
+  customerId: string; program: Program; items: ProgramItem[];
+  /** bumps when ProgramAdmin reloads: the numbers are counted again */ ver: number;
+  editing: boolean; onToggleEdit: () => void;
+  /** open the editor on this design price */ onEditItem: (id: string) => void;
+  /** a new design price for this end client */ onAdd: (who: string[]) => void;
+}) {
+  const sb = createClient();
+  const live = useMemo(() => items.filter((i) => i.active && !i.archived_at), [items]);
+
+  // end clients: the active prices grouped by who they're for; prices for anyone are one group named after the program
+  const clients = useMemo(() => {
+    const m = new Map<string, { key: string; who: string[]; items: ProgramItem[] }>();
+    for (const it of live) {
+      const k = whoKey(it);
+      if (!m.has(k)) m.set(k, { key: k, who: k ? k.split("|") : [], items: [] });
+      m.get(k)!.items.push(it);
+    }
+    return [...m.values()];
+  }, [live]);
+  const [pick, setPick] = useSticky<string>("program.client", "");
+  const cur = clients.find((c) => c.key === pick) || clients[0];
+
+  const [stats, setStats] = useState<CardStats | null>(null);
+  useEffect(() => {
+    let on = true;
+    programCardStats(customerId).then((r) => { if (on) setStats(r.ok ? r.stats : null); }, () => { if (on) setStats(null); });
+    return () => { on = false; };
+  }, [customerId, ver]);
+
+  // the customer's brands and logos (for each decoration's logos), and the shop's extras (for the extras' names)
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [designs, setDesigns] = useState<D[]>([]);
+  const [extraList, setExtraList] = useState<Extra[]>([]);
+  const linked = useMemo(() => [...new Set(live.flatMap((i) => i.match?.designs || []))].sort(), [live]);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const [{ data: bs }, { data: ds }, { data: st }] = await Promise.all([
+        sb.from("brands").select("id, name").eq("customer_id", customerId).is("archived_at", null),
+        sb.from("designs").select("*").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).not("brand_id", "is", null).order("number").limit(400),
+        sb.from("settings").select("data").eq("id", 1).maybeSingle(),
+      ]);
+      let all = (ds || []) as D[];
+      const missing = linked.filter((id) => !all.some((d) => d.id === id));
+      if (missing.length) { const { data: more } = await sb.from("designs").select("*").in("id", missing); all = [...all, ...((more || []) as D[])]; }
+      const d = (st?.data || {}) as { finishing?: Extra[]; wholesale?: { finishing?: Extra[]; embExtras?: Extra[] } };
+      const xs = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || [])];
+      if (!on) return;
+      setBrands((bs || []) as { id: string; name: string }[]);
+      setDesigns(all);
+      setExtraList(xs.filter((f, i) => f?.id && xs.findIndex((x) => x.id === f.id) === i));
+    })().catch(() => null);
+    return () => { on = false; };
+  }, [customerId, linked.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the picked end client's card: the rate card whose words name them, else the main one
+  const card: RateCard | null = useMemo(() => {
+    const cards = cardsOf(program);
+    return (cur && cards.find((c) => (c.match || []).some((m) => cur.who.some((w) => sameWords(m, w))))) || cards[0] || program.rate_card || null;
+  }, [program, cur]);
+
+  // each decoration (method + its note, "Screen print · Helper logo") and the logos it uses
+  const sections = useMemo(() => {
+    if (!cur) return [];
+    const theirBrands = brands.filter((b) => cur.who.some((w) => sameWords(b.name, w)));
+    const brandLogos = designs.filter((d) => d.brand_id && theirBrands.some((b) => b.id === d.brand_id));
+    const m = new Map<string, { key: string; lane: Lane; note: string; items: ProgramItem[] }>();
+    for (const it of cur.items) {
+      const im = it.imprints?.[0], lane = laneOf(im?.method), note = (im?.notes || "").trim();
+      const k = `${lane}|${norm(note)}`;
+      if (!m.has(k)) m.set(k, { key: k, lane, note, items: [] });
+      m.get(k)!.items.push(it);
+    }
+    return [...m.values()].map((s) => {
+      const imps = s.items.flatMap((i) => i.imprints || []);
+      const inks = uniq(imps.flatMap((im) => (im.inks || "").split(",").map((x) => x.trim())));
+      const thread = s.lane === "embroidery";
+      const inkWords = !inks.length ? "" : inks.length <= 3 ? inks.join(", ") : plural(inks.length, thread ? "thread" : "color");
+      const places = uniq(s.items.map((i) => (i.imprints || []).map((im) => [im.location, im.size].map((x) => (x || "").trim()).filter(Boolean).join(" ")).filter(Boolean).join(" + ")));
+      const where = places.slice(0, 4).join(", ") + (places.length > 4 ? ", …" : "");
+      // the logos: the ones the prices name; else the brand's logos ready for this decoration; else all of the brand's
+      const named = designs.filter((d) => s.items.some((i) => (i.match?.designs || []).includes(d.id)));
+      const ready = brandLogos.filter((d) => laneState(d, s.lane).ready);
+      const logos = named.length ? named : ready.length ? ready : brandLogos;
+      return { ...s, title: [laneLabel(s.lane), s.note].filter(Boolean).join(" · "), sub: [inkWords, where].filter(Boolean).join(" · "), logos };
+    });
+  }, [cur, brands, designs]);
+
+  // sign the pictures of the logos on screen
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const shown = useMemo(() => { const m = new Map<string, D>(); sections.forEach((s) => s.logos.slice(0, 4).forEach((d) => m.set(d.id, d))); return [...m.values()]; }, [sections]);
+  useEffect(() => {
+    const todo = shown.filter((d) => !(d.id in urls));
+    if (!todo.length) return;
+    let on = true;
+    previewUrls(sb, todo).then((u) => { if (on) setUrls((x) => ({ ...x, ...Object.fromEntries(todo.map((d) => [d.id, ""])), ...u })); }, () => null);
+    return () => { on = false; };
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!cur) return null;
+  const st = stats?.who[cur.key];
+  const styleJobs = stats?.styles[cur.key] || {};
+  const all = cur.items;
+  const allSupplied = all.every((i) => !!i.supplied), noneSupplied = all.every((i) => !i.supplied);
+  const allIn = all.every((i) => i.price_mode === "flat" && !!i.supplied);
+  const setup = card?.noSetupEver || allIn
+    ? { v: "None", s: allIn ? "no screens or digitizing; the price is all in" : "no screens or digitizing on any job" }
+    : card?.screenFee != null ? { v: `Screens ${money(+card.screenFee)}`, s: "each, on every job" }
+      : { v: "Normal", s: "screens and digitizing as usual" };
+  const extras = Object.entries(card?.extraPrices || {}).filter(([, n]) => n != null).map(([id, n]) => {
+    const f = extraList.find((x) => x.id === id);
+    const name = (f?.name || id.replace(/^[a-z]+_/, "").replace(/_/g, " ")).replace(/\s*\([^)]*\)\s*$/, "").trim();
+    return { id, name: name.charAt(0).toUpperCase() + name.slice(1), price: +n, was: f ? +f.price : null };
+  });
+  // not on the program: the words that keep a job off it, art that's always custom, and the standard-print limits
+  const notOn = uniq(all.flatMap((i) => i.match?.not || []));
+  const notArt = uniq(all.flatMap((i) => i.match?.notArt || [])).map((w) => `art named ${w}`);
+  const limits = sections.flatMap((s) => {
+    const mc: number[] = [...new Set<number>(s.items.map((i) => +(i.match?.maxColors || 0)).filter((n) => n > 0))];
+    const mp: number[] = [...new Set<number>(s.items.map((i) => +(i.match?.maxPrints || 0)).filter((n) => n > 0))];
+    const bits = [...mc.map((n) => `more than ${plural(n, "color")}`), ...mp.map((n) => `more than ${plural(n, "print")}`)];
+    return bits.length ? [`${bits.join(" or ")} (${s.title.toLowerCase()})`] : [];
+  });
+  const otherLogos = all.some((i) => i.match?.designs?.length) ? ["any logo other than the ones above"] : [];
+  const notList = [...notOn, ...notArt, ...limits, ...otherLogos];
+  const groupName = (c: { who: string[] }) => c.who.length ? c.who.join(" · ") : program.name || "Program";
+
+  const print = () => {
+    document.body.classList.add("prs-printing");
+    const done = () => { document.body.classList.remove("prs-printing"); window.removeEventListener("afterprint", done); };
+    window.addEventListener("afterprint", done);
+    window.print();
+  };
+
+  return (
+    <section className="panel prs">
+      <div className="panel-h prs-h">
+        <div className="prs-ht"><h2>Program pricing</h2><span className="faint">{plural(clients.length, "end client")}</span></div>
+        <div className="prs-hr">
+          {clients.length > 1 && (
+            <div className="chips prs-clients" role="tablist" aria-label="End clients">
+              {clients.map((c) => <button key={c.key || "-"} type="button" role="tab" aria-selected={c.key === cur.key} className={"chip" + (c.key === cur.key ? " on" : "")} title={groupName(c)} onClick={() => setPick(c.key)}>{c.who[0] || program.name || "Program"}<span className="chip-n">{c.items.length}</span></button>)}
+            </div>
+          )}
+          <button type="button" className="btn prs-noprint" onClick={print}>Print rate card</button>
+        </div>
+      </div>
+
+      <div className="stats prs-deal">
+        <div className="stat"><span className="k">Applies to</span><span className="v">{cur.who.length ? cur.who.map((w, k) => <span key={w}>{k > 0 && " · "}<span className="prs-nw">{w}</span></span>) : "Every order on the program"}</span><small>{cur.who.length ? "in the order name" : "no end client words"}</small></div>
+        <div className="stat"><span className="k">Garments</span><span className="v">{allSupplied ? "Customer supplied" : noneSupplied ? "We supply" : "Both"}</span><small>{allSupplied ? "print only, no shirt in the price" : noneSupplied ? "the shirt is in the price" : "see each product"}</small></div>
+        <div className="stat"><span className="k">Setup</span><span className="v">{setup.v}</span><small>{setup.s}</small></div>
+        <div className="stat"><span className="k">Last 6 months</span><span className="v">{st ? <><span className="prs-nw">{plural(st.jobs, "job")}</span> · <span className="prs-nw">{st.pcs.toLocaleString("en-US")} pcs</span></> : "—"}</span><small>{st ? `${money(st.total)} billed` : cur.who.length ? "counting…" : "by end client only"}</small></div>
+      </div>
+
+      {sections.map((s) => (
+        <div key={s.key} className="prs-sec">
+          <div className="prs-sh">
+            <div className="prs-st"><h3>{s.title}</h3>{s.sub && <span className="faint">{s.sub}</span>}</div>
+            {s.logos.length > 0 && (
+              <div className="prs-logos">
+                {s.logos.slice(0, 4).map((d) => (
+                  <div key={d.id} className="prs-logo" title={d.name}>
+                    <span className="prs-logo-t"><LogoThumb d={d} url={urls[d.id] || ""} /></span>
+                    <span className="prs-logo-n"><b data-notranslate>D-{d.number}</b><span className="faint">{d.name}</span></span>
+                  </div>
+                ))}
+                {s.logos.length > 4 && <span className="faint prs-more">+{s.logos.length - 4} more</span>}
+              </div>
+            )}
+          </div>
+          <div className="tbl-wrap prs-tw">
+            <table className="tbl prs-tbl">
+              <thead><tr><th>Product</th><th>Styles we see</th><th className="r">Each</th><th className="prs-noprint" aria-label="Edit" /></tr></thead>
+              <tbody>
+                {s.items.map((it) => {
+                  const what = (it.match?.what || []).map((w) => w.trim()).filter(Boolean);
+                  const styles = what.filter((w) => /\d/.test(w)).map((w) => ({ w, n: +(styleJobs[w] || 0) })).sort((a, b) => b.n - a.n);
+                  const words = what.filter((w) => !/\d/.test(w));
+                  const jobs = styles.reduce((a, x) => a + x.n, 0);
+                  const tiers = tiersOf(it);
+                  const name = (it.garment || "").split(":")[0].trim() || it.name || "Product";
+                  return (
+                    <tr key={it.id} onClick={() => onEditItem(it.id)}>
+                      <td className="prs-prod"><b>{name}</b>{jobs > 0 && <span className="sub">{plural(jobs, "job")}</span>}</td>
+                      <td className="prs-sty">
+                        {styles.length || words.length ? (
+                          <span className="prs-chips">
+                            {styles.map((x, k) => <span key={x.w} className={"chip" + (k === 0 && x.n > 0 ? " on" : "")} title={x.n ? plural(x.n, "job") : "no jobs in 6 months"} data-notranslate>{x.w}</span>)}
+                            {words.map((w) => <span key={w} className="chip">{w}</span>)}
+                          </span>
+                        ) : <span className="faint">any style not above</span>}
+                      </td>
+                      <td className="r prs-each">
+                        {tiers.length ? <>{money(tiers[0].price)}{(tiers.length > 1 || tiers[0].min > 0) && <small>{tiers[0].min > 0 ? `${tiers[0].min}+ pcs` : "any qty"}{tiers.length > 1 ? ` · ${plural(tiers.length - 1, "more break")}` : ""}</small>}</> : <span className="faint">no price</span>}
+                      </td>
+                      <td className="prs-ed prs-noprint"><button type="button" className="btn icon ghost sm" aria-label={`Edit ${name}`} title="Edit" onClick={(e) => { e.stopPropagation(); onEditItem(it.id); }}>✎</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      {extras.length > 0 && (
+        <div className="prs-xs">
+          {extras.map((x) => <span key={x.id} className="prs-x">{x.name} <b>{money(x.price)}</b><span className="faint">each{x.was != null && x.was !== x.price ? ` (list ${money(x.was)})` : ""}</span></span>)}
+        </div>
+      )}
+
+      {notList.length > 0 && <div className="prs-not"><b>Not on the program, priced normally:</b> {notList.join(", ")}.</div>}
+
+      <div className="prs-foot prs-noprint">
+        <span className="faint">Matching words, prices, logos, extras and portal settings</span>
+        <button type="button" className={"btn" + (editing ? " primary" : "")} aria-expanded={editing} onClick={onToggleEdit}>{editing ? "Hide the rules" : "Edit the rules"}</button>
+        <button type="button" className="btn" onClick={() => onAdd(cur.who)}>+ Product</button>
+      </div>
+    </section>
+  );
+}

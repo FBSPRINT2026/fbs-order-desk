@@ -1,5 +1,7 @@
 "use client";
 import PrintavoSetup from "@/components/PrintavoSetup";
+import ProgramPricingCard from "@/components/ProgramPricingCard";
+import { useSticky } from "@/lib/useSticky";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
@@ -24,6 +26,19 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   const [state, setState] = useState("");
   const [ver, setVer] = useState(0);
   const [cardSel, setCardSel] = useState("main");
+  // the rate card on top; every setting under "Edit the rules" (Oct 30, Nick: the tab was "almost unreadable")
+  const [editing, setEditing] = useSticky("program.edit", false);
+  const [hit, setHit] = useState("");
+  const [goTo, setGoTo] = useState("");
+  useEffect(() => {
+    if (!goTo || !editing) return;
+    const t = requestAnimationFrame(() => {
+      document.getElementById(goTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (goTo.startsWith("pga-item-")) { const id = goTo.slice(9); setHit(id); setTimeout(() => setHit((x) => (x === id ? "" : x)), 2500); }
+      setGoTo("");
+    });
+    return () => cancelAnimationFrame(t);
+  }, [goTo, editing, items.length]);
   const load = useCallback(async () => {
     const [{ data: ps }, { data: ds }] = await Promise.all([
       sb.from("programs").select("*").eq("customer_id", customerId).order("created_at").limit(1),
@@ -51,6 +66,16 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   };
   const saveItem = async (id: string, patch: Partial<ProgramItem>) => { setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x))); const { error } = await sb.from("program_items").update(patch).eq("id", id); setState(error ? "Couldn't save: " + error.message : "Saved"); };
 
+  /** a new design price (for an end client when added from the rate card), then open on it */
+  const addItem = async (who?: string[]) => {
+    if (!program) return;
+    const row = { ...blankItem(program.id, items.length), price_mode: "flat" as const, supplied: program.rate_card?.garmentIncluded === false, ...(who?.length ? { match: { who } } : {}) };
+    const { data, error } = await sb.from("program_items").insert(row).select("id").single();
+    if (error) { setState(error.message); return; }
+    await load();
+    if (data?.id) { setEditing(true); setGoTo(`pga-item-${data.id}`); }
+  };
+
   if (!loaded) return <div className="gb-empty">Loading…</div>;
   if (!program) return (
     <div className="pga">
@@ -66,9 +91,15 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
     </div>
     </div>
   );
+  const hasCard = items.some((i) => i.active && !i.archived_at);
   return (
     <div className="pga">
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
+      {hasCard && <ProgramPricingCard customerId={customerId} program={program} items={items} ver={ver} editing={editing}
+        onToggleEdit={() => { const on = !editing; setEditing(on); if (on) setGoTo("pga-rules"); }}
+        onEditItem={(id) => { setEditing(true); setGoTo(`pga-item-${id}`); }}
+        onAdd={(who) => void addItem(who)} />}
+      {(!hasCard || editing) && <>
+      <div className="aa-bar" id="pga-rules"><div className="aa-bar-l"><h2>{hasCard ? "The rules" : "Program pricing"}</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
       <PrintavoSetup customerId={customerId} onApplied={load} />
@@ -95,7 +126,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       </div>
       <div className="pga-items">
         {items.map((it) => (
-          <article key={it.id} className={"pga-item" + (it.active ? "" : " off")}>
+          <article key={it.id} id={`pga-item-${it.id}`} className={"pga-item" + (it.active ? "" : " off") + (hit === it.id ? " hit" : "")}>
             <div className="pga-img">
               {(["image_path", "image_back"] as const).map((field) => {
                 const path = (it[field] || "") as string;
@@ -198,7 +229,8 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
           </article>
         ))}
       </div>
-      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert({ ...blankItem(program.id, items.length), price_mode: "flat", supplied: program.rate_card?.garmentIncluded === false }); if (error) setState(error.message); load(); }}>+ Add a design price</button>
+      <button type="button" className="btn primary" onClick={() => void addItem()}>+ Add a design price</button>
+      </>}
     </div>
   );
 }
