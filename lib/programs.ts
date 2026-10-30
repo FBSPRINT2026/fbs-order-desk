@@ -135,7 +135,9 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
 export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied" | "match"> & { imprints?: ProgramImprint[] };
-export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string; /** the prints' art names only */ art?: string };
+export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string; /** the prints' art names only */ art?: string;
+  /** each line's own garment text (by line id): a group with helper tees and hoodies prices each by its own garment
+   *  (Oct 30, Nick: All My Sons tees $1.35, hoodies $1.50 on one job) */ lineGarments?: Record<string, string> };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
@@ -158,6 +160,12 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
       && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what))
       && !(it.match?.not?.length && has(who, it.match.not)) && !(it.match?.notArt?.length && has(sing(d.art || ""), it.match.notArt)) && sameMethod(it) && standard(it));
+    // the most specific match wins: a style number ("W961") over a word, a longer phrase ("knit cap") over one word
+    // ("short" is in "Short Sleeve UV Daybreak Shirt"), and any garment match over a catch-all with no garment list
+    const fit = (it: DesignPrice) => Math.max(0, ...(it.match?.what || []).map((x) => sing(x).trim()).filter((x) => x && what.includes(` ${x} `))
+      .map((x) => (/\d/.test(x) ? 100 : x.split(" ").length)));
+    const best = Math.max(0, ...hits.map(fit));
+    hits = hits.filter((it) => fit(it) === best);
   }
   if (!hits.length) {
     const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
@@ -180,8 +188,17 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     const dp = designPrice(g, qty, design);
     if (dp.item) {
       const it = dp.item, lines: ProgramGroup["lines"] = {};
-      for (const l of g.lines || []) lines[l.id] = qtyOf(l) ? { each: r2(+it.price), note: `${it.name} program price: ${(+it.price).toFixed(2)}${it.min_qty ? ` at ${it.min_qty}+` : ""}` } : null;
-      return { ok: true, flat: true, key: it.name, note: `${it.name}: ${(+it.price).toFixed(2)} a piece${it.min_qty ? ` at ${it.min_qty}+` : ""}, ${qty} pieces`, lines };
+      const names = new Set<string>();
+      for (const l of g.lines || []) {
+        if (!qtyOf(l)) { lines[l.id] = null; continue; }
+        // the line's own garment picks its price when it has one (same quantity break as the group)
+        const own = design.lineGarments?.[l.id] ? designPrice(g, qty, { ...design, garments: design.lineGarments[l.id] }).item : undefined;
+        const x = own || it;
+        names.add(x.name);
+        lines[l.id] = { each: r2(+x.price), note: `${x.name} program price: ${(+x.price).toFixed(2)}${x.min_qty ? ` at ${x.min_qty}+` : ""}` };
+      }
+      const one = names.size <= 1;
+      return { ok: true, flat: true, key: one ? it.name : [...names].join(" + "), note: one ? `${it.name}: ${(+it.price).toFixed(2)} a piece${it.min_qty ? ` at ${it.min_qty}+` : ""}, ${qty} pieces` : `${[...names].join(" + ")}: each garment at its own program price, ${qty} pieces`, lines };
     }
     if (dp.under) pre = `${dp.under.name} program price starts at ${dp.under.min_qty} (this is ${qty}); `;
   }
