@@ -3,6 +3,9 @@
  * Rendered in a <style> tag on the print page only, so the letter-size @page rule never reaches other pages.
  */
 export const DOC_CSS = `
+/* iPhone Safari enlarges text in blocks it thinks are too small on a page wider than the phone (the letter-size sheet), so
+   some lines came out huge and on top of each other (Oct 30, Nick, #40210's quote): the document's type is exactly as set */
+html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}
 .pdoc{--row:.34in;--ink:#141D2B;--ink2:#3c4658;--ink3:#6b7587;--line:#d6dbe3;--line2:#e8ebf0;--blue:#0e9bd8;--salmon:#f26660;--orange:#fcb122;--fade:linear-gradient(90deg,#0e9bd8 0%,#f26660 52%,#fcb122 100%);--ok:#1a8a5a;
   background:#c9ced6;min-height:100vh;padding:0 12px 24px;color:var(--ink);font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:11pt;line-height:1.35;
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow-x:auto}
