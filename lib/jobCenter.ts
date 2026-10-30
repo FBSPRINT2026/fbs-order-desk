@@ -36,6 +36,7 @@ export type JobItem = {
   /** sew-outs taken, not sent (Send); sent, not answered (Remind) */ sewoutIds?: string[]; sentSewoutIds?: string[];
   /** the first group with prints and no mockup (Mockup Creator opens on it) */ mockGroup?: { id: string; mockupKind?: "logo" };
   declined?: string; status?: string; /** came back with changes at some point */ revised?: boolean;
+  /** when what's out with the customer went (the newest) */ sentAt?: string | null;
   /** the account owner's first name, lowercase ("" when nobody owns it) */ owner?: string;
 };
 
@@ -169,7 +170,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     const sw0 = sws.filter((x) => x.order_id === o.id && x.status === "pending");
     // came back with changes before (a proof or sew-out sent back, the quote declined), even if it's moved on since
     const revised = all.some((p) => p.status === "changes" || !!p.customer_comment) || !!lastDecl || sws.some((x) => x.order_id === o.id && (x.status === "changes" || !!x.customer_comment));
-    out.push({ ...base, key: `ord:${o.id}`, type: "order", steps, at: appr || o.updated_at || o.created_at, tracks, total: c.total, status: o.status, revised,
+    const sentAt = [...live.filter((p) => p.status === "pending").map((p) => p.sent_at), ...sws.filter((x) => x.order_id === o.id && x.status === "pending").map((x) => x.sent_at), o.status === "quote_sent" ? lastSent?.created_at : null].filter(Boolean).sort().pop() || null;
+    out.push({ ...base, key: `ord:${o.id}`, type: "order", steps, at: appr || o.updated_at || o.created_at, tracks, total: c.total, status: o.status, revised, sentAt,
       sewoutIds: sw0.filter((x) => !x.sent_at).map((x) => x.id), sentSewoutIds: sw0.filter((x) => x.sent_at).map((x) => x.id), mockGroup: mg ? { id: mg.id, mockupKind: mg.mockupKind } : undefined });
   }
   // Done · Declined: the customer walked away (two weeks)
@@ -202,4 +204,105 @@ export async function jobTimeline(admin: SupabaseClient, orderId: string) {
   for (const p of (pf || []) as { version: number; viewed_at: string; view_count: number }[]) { if (seen.has(p.version)) continue; seen.add(p.version); rows.push({ at: p.viewed_at, what: `Mockup v${p.version} opened`, detail: p.view_count > 1 ? `${p.view_count} times` : "", who: "", tone: "" }); }
   for (const s of (sw || []) as { version: number; viewed_at: string; view_count: number }[]) rows.push({ at: s.viewed_at, what: `Sew-out v${s.version} opened`, detail: s.view_count > 1 ? `${s.view_count} times` : "", who: "", tone: "" });
   return rows.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** One job, for the Job Center's right panel: its pieces with pictures and what happened to each, what the customer
+ * said last, the messages, the history and the customer's page link (Oct 29, Nick: "you click on it and say, here's the
+ * order… view the mockup… or the sew-out… copy link… view the messages, what was sent… if it was opened or not… proof
+ * approved, changes to art"). */
+export type PieceState = "needed" | "made" | "sent" | "changes" | "done";
+export type ProofVersion = { v: number; state: PieceState | "replaced"; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pics: string[] };
+export type JobPiece =
+  | { k: "art"; state: PieceState; versions: ProofVersion[]; next: string[] | null; pdf: string }
+  | { k: "sewout"; id: string | null; where: string; imprintId: string; state: PieceState; v: number; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pic: string; pdf: string }
+  | { k: "quote"; state: PieceState; total: number; qty: number; sentAt: string | null; decidedAt: string | null; decidedName: string | null; comment: string; pdf: string };
+export type JobDetail = {
+  id: string; number: number; title: string; status: string; due: string | null; qty: number; customer: string; contact: string; email: string;
+  depts: Dept[]; pieces: JobPiece[]; said: { who: string; at: string; text: string; on: string; after: string } | null;
+  msgs: { at: string; who: string; us: boolean; text: string }[]; link: string | null; mockGroup?: { id: string; mockupKind?: "logo" };
+  declinedAt: string | null; declinedWhy: string;
+};
+
+export async function jobDetail(admin: SupabaseClient, orderId: string): Promise<JobDetail> {
+  const { data: od } = await admin.from("orders").select("*, customers(company, name, email)").eq("id", orderId).maybeSingle();
+  if (!od) throw new Error("That order isn't there any more.");
+  const o = od as unknown as Order & { customers?: { company?: string; name?: string; email?: string } | null; declined_at?: string | null; declined_reason?: string };
+  const [{ data: s }, { data: pf }, { data: mk }, { data: sw }, { data: ev }, { data: ms }, { data: lk }] = await Promise.all([
+    admin.from("settings").select("data").eq("id", 1).maybeSingle(),
+    admin.from("proofs").select("version, status, file_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, archived_at, mockup_id, created_at").eq("order_id", orderId).not("version", "is", null).order("created_at"),
+    admin.from("mockups").select("id, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at"),
+    admin.from("sewouts").select("id, imprint_id, version, status, photo_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, created_at").eq("order_id", orderId).is("archived_at", null).order("version", { ascending: false }),
+    admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "approved"]).order("created_at"),
+    admin.from("messages").select("author_type, author_name, author_email, body, created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(8),
+    admin.from("proof_links").select("id").eq("order_id", orderId).eq("kind", "order").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const settings = mergeSettings(s?.data);
+  const gs = orderGroups(o);
+  type P = { version: number; status: string; file_path: string; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; mockup_id: string | null };
+  type S = { id: string; imprint_id: string; version: number; status: string; photo_path: string; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string };
+  const ps = (pf || []) as P[], mks = (mk || []) as { id: string; file_path: string; group_id: string | null }[], sws = (sw || []) as S[];
+  const evs = (ev || []) as { kind: string; detail: string; actor: string; created_at: string }[];
+  // every picture, signed once
+  const paths = [...new Set([...ps.map((p) => p.file_path), ...mks.map((m) => m.file_path), ...sws.map((x) => x.photo_path)].filter(Boolean))];
+  const url = new Map<string, string>();
+  if (paths.length) { const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600); (sg || []).forEach((r, i) => { if (r.signedUrl) url.set(paths[i], r.signedUrl); }); }
+  const pics = (xs: string[]) => xs.map((x) => url.get(x) || "").filter(Boolean);
+  const pieces: JobPiece[] = [];
+  const early = EARLY.includes(o.status), quoting = o.status === "quote" || o.status === "quote_sent";
+
+  // the mockup, by version (the newest first)
+  const live = ps.filter((p) => !p.archived_at);
+  const top = Math.max(0, ...live.map((p) => p.version));
+  const vs = [...new Set(ps.map((p) => p.version))].sort((a, b) => b - a).map((v): ProofVersion => {
+    const rs = ps.filter((p) => p.version === v), r0 = rs.find((p) => p.decided_at) || rs[0];
+    const isLive = v === top && rs.some((p) => !p.archived_at);
+    const state: ProofVersion["state"] = !isLive ? (rs.some((p) => p.status === "changes") ? "changes" : rs.every((p) => p.status === "approved") ? "done" : "replaced")
+      : rs.some((p) => p.status === "pending") ? "sent" : rs.some((p) => p.status === "changes") ? "changes" : "done";
+    return { v, state, sentAt: r0.sent_at, sentTo: r0.sent_to, viewedAt: rs.map((p) => p.viewed_at).filter(Boolean).sort()[0] || null, views: Math.max(0, ...rs.map((p) => p.view_count || 0)),
+      decidedAt: r0.decided_at, decidedName: r0.decided_name, comment: rs.map((p) => p.customer_comment).find(Boolean) || "", pics: pics(rs.map((p) => p.file_path)) };
+  });
+  const unsent = early && mks.length > 0 && mks.some((m) => !live.some((p) => p.mockup_id === m.id));
+  const hasPrints = gs.some((g) => (g.imprints || []).length);
+  if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(mks.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
+  // each embroidered print's sew-out
+  for (const g of gs) for (const im of g.imprints || []) {
+    if (im.method !== "embroidery" || !im.emb?.file) continue;
+    const x = sws.find((y) => y.imprint_id === im.id);
+    const where = `${im.location || "Embroidery"}${im.size ? `, ${im.size}` : ""}`;
+    if (!x) { if (early) pieces.push({ k: "sewout", id: null, where, imprintId: im.id, state: "needed", v: 0, sentAt: null, sentTo: null, viewedAt: null, views: 0, decidedAt: null, decidedName: null, comment: "", pic: "", pdf: "" }); continue; }
+    pieces.push({ k: "sewout", id: x.id, where, imprintId: im.id, state: x.status === "approved" ? "done" : x.status === "changes" ? "changes" : x.sent_at ? "sent" : "made", v: x.version, sentAt: x.sent_at, sentTo: x.sent_to,
+      viewedAt: x.viewed_at, views: x.view_count || 0, decidedAt: x.decided_at, decidedName: x.decided_name, comment: x.customer_comment || "", pic: url.get(x.photo_path) || "", pdf: `/print/${orderId}?sewout=${x.id}` });
+  }
+  // the quote
+  const c = calcOrder(o, settings, []);
+  const sized = gs.some((g) => g.lines.some((l) => lineQty(l) > 0));
+  const lastSent = [...evs].reverse().find((e) => e.kind === "sent"), lastDecl = [...evs].reverse().find((e) => e.kind === "quote_declined");
+  const qState: PieceState = o.status === "quote_sent" ? "sent" : o.status === "quote" ? (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at) ? "changes" : !sized || !(c.total > 0) ? "needed" : "made") : "done";
+  pieces.push({ k: "quote", state: qState, total: c.total, qty: o.qty || 0, sentAt: lastSent?.created_at || o.sent_at || null, decidedAt: qState === "changes" ? lastDecl!.created_at : o.approved_at, decidedName: qState === "changes" ? lastDecl!.detail.split(":")[0] : o.approved_name,
+    comment: qState === "changes" ? lastDecl!.detail.replace(/^[^:]*:\s*/, "") : "", pdf: `/print/${orderId}` });
+
+  // what the customer said last: a proof or sew-out answer, a declined quote, or a message
+  const words: { who: string; at: string; text: string; on: string }[] = [
+    ...vs.filter((v) => v.comment && v.decidedAt).map((v) => ({ who: v.decidedName || "The customer", at: v.decidedAt!, text: v.comment, on: `${v.state === "changes" ? "Changes asked" : "Approved with a change"} on mockup v${v.v}` })),
+    ...pieces.filter((p): p is Extract<JobPiece, { k: "sewout" }> => p.k === "sewout" && !!p.comment && !!p.decidedAt).map((p) => ({ who: p.decidedName || "The customer", at: p.decidedAt!, text: p.comment, on: `On the sew-out, ${p.where}` })),
+    ...evs.filter((e) => e.kind === "quote_declined").map((e) => ({ who: e.detail.split(":")[0], at: e.created_at, text: e.detail.replace(/^[^:]*:\s*/, ""), on: "Declined the quote" })),
+    ...((ms || []) as { author_type: string; author_name: string; body: string; created_at: string }[]).filter((m) => m.author_type === "customer" && !/^Declined the quote:/.test(m.body)).map((m) => ({ who: m.author_name || "The customer", at: m.created_at, text: m.body, on: "Message" })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  const said0 = words[0];
+  const sentAfter = said0 ? evs.find((e) => e.created_at > said0.at && (e.kind === "proofs_requested" || e.kind === "sewout_sent" || e.kind === "sent")) : undefined;
+  const said = said0 ? { ...said0, after: sentAfter ? `${sentAfter.kind === "proofs_requested" ? sentAfter.detail.replace(/\s*\(.*$/, "") : sentAfter.kind === "sewout_sent" ? "A new sew-out" : "The quote"} went out after this, ${new Date(sentAfter.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}` : "" } : null;
+
+  // messages: what we sent them and what's been written, newest first
+  const msgs = [
+    ...evs.filter((e) => e.kind === "proofs_requested" || e.kind === "sewout_sent" || e.kind === "sent").map((e) => ({ at: e.created_at, who: (e.actor || "").split("@")[0], us: true,
+      text: e.kind === "sent" ? (e.detail === "link copied" ? "Quote · link copied to send yourself" : `Quote · to ${e.detail}`) : e.detail.replace(/^Version (\d+)/, "Mockup v$1") })),
+    ...((ms || []) as { author_type: string; author_name: string; author_email: string; body: string; created_at: string }[]).map((m) => ({ at: m.created_at, who: m.author_name || (m.author_email || "").split("@")[0], us: m.author_type !== "customer", text: m.body })),
+  ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+  const mg = gs.find((g) => (g.imprints || []).length && !mks.some((m) => m.group_id === g.id)) || gs.find((g) => (g.imprints || []).length);
+  return {
+    id: o.id, number: o.number, title: o.nickname || "Order", status: o.status, due: o.due_date || null, qty: o.qty || 0,
+    customer: o.customers?.company || o.customers?.name || "", contact: o.customers?.company ? (o.customers?.name || "") : "", email: o.customers?.email || "",
+    depts: [...new Set(gs.flatMap((g) => (g.imprints || []).map((im) => deptOf(im.method))))], pieces, said, msgs, link: lk?.id ? `/proof/${lk.id}` : null,
+    mockGroup: mg ? { id: mg.id, mockupKind: mg.mockupKind } : undefined, declinedAt: o.declined_at || null, declinedWhy: o.declined_reason || "",
+  };
 }

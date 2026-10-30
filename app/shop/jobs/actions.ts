@@ -2,7 +2,7 @@
 import { cookies } from "next/headers";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { jobTimeline, loadJobCenter } from "@/lib/jobCenter";
+import { jobDetail, jobTimeline, loadJobCenter } from "@/lib/jobCenter";
 import { firstName } from "@/lib/accountOwners";
 
 /** The Job Center (app/shop/jobs/page.tsx): every job before production, by the step it's at (lib/jobCenter.ts). */
@@ -67,5 +67,14 @@ export async function notAJob(suggestionId: string) {
     const { error } = await admin.from("ai_suggestions").update({ status: "dismissed", decided_at: new Date().toISOString(), decided_by: email }).eq("id", suggestionId).eq("kind", "draft_order");
     if (error) throw new Error(error.message);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** One job for the right panel (lib/jobCenter.ts jobDetail). */
+export async function jobPanel(orderId: string) {
+  try {
+    const { admin } = await me();
+    const [detail, rows] = await Promise.all([jobDetail(admin, orderId), jobTimeline(admin, orderId)]);
+    return { ok: true as const, detail, rows };
   } catch (e) { return fail(e); }
 }

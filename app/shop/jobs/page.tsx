@@ -1,16 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
-import SendProofTool from "@/components/tools/SendProofTool";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
-import { mockupHref } from "@/lib/mockupFresh";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
-import { jobHistory, loadJobs, markDeclined, notAJob, undoDeclined } from "./actions";
-import { remindProof } from "@/app/shop/proof-actions";
-import { remindSewoutAction } from "@/app/shop/sewout-actions";
+import { loadJobs, notAJob, undoDeclined } from "./actions";
+import JobPanel, { StartHere } from "./JobPanel";
 
 /**
  * The Job Center (Oct 29, Nick: "everything pre-production… new requests… quotes without mockups and mockups without
@@ -54,7 +50,6 @@ const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && 
   : s === "ready" ? t.state === "made" : s === "sent" ? t.state === "sent" : s === "changes" ? t.state === "changes" : s === "approved" ? t.state === "done" : false);
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
 const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
-const stamp = (s: string) => new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
 const ago = (s: string) => { const d = Math.floor((Date.now() - new Date(s).getTime()) / 864e5); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 const DEPT_TAG: Record<Dept, string> = { screen: "SP", embroidery: "EMB", heat: "HP" };
 
@@ -68,7 +63,7 @@ export default function JobCenter() {
   const [cameBack, setCameBack] = useSticky<boolean>("jobs.cameBack", false);
   const [artOnly, setArtOnly] = useSticky<boolean>("jobs.artOnly", false);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
+  const [pick, setPick] = useState<string | null>(null); // the job open in the right panel
   const [n, setN] = useState(0);
   const [lead, setLead] = useState<JobItem | null>(null);
 
@@ -92,6 +87,8 @@ export default function JobCenter() {
   [items, step, dept, q, mine, me, cameBack, artOnly]);
   const deptCount = (d: Dept | "all") => base.filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
+  const picked = (items || []).find((it) => it.key === pick) || null;
+  const go = (s: Step, key?: string) => { setStep(s); setPick(key || null); };
 
   return (
     <>
@@ -104,7 +101,7 @@ export default function JobCenter() {
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <section className="panel">
-        <div className="panel-b stack" style={{ gap: 12 }}>
+        <div className="panel-b">
           <div className="jc-groups" role="tablist" aria-label="Steps">
             {GROUPS.map((g) => (
               <div key={g.t} className="jc-g" style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
@@ -112,7 +109,7 @@ export default function JobCenter() {
                 <div className="jc-st">
                   {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
                   {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
-                    <button key={k} type="button" role="tab" aria-selected={step === k} className={"dgz-stn" + (step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => { setStep(k); setOpen(null); }}>
+                    <button key={k} type="button" role="tab" aria-selected={step === k} className={"dgz-stn" + (step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
                       <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
                       <span className="dgz-nm">{l}</span>
                     </button>); })}
@@ -120,102 +117,65 @@ export default function JobCenter() {
               </div>
             ))}
           </div>
-          <div className="toolbar" data-toolbar>
-            {step !== "leads" && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? deptCount(k) : "…"}</span></button>)}</div>}
-            <div className="chips">
-              <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
-              {step === "mockups" && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
-            </div>
-            <SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-          {!items ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{q ? `No matches for “${q}”.` : EMPTY[step]}</div> : (
-            <div className="tbl-wrap"><table className="tbl jc">
-              <thead><tr>{step === "leads" ? <><th>Lead</th><th>Customer</th><th>Came in</th><th /></>
-                : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th><th /></>
-                : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
-              <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} open={open === it.key} onToggle={() => setOpen(open === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />)}</tbody>
-            </table></div>
-          )}
         </div>
       </section>
+      <div className={"jc-body" + (picked ? " has-pick" : "")}>
+        <section className="panel jc-list">
+          <div className="panel-b stack" style={{ gap: 12 }}>
+            <div className="toolbar" data-toolbar>
+              {step !== "leads" && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? deptCount(k) : "…"}</span></button>)}</div>}
+              <div className="chips">
+                <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
+                {step === "mockups" && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
+              </div>
+              <SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            {!items ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{q ? `No matches for “${q}”.` : EMPTY[step]}</div> : (
+              <div className="tbl-wrap"><table className="tbl jc">
+                <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
+                  : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
+                  : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
+                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />)}</tbody>
+              </table></div>
+            )}
+          </div>
+        </section>
+        <aside className="jc-side" aria-label={picked ? "The job" : "Where to start"}>
+          {picked ? <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
+            : <StartHere items={base.filter(inDept)} loading={!items} mine={mine} go={go} />}
+        </aside>
+      </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
       {lead?.activityId && <CreateOrderTool activityId={lead.activityId} text={lead.leadText || lead.title} onClose={() => { setLead(null); setN((x) => x + 1); }} onCreated={(_, num) => after(`Order #${num} made.`)} />}
     </>
   );
 }
 
-function Row({ it, step, open, onToggle, after, onLead }: { it: JobItem; step: Step; open: boolean; onToggle: () => void; after: (m: string) => void; onLead: () => void }) {
-  const [busy, setBusy] = useState(false), [why, setWhy] = useState(""), [asking, setAsking] = useState(false);
-  const [hist, setHist] = useState<{ at: string; what: string; detail: string; who: string; tone: string }[] | null>(null);
-  useEffect(() => { if (open && it.orderId && !hist) void jobHistory(it.orderId).then((r) => setHist(r.ok ? r.rows : [])); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+function Row({ it, step, on, onPick, after, onLead }: { it: JobItem; step: Step; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void }) {
+  const [busy, setBusy] = useState(false);
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
-  const go = async (f: () => Promise<{ ok: boolean; error?: string }>, done: string) => { setBusy(true); const r = await f(); setBusy(false); after(r.ok ? done : r.error || "That didn't work."); };
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
-  const who = <>{it.number ? <Link className="ordno" href={`/shop/orders/${it.orderId}`} onClick={(e) => e.stopPropagation()}>#{it.number}</Link> : null}{" "}<b>{it.customer || "No customer yet"}</b><div className="sub">{it.title}</div></>;
-  const cols = 5;
-
+  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b><div className="sub">{it.title}</div></>;
+  const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on };
   if (it.type === "lead") return (
-    <tr>
-      <td><b>{it.title}</b><div className="sub">{it.sub}{it.tracks.length ? " · has questions to answer" : ""}</div></td>
-      <td>{it.customer || <span className="faint">Not matched</span>}</td>
+    <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
+      <td><b>{it.title}</b><div className="sub">{it.customer ? `${it.customer} · ` : ""}{it.sub}{it.tracks.length ? " · has questions to answer" : ""}</div></td>
       <td className="nowrap">{ago(it.at)}</td>
-      <td className="r nowrap">
+      <td className="nowrap" onClick={(e) => e.stopPropagation()}>
         {it.activityId && <button type="button" className="btn sm primary" onClick={onLead}>Make a job</button>}{" "}
-        <button type="button" className="btn sm" disabled={busy} onClick={() => void go(() => notAJob(it.suggestionId!), "Taken off the leads.")}>Not a job</button>
+        <button type="button" className="btn sm" disabled={busy} onClick={() => { setBusy(true); void notAJob(it.suggestionId!).then((r) => { setBusy(false); after(r.ok ? "Taken off the leads." : r.error); }); }}>Not a job</button>
       </td>
     </tr>);
   if (step === "declined") return (
-    <tr>
-      <td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td>
-      <td className="r nowrap"><button type="button" className="btn sm" disabled={busy} onClick={() => void go(() => undoDeclined(it.orderId!), "Back on the Job Center.")}>Put it back</button>{" "}<Link className="btn sm" href={`/shop/orders/${it.orderId}`}>Open order</Link></td>
-    </tr>);
-
-  const sentArt = it.tracks.some((t) => t.k === "art" && t.state === "sent"), sentSew = it.sentSewoutIds || [];
-  const out = it.tracks.some((t) => t.state === "sent" || t.state === "done" || t.state === "changes");
-  const fixes: ReactNode[] = [];
-  const need = (k: Track["k"], s: Track["state"]) => it.tracks.some((t) => t.k === k && t.state === s);
-  if (it.type === "request") fixes.push(<Link key="o" className="btn sm primary" href={`/shop/orders/${it.orderId}`}>Price and review</Link>);
-  if (it.type === "artonly") fixes.push(<Link key="c" className="btn sm primary" href={`/shop/customers/${it.customerId}`}>Open the customer</Link>);
-  if (it.type === "order") {
-    if ((need("art", "needed") || need("art", "changes")) && it.mockGroup) fixes.push(<Link key="m" className="btn sm" href={mockupHref(it.orderId!, it.mockGroup)}>Mockup Creator</Link>);
-    if (need("sewout", "needed") || need("sewout", "changes")) fixes.push(<Link key="d" className="btn sm" href="/shop/digitizing">Digitizing</Link>);
-    if (need("numbers", "needed") || need("numbers", "changes")) fixes.push(<Link key="p" className="btn sm" href={`/shop/orders/${it.orderId}`}>{it.tracks.some((t) => t.label === "No sizes yet") ? "Add sizes" : need("numbers", "changes") ? "Fix the quote" : "Price it"}</Link>);
-    if (it.tracks.some((t) => t.state === "made")) fixes.push(<SendProofTool key="s" target={{ kind: "order", orderId: it.orderId! }} label="Send" onDone={after} />);
-    if (sentArt) fixes.push(<button key="ra" type="button" className="btn sm" disabled={busy} title="Emails them a reminder about the mockup" onClick={() => void go(() => remindProof(it.orderId!), "Reminder sent.")}>Remind</button>);
-    if (sentSew.length && !sentArt) fixes.push(<button key="rs" type="button" className="btn sm" disabled={busy} title="Emails them a reminder about the sew-out" onClick={() => void go(async () => { for (const id of sentSew) { const r = await remindSewoutAction(id); if (!r.ok) return r; } return { ok: true }; }, "Reminder sent.")}>Remind</button>);
-  }
+    <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>);
   return (
-    <>
-      <tr className={open ? "on" : ""} onClick={onToggle} style={{ cursor: "pointer" }}>
-        <td>{who}</td>
-        <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
-        <td>{step === "requests" ? <span className="nowrap">{it.qty || 0} pcs</span> : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
-          : <div className="jc-tags">{here.map(tag)}</div>}{here.find((t) => t.note) && <div className="sub">“{here.find((t) => t.note)!.note}”</div>}</td>
-        <td><div className="jc-tags sm">{(step === "approved" ? [] : also).map(tag)}{it.revised && step !== "changes" && <span className="faint jc-back">came back once</span>}</div></td>
-        <td className="nowrap">{step === "requests" ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
-      </tr>
-      {open && <tr className="prf-more"><td colSpan={cols}>
-        <div className="prf-open">
-          <div className="prf-steps">
-            <div className="imp-l">What&apos;s happened</div>
-            {!it.orderId ? <div className="faint" style={{ fontSize: 12.5 }}>{it.mockupIds?.length || 0} mockup{it.mockupIds?.length === 1 ? "" : "s"} made for {it.customer}, no order yet.</div>
-              : !hist ? <div className="faint" style={{ fontSize: 12.5 }}>Loading…</div>
-              : hist.length ? <ol>{hist.map((x, i) => <li key={i} className={x.tone}><b>{x.what}</b><span>{stamp(x.at)}{x.who ? ` · ${x.who.split("@")[0]}` : ""}</span>{x.detail && <small>{x.detail}</small>}</li>)}</ol>
-              : <div className="faint" style={{ fontSize: 12.5 }}>Nothing sent yet.</div>}
-          </div>
-          <div className="prf-acts">
-            {fixes}
-            {it.type === "order" && out && <SendProofTool target={{ kind: "order", orderId: it.orderId! }} mode="copy" onDone={after} />}
-            {it.orderId && <Link className="btn sm" href={`/shop/orders/${it.orderId}?tab=msg`}>Message</Link>}
-            {it.orderId && <Link className="btn sm" href={`/shop/orders/${it.orderId}`}>Open order</Link>}
-            {it.type === "order" && step !== "approved" && (asking
-              ? <span className="jc-decl"><input type="text" autoFocus placeholder="Why? (optional)" value={why} onChange={(e) => setWhy(e.target.value)} aria-label="Why it was declined" />
-                  <button type="button" className="btn sm" onClick={() => setAsking(false)}>Cancel</button>
-                  <button type="button" className="btn sm danger" disabled={busy} onClick={() => void go(() => markDeclined(it.orderId!, why), "Moved to Declined.")}>Mark declined</button></span>
-              : <button type="button" className="btn sm" onClick={() => setAsking(true)}>Mark declined</button>)}
-          </div>
-        </div>
-      </td></tr>}
-    </>
+    <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
+      <td>{who}</td>
+      <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
+      <td>{step === "requests" ? <span className="nowrap">{it.qty || 0} pcs</span> : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
+        : <div className="jc-tags">{here.map(tag)}</div>}</td>
+      <td><div className="jc-tags sm">{(step === "approved" ? [] : also).map(tag)}{it.revised && step !== "changes" && <span className="faint jc-back">came back once</span>}</div></td>
+      <td className="nowrap">{step === "requests" ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
+    </tr>
   );
 }
