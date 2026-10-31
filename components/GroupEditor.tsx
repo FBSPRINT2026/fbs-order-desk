@@ -8,7 +8,7 @@ import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
 import MockupBg from "@/components/MockupBg";
-import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway, withLogoSetup } from "@/lib/brands";
+import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway, sewKindOf, withLogoSetup } from "@/lib/brands";
 import ColorwayChange from "@/components/ColorwayChange";
 import { hasColorwayArt, printArtUrl } from "@/lib/designs";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -405,7 +405,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const canSplit = !!printColorway(d, cur) && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1;
     return <ColorwaySwap d={cur} im={d} urls={designUrls || {}} mockupNo={g.masterMockup || g.fromMockup?.number || null} disabled={fixed || printsFixed}
       split={isCw(d) ? cwChangeText(d) : undefined} onSplit={canSplit ? () => setCwcAt(di) : undefined}
-      onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw); if (isCw(x.imprints[di])) sortLines(x); }); redrawSoon(); }} />;
+      onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw, sewKindOf(x.lines)); if (isCw(x.imprints[di])) sortLines(x); }); redrawSoon(); }} />;
   };
   /** "B Maroon / Off White  ⟳  A Maroon / Black · EB530 Charcoal Gray (12)" */
   const cwChangeText = (d: Imprint) => {

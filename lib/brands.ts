@@ -147,8 +147,14 @@ export function colorwayFor(d: Pick<Design, "specs">, brand: Brand | null | unde
 }
 
 /** the sew file linked to a colorway (Colorway.sew), if it has one */
-export function colorwaySew(d: Pick<Design, "specs">, cw: Colorway | null | undefined, brand?: Pick<Brand, "colors"> | null): SewFile | null {
-  return cw?.sew ? sewFilesOf(d, brand).find((f) => f.code === cw.sew) || null : null;
+export function colorwaySew(d: Pick<Design, "specs">, cw: Colorway | null | undefined, brand?: Pick<Brand, "colors"> | null, /** the goods it sews on (sewKindOf) */ kind?: SewKind): SewFile | null {
+  const files = sewFilesOf(d, brand);
+  const linked = cw?.sew ? files.find((f) => f.code === cw.sew) || null : null;
+  if (!kind || !linked || (linked.kind || "flat") === kind) return linked;
+  // the same colorway digitized for these goods (Oct 31, Nick: MEI's bag files): a file of that kind sewing the linked
+  // one's threads; none, the linked one
+  const th = (f: SewFile) => sewThreads(f).map((x) => x.toLowerCase()).sort().join("|");
+  return files.find((f) => (f.kind || "flat") === kind && th(f) === th(linked)) || linked;
 }
 /** a print with its sew file as the logo has it now (Oct 31): the threads we really run on each needle may have been set on
  *  the logo since the print took its copy of the file (lib/brands.ts withStandards) */
@@ -266,14 +272,14 @@ export function printColorway(im: Pick<Imprint, "colorway" | "inks" | "emb">, d:
  * that file's threads, stitches and size. The picture becomes the colorway's own: the inks painted before, the saved
  * tile and any color change were for the old version, so they're dropped.
  */
-export function applyColorway(im: Imprint, d: Pick<Design, "specs">, cw: Colorway): Imprint {
+export function applyColorway(im: Imprint, d: Pick<Design, "specs">, cw: Colorway, /** the goods it sews on: that kind's file (a bag's) */ kind?: SewKind): Imprint {
   const x: Imprint = { ...im, colorway: cw.name };
   delete x.inkMap; delete x.shownArt; delete x.inkBy; x.inkChanges = 0;
   if (im.method === "embroidery") {
-    const linked = colorwaySew(d, cw), was = im.emb?.file as SewFile | undefined;
+    const linked = colorwaySew(d, cw, undefined, kind), was = im.emb?.file as SewFile | undefined;
     // the colorway's file for the size and kind this print sews: the linked one, or one cut the same as the old file
     // that sews the linked one's threads
-    const same = (f: SewFile) => !!was && (f.kind || "flat") === (was.kind || "flat") && Math.abs((f.wIn || 0) - (was.wIn || 0)) < 0.06;
+    const same = (f: SewFile) => !!was && (f.kind || "flat") === (kind || was.kind || "flat") && Math.abs((f.wIn || 0) - (was.wIn || 0)) < 0.06;
     const sew = !linked || !was || same(linked) ? linked : sewFilesOf(d).find((f) => same(f) && sewThreads(f).join() === sewThreads(linked).join()) || linked;
     const th = sewThreads(sew);
     const inks = th.length ? th : cw.inks;
@@ -302,7 +308,8 @@ export function printOnColor(im: Imprint, d: Pick<Design, "specs"> | null | unde
   if (!cw || !d) return im;
   const base: Imprint = { ...im };
   delete base.colorwayBy; delete base.inkBy;
-  return applyColorway(base, d, cw);
+  // the same kind of goods as the print's own file (a bag's colorway sews the bag file)
+  return applyColorway(base, d, cw, ((im.emb?.file as SewFile | undefined)?.kind) || undefined);
 }
 /**
  * A logo put on a print brings what the logo already knows (Oct 31, Nick: "when you bring in a master logo that's been
@@ -322,8 +329,9 @@ export function withLogoSetup(im: Imprint, d: Pick<Design, "id" | "specs"> | nul
   const main = mainLine(goods.length ? goods : lines);
   const cw = printColorway(x, d) || (fresh && cws.length ? colorwayFor(d, brand, main ? isDarkGarment(main) : false) : null);
   if (im.method === "embroidery") {
-    const files = sewFilesOf(d, brand), linked = cw ? colorwaySew(d, cw, brand) : null;
-    if (fresh && cw && linked) return applyColorway(x, d, cw);
+    const kind = sewKindOf(lines);
+    const files = sewFilesOf(d, brand), linked = cw ? colorwaySew(d, cw, brand, kind) : null;
+    if (fresh && cw && linked) return applyColorway(x, d, cw, kind);
     if (!files.length || (x.emb?.file?.path && files.some((f) => f.path === x.emb!.file!.path))) { if (cw && !x.colorway && fresh) x.colorway = cw.name; return x; }
     const w = /(\d+(?:\.\d+)?)/.exec(x.size || "");
     const f = linked || pickSewFile(files, sewKindOf(lines), w ? +w[1] : undefined);

@@ -18,7 +18,7 @@ import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
 import type { RosterSpec } from "@/lib/rosterArt";
-import { applyColorway, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
+import { applyColorway, sewKindOf, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
 import ColorwaySwap from "@/components/ColorwaySwap";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
@@ -4328,7 +4328,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         here… I don't want to bring it in the wrong way"): its inks or threads, sew file and picture */}
                     {p.d && !(im.visualOnly && !im.confirmed) && <ColorwaySwap d={p.d} im={im} urls={urls} onPick={(cw) => {
                       const dz = p.d!;
-                      setImprints((xs) => xs.map((x) => (x.id === im.id ? applyColorway(x, dz, cw) : x)));
+                      setImprints((xs) => xs.map((x) => (x.id === im.id ? applyColorway(x, dz, cw, sewKindOf(lines)) : x)));
                       setPaints((pp) => { const n = { ...pp }; delete n[im.id]; return n; });
                       setCwTick((t) => t + 1);
                     }} />}

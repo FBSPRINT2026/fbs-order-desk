@@ -16987,3 +16987,5 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .pr-sup .check{font-weight:600}
 .pr-sup .faint{font-size:12.5px}
 .pr-sup-box{flex:1 1 100%}
+
+.lg-newkind{width:auto;height:30px;padding:0 8px;font-size:13px;margin-right:6px}

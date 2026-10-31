@@ -17,7 +17,6 @@ import { ThreadSelect } from "@/components/InkSelect";
 import { fitLabel } from "@/lib/inkShort";
 import { colorsText, colorwayUses, inkColor, logoColors, parseColors, setStandardThread } from "@/lib/logoColors";
 import { useCan } from "@/components/RoleContext";
-import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
 import LogoResearch, { type LogoHistory, type Sew } from "@/components/LogoResearch";
 import { LogoFace, onShirtsOf } from "@/components/LogoOnShirts";
@@ -72,6 +71,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [editing, setEditing] = useState(false);
   const [details, setDetails] = useState(false);
   const [sewBusy, setSewBusy] = useState(false);
+  /** the kind of goods new sew files are for (Oct 31, Nick: "these are specifically for sewing a bag") */
+  const [sewKind, setSewKind] = useState<keyof typeof SEW_KINDS>("flat");
   const [brands, setBrands] = useState<Brand[]>([]);
   const [colEdit, setColEdit] = useState<string | null>(null);
   const [cwEdit, setCwEdit] = useState<number | null>(null);
@@ -151,16 +152,11 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     if (!d || !files?.length) return;
     setSewBusy(true); setMsg("");
     try {
-      const { expandFiles, takeDigitized } = await import("@/lib/digitizedFiles");
-      const have = sewFilesOf(d), code = nextSewCode(have), name = tajimaName(d.number, Number(code.slice(1)));
-      const named = await Promise.all((await expandFiles([...files])).map((f) => tajimaFile(f, name)));
-      const { set } = await takeDigitized(sb, d.id, named, { link: false });
+      const { addSewFiles } = await import("@/lib/sewAdd");
+      const added = await addSewFiles(sb, d, [...files], { kind: sewKind });
       const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
-      const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
-      const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), { ...set, code, kind: "flat" }] } };
-      const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
-      if (error) throw new Error(error.message);
-      setD({ ...d, specs: specs as Design["specs"] }); setMsg(`${name} added`);
+      setD({ ...d, specs: (data?.specs || d.specs) as Design["specs"] });
+      setMsg(`${added.map((f) => f.name.replace(/\.dst$/i, "")).join(", ")} added (${SEW_KINDS[sewKind]})`);
     } catch (e) { setMsg(e instanceof Error ? e.message : "Couldn't add the sew file."); }
     setSewBusy(false);
   }
@@ -385,7 +381,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           {tab === "emb" && (
             <div className="lgx-tab">
               <div className="panel-h"><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet, made at one size for one spot" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
-                <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
+                <span className="spacer" /><select className="lg-newkind" aria-label="New sew files are for" title="The kind of goods the new sew files are for: a group of those goods sews them" value={sewKind} onChange={(e) => setSewKind(e.target.value as keyof typeof SEW_KINDS)}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>For {l.toLowerCase()}</option>)}</select><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
                 <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th>{anyUsed && <th>Last used</th>}<th>Files</th></tr></thead>
                 <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (a.f.code || "").localeCompare(b.f.code || "", undefined, { numeric: true })).map(({ f, i }) => (

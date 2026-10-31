@@ -23,12 +23,7 @@ const colorsText = (cs: BrandColor[]) => cs.map((c) => [c.name, c.pms || "", c.h
 const parseColors = (t: string): BrandColor[] => t.split("\n").map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[0]).map(([name, pms, hex, thread]) => ({ name, ...(pms ? { pms } : {}), hex: /^#?[0-9a-f]{6}$/i.test(hex || "") ? (hex.startsWith("#") ? hex : "#" + hex) : "#888888", ...(thread ? { thread } : {}) }));
 
 /** a DST renamed for the Tajima: the file name and its LA header both say D{number}E{n} */
-export async function tajimaFile(f: File, code: string): Promise<File> {
-  const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toUpperCase();
-  const buf = new Uint8Array(await f.arrayBuffer());
-  if (ext === ".DST" && String.fromCharCode(buf[0], buf[1], buf[2]) === "LA:") buf.set(new TextEncoder().encode(code.padEnd(16, " ").slice(0, 16)), 3);
-  return new File([buf], `${code}${ext === ".PDF" ? " worksheet.pdf" : ext}`, { type: f.type || "application/octet-stream" });
-}
+export { tajimaFile } from "@/lib/sewAdd";
 
 /** "M-1108, 1109" → [1108, 1109] */
 const nums = (s: string) => [...new Set((s.match(/\d{1,7}/g) || []).map(Number).filter((n) => n > 0))];
@@ -92,17 +87,10 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
     if (!files?.length) return;
     setBusy("sew" + d.id); setErr("");
     try {
-      const { expandFiles, takeDigitized } = await import("@/lib/digitizedFiles");
-      const have = sewFilesOf(d), code = nextSewCode(have), name = tajimaName(d.number, Number(code.slice(1)));
-      const named = await Promise.all((await expandFiles([...files])).map((f) => tajimaFile(f, name)));
-      const { set } = await takeDigitized(sb, null, named);
-      const sew: SewFile = { ...set, code, kind, placement: place.trim() || undefined };
+      const { addSewFiles } = await import("@/lib/sewAdd");
+      await addSewFiles(sb, d, [...files], { kind, placement: place });
       const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
-      const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
-      const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), sew] } };
-      const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
-      if (error) throw new Error(error.message);
-      setDs(ds.map((x) => (x.id === d.id ? { ...x, specs } : x)));
+      setDs(ds.map((x) => (x.id === d.id ? { ...x, specs: (data?.specs as typeof x.specs) || x.specs } : x)));
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't add the sew file."); }
     setBusy("");
   }
