@@ -33,6 +33,14 @@ const key = (customerId: string) => `training_chat:${customerId}`;
 const MAX_IMG = 3_600_000, MAX_PDF = 24_000_000;
 const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 
+/** a proposed training is only the training: anything from the prompt's other parts that came along is cut off */
+function cutLeaks(t: string) {
+  let s = t.replace(/<\/?training>/g, "").trim();
+  const at = s.search(/\n\s*(<\/?(customer|brands|logos|worked_examples|files|training_name|used_when|conversation|staff_now_says)>|ORDERS STAFF CHECKED RIGHT|WHAT CAME IN:|THE ORDER MADE:)/);
+  if (at > 0) s = s.slice(0, at).trim();
+  return s;
+}
+
 async function download(admin: SupabaseClient, path: string, max: number) {
   const { data } = await admin.storage.from("proofs").download(path);
   if (!data) return null;
@@ -106,17 +114,20 @@ export async function trainingChat(admin: SupabaseClient, s: Settings, customerI
     } else skipped.push(f.name);
   }
 
+  // each part in its own tags, the training last before the conversation, so the training's end is plain (Oct 30: without
+  // them Claude copied the logos and examples that followed it into the training)
+  const tag = (name: string, body: string) => `<${name}>\n${body}\n</${name}>`;
   const prompt = [
-    `Customer: ${cur.name}`,
-    `Training name: ${base.name || "(none)"}\nUsed when the job says (comma-separated words): ${base.when || "(every job of theirs)"}`,
-    `THE TRAINING NOW (${base.training.length} of ${TRAINING_MAX} characters):\n${base.training || "(none yet)"}`,
-    cur.brands.length ? `Their brands (set on their Brand standards, not in the training): ${cur.brands.map((b) => `${b.name} ${JSON.stringify(b.rules || {})}${b.notes ? ` · notes: ${String(b.notes).slice(0, 300)}` : ""}`).join(" | ")}` : "",
-    cur.logos.length ? `Their logos: ${cur.logos.map((l) => `D-${l.number} "${l.name || ""}"${l.inks ? ` (${l.inks})` : ""}`).join("; ")}` : "Their logos: none on file",
-    cur.examples.length ? `ORDERS STAFF CHECKED RIGHT (worked examples Create order also reads):\n${cur.examples.map((x, i) => `--- ${i + 1}. ${x.title}\nWHAT CAME IN:\n${x.source_text.slice(0, 1500)}\nTHE ORDER MADE:\n${x.order_text.slice(0, 2500)}`).join("\n\n")}` : "Worked examples: none yet",
-    `Files attached for you: ${[...documents.map((d) => d.label), ...images.map((x) => x.label)].join(" | ") || "none"}${skipped.length ? `\nCouldn't read: ${skipped.join(", ")}` : ""}`,
-    ...words,
-    thread.length ? `The conversation so far:\n${thread.slice(-16).map((m) => `${m.role === "staff" ? `Staff${m.by ? ` (${m.by.split("@")[0]})` : ""}` : "You"}: ${m.text}${m.files?.length ? ` [attached ${m.files.map((f) => f.name).join(", ")}]` : ""}${m.proposal ? ` (you proposed a new training: ${m.status || "open"})` : ""}`).join("\n")}` : "",
-    `Staff now says: ${msg || "(see the attached files)"}`,
+    tag("customer", cur.name),
+    cur.brands.length ? tag("brands", `Set on their Brand standards, not in the training:\n${cur.brands.map((b) => `${b.name} ${JSON.stringify(b.rules || {})}${b.notes ? ` · notes: ${String(b.notes).slice(0, 300)}` : ""}`).join("\n")}`) : "",
+    tag("logos", cur.logos.length ? cur.logos.map((l) => `D-${l.number} "${l.name || ""}"${l.inks ? ` (${l.inks})` : ""}`).join("\n") : "none on file"),
+    tag("worked_examples", cur.examples.length ? `Orders staff checked right (Create order also reads the closest of these):\n${cur.examples.map((x, i) => `--- ${i + 1}. ${x.title}\nWHAT CAME IN:\n${x.source_text.slice(0, 1500)}\nTHE ORDER MADE:\n${x.order_text.slice(0, 2500)}`).join("\n\n")}` : "none yet"),
+    tag("files", `${[...documents.map((d) => d.label), ...images.map((x) => x.label)].join(" | ") || "none attached"}${skipped.length ? `\nCouldn't read: ${skipped.join(", ")}` : ""}${words.length ? `\n\n${words.join("\n\n")}` : ""}`),
+    tag("training_name", base.name || "(none)"),
+    tag("used_when", base.when || "(every job of theirs)"),
+    tag("training", base.training || "(none yet)"),
+    thread.length ? tag("conversation", thread.slice(-16).map((m) => `${m.role === "staff" ? `Staff${m.by ? ` (${m.by.split("@")[0]})` : ""}` : "You"}: ${m.text}${m.files?.length ? ` [attached ${m.files.map((f) => f.name).join(", ")}]` : ""}${m.proposal ? ` (you proposed a new training: ${m.status || "open"})` : ""}`).join("\n")) : "",
+    tag("staff_now_says", msg || "(see the attached files)"),
   ].filter(Boolean).join("\n\n");
 
   const r = await askClaude<{ reply: string; question?: string; training?: string; name?: string; when?: string }>({
@@ -125,13 +136,13 @@ export async function trainingChat(admin: SupabaseClient, s: Settings, customerI
     tool: { name: "answer", description: "Your reply, and the training rewritten when it should change.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, a few sentences: what you understood and what you changed (or the answer to their question). Don't paste the training; the changes are shown from it." },
       question: { type: "string", description: "One question, only when something that matters is unclear or two things disagree." },
-      training: { type: "string", description: `The WHOLE training after the change (it replaces the saved one), at most ${TRAINING_MAX} characters. Leave it out when nothing should change.` },
+      training: { type: "string", description: `The WHOLE training after the change: the text inside <training> with your changes made, nothing from the other tags (it replaces the saved one), at most ${TRAINING_MAX} characters. Leave it out when nothing should change.` },
       name: { type: "string", description: "A new training name, only when it should change (e.g. the end client: All My Sons)." },
       when: { type: "string", description: "New words that pick this training out of a job's subject or body, comma-separated, only when they should change (e.g. AMS, All My Sons). Empty = every job of theirs." },
     }, required: ["reply"] } },
     system: `${SHOP_CONTEXT(s)}
 
-You're helping the shop keep a customer's ORDER TRAINING: the playbook Create order (the AI that reads an email, a PO or a ClickUp job and makes the order) follows for this customer's jobs. Create order reads the training in full before every job of theirs, as "HOW TO MAKE <CUSTOMER>'S ORDERS", and it wins over its general rules. It also reads the closest worked examples (orders staff checked right). Staff talk the training through with you or attach paperwork (a PO, an order sheet, a confirmation) and you keep the training right.
+You're helping the shop keep a customer's ORDER TRAINING (the text in <training>): the playbook Create order (the AI that reads an email, a PO or a ClickUp job and makes the order) follows for this customer's jobs. Create order reads the training in full before every job of theirs, as "HOW TO MAKE <CUSTOMER>'S ORDERS", and it wins over its general rules. It also reads the closest worked examples (orders staff checked right). Staff talk the training through with you or attach paperwork (a PO, an order sheet, a confirmation) and you keep the training right.
 
 Write it the way it's written now: plain sentences, short sections with a heading in capitals and a colon (JOB:, GROUPS, PRINTS, PERSONALIZATION:, PRICES:, SHIPPING, NOT STANDARD (ask):). Say exactly what to make: what to name the job, which PO number, how garments are split into groups and what each group is called, which logo by D-number on which spot (spots: ${LOCATIONS.join(", ")}) at what size, inks or threads, which garments sew or print somewhere else, personalization, pricing, goods (who supplies the blanks), shipping, and what's not standard so it asks. Use style numbers and D-numbers, not descriptions alone.
 Change only what staff asked for or what the attached paperwork shows; keep everything else word for word, in the same order. When staff correct something, fix it everywhere it's said in the training. When a rule is new, put it in the section it belongs to. Don't invent rules nobody stated; when an attached PO or a worked example shows a pattern staff haven't said, you may propose it and say so in the reply.
@@ -142,7 +153,7 @@ Brands' rules (mockups on new orders, standard mockups, dark-goods ink) are set 
   });
   if (!r.ok) return { ok: false, error: r.error };
   const d = r.data;
-  const nextT = typeof d.training === "string" ? d.training.trim().slice(0, TRAINING_MAX) : null;
+  const nextT = typeof d.training === "string" ? cutLeaks(d.training).slice(0, TRAINING_MAX) : null;
   const proposal: TrainProposal | null = nextT !== null || d.name || d.when !== undefined ? {
     training: nextT ?? base.training,
     ...(d.name && d.name.trim() !== base.name ? { name: d.name.trim().slice(0, 120) } : {}),
