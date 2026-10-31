@@ -403,8 +403,9 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
   const out = new Map<string, StdMockup>();
   const { data: bs } = await admin.from("brands").select("name, rules").eq("customer_id", custId).is("archived_at", null);
   const byBrand = new Map(((bs || []) as { name: string; rules: { mockups?: number[] } | null }[]).filter((b) => b.rules?.mockups?.length).map((b) => [b.name, b.rules!.mockups!]));
-  if (!byBrand.size) return out;
-  const nums = [...new Set([...byBrand.values()].flat())];
+  // the brands' standard mockups, and every saved mockup a group was made from (lib/masterMockups.ts)
+  const nums = [...new Set([...[...byBrand.values()].flat(), ...groups.map((g) => g.masterMockup || 0).filter(Boolean)])];
+  if (!nums.length) return out;
   const { data: ms } = await admin.from("mockups").select("number, title, file_path, design_ids, snapshot, created_at").eq("customer_id", custId).in("number", nums).is("archived_at", null).order("created_at", { ascending: false });
   const rows = (ms || []) as (StdMockup & { created_at: string })[];
   // the same logos at the same spots (Oct 30: M-1117, D-10301 on the shorts' Left Leg, isn't a black polo's Left Chest)
@@ -414,10 +415,10 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
   const allIds = [...new Set(groups.flatMap((g) => g.imprints.map((im) => im.design_id).filter(Boolean) as string[]))];
   const { data: ds } = allIds.length ? await admin.from("designs").select("id, preview_path, file_path").in("id", allIds) : { data: [] };
   for (const g of groups) {
-    if ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand))) continue;
-    const want = key(g.imprints);
-    const own = byBrand.get(g.imprints[0].fromBrand!)!;
-    const m = rows.find((r) => own.includes(r.number) && keyOf(r) === want);
+    // a master mockup's group (lib/masterMockups.ts) is that mockup; any other group gets one with the same logos at the same spots
+    const master = g.masterMockup ? rows.find((r) => r.number === g.masterMockup) : null;
+    if (!master && ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand)))) continue;
+    const m = master || rows.find((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number) && keyOf(r) === key(g.imprints));
     if (!m) continue;
     g.mockupThumbs = [m.file_path.replace(/\.png$/i, "-thumb.png")];
     g.mockupAt = new Date().toISOString();

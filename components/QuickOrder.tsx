@@ -863,6 +863,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           const was = sp.lastW / sp.lastH, now = 1 / r;
           if (now > was * 1.12) { const sug = Math.round(sp.lastW * (now / was) * 4) / 4; if (sug <= spotFor(im.location).maxW) sp.flag = { text: `This art is wider than ${im.sameAs?.label.replace(/^(#\d+).*/, "$1") || "last time"}'s (${sp.lastW}" × ${sp.lastH}"). Same ${sp.lastW}", or ${sug}"?`, size: sug }; }
         }
+        // a master mockup's prints are the mockup's, as they are (lib/masterMockups.ts): nothing read off the art
+        if (x.masterMockup) {
+          if (w > 0) sp.size = w;
+          sp.sizeWhy = `Master mockup M-${x.masterMockup}`;
+          if (im.inks) { sp.inks = im.inks; sp.inksWhy = `Master mockup M-${x.masterMockup}`; }
+          delete sp.flag; delete sp.ub; delete sp.ubWhy;
+        }
         specs[im.id] = sp;
       }
       d = { ...d, specs };
@@ -1856,8 +1863,22 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                 <span className="faint" data-notranslate>{Object.entries(l.sizes || {}).filter(([, q]) => +q).sort(([a], [b]) => sizeRank(a) - sizeRank(b)).map(([z, q]) => `${z} ${q}`).join(" · ")}</span>
               </div>
             ))}
+            {/* a master mockup's group: the mockup is the answer, nothing to pick (Oct 30, Nick: "boom, use mockup this number…
+                there's nothing to worry about") */}
+            {g.masterMockup ? (
+              <div className="rv-master">
+                <Pic path={g.mockupThumbs?.[0]} big />
+                <div className="rv-master-t">
+                  <b>Master mockup M-{g.masterMockup}</b>
+                  {[...g.imprints].sort((x, y) => spotRank(x.location) - spotRank(y.location)).map((im) => (
+                    <span key={im.id} data-notranslate>{im.location}{parseFloat(String(im.size || "")) > 0 ? `, ${parseFloat(String(im.size))}" wide` : ""}{im.inks ? ` · ${im.inks}` : ""}{Object.keys(im.spotBy || {}).length ? ` · ${g.lines.filter((l) => im.spotBy?.[l.id]).map((l) => `${l.style} on the ${im.spotBy![l.id]}`).join(", ")}` : ""}</span>
+                  ))}
+                  <span className="faint">Prints and picture from the mockup; only the garments and quantities were read.</span>
+                </div>
+              </div>
+            ) : null}
             {/* front first, then the back, then sleeves (Oct 23, Nick: "can you do the front first and the back second?") */}
-            {[...g.imprints].sort((x, y) => spotRank(x.location) - spotRank(y.location)).map((im) => {
+            {!g.masterMockup && [...g.imprints].sort((x, y) => spotRank(x.location) - spotRank(y.location)).map((im) => {
               const cur = art[im.id] || "";
               // art pulled off our own mockup sheet (the files step already said "I'll use its art"): that's the logo, not
               // asked again (Oct 23, Nick: "you already have the mockup. You said, I'm good to go. And then you ask their
@@ -1896,7 +1917,7 @@ function ReviewConfirm({ a, onCancel }: { a: ReviewAsk; onCancel: () => void }) 
                 </div>
               );
             })}
-            {g.imprints.length > 1 && <label className="rv-same-inks"><input type="checkbox" checked={!!sameInks[g.id]} onChange={(e) => setSameInks((x) => ({ ...x, [g.id]: e.target.checked }))} /> Same inks on all its prints</label>}
+            {g.imprints.length > 1 && !g.masterMockup && <label className="rv-same-inks"><input type="checkbox" checked={!!sameInks[g.id]} onChange={(e) => setSameInks((x) => ({ ...x, [g.id]: e.target.checked }))} /> Same inks on all its prints</label>}
             {qs.map(({ i }) => Q(i))}
           </section>
         );

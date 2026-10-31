@@ -317,6 +317,8 @@ export type Group = { id: string; name?: string; /** priced by a program design'
   neckLabel?: string; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** the mockup was made in the logo builder (Add logo): Edit mockup opens it there (lib/mockupFresh.ts mockupHref) */ mockupKind?: "logo";
+  /** the group is a brand's master mockup (lib/masterMockups.ts): its prints and picture came from M-<number>, and only
+   *  its garments and quantities were read off the paperwork */ masterMockup?: number;
   /** what the saved pictures were drawn from: when it changes they're drawn again by themselves (lib/mockupFresh.ts) */ mockupArt?: import("@/lib/mockupFresh").MockupArt;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];

@@ -1,5 +1,6 @@
 import { fillFromLogo, logosOnFile, mergeLogoGroups } from "@/lib/ai/logosOnFile";
 import "server-only";
+import { applyMasters, loadCatalog, loadMasters } from "@/lib/masterMockups";
 import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -424,7 +425,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30k";
+export const READER_REV = "2026-10-30l";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -1053,6 +1054,13 @@ ${staffSays}` : ""}`;
   };
   // a reorder of a Printavo job: the inks its notes name go on the prints, for production to confirm
   if (job?.ref.startsWith("a:")) await fillFromOldNotes(admin, settings, draft, by, a.customer_id).catch((e) => console.warn("fillFromOldNotes", e));
+  // the customer's master mockups (lib/masterMockups.ts): a garment whose style one covers goes straight into its group,
+  // with the mockup's prints; only its styles, colors and quantities come from the paperwork
+  if (a.customer_id && draft.kind === "new") {
+    const [ms, cat] = await Promise.all([loadMasters(admin, a.customer_id as string).catch(() => []), loadCatalog(admin, a.customer_id as string).catch(() => [])]);
+    const did = applyMasters(draft, ms, cat, `${a.subject || ""} ${String(a.body || "").slice(0, 4000)}`);
+    if (did.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Master mockups: ${did.join(", ")}.`.slice(0, 1200);
+  }
   const row = {
     kind: o.part ? "draft_order_part" : "draft_order", dedupe_key: o.part ? `email:${o.part.anchor || C.id}:order:${o.part.key}` : `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
     customer_id: a.customer_id, order_id: null, activity_id: C.id,
