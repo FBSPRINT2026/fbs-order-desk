@@ -16918,3 +16918,16 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
   .ord .ed-grid{grid-template-columns:minmax(0,1fr)}
   .ord .ed-aside{position:static}
 }
+/* the 2XL+ charge under a size box hangs below it: a personalization row under the line clears it (Oct 31) */
+html body .ord .line-b .gl:has(.a-sz .szc > :is(small.upc,.upc-btn)) > .gl-pers:not(.gl-pers ~ .gl-pers){margin-top:16px}
+/* The right-side tool panels: narrower by default, and as wide as the person drags them (components/DockSizer.tsx, Oct 31) */
+.dla-bg.dock{width:min(var(--dock-w,440px),100vw)}
+.dla-bg.dock.wide{width:min(var(--dock-w,540px),100vw)}
+body:has(.dla-bg.dock:not(.og-hidden)){padding-right:min(var(--dock-w,440px),100vw)}
+body:has(.dla-bg.dock.wide:not(.og-hidden)){padding-right:min(var(--dock-w,540px),100vw)}
+@media (max-width:760px){body:has(.dla-bg.dock){padding-right:0}}
+.dla-bg.dock > .dla{position:relative}
+.dla-bg.dock > .dla::before{content:"";position:absolute;left:-3px;top:0;bottom:0;width:10px;cursor:col-resize;z-index:6}
+.dla-bg.dock > .dla::after{content:"";position:absolute;left:3px;top:50%;width:4px;height:38px;margin-top:-19px;border-radius:2px;background:var(--line);pointer-events:none;z-index:6}
+.dla-bg.dock > .dla:hover::after{background:var(--ink-3)}
+body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:none!important}

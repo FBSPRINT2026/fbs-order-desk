@@ -326,7 +326,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     // each section's picture has its own background (Group.mockupBgBy, Oct 31, Nick: "change the background on the
     // individual colorway swatches"), else its garment with the most pieces
     const auto = l ? hexOfColor(l.color) : "#9aa1ab", bgKey = (v.to || "").trim().toLowerCase();
-    const hex = g.mockupBgBy?.[bgKey] || auto, bg = tileBg(bgKey, auto);
+    const hex = bgOf(bgKey) || auto, bg = tileBg(bgKey, auto);
     let color = `Group ${String.fromCharCode(66 + i)}`;
     if (v.cw) {
       // a colorway change: that colorway's own picture, as it is (its inks painted on the logo when it has none)
@@ -354,13 +354,33 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     for (const l of g.lines) { const n = (l.color || "").trim(); if (!n) continue; const k = n.toLowerCase(); const was = by.get(k); by.set(k, { name: n, hex: was?.hex || hexOfColor(n), pcs: (was?.pcs || 0) + lineQty(l) }); }
     return [...by.values()].sort((a, b) => b.pcs - a.pcs);
   };
-  /** a section's picture background swatch (components/MockupBg.tsx), saved by section in Group.mockupBgBy */
+  /**
+   * The first section's close-up and a logo mockup's picture are one background (Oct 31, Nick: "the box on the left when
+   * you have a split colorway, A and that box should mirror each other"): that section's swatch is Group.mockupBg (the
+   * picture is drawn again with it); the other sections keep their own (Group.mockupBgBy).
+   */
+  const firstSecKey = (() => {
+    const d0 = g.imprints.find((x) => versionsOf(x).length > 0);
+    if (!d0 || !isCw(d0)) return ASIS_BG;
+    const des = designOf(d0), base = des ? printColorway(d0, des) : null;
+    if (!des || !base) return ASIS_BG;
+    const first = [base.name, ...versionsOf(d0).map((v) => v.to)].sort((a, b) => cwLetter(des, { name: a }).localeCompare(cwLetter(des, { name: b })))[0];
+    return first === base.name ? ASIS_BG : first.trim().toLowerCase();
+  })();
+  const bgShared = (key: string) => g.mockupKind === "logo" && key === firstSecKey;
+  const bgOf = (key: string) => (bgShared(key) ? g.mockupBg : g.mockupBgBy?.[key]) || "";
+  /** a section's picture background swatch (components/MockupBg.tsx) */
   const tileBg = (key: string, auto: string) => (fixed || printsFixed ? null : (
-    <MockupBg small value={g.mockupBgBy?.[key]} auto={auto} colors={bgColors()} onPick={(hex) => update((x) => {
-      const m = { ...(x.mockupBgBy || {}) };
-      if (hex) m[key] = hex; else delete m[key];
-      if (Object.keys(m).length) x.mockupBgBy = m; else delete x.mockupBgBy;
-    })} />
+    <MockupBg small value={bgOf(key) || undefined} auto={auto} colors={bgColors()} onPick={(hex) => {
+      const shared = bgShared(key);
+      update((x) => {
+        if (shared) { if (hex) x.mockupBg = hex; else delete x.mockupBg; return; }
+        const m = { ...(x.mockupBgBy || {}) };
+        if (hex) m[key] = hex; else delete m[key];
+        if (Object.keys(m).length) x.mockupBgBy = m; else delete x.mockupBgBy;
+      });
+      if (shared) redrawSoon();
+    }} />
   ));
   /** the print's color change count and its Change button (in the read-out and the form) */
   const ccRow = (d: Group["imprints"][number], di: number) => {
@@ -1171,7 +1191,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? g.mockupBgBy?.[ASIS_BG] || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">

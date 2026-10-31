@@ -17,6 +17,7 @@ import SameArtPrompt from "@/components/SameArtPrompt";
 import ArtboardPrompt from "@/components/ArtboardPrompt";
 import StockInkSeed from "@/components/StockInkSeed";
 import MockupFreshener from "@/components/MockupFreshener";
+import DockSizer from "@/components/DockSizer";
 
 export const dynamic = "force-dynamic";
 // the shop's server actions (the Order chat reading a big PDF and making many edits) get up to 5 minutes
@@ -63,6 +64,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
+        <DockSizer />
         <OrderCheckDock />
         <CreateOrderDock />
         <OrderGoodsDock />
