@@ -839,6 +839,23 @@ export const garmentHex = (supplierHex: string | null | undefined, name: string)
  * how many times have we talked about this… permanently fix this problem throughout the site": #40188's tote showed
  * cream in its mockup and gray on the order).
  */
+/**
+ * The garment a group is shown on: the color with the most pieces (Oct 31, Nick: "there's 100 black, 20 navy, and 10
+ * charcoal, then just pick black"), the first one on a tie or when nothing has quantities yet. Every place that shows a
+ * group's prints on one color (the order's print tiles, the logo mockup's picture, the small print pictures) uses it.
+ */
+export function mainLine<L extends { color?: string; hex?: string; shade?: string; style?: string; sizes?: Record<string, unknown> | null }>(lines: L[] | null | undefined): L | undefined {
+  const ls = (lines || []).filter((l) => (l.color || "").trim() || l.hex);
+  if (!ls.length) return (lines || [])[0];
+  const qty = (l: L) => Object.values(l.sizes || {}).reduce((a: number, v) => a + (Number(v) || 0), 0);
+  // pieces by color, so one color split over several lines (sizes, styles) counts together
+  const key = (l: L) => (l.color || l.hex || "").trim().toLowerCase();
+  const by = new Map<string, number>();
+  for (const l of ls) by.set(key(l), (by.get(key(l)) || 0) + qty(l));
+  let best = ls[0];
+  for (const l of ls) if ((by.get(key(l)) || 0) > (by.get(key(best)) || 0)) best = l;
+  return best;
+}
 export const lineColor = (l: { color?: string; hex?: string; shade?: string } | null | undefined): string => lineHex(l) || l?.color || "";
 /**
  * The color a line was last SHOWN in, when one is known: picked by hand (`hex`), else the color the Mockup Creator worked

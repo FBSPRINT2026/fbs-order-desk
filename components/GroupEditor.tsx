@@ -5,7 +5,11 @@ import { threadByName } from "@/lib/embroidery";
 import { kidLine } from "@/lib/pricing";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
+import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
+import ColorwaySwap from "@/components/ColorwaySwap";
+import MockupBg from "@/components/MockupBg";
+import { applyColorway, colorwaysOf } from "@/lib/brands";
+import { hasColorwayArt, printArtUrl } from "@/lib/designs";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
 import { loadInkFormulas } from "@/lib/inkFormulas";
 import { createClient } from "@/lib/supabase/client";
@@ -235,8 +239,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const brandOnly = !!onMockup && !g.mockupAt && g.imprints.length > 0 && g.imprints.every((x) => x.fromBrand || x.sizeFrom === "brand");
   const frozen = fixed || printsFixed || (!!onMockup && !!g.mockupAt) || (brandOnly && !editBrand);
   // the group's shirt color (first garment): behind each print's logo, like the Mockup Creator's close-ups (Oct 15, Nick)
+  // the garment it's shown on: the color with the most pieces (lib/mockup.ts mainLine; Oct 31, Nick: "100 black, 20
+  // navy… just pick black"), or the first when a print changes color by garment (its first color is the one as printed)
+  const ccAny = g.imprints.some((x) => Object.keys(x.inkBy || {}).length);
+  const showLine = ccAny ? g.lines.find((x) => (x.style || "").trim()) || g.lines[0] : mainLine(g.lines.filter((x) => (x.style || "").trim()).length ? g.lines.filter((x) => (x.style || "").trim()) : g.lines);
   const shirtHex = (() => {
-    const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
+    // a logo mockup's background picked on the order (Group.mockupBg) is what its pictures show
+    if (g.mockupKind === "logo" && g.mockupBg && /^#[0-9a-f]{6}$/i.test(g.mockupBg)) return g.mockupBg.toLowerCase();
+    const l = showLine;
     if (!l) return "#9aa1ab";
     if (lineHex(l)) return lineHex(l); // as the Mockup Creator showed it (picked, or drawn): lib/mockup.ts lineHex
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -253,7 +263,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const ci = gar?.color_images?.[color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(color))?.[1];
     return garmentHex(ci?.hex, color) || guessHex(color) || "#9aa1ab";
   };
-  const firstColor = (g.lines.find((x) => (x.style || "").trim()) || g.lines[0])?.color || "";
+  const firstColor = showLine?.color || "";
   const changesOf = (d: Group["imprints"][number]) => {
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const colors = [...new Set(g.lines.map((l) => l.color).filter(Boolean))].filter((c) => key(c) !== key(firstColor));
@@ -297,6 +307,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (d.method === "screen" && (n > 0 || !d.fromBrand)) return null;
     return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{n ? `${n}` : "None"} <button type="button" className="linkbtn" onClick={() => setCcAt(di)}>{n ? "Change" : "Add color change"}</button></span></div>;
   };
+  /** the logo's colorway on this print, with Swap (components/ColorwaySwap.tsx): only for a logo with colorways */
+  const cwRow = (d: Group["imprints"][number], di: number) => {
+    const cur = d.design_id ? (designs || []).find((x) => x.id === d.design_id) : undefined;
+    if (!cur || colorwaysOf(cur).length < 2 || d.supplied) return null;
+    return <ColorwaySwap d={cur} im={d} urls={designUrls || {}} mockupNo={g.masterMockup || g.fromMockup?.number || null} disabled={fixed || printsFixed}
+      onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw); }); redrawSoon(); }} />;
+  };
+  /** the group's saved pictures drawn again now (the order page does it: a print's colorway or the background changed) */
+  const redrawSoon = () => { if (g.mockupAt && !g.mockupSkipped) setTimeout(() => window.dispatchEvent(new CustomEvent("fbs:redraw-mockup", { detail: { groupId: g.id } })), 400); };
   /** an embroidery print's location change and its Change button (read-out and form), like the color change */
   const lcRow = (d: Group["imprints"][number], di: number) => {
     if (fixed || printsFixed || d.supplied || d.method !== "embroidery" || new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => spotKey(x))).size < 2) return null;
@@ -983,6 +1002,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 if (bp) return <div className="mk-pref mk-brandlogo"><MockGallery urls={[designUrls![bp.design_id!]]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
                 const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
                 return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
+          {/* a logo mockup's background: the most-used garment color, changed here (components/MockupBg.tsx) */}
+          {g.mockupKind === "logo" && g.mockupAt && onMockup && !fixed && (g.mockupThumbs || []).some((p) => thumbUrls?.[p]) && (() => {
+            const by = new Map<string, { name: string; hex: string; pcs: number }>();
+            for (const l of g.lines) { const n = (l.color || "").trim(); if (!n) continue; const k = n.toLowerCase(); const was = by.get(k); by.set(k, { name: n, hex: was?.hex || hexOfColor(n), pcs: (was?.pcs || 0) + lineQty(l) }); }
+            const cs = [...by.values()].sort((a, b) => b.pcs - a.pcs);
+            const auto = showLine ? hexOfColor(showLine.color) : cs[0]?.hex || "#9aa1ab";
+            return <MockupBg value={g.mockupBg} auto={auto} colors={cs} onPick={(hex) => { update((x) => { if (hex) x.mockupBg = hex; else delete x.mockupBg; }); redrawSoon(); }} />;
+          })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
           {onMockup && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
             {/* the shirt icon shows on a phone, where the three buttons are matching tiles (Oct 29, Nick) */}
@@ -1053,7 +1080,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1663,7 +1690,7 @@ function PrintRow({ youth, shown, d, n, hex, designs, urls, each, detailsHref, o
   // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
   // a brand logo's own picture in this print's thread (its colorway, lib/designs previewUrls): shown as it is (Oct 27,
   // Nick: picked 1801 white and the tile still showed the navy logo on navy)
-  const ownCw = cur ? urls[`${cur.id}:ink:${(d.inks || "").trim().toLowerCase()}`] || "" : "";
+  const ownCw = cur ? (hasColorwayArt(urls, cur.id, d) ? printArtUrl(urls, cur.id, d) : urls[`${cur.id}:ink:${(d.inks || "").trim().toLowerCase()}`] || "") : "";
   const painted = usePainted(shown ? "" : ownCw || (cur ? urls[cur.id] || "" : ""), ownCw ? { ...d, inkMap: undefined } : d);
   // the art as the Mockup Creator showed it when the mockup was saved: the same picture as the blow-up (falls back to
   // the logo painted here for prints saved before, or with no mockup yet)
@@ -1762,9 +1789,9 @@ function PrintRow({ youth, shown, d, n, hex, designs, urls, each, detailsHref, o
   );
 }
 
-function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string; inkMap?: Imprint["inkMap"]; artRatio?: number }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
+function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string; inkMap?: Imprint["inkMap"]; artRatio?: number; colorway?: string }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
   const cur = designs.find((x) => x.id === imprint.design_id);
-  const pic = usePainted(cur ? urls[cur.id] || "" : "", imprint);
+  const pic = usePainted(cur ? printArtUrl(urls, cur.id, imprint) : "", imprint);
   const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
   const other = cur && val ? designOther(cur, val, given, imprint.artRatio) : 0;
@@ -1778,7 +1805,7 @@ function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?:
 }
 
 function DesignPick({ imprint, lines, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
-  imprint: { design_id?: string; size: string; artRatio?: number; inkMap?: Imprint["inkMap"] }; /** the group's garments, for its picture */ lines?: { color?: string; hex?: string }[]; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  imprint: { design_id?: string; size: string; artRatio?: number; inkMap?: Imprint["inkMap"]; colorway?: string }; /** the group's garments, for its picture */ lines?: { color?: string; hex?: string }[]; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
   /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
    *  new art from the main order page") */ readOnly?: boolean; onMockup?: () => void;
   onStar?: (d: Design, starred: boolean) => void;
@@ -1794,7 +1821,7 @@ function DesignPick({ imprint, lines, designs, urls, canUpload, onPick, onUpload
     <div className="dp">
       <span className="dp-l">Logo</span>
       {readOnly
-        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <span className="dp-th"><PrintThumb d={cur} url={urls[cur.id]} print={imprint} lines={lines} /></span>}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
+        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <span className="dp-th"><PrintThumb d={cur} url={printArtUrl(urls, cur.id, imprint)} print={imprint} lines={lines} /></span>}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
             {onMockup && <button type="button" className="linkbtn" onClick={onMockup}>{cur ? "Change in the Mockup Creator" : "Pick it in the Mockup Creator"}</button>}</span>
         : <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />}
       {canUpload && !readOnly && (

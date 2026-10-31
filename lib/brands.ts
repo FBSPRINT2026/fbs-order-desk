@@ -93,6 +93,71 @@ export function sewThreads(f: SewFile | null | undefined, side: "light" | "dark"
   if (f.ws?.threads?.length) return needleThreads(f.ws, "").map((t) => t.label);
   return f.threads?.[side] || [];
 }
+/** colorway names compared loosely ("Maroon / Off White" = "maroon/off-white") */
+const cwKey = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/** inks compared loosely, in any order ("PMS 492 C, Black" = "black, pantone 492c") */
+const inksKey = (xs: string[]) => xs.map((x) => x.trim().toLowerCase().replace(/^pantone\s*/, "pms ").replace(/[^a-z0-9]/g, "")).filter(Boolean).sort().join("|");
+/**
+ * THE picture of a print's art (Oct 31): the colorway it was switched to (Imprint.colorway) has its own picture, drawn
+ * as it is; else the logo's picture (painted in the print's inks by whoever shows it). `urls` is previewUrls'.
+ */
+export function printArtUrl(urls: Record<string, string> | null | undefined, designId: string | null | undefined, im?: { colorway?: string } | null): string {
+  if (!urls || !designId) return "";
+  return (im?.colorway && urls[`${designId}:cw:${cwKey(im.colorway)}`]) || urls[designId] || "";
+}
+/** a print switched to a colorway with its own picture: that picture is already in its colors (nothing to paint) */
+export const hasColorwayArt = (urls: Record<string, string> | null | undefined, designId: string | null | undefined, im?: { colorway?: string } | null) =>
+  !!(urls && designId && im?.colorway && urls[`${designId}:cw:${cwKey(im.colorway)}`]);
+/** a colorway's letter: A, B, C… in the order they're on the logo's page (M-1240-B is saved mockup 1240 in its B) */
+export function cwLetter(d: Pick<Design, "specs">, cw: Pick<Colorway, "name"> | null | undefined): string {
+  const i = cw ? colorwaysOf(d).findIndex((c) => cwKey(c.name) === cwKey(cw.name)) : -1;
+  return i >= 0 ? String.fromCharCode(65 + i) : "";
+}
+/**
+ * The colorway a print is (Oct 31, Nick: "I'm using this logo… it's on this logo mockup, which is M-1108, and I can use
+ * A, B, C, or D"): the one picked on it (Imprint.colorway), else the one whose sew file it sews, else the one whose inks
+ * it has. Null when it's none of them (inks typed by hand, or a logo without colorways).
+ */
+export function printColorway(im: Pick<Imprint, "colorway" | "inks" | "emb">, d: Pick<Design, "specs"> | null | undefined): Colorway | null {
+  const cws = d ? colorwaysOf(d) : [];
+  if (!d || !cws.length) return null;
+  if (im.colorway) { const c = cws.find((x) => cwKey(x.name) === cwKey(im.colorway)); if (c) return c; }
+  const f = im.emb?.file?.path;
+  if (f) { const c = cws.find((x) => colorwaySew(d, x)?.path === f); if (c) return c; }
+  const k = inksKey((im.inks || "").split(/\s*,\s*/));
+  return k ? cws.find((x) => inksKey(x.inks) === k) || null : null;
+}
+/**
+ * A print switched to one of its logo's colorways (Swap on the order). It takes the colorway's inks; embroidery takes
+ * the colorway's sew file (the one of the same kind and size as the file it sewed, when the logo has one for each),
+ * that file's threads, stitches and size. The picture becomes the colorway's own: the inks painted before, the saved
+ * tile and any color change were for the old version, so they're dropped.
+ */
+export function applyColorway(im: Imprint, d: Pick<Design, "specs">, cw: Colorway): Imprint {
+  const x: Imprint = { ...im, colorway: cw.name };
+  delete x.inkMap; delete x.shownArt; delete x.inkBy; x.inkChanges = 0;
+  if (im.method === "embroidery") {
+    const linked = colorwaySew(d, cw), was = im.emb?.file as SewFile | undefined;
+    // the colorway's file for the size and kind this print sews: the linked one, or one cut the same as the old file
+    // that sews the linked one's threads
+    const same = (f: SewFile) => !!was && (f.kind || "flat") === (was.kind || "flat") && Math.abs((f.wIn || 0) - (was.wIn || 0)) < 0.06;
+    const sew = !linked || !was || same(linked) ? linked : sewFilesOf(d).find((f) => same(f) && sewThreads(f).join() === sewThreads(linked).join()) || linked;
+    const th = sewThreads(sew);
+    const inks = th.length ? th : cw.inks;
+    x.inks = inks.join(", ");
+    x.colors = Math.max(1, inks.length);
+    if (sew) {
+      x.emb = { ...(im.emb || {}), file: sew, stitchesFrom: "file" };
+      x.stitches = sew.stitches;
+      x.digitized = true;
+      if (sew.wIn && sew.hIn) { x.size = `${sew.wIn}" × ${sew.hIn}"`; x.artRatio = Math.round((sew.hIn / sew.wIn) * 1000) / 1000; }
+    }
+  } else {
+    x.inks = cw.inks.join(", ");
+    x.colors = Math.max(1, cw.inks.length);
+  }
+  return x;
+}
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
 export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number): SewFile | null {
@@ -149,6 +214,7 @@ export function brandPrint(o: { design: Design; brand: Brand | null; method: Lan
     const linked = (side: "light" | "dark") => sewThreads(colorwaySew(d, colorwayFor(d, brand, side === "dark")));
     const th = (side: "light" | "dark") => linked(side).length ? linked(side) : o.sew?.threads?.[side]?.length ? o.sew.threads[side]! : brand?.embroidery[side] || [];
     const a = th(base), b = th(base === "light" ? "dark" : "light");
+    { const cw = colorwayFor(d, brand, base === "dark"); if (cw && colorwaySew(d, cw)) im.colorway = cw.name; }
     im.inks = a.join(", ");
     im.colors = Math.max(1, a.length || o.sew?.colors || 1);
     if (base === "light" && dark.length && b.length && b.join() !== a.join()) {
@@ -164,6 +230,7 @@ export function brandPrint(o: { design: Design; brand: Brand | null; method: Lan
   } else {
     const cw = o.colorway || colorwayFor(d, brand, base === "dark");
     if (cw) {
+      im.colorway = cw.name;
       im.inks = cw.inks.join(", ");
       im.colors = Math.max(1, cw.inks.length);
       const other = base === "light" && dark.length ? colorwayFor(d, brand, true) : null;

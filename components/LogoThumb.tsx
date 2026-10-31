@@ -1,6 +1,6 @@
 "use client";
 import type { Design } from "@/lib/pricing";
-import { lineColor } from "@/lib/mockup";
+import { lineColor, mainLine } from "@/lib/mockup";
 import { LogoFace, LogoPic, PaintedPic, onShirtsOf } from "@/components/LogoOnShirts";
 
 /**
@@ -43,6 +43,6 @@ export function PrintThumb({ d, url, print, lines, className }: {
   /** the print's group's garments: the first with a color is the one it's shown on, in its picked color when it has one */ lines?: { color?: string; hex?: string }[] | null;
   className?: string;
 }) {
-  return <LogoThumb d={d} url={url} shirt={lineColor((lines || []).find((l) => l.color || l.hex)) || undefined} inkMap={print.inkMap?.map} className={className} />;
+  return <LogoThumb d={d} url={url} shirt={lineColor(mainLine(lines || [])) || undefined} inkMap={print.inkMap?.map} className={className} />;
 }
 

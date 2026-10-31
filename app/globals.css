@@ -16811,3 +16811,43 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 .lgx-details{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .lgx-th{white-space:nowrap;font-size:13px}
 .lgx-tab .lg-kind{width:auto;min-width:96px}
+
+/* Colorway on a print (components/ColorwaySwap.tsx; Oct 31, Nick: one line, a small Swap that opens the colorways) */
+.cws{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.cws-now{flex-wrap:wrap;gap:6px 8px}
+.cws-pic{display:inline-grid;place-items:center;width:48px;height:24px;flex:none;border-radius:4px;border:1px solid var(--line-2);background:#fff;overflow:hidden}
+.cws-pic.dk{background:#2a3140;border-color:#2a3140}
+.cws-pic img{max-width:90%;max-height:80%;object-fit:contain}
+.cws-pic.big{width:100%;height:40px}
+.cws-ink{font-size:10.5px;color:var(--ink-3);padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cws-l{font-size:14px;font-weight:700;color:var(--ink)}
+.cws-n{font-size:13px;color:var(--ink);white-space:nowrap}
+.cws-m{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.cws-swap{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--line);border-radius:var(--r,6px);background:var(--surface,#fff);color:var(--accent);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.cws-swap svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.cws-swap:hover,.cws-swap.on{border-color:var(--accent);background:var(--accent-soft)}
+.cws-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;padding:10px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface-2)}
+.cws-opt{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff);font:inherit;color:var(--ink);cursor:pointer;text-align:left;min-width:0}
+.cws-opt:hover{border-color:var(--accent)}
+.cws-opt.on{border:2px solid var(--accent);padding:4px;color:var(--accent)}
+.cws-on{display:flex;flex-direction:column;line-height:1.25;padding:0 2px 1px}
+.cws-on b{font-size:13px}
+.cws-on span{font-size:12px;font-weight:500}
+
+/* Background behind a logo mockup's picture (components/MockupBg.tsx; Oct 31, Nick) */
+.imp-mock{position:relative}
+.mbg{position:absolute;top:6px;right:6px;z-index:3}
+.mbg-btn{display:grid;place-items:center;width:26px;height:26px;padding:0;border-radius:6px;border:1px solid var(--line);background:var(--surface,#fff);box-shadow:0 1px 3px rgba(20,29,43,.3);cursor:pointer}
+.mbg-btn span{width:15px;height:15px;border-radius:50%;border:1px solid #9aa3b2}
+.mbg-btn.on,.mbg-btn:hover{outline:2px solid var(--accent)}
+.mbg-pop{position:absolute;top:32px;right:0;width:240px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(20,29,43,.18);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.mbg-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.mbg-cs{display:flex;flex-wrap:wrap;gap:8px}
+.mbg-c{display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer;font:inherit;max-width:64px}
+.mbg-c span{width:30px;height:30px;border-radius:50%;border:1px solid var(--line)}
+.mbg-c.on span{outline:2px solid var(--accent);outline-offset:2px}
+.mbg-c small{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
+.mbg-any{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--accent);cursor:pointer}
+.mbg-any input{width:22px;height:22px;padding:0;border:1px solid var(--line);border-radius:4px;background:none}
+.mbg-reset{align-self:flex-start;font-size:12.5px}
+.mbg-f{margin:0;font-size:12px;color:var(--ink-3)}

@@ -389,6 +389,25 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setSaveState(error ? "Save failed: " + error.message : "Saved");
     if (!error) { const at = String((savedRow as { updated_at?: string } | null)?.updated_at || ""); if (at) baseAt.current = at; savedUnsaved(d.id, startedAt, at); }
   }, [sb, settings]);
+  // a print's colorway or a logo mockup's background changed on this page (GroupEditor): that group's pictures drawn
+  // again now, the same way as above
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<{ groupId?: string }>).detail?.groupId;
+      const o = latest.current, g = o?.groups.find((x) => x.id === id);
+      if (!o || !g || redrawBusy.current) return;
+      redrawBusy.current = true;
+      void (async () => {
+        setRedrawing([g.id]);
+        try { await save(); } catch { /* */ }
+        await remakeMockup(o.id, g);
+        setRedrawing([]); redrawBusy.current = false;
+        window.dispatchEvent(new CustomEvent("fbs:order-changed", { detail: { orderId: o.id } }));
+      })();
+    };
+    window.addEventListener("fbs:redraw-mockup", on);
+    return () => window.removeEventListener("fbs:redraw-mockup", on);
+  }, [save]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
   // the order check on the right (components/tools/OrderReview.tsx, Oct 23): what's typed here is saved before it changes

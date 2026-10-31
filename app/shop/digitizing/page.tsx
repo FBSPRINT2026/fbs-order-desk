@@ -6,11 +6,11 @@ import { currentSewFile, digitizeState, requestOf, sewVersions } from "@/lib/dig
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole } from "@/components/RoleContext";
-import { previewUrls } from "@/lib/designs";
+import { previewUrls, printArtUrl } from "@/lib/designs";
 import { designLabel, type Design, type Group, type Imprint } from "@/lib/pricing";
 import { readDst, type DstInfo } from "@/lib/dst";
 import DstPreview from "@/components/DstPreview";
-import { guessHex, lineColor } from "@/lib/mockup";
+import { guessHex, lineColor, mainLine } from "@/lib/mockup";
 import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence from "@/components/SewSequence";
 import { stopColors } from "@/lib/needleThreads";
@@ -230,7 +230,7 @@ export default function Digitizing() {
                 const st = stateOf(it), e = embOf(it.d), f = currentSewFile(it.im, e.files);
                 const ctx: SewCtx = { files: e.files || (f ? [f] : []), current: f?.path, inks: it.im.inks || "", size: it.im.size || "", stitches: it.im.stitches || undefined, stock };
                 return (
-                  <FragmentRow key={it.key} it={it} pic={it.d ? urls[it.d.id] : ""} st={st} f={f} req={(requestOf(it.im, it.d) as EmbSpecs["request"]) || undefined} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
+                  <FragmentRow key={it.key} it={it} pic={it.d ? printArtUrl(urls, it.d.id, it.im) : ""} st={st} f={f} req={(requestOf(it.im, it.d) as EmbSpecs["request"]) || undefined} open={open === it.key} toggle={() => setOpen(open === it.key ? null : it.key)}
                     ctx={ctx} noProof={!proofed.has(it.o.id)} onUse={(set) => void useFile(it, set)} dsws={it.d ? dsws.filter((x) => x.design_id === it.d!.id) : []}
                     canEdit={canEdit} busy={busy === it.key} text={requestText(it)} reply={e.reply || null} onSend={() => setTool({ orderId: it.o.id, imprintId: it.im.id })} onAsked={() => void markAsked(it)} onDst={(files) => void takeFiles(it, files)}
                     sws={swOf(it)} swUrls={swUrls} onSew={(m) => { setMsg(m); setTimeout(() => setMsg(""), 6000); void load(); }} />
@@ -320,7 +320,7 @@ function FragmentRow({ it, pic, st, f, req, open, toggle, canEdit, busy, text, r
               the needs sew-out section"): the line at the top says where it is */}
           <div className={"dgz-grid" + (f ? "" : " nofile")}>
             {f && <div className="dgz-card dgz-pic-big">
-              {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} art={pic || undefined} fabric={guessHex(lineColor(it.g.lines?.[0])) || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
+              {dstInfo ? <DstPreview info={dstInfo} colors={dstColors} art={pic || undefined} fabric={guessHex(lineColor(mainLine(it.g.lines))) || "#F4F4F1"} width={260} /> : <div className="emb-dst faint">Reading the file…</div>}
               <div className="sub">Sew-out simulation, drawn from the DST</div>
             </div>}
             <div className="stack" style={{ gap: 12, minWidth: 0 }}>

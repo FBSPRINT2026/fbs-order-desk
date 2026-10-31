@@ -25,8 +25,11 @@ function stable(v: unknown): string {
 function hash(s: string): string { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
 /** what a group's pictures are drawn from: each print's logo, spot, size, drop, inks and sew file */
-export function mockupArtKey(g: Pick<Group, "imprints">): string {
-  return hash((g.imprints || []).map((im) => stable([im.id, im.design_id || "", im.method || "", (im.location || "").trim(), (im.size || "").trim(), String(im.drop ?? "").trim(), (im.inks || "").trim(), im.inkMap?.map || null, im.inkBy || null, im.emb?.file?.path || ""])).join("|"));
+export function mockupArtKey(g: Pick<Group, "imprints"> & { mockupBg?: string; mockupKind?: string }): string {
+  // a logo mockup's background picked on the order (Group.mockupBg) and a print's colorway count too; left out when
+  // not set, so pictures saved before them aren't all drawn again
+  return hash((g.imprints || []).map((im) => stable([im.id, im.design_id || "", im.method || "", (im.location || "").trim(), (im.size || "").trim(), String(im.drop ?? "").trim(), (im.inks || "").trim(), im.inkMap?.map || null, im.inkBy || null, im.emb?.file?.path || "", ...(im.colorway ? [im.colorway] : [])])).join("|"))
+    + (g.mockupKind === "logo" && g.mockupBg ? `:${g.mockupBg.toLowerCase()}` : "");
 }
 
 /** the garments a group's pictures are drawn on and named for: each style and color (Oct 30, Nick on #40284: the helper
@@ -38,7 +41,7 @@ export function mockupGarmentKey(g: Pick<Group, "lines">): string {
 export type MockupArt = { k: string; /** the garments drawn (mockupGarmentKey) */ gk?: string; /** each logo's picture (designs.preview_path) when it was drawn */ d: Record<string, string>;
   /** saved since the garment's color as drawn is kept on its lines (GLine.shade, Oct 29): one made before is drawn again once */ s?: 1 };
 
-export function mockupArtStamp(g: Pick<Group, "imprints" | "lines">, designs: { id: string; preview_path?: string | null; file_path?: string | null }[]): MockupArt {
+export function mockupArtStamp(g: Pick<Group, "imprints" | "lines" | "mockupBg" | "mockupKind">, designs: { id: string; preview_path?: string | null; file_path?: string | null }[]): MockupArt {
   const ids = [...new Set((g.imprints || []).map((im) => im.design_id).filter(Boolean))] as string[];
   return { k: mockupArtKey(g), gk: mockupGarmentKey(g), d: Object.fromEntries(ids.map((id) => { const x = designs.find((y) => y.id === id); return [id, String(x?.preview_path || x?.file_path || "")]; }).filter(([, p]) => p)), s: 1 };
 }

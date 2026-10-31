@@ -150,6 +150,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  3D puff / metallic, the thread line and the digitized file (lib/embroidery.ts). Screen prints never have it */
   emb?: import("@/lib/embroidery").EmbSpec;
   /** added from the customer's brand (Customer artwork → Brands): the brand's name. Set up by its rules, no mockup needed */ fromBrand?: string;
+  /** the version of the logo this print is (one of its colorways by name: "Maroon / Off White"), picked with Swap on the
+   *  order (Oct 31, Nick: "M-1240-A, -B, -C, -D… I can use A, B, C, or D, depending on what the order calls for"). Its
+   *  inks or threads, sew file and picture come from that colorway (lib/brands.ts applyColorway) */ colorway?: string;
   /** embroidery: a digitizing fee set by hand for a complex logo (overrides the base + stitches fee; digitizingFee) */ digitizeFee?: number;
   /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
    *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
@@ -325,6 +328,9 @@ export type Group = { id: string; name?: string; /** priced by a program design'
    *  Mockup Creator asks once) */ youthSet?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** the mockup was made in the logo builder (Add logo): Edit mockup opens it there (lib/mockupFresh.ts mockupHref) */ mockupKind?: "logo";
+  /** the color behind a logo mockup's picture (Oct 31, Nick: "pick the most used color in that group… a little color
+   *  picker… when you hover over it, it says background"): picked with the Background button on the order; not set =
+   *  the color of the garment with the most pieces (lib/mockup.ts mainLine). Only the picture, never the garments */ mockupBg?: string;
   /** the group is a brand's master mockup (lib/masterMockups.ts): its prints and picture came from M-<number>, and only
    *  its garments and quantities were read off the paperwork */ masterMockup?: number;
   /** what the saved pictures were drawn from: when it changes they're drawn again by themselves (lib/mockupFresh.ts) */ mockupArt?: import("@/lib/mockupFresh").MockupArt;

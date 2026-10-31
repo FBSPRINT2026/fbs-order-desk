@@ -1,5 +1,5 @@
 "use client";
-import { needsDarkBackdrop } from "@/lib/lightArt";
+import { isLightArtUrl } from "@/lib/lightArt";
 import Link from "next/link";
 import BackLink from "@/components/BackLink";
 import CustomerPick from "@/components/CustomerPick";
@@ -32,22 +32,8 @@ type Sep = { id: string; number: number | null; location: string | null; garment
 type Gang = { id: string; name: string | null; status: string | null; created_at: string; data: unknown };
 type Film = { id: string; name: string; file_path: string; order_id: string; created_at: string };
 const fileLink = (p: string, n?: string) => `/api/files/open?${new URLSearchParams({ p, ...(n ? { n } : {}) })}`;
-/** a light logo (white ink) shows on charcoal so it can be seen; anything else on white. No made-up backgrounds or colors
- *  (Oct 28, Nick: "you're automatically adding in some variations that don't exist… we need to get rid of it") */
-async function isLightArt(url: string): Promise<boolean> {
-  try {
-    const im = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = no; i.src = url; });
-    const c = document.createElement("canvas"); c.width = 64; c.height = Math.max(1, Math.round((64 * (im.naturalHeight || 1)) / (im.naturalWidth || 1)));
-    const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return false;
-    g.drawImage(im, 0, 0, c.width, c.height);
-    const px = g.getImageData(0, 0, c.width, c.height).data;
-    let n = 0;
-    for (let i = 3; i < px.length; i += 4) if (px[i] > 128) n++;
-    // see-through art with light parts that would vanish on white (lib/lightArt.ts); a picture with a white background
-    // is opaque, so it stays on white
-    return n > 0 && n < (px.length / 4) * 0.97 && needsDarkBackdrop(px);
-  } catch { return false; }
-}
+/** a light logo (white ink) shows on charcoal so it can be seen; anything else on white (lib/lightArt.ts) */
+const isLightArt = isLightArtUrl;
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
   emb: <path d="M4 20L20 4M14 4h6v6M6 14l4 4" />,
   sp: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16M10 4v16" /></>,

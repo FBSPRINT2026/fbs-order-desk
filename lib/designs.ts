@@ -157,6 +157,9 @@ export async function setLogoArt(sb: SupabaseClient, d: Design, f: File): Promis
 }
 
 /** Signed links for design previews, keyed by design id. */
+const cwName = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export { printArtUrl, hasColorwayArt } from "@/lib/brands";
+
 export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<Record<string, string>> {
   const withPv = list.filter((d) => d.preview_path);
   // and each background's own picture (Edit logo → Backgrounds), keyed by its path
@@ -170,10 +173,11 @@ export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<R
   for (const d of list) { const cp = d.specs?.cleanPreview as string | undefined; if (cp && out[cp]) out[d.id + ":clean"] = out[cp]; }
   // a brand logo's colorways (lib/brands.ts): each version's own picture, keyed "<id>:ink:<its inks>" (a color change
   // tile shows the logo in the thread it changes to, Oct 27)
-  const cws = list.flatMap((d) => (((d.specs as { colorways?: { inks?: string[]; preview?: string }[] } | null)?.colorways) || []).filter((c) => c.preview && c.inks?.length).map((c) => ({ id: d.id, key: c.inks!.join(", ").toLowerCase(), path: c.preview! })));
+  // and by its name, "<id>:cw:<name>" (a print switched to that colorway: printArtUrl)
+  const cws = list.flatMap((d) => (((d.specs as { colorways?: { name?: string; inks?: string[]; preview?: string }[] } | null)?.colorways) || []).filter((c) => c.preview).map((c) => ({ id: d.id, key: (c.inks || []).join(", ").toLowerCase(), name: cwName(c.name), path: c.preview! })));
   if (cws.length) {
     const { data: cu } = await sb.storage.from("proofs").createSignedUrls(cws.map((c) => c.path), 3600);
-    cws.forEach((c, i) => { const u = cu?.[i]?.signedUrl; if (u) out[`${c.id}:ink:${c.key}`] = u; });
+    cws.forEach((c, i) => { const u = cu?.[i]?.signedUrl; if (!u) return; if (c.key) out[`${c.id}:ink:${c.key}`] = u; if (c.name) out[`${c.id}:cw:${c.name}`] = u; });
   }
   return out;
 }

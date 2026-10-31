@@ -15,7 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
-import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
+import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
@@ -81,6 +81,7 @@ type Paint = { /** the shirt color it was set up for, when the logo has its own 
   /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
   /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean;
   /** drawn from the clean picture: the logo's distress layer turned off */ off?: boolean;
+  /** drawn from a colorway's own picture (its image cache key, "<id>:cw:<name>") */ cw?: string;
   /** set up for embroidery: each color is a Madeira thread, not an ink (screen prints leave it out) */ method?: "embroidery" };
 /** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
 const inkNames = (pt: Paint, map = pt.map) => {
@@ -311,6 +312,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [askUploaded, setAskUploaded] = useState(false);
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
+  /** a logo mockup's background picked on the order (Group.mockupBg): its first picture is drawn on it */
+  const [mockBg, setMockBg] = useState("");
   // a color change: the art painted in another ink on one garment color (`${imprint id}|${color key}`)
   const [paintedBy, setPaintedBy] = useState<Record<string, string>>({});
   // embroidered prints drawn stitched on the mockup (off shows the flat logo)
@@ -329,6 +332,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [trims, setTrims] = useState<Record<string, { w: number; h: number }>>({});
   /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
   const replan = useRef(new Set<string>());
+  /** a colorway's own picture, its empty margins cut off like the logo's (cached by "<id>:cw:<name>") */
+  async function cwImg(key: string, url: string): Promise<HTMLImageElement> {
+    const hit = imgCache.current.get(key);
+    if (hit) return hit;
+    let img = await loadImg(url);
+    const k = trimClear(img);
+    if (k) img = await loadImg(k.url);
+    imgCache.current.set(key, img);
+    return img;
+  }
   async function logoImg(d: Design, clean0 = false): Promise<HTMLImageElement> {
     // a distressed logo printed without its distress: its clean picture (cached apart)
     if (clean0 && urls[d.id + ":clean"]) {
@@ -596,7 +609,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // one mockup per garment: the same style and color twice (their extras line under it) is one shirt, not two
           // identical mockups (Oct 22: #40104 and #40106 each got the same Red / Charcoal mockup twice)
           const seenSC = new Set<string>();
-          setLines(g.lines.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}) })));
+          // a logo mockup is drawn on the garment color with the most pieces first (Oct 31, Nick: "100 black, 20 navy…
+          // just pick black"): its first picture is the one the order shows; the background picked on the order with it
+          const pcsOf = (c: string) => g.lines.filter((x) => (x.color || "").trim().toLowerCase() === (c || "").trim().toLowerCase()).reduce((n, x) => n + Object.values(x.sizes || {}).reduce((a: number, q) => a + (+(q || 0) || 0), 0), 0);
+          const byPcs = logoOnly && !g.imprints.some((x) => Object.keys(x.inkBy || {}).length) ? [...g.lines].sort((a, b) => pcsOf(b.color) - pcsOf(a.color)) : g.lines;
+          setMockBg(logoOnly && g.mockupBg && /^#[0-9a-f]{6}$/i.test(g.mockupBg) ? g.mockupBg.toLowerCase() : "");
+          setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
@@ -742,19 +760,24 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const sh = onShirtsOf(d).length ? (line?.color || "") : "";
       const off = im.distress === "off" && !!urls[d.id + ":clean"];
       const emb = im.method === "embroidery";
-      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off && (paints[im.id]?.method === "embroidery") === emb) return;
+      // a print switched to one of the logo's colorways (Imprint.colorway, Swap on the order): drawn from that colorway's
+      // own picture, already in its colors (lib/designs.ts printArtUrl)
+      const cwU = hasColorwayArt(urls, d.id, im) ? printArtUrl(urls, d.id, im) : "";
+      const cwK = cwU ? `${d.id}:cw:${im.colorway}` : "";
+      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off && (paints[im.id]?.method === "embroidery") === emb && (paints[im.id]?.cw || "") === cwK) return;
       // every PMS the Ink Room has, before the order's inks are matched to the logo's colors (PMS 2178 C, HALFF #40119)
       if (!portal) await loadInkFormulas(sb).catch(() => 0);
       try {
-        const img = await logoImg(d, off);
-        // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved
-        let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 && !replan.current.has(d.id) ? d.print_plan as PrintPlan : null;
-        replan.current.delete(d.id);
+        const img = cwU ? await cwImg(cwK, cwU) : await logoImg(d, off);
+        // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved. A
+        // colorway's picture has its own colors: its plan is read from it, not saved on the logo
+        let plan = !cwU && (d.print_plan as PrintPlan | null | undefined)?.v === 1 && !replan.current.has(d.id) ? d.print_plan as PrintPlan : null;
+        if (!cwU) replan.current.delete(d.id);
         if (!plan) {
           plan = planPrint(pxOfImage(img, 1600), { garment: line ? shirtHex(line) : undefined });
           const names = [...new Set(plan.inks.map((k) => k.name))];
-          if (!portal) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
-          const pl = plan; setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
+          if (!portal && !cwU) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
+          const pl = plan; if (!cwU) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
         }
         // embroidery (Oct 23, Nick: "we're no longer picking colors or PMS colors, we're picking threads… Madeira"): each
         // color of the logo is the closest Madeira thread (or the thread saved on the print), its own path apart from
@@ -786,7 +809,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             const pick = was || named || (own ? { name: "none", hex: k.hex } : t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: k.hex });
             for (const hex of [k.hex, ...k.also]) map[hex] = saved?.[hex] && isThreadName(saved[hex].name) ? saved[hex] : pick;
           }
-          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, method: "embroidery" } }));
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, cw: cwK || undefined, method: "embroidery" } }));
           const names = [...new Set(Object.values(map).map((v) => v.name).filter((n) => n && n !== "none"))];
           setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: names.join(", "), colors: Math.max(1, names.length) } : x)));
           return;
@@ -848,19 +871,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // untouched until production confirms it"): the art as it is, no ink names put on the print; production sets
           // how it printed here (Combine colors, halftones) or on Reorder Details
           if (!saved && im.visualOnly && !im.confirmed) {
-            setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map: {}, unite: true, plan: plan!, off } }));
+            setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map: {}, unite: true, plan: plan!, off, cw: cwK || undefined } }));
             return;
           }
           const kept = [...new Set(chosen)].filter((n) => n && n !== "none");
           const names = kept;
-          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, cw: cwK || undefined } }));
           // a reorder awaiting production keeps the color count the old job printed (Printavo's 7/0 is a fact; the inks
           // painted here are our guess, and production confirms both: Oct 20, Nick)
           setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : Math.max(1, names.length) } : x)));
           return;
         }
         const sources = detectColors(img);
-        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan!, off } }));
+        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan!, off, cw: cwK || undefined } }));
         setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: keepCount(x) ? x.colors : plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
       } catch { /* preview not loadable */ }
     });
@@ -876,7 +899,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!pt) continue;
       const map = hover && hover.id === im.id ? { ...pt.map, ...Object.fromEntries(hover.hexes.map((h) => [h, hover.v])) } : pt.map;
       if (!Object.keys(map).length) continue;
-      const img = imgCache.current.get(pt.design + (pt.off ? ":clean" : ""));
+      const img = imgCache.current.get(pt.cw || pt.design + (pt.off ? ":clean" : ""));
       if (!img) continue;
       const targets: Record<string, string> = {};
       Object.entries(map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
@@ -906,7 +929,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (const im of imprints) {
       const pt = paints[im.id];
       if (!pt || !im.inkBy) continue;
-      const img = imgCache.current.get(pt.design + (pt.off ? ":clean" : ""));
+      const img = imgCache.current.get(pt.cw || pt.design + (pt.off ? ":clean" : ""));
       if (!img) continue;
       for (const [ck, swap] of Object.entries(im.inkBy)) {
         const ch = Object.entries(swap || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase());
@@ -1068,7 +1091,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint, on?: Line) => { const k = on && im.inkBy ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
+  const artUrl = (im: Imprint, on?: Line) => { const k = on && im.inkBy ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (hasColorwayArt(urls, d.id, im) && printArtUrl(urls, d.id, im)) || (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
   /** "Need help picking garments?": our most popular garments to pick from (Oct 24, Nick) */
@@ -1939,7 +1962,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
   // a logo mockup's background is staff's (Oct 29, Nick: "you should never edit the background… just the thread colors"):
   // the color picked, else the one it was saved with, and only the first time it's made the garment's color
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (logoOnly && l.shade && /^#[0-9a-f]{6}$/i.test(l.shade)) return l.shade; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || fits[photo(l, "front")]?.hex || guessHex(l.color); /* the garment's own color (its code, its photo) before what its name says: "Regatta Blue" is a natural tote's trim */ };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (logoOnly && mockBg && l.id === lines[0]?.id) return mockBg; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (logoOnly && l.shade && /^#[0-9a-f]{6}$/i.test(l.shade)) return l.shade; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || fits[photo(l, "front")]?.hex || guessHex(l.color); /* the garment's own color (its code, its photo) before what its name says: "Regatta Blue" is a natural tote's trim */ };
 
   /**
    * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,

@@ -64,7 +64,13 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   // the logos' pictures: the work order, the proof, and the sew-out's "compared to the original file"
   // (the quote / invoice too: a garment color with no mockup of its own shows its print's logo on that color, Oct 30)
   const dPaths = Object.values(designs).filter((d) => d.preview_path);
-  const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path)];
+  // a print switched to a colorway: that colorway's own picture (lib/designs.ts printArtUrl's "<id>:cw:<name>")
+  const cwKey = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cwPics = [...new Map(groups.flatMap((g) => g.imprints).filter((d) => d.colorway && d.design_id && designs[d.design_id]).map((d) => {
+    const cw = (((designs[d.design_id!].specs || {}) as { colorways?: { name: string; preview?: string }[] }).colorways || []).find((c) => cwKey(c.name) === cwKey(d.colorway!));
+    return cw?.preview ? [`${d.design_id}:cw:${cwKey(cw.name)}`, cw.preview] as [string, string] : null;
+  }).filter((x): x is [string, string] => !!x)).entries()];
+  const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path), ...cwPics.map(([, path]) => path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();
   toSign.forEach((x, i) => { if (signed[i]?.signedUrl) urlOf.set(x, signed[i].signedUrl!); });
@@ -72,6 +78,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const byLine = mkPaths.map((ps) => ps.map((x) => urlOf.get(x) || ""));
   const designUrls: Record<string, string> = {};
   dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
+  cwPics.forEach(([k, path]) => { const u = urlOf.get(path); if (u) designUrls[k] = u; });
   // vector art's own file, so the saved PDF can draw it sharp at any size (Oct 20, Nick: "really high-resolution")
   const designFiles: Record<string, string> = {};
   if (work0 || proof0) {
