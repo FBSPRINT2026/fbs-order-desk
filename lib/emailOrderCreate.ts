@@ -396,7 +396,7 @@ async function ownAccountMethod(id: string): Promise<string> {
 type StdMockup = { number: number; title: string; file_path: string; design_ids: string[]; snapshot: unknown };
 /**
  * The customer's brands' standard mockups (Brand.rules.mockups, by M-number) for these groups: a group whose prints are
- * all that brand's logos, with the same logos as a standard mockup, gets it (its newest version). The group is stamped
+ * all that brand's logos, with the same logos at the same spots as a standard mockup, gets it (its newest version). The group is stamped
  * as drawn (mockupArt) so the order page doesn't draw it again. Returns group id → the mockup row to copy.
  */
 async function standardMockups(admin: SupabaseClient, custId: string, groups: Group[]): Promise<Map<string, StdMockup>> {
@@ -407,14 +407,17 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
   const nums = [...new Set([...byBrand.values()].flat())];
   const { data: ms } = await admin.from("mockups").select("number, title, file_path, design_ids, snapshot, created_at").eq("customer_id", custId).in("number", nums).is("archived_at", null).order("created_at", { ascending: false });
   const rows = (ms || []) as (StdMockup & { created_at: string })[];
-  const key = (ids: string[]) => [...new Set(ids)].sort().join("|");
+  // the same logos at the same spots (Oct 30: M-1117, D-10301 on the shorts' Left Leg, isn't a black polo's Left Chest)
+  const norm = (s: string) => (s || "").trim().toLowerCase();
+  const key = (ims: { design_id?: string | null; location?: string }[]) => [...new Set(ims.filter((im) => im.design_id).map((im) => `${im.design_id}@${norm(im.location || "")}`))].sort().join("|");
+  const keyOf = (r: StdMockup) => { const ims = ((r.snapshot as { imprints?: { design_id?: string | null; location?: string }[] } | null)?.imprints || []); return ims.length ? key(ims) : ""; };
   const allIds = [...new Set(groups.flatMap((g) => g.imprints.map((im) => im.design_id).filter(Boolean) as string[]))];
   const { data: ds } = allIds.length ? await admin.from("designs").select("id, preview_path, file_path").in("id", allIds) : { data: [] };
   for (const g of groups) {
     if ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand))) continue;
-    const want = key(g.imprints.map((im) => im.design_id!));
+    const want = key(g.imprints);
     const own = byBrand.get(g.imprints[0].fromBrand!)!;
-    const m = rows.find((r) => own.includes(r.number) && key(r.design_ids || []) === want);
+    const m = rows.find((r) => own.includes(r.number) && keyOf(r) === want);
     if (!m) continue;
     g.mockupThumbs = [m.file_path.replace(/\.png$/i, "-thumb.png")];
     g.mockupAt = new Date().toISOString();
