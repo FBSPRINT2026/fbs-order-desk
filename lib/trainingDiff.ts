@@ -4,7 +4,9 @@ export type TrainLine = { op: "+" | "-" | "~"; text: string; old?: string; parts
 
 /** a rewritten paragraph word by word: what was added and taken out, with long unchanged stretches shortened to "…" */
 export function wordDiff(before: string, after: string): TrainPart[] {
-  const a = before.split(/\s+/).filter(Boolean), b = after.split(/\s+/).filter(Boolean);
+  // punctuation is its own word, so "Front," → "Front at 2.5" wide," marks only what was added
+  const toks = (x: string) => x.match(/[^\s,;:()]+|[,;:()]/g) || [];
+  const a = toks(before), b = toks(after);
   const n = a.length, m = b.length;
   const L: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
@@ -20,12 +22,13 @@ export function wordDiff(before: string, after: string): TrainPart[] {
     let y = x;
     while (y < words.length && words[y].k === words[x].k) y++;
     const run = words.slice(x, y).map((v) => v.w), k = words[x].k;
+    const join = (ws: string[]) => ws.join(" ").replace(/ ([,;:)])/g, "$1").replace(/\( /g, "(");
     if (k === "same" && run.length > 18) {
       const head = x === 0 ? [] : run.slice(0, 7), tail = y === words.length ? [] : run.slice(-7);
-      if (head.length) parts.push({ t: head.join(" "), k: "same" });
+      if (head.length) parts.push({ t: join(head), k: "same" });
       parts.push({ t: "…", k: "gap" });
-      if (tail.length) parts.push({ t: tail.join(" "), k: "same" });
-    } else parts.push({ t: run.join(" "), k });
+      if (tail.length) parts.push({ t: join(tail), k: "same" });
+    } else parts.push({ t: join(run), k });
     x = y;
   }
   return parts;

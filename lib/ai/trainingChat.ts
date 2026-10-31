@@ -35,7 +35,8 @@ const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.te
 
 /** a proposed training is only the training: anything from the prompt's other parts that came along is cut off */
 function cutLeaks(t: string) {
-  let s = t.replace(/<\/?training>/g, "").trim();
+  // a line that's only a tag (</answer>, <training>) is never part of a training
+  let s = t.split("\n").filter((l) => !/^\s*<\/?[a-z_]+>\s*$/i.test(l)).join("\n").replace(/<\/?training>/g, "").trim();
   const at = s.search(/\n\s*(<\/?(customer|brands|logos|worked_examples|files|training_name|used_when|conversation|staff_now_says)>|ORDERS STAFF CHECKED RIGHT|WHAT CAME IN:|THE ORDER MADE:)/);
   if (at > 0) s = s.slice(0, at).trim();
   return s;

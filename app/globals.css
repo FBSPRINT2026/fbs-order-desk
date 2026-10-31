@@ -16542,7 +16542,6 @@ html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%
 .otr-chat{max-height:min(78vh,760px);top:12px}
 .otr-chat .im-msgs{min-height:320px}
 .otr-line .txt{display:flex;flex-direction:column;gap:2px;white-space:pre-wrap;overflow-wrap:anywhere}
-.otr-w + .otr-w::before{content:" "}
 .otr-w.add{background:#e3f6e8;color:#1d6b33;border-radius:3px}
 .otr-w.del{color:#b4232f;text-decoration:line-through}
 .otr-w.gap{color:#8e8e93}

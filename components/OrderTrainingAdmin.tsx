@@ -215,7 +215,7 @@ function TrainingChat({ customerId, customerName, base, onApplied }: { customerI
                     <div className={"im-card " + (m.status || "")}>
                       <div className="im-card-h">{m.status === "applied" ? "✓ Applied" : m.status === "dismissed" ? "Not applied" : `Changes to the training (${m.lines.length})`}</div>
                       {m.lines.map((l, k) => (
-                        <div key={k} className="im-line otr-line"><span className={"op " + OP[l.op]}>{l.op === "-" ? "−" : l.op}</span><span className="txt">{l.parts ? <span>{l.parts.map((p, q) => <span key={q} className={"otr-w " + p.k}>{p.t}</span>)}</span> : l.op === "-" ? <s>{l.text}</s> : l.text}</span></div>
+                        <div key={k} className="im-line otr-line"><span className={"op " + OP[l.op]}>{l.op === "-" ? "−" : l.op}</span><span className="txt">{l.parts ? <span>{l.parts.map((p, q) => <span key={q}>{q > 0 && !/^[,;:)]/.test(p.t) ? " " : ""}<span className={"otr-w " + p.k}>{p.t}</span></span>)}</span> : l.op === "-" ? <s>{l.text}</s> : l.text}</span></div>
                       ))}
                       {m.status === "open" ? (
                         <div className="im-acts"><button type="button" className="im-apply" disabled={!!busy} onClick={() => void decide(i, "apply")}>{busy === "Applying…" ? "Applying…" : "Apply"}</button><button type="button" className="im-later" disabled={!!busy} onClick={() => void decide(i, "dismiss")}>Discard</button></div>
