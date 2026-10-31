@@ -16719,3 +16719,6 @@ html body .panel-h{flex-wrap:wrap;row-gap:4px}
 html body .panel-h > h2{min-width:min(100%,14ch)}
 /* Create order's review: a linked logo's own small picture in the art tile */
 html body .eo-art.on:has(> .logo-thumb){background:#fff;padding:2px;overflow:hidden}
+/* Popular garments → Good for: each choice keeps its words together ("Event or giveaway", "Kids"); the choices wrap
+   onto more lines instead of breaking a word a letter per line (Oct 31) */
+html body .pgs-uses label{white-space:nowrap}
