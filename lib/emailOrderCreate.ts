@@ -427,7 +427,10 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
   const rows = (ms || []) as (StdMockup & { created_at: string })[];
   // the same logos at the same spots (Oct 30: M-1117, D-10301 on the shorts' Left Leg, isn't a black polo's Left Chest)
   const norm = (s: string) => (s || "").trim().toLowerCase();
-  const key = (ims: { design_id?: string | null; location?: string }[]) => [...new Set(ims.filter((im) => im.design_id).map((im) => `${im.design_id}@${norm(im.location || "")}`))].sort().join("|");
+  // and the same colorway (Oct 31, #40319: M-1144 is the Primary logo in Maroon / Black; a black jacket's Maroon / Off
+  // White is another mockup)
+  const cwOf = (im: { colorway?: string; design_id?: string | null }) => norm(im.colorway || "");
+  const key = (ims: { design_id?: string | null; location?: string; colorway?: string }[]) => [...new Set(ims.filter((im) => im.design_id).map((im) => `${im.design_id}@${norm(im.location || "")}#${cwOf(im)}`))].sort().join("|");
   const keyOf = (r: StdMockup) => { const ims = ((r.snapshot as { imprints?: { design_id?: string | null; location?: string }[] } | null)?.imprints || []); return ims.length ? key(ims) : ""; };
   const allIds = [...new Set(groups.flatMap((g) => g.imprints.map((im) => im.design_id).filter(Boolean) as string[]))];
   const { data: ds } = allIds.length ? await admin.from("designs").select("id, preview_path, file_path").in("id", allIds) : { data: [] };

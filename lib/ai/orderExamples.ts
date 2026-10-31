@@ -2,9 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pdfTextServer } from "@/lib/pdfTextServer";
 import { officeText } from "@/lib/officeText";
-import { finishingList, lineQty, mergeSettings, orderGroups, persOf, priceList, SIZES, type GLine, type Group, type Order, type PriceType } from "@/lib/pricing";
+import { finishingList, lineQty, mergeSettings, orderGroups, persOf, priceList, SIZES, type Design, type GLine, type Group, type Order, type PriceType } from "@/lib/pricing";
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
+import { colorwayOnColor, type BrandRules } from "@/lib/brands";
 import { customerTrainings, DEFAULT_FIELDS, SHIP_SAID, trainingsForText, type DefaultField, type TrainingDefaults } from "@/lib/orderTrainings";
 
 /**
@@ -102,6 +103,7 @@ export async function saveExample(admin: SupabaseClient, orderId: string, by: st
   };
   const { error } = await admin.from("order_examples").upsert(row, { onConflict: "order_id" });
   if (!error) await learnDefaults(admin, o.customer_id as string, `${o.nickname || ""} ${subject} ${o.po_number || ""}`).catch((e) => console.warn("learnDefaults", e));
+  if (!error) await learnBrandLooks(admin, order).catch((e) => console.warn("learnBrandLooks", e));
   return error ? { ok: false, why: error.message } : { ok: true };
 }
 
@@ -190,4 +192,47 @@ THE ORDER STAFF MADE FROM IT:
 ${x.order_text}${x.reading_text ? `
 YOUR FIRST READING OF IT (corrected by staff into the order above):
 ${x.reading_text}` : ""}`).join("\n\n")}`;
+}
+
+/**
+ * What a right order teaches its customer's brands (Oct 31, Nick on #40319: "you should have made a mock-up… made it just
+ * like this in M-1144. And then those should be going in each time"):
+ *  - each garment color's goods (BrandRules.goods): a print in the brand's light colorway on Dark Gray Heather makes Dark
+ *    Gray Heather light goods for that brand's logos from now on, its dark colorway dark;
+ *  - its logo mockups are the brand's standard mockups (BrandRules.mockups): a group whose prints are all one brand's logos
+ *    with a saved logo mockup gives that mockup to the next group with the same logos, spots and colorway.
+ */
+export async function learnBrandLooks(admin: SupabaseClient, order: Order) {
+  const groups = orderGroups(order);
+  const ids = [...new Set(groups.flatMap((g) => (g.imprints || []).map((im) => im.design_id)).filter(Boolean) as string[])];
+  if (!ids.length) return;
+  const { data: ds } = await admin.from("designs").select("id, specs, brand_id").in("id", ids);
+  const des = new Map(((ds || []) as (Pick<Design, "id" | "specs"> & { brand_id?: string | null })[]).map((d) => [d.id, d]));
+  const bIds = [...new Set([...des.values()].map((d) => d.brand_id).filter(Boolean) as string[])];
+  if (!bIds.length) return;
+  const { data: bs } = await admin.from("brands").select("id, rules").in("id", bIds);
+  const rules = new Map(((bs || []) as { id: string; rules: BrandRules | null }[]).map((b) => [b.id, { ...(b.rules || {}) } as BrandRules]));
+  const changed = new Set<string>();
+  const cwKey = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const { data: mks } = await admin.from("mockups").select("number, title, group_id, created_at").eq("order_id", order.id).is("archived_at", null).order("created_at", { ascending: false });
+  for (const g of groups) {
+    const colors = [...new Set((g.lines || []).filter((l) => lineQty(l) > 0 && (l.color || "").trim()).map((l) => l.color.trim().toLowerCase()))];
+    const bOfG = new Set<string>();
+    for (const im of g.imprints || []) {
+      const d = im.design_id ? des.get(im.design_id) : null, bid = d?.brand_id;
+      if (!d || !bid) { bOfG.add(""); continue; }
+      bOfG.add(bid);
+      const r = rules.get(bid); if (!r) continue;
+      for (const c of colors) {
+        const cw = colorwayOnColor(im, d, c)?.name;
+        const side = cw && cwKey(cw) === cwKey(r.light) ? "light" : cw && cwKey(cw) === cwKey(r.dark) ? "dark" : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
+        if (side && r.goods?.[c] !== side) { r.goods = { ...(r.goods || {}), [c]: side }; changed.add(bid); }
+      }
+    }
+    // the group's saved logo mockup, when all its prints are one brand's logos
+    const only = bOfG.size === 1 ? [...bOfG][0] : "";
+    const m = only ? ((mks || []) as { number: number; title: string; group_id: string | null }[]).find((x) => x.group_id === g.id && / — Logo /.test(x.title || "")) : null;
+    if (only && m) { const r = rules.get(only)!; if (!(r.mockups || []).includes(m.number)) { r.mockups = [...(r.mockups || []), m.number]; changed.add(only); } }
+  }
+  for (const bid of changed) await admin.from("brands").update({ rules: rules.get(bid) }).eq("id", bid);
 }

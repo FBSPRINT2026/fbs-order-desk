@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { colorwaysOf, isDarkGarment, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
+import { brandDark, colorwaysOf, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
 import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
 
 /**
@@ -64,8 +64,10 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
   im.fromBrand = brand?.name || "their logos";
   if (im.method === "embroidery") {
     // the colorway's own sew file when the brand links one (light goods first, as the print's base), else the best fit
-    const sew = sewForPrint(d, brand, lines.length > 0 && lines.every((l) => isDarkGarment(l)), sewKindOf(lines));
+    const sew = sewForPrint(d, brand, lines.length > 0 && lines.every((l) => brandDark(brand, l)), sewKindOf(lines));
     if (sew) {
+      // the colorway that sews this file, by name on the print (a standard mockup is matched by it)
+      { const cw = colorwaysOf(d).find((c) => c.sew && c.sew === sew.code); if (cw) im.colorway = cw.name; }
       im.size = `${sew.wIn}" × ${sew.hIn}"`;
       im.stitches = sew.stitches;
       im.digitized = true;
