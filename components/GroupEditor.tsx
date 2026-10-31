@@ -342,7 +342,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   /** the print's color change count and its Change button (in the read-out and the form) */
   const ccRow = (d: Group["imprints"][number], di: number) => {
     if (fixed || printsFixed || d.supplied || !(d.inks || "").trim() || new Set(g.lines.map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size < 2) return null;
-    // a colorway change is the print's color change: its own row (cwcRow)
+    // a colorway split is the print's color change: shown on its Colorway line (Split)
     if (isCw(d)) return null;
     const n = versionsOf(d).length;
     // a screen print's color change already has its own line with the screens (count and fee), and is set in the Mockup
@@ -350,21 +350,19 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (d.method === "screen" && (n > 0 || !d.fromBrand)) return null;
     return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{n ? `${n}` : "None"} <button type="button" className="linkbtn" onClick={() => setCcAt(di)}>{n ? "Change" : "Add color change"}</button></span></div>;
   };
-  /** the logo's colorway on this print, with Swap (components/ColorwaySwap.tsx): only for a logo with colorways */
+  /**
+   * The logo's colorway on this print (components/ColorwaySwap.tsx): Swap picks another one for the whole print; Split
+   * gives some garments another colorway (components/ColorwayChange.tsx). Oct 31, Nick: "a colorway is a formal way to set
+   * a color change… for colorway, I think you should have swap and then a split button" (not a third "change" row beside
+   * Color change and Location change). Only for a logo with colorways.
+   */
   const cwRow = (d: Group["imprints"][number], di: number) => {
     const cur = d.design_id ? (designs || []).find((x) => x.id === d.design_id) : undefined;
     if (!cur || colorwaysOf(cur).length < 2 || d.supplied) return null;
+    const canSplit = !!printColorway(d, cur) && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1;
     return <ColorwaySwap d={cur} im={d} urls={designUrls || {}} mockupNo={g.masterMockup || g.fromMockup?.number || null} disabled={fixed || printsFixed}
-      also={isCw(d) ? versionsOf(d).map((v, i) => `Group ${String.fromCharCode(66 + i)}: ${cwLetter(cur, { name: v.to })} ${v.to}`).join(" · ") : undefined}
+      split={isCw(d) ? cwChangeText(d) : undefined} onSplit={canSplit ? () => setCwcAt(di) : undefined}
       onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw); }); redrawSoon(); }} />;
-  };
-  /** the group's saved pictures drawn again now (the order page does it: a print's colorway or the background changed) */
-  /** the print's colorway change (components/ColorwayChange.tsx): which garments get another colorway of the logo */
-  const cwcRow = (d: Group["imprints"][number], di: number) => {
-    const des = designOf(d);
-    if (fixed || printsFixed || d.supplied || !des || colorwaysOf(des).length < 2 || new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size < 2) return null;
-    const base = printColorway(d, des);
-    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Colorway change</span><span className="pr-scr-v">{isCw(d) ? cwChangeText(d) : "None"} <button type="button" className="linkbtn" onClick={() => setCwcAt(di)} disabled={!base} title={base ? undefined : "Swap the print to one of its colorways first"}>{isCw(d) ? "Change" : "Add colorway change"}</button></span></div>;
   };
   /** "B Maroon / Off White  ⟳  A Maroon / Black · EB530 Charcoal Gray (12)" */
   const cwChangeText = (d: Imprint) => {
@@ -830,7 +828,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               <Fragment key={l.id}>
               {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
                 {/* a color change between the sections: its own divider line, so B lines up with A (Oct 27, Nick) */}
-                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />{ccImps.some(isCw) ? "Colorway change" : "Color change"}</span></div>}
+                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />{ccImps.some(isCw) ? "Colorway split" : "Color change"}</span></div>}
                 <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
               {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
@@ -1148,7 +1146,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{cwcRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? g.mockupBgBy?.[ASIS_BG] || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? g.mockupBgBy?.[ASIS_BG] || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1214,14 +1212,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                     <button type="button" className="btn sm ghost" onClick={() => setCcAt(di)}>{versionsOf(d).length ? "Change" : "Add color change"}</button>
                   </div>
                 )}
-                {/* colorway change (Oct 31, Nick: "just like color change or location change, we need to do colorway") */}
-                {!d.supplied && designOf(d) && colorwaysOf(designOf(d)!).length > 1 && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1 && (
-                  <div className="imp-cc">
-                    <span className="imp-l">Colorway change</span>
-                    {isCw(d) ? <span className="imp-cc-v"><span>{cwChangeText(d)}</span></span> : <span className="faint">{printColorway(d, designOf(d)!) ? "Same colorway on every garment" : "Swap the print to one of its colorways first"}</span>}
-                    <button type="button" className="btn sm ghost" disabled={!printColorway(d, designOf(d)!)} onClick={() => setCwcAt(di)}>{isCw(d) ? "Change" : "Add colorway change"}</button>
-                  </div>
-                )}
+                {/* the logo's colorway: Swap, and Split for some garments (Oct 31, Nick) */}
+                {!d.supplied && cwRow(d, di) && <div className="imp-scr">{cwRow(d, di)}</div>}
                 {d.method === "embroidery" && !d.supplied && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => spotKey(x))).size > 1 && (
                   <div className="imp-cc">
                     <span className="imp-l">Location change</span>

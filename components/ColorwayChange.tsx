@@ -6,7 +6,7 @@ import { isLightArtUrl } from "@/lib/lightArt";
 import { lineQty, type Design, type GLine, type Imprint } from "@/lib/pricing";
 
 /**
- * Colorway change on a print (Oct 31, Nick: "just like color change or location change, we need to do colorway…
+ * Split colorways on a print (the Split button beside Swap; Oct 31, Nick: "just like color change or location change, we need to do colorway…
  * CT106678 gets colorway B, and then the charcoal gets colorway A… you select which ones get which colorway"). Built like
  * the location change pop-up: one row per garment color, one column per colorway of the logo (its picture, letter and
  * name); each garment color ticks the colorway it gets. The print's own colorway is where everything starts.
@@ -27,10 +27,10 @@ export default function ColorwayChange({ im, d, lines, urls, onClose, onSave }: 
   const [dark, setDark] = useState<boolean[]>([]);
   useEffect(() => { let on = true; void Promise.all(pics.map((u) => isLightArtUrl(u))).then((v) => { if (on) setDark(v); }); return () => { on = false; }; }, [pics.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Colorway change" onClick={onClose}>
+    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Split colorways" onClick={onClose}>
       <div className="dla cc cwc" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="dla-x" aria-label="Close" onClick={onClose}>×</button>
-        <h3>Colorway change · {im.location}</h3>
+        <h3>Split colorways · {im.location}</h3>
         <p className="dla-sub">Same logo, a different colorway on some garments. Tick the colorway each garment color gets; the print is {base ? `${String.fromCharCode(65 + cws.findIndex((c) => c.name === base.name))} ${base.name}` : "not one of its colorways yet (Swap first)"}.</p>
         <div className="tbl-wrap"><table className="tbl cc-tbl cwc-tbl">
           <thead><tr><th>Garment</th>{cws.map((c, i) => (
@@ -47,10 +47,10 @@ export default function ColorwayChange({ im, d, lines, urls, onClose, onSave }: 
           })}</tbody>
         </table></div>
         <div className="dla-acts">
-          {im.colorwayBy && Object.keys(im.colorwayBy).length > 0 && <button type="button" className="btn ghost danger" onClick={() => onSave({})}>No colorway change</button>}
+          {im.colorwayBy && Object.keys(im.colorwayBy).length > 0 && <button type="button" className="btn ghost danger" onClick={() => onSave({})}>Don't split</button>}
           <span className="spacer" />
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn primary" disabled={!base || !changed} title={!base ? "Swap the print to one of its colorways first" : changed ? undefined : "Tick another colorway for a garment color"} onClick={() => onSave(Object.fromEntries(colors.map(([k, c]) => [c, pick[k]])))}>Save colorway change</button>
+          <button type="button" className="btn primary" disabled={!base || !changed} title={!base ? "Swap the print to one of its colorways first" : changed ? undefined : "Tick another colorway for a garment color"} onClick={() => onSave(Object.fromEntries(colors.map(([k, c]) => [c, pick[k]])))}>Save split</button>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { isLightArtUrl } from "@/lib/lightArt";
 import type { Design, Imprint } from "@/lib/pricing";
 
 /**
- * THE colorway picker for a print (Oct 31, Nick: "collapse that and then have a small button that says change
+ * THE colorway picker for a print (Swap), and its Split (some garments in another colorway) (Oct 31, Nick: "collapse that and then have a small button that says change
  * colorway… by default it'll just say colorway A, B, C or D… then right to the right of it… swap… it sends them out
  * again so that you can see them and pick the next one… and then goes back down to just D").
  *
@@ -15,11 +15,13 @@ import type { Design, Imprint } from "@/lib/pricing";
  * one closes it again. Shown only for a logo with two or more colorways. Picking is the caller's: it applies the
  * colorway to the print (lib/brands.ts applyColorway), which sets its inks or threads, sew file and picture.
  */
-export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick, also }: {
+export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick, also, split, onSplit }: {
   d: Pick<Design, "id" | "specs">; im: Pick<Imprint, "colorway" | "inks" | "emb">; urls: Record<string, string>;
   /** the saved mockup the group is made from (M-1240), for the line's "M-1240-B" */ mockupNo?: number | null;
   disabled?: boolean; onPick: (cw: Colorway) => void;
   /** a colorway change's other colorways, after this one ("Group B: A Maroon / Black") */ also?: string;
+  /** the print's colorway split, in words ("B Maroon / Off White ⟳ A Maroon / Black · EB530 Charcoal Gray (1)") */ split?: string;
+  /** Split: some garments get another colorway (components/ColorwayChange.tsx); not given when it can't be split */ onSplit?: () => void;
 }) {
   const cws = colorwaysOf(d);
   const cur = printColorway(im, d);
@@ -47,8 +49,14 @@ export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick, 
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4" /><path d="M3 7h18" /><path d="M7 21l-4-4 4-4" /><path d="M21 17H3" /></svg>Swap
             </button>
           )}
+          {!disabled && onSplit && (
+            <button type="button" className={"cws-swap" + (split ? " on" : "")} title="Split: some garments get another colorway (CT106678 in B, the charcoal in A)" onClick={onSplit}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h6l4-6h8" /><path d="M13 12l0 0" /><path d="M9 12l4 6h8" /><path d="M18 3l3 3-3 3" /><path d="M18 15l3 3-3 3" /></svg>Split
+            </button>
+          )}
         </span>
       </div>
+      {split && <div className="pr-scr cws-split"><span className="pr-scr-l">Split</span><span className="pr-scr-v">{split}</span></div>}
       {open && !disabled && (
         <div className="cws-opts" role="group" aria-label="Colorways">
           {cws.map((c, i) => (
