@@ -78,6 +78,19 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   // ?area=details (older links) and a brand new customer open it
   const [detailsOpen, setDetailsOpen] = useState(() => isNew || searchParams.get("area") === "details");
   const [hasProgram, setHasProgram] = useState(false);
+  // the mockups their program's prices use: kept (no Archive), see migration 249
+  const [progMocks, setProgMocks] = useState<Record<number, string>>({});
+  useEffect(() => {
+    const sb = createClient();
+    sb.from("programs").select("id").eq("customer_id", id).then(async ({ data: ps }) => {
+      const ids = ((ps || []) as { id: string }[]).map((p) => p.id);
+      if (!ids.length) return setProgMocks({});
+      const { data: its } = await sb.from("program_items").select("name, garment, mockups").in("program_id", ids).eq("active", true).is("archived_at", null);
+      const m: Record<number, string> = {};
+      for (const it of (its || []) as { name: string; garment: string; mockups: { n: number }[] | null }[]) for (const e of it.mockups || []) m[+e.n] ||= (it.garment || "").split(":")[0].trim() || it.name;
+      setProgMocks(m);
+    });
+  }, [id]);
   // a program, or training for Create order: the Program & training tab shows
   useEffect(() => {
     const sb = createClient();
@@ -321,7 +334,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       )}
       <AccountAreas mode="shop" gangPanel={<CustomerGangSheets customerId={id} />} brandPortal={c?.brand_portal !== false} onBrandPortal={(v) => set("brand_portal", v)} brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><BrandSections customerId={id} company={c?.company || c?.name || ""} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} />} projectsCount={projOpen}
-          programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram} newMockup={`/shop/artwork/mockup?customer=${id}`}
+          programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram} newMockup={`/shop/artwork/mockup?customer=${id}`} programMockups={progMocks}
           designsPanel={c.design_catalog ? <CustomerDesigns customerId={id} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} /> : undefined}
           productionPanel={<CustomerProductionFiles customerId={id} />}
           brandsPanel={<CustomerBrands customerId={id} />}

@@ -16594,3 +16594,5 @@ input.prs-mk-col:hover,input.prs-mk-col:focus{border-color:var(--line);backgroun
 /* the customer's Mockups: New mockup / New logo mockup on its title line; a logo mockup's colors field (Oct 30) */
 .aa-sec-acts{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:auto}
 .mk-logo-col{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:200px;flex:1 1 200px;max-width:280px}
+/* a mockup their program uses: kept, marked instead of the Archive button (Oct 30) */
+.dc-kept{position:absolute;top:6px;left:6px;z-index:2;display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);font:700 11px var(--body);white-space:nowrap}

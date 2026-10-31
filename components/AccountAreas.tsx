@@ -77,7 +77,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ newMockup, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -106,6 +106,7 @@ export default function AccountAreas({ newMockup, gangPanel, brandPortal = true,
   /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
   programPanel?: ReactNode; hasProgram?: boolean;
   /** shop: the Mockup Creator for this customer, no order (its Logo mockup adds &logo=1) */ newMockup?: string;
+  /** mockups their program uses (number → the price's name): kept, so no Archive on them (migration 249) */ programMockups?: Record<number, string>;
   /** staff: the customer's designs, every way each was printed (Oct 20, Nick: Dear Heart) */
   designsPanel?: ReactNode;
   /** shop: brand standards shown in their portal, switched on the card's header line (Oct 24, Nick) */ brandPortal?: boolean; onBrandPortal?: (v: boolean) => void;
@@ -954,7 +955,8 @@ export default function AccountAreas({ newMockup, gangPanel, brandPortal = true,
             {P.items.map((set) => { const m = set[0], name = m.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
               <div key={m.id} className={"design-card mk-card" + (m.starred ? " starred" : "")}>
                 <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
-                  {!m.shelved && onArchiveMockup && <button type="button" className="dc-arch" title="Archive this mockup (find it under Archive)" aria-label="Archive mockup" onClick={() => shelveMock(m, true)}><Ico d={I.archive} size={14} /></button>}
+                  {m.mno != null && programMockups[m.mno] && <span className="dc-kept" title={`Used in their program (${programMockups[m.mno]}), so it can't be archived. Take it off the program first.`}>In program</span>}
+                  {!m.shelved && onArchiveMockup && !(m.mno != null && programMockups[m.mno]) && <button type="button" className="dc-arch" title="Archive this mockup (find it under Archive)" aria-label="Archive mockup" onClick={() => shelveMock(m, true)}><Ico d={I.archive} size={14} /></button>}
                   {set.length > 1 && <span className="mk-card-n" title={set.map((x) => x.title.split(" — ")[1] || x.title).join("\n")}>{set.length} colors</span>}
                   {onStarMockup && !m.shelved && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
                 </div>
