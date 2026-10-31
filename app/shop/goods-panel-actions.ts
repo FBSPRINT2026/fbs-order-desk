@@ -16,7 +16,12 @@ import { staffAddTracking, staffGoodsInfo } from "@/app/shop/goods-actions";
 export type PanelTrack = { carrier: string; tracking: string; status?: string | null; detail?: string | null; eta?: string | null; delivered?: string | null };
 export type PanelBuy = { id: string; vendor: string; po: string; pcs: number; total: number | null; expected: string | null; status: string; via: string; at: string; note: string; tracking: PanelTrack[] };
 export type PanelCust = { status: string; vendor: string; po: string; shipDate: string | null; expected: string; tracking: PanelTrack[] };
-export type GoodsPanel = { fbs: PanelBuy[]; cust: PanelCust | null };
+/** the customer's own transfers (order_supplies, kept in step with the prints ticked "Customer supplied transfers") */
+export type PanelSup = { id: string; vendor: string; ref: string; where: string; status: string; expected: string | null; received: string | null; tracking: PanelTrack[] };
+export type GoodsPanel = { fbs: PanelBuy[]; cust: PanelCust | null; sup: PanelSup[] };
+type SupRow = { id: string; vendor: string; ref: string; where_text: string; status: string; expected: string | null; received_at: string | null; carrier: string; tracking: string; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null };
+const supOf = (x: SupRow): PanelSup => ({ id: x.id, vendor: x.vendor, ref: x.ref, where: x.where_text, status: x.received_at ? "received" : x.status, expected: x.expected, received: x.received_at,
+  tracking: x.tracking ? [{ carrier: x.carrier || carrierOf(x.tracking), tracking: x.tracking, status: x.track_status, detail: x.track_detail, eta: x.est_delivery || x.expected, delivered: x.delivered_at }] : [] });
 
 async function staff() {
   const v = await getViewer();
@@ -30,12 +35,13 @@ export async function goodsPanel(orderId: string): Promise<{ ok: true; panel: Go
   try {
     await staff();
     const admin = createAdminClient();
-    const [{ data: buys }, { data: g }, { data: sh }, { data: bs }] = await Promise.all([
+    const [{ data: buys }, { data: g }, { data: sh }, { data: bs }, { data: sp }] = await Promise.all([
       admin.from("blank_orders").select("id, supplier, supplier_order, po, status, lines, total, expected_date, placed_via, created_at, received_at, note").eq("order_id", orderId).neq("status", "cancelled").order("created_at"),
       admin.from("order_goods").select("status, supplier, supplier_po, ship_date, expected").eq("order_id", orderId).maybeSingle(),
       admin.from("goods_shipments").select("carrier, tracking, eta, track_status, track_detail, est_delivery, delivered_at").eq("order_id", orderId).order("created_at"),
       // our goods' boxes: from the supplier manifests matched every night (lib/manifest.ts applyBlanks) and from Add here
       admin.from("blank_shipments").select("blank_order_id, supplier, carrier, tracking, eta, track_status, track_detail, est_delivery, delivered_at").eq("order_id", orderId).order("created_at"),
+      admin.from("order_supplies").select("*").eq("order_id", orderId).neq("status", "gone").order("created_at"),
     ]);
     const boxes = (bs || []) as { blank_order_id: string | null; supplier: string | null; carrier: string; tracking: string; eta: string | null; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null }[];
     const rows = (buys || []) as BuyRow[];
@@ -54,11 +60,11 @@ export async function goodsPanel(orderId: string): Promise<{ ok: true; panel: Go
       ? { status: go?.status || "on_way", vendor: supplierLabel(go?.supplier) || "", po: go?.supplier_po || "", shipDate: go?.ship_date || null, expected: go?.expected || "",
           tracking: ships.filter((s) => s.tracking).map((s) => ({ carrier: s.carrier || carrierOf(s.tracking), tracking: s.tracking, status: s.track_status, detail: s.track_detail, eta: s.est_delivery || s.eta, delivered: s.delivered_at })) }
       : null;
-    return { ok: true, panel: { fbs, cust } };
+    return { ok: true, panel: { fbs, cust, sup: ((sp || []) as SupRow[]).map(supOf) } };
   } catch (e) { return fail(e); }
 }
 
-export type GoodsAdd = { who: "fbs" | "cust"; vendor: string; po: string; eta: string; carrier: string; tracking: string; note?: string; /** add to this goods order of ours */ buyId?: string };
+export type GoodsAdd = { who: "fbs" | "cust" | "sup"; vendor: string; po: string; eta: string; carrier: string; tracking: string; note?: string; /** add to this goods order of ours */ buyId?: string; /** their transfers (who: "sup"): tracking and arrival on this batch */ supId?: string };
 
 /** Add what's known: our purchase from any vendor (or tracking on one we already have), or the customer's goods. */
 export async function addGoodsInfo(orderId: string, a: GoodsAdd): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -67,6 +73,18 @@ export async function addGoodsInfo(orderId: string, a: GoodsAdd): Promise<{ ok: 
     const admin = createAdminClient();
     const tracking = String(a.tracking || "").replace(/\s+/g, "").slice(0, 60), vendor = String(a.vendor || "").trim().slice(0, 60), po = String(a.po || "").trim().slice(0, 60);
     const eta = /^\d{4}-\d{2}-\d{2}$/.test(a.eta || "") ? a.eta : null;
+    // their transfers: who made them and their order # are on the print; here, tracking and when they arrive
+    if (a.who === "sup") {
+      if (!a.supId) return { ok: false, error: "Pick their transfers first." };
+      if (!tracking && !eta) return { ok: false, error: "Add tracking or when they arrive." };
+      const carrier = tracking ? (a.carrier || carrierOf(tracking)).slice(0, 40) : "";
+      const f = tracking ? await startTracker(tracking, carrier).catch(() => null) : null;
+      const { data: row, error } = await admin.from("order_supplies").update({ ...(tracking ? { tracking, carrier, ...(f || {}) } : {}), ...(eta ? { expected: eta } : {}), status: "on_way", updated_at: new Date().toISOString() })
+        .eq("id", a.supId).eq("order_id", orderId).is("received_at", null).select("vendor, ref").maybeSingle();
+      if (error) return { ok: false, error: error.message };
+      if (row) await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: `Their transfers: ${[row.vendor, row.ref && `order ${row.ref}`, tracking && `${carrier} ${tracking}`, eta && `arrive ${eta}`].filter(Boolean).join(" · ")}`, actor: v.email });
+      return { ok: true };
+    }
     if (!tracking && !vendor && !po) return { ok: false, error: "Add the vendor, an order number or tracking." };
     if (a.who === "cust") {
       if (vendor || po) {
@@ -159,5 +177,35 @@ export async function setBuyReceived(orderId: string, buyId: string, yes: boolea
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: yes ? "Goods we ordered marked received" : "Goods we ordered marked not received", actor: v.email });
     return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** their transfers are here (or aren't after all): the order's Goods panel and Goods & receiving */
+export async function setSupplyReceived(orderId: string, supId: string, yes: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await staff();
+    const admin = createAdminClient();
+    const { data: row, error } = await admin.from("order_supplies").update({ received_at: yes ? new Date().toISOString() : null, received_by: yes ? v.email : null, status: yes ? "received" : "waiting", updated_at: new Date().toISOString() })
+      .eq("id", supId).eq("order_id", orderId).select("vendor, ref, tracking").maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!yes && row?.tracking) await admin.from("order_supplies").update({ status: "on_way" }).eq("id", supId);
+    await admin.from("order_events").insert({ order_id: orderId, kind: "goods", detail: `Their transfers${row ? ` (${[row.vendor, row.ref && `order ${row.ref}`].filter(Boolean).join(" ")})` : ""} marked ${yes ? "received" : "not received"}`, actor: v.email });
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** every open batch of customer supplied transfers, for Goods & receiving */
+export type OpenSupply = PanelSup & { orderId: string; number: number; nickname: string; customer: string; due: string | null };
+export async function openSupplies(): Promise<{ ok: true; rows: OpenSupply[] } | { ok: false; error: string }> {
+  try {
+    await staff();
+    const admin = createAdminClient();
+    const { data } = await admin.from("order_supplies").select("*, orders(id, number, nickname, due_date, status, customers(company, name))").in("status", ["waiting", "on_way"]).order("created_at").limit(500);
+    type R = SupRow & { order_id: string; orders: { id: string; number: number; nickname: string | null; due_date: string | null; status: string; customers: { company: string | null; name: string | null } | null } | null };
+    const rows = ((data || []) as unknown as R[]).filter((x) => x.orders && !["completed", "canceled", "cancelled"].includes(x.orders.status)).map((x) => ({
+      ...supOf(x), orderId: x.order_id, number: x.orders!.number, nickname: x.orders!.nickname || "", customer: x.orders!.customers?.company || x.orders!.customers?.name || "", due: x.orders!.due_date,
+    }));
+    rows.sort((p, q) => (p.due || "9999").localeCompare(q.due || "9999"));
+    return { ok: true, rows };
   } catch (e) { return fail(e); }
 }

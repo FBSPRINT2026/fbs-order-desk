@@ -368,6 +368,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     } catch (e) { say("Upload failed: " + (e instanceof Error ? e.message : String(e))); return null; }
   }
 
+  const lastSup = useRef("");
   const save = useCallback(async () => {
     const d = latest.current;
     if (!d) return;
@@ -390,6 +391,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     }).eq("id", d.id).select("updated_at").maybeSingle();
     setSaveState(error ? "Save failed: " + error.message : "Saved");
     if (!error) { const at = String((savedRow as { updated_at?: string } | null)?.updated_at || ""); if (at) baseAt.current = at; savedUnsaved(d.id, startedAt, at); }
+    // their transfers ticked, named or unticked: the Goods panel shows them (order_supplies, kept in step by the database)
+    const sup = JSON.stringify(d.groups.flatMap((g) => g.imprints.filter((im) => im.supplied).map((im) => [im.id, im.supplied?.by || "", im.supplied?.ref || "", im.supplied?.where || "", im.location])));
+    if (!error && sup !== lastSup.current) { lastSup.current = sup; window.dispatchEvent(new CustomEvent("fbs:goods-changed", { detail: { orderId: d.id } })); }
   }, [sb, settings]);
   // a print's colorway or a logo mockup's background changed on this page (GroupEditor): that group's pictures drawn
   // again now, the same way as above

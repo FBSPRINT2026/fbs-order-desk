@@ -7,6 +7,7 @@ import { custLabel, money } from "@/lib/format";
 import { mergeSettings, type Customer } from "@/lib/pricing";
 import { goodsNeedInfo, needsGoods, supplierLabel, TRACK, trackingUrl, type GoodsItem } from "@/lib/goods";
 import { shopGoods } from "@/app/shop/goods-actions";
+import { openSupplies, setSupplyReceived, type OpenSupply } from "@/app/shop/goods-panel-actions";
 import CustomerGoodsBoard from "@/components/CustomerGoodsBoard";
 import { ResolveList } from "@/components/IncomingShipments";
 import type { ManifestHit, PendingShipment, PrintavoGoods } from "@/lib/manifest";
@@ -37,7 +38,8 @@ type Row = { key: string; /** a job's shipments shown separately (Uncombine): th
   jobKeys?: string[];
   /** a mixed shipment: the jobs sharing its boxes */
   jobs?: { number: number; href: string }[];
-  link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
+  link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean;
+  /** the customer's own transfers (order_supplies): marked received here */ sup?: { id: string; orderId: string } };
 type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
   /** an unknown account whose goods fit one customer's job: who we think it is, and why */
   sugCust?: { id: string; name: string } | null; sugHow?: string;
@@ -102,7 +104,7 @@ const WH: Record<string, string> = { TX: "Fort Worth", KS: "Kansas", IL: "Illino
  */
 export default function GoodsReceiving() {
   const sb = createClient();
-  const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; lead: number } | null>(null);
+  const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; sups: OpenSupply[]; lead: number } | null>(null);
   const [tab, setTab] = useSticky<"arriving" | "need" | "ordered" | "received">("receiving.tab", "arriving");
   const [focus, setFocus] = useState<Focus | null>(null);
   const [groupBy, setGroupBy] = useSticky<GroupBy>("receiving.groupBy", "carrier");
@@ -222,8 +224,8 @@ export default function GoodsReceiving() {
       sb.from("customers").select("*").in("id", [...new Set(orders.map((o) => o.customer_id).filter(Boolean))] as string[]),
     ]);
     const wholesale = orders.filter((o) => needsGoods({ ...o, type: o.type }));
-    const g = wholesale.length ? await shopGoods(wholesale.map((o) => o.id)) : { items: [] };
-    setData({ orders, cust: Object.fromEntries(((cs || []) as Customer[]).map((c) => [c.id, c])), blanks, bships: (bs || []) as BS[], goods: g.items || [], lead: mergeSettings(st?.data).ship.goodsLeadDays });
+    const [g, sp] = await Promise.all([wholesale.length ? shopGoods(wholesale.map((o) => o.id)) : Promise.resolve({ items: [] }), openSupplies().catch(() => null)]);
+    setData({ orders, cust: Object.fromEntries(((cs || []) as Customer[]).map((c) => [c.id, c])), blanks, bships: (bs || []) as BS[], goods: g.items || [], sups: sp && sp.ok ? sp.rows : [], lead: mergeSettings(st?.data).ship.goodsLeadDays });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
@@ -300,6 +302,10 @@ export default function GoodsReceiving() {
     ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: /sanmar/i.test(sh.note + sh.carrier) ? "SanMar" : /s&s|s & s/i.test(sh.note + sh.carrier) ? "S&S" : sh.carrier || "—", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false, supplierRaw: sh.carrier + " " + (sh.note || ""), shipped: null, po: "", so: (sh.note.match(/order\s+([A-Z0-9-]+)/i) || [])[1] || "" }); }),
     // customers' goods on orders here
     ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: it.goods.supplier === "ss" ? "S&S" : it.goods.supplier === "sanmar" ? "SanMar" : supplierLabel(it.goods.supplier) || "Customer", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null, po: "", so: it.goods.supplier_po || "" }); })),
+    // customers' own transfers (a print ticked "Customer supplied transfers"): who made them, their order #, tracking
+    ...data.sups.map((x) => rowOf({ key: "s" + x.id, side: "customer", number: x.number, href: `/shop/orders/${x.orderId}`, who: x.customer || "—", what: "Their transfers", sub: x.vendor || "Transfers", so: x.ref, po: "", boxes: 0, pcs: 0,
+      trks: x.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: !!k.delivered || k.status === "delivered", status: k.status || "" })), statuses: x.tracking.map((k) => k.status || ""),
+      at: x.tracking[0]?.eta || x.expected, deliveredAt: x.tracking[0]?.delivered || null, need: x.due ? bizBefore(x.due, data.lead) : null, unlinked: false, supplierRaw: x.vendor, shipped: null, sup: { id: x.id, orderId: x.orderId } })),
     // tied to Printavo jobs (until go-live)
     ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight, mixed: k.mixed })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
@@ -419,6 +425,7 @@ export default function GoodsReceiving() {
             : r.link?.sugCust && !r.link.customerId && !r.link.us && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : r.jobs ? <span className="rv-mixed" title="A mixed shipment: the same boxes hold goods for each of these jobs. Click the row to see which items go where."><span className="rv-tag rv-mix">mixed</span>{r.jobs.map((j, i) => <span key={j.href}>{i ? " + " : ""}<Link href={j.href} className="rv-linked">#{j.number}</Link></span>)}</span>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
+        {r.sup && <button type="button" className="btn sm" onClick={async () => { const x = await setSupplyReceived(r.sup!.orderId, r.sup!.id, true); if (x.ok) load(); }} title="Their transfers are here">Mark received</button>}
         {r.parts && r.jobKeys && <button type="button" className="rv-ign" onClick={async () => { for (const k of r.jobKeys!) await setSeparated(k, true, `${r.who} #${r.number}`); }} title="These shipments are one row because they're for the same job or share boxes. Show each on its own row; Unlink is there for the one that's wrong.">Uncombine</button>}
         {r.splitOf && <button type="button" className="rv-ign" onClick={async () => { for (const k of r.splitOf!.split("§")) await setSeparated(k, false, `${r.who} #${r.number}`); }} title="Show this job's supplier orders as one row again">Combine</button>}
         {!r.unlinked && !!r.lineIds?.length && !r.parts && <button type="button" className={"rv-ign rv-unl" + (unlinkAsk === r.key ? " ask" : "")} onClick={() => unlink(r)} title="Linked to the wrong job? Unlink it: the goods go back to not linked, and that job is remembered as wrong">{unlinkAsk === r.key ? "Sure? Unlink" : "Unlink"}</button>}
