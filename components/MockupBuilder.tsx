@@ -1235,7 +1235,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog, custMocks, lookingUp, garDrawing]);
   // auto mode doesn't save the plain drawing while one is still to be drawn from their photo
-  const drawPending = !portal && !!orderId && custMocks.length > 0 && lines.some((x) => x.look?.kind && !x.look.draw && !x.own && x.style.trim() && !garmentFor(x) && !garDrawn.current.has(bareStyle(x.style, x.brand).style.toUpperCase()));
+  // (a logo mockup draws no garment: nothing to wait for; Oct 31, #40322's redraw waited on it and never saved)
+  const drawPending = !portal && !logoOnly && !!orderId && custMocks.length > 0 && lines.some((x) => x.look?.kind && !x.look.draw && !x.own && x.style.trim() && !garmentFor(x) && !garDrawn.current.has(bareStyle(x.style, x.brand).style.toUpperCase()));
 
   // a garment we have no photo of, drawn in its color (Oct 27, Nick: "better stock graphics for when we don't have the
   // actual garment"): a tee, long sleeve, hoodie, vest… from its name, painted with the look read off their mockup
