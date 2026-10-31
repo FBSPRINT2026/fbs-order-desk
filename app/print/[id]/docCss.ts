@@ -570,4 +570,50 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .tot .r.iv2-pay{color:var(--ok)}
 .pdoc .tot .r.iv2-pay small{font-size:8.5pt;color:var(--ink3);margin-left:7px;font-weight:400}
 .pdoc .iv2-full{align-self:flex-start;font-size:8pt;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
+/* The work order's job page, Oct 31 (Nick: "the job name is huge… no room to view the mock-up… the counting in… doesn't
+   need to take up half the page… reimagine it"): a short top, the mockup large beside the prints, a row per garment */
+.pdoc .w2-top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:start}
+.pdoc .w2-t{min-width:0}
+.pdoc .w2-t h1{margin:2px 0 0;font-size:19pt;line-height:1.08;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pdoc .w2-who{font-size:10.5pt;margin-top:3px;color:var(--ink2)}
+.pdoc .w2-who b{color:var(--ink)}
+.pdoc .w2-who .nw{white-space:nowrap}
+.pdoc .w2-due{border:2.5px solid var(--ink);border-radius:9px;padding:5px 12px;text-align:center;display:flex;flex-direction:column;align-items:center;min-width:1.5in}
+.pdoc .w2-due b{font-size:17pt;line-height:1.05;white-space:nowrap}
+.pdoc .w2-due small{font-size:8.5pt;color:var(--ink2);white-space:nowrap}
+.pdoc .wo2 .qr{width:.72in;height:.72in}
+.pdoc .wo2 .codes small{font-size:6.5pt;max-width:.9in}
+.pdoc .wo2 .flags{margin-top:8px}
+.pdoc .w2-hero{flex:1 1 0;min-height:2.6in;display:grid;grid-template-columns:minmax(0,1fr) 2.9in;gap:12px;margin-top:10px}
+.pdoc .w2-hero.many{grid-template-columns:minmax(0,1fr) 3.3in}
+.pdoc .w2-hero .wo-mks{margin-top:0;min-height:0;flex:none;height:100%}
+.pdoc .w2-prints{display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden}
+.pdoc .w2-prints .wo-pc .kv{grid-template-columns:.62in 1fr;font-size:9.5pt}
+.pdoc .w2-prints .wo-pc .inks span{display:block}
+.pdoc .w2-way{display:flex;flex-direction:column;gap:1px}
+.pdoc .w2-th{display:flex;flex-direction:column}
+.pdoc .w2-th > span{font-weight:700;color:var(--ink)}
+.pdoc table.cnt2{width:100%;border-collapse:collapse;font-size:10.5pt}
+.pdoc .cnt2 th{font-size:8pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:3px 5px;border-bottom:2px solid var(--ink)}
+.pdoc .cnt2 th.sz,.pdoc .cnt2 td.sz{text-align:center;width:.5in}
+.pdoc .cnt2 th.tot,.pdoc .cnt2 td.tot{width:.62in;background:#f2f4f7}
+.pdoc .cnt2 th.fin,.pdoc .cnt2 td.fin{width:.62in}
+.pdoc .cnt2 td{padding:5px;border-bottom:1px solid var(--line);vertical-align:top}
+.pdoc .cnt2 td.g .g1{font-size:10.5pt}
+.pdoc .cnt2 td.g .g2{font-size:8.5pt;color:var(--ink3);margin-left:20px}
+.pdoc .cnt2 td.g .lnote{font-size:8.5pt;margin-left:20px}
+.pdoc .cnt2 td.sz b{display:block;font-size:14pt;line-height:1.1}
+.pdoc .cnt2 td.sz i{display:block;height:.24in;margin-top:3px;border:1.3px dashed #9aa3b2;border-radius:4px}
+.pdoc .cnt2 td.fin i{margin-top:0;height:.36in}
+.pdoc .cnt2-by{display:flex;gap:28px;font-size:9.5pt;color:var(--ink2);margin-top:6px}
+.pdoc .cnt2-by i{display:inline-block;width:1.4in;border-bottom:1px solid var(--ink2);margin-left:6px;vertical-align:-2px}
+.pdoc .wo2 h2{margin:12px 0 4px}
+.pdoc .wo2 .notes{font-size:10pt;overflow-wrap:anywhere;min-height:.5in}
+.pdoc .wo2.f1 .cnt2 td.sz i{height:.18in}
+.pdoc .wo2.f2 .w2-hero{min-height:2in}
+.pdoc .wo2.f5 .w2-hero{min-height:1.5in}
+/* the color change / colorway tag on a close-up: its own name (the shop's .cc-tag is a square letter badge) */
+.pdoc .doc-cctag{display:inline-block;width:auto;height:auto;font-size:9.5pt;font-weight:800;letter-spacing:.04em;color:#b3261e;background:#fdecea;border-radius:999px;padding:2px 10px;margin-top:4px}
+/* the group's piece count stays on one line beside its name (Oct 31: "2 / pcs" ran into the Amount heading) */
+.pdoc .iv2-gh > small{white-space:nowrap;flex:none;margin-left:12px}
 `;

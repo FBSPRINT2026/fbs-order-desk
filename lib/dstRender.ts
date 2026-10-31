@@ -132,11 +132,14 @@ export function renderThreads(info: DstInfo, colors: string[], opts: { width?: n
       const diff = Math.max(0, nx * L[0] + ny * L[1] + nzz * L[2]);
       const spec = Math.pow(Math.max(0, nx * Hv[0] + ny * Hv[1] + nzz * Hv[2]), 14);
       const fib = 0.07 * Math.sin(sAcross * 9 + ph) + 0.04 * Math.sin(sAcross * 21 + ph * 2) + (rnd() - 0.5) * 0.08;
-      const along = 0.66 + 0.42 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, t / len))), 0.6);
+      // a stitch is a little darker where it dips into its needle holes; kept gentle (Oct 31, Nick on #40311's work order:
+      // "I don't think it really looks like that when you sew it": short fill stitches came out much darker than a satin's
+      // long ones, so one color looked like two)
+      const along = 0.84 + 0.2 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, t / len))), 0.6);
       const shade = (0.9 + 0.14 * diff + fib) * along;
       const a = Math.max(0, Math.min(1, (1 - dist) * rr));
       const p = y * W + x;
-      for (let k = 0; k < 3; k++) col[p * 3 + k] = Math.min(1, base[k] * shade + 0.12 * spec) * a + col[p * 3 + k] * (1 - a);
+      for (let k = 0; k < 3; k++) col[p * 3 + k] = Math.min(1, base[k] * shade + 0.07 * spec) * a + col[p * 3 + k] * (1 - a);
       al[p] = a + al[p] * (1 - a);
     }
   }
