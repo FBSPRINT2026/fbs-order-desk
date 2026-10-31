@@ -133,7 +133,7 @@ export async function describeFromStyles(admin: SupabaseClient, customerId: stri
   ]);
   const nameOf = new Map<string, { name: string; brand: string }>();
   for (const r of (sm || []) as { style: string; brand: string; title: string }[])
-    nameOf.set(r.style.toUpperCase(), { name: (r.title || "").replace(new RegExp(`\\.?\\s*${r.style.replace(/[^A-Za-z0-9]/g, "")}\\s*$`, "i"), "").replace(new RegExp(`^${(r.brand || "").replace(/[^\w\s&-]/g, "")}\\s+`, "i"), "").trim(), brand: r.brand || "" });
+    nameOf.set(r.style.toUpperCase(), { name: (r.title || "").replace(new RegExp(`\\.?\\s*${r.style.replace(/[^A-Za-z0-9]/g, "")}\\s*$`, "i"), "").replace(new RegExp(`^${(r.brand || "").replace(/[^\w\s&-]/g, "")}\\s+`, "i"), "").replace(/[\s.\-–—]+$/, "").trim(), brand: r.brand || "" });
   // our own garment list wins over SanMar's wording
   for (const r of (gs || []) as { style: string; brand: string; description: string }[]) if ((r.description || "").trim()) nameOf.set(r.style.toUpperCase(), { name: r.description.split(/\r?\n/)[0].trim(), brand: r.brand || "" });
   // what the shop called it on this customer's past orders, when neither list has it
@@ -154,7 +154,7 @@ export async function describeFromStyles(admin: SupabaseClient, customerId: stri
     const mine = [...words(said, l.brand || known.brand)].filter((w) => !KINDS.has(w));
     const theirs = words(known.name, known.brand);
     if (said && mine.some((w) => theirs.has(w))) continue;
-    l.garment = known.name;
+    l.garment = known.name.replace(/[\s.\-–—]+$/, "");
     done.push(said ? `${st}: "${said}" → "${known.name}"` : `${st}: ${known.name}`);
   }
   return done;
