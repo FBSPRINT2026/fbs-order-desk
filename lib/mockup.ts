@@ -478,6 +478,54 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
 }
 
 /**
+ * A cap's photo (Oct 31, Nick: "Amanda's doing our first hat and the sizing is way off… 4.5 should almost take up the
+ * whole front on this Richardson 112FP"): caps were drawn at a shirt's scale, so a 4.5" front logo came out about an
+ * inch wide. Measured like a bag: the cap's silhouette on the white background, its widest row taken as the crown's
+ * width across the front (CAP_FRONT_W, about 8" on a structured cap seen from the front), which sets the pixels per
+ * inch; prints sit centered on the front panels (below the button, above the brim seam), at real size.
+ */
+export const CAP_FRONT_W = 8;
+export function measureCap(img: HTMLImageElement, view: View): Fit | null {
+  const W = PHOTO_W, H = PHOTO_H;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  if (!x) return null;
+  drawContained(x, img, W, H);
+  let d: Uint8ClampedArray;
+  try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
+  // the background: near-white connected to the border (a white cap's own whites stay cap)
+  const bg = new Uint8Array(W * H);
+  const light = (p: number) => Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) >= 245;
+  const stack = new Int32Array(W * H);
+  let sp = 0;
+  const push = (p: number) => { if (!bg[p] && light(p)) { bg[p] = 1; stack[sp++] = p; } };
+  for (let X = 0; X < W; X++) { push(X); push((H - 1) * W + X); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (sp) { const p = stack[--sp], X = p % W; if (X > 0) push(p - 1); if (X < W - 1) push(p + 1); if (p >= W) push(p - W); if (p < W * (H - 1)) push(p + W); }
+  const md = x.createImageData(W, H);
+  for (let p = 0; p < W * H; p++) md.data[p * 4 + 3] = bg[p] ? 0 : 255;
+  const mc = document.createElement("canvas"); mc.width = W; mc.height = H; mc.getContext("2d")!.putImageData(md, 0, 0);
+  // the silhouette: its top, bottom and widest row (the soft shadow around it isn't counted)
+  const strong = (p: number) => { const r = d[p * 4], g = d[p * 4 + 1], b = d[p * 4 + 2]; return !bg[p] && (Math.min(r, g, b) < 225 || Math.max(r, g, b) - Math.min(r, g, b) > 20); };
+  let top = -1, bot = -1, maxW = 0, cxSum = 0, cxN = 0;
+  const Ls = new Int16Array(H).fill(-1), Rs = new Int16Array(H).fill(-1);
+  for (let y = 0; y < H; y++) {
+    let L = -1, R = -1;
+    for (let X = 0; X < W; X++) if (strong(y * W + X)) { if (L < 0) L = X; R = X; }
+    Ls[y] = L; Rs[y] = R;
+    if (L >= 0 && R - L > 20) { if (top < 0) top = y; bot = y; maxW = Math.max(maxW, R - L); }
+  }
+  if (top < 0 || bot - top < 100 || maxW < 150) return null;
+  for (let y = top; y <= bot; y++) if (Ls[y] >= 0 && Rs[y] - Ls[y] >= maxW * 0.85) { cxSum += (Ls[y] + Rs[y]) / 2; cxN++; }
+  const cx = cxN ? cxSum / cxN : W / 2;
+  const ppi = maxW / CAP_FRONT_W, tall = bot - top;
+  // the front panels: from under the button to the brim seam (front); the back: the crown above the closure
+  const y0 = top + tall * (view === "back" ? 0.1 : 0.08), y1 = top + tall * (view === "back" ? 0.62 : 0.74);
+  const none = { x: cx, y: top, rot: 0 };
+  return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top: y0, w: maxW * 0.62, h: y1 - y0, ppi } };
+}
+
+/**
  * A bag or tote photo (white background): the body of the bag (the wide part under the handles) and its scale from the
  * bag's real width. Prints are placed on the body, centered, at real size (no shirt geometry).
  */
