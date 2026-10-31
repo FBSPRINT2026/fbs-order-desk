@@ -3,7 +3,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { kidLine } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -129,7 +129,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const specFromCatalog = g.imprints.some((d) => d.method === "embroidery") ? g.lines.map((l, i) => ({ l, i })).filter(({ l }) => {
     if (l.specialty != null || isSpecialtyItem(l) || !(l.style || "").trim()) return false;
     const gar = catalog.find((x) => x.style.toLowerCase() === l.style.trim().toLowerCase());
-    return !!gar && SPECIALTY_ITEM.test(gar.description || "");
+    return !!gar && specialtyText(gar.description || "");
   }).map((x) => x.i) : [];
   useEffect(() => { if (specFromCatalog.length) update((x) => { for (const i of specFromCatalog) if (x.lines[i]) x.lines[i].specialty = true; }); }, [specFromCatalog.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const [askSkip, setAskSkip] = useState(false);

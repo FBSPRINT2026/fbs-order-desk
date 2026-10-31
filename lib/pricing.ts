@@ -509,14 +509,23 @@ export type PriceList = {
   contractNotes?: string;
 };
 /** non-standard flat garments (embroidery specialty items), from the garment's name */
-export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|knit|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|vest|blanket|towel|apron)s?\b/i;
+export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|knit|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|jkt|jckt|coat|parka|anorak|windbreaker|soft ?shell|vest|blanket|towel|apron)s?\b/i;
+/** the specialty words a garment name can be cut off in (the supplier's 30-odd character names: "Carhartt Thermal-Lined
+ *  Duck Active Jac", Oct 31, #40311: the jacket wasn't charged as one) */
+const SPECIALTY_WORDS = ["backpack", "beanie", "blanket", "duffel", "fleece", "hoodie", "hooded", "jacket", "parka", "anorak", "windbreaker", "sweatshirt", "snapback", "trucker", "towel", "apron"];
+/** a garment name that's a specialty item: by its words, or (cut off) by a last word that's the start of one ("Jac") */
+export function specialtyText(t: string): boolean {
+  if (SPECIALTY_ITEM.test(t)) return true;
+  const last = ((t || "").trim().match(/([A-Za-z]{3,})[^A-Za-z]*$/) || [])[1]?.toLowerCase() || "";
+  return !!last && SPECIALTY_WORDS.some((w) => w !== last && w.startsWith(last));
+}
 /** brands that only make headwear: a line with just a style number ("Richardson 115", "Flexfit 110M") is still a hat
  *  (Oct 27, Nick: the hat add-on wasn't charged on #40181, whose lines had no garment name) */
 export const HEADWEAR_BRAND = /^\s*(richardson|flexfit|yupoong|yp classics|pacific headwear|imperial|outdoor cap|legacy|infinity her|otto( cap)?|atlantis( headwear)?|kati|sportsman|decky|valucap|ahead|new era|cap america|dorfman|melin)\b/i;
 /** an embroidery specialty item (hats, beanies, bags, fleece, jackets…): from the line's name, style and brand, or its
  *  own tick (GLine.specialty) */
 export const isSpecialtyItem = (l: { garment?: string; style?: string; brand?: string; specialty?: boolean | null }) =>
-  l.specialty != null ? !!l.specialty : SPECIALTY_ITEM.test(`${l.garment || ""} ${l.style || ""}`) || HEADWEAR_BRAND.test(l.brand || "") || !!headwearOf(l)
+  l.specialty != null ? !!l.specialty : specialtyText(l.garment || "") || SPECIALTY_ITEM.test(`${l.garment || ""} ${l.style || ""}`) || HEADWEAR_BRAND.test(l.brand || "") || !!headwearOf(l)
     || /^(C\d{3}|CP\d{2,3}|STC\d{2})\b/i.test((l.style || "").trim()); // Port Authority / Sport-Tek caps
 /** the hat's own spots past the front (sides, back) are special locations like a sleeve (Oct 27, Nick) */
 export const HAT_SPECIAL_LOCATIONS = ["Left Side", "Right Side", "Back"];
