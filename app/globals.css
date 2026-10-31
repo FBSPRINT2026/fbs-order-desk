@@ -16686,15 +16686,13 @@ html body .mk-youth-warn{font-size:12px;color:var(--warn);font-weight:700}
 html body .mk-youth-msg{border:1px solid var(--fbs-blue);background:var(--accent-soft);border-radius:var(--r);padding:10px 12px;font-size:13.5px;color:var(--ink-2);margin-bottom:10px}
 html body .mk-youth-msg b{color:var(--ink)}
 html body .panel.mk-youth-lock{opacity:.5;filter:grayscale(.4)}
-/* youth screens on the order's print: a row a side (Oct 31, Nick picked option C) */
-html body .yth-wrap{margin:6px 0 2px;width:100%;grid-column:1/-1}
-html body table.yth-tbl{width:100%;border:1px solid var(--line);border-radius:var(--r);border-collapse:separate;border-spacing:0;overflow:hidden;font-size:13px}
-html body table.yth-tbl th{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:5px 8px;background:var(--surface-2);border-bottom:1px solid var(--line)}
-html body table.yth-tbl td{padding:6px 8px;border-bottom:1px solid var(--line-2,var(--line));white-space:nowrap;color:var(--ink)}
-html body table.yth-tbl tr:last-child td{border-bottom:0}
-html body table.yth-tbl td.big{font-weight:800;font-size:15px}
-html body table.yth-tbl .r{text-align:right}
-html body table.yth-tbl td .sub{display:block;color:var(--ink-3);font-size:12px;font-weight:400;white-space:normal}
-html body table.yth-tbl tr.y td{background:var(--accent-soft)}
-html body table.yth-tbl tr.y td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
-html body table.yth-tbl tr.y td:first-child b{color:var(--fbs-blue)}
+/* youth screens on the order's print (Oct 31, Nick: "a simple adult and then youth" right under the name, and "in bold,
+   two different setups" next to the colors): plain text rows, the youth row in blue */
+html body .pr-ynote{color:var(--ink);font-weight:700}
+html body table.yth-mini{border-collapse:collapse;font-size:13px;color:var(--ink-2);margin:2px 0 4px}
+html body table.yth-mini td{padding:1px 18px 1px 0;vertical-align:baseline}
+html body table.yth-mini td:nth-child(2){white-space:nowrap}
+html body table.yth-mini td:first-child{color:var(--ink-3);font-size:12px;width:56px}
+html body table.yth-mini tr.y td{color:var(--fbs-blue)}
+html body table.yth-mini tr.y td:first-child{font-weight:700}
+html body .imp-scr .pr-ynote{display:block;font-size:13px;margin-bottom:2px}

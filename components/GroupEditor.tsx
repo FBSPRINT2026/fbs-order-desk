@@ -582,51 +582,31 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   };
   // youth screens (Oct 30, Nick, #40302): a print with its own youth screen shows its youth size, its screens and their
   // setup, and the pieces each side is priced at; a print the youth shirts share says so. Set in the Mockup Creator
-  const youthCtl = (d: Group["imprints"][number]) => {
+  const youthInfo = (d: Group["imprints"][number]): YouthInfo | null => {
     if (!g.youthSet || !d.youth) return null;
     const ic = gc.imprints[g.imprints.indexOf(d)], y = ic?.youth;
-    if (!y) return <div className="pr-scr pr-youth-line"><span className="pr-scr-l">Youth</span><span className="pr-scr-v">Same {d.method === "screen" ? "screen" : "print"} as adult</span></div>;
-    // a little table, a row a side (Oct 31, Nick picked "C": "everything per side in one grid… easiest to check the math")
+    const drop = d.drop ? `${d.drop}" drop` : "Standard drop";
     const cur = (designs || []).find((x) => x.id === d.design_id);
     const wh = (sz: string) => {
       const m = (sz || "").match(/^([\d.]+)\D*(wide|tall)?/i); if (!m) return "—";
       const val = +m[1], given: "W" | "H" = /tall/i.test(m[2] || "") ? "H" : "W", other = cur ? designOther(cur, val, given, d.artRatio) : 0;
       return given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`;
     };
-    const styles = (kid: boolean) => [...new Set(g.lines.filter((l) => lineQty(l) > 0 && kidLine(l) === kid).map((l) => l.style).filter(Boolean))].join(", ");
-    const scr = d.method === "screen";
-    const an = scr ? screensFor(d, wpl, allLight).n : 0, yn = scr ? Math.min(+(y.screens || 0), 15) || 1 : 0;
-    const rows = [
-      { k: "Adult", st: styles(false), size: wh(d.size), pcs: y.adultQty, n: an, setup: gc.imprintSetups?.[g.imprints.indexOf(d)] ?? ic.setup, each: y.adultEach ?? ic.each, y: false },
-      { k: "Youth", st: styles(true), size: wh(y.size), pcs: y.qty, n: yn, setup: y.setup, each: y.each, y: true },
-    ];
-    return (
-      <div className="yth-wrap">
-        <table className="tbl yth-tbl">
-          <thead><tr><th>Shirts</th><th>Size</th><th className="r">Pieces</th>{scr && <th className="r">Screens</th>}{!hidePrices && <><th className="r">Setup</th><th className="r">Each</th></>}</tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.k} className={r.y ? "y" : ""}>
-              <td><b>{r.k}</b>{r.st && <span className="sub">{r.st}</span>}</td>
-              <td className="big">{r.size}</td>
-              <td className="r num">{r.pcs}</td>
-              {scr && <td className="r num">{r.n}</td>}
-              {!hidePrices && <><td className="r num">{money(r.setup)}</td><td className="r num">{money(r.each)}</td></>}
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    );
+    const what = d.method === "screen" ? "setup" : d.method === "embroidery" ? "file" : "print";
+    if (!y) return { split: false, note: `One ${what}: adult and youth share it`, rows: [{ k: "Adult", size: wh(d.size), drop, pcs: `Same ${d.method === "screen" ? "screen" : what} for youth`, y: false }] };
+    return { split: true, note: `Two ${what}s: adult and youth`, yn: d.method === "screen" ? Math.min(+(y.screens || 0), 15) || 1 : 0, ySetup: y.setup,
+      rows: [{ k: "Adult", size: wh(d.size), drop, pcs: `${y.adultQty} pcs`, y: false }, { k: "Youth", size: wh(y.size), drop, pcs: `${y.qty} pcs`, y: true }] };
   };
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
     // embroidery: its thread change on the same kind of line (Oct 26, Nick: "thread change… exactly the same as color change")
     if (embImps.includes(d)) { const tc = +(d.inkChanges || 0); return tc > 0 ? <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Thread change</span><span className="pr-scr-v">{tc}{!hidePrices && <> · <b className="num">{money(tc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div> : null; }
     if (!scrImps.includes(d)) return null;
-    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
+    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake), yi = youthInfo(d);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
     const cc = +(d.inkChanges || 0);
     return (<>
-      <ScreensLine key={d.id} summary={<>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}
+      <ScreensLine key={d.id} summary={<>{yi?.split ? `${sc.n} adult + ${yi.yn} youth` : `${sc.n} screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0) + (yi?.split ? yi.ySetup || 0 : 0))}</b></>}
         {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
         <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same as with an underbase (two rounds on press)."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })} />Fashion hit</label>
@@ -1073,7 +1053,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{youthCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1117,7 +1097,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
                 {d.supplied && <SuppliedBox d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
-                {youthCtl(d) && <div className="imp-scr">{youthCtl(d)}</div>}
+                {youthInfo(d) && <div className="imp-scr"><YouthSpec y={youthInfo(d)!} note /></div>}
                 {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
                 {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
@@ -1580,6 +1560,20 @@ function MockGallery({ urls }: { urls: string[] }) {
   </>;
 }
 
+/** youth screens on a print (Oct 31, Nick: "put that table right under where it says full front… just a simple adult
+ *  and then youth", and next to the colors "in bold, two different setups, youth and adult") */
+type YouthInfo = { split: boolean; note: string; yn?: number; ySetup?: number; rows: { k: string; size: string; drop: string; pcs: string; y: boolean }[] };
+function YouthSpec({ y, note = false }: { y: YouthInfo; note?: boolean }) {
+  return (
+    <>
+      {note && <b className="pr-ynote">{y.note}</b>}
+      <table className="yth-mini" data-nofit><tbody>
+        {y.rows.map((r) => <tr key={r.k} className={r.y ? "y" : ""}><td>{r.k}</td><td>{r.size}</td><td>{r.drop}</td><td>{r.pcs}</td></tr>)}
+      </tbody></table>
+    </>
+  );
+}
+
 function ScreensLine({ summary, children }: { summary: React.ReactNode; children: React.ReactNode }) {
   const [edit, setEdit] = useState(false);
   return (
@@ -1655,7 +1649,7 @@ function ChangeTile({ d, url, color, hex, swap, sym, own }: { d: Group["imprints
   );
 }
 
-function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout, onFind }: { /** "Already digitized?": find the print's existing stitch files (components/DigitizedFinder.tsx) */ onFind?: () => void; /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ youth, shown, d, n, hex, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout, onFind }: { /** youth screens on: the adult and youth rows under the name */ youth?: YouthInfo | null; /** "Already digitized?": find the print's existing stitch files (components/DigitizedFinder.tsx) */ onFind?: () => void; /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string>; url?: string; to?: string }[];
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
@@ -1748,11 +1742,13 @@ function PrintRow({ shown, d, n, hex, designs, urls, each, detailsHref, onMockup
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
-          {size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
-          {!(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
+          {youth && <b className="pr-ynote">{youth.note}</b>}
+          {!youth && size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
+          {!youth && !(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "screen" && d.puff && <span className="pr-puff">Puff print</span>}
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}
         </div>
+        {youth && <YouthSpec y={youth} />}
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {!(d.visualOnly && !d.confirmed) && inksLine}
         {extra}
