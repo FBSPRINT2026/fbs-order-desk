@@ -41,7 +41,8 @@ export async function stampCustomerMockup(blob: Blob, name: string): Promise<Fil
   x.textBaseline = "middle";
   const tw = x.measureText(TEXT).width, gapX = tw + fs * 2, gapY = fs * 3, R = Math.hypot(c.width, c.height);
   x.lineJoin = "round"; x.lineWidth = Math.max(2, fs / 9);
-  x.strokeStyle = "rgba(255,255,255,0.28)"; x.fillStyle = "rgba(96,96,96,0.34)";
+  // very light (Oct 31, Nick: "we should still be able to see it… very, very light gray"): marked, not covered
+  x.strokeStyle = "rgba(255,255,255,0.1)"; x.fillStyle = "rgba(128,128,128,0.11)";
   for (let row = 0, y = -R / 2; y < R / 2; y += gapY, row++) {
     for (let xx = -R / 2 - (row % 2 ? gapX / 2 : 0); xx < R / 2; xx += gapX) { x.strokeText(TEXT, xx, y); x.fillText(TEXT, xx, y); }
   }
