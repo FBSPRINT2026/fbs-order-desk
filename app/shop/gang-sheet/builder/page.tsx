@@ -10,6 +10,7 @@ import BackLink from "@/components/BackLink";
 import { packFill, type PackItem } from "@/lib/gangPack";
 import { lineQty, orderGroups, type Order } from "@/lib/pricing";
 import { heldFiles } from "@/lib/heldFiles";
+import { rosterPieces, type RosterSpec } from "@/lib/rosterArt";
 
 /**
  * Gang sheet builder (Heat press; Oct 26, Nick).
@@ -525,6 +526,41 @@ export default function GangSheet() {
   }
   const [artAsk, setArtAsk] = useState<{ o: OrderLite; rows: (AskRow & { mockUrl: string; origUrl: string })[] } | null>(null);
   /**
+   * An order's names & numbers (Imprint.roster, the Mockup Creator's Name & number builder; Oct 31, Nick: "put all the names
+   * together, put the names and numbers together… sometimes we order just names and then numbers so that we can manually
+   * put them together because it's cheaper on the gang sheet. Sometimes if it's not a lot… already spaced out and ready").
+   * Asked which, then every shirt's pieces go on the sheet (lib/rosterArt.ts rosterPieces), with the order's other prints.
+   */
+  const [rosterAsk, setRosterAsk] = useState<{ o: OrderLite; specs: { spec: RosterSpec; where: string }[]; rest: Want[] } | null>(null);
+  async function addRoster(apart: boolean) {
+    const ask = rosterAsk; if (!ask) return;
+    setRosterAsk(null); setErr("");
+    try {
+      if (ask.rest.length) await makeFrom(ask.o, ask.rest);
+      const lgs: Logo[] = [], imgs: Record<string, HTMLImageElement> = {};
+      for (const { spec, where } of ask.specs) {
+        setBusy(`Making the names and numbers for the ${where}…`);
+        for (const pc of await rosterPieces(spec, apart)) {
+          const lg: Logo = { id: uid(), name: pc.label, src: pc.png, srcW: pc.px[0], srcH: pc.px[1], colors: [spec.color, ...(spec.outline ? [spec.outline] : [])], vers: [{ ...newVer(pc.wIn, pc.qty), label: where.slice(0, 80) }] };
+          lgs.push(lg); imgs[lg.id] = await loadImg(pc.png);
+        }
+      }
+      const n = lgs.reduce((a, l) => a + l.vers.reduce((b, v) => b + v.qty, 0), 0);
+      if (ask.rest.length) {
+        setLogos((x) => [...x, ...lgs]); setArts((x) => ({ ...x, ...imgs }));
+        setJobs((js) => js.map((j) => ({ ...j, logos: [...j.logos, ...lgs.map((l) => l.id)] })));
+      } else {
+        if (ask.o.customer_id) { const { data: cu } = await sb.from("customers").select("id, company, name").eq("id", ask.o.customer_id).maybeSingle(); if (cu) setCustFor({ id: cu.id as string, label: String(cu.company || cu.name || "Customer") }); }
+        setSheetName(`Order #${ask.o.number} names & numbers`);
+        setArts(imgs); setLogos(lgs);
+        setJobs([{ id: uid(), job: String(ask.o.number), logos: lgs.map((l) => l.id), note: apart ? "Names and numbers apart: put each shirt's together on press" : "Each shirt's name and number together" }]);
+        window.history.replaceState(null, "", "/shop/gang-sheet/builder");
+      }
+      setDone(`Names & numbers from order #${ask.o.number}: ${n} transfer${n === 1 ? "" : "s"}${apart ? ", the names and the numbers apart" : ", each shirt's together"}. Check the sizes, then Optimize sheet.`);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't make the names and numbers."); }
+    setBusy("");
+  }
+  /**
    * Create DTF gang sheet, on an order's Ask AI (Oct 26, Nick: "you've made an order, it's going to be heat [press]… we need 10 of these and 12
    * of these shirts, and then you click it, brings in the art for both, drops them in here, knows whether the background
    * is removed… orders the exact same quantities"). Every heat press print on the order: its art as the Mockup Creator
@@ -545,10 +581,13 @@ export default function GangSheet() {
       const designIds = [...new Set(groups.flatMap((g) => g.imprints.filter((im) => (im.method === "dtf" || im.method === "screen") && im.design_id).map((im) => im.design_id!)))];
       const { data: ds } = designIds.length ? await sb.from("designs").select("id, number, name, file_path, preview_path").in("id", designIds) : { data: [] };
       const dById = new Map((ds || []).map((d) => [d.id as string, d as { id: string; number: number; name: string; file_path: string; preview_path: string }]));
+      const rosters: { spec: RosterSpec; where: string }[] = [];
       for (const g of groups) {
         const qty = g.lines.reduce((a, l) => a + lineQty(l), 0);
         if (!qty) continue;
         for (const im of g.imprints) {
+          // names & numbers: every shirt's, asked how (apart or together) below
+          if (im.roster?.rows?.length) { rosters.push({ spec: im.roster, where: [im.location, g.name].filter(Boolean).join(", ") }); continue; }
           if (im.method !== "dtf" && im.method !== "screen") continue;
           const d = im.design_id ? dById.get(im.design_id) : undefined;
           const orig = (d && /\.(png|jpe?g|webp|pdf|ai)$/i.test(d.file_path || "") ? d.file_path : d?.preview_path) || "";
@@ -563,6 +602,7 @@ export default function GangSheet() {
           asks.push({ key: `${g.id}|${im.id}`, want: { ...base, src: orig || im.shownArt! }, orig: orig || "", mock: im.shownArt || "", origPic: d?.preview_path || orig, pick: im.shownArt && (changed || !orig) ? "mock" : "orig", changed, label: `${im.location}${d ? ` · D-${d.number}${d.name ? ` ${d.name}` : ""}` : ""}`, inks: im.inks || "" });
         }
       }
+      if (rosters.length) { setRosterAsk({ o: o as OrderLite, specs: rosters, rest: want }); setBusy(""); return; }
       // heat press prints: their art as the Mockup Creator shows it, straight in
       if (want.length) { await makeFrom(o as OrderLite, want); setBusy(""); return; }
       // a screen printed order (Oct 26, Nick: "do you want to use the art as originally it was brought in, or… as you
@@ -996,6 +1036,21 @@ export default function GangSheet() {
           </section>
         </div>
       </div>
+      {rosterAsk && (() => { const n = rosterAsk.specs.reduce((a, x) => a + x.spec.rows.length, 0), both = rosterAsk.specs.some((x) => x.spec.show === "both"); return (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Names and numbers on the sheet" onClick={() => setRosterAsk(null)}>
+          <div className="dla" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <h3>Names &amp; numbers · order #{rosterAsk.o.number}</h3>
+            <p className="dla-sub">{n} shirt{n === 1 ? "" : "s"} on the {rosterAsk.specs.map((x) => x.where).join(", ")}{rosterAsk.rest.length ? `, with the order's other ${rosterAsk.rest.length === 1 ? "print" : "prints"}` : ""}. {both ? "How should they go on the sheet?" : ""}</p>
+            {both ? (
+              <div className="gang-rs">
+                <button type="button" className="gang-rs-o" onClick={() => void addRoster(true)}><b>Names and numbers apart</b><span>Every name and every number its own transfer; the same ones add up. Less film: put each shirt&apos;s together on press.</span></button>
+                <button type="button" className="gang-rs-o" onClick={() => void addRoster(false)}><b>Each shirt&apos;s together</b><span>The name over the number, spaced and ready to press. Best for a short list.</span></button>
+              </div>
+            ) : null}
+            <div className="dla-acts"><span className="spacer" /><button type="button" className="btn ghost" onClick={() => setRosterAsk(null)}>Cancel</button>{!both && <button type="button" className="btn primary" onClick={() => void addRoster(true)}>Put them on the sheet</button>}</div>
+          </div>
+        </div>
+      ); })()}
       {artAsk && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Which art goes on the transfers" onClick={() => setArtAsk(null)}>
           <div className="dla grd" onClick={(e) => e.stopPropagation()}>

@@ -413,6 +413,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const on = (name: string) => g.lines.filter((l) => lineQty(l) > 0 && cwOn(d, l.color)?.name === name).map((l) => `${l.style ? `${l.style} ` : ""}${l.color} (${lineQty(l)})`).join(", ");
     return [base ? `${cwLetter(des, base)} ${base.name}` : "", ...versionsOf(d).map((v) => `${cwLetter(des, { name: v.to })} ${v.to} · ${on(v.to)}`)].filter(Boolean).join("  ⟳  ");
   };
+  /** a names & numbers print (Imprint.roster, the Mockup Creator's Name & number builder): its list, and the gang sheet */
+  const rosterRow = (d: Group["imprints"][number]) => {
+    const r = d.roster; if (!r?.rows?.length) return null;
+    const what = r.show === "name" ? "names" : r.show === "number" ? "numbers" : "names & numbers";
+    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Names &amp; numbers</span><span className="pr-scr-v">{r.rows.length} shirt{r.rows.length === 1 ? "" : "s"} · {what} · {r.font}{orderId ? <> · <a className="linkbtn" href={`/shop/gang-sheet/builder?order=${orderId}`} title="Every shirt's name and number on a DTF gang sheet">Make the gang sheet</a></> : null}</span></div>;
+  };
   const redrawSoon = () => { if (g.mockupAt && !g.mockupSkipped) setTimeout(() => window.dispatchEvent(new CustomEvent("fbs:redraw-mockup", { detail: { groupId: g.id } })), 400); };
   /** an embroidery print's location change and its Change button (read-out and form), like the color change */
   const lcRow = (d: Group["imprints"][number], di: number) => {
@@ -1191,7 +1197,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">

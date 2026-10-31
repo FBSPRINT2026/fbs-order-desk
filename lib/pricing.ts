@@ -155,6 +155,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  inks or threads, sew file and picture come from that colorway (lib/brands.ts applyColorway) */ colorway?: string;
   /** the logo whose own setup (colorway, sew file, threads, stitches) the print took when the logo was put on it
    *  (lib/brands.ts withLogoSetup), so it's taken once and what's set by hand after stays */ setupFrom?: string;
+  /** names & numbers (Oct 31, the Mockup Creator's Name & number builder): the list and how it prints; the print's art
+   *  is the first shirt's, for the customer's approval; the gang sheet makes every shirt's (lib/rosterArt.ts) */
+  roster?: import("@/lib/rosterArt").RosterSpec;
   /** a colorway change: by garment color (lowercase), the colorway it gets instead of the print's own. inkBy holds the
    *  same change as inks, so it works like a color change everywhere (lib/brands.ts applyColorwayChange) */ colorwayBy?: Record<string, string>;
   /** embroidery: a digitizing fee set by hand for a complex logo (overrides the base + stitches fee; digitizingFee) */ digitizeFee?: number;

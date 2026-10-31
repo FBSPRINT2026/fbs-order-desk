@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as RPointerEvent, ReactNode } from "react";
+import { embeddedFonts } from "@/lib/rosterArt";
 import { SHIRT_BG, UNITS_PER_IN, clipartOf, fontOf, type DesignDoc, type Layer, type LayerInit, type RosterRow } from "@/lib/designerArt";
 import { TEMPLATES, TEMPLATE_CATS, type Template } from "@/lib/designerTemplates";
 import { CLIP_CATEGORIES, clipCredits, firstIcon, getClipIcons, searchClipart, searchMany, uniqueIds, type ClipHit, type ClipIcon, type ClipSet } from "@/lib/clipart";
@@ -105,29 +106,6 @@ async function shrink(img: HTMLImageElement, max = 2400) {
   c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
   c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
   return { url: c.toDataURL("image/png"), w: c.width, h: c.height };
-}
-function b64(buf: ArrayBuffer) {
-  const u = new Uint8Array(buf); let s = "";
-  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-/** @font-face rules with the font files built in, so the saved SVG looks the same anywhere. */
-async function embeddedFonts(list: { font: string; weight: number }[]) {
-  const out: string[] = [], done = new Set<string>();
-  for (const { font, weight } of list) {
-    const key = `${font}:${weight}`;
-    if (done.has(key)) continue;
-    done.add(key);
-    try {
-      const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${cssFamily(font, weight)}&display=swap`)).text();
-      const block = (css.match(/\/\*\s*latin\s*\*\/\s*(@font-face\s*\{[^}]*\})/) || css.match(/(@font-face\s*\{[^}]*\})\s*$/) || [])[1];
-      const url = block?.match(/url\((https:[^)]+)\)/)?.[1];
-      if (!block || !url) continue;
-      const data = b64(await (await fetch(url)).arrayBuffer());
-      out.push(block.replace(url, `data:font/woff2;base64,${data}`));
-    } catch { /* that font falls back */ }
-  }
-  return out.join("\n");
 }
 
 /* ---------- small pieces ---------- */

@@ -16,6 +16,8 @@ import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
+import NameNumberBuilder from "@/components/NameNumberBuilder";
+import type { RosterSpec } from "@/lib/rosterArt";
 import { colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
@@ -619,6 +621,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setMockBg(logoOnly && g.mockupBg && /^#[0-9a-f]{6}$/i.test(g.mockupBg) ? g.mockupBg.toLowerCase() : "");
           setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
+          setPieceCount(g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((a: number, v) => a + (+(v || 0)), 0), 0));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
@@ -664,6 +667,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const fileOf = useRef<Record<string, string>>({});
   /** each print as it was when the order was opened here: only what's changed here goes back to the order */
   const loadedIms = useRef<Record<string, Imprint>>({});
+  /** the group's pieces (the Name & number builder checks its list against them) */
+  const [pieceCount, setPieceCount] = useState(0);
   useEffect(() => {
     const on = async () => {
       setArtTick((t) => t + 1);
@@ -2127,20 +2132,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const im = { ...newImprint(loc), size: big === loc ? '10" wide' : "" };
     setImprints([...imprints, im]); setTab(curTab); textMode(im, true);
   };
+  /** the Name & number builder's first shirt as a print (components/NameNumberBuilder.tsx): saved like a Design Lab design,
+   *  put where it was asked for, with the list and its look on the print (Imprint.roster) for the gang sheet */
+  async function placeRoster(out: DesignerOut, spec: RosterSpec): Promise<string | void> {
+    try {
+      const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
+      const r = await saveDesignerLogo(sb, out, { portal, customerId, by: u.user?.email || "" });
+      setDesigns((x) => [r.design, ...x]);
+      if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
+      const was = imprints.find((x) => x.roster);
+      const side: Side = /front|chest/i.test(spec.location) ? "front" : /sleeve/i.test(spec.location) ? "sleeve" : "back";
+      const note = `Names & numbers (${spec.rows.length}): ${spec.rows.map((x) => [x.name, x.number, x.size].filter(Boolean).join(" ")).join("; ")}`.slice(0, 1500);
+      placeFromLab(side, was?.id || "", r.design, out.box, note, spec.location);
+      setImprints((xs) => xs.map((x) => (x.design_id === r.design.id ? { ...x, roster: spec, method: was?.method || "dtf", colors: out.colors, inks: out.inks } : x)));
+      if (was) { setPaints((p) => { const n = { ...p }; delete n[was.id]; return n; }); }
+      setMsg(`${out.name}: the first shirt is on the mockup. Save to keep it.`);
+    } catch (e) { return e instanceof Error ? e.message : "Couldn't put the names on the shirt."; }
+  }
   /** A design back from the Idea Lab goes on the shirt where it was drawn: size and spot pick the location. */
-  function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }, notes = "") {
+  function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }, notes = "", loc = "") {
     const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
     const withNotes = (x: Imprint) => (notes ? { ...x, notes } : x);
     if (side === "sleeve") {
       if (target) setImprints((xs) => xs.map((x) => (x.id === target.id ? withNotes({ ...x, design_id: d.id }) : x)));
-      else setImprints((xs) => [...xs, withNotes({ ...newImprint("Left Sleeve"), design_id: d.id })]);
+      else setImprints((xs) => [...xs, withNotes({ ...newImprint(loc || "Left Sleeve"), design_id: d.id })]);
       return;
     }
     const v = side as View, ppi = PX_PER_IN * scale;
     const r = d.width_px && d.height_px ? d.height_px / d.width_px : box.h / (box.w || 1);
     const wIn = Math.round((box.w / 50) * 100) / 100, hIn = wIn * r;
     const left = CENTER_X + ((box.x - 300) / 50) * ppi, top = COLLAR_Y[v] + (4 + box.y / 50) * ppi;
-    const z = autoSpot(v === "front" ? "Full Front" : "Full Back", v, (box.x + box.w / 2 - 300) / 50, 4 + box.y / 50, wIn, hIn);
+    const z = loc || autoSpot(v === "front" ? "Full Front" : "Full Back", v, (box.x + box.w / 2 - 300) / 50, 4 + box.y / 50, wIn, hIn);
     const nb = basePlacement(z, wIn, r, null, scale);
     const id = target?.id || uid();
     setImprints((xs) => target
@@ -4704,6 +4726,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>}
             </section>
           )}
+          {/* names & numbers (Oct 31, Nick): the list, the look, the first shirt on the mockup for approval */}
+          {!viewId && <NameNumberBuilder pieces={pieceCount || undefined} start={imprints.find((x) => x.roster)?.roster || null} onPlace={placeRoster} />}
         </div>
       </div>
     </BrandCtx.Provider>
