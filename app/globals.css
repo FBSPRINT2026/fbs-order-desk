@@ -16989,3 +16989,7 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .pr-sup-box{flex:1 1 100%}
 
 .lg-newkind{width:auto;height:30px;padding:0 8px;font-size:13px;margin-right:6px}
+.lg-rm-c{width:1%;text-align:right}
+.lg-rm{border:0;background:none;color:var(--ink-3);font:600 16px/1 var(--body);padding:2px 6px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.lg-rm:hover{color:var(--danger);background:var(--surface-2)}
+.lg-rm.on{color:#fff;background:var(--danger);font-size:12px;padding:4px 8px}

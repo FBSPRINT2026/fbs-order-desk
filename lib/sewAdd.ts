@@ -27,8 +27,10 @@ export async function addSewFiles(sb: SupabaseClient, d: Pick<Design, "id" | "nu
   const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
   const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
   const have = [...(em.files || [])], added: SewFile[] = [];
+  // a removed file's number isn't used again: the Tajima may still have the old D10316E5 in its memory
+  const gone = ((em as { removed?: SewFile[] }).removed || []);
   for (const set0 of sets) {
-    const code = nextSewCode([...have, ...added]), name = tajimaName(d.number, Number(code.slice(1)));
+    const code = nextSewCode([...have, ...gone, ...added]), name = tajimaName(d.number, Number(code.slice(1)));
     const named = await Promise.all(set0.map((f) => tajimaFile(f, name)));
     const { set } = await takeDigitized(sb, d.id, named, { link: false });
     added.push({ ...set, code, kind: o.kind, ...(o.placement?.trim() ? { placement: o.placement.trim() } : {}) });
@@ -37,4 +39,19 @@ export async function addSewFiles(sb: SupabaseClient, d: Pick<Design, "id" | "nu
   const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
   if (error) throw new Error(error.message);
   return added;
+}
+
+/**
+ * Take a sew file off a logo (Oct 31, Nick: "D10316E5 D10316E6 sew files need to be removed… add a remove button"): it
+ * leaves the logo's list (no print picks it again) and is kept under specs.embroidery.removed with who and when; its DST,
+ * EMB and worksheet stay in storage, and a print that already has it keeps its copy.
+ */
+export async function removeSewFile(sb: SupabaseClient, designId: string, path: string, by: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data } = await sb.from("designs").select("specs").eq("id", designId).maybeSingle();
+  const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[]; removed?: (SewFile & { removedAt?: string; removedBy?: string })[] };
+  const f = (em.files || []).find((x) => x.path === path);
+  if (!f) return { ok: false, error: "That sew file isn't on the logo any more." };
+  const specs = { ...sp, embroidery: { ...em, files: (em.files || []).filter((x) => x.path !== path), removed: [...(em.removed || []), { ...f, removedAt: new Date().toISOString(), removedBy: by }] } };
+  const { error } = await sb.from("designs").update({ specs }).eq("id", designId);
+  return error ? { ok: false, error: error.message } : { ok: true };
 }

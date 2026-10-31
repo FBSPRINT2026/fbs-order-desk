@@ -160,6 +160,20 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     } catch (e) { setMsg(e instanceof Error ? e.message : "Couldn't add the sew file."); }
     setSewBusy(false);
   }
+  /** take a sew file off the logo (kept under specs.embroidery.removed, files left in storage): a click arms it */
+  const [rmSew, setRmSew] = useState("");
+  async function removeSew(f: Sew) {
+    if (!d) return;
+    if (rmSew !== f.path) { setRmSew(f.path); setTimeout(() => setRmSew((x) => (x === f.path ? "" : x)), 3500); return; }
+    setRmSew("");
+    const { data: u } = await sb.auth.getUser();
+    const { removeSewFile } = await import("@/lib/sewAdd");
+    const r = await removeSewFile(sb, d.id, f.path, u.user?.email || "staff");
+    if (!r.ok) { setMsg(r.error); return; }
+    const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+    setD({ ...d, specs: (data?.specs || d.specs) as Design["specs"] });
+    setMsg(`${f.name.replace(/\.dst$/i, "")} removed`);
+  }
   async function setSew(i: number, p: Partial<Sew>) {
     if (!d) return;
     const fs = sewFilesOf(d, brand).map((f, j) => (j === i ? { ...f, ...p } : f));
@@ -383,7 +397,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
               <div className="panel-h"><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet, made at one size for one spot" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
                 <span className="spacer" /><select className="lg-newkind" aria-label="New sew files are for" title="The kind of goods the new sew files are for: a group of those goods sews them" value={sewKind} onChange={(e) => setSewKind(e.target.value as keyof typeof SEW_KINDS)}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>For {l.toLowerCase()}</option>)}</select><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
-                <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th>{anyUsed && <th>Last used</th>}<th>Files</th></tr></thead>
+                <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th>{anyUsed && <th>Last used</th>}<th>Files</th><th aria-label="Remove" /></tr></thead>
                 <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (a.f.code || "").localeCompare(b.f.code || "", undefined, { numeric: true })).map(({ f, i }) => (
                   <tr key={i}>
                     <td><b className="ordno">{tajimaName(d.number, Number((f.code || "E1").slice(1)) || i + 1)}</b></td>
@@ -413,6 +427,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                     <td><select className="lg-kind" aria-label="Kind" value={f.kind || "flat"} onChange={(e) => void setSew(i, { kind: e.target.value as Sew["kind"] })}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                     {anyUsed && <td>{f.lastUsed?.job ? <span style={{ whiteSpace: "nowrap" }}>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}</div></span> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>}
                     <td style={{ whiteSpace: "nowrap" }}><a href={fileLink(f.path, f.name)} target="_blank" rel="noreferrer">DST</a>{f.emb && <> · <a href={fileLink(f.emb.path, f.emb.name)} target="_blank" rel="noreferrer">EMB</a></>}{f.sheet && <> · <a href={fileLink(f.sheet.path, f.sheet.name)} target="_blank" rel="noreferrer">Sheet</a></>}</td>
+                    <td className="lg-rm-c"><button type="button" className={"lg-rm" + (rmSew === f.path ? " on" : "")} title="Take this sew file off the logo (its files are kept)" aria-label={`Remove ${f.name}`} onClick={() => void removeSew(f)}>{rmSew === f.path ? "Remove?" : "×"}</button></td>
                   </tr>
                 ))}</tbody>
               </table></div> : <div className="panel-b faint">Add the digitizer&apos;s DST (with its EMB and sheet), or use Find it everywhere to bring in the ones from past jobs.</div>}

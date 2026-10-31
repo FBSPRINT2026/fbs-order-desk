@@ -94,6 +94,18 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't add the sew file."); }
     setBusy("");
   }
+  /** take a sew file off the logo (lib/sewAdd.ts removeSewFile: kept, its files stay): a click arms it */
+  const [rmSew, setRmSew] = useState("");
+  async function removeSew(d: D, f: SewFile) {
+    if (rmSew !== f.path) { setRmSew(f.path); setTimeout(() => setRmSew((x) => (x === f.path ? "" : x)), 3500); return; }
+    setRmSew("");
+    const { data: u } = await sb.auth.getUser();
+    const { removeSewFile } = await import("@/lib/sewAdd");
+    const r = await removeSewFile(sb, d.id, f.path, u.user?.email || "staff");
+    if (!r.ok) { setErr(r.error); return; }
+    const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+    setDs(ds.map((x) => (x.id === d.id ? { ...x, specs: (data?.specs as typeof x.specs) || x.specs } : x)));
+  }
   async function setSewKind(d: D, i: number, k: SewKind) {
     const fs = sewFilesOf(d).map((f, j) => (j === i ? { ...f, kind: k } : f));
     const specs = { ...(d.specs || {}), embroidery: { ...((d.specs?.embroidery as object) || {}), files: fs } };
@@ -165,7 +177,8 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
                     {lane === "embroidery" && sews.length > 0 && <div className="cb-sews">{sews.map((f, i) => (
                       <span key={i} className="cb-sew"><a href={open(f.path)} target="_blank" rel="noreferrer" data-notranslate>{f.name || f.code}</a> {f.wIn}" × {f.hIn}" · {f.stitches.toLocaleString()} st{f.placement ? ` · ${f.placement}` : ""}
                         <select aria-label="Kind of goods" value={f.kind || "flat"} onChange={(e) => void setSewKind(d, i, e.target.value as SewKind)}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-                        {f.emb && <a href={open(f.emb.path)} target="_blank" rel="noreferrer">EMB</a>}{f.sheet && <a href={open(f.sheet.path)} target="_blank" rel="noreferrer">Worksheet</a>}</span>
+                        {f.emb && <a href={open(f.emb.path)} target="_blank" rel="noreferrer">EMB</a>}{f.sheet && <a href={open(f.sheet.path)} target="_blank" rel="noreferrer">Worksheet</a>}
+                        <button type="button" className={"lg-rm" + (rmSew === f.path ? " on" : "")} title="Take this sew file off the logo (its files are kept)" aria-label={`Remove ${f.name || f.code}`} onClick={() => void removeSew(d, f)}>{rmSew === f.path ? "Remove?" : "×"}</button></span>
                     ))}</div>}
                     {lane === "screen" && <div className="cb-sews">{cws.map((c) => <span key={c.name} className="cb-sew">{c.name}: {c.inks.join(", ")}</span>)}{st.ready && <a href={open(d.file_path)} target="_blank" rel="noreferrer">Vector file</a>}</div>}
                     {lane === "dtf" && st.ready && <div className="cb-sews"><a href={open(d.file_path)} target="_blank" rel="noreferrer">Print file</a></div>}
