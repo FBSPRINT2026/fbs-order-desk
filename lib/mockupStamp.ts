@@ -15,7 +15,8 @@ export function stampKey(path: string) {
   for (let i = 0; i < path.length; i++) h = ((h << 5) + h + path.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
-export const stampName = (path: string) => `custmockup-${stampKey(path)}.jpg`;
+/** the stamped file's name: "-l" since the stamp went very light (Oct 31); one stamped before is stamped again once */
+export const stampName = (path: string) => `custmockup-${stampKey(path)}-l.jpg`;
 
 export async function stampCustomerMockup(blob: Blob, name: string): Promise<File | null> {
   let src: Blob = blob;
@@ -78,7 +79,9 @@ export async function stampOrderMockups(sb: SB, orderId: string, groups: { custo
   const todo = groups.flatMap((g) => g.customerMockups || []);
   for (const m of todo) {
     const key = stampKey(m.path);
-    if ([...have].some((p) => p.includes(`custmockup-${key}`))) continue;
+    if ([...have].some((p) => p.includes(`custmockup-${key}-l`))) continue;
+    // stamped before in the darker gray: the same file listing gets the light one (the old picture stays in storage)
+    const old = [...have].find((p) => p.includes(`custmockup-${key}.jpg`));
     const { data: blob } = await sb.storage.from("proofs").download(m.path);
     if (!blob) continue;
     const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup").catch(() => null);
@@ -87,8 +90,10 @@ export async function stampOrderMockups(sb: SB, orderId: string, groups: { custo
     const up = await sb.storage.from("proofs").upload(path, f, { contentType: "image/jpeg", upsert: true });
     if (up.error) continue;
     const base = (m.name || "mockup").replace(/\.[^.]+$/, "");
-    const { error } = await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg", category: "customer_mockup" });
-    if (!error) { have.add(path); added++; }
+    const { error } = old
+      ? await sb.from("art_files").update({ file_path: path }).eq("order_id", orderId).eq("file_path", old)
+      : await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg", category: "customer_mockup" });
+    if (!error) { have.add(path); if (old) have.delete(old); added++; }
   }
   return added;
 }
