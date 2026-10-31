@@ -865,8 +865,13 @@ export const lineColor = (l: { color?: string; hex?: string; shade?: string } | 
  */
 export const lineHex = (l: { hex?: string; shade?: string } | null | undefined): string => {
   const ok = (h?: string) => !!h && /^#[0-9a-f]{6}$/i.test(h);
-  return ok(l?.hex) ? l!.hex!.toLowerCase() : ok(l?.shade) ? l!.shade!.toLowerCase() : "";
+  // the Mockup Creator's "color not known" gray isn't a shade it found (Oct 31, #40315: Nike "Marine" saved as #9aa1ab
+  // and every printed page drew it gray): the name's color is used instead
+  const found = (h?: string) => ok(h) && h!.toLowerCase() !== UNKNOWN_SHADE;
+  return ok(l?.hex) ? l!.hex!.toLowerCase() : found(l?.shade) ? l!.shade!.toLowerCase() : "";
 };
+/** the gray the Mockup Creator draws a garment it has no color for */
+export const UNKNOWN_SHADE = "#9aa1ab";
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 

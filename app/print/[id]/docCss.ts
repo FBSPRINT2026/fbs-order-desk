@@ -588,8 +588,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .w2-hero.many{grid-template-columns:minmax(0,1fr) 3.3in}
 .pdoc .w2-hero .wo-mks{margin-top:0;min-height:0;flex:none;height:100%}
 .pdoc .w2-prints{display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden}
-.pdoc .w2-prints .wo-pc .kv{grid-template-columns:.62in 1fr;font-size:9.5pt}
-.pdoc .w2-prints .wo-pc .inks span{display:block}
+.pdoc .w2-prints .wo-pc .kv{grid-template-columns:.58in minmax(0,1fr);font-size:9.5pt}
+.pdoc .w2-prints .wo-pc .inks span,.pdoc .w2-prints .wo-pc .w2-th>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdoc .w2-prints .wo-pc .kv>*{min-width:0}
 .pdoc .w2-way{display:flex;flex-direction:column;gap:1px}
 .pdoc .w2-way .w2-file{font-size:8.5pt;color:var(--ink3)}
 .pdoc .w2-th{display:flex;flex-direction:column}

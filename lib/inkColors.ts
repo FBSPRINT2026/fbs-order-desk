@@ -1,4 +1,5 @@
 import { PMS_COATED } from "./pms";
+import { threadByName } from "./threadData";
 import { collapseRamps, labOfRgb, onLine } from "./gradients";
 
 /**
@@ -76,7 +77,9 @@ export const colorHex = (name: string) => {
   if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
-  return m ? FORMULA_HEX[m.toUpperCase().replace(/\s+/g, " ")] || PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
+  // a thread by its name ("Madeira 1981 Carmine", "Isacord 0670 Cream"): its color, wherever an embroidery print's
+  // threads are shown with the inks' swatches (Oct 31: a work order showed them gray)
+  return (m ? FORMULA_HEX[m.toUpperCase().replace(/\s+/g, " ")] || PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "") || threadByName(name)?.hex || "";
 };
 
 /** Main flat colors in a logo (transparent pixels ignored), largest first. */

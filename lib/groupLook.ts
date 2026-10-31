@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { designOther, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
-import { guessHex, garmentHex, registerAreas, spotFor } from "@/lib/mockup";
+import { guessHex, garmentHex, lineHex, mainLine, registerAreas, spotFor } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
 
 /**
@@ -24,18 +24,21 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
   const cat = (gz || []) as Cat[];
   const garOf = (style: string) => cat.find((x) => x.style.toLowerCase() === (style || "").trim().toLowerCase()) || null;
   const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  // the shirt behind a group's art: the color most of its pieces are (mainLine), as the Mockup Creator drew it (lineHex),
+  // else the catalog's color for it, else its name's (Oct 31, #40315: the first garment's unknown "Marine" made a
+  // three-color group's close-up gray while most of it is black)
   const hexes = groups.map((g) => {
-    const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
+    const l = mainLine(g.lines.filter((x) => (x.style || "").trim() || (x.color || "").trim())) || g.lines[0];
     if (!l) return "#9aa1ab";
     const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
-    return garmentHex(ci?.hex, l.color) || "#9aa1ab";
+    return lineHex(l) || garmentHex(ci?.hex, l.color) || "#9aa1ab";
   });
   /** every garment color's own shirt color (lower-case letters and digits → hex): a color change's close-ups (Oct 26) */
   const colorHexes: Record<string, string> = {};
   for (const g of groups) for (const l of g.lines) {
     if (!l.color || colorHexes[key(l.color)]) continue;
     const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
-    const h = garmentHex(ci?.hex, l.color);
+    const h = lineHex(l) || garmentHex(ci?.hex, l.color);
     if (h) colorHexes[key(l.color)] = h;
   }
   const maxes: MaxArea[][] = groups.map((g) => {

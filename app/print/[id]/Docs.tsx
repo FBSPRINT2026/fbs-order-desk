@@ -16,7 +16,7 @@ import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
 import WoFit from "./WoFit";
 import InkFit from "./InkFit";
-import { inkShort } from "@/lib/inkShort";
+import { inkShort, threadShort } from "@/lib/inkShort";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import type { ReactNode } from "react";
 import DstPicture from "@/components/DstPicture";
@@ -402,12 +402,13 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
       <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
       <div className="kv">
         <i>Method</i><span>{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
-        {inks.length > 0 && <><i>{inks.length === 1 ? "Ink" : "Inks"}</i>
-          <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && <b>{n + 1} </b>}<b>{k}</b></span>)}</div></>}
+        {inks.length > 0 && <><i>{d.method === "embroidery" ? (inks.length === 1 ? "Thread" : "Threads") : inks.length === 1 ? "Ink" : "Inks"}</i>
+          {/* one line each (Oct 31, Nick: "the number is the most important"): a thread's maker short, its number and name */}
+          <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && d.method !== "embroidery" && <b>{n + 1} </b>}<b>{d.method === "embroidery" ? threadShort(k) : k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>
           <span className="w2-way"><span><b>{w.on}</b> with {andList(w.name.split(/\s*\/\s*/))} {d.method === "embroidery" ? "thread" : "ink"}{w.qty ? <span className="faint"> ({w.qty})</span> : null}</span>
             {w.file ? <span className="w2-file">{w.file}</span> : null}
-            <span className="w2-th">{w.threads.map((k) => <span key={k}><Swatch c={threadByName(k)?.hex || colorHex(k) || "#ccc"} />{k}</span>)}</span></span></span>)}
+            <span className="w2-th">{w.threads.map((k) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{threadShort(k)}</span>)}</span></span></span>)}
         {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
         {d.method === "embroidery" ? (d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null)

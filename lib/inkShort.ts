@@ -62,3 +62,17 @@ export function fitLabel(s: string, max = 15): string {
   }
   return words.join(" ");
 }
+
+/**
+ * A thread's name kept short and on one line (Oct 31, Nick on a work order: "Madeira shortened, Isacord shortened, and
+ * then with the number. The number is the most important"): "Madeira 1981 Carmine" → "Mad 1981 Carmine", "Isacord 0670
+ * Cream" → "Isa 0670 Cream", "Madeira Rayon 1147 Red" → "Mad R 1147 Red". Anything that isn't a thread is as it is.
+ */
+export function threadShort(name: string): string {
+  const n = (name || "").trim();
+  const m = /^(madeira|isacord|robison[- ]anton|gunold|sulky)\s+(?:(rayon|polyneon|classic(?: rayon)?|40)\s+)?(\d{3,5})\b\s*(.*)$/i.exec(n);
+  if (!m) return n;
+  const brand = /^madeira/i.test(m[1]) ? "Mad" : /^isacord/i.test(m[1]) ? "Isa" : /^robison/i.test(m[1]) ? "R-A" : m[1].slice(0, 3);
+  const line = m[2] && /rayon|classic/i.test(m[2]) ? " R" : "";
+  return `${brand}${line} ${m[3]}${m[4] ? ` ${m[4]}` : ""}`;
+}
