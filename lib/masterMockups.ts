@@ -73,7 +73,13 @@ export function masterFor(masters: Master[], style: string, color: string, metho
 
 const ART_Q = /\b(art|logo|ink|inks|thread|threads|pms|colou?rs?|size|wide|width|print|prints|mockup|location|spot|underbase|design|file|digiti[sz]|stitch)/i;
 const same = (a?: string, b?: string) => norm(a).trim() !== "" && norm(a) === norm(b);
-const copyPrints = (m: Master) => m.imprints.map((im) => ({ ...JSON.parse(JSON.stringify(im)), id: uid(), notes: [String(im.notes || "").trim(), `From mockup M-${m.number}`].filter(Boolean).join(" · ") }) as Imprint);
+/** the mockup's prints, as they are: known good, so nothing waits on production to confirm them (Oct 30, Nick: "we
+ *  should set it to reorder and then don't confirm any of the details. We know it's good") */
+const copyPrints = (m: Master) => m.imprints.map((im) => {
+  const x = { ...JSON.parse(JSON.stringify(im)), id: uid(), notes: [String(im.notes || "").trim(), `From mockup M-${m.number}`].filter(Boolean).join(" · ") } as Imprint;
+  delete (x as { confirm?: unknown }).confirm; delete (x as { visualOnly?: unknown }).visualOnly;
+  return x;
+});
 const stamp = (g: Group, m: Master) => { g.masterMockup = m.number; g.mockupThumbs = [m.thumb]; g.mockupAt = new Date().toISOString(); if (m.kind) g.mockupKind = m.kind; delete g.mockupArt; delete g.mockupSkipped; delete g.customerMockups; };
 
 const printKey = (ims: Imprint[]) => [...new Set(ims.map((im) => `${im.design_id || ""}@${(im.location || "").trim().toLowerCase()}`))].sort().join("|");

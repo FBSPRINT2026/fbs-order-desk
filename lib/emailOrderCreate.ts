@@ -244,6 +244,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
     // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
     ...(d.delivery === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : {}),
+    // every group is one of the program's master mockups (lib/masterMockups.ts): a reorder of known-good work, nothing
+    // for production to confirm (Oct 30, Nick on All My Sons: "set it to reorder and then don't confirm any of the details")
+    ...(groups.length && groups.every((g) => g.masterMockup || !g.imprints.length) && groups.some((g) => g.masterMockup) ? { order_type: "reorder" } : {}),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
   };
   const { data: o, error } = intoId
