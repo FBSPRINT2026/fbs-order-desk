@@ -13335,6 +13335,7 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .draft-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin:8px 0 4px;border:1px dashed color-mix(in srgb,var(--fbs-orange,#F7941D) 60%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--fbs-orange,#F7941D) 7%,var(--surface));font-size:14px}
 .draft-bar .spacer{flex:1}
 .ot-no.ot-draft{color:#a35c00}
+.ed-head h1 .ot-no1{margin-right:.35em}
 /* drafts left behind: pick them back up (Oct 24, Nick) */
 .draft-rec{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:10px 14px;margin:0 0 12px;border:1px dashed color-mix(in srgb,var(--fbs-orange,#F7941D) 60%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--fbs-orange,#F7941D) 6%,var(--surface));font-size:13.5px}
 .pdx-draft .btn{margin-left:auto}

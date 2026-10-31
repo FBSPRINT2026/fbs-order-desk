@@ -1358,7 +1358,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       )}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
-          <h1>{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : <span className="ot-no"> – #{o.number}</span>}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
+          <h1>{/* the number first, so it shows when a long name is cut off (Oct 31, Nick) */}{!o.draft && <span className="ot-no ot-no1">#{o.number}</span>}{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : null}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className={"ed-actions" + (actsOpen ? " open" : "")}>
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
