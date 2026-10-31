@@ -1,4 +1,5 @@
 import "server-only";
+import { cutClean } from "@/lib/sentenceCut";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
@@ -152,7 +153,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
         say: { type: "string", description: "One plain sentence, past tense: \"Set every garment to $5.00 each\"" },
         ops: { type: "array", items: { type: "object", properties: { op: { type: "string", enum: ["add", "remove", "replace", "move", "copy"] }, path: { type: "string" }, from: { type: "string" }, value: {} }, required: ["op", "path"] } },
       }, required: ["say", "ops"] } },
-      lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): one sentence to remember for their next orders. Empty otherwise." },
+      lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): what to remember for their next orders, one or two short sentences (under 400 characters). Empty otherwise." },
       rule: { type: "string", description: "Only when the mistake was the shop's own way of doing things, not this customer's (a print placed far too low, a wrong default): one sentence of the rule that would have prevented it. Empty otherwise." },
     }, required: ["reply", "changes"] } },
     system: `${SHOP_CONTEXT(s)}
@@ -201,7 +202,7 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
 }
 
 /** the AI's "nothing" ('""', "none", "N/A") is nothing (Oct 23: Remember for theMcKennagroup: "") */
-const clean = (x: unknown) => { const t = String(x ?? "").trim().replace(/^["'“”\s]+|["'“”\s]+$/g, "").slice(0, 300); return t && !/^(none|n\/a|null|nothing|empty)\.?$/i.test(t) ? t : undefined; };
+const clean = (x: unknown) => { const t = cutClean(String(x ?? "").trim().replace(/^["'“”\s]+|["'“”\s]+$/g, ""), 600); return t && !/^(none|n\/a|null|nothing|empty)\.?$/i.test(t) ? t : undefined; };
 
 /** "S:10, M:12, L:8" → the size run (null when it isn't one) */
 function parseRun(v: string): Partial<Record<(typeof SIZES)[number], number>> | null {

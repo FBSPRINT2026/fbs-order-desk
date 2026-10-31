@@ -18,6 +18,7 @@ import { emailChat, emailChatThread, noteEmail, type ActRow } from "@/lib/ai/ema
 import { accountForUser } from "@/lib/mail/config";
 import { fixSignOff, writerNote } from "@/lib/mail/signoff";
 import { forgetMemory, loadMemories, saveMemory } from "@/lib/ai/orderMemory";
+import { customerTrainings, trainingsForText, TRAINING_MAX } from "@/lib/orderTrainings";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -484,13 +485,32 @@ export async function noteArtChange(orderId: string, imprintId: string, say: str
   } catch (e) { return fail(e); }
 }
 
-/** a lesson for this order's customer: read first by their next Create order (and the Assistant) */
+/**
+ * A lesson for this order's customer: remembered for their next Create order (and the Assistant), and written into the
+ * Create order trainings this job uses (Oct 31, #40311, Nick: "learn this invoice and add to the MEI learned process"),
+ * under "LEARNED FROM ORDERS", so the training itself carries it and staff see it there. The trainings are the ones the
+ * reader would use for this job (lib/orderTrainings.ts: their words in the job name). Returns the trainings it went in.
+ */
 export async function saveOrderLesson(orderId: string, text: string) {
   try {
     const { admin, email } = await staff();
-    const { data: o } = await admin.from("orders").select("customer_id, number, nickname").eq("id", orderId).maybeSingle();
+    const { data: o } = await admin.from("orders").select("customer_id, number, nickname, po_number").eq("id", orderId).maybeSingle();
     if (!o?.customer_id) return { ok: false as const, error: "This order has no customer." };
-    return await saveMemory(admin, { customerId: o.customer_id as string, text: text.trim().slice(0, 300), by: email || "staff", subject: `Order #${o.number}${o.nickname ? ` ${o.nickname}` : ""}` });
+    const r = await saveMemory(admin, { customerId: o.customer_id as string, text, by: email || "staff", subject: `Order #${o.number}${o.nickname ? ` ${o.nickname}` : ""}` });
+    if (!r.ok) return r;
+    const trainings: string[] = [], full: string[] = [];
+    const ts = trainingsForText(await customerTrainings(admin, o.customer_id as string), `${o.nickname || ""} ${o.po_number || ""}`);
+    const day = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric" });
+    for (const t of ts) {
+      if (t.rules.includes(r.text)) { trainings.push(t.name); continue; }
+      const head = "LEARNED FROM ORDERS (each checked right by staff):";
+      const line = `- #${o.number} (${day}${o.nickname ? `, ${String(o.nickname).slice(0, 60)}` : ""}): ${r.text}`;
+      const rules = t.rules.includes(head) ? `${t.rules.trimEnd()}\n${line}` : `${t.rules.trimEnd()}\n\n${head}\n${line}`;
+      if (rules.length > TRAINING_MAX) { full.push(t.name); continue; }
+      const { error } = await admin.from("order_trainings").update({ rules, updated_by: email || "staff", updated_at: new Date().toISOString() }).eq("id", t.id);
+      if (!error) trainings.push(t.name);
+    }
+    return { ...r, trainings, full };
   } catch (e) { return fail(e); }
 }
 

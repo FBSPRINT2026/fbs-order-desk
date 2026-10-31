@@ -257,11 +257,14 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   async function done() {
     if (needMock && !onMockupPage) window.open(next && next.includes("/mockup?") ? next : mockHref(needMock), "_blank", "noopener");
     setBusy("Saving…");
-    if (lesson.on && lesson.text.trim()) await saveOrderLesson(orderId, lesson.text).catch(() => null);
+    const kept = lesson.on && lesson.text.trim() ? await saveOrderLesson(orderId, lesson.text).catch(() => null) : null;
+    const tr = kept && kept.ok && "trainings" in kept ? kept : null;
+    const inTr = tr?.trainings?.length ? ` · added to the ${tr.trainings.join(" and ")} training` : "";
+    const tooFull = tr?.full?.length ? ` · the ${tr.full.join(" and ")} training is full, so it wasn't added there` : "";
     await markOrderChecked(orderId).catch(() => null);
     // the OK stays in the conversation, which is kept with the order
     const when = new Date().toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    const after: Round[] = [...rounds, { you: changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right", reply: `Marked right · ${when}${lesson.on && lesson.text.trim() ? ` · remembered for ${who}: ${lesson.text.trim()}` : ""}`, applied: [], art: [], suggest: [] }];
+    const after: Round[] = [...rounds, { you: changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right", reply: `Marked right · ${when}${lesson.on && lesson.text.trim() ? ` · remembered for ${who}: ${kept && kept.ok ? kept.text : lesson.text.trim()}${inTr}${tooFull}` : ""}`, applied: [], art: [], suggest: [] }];
     await saveOrderThread(orderId, { rounds: after, lesson: { ...lesson, on: false }, did: didKept }).catch(() => null);
     try { sessionStorage.removeItem(keyOf(orderId)); } catch { /* */ }
     setBusy("");
@@ -356,7 +359,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
         {busy && <>{pending && <div className="bub me"><p>{pending}</p></div>}<div className="bub them typing" aria-label={busy}><i /><i /><i /></div></>}
         {remaking && <p className="bub-note">Making the mockup again with the new art…</p>}
         {stale && !working && !remaking && <p className="bub-note">{onMockupPage ? "The logo changed and the shirt on the left shows it now. Save the mockup to the order so its picture shows it too." : <>The logo changed: <a className="ap-link" href={mockHref(o.groups[0])} target="_blank" rel="noreferrer">open the mockup</a> and save it again so its picture shows it.</>}</p>}
-        {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><input type="text" value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
+        {lesson.text && <label className="orv-lesson"><input type="checkbox" checked={lesson.on} onChange={(e) => setLesson((l) => ({ ...l, on: e.target.checked }))} /> <span>Remember for {who}:</span><textarea rows={Math.min(5, Math.max(2, Math.ceil(lesson.text.length / 60)))} value={lesson.text} onChange={(e) => setLesson((l) => ({ ...l, text: e.target.value }))} aria-label="What to remember" /></label>}
         {lastRule && <p className="bub-note">For tonight&apos;s review: {lastRule}</p>}
         {err && <div className="err">{err}</div>}
         {askNext && nextUp && (

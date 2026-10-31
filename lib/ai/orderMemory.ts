@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cutClean } from "@/lib/sentenceCut";
 
 /**
  * What staff taught the AI about a customer's orders, remembered for their next emails (Oct 20, Nick: "if Terrible
@@ -28,7 +29,7 @@ ${ms.map((m) => `- ${m.at.slice(0, 10)}${m.subject ? ` (about "${m.subject.slice
 }
 
 export async function saveMemory(admin: SupabaseClient, o: { customerId: string; text: string; by: string; activityId?: string | null; subject?: string }) {
-  const text = o.text.replace(/^\s*(please\s+)?(remember( that)?|from now on|next time)[:,]?\s*/i, "").trim().slice(0, 600);
+  const text = cutClean(o.text.replace(/^\s*(please\s+)?(remember( that)?|from now on|next time)[:,]?\s*/i, ""), 600);
   if (!text) return { ok: false as const, error: "Nothing to remember." };
   const at = new Date().toISOString();
   const { data, error } = await admin.from("ai_suggestions").insert({
