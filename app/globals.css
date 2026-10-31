@@ -16707,7 +16707,7 @@ html body .matrix input{padding:6px 4px}
    the name keeps a readable width, and the description and buttons wrap under it when there isn't room */
 html body .line-h{flex-wrap:wrap;row-gap:4px}
 html body .line-h input.grp-name{min-width:min(220px,100%)}
-html body .ord .line-h .grp-desc-in{min-width:min(160px,100%)}
+html body .line-h .grp-desc-in{flex:1 1 160px;min-width:min(160px,100%)}
 /* Printavo archive: the info boxes never get narrower than a label and its value side by side (Oct 31: at 820px the
    dates box wrapped "Oct 22, / 2026" and the PO a word per line); long values break between words, not letters */
 html body .pv-info{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
