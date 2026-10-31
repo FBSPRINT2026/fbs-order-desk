@@ -11,8 +11,11 @@ import { designLabel, orderGroups, type Customer, type Design, type Order } from
 import { custLabel, fmtDate } from "@/lib/format";
 import { addColorway, setDesignPreview } from "@/lib/designs";
 import LogoEditor from "@/components/LogoEditor";
-import { colorwaySew, colorwaysOf, nextSewCode, SEW_KINDS, sewFilesOf, sewThreads, tajimaName, type Brand, type Colorway, type SewFile } from "@/lib/brands";
-import { colorsText, colorwayUses, inkColor, logoColors, parseColors } from "@/lib/logoColors";
+import { colorwaySew, colorwaysOf, logoColorOfThread, nextSewCode, SEW_KINDS, sewFilesOf, sewThreads, standardColors, tajimaName, type Brand, type Colorway, type LogoColor, type SewFile } from "@/lib/brands";
+import { needleThreads } from "@/lib/needleThreads";
+import { ThreadSelect } from "@/components/InkSelect";
+import { fitLabel } from "@/lib/inkShort";
+import { colorsText, colorwayUses, inkColor, logoColors, parseColors, setStandardThread } from "@/lib/logoColors";
 import { useCan } from "@/components/RoleContext";
 import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
@@ -74,6 +77,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [cwEdit, setCwEdit] = useState<number | null>(null);
   const [cwBusy, setCwBusy] = useState(false);
   const [cwDark, setCwDark] = useState<boolean[]>([]);
+  // the thread being set: a logo color's (its swatch), or one needle of a sew file
+  const [thrAt, setThrAt] = useState<{ kind: "color"; i: number } | { kind: "sew"; i: number; needle: number } | null>(null);
   // who may unlock a master logo: Settings → User Access (owners always; Amanda given it, Oct 31). The database checks too.
   const canUnlock = useCan("masterLogos");
   useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
@@ -114,6 +119,14 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     } else setFilms([]);
   }
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the brand's standard threads kept on the logo itself, so every place that reads its sew files (an order's Swap, the
+  // work order) runs them, not only this page (a color it already has its own thread for keeps it)
+  useEffect(() => {
+    if (!d || !brand || !(brand.colors || []).some((c) => c.thread)) return;
+    const own = ((d.specs || {}) as { colors?: LogoColor[] }).colors || [];
+    const cs = logoColors(d, brand);
+    if (cs.some((c) => c.thread && !own.some((o) => o.name === c.name && o.thread === c.thread))) void setSpecs({ colors: cs });
+  }, [d?.id, brand?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownUrl = shown >= 0 ? cwUrls[shown] || "" : pv;
   // each colorway's picture on a dark backdrop when it has light parts (the same test as the big picture)
   useEffect(() => { let on = true; void Promise.all(cwUrls.map((u) => (u ? isLightArt(u) : Promise.resolve(false)))).then((v) => { if (on) setCwDark(v); }); return () => { on = false; }; }, [cwUrls]);
@@ -153,7 +166,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   }
   async function setSew(i: number, p: Partial<Sew>) {
     if (!d) return;
-    const fs = sewFilesOf(d).map((f, j) => (j === i ? { ...f, ...p } : f));
+    const fs = sewFilesOf(d, brand).map((f, j) => (j === i ? { ...f, ...p } : f));
     await patch({ specs: { ...((d.specs || {}) as object), embroidery: { ...(((d.specs as { embroidery?: object } | null)?.embroidery) || {}), files: fs } } as Design["specs"] });
   }
 
@@ -194,7 +207,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   if (!d) return <div className="empty">{msg || "Loading…"}</div>;
   const sp = (d.specs || {}) as { printSize?: { wIn?: number; hIn?: number; location?: string }; source?: { printavo?: string; dropbox?: string; where?: string }; history?: LogoHistory[] };
   const src = sp.source;
-  const sews = sewFilesOf(d) as Sew[];
+  const sews = sewFilesOf(d, brand) as Sew[];
   const cws = colorwaysOf(d);
   const hist: { at: string; text: string; href?: string }[] = [
     ...orders.map((o) => ({ at: (o.created_at || "").slice(0, 10), text: `On #${o.number} ${o.nickname || ""} · ${orderGroups(o).flatMap((g) => g.imprints.filter((im) => im.design_id === d.id).map((im) => im.location)).join(", ")}`, href: `/shop/orders/${o.id}` })),
@@ -206,6 +219,32 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   // "Last used" only when a sew file has one (a column that's only sometimes needed, house rule)
   const anyUsed = sews.some((f) => f.lastUsed?.job || f.lastUsed?.dropbox);
   const master = (d.specs as { master?: { at?: string; by?: string } | null } | null)?.master || null;
+  // a master logo's colors and threads are locked in (Oct 31, Nick: "once we build that sheet, you got to lock that top
+  // part in"): only someone allowed to unlock masters changes them; a thread not set yet can still be filled in
+  const colorsLocked = !!master && !canUnlock;
+  /** a logo color's thread (Oct 31, Nick: "instead of the hex… set a thread color"): what every sew file's needle of that
+   *  color runs (lib/brands.ts withStandards) */
+  const setColorThread = async (i: number, thread: string) => {
+    const cs = colors.map((c, j) => (j === i ? { ...c, thread: thread || undefined } : c)).map((c) => { const x = { ...c }; if (!x.thread) delete x.thread; return x; });
+    await setSpecs({ colors: cs });
+  };
+  /** "Set as standard thread for this client": the brand's color and every logo of the brand (lib/logoColors.ts) */
+  const makeStandard = async (color: LogoColor, thread: string) => {
+    if (!brand) return;
+    const r = await setStandardThread(sb, { brand, from: d, color, thread });
+    if (r.error) { setMsg("Couldn't save: " + r.error); return; }
+    setMsg(`${color.name} is ${thread} on ${brand.name}${r.took ? ` · ${r.took} more logo${r.took === 1 ? "" : "s"} took it` : ""}${r.kept ? ` · ${r.kept} kept their own` : ""}`);
+    await load();
+  };
+  /** one needle of a sew file on the thread we really ran (null: back to what the digitizer's sheet says) */
+  const setNeedle = async (i: number, needle: number, thread: string | null) => {
+    const f = sews[i];
+    if (!f?.ws) return;
+    const threads = f.ws.threads.map((x) => { if (x.needle !== needle) return x; const y = { ...x }; if (thread) { y.ours = thread; y.oursFrom = "staff"; } else { delete y.ours; delete y.oursFrom; } return y; });
+    await setSew(i, { ws: { ...f.ws, threads } });
+  };
+  const stdColors = standardColors({ specs: { ...((d.specs || {}) as object), colors } as Design["specs"] }, brand);
+  const threadSuggest = [...new Set(colors.map((c) => c.thread).filter(Boolean) as string[])];
   // every print of this logo on an order: where it went and how big (a logo's size lives with each use, Oct 31, Nick)
   const uses = orders.flatMap((o) => orderGroups(o).flatMap((g) => g.imprints.filter((im) => im.design_id === d.id).map((im) => ({ o, where: im.location, size: im.size, method: im.method === "embroidery" ? "Embroidery" : im.method === "screen" ? "Screen print" : im.method === "dtf" ? "Heat press" : im.method, colors: im.inks }))));
   const counts: Record<Tab, number> = { emb: sews.length, sp: seps.length + films.length, hp: gangs.length, ord: uses.length, hist: hist.length };
@@ -242,16 +281,37 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
             {shown >= 0 && <div className="lgx-showing"><span>Showing <b>{cws[shown]?.name}</b></span><button type="button" className="linkbtn" onClick={() => setShown(-1)}>As on file</button></div>}
           </div>
           <div className="lgx-side">
-            <div className="lgx-k">Logo colors{!colEdit && <button type="button" className="linkbtn" onClick={() => setColEdit(colorsText(colors))}>Edit</button>}</div>
+            <div className="lgx-k">Logo colors{!colEdit && !colorsLocked && <button type="button" className="linkbtn" onClick={() => setColEdit(colorsText(colors))}>Edit</button>}{colorsLocked && <span className="lgx-lk" title="A master logo's colors and threads are locked in: someone allowed in Settings → User Access can change them"><LockIcon />Locked</span>}</div>
             {colEdit !== null ? (
               <div className="lgx-coledit">
-                <div className="field"><label htmlFor="lgx-c">One a line: name | PMS | #hex</label><textarea id="lgx-c" rows={5} value={colEdit} placeholder={"Maroon | PMS 492 C | #8B2E35\nOff White | PMS Warm Gray 1 C | #FAF6EC"} onChange={(e) => setColEdit(e.target.value)} /></div>
-                <div className="row"><button type="button" className="btn ghost sm" onClick={() => setColEdit(null)}>Cancel</button><button type="button" className="btn primary sm" onClick={() => { void setSpecs({ colors: parseColors(colEdit) }); setColEdit(null); }}>Save colors</button></div>
+                <div className="field"><label htmlFor="lgx-c">One a line: name | PMS</label><textarea id="lgx-c" rows={5} value={colEdit} placeholder={"Maroon | PMS 492 C\nOff White | PMS Warm Gray 1 C\nBlack"} onChange={(e) => setColEdit(e.target.value)} /></div>
+                <div className="row"><button type="button" className="btn ghost sm" onClick={() => setColEdit(null)}>Cancel</button><button type="button" className="btn primary sm" onClick={() => { void setSpecs({ colors: parseColors(colEdit, colors) }); setColEdit(null); }}>Save colors</button></div>
               </div>
             ) : colors.length ? (
-              <div className="lgx-sws">{colors.map((c) => (
-                <div key={c.name} className="lgx-sw"><span className="lgx-chip" style={{ background: c.hex }} /><b>{c.name}</b><span>{c.pms || " "}</span><small data-notranslate>{c.hex}</small></div>
-              ))}</div>
+              <>
+              {/* each color on three lines that line up across the row: its name, its PMS (else its name again), and the
+                  thread we sew it in; each kept to one line, shortened when it has to be (Oct 31, Nick) */}
+              <div className="lgx-sws">{colors.map((c, i) => {
+                const on = thrAt?.kind === "color" && thrAt.i === i, can = !colorsLocked || !c.thread;
+                return (
+                  <div key={c.name} className={"lgx-sw" + (on ? " on" : "")}>
+                    <span className="lgx-chip" style={{ background: c.hex }} />
+                    <b title={c.name}>{fitLabel(c.name, 13)}</b>
+                    <span title={c.pms || c.name} data-notranslate>{fitLabel(c.pms || c.name)}</span>
+                    {can ? <button type="button" className={"lgx-thr" + (c.thread ? "" : " none")} aria-expanded={on} title={c.thread ? `${c.thread}: the thread we sew ${c.name} in. Click to change it` : `Set the thread we sew ${c.name} in`} onClick={() => setThrAt(on ? null : { kind: "color", i })}><span data-notranslate>{c.thread ? fitLabel(c.thread, 17) : "+ Thread"}</span></button>
+                      : <span className="lgx-thr lk" title={`${c.thread}: locked with the master logo`} data-notranslate>{fitLabel(c.thread || "", 17)}</span>}
+                  </div>
+                );
+              })}</div>
+              {thrAt?.kind === "color" && colors[thrAt.i] && (() => { const c = colors[thrAt.i]; return (
+                <div className="lgx-thed">
+                  <div className="field"><label>{c.name} thread</label><ThreadSelect value={c.thread || ""} line={null} suggest={threadSuggest} onChange={(n) => void setColorThread(thrAt.i, n)} /></div>
+                  {master && brand && c.thread && <button type="button" className="btn sm" onClick={() => void makeStandard(c, c.thread!)} title={`Every ${brand.name} logo's ${c.name} sews in ${c.thread}, whatever the digitizer's sheet says`}>Set as standard thread for {brand.name}</button>}
+                  {c.thread && !colorsLocked && <button type="button" className="linkbtn" onClick={() => void setColorThread(thrAt.i, "")}>Clear</button>}
+                  <button type="button" className="btn ghost sm" onClick={() => setThrAt(null)}>Done</button>
+                </div>
+              ); })()}
+              </>
             ) : <p className="faint">No colors yet: add them, or add colorways and their inks fill this in.</p>}
             <div className="lgx-own">
               <span className="lgx-k0">Belongs to</span>
@@ -282,7 +342,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           <label className="btn sm" style={{ cursor: "pointer" }}>{cwBusy ? "Adding…" : "+ Add colorway"}<input type="file" hidden accept=".svg,.pdf,.ai,.eps,.png,.jpg,.jpeg,.webp" disabled={cwBusy} onChange={(e) => { void addCw(e.target.files?.[0] || null); e.target.value = ""; }} /></label></div>
         <div className="panel-b">
           {cws.length ? <div className="lgx-cws">{cws.map((c, i) => {
-            const uses = colorwayUses(c, brand), sew = colorwaySew(d, c);
+            const uses = colorwayUses(c, brand), sew = colorwaySew(d, c, brand);
             return (
               <div key={c.name + i} className={"lgx-cw" + (shown === i ? " on" : "")}>
                 <button type="button" className={"lgx-pic" + (cwDark[i] ? " dark" : "")} onClick={() => setShown(shown === i ? -1 : i)} title="Show it big">{cwUrls[i] ? <img src={cwUrls[i]} alt={c.name} /> : <span className="faint">No picture</span>}</button>
@@ -333,7 +393,26 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                     <td><b className="ordno">{tajimaName(d.number, Number((f.code || "E1").slice(1)) || i + 1)}</b></td>
                     <td>{cws.filter((c) => c.sew && c.sew === f.code).map((c) => c.name).join(", ") || <span className="faint">—</span>}</td>
                     <td><input type="text" aria-label="Where it goes" defaultValue={f.placement || ""} placeholder="Left chest, Left sleeve…" title="Every place this file sews: one file can go on several spots" onBlur={(e) => { if ((f.placement || "") !== e.target.value.trim()) void setSew(i, { placement: e.target.value.trim() || undefined }); }} /><div className="sub" style={{ whiteSpace: "nowrap" }}>{f.wIn}&quot; × {f.hIn}&quot;</div></td>
-                    <td>{sewThreads(f).length ? sewThreads(f).map((t, k) => <div key={k} className="lgx-th">{t}</div>) : <span className="faint">{f.colors} color{f.colors === 1 ? "" : "s"}</span>}</td>
+                    {/* each needle's thread: the sheet's, else ours (Oct 31, Nick: "the digitizer doesn't know what we have on
+                        the wall… I need to be able to override"): the client's standard for that color, or one picked here */}
+                    <td>{f.ws?.threads?.length ? needleThreads(f.ws, "").map((nt) => {
+                      const x = f.ws!.threads.find((y) => y.needle === nt.needle)!, ed = thrAt?.kind === "sew" && thrAt.i === i && thrAt.needle === nt.needle;
+                      const lc = nt.why === "staff" && master && brand ? logoColorOfThread(x, stdColors) : null;
+                      return (
+                        <div key={nt.needle} className="lgx-nt">
+                          <button type="button" className="lgx-th lgx-thb" aria-expanded={ed} title={`Needle ${nt.needle}. Click to set the thread we really run`} onClick={() => setThrAt(ed ? null : { kind: "sew", i, needle: nt.needle })}><i style={{ background: nt.hex }} /><span data-notranslate>{nt.label}</span></button>
+                          {nt.from === "ours" && <div className="sub">{nt.why === "standard" ? `${brand?.name || "Their"} standard` : "Picked here"} · sheet said <span data-notranslate>{nt.sheet}</span>
+                            {nt.why === "staff" && master && brand && (lc
+                              ? <> · <button type="button" className="linkbtn" title={`${lc.name} on every ${brand.name} logo sews in ${nt.label}`} onClick={() => void setNeedle(i, nt.needle, null).then(() => makeStandard(lc, nt.label))}>Set as standard thread for this client</button></>
+                              : <> · <span title={`None of the logo's colors is near ${nt.sheet}`}>no logo color to set it on</span></>)}</div>}
+                          {ed && <div className="lgx-thed sm">
+                            <ThreadSelect value={nt.label} line={null} suggest={threadSuggest} onChange={(n) => void setNeedle(i, nt.needle, n)} />
+                            {nt.why === "staff" && <button type="button" className="linkbtn" onClick={() => void setNeedle(i, nt.needle, null)}>Undo this pick</button>}
+                            <button type="button" className="btn ghost sm" onClick={() => setThrAt(null)}>Done</button>
+                          </div>}
+                        </div>
+                      );
+                    }) : sewThreads(f).length ? sewThreads(f).map((t, k) => <div key={k} className="lgx-th">{t}</div>) : <span className="faint">{f.colors} color{f.colors === 1 ? "" : "s"}</span>}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{(f.stitches || 0).toLocaleString()}</td>
                     <td><select className="lg-kind" aria-label="Kind" value={f.kind || "flat"} onChange={(e) => void setSew(i, { kind: e.target.value as Sew["kind"] })}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                     {anyUsed && <td>{f.lastUsed?.job ? <span style={{ whiteSpace: "nowrap" }}>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}</div></span> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>}

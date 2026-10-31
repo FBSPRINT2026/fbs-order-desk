@@ -16878,3 +16878,21 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 .mbg.sm .mbg-btn{width:22px;height:22px}
 .mbg.sm .mbg-btn span{width:12px;height:12px}
 .mbg.sm .mbg-pop{right:auto;left:0;top:28px;line-height:1.3;z-index:5}
+/* logo colors: name, PMS and thread each on one line, lined up across the row (Oct 31, Nick) */
+.lgx-sw > *{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.lgx-thr{display:block;text-align:left;border:0;background:none;padding:0;font:inherit;font-size:12px;color:var(--accent);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.lgx-thr.none{color:var(--ink-3)}
+.lgx-thr.lk{color:var(--ink-2);cursor:default}
+.lgx-thr:hover:not(.lk){text-decoration:underline}
+.lgx-sw.on .lgx-chip{outline:2px solid var(--accent);outline-offset:2px}
+.lgx-thed{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 10px;margin-top:10px}
+.lgx-thed .field{flex:1 1 260px;min-width:0;margin:0}
+.lgx-thed.sm{align-items:center;margin:4px 0 6px}
+.lgx-thed.sm .ink-dd{flex:1 1 240px;min-width:0}
+.lgx-lk{display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:11px;color:var(--ink-3);text-transform:none;letter-spacing:0}
+.lgx-lk svg{width:12px;height:12px}
+.lgx-nt + .lgx-nt{margin-top:4px}
+.lgx-thb{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.lgx-thb i{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);flex:none}
+.lgx-thb:hover span{text-decoration:underline;color:var(--accent)}
+.lgx-sw .lgx-thr span{color:inherit}

@@ -1,5 +1,5 @@
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
-import { cwLetter, hasColorwayArt, printArtUrl, printOnColor, withSewFile } from "@/lib/brands";
+import { cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile } from "@/lib/brands";
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
@@ -132,8 +132,9 @@ function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: s
 
 // ───────────────────────────── work order ─────────────────────────────
 export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string }) {
-  // each embroidered print with the sew file it sews, its logo's when it has none of its own (lib/brands.ts withSewFile)
-  const p = { ...p0, groups: p0.groups.map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => withSewFile(im, im.design_id ? p0.designs[im.design_id] : null, g.lines || [])) })) };
+  // each embroidered print with the sew file it sews, its logo's when it has none of its own (lib/brands.ts withSewFile),
+  // each needle on the thread we really run as the logo has it now (withLiveSew)
+  const p = { ...p0, groups: p0.groups.map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => withLiveSew(withSewFile(im, im.design_id ? p0.designs[im.design_id] : null, g.lines || []), im.design_id ? p0.designs[im.design_id] : null)) })) };
   const { o, cust, groups, c } = p;
   // each group's pages (Oct 26, Nick: "the mock-ups aren't nearly big enough, and the little print cubes are too big… the
   // first page… small versions… then a larger mock-up and its printing underneath"; "make it fill the space… variable";

@@ -36,3 +36,29 @@ export function inkShort(name: string): string {
   // "Kelly Green" → "Kly G": the first word short, the rest their first letters
   return [vowelless(words[0]), ...words.slice(1).map((w) => w[0].toUpperCase())].join(" ");
 }
+
+/**
+ * A color, PMS or thread name made to fit one line of a small swatch (Oct 31, Nick: "this warm gray 1 C goes over into
+ * two lines… if you need to abbreviate a color to make it one line, do so"): as written when it fits, else the words
+ * shortened one at a time from the end ("PMS Warm Gray 1 C" → "PMS Warm Gy 1C", "Madeira 1981 Carmine" → "Mad 1981
+ * Carmine") until it's `max` characters or less. The full name goes in the swatch's title.
+ */
+const SHORT_WORD: Record<string, string> = {
+  gray: "Gy", grey: "Gy", warm: "Wm", cool: "Cl", black: "Blk", white: "Wht", light: "Lt", dark: "Dk", diamond: "Dmnd", process: "Proc",
+  green: "Grn", orange: "Org", purple: "Prp", yellow: "Ylw", brown: "Brn", silver: "Slv", metallic: "Met", neon: "Nn", royal: "Roy",
+  madeira: "Mad", isacord: "Isa", polyneon: "PN", rayon: "Ry", heather: "Hth", charcoal: "Chr", maroon: "Mrn", burgundy: "Brg",
+  forest: "Fst", kelly: "Kly", navy: "Nvy", super: "Sup", emerald: "Em", carmine: "Crm", cream: "Crm", natural: "Nat", pantone: "PMS",
+};
+export function fitLabel(s: string, max = 15): string {
+  let t = (s || "").trim().replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  t = t.replace(/(\d)\s+([CU])\b/g, "$1$2");
+  const words = t.split(" ");
+  // a thread's maker first ("Madeira" → "Mad"), then the words from the end
+  for (let i = 0; i < words.length && words.join(" ").length > max; i++) if (/^(madeira|isacord|polyneon|pantone)$/i.test(words[i])) words[i] = SHORT_WORD[words[i].toLowerCase()];
+  for (let i = words.length - 1; i >= 0 && words.join(" ").length > max; i--) {
+    const k = words[i].toLowerCase();
+    if (SHORT_WORD[k]) words[i] = SHORT_WORD[k];
+  }
+  return words.join(" ");
+}

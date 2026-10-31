@@ -15,7 +15,7 @@ import { takeDigitized, type DigitizedSet } from "@/lib/digitizedFiles";
 import SewSequence from "@/components/SewSequence";
 import { stopColors } from "@/lib/needleThreads";
 import { lineName, threadByName } from "@/lib/embroidery";
-import { tajimaName } from "@/lib/brands";
+import { sewFilesOf, tajimaName } from "@/lib/brands";
 import SewoutCapture from "@/components/SewoutCapture";
 import { approveSewoutAnother, remindSewoutAction, sendSewoutToCustomer } from "@/app/shop/sewout-actions";
 import type { SewCtx } from "@/components/SewnPanel";
@@ -55,7 +55,8 @@ type Sw = { id: string; order_id: string; imprint_id: string; version: number; p
 /** a logo's sew-outs on any order, to show each stitch file version's approval (Oct 29, Nick: "once we get approval…
  *  version 2 gets approved. There should be a note… approved 10/29 for order…") */
 type DSw = { id: string; design_id: string; status: string; decided_at: string | null; sent_at: string | null; created_at: string; archived_at: string | null; sewn?: { file?: { path?: string } | null } | null; orders?: { number: number } | null };
-const embOf = (d: Design | null): EmbSpecs => ((d?.specs as { embroidery?: EmbSpecs } | null)?.embroidery) || {};
+/** a logo's embroidery: its sew files with each needle on the thread we really run (lib/brands.ts withStandards) */
+const embOf = (d: Design | null): EmbSpecs => { const e = ((d?.specs as { embroidery?: EmbSpecs } | null)?.embroidery) || {}; return d && e.files?.length ? { ...e, files: sewFilesOf(d) as unknown as EmbFile[] } : e; };
 
 export default function Digitizing() {
   const canEdit = useCan("digitizing");

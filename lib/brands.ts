@@ -1,6 +1,8 @@
 import type { DigitizedSet } from "@/lib/digitizedFiles";
-import { garmentHex } from "@/lib/mockup";
-import { needleThreads } from "@/lib/needleThreads";
+import { garmentHex, guessHex } from "@/lib/mockup";
+import { needleThreads, sheetThread } from "@/lib/needleThreads";
+import { colorHex } from "@/lib/inkColors";
+import { threadByName } from "@/lib/embroidery";
 import { newImprint, type Design, type GLine, type Imprint, type Method } from "@/lib/pricing";
 
 /**
@@ -30,7 +32,9 @@ export type Brand = { id: string; customer_id: string; name: string; colors: Bra
 export type Colorway = { name: string; inks: string[]; preview?: string; file?: { path: string; name: string }; sew?: string };
 /** a logo's colors (the swatches on its page): the brand's colors it uses, with their PMS (Oct 31, Nick: "here's the
  *  logo, here's the colors… very visual") */
-export type LogoColor = { name: string; pms?: string; hex: string };
+export type LogoColor = { name: string; pms?: string; hex: string;
+  /** the thread we sew this color in (Oct 31, Nick: "instead of the hex… set a thread color"): the customer-approved one.
+   *  Every sew file's needle nearest this color runs it, whatever the digitizer's sheet says (withStandards) */ thread?: string };
 /** a sew file: a DST made for one size and kind of goods. code = E1, E2… (D10241E1 on the Tajima's screen) */
 export type SewKind = "flat" | "cap" | "bag" | "puff" | "fleece";
 export const SEW_KINDS: Record<SewKind, string> = { flat: "Flat", cap: "Cap", bag: "Bag", puff: "3D puff", fleece: "Fleece" };
@@ -46,7 +50,66 @@ export const LANES: { id: Lane; label: string; short: string }[] = [
 type Specs = { colorways?: Colorway[]; embroidery?: { files?: SewFile[] }; heat?: { file?: { path: string; name: string } }; seps?: unknown; [k: string]: unknown };
 const specsOf = (d: Pick<Design, "specs">) => (d.specs || {}) as Specs;
 export const colorwaysOf = (d: Pick<Design, "specs">): Colorway[] => specsOf(d).colorways || [];
-export const sewFilesOf = (d: Pick<Design, "specs">): SewFile[] => (specsOf(d).embroidery?.files || []).filter((f) => f && f.path);
+/** a logo's sew files, each needle on the thread we really run (withStandards: staff picks, else the logo colors' threads) */
+export const sewFilesOf = (d: Pick<Design, "specs">, brand?: Pick<Brand, "colors"> | null): SewFile[] => {
+  const std = standardColors(d, brand);
+  return (specsOf(d).embroidery?.files || []).filter((f) => f && f.path).map((f) => withStandards(f, std));
+};
+/** a logo's colors with their standard threads: its own (each without a thread taking its brand's for the same PMS or
+ *  name), else its brand's colors */
+export function standardColors(d: Pick<Design, "specs">, brand?: Pick<Brand, "colors"> | null): LogoColor[] {
+  const k = (s?: string) => (s || "").toLowerCase().replace(/^(pantone|pms)\s*/, "").replace(/[^a-z0-9]/g, "");
+  const own = ((specsOf(d) as { colors?: LogoColor[] }).colors || []).filter((c) => c && c.name);
+  const bc = brand?.colors || [];
+  if (!own.length) return bc;
+  return own.map((c) => c.thread ? c : { ...c, thread: bc.find((x) => (c.pms && x.pms && k(x.pms) === k(c.pms)) || k(x.name) === k(c.name))?.thread });
+}
+const rgbOf = (h: string) => { const v = parseInt((h || "#9aa1ab").replace("#", "").padEnd(6, "0").slice(0, 6), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+const rgbDist = (a: string, b: string) => { const x = rgbOf(a), y = rgbOf(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+/** a logo color's screen color: as saved, else its PMS's, else its name's */
+const colorOf = (c: LogoColor) => (/^#[0-9a-f]{6}$/i.test(c.hex || "") ? c.hex : colorHex(c.pms || "") || colorHex(c.name) || guessHex(c.name) || "#9aa1ab");
+/**
+ * The logo color a worksheet's thread is (Oct 31): the nearest of the logo's colors to the thread's color, when it's
+ * close (a Carmine needle is the Maroon; a gold one is no color of a maroon-and-white logo). Ties go to a color with a
+ * thread set. Null when none is close.
+ */
+export function logoColorOfThread(x: { code: string; chart: string; name: string }, colors: LogoColor[]): LogoColor | null {
+  const st = sheetThread(x), hex = st?.hex || guessHex(x.name) || "";
+  if (!colors.length) return null;
+  // by name first: a color whose whole name is in the thread's ("Super White" is the White, not the Off White; "Emerald
+  // Black" is the Black), the longest such name
+  const tn = ` ${(st?.name || x.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  const named = colors.filter((c) => c.name && tn.includes(` ${c.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `)).sort((a, b) => b.name.length - a.name.length);
+  if (named.length) return named.find((c) => c.thread) && named[0].name.length === named.find((c) => c.thread)!.name.length ? named.find((c) => c.thread)! : named[0];
+  if (!hex) return null;
+  let best: LogoColor | null = null, bd = Infinity;
+  for (const c of colors) { const dd = rgbDist(hex, colorOf(c)); if (dd < bd - 0.5 || (Math.abs(dd - bd) <= 0.5 && !best?.thread && c.thread)) { best = c; bd = dd; } }
+  return bd <= 80 ? best : null;
+}
+/**
+ * A sew file with each needle on the thread we really run (Oct 31, Nick: "the digitizer doesn't know what we have on the
+ * wall… if we get a DST back, they might just select whatever on the embroidery sheet… don't assume those are the
+ * customer approved threads"): a needle staff picked a thread for keeps it; any other takes the standard thread of the
+ * logo color nearest the sheet's thread (LogoColor.thread); else the sheet's. Worked out each time a logo's files are
+ * read, so a standard set later reaches every file, old and new.
+ */
+export function withStandards(f: SewFile, colors: LogoColor[]): SewFile {
+  if (!f.ws?.threads?.length) return f;
+  let changed = false;
+  const threads = f.ws.threads.map((x) => {
+    if (x.ours && x.oursFrom !== "standard") return x;
+    const c = logoColorOfThread(x, colors);
+    const st = sheetThread(x);
+    // the standard only when it isn't what the sheet already says
+    const want = c?.thread && !(st && threadByName(c.thread)?.code === st.code && threadByName(c.thread)?.line === st.line) ? c.thread : undefined;
+    if ((x.ours || undefined) === want) return x;
+    changed = true;
+    const y = { ...x };
+    if (want) { y.ours = want; y.oursFrom = "standard"; } else { delete y.ours; delete y.oursFrom; }
+    return y;
+  });
+  return changed ? { ...f, ws: { ...f.ws, threads } } : f;
+}
 const isVector = (d: Pick<Design, "file_type" | "file_name">) => /pdf|postscript|illustrator|svg|eps/i.test(d.file_type || "") || /\.(pdf|ai|eps|svg)$/i.test(d.file_name || "");
 
 /** what a lane has of a logo, in words for its card ("2 sew files", "Vector, 4 colorways"), and whether it's ready */
@@ -84,8 +147,15 @@ export function colorwayFor(d: Pick<Design, "specs">, brand: Brand | null | unde
 }
 
 /** the sew file linked to a colorway (Colorway.sew), if it has one */
-export function colorwaySew(d: Pick<Design, "specs">, cw: Colorway | null | undefined): SewFile | null {
-  return cw?.sew ? sewFilesOf(d).find((f) => f.code === cw.sew) || null : null;
+export function colorwaySew(d: Pick<Design, "specs">, cw: Colorway | null | undefined, brand?: Pick<Brand, "colors"> | null): SewFile | null {
+  return cw?.sew ? sewFilesOf(d, brand).find((f) => f.code === cw.sew) || null : null;
+}
+/** a print with its sew file as the logo has it now (Oct 31): the threads we really run on each needle may have been set on
+ *  the logo since the print took its copy of the file (lib/brands.ts withStandards) */
+export function withLiveSew<T extends Pick<Imprint, "emb">>(im: T, d: Pick<Design, "specs"> | null | undefined): T {
+  const p = im.emb?.file?.path;
+  const live = p && d ? sewFilesOf(d).find((f) => f.path === p) : null;
+  return live?.ws ? { ...im, emb: { ...(im.emb || {}), file: { ...im.emb!.file!, ws: live.ws } } } : im;
 }
 /** the threads a sew file sews in, in order ("Madeira 1981 Carmine"): its worksheet's, else the ones set on it */
 export function sewThreads(f: SewFile | null | undefined, side: "light" | "dark" = "light"): string[] {
@@ -237,9 +307,9 @@ export function printOnColor(im: Imprint, d: Pick<Design, "specs"> | null | unde
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
 export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number): SewFile | null {
-  const linked = colorwaySew(d, colorwayFor(d, brand, dark));
+  const linked = colorwaySew(d, colorwayFor(d, brand, dark), brand);
   if (linked && (linked.kind || "flat") === kind) return linked;
-  return pickSewFile(sewFilesOf(d), kind, wantW);
+  return pickSewFile(sewFilesOf(d, brand), kind, wantW);
 }
 
 /** the sew file that fits a print: the kind of goods, then the size closest to the one wanted (within about 10%) */

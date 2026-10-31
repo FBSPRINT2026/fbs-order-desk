@@ -145,7 +145,7 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
  * like the drop down on the mock-up… you can select white, or you can select the threads"): type a Madeira number, name
  * or PMS, or open the list: the customer's brand threads first, then white and black.
  */
-export function ThreadSelect({ value, onChange, line = "Polyneon 40", suggest = [], placeholder = "Find a thread: number, name or PMS" }: { value: string; onChange: (name: string, hex: string) => void; line?: Thread["line"]; suggest?: string[]; placeholder?: string }) {
+export function ThreadSelect({ value, onChange, line = "Polyneon 40", suggest = [], placeholder = "Find a thread: number, name or PMS" }: { value: string; onChange: (name: string, hex: string) => void; /** null: every line we stock (Madeira Polyneon, Isacord, Rayon) */ line?: Thread["line"] | null; suggest?: string[]; placeholder?: string }) {
   const box = useRef<HTMLSpanElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const inp = useRef<HTMLInputElement>(null);
@@ -158,7 +158,7 @@ export function ThreadSelect({ value, onChange, line = "Polyneon 40", suggest = 
     const out: { label: string; opts: { name: string; hex: string; sub?: string }[] }[] = [];
     const seen = new Set<string>();
     const add = (label: string, list: Thread[]) => { const o = list.filter((t) => !seen.has(t.code)).map((t) => { seen.add(t.code); return { name: threadLabel(t), hex: t.hex, sub: t.pms.length ? `PMS ${t.pms[0].replace(/^PMS\s*/i, "")}` : undefined }; }); if (o.length) out.push({ label, opts: o }); };
-    if (q) add("", findThreads(q, line, 40));
+    if (q) add("", findThreads(q, line || undefined, 40));
     else {
       add("Their brand", suggest.map((n) => threadByName(n)).filter(Boolean) as Thread[]);
       add("White and black", [threadByName(`${line === "Isacord 40" ? "Isacord 0015" : "Madeira 1801"}`), threadByName(`${line === "Isacord 40" ? "Isacord 0020" : "Madeira 1800"}`)].filter(Boolean) as Thread[]);

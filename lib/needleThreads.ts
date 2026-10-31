@@ -13,9 +13,12 @@ import { guessHex } from "@/lib/mockup";
  *   closest to that color (each order thread used once; in sew order when the color word says nothing). With fewer
  *   order threads than needles, the rest are drawn in the color the worksheet says.
  * - No worksheet: the order's threads in turn.
+ * - A needle with our own thread (SheetThread.ours: picked on the logo's page, or the client's standard thread for that logo
+ *   color, Oct 31): that thread, whatever the sheet said (the digitizer picks from their chart, not our wall).
  * `sewn` (needle → thread name) is what was actually sewn, when a sew-out recorded it, and wins.
  */
-export type NeedleThread = { needle: number; label: string; hex: string; thread: Thread | null; from: "sheet" | "order" | "default" };
+export type NeedleThread = { needle: number; label: string; hex: string; thread: Thread | null; from: "sheet" | "order" | "default" | "ours";
+  /** "ours": what the worksheet said instead ("Madeira 1800 Black") and whether staff picked it or the client's standard did */ sheet?: string; why?: "staff" | "standard" };
 
 const isDefault = (chart: string) => /^default$/i.test(chart || "");
 const lineOf = (chart: string): Thread["line"] => (/isacord/i.test(chart) ? "Isacord 40" : /classic|rayon/i.test(chart) ? "Classic Rayon 40" : "Polyneon 40");
@@ -44,6 +47,8 @@ export function needleThreads(ws: Worksheet | null | undefined, inks: string, se
   };
   return ws.threads.map((x) => {
     if (sewn?.[x.needle]) return fromName(sewn[x.needle], x.needle, "order");
+    // the thread we really run (picked on the logo's page, or the client's standard for that color) wins over the sheet
+    if (x.ours) { const st = sheetThread(x); return { ...fromName(x.ours, x.needle, "ours"), sheet: st ? threadLabel(st) : `${x.code}${x.name ? ` ${x.name}` : ""}`, why: x.oursFrom || "staff" }; }
     if (!isDefault(x.chart)) {
       const t = sheetThread(x);
       return { needle: x.needle, label: t ? threadLabel(t) : `${x.code}${x.name ? ` ${x.name}` : ""}`, hex: t?.hex || defaultHex(x.name), thread: t, from: "sheet" };
