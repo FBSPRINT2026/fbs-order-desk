@@ -13,7 +13,7 @@ import { addColorway, setDesignPreview } from "@/lib/designs";
 import LogoEditor from "@/components/LogoEditor";
 import { colorwaySew, colorwaysOf, nextSewCode, SEW_KINDS, sewFilesOf, sewThreads, tajimaName, type Brand, type Colorway, type SewFile } from "@/lib/brands";
 import { colorsText, colorwayUses, inkColor, logoColors, parseColors } from "@/lib/logoColors";
-import { useRole } from "@/components/RoleContext";
+import { useCan } from "@/components/RoleContext";
 import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
 import LogoResearch, { type LogoHistory, type Sew } from "@/components/LogoResearch";
@@ -88,8 +88,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [cwEdit, setCwEdit] = useState<number | null>(null);
   const [cwBusy, setCwBusy] = useState(false);
   const [cwDark, setCwDark] = useState<boolean[]>([]);
-  const role = useRole().role;
-  const canUnlock = !role || role === "owner" || role === "admin";
+  // who may unlock a master logo: Settings → User Access (owners always; Amanda given it, Oct 31). The database checks too.
+  const canUnlock = useCan("masterLogos");
   useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
 
   async function load() {
@@ -198,7 +198,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   }
   /** a master logo is set in stone: it can't be deleted, archived or have its art replaced (the database refuses too) */
   async function setMaster(on: boolean) {
-    if (!on && !canUnlock) { setMsg("Only an owner or admin can unlock a master logo."); return; }
+    if (!on && !canUnlock) { setMsg("Only someone allowed in Settings → User Access can unlock a master logo."); return; }
     const { data: u } = await sb.auth.getUser();
     await setSpecs({ master: on ? { at: new Date().toISOString(), by: u.user?.email || "" } : undefined });
     setMsg(on ? "Locked as a master logo" : "Unlocked");
@@ -274,7 +274,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                   <option value="">No brand</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select></>}
               <span className="lgx-sep" />
-              <label className={"lgx-lock" + (master ? " on" : "")} title={master ? (canUnlock ? "Locked: it can't be deleted or have its art replaced. Turn off to unlock." : "Locked: only an owner or admin can unlock a master logo") : "Make it a master logo: set in stone, it can't be deleted or have its art replaced"}>
+              <label className={"lgx-lock" + (master ? " on" : "")} title={master ? (canUnlock ? "Locked: it can't be deleted or have its art replaced. Turn off to unlock." : "Locked: only someone allowed in Settings → User Access can unlock a master logo") : "Make it a master logo: set in stone, it can't be deleted or have its art replaced"}>
                 <LockIcon /><span>Master logo</span>
                 <input type="checkbox" role="switch" checked={!!master} disabled={!!master && !canUnlock} onChange={(e) => void setMaster(e.target.checked)} /><i aria-hidden />
               </label>

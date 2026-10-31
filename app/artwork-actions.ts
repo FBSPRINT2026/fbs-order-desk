@@ -24,7 +24,7 @@ const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e
 
 /** a master logo is set in stone (Oct 31, Nick: "once we put it in… it can't be deleted, it's there"); the database refuses too */
 const masterNo = (d: { number?: number; specs?: { master?: unknown } | null }, what: string): Result | null =>
-  d.specs?.master ? { ok: false, error: `D-${d.number ?? ""} is a master logo, so it can't be ${what}. An owner can unlock it on its page first.` } : null;
+  d.specs?.master ? { ok: false, error: `D-${d.number ?? ""} is a master logo, so it can't be ${what}. Unlock it on its page first (Settings → User Access says who can).` } : null;
 
 /** Delete a logo that hasn't been used on a mockup or order (file and preview too). */
 export async function deleteDesign(id: string): Promise<Result> {

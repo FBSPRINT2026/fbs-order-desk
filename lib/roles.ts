@@ -36,6 +36,7 @@ export const PERMS = [
   { k: "inkRoom", group: "Production", label: "Can open the Ink Room (screen printing inks and mixing)" },
   { k: "threadRoom", group: "Embroidery", label: "Can open the Thread Wall (embroidery threads)" },
   { k: "digitizing", group: "Embroidery", label: "Can open Digitizing (embroidery files: requests, DST files, stitch counts)" },
+  { k: "masterLogos", group: "Production", label: "Can unlock a master logo (a logo set in stone can't be deleted, archived or have its art replaced; Oct 31, Nick: \"me or Amanda\")" },
   { k: "employees", group: "Production", label: "Can open Employees" },
   { k: "pay", group: "Production", label: "Runs the time clock: sees and changes employee pay, fixes timecards, adds employees, payroll report (Oct 20, Nick)" },
   { k: "shipping", group: "Shop tools", label: "Can open the Shipping Center" },
@@ -50,10 +51,12 @@ export type Perms = Record<PermKey, boolean>;
 export type AccessOverrides = Record<string, Partial<Perms>>;
 
 const ALL = Object.fromEntries(PERMS.map((p) => [p.k, true])) as Perms;
-const CREW: Perms = { ...ALL, money: false, payments: false, quotes: false, customers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
+const CREW: Perms = { ...ALL, masterLogos: false, money: false, payments: false, quotes: false, customers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
 /** what each role starts with */
 export const roleDefaults = (role?: string | null): Perms => {
-  if (!role || role === "owner" || role === "admin") return { ...ALL };
+  if (!role || role === "owner") return { ...ALL };
+  // admins get everything but unlocking master logos, which is given person by person in User Access
+  if (role === "admin") return { ...ALL, masterLogos: false };
   if (role === "production") return { ...CREW };
   // embroidery: her side of the shop only (screen printing's inks, separations and presses aren't hers)
   if (role === "embroidery") return { ...CREW, inkRoom: false, inkStock: false, separations: false, coach: false };
