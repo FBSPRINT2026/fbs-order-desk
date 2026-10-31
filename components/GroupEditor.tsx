@@ -999,7 +999,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
             : (() => { const bp = g.imprints.find((x) => (x.fromBrand || x.sizeFrom === "brand") && x.design_id && designUrls?.[x.design_id]);
                 // a logo added from their brand: the logo itself, large, where the mockup goes (Oct 27, Nick)
-                if (bp) return <div className="mk-pref mk-brandlogo"><MockGallery urls={[designUrls![bp.design_id!]]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
+                if (bp) return <div className="mk-pref mk-brandlogo" style={{ "--mkbg": shirtHex } as React.CSSProperties}><MockGallery urls={[printArtUrl(designUrls, bp.design_id, bp)]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
                 const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
                 return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
           {/* a logo mockup's background: the most-used garment color, changed here (components/MockupBg.tsx) */}
