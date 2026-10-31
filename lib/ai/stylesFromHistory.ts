@@ -81,7 +81,7 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
       }
       return best;
     };
-    let hit = named || pick(known), from = "their past orders";
+    let hit: Known | null = named || pick(known), from = "their past orders";
     if (!hit) {
       if (!catalog) {
         const { data } = await admin.from("garments").select("style, brand, description").limit(5000);

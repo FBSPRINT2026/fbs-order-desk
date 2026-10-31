@@ -105,7 +105,7 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       { const b = bareStyle(l.style, l.brand); l.style = b.style; if (!l.brand && b.brand) l.brand = b.brand; }
       l.garment = (g.description || "").trim().slice(0, 120);
       // no style named: what they called it, for Create order to ask about (their preferred goods first, Oct 26)
-      { const c = String(g.called || "").trim().slice(0, 40); if (c && !l.style) l.called = c; }
+      { const c = String(g.called || "").trim().slice(0, 120); if (c && !l.style) l.called = c; } // the whole product name: cut short, it no longer matches (Oct 31: "…Sleeve Swoosh 1" for 1/2-Zip)
       l.color = (g.color || "").trim().slice(0, 60);
       // what it looks like in their photo (Oct 27, Nick: Peter Millar's Ridge Vest isn't in a catalog, so it's drawn)
       { const lk = lookOf(g.look); if (lk) l.look = lk; }
