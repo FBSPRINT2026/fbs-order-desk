@@ -78,13 +78,16 @@ export async function checkManifestMail(admin: SupabaseClient, opts: { days?: nu
       .filter((f) => f.id && !/^(deleted items|junk( e-?mail)?|drafts|outbox|sent items|conversation history|sync issues.*|conflicts|local failures|server failures|calendar|contacts|tasks|notes|journal|rss feeds)$/i.test(f.name));
     const ids = [`<t:DistinguishedFolderId Id="inbox"/>`, ...folders.map((f) => `<t:FolderId Id="${esc(f.id)}"/>`)];
     const items: { id: string; subject: string; from: string; mid: string; received: string }[] = [];
-    for (let i = 0; i < ids.length; i += 20) {
-      const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="item:Subject"/><t:FieldURI FieldURI="message:From"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURI FieldURI="item:HasAttachments"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="100" Offset="0" BasePoint="Beginning"/><m:Restriction><t:IsGreaterThanOrEqualTo><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURIOrConstant><t:Constant Value="${since}"/></t:FieldURIOrConstant></t:IsGreaterThanOrEqualTo></m:Restriction><m:ParentFolderIds>${ids.slice(i, i + 20).join("")}</m:ParentFolderIds></m:FindItem>`, 30000);
-      for (const m of all(x, "Message")) {
+    for (let i = 0; i < ids.length; i += 20) for (let off = 0; off < 2000; off += 100) {
+      // a page of 100 at a time: a long look back (a month of the shipping mailbox) is more than one page
+      const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="item:Subject"/><t:FieldURI FieldURI="message:From"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURI FieldURI="item:HasAttachments"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="100" Offset="${off}" BasePoint="Beginning"/><m:Restriction><t:IsGreaterThanOrEqualTo><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURIOrConstant><t:Constant Value="${since}"/></t:FieldURIOrConstant></t:IsGreaterThanOrEqualTo></m:Restriction><m:ParentFolderIds>${ids.slice(i, i + 20).join("")}</m:ParentFolderIds></m:FindItem>`, 30000);
+      const page = all(x, "Message");
+      for (const m of page) {
         const from = unesc(one(one(m.inner, "From"), "EmailAddress")).toLowerCase(), subject = unesc(one(m.inner, "Subject"));
         if (one(m.inner, "HasAttachments") !== "true" || !SUPPLIER_MAIL.test(from + " " + subject) || !MANIFEST_SUBJECT.test(subject)) continue;
         items.push({ id: attr(all(m.inner, "ItemId")[0]?.attrs || "", "Id"), subject, from, mid: unesc(one(m.inner, "InternetMessageId")), received: one(m.inner, "DateTimeReceived") });
       }
+      if (page.length < 100) break;
     }
     items.sort((a, b2) => a.received.localeCompare(b2.received));
     for (const it of items) {

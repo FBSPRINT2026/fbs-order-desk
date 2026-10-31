@@ -31,7 +31,7 @@ export async function checkManifestMailNow(days = 4) {
   try {
     await boss();
     const admin = createAdminClient();
-    const r = await checkManifestMail(admin, { days: Math.min(14, Math.max(1, Math.round(days))), deadline: Date.now() + 240000 });
+    const r = await checkManifestMail(admin, { days: Math.min(45, Math.max(1, Math.round(days))), deadline: Date.now() + 240000 });
     return { ok: true as const, result: r, box: publicBox(await getBox(admin)) };
   } catch (e) { return fail(e); }
 }

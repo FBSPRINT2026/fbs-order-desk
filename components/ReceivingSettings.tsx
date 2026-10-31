@@ -29,9 +29,11 @@ export default function ReceivingSettings({ upBusy, onUpload }: { upBusy?: boole
     if (!r.ok) { setErr(r.error); return; }
     setBox(r.box); setPw(""); setMsg(on ? `Saved. Signed in to ${email}.` : "Saved. Turned off: the mailbox isn't read.");
   }
+  // how far back Check now looks (Oct 30, Nick: "pull the manifests from the 15th forward"); the hourly pass looks 4 days
+  const [back, setBack] = useState(4);
   async function check() {
     setBusy("check"); setErr(""); setMsg("");
-    const r = await checkManifestMailNow(4);
+    const r = await checkManifestMailNow(back);
     setBusy("");
     if (!r.ok) { setErr(r.error); return; }
     setBox(r.box);
@@ -53,7 +55,10 @@ export default function ReceivingSettings({ upBusy, onUpload }: { upBusy?: boole
         </div>
         {can ? <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn primary" disabled={!!busy || !email.trim()} onClick={() => void save()}>{busy === "save" ? "Signing in…" : "Save"}</button>
-          <button type="button" className="btn" disabled={!!busy || !box?.enabled} onClick={() => void check()}>{busy === "check" ? "Looking…" : "Check now"}</button>
+          <select className="rs-back" aria-label="How far back to look" value={back} onChange={(e) => setBack(+e.target.value)} disabled={!!busy}>
+            {[[4, "Last 4 days"], [7, "Last week"], [14, "Last 2 weeks"], [31, "Last month"], [45, "Last 45 days"]].map(([n, t]) => <option key={n} value={n}>{t}</option>)}
+          </select>
+          <button type="button" className="btn" disabled={!!busy || !box?.enabled} onClick={() => void check()}>{busy === "check" ? "Looking… (a long look can take a few minutes; run it again if it stops)" : "Check now"}</button>
         </div> : <p className="faint">Only an owner or admin can change this.</p>}
         {err && <div className="pv-err">{err}</div>}
         {msg && <div className="banner">{msg}</div>}
