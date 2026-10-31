@@ -17,7 +17,10 @@ export type BrandColor = { name: string; pms?: string; hex: string; /** a thread
 export type BrandRules = { light?: string; dark?: string; one_light?: string; one_dark?: string;
   /** new orders with this brand's logos (Oct 30, Nick: All My Sons gets a logo mockup, like #40284; "only for this
    *  account"): "logo" = Create order makes the logo mockup (the logos on the shirt color) by itself; unset = none */
-  mockup?: "logo" };
+  mockup?: "logo";
+  /** the brand's standard mockups by number (Oct 30, Nick: "save the mockup number and reuse those on each line item…
+   *  you don't need to make it each time"): a new order's group with the same logos gets that mockup, copied */
+  mockups?: number[] };
 export type BrandEmb = { light?: string[]; dark?: string[]; backing?: string };
 export type Brand = { id: string; customer_id: string; name: string; colors: BrandColor[]; rules: BrandRules; embroidery: BrandEmb; notes: string; sort: number; archived_at?: string | null };
 

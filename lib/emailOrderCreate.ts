@@ -1,4 +1,5 @@
 import { resolvePending } from "@/lib/manifest";
+import { mockupArtStamp } from "@/lib/mockupFresh";
 import "server-only";
 import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -230,6 +231,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // a simple order from the portal (app/shop/actions.ts simpleOrderActivity): filled in where it is, keeping its number
   const intoId = String(((a?.meta || {}) as { into_order?: string }).into_order || "");
+  // the brand's standard mockups (its "Standard mockups", Oct 30, Nick: "save the mockup number and reuse those… you don't
+  // need to make it each time"): a group with exactly those logos gets that mockup, copied, nothing drawn
+  const std = await standardMockups(admin, custId, groups).catch((e) => { console.warn("standard mockups", e); return new Map<string, StdMockup>(); });
   const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
@@ -246,6 +250,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     : await admin.from("orders").insert(orderRow).select("id, number").single();
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
+  for (const [gid, m] of std) await admin.from("mockups").insert({ customer_id: custId, order_id: oid, group_id: gid, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids, created_by: by, snapshot: m.snapshot, number: m.number }).then(() => null, () => null);
   // a job from the customer's ClickUp board (ClickUp Jobs, lib/clickup.ts)
   const cuMeta = ((a?.meta || {}) as { source?: string; clickup?: { id?: string } });
   const cuJob = cuMeta.source === "clickup" && cuMeta.clickup?.id ? { id: String(cuMeta.clickup.id), name: String(a?.subject || "") } : null;
@@ -387,3 +392,36 @@ async function ownAccountMethod(id: string): Promise<string> {
   const a = (await carrierAccountsCached().catch(() => [])).find((x) => x.id === id);
   return onAccountMethod(`${a && /ups/i.test(a.readable || a.type) ? "UPS" : "FedEx"} Ground`, a ? a.description || `${a.readable} account` : "their account");
 }
+
+type StdMockup = { number: number; title: string; file_path: string; design_ids: string[]; snapshot: unknown };
+/**
+ * The customer's brands' standard mockups (Brand.rules.mockups, by M-number) for these groups: a group whose prints are
+ * all that brand's logos, with the same logos as a standard mockup, gets it (its newest version). The group is stamped
+ * as drawn (mockupArt) so the order page doesn't draw it again. Returns group id → the mockup row to copy.
+ */
+async function standardMockups(admin: SupabaseClient, custId: string, groups: Group[]): Promise<Map<string, StdMockup>> {
+  const out = new Map<string, StdMockup>();
+  const { data: bs } = await admin.from("brands").select("name, rules").eq("customer_id", custId).is("archived_at", null);
+  const byBrand = new Map(((bs || []) as { name: string; rules: { mockups?: number[] } | null }[]).filter((b) => b.rules?.mockups?.length).map((b) => [b.name, b.rules!.mockups!]));
+  if (!byBrand.size) return out;
+  const nums = [...new Set([...byBrand.values()].flat())];
+  const { data: ms } = await admin.from("mockups").select("number, title, file_path, design_ids, snapshot, created_at").eq("customer_id", custId).in("number", nums).is("archived_at", null).order("created_at", { ascending: false });
+  const rows = (ms || []) as (StdMockup & { created_at: string })[];
+  const key = (ids: string[]) => [...new Set(ids)].sort().join("|");
+  const allIds = [...new Set(groups.flatMap((g) => g.imprints.map((im) => im.design_id).filter(Boolean) as string[]))];
+  const { data: ds } = allIds.length ? await admin.from("designs").select("id, preview_path, file_path").in("id", allIds) : { data: [] };
+  for (const g of groups) {
+    if ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand))) continue;
+    const want = key(g.imprints.map((im) => im.design_id!));
+    const own = byBrand.get(g.imprints[0].fromBrand!)!;
+    const m = rows.find((r) => own.includes(r.number) && key(r.design_ids || []) === want);
+    if (!m) continue;
+    g.mockupThumbs = [m.file_path.replace(/\.png$/i, "-thumb.png")];
+    g.mockupAt = new Date().toISOString();
+    if (/ — Logo /.test(m.title || "")) g.mockupKind = "logo";
+    g.mockupArt = mockupArtStamp(g, (ds || []) as { id: string; preview_path?: string | null; file_path?: string | null }[]);
+    out.set(g.id, m);
+  }
+  return out;
+}
+
