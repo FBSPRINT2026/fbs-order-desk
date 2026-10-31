@@ -207,6 +207,7 @@ export default function ArtworkPage() {
         <div className="row">
           <Link className="btn" href="/shop/art-builder">Customer artwork builder</Link>
           <Link className="btn" href="/shop/artwork/mockup">Mockup Creator</Link>
+          <Link className="btn" href="/shop/artwork/mockup?logo=1" title="Just the logo on its colors, no garment and no order">Logo mockup</Link>
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload logo"}</button>
         </div>
       </div>

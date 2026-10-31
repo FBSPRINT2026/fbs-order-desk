@@ -77,7 +77,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ newMockup, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -105,6 +105,7 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
   projectsPanel?: ReactNode; projectsCount?: number;
   /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
   programPanel?: ReactNode; hasProgram?: boolean;
+  /** shop: the Mockup Creator for this customer, no order (its Logo mockup adds &logo=1) */ newMockup?: string;
   /** staff: the customer's designs, every way each was printed (Oct 20, Nick: Dear Heart) */
   designsPanel?: ReactNode;
   /** shop: brand standards shown in their portal, switched on the card's header line (Oct 24, Nick) */ brandPortal?: boolean; onBrandPortal?: (v: boolean) => void;
@@ -945,7 +946,7 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
       </div>
       <div className="aa-card">
-        <div className="aa-sec-h"><h3>Mockups</h3></div>
+        <div className="aa-sec-h"><h3>Mockups</h3>{mode === "shop" && newMockup && <span className="aa-sec-acts"><a className="btn sm" href={newMockup}>New mockup</a><a className="btn sm" href={`${newMockup}&logo=1`} title="Just the logo on its colors, no garment and no order">New logo mockup</a></span>}</div>
         {/* one card per mockup set, with its number (Oct 24, Nick: "Mockups all need a number… they click on the mockup and
             they can either edit it or they can order it") */}
         {mSets.length ? (() => { const P = pageOf("mock", mSets, 12); return <>

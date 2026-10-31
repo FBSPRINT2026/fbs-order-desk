@@ -294,7 +294,7 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
                     </tr>,
                     pickFor === it.id ? (
                       <tr key={it.id + "-pick"} className="prs-pick prs-noprint"><td colSpan={5}>
-                        <div className="prs-pick-h"><b>Which mockup is {name}?</b><input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Find by number or name" aria-label="Find a mockup" /><button type="button" className="linkbtn" onClick={() => setPickFor("")}>Done</button></div>
+                        <div className="prs-pick-h"><b>Which mockup is {name}?</b><input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Find by number or name" aria-label="Find a mockup" /><a className="btn sm" href={`/shop/artwork/mockup?customer=${customerId}&logo=1`} target="_blank" rel="noreferrer" title="Make a logo mockup (no garment, no order); it shows here once saved">New logo mockup</a><button type="button" className="linkbtn" onClick={() => setPickFor("")}>Done</button></div>
                         <div className="prs-pick-g">
                           {[...mks.values()].filter((m) => !m.archived && (!pq.trim() || `M-${m.n} ${m.n} ${m.title}`.toLowerCase().includes(pq.trim().toLowerCase()))).slice(0, 36).map((m) => {
                             const on = ml.some((x) => +x.n === m.n);
