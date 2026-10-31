@@ -428,7 +428,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-31g";
+export const READER_REV = "2026-10-31h";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -492,7 +492,10 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // playbook, one per end client), in full
   const trns = a.customer_id ? trainingsForText(await customerTrainings(admin, a.customer_id as string).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
   // with the training's order defaults in words (lib/orderTrainings.ts; Create order also puts them on the order itself)
-  const trainText = trns.map((t) => { const dft = defaultsText(t.defaults || {}); return `${trns.length > 1 || t.name ? `[${t.name || "Training"}]\n` : ""}${t.rules.trim().slice(0, 8000)}${dft ? `\n\nORDER DEFAULTS (unless the job says otherwise): ${dft}.` : ""}`; }).join("\n\n").slice(0, 12000);
+  // with the training's shipping default in words (lib/orderTrainings.ts). Only shipping: the order type and production
+  // confirmation are put on the order after it's made, never read (Oct 31, #40311's next cart: "ORDER DEFAULTS: Reorder"
+  // made the reader treat a new cart as a reorder of an old job and ask about its files)
+  const trainText = trns.map((t) => { const d = t.defaults || {}; const dft = defaultsText({ delivery_method: d.delivery_method, ship_method: d.ship_method }); return `${trns.length > 1 || t.name ? `[${t.name || "Training"}]\n` : ""}${t.rules.trim().slice(0, 8000)}${dft ? `\n\nSHIPPING DEFAULT (unless the job says otherwise): ${dft}.` : ""}`; }).join("\n\n").slice(0, 12000);
   const exText = (trainText ? `HOW TO MAKE ${String(trns.map((t) => t.name).filter(Boolean).join(" / ") || cust?.company || cust?.name || "THIS CUSTOMER").toUpperCase()}'S ORDERS (the shop's own training for this customer: follow it exactly; it wins over your general rules where they differ):\n${trainText}\n\n` : "") + examplesText(await loadExamples(admin, (a.customer_id as string) || null, `${told} ${said}`).catch(() => []), String(cust?.company || cust?.name || "this customer"));
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   // the past job whose mockup is the picture in their email (app/api/inbox/order/look): first, and said so

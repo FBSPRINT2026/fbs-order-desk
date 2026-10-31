@@ -31,7 +31,8 @@ export function defaultsOf(ts: Pick<Training, "defaults">[]): TrainingDefaults {
   for (const t of ts) for (const f of DEFAULT_FIELDS) { const v = t.defaults?.[f]; if (v !== undefined && v !== "" && out[f] === undefined) (out as Record<string, unknown>)[f] = v; }
   return out;
 }
-/** words for the defaults ("Reorder · no production confirmation · ship FedEx Ground") */
+/** words for the defaults ("Reorder · no production confirmation · ship FedEx Ground"), for people (the reader is only
+ *  told the shipping: "Reorder" here means known logos with nothing to confirm, never a copy of a past job) */
 export function defaultsText(d: TrainingDefaults): string {
   return [
     d.order_type ? ({ new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" } as const)[d.order_type] : "",
