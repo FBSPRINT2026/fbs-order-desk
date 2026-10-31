@@ -16722,3 +16722,6 @@ html body .eo-art.on:has(> .logo-thumb){background:#fff;padding:2px;overflow:hid
 /* Popular garments → Good for: each choice keeps its words together ("Event or giveaway", "Kids"); the choices wrap
    onto more lines instead of breaking a word a letter per line (Oct 31) */
 html body .pgs-uses label{white-space:nowrap}
+/* any checkbox's label inside a table keeps its words whole (the cells may break long words; a label never should) */
+html body td label.check{overflow-wrap:normal;word-break:normal}
+html body td label.check:not(:has(> span, > div)){white-space:nowrap}
