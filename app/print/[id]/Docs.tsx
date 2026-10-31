@@ -1,5 +1,5 @@
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
-import { cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile } from "@/lib/brands";
+import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile } from "@/lib/brands";
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
@@ -68,6 +68,15 @@ const Swatch = ({ c }: { c: string }) => <span className="sw" style={{ backgroun
  */
 /** the garment colors (other than the first) a print changes ink on, with the swap for each (Imprint.inkBy, Oct 26) */
 const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/** a garment color's shade on the printed pages (Oct 31, #40311: the press sheet drew Grey Steel darker than page 1):
+ *  the line's own color (lineColor: picked in the Mockup Creator, the mockup's shade), then the stocked/catalog color,
+ *  then the name's guess, the same way every swatch and close-up reads it */
+function colorBg(lines: Group["lines"], color: string, colorHexes?: Record<string, string>) {
+  const c = (color || "").split(",")[0].trim();
+  if (!c) return "";
+  const l = lines.find((x) => ckey(x.color) === ckey(c));
+  return (l ? lineHex(l) : "") || colorHexes?.[ckey(c)] || guessHex(c) || "";
+}
 /** garments on the work order's first page; the rest go on pages of 10 */
 const WO_FIRST = 6;
 export type Variant = { color: string; swap: Record<string, string>; /** a colorway change: the colorway this sheet runs */ cw?: string };
@@ -231,7 +240,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
           <>
             <table className="cnt2">
               <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz tot">Total</th><th className="sz fin">Final</th></tr></thead>
-              <tbody>{ls.map((l) => <LineRow key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} />)}</tbody>
+              <tbody>{ls.map((l) => <LineRow key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} cw={cwLetters(g, l, p.designs)} />)}</tbody>
             </table>
             <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
           </>
@@ -300,7 +309,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
             ))}
             {/* 3. each mockup big, its prints blown up under it */}
             {mk.map((u, i) => {
-              const col = mkColor(i), bg = col ? p.colorHexes?.[ckey(col)] || mkHex(i) : mkHex(i);
+              const col = mkColor(i), bg = col ? colorBg(lines, col, p.colorHexes) || mkHex(i) : mkHex(i);
               const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.allQty || 0;
               return (
                 <section className="sheet wo1" key={"mk" + i}>
@@ -396,7 +405,8 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
         {inks.length > 0 && <><i>{inks.length === 1 ? "Ink" : "Inks"}</i>
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && <b>{n + 1} </b>}<b>{k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>
-          <span className="w2-way"><span><b>{w.name}</b>{w.file ? <span className="faint"> · {w.file.replace(/\.dst$/i, "")}</span> : null}</span><span className="faint">on {w.on} ({w.qty})</span>
+          <span className="w2-way"><span><b>{w.on}</b> with {andList(w.name.split(/\s*\/\s*/))} {d.method === "embroidery" ? "thread" : "ink"}{w.qty ? <span className="faint"> ({w.qty})</span> : null}</span>
+            {w.file ? <span className="w2-file">{w.file}</span> : null}
             <span className="w2-th">{w.threads.map((k) => <span key={k}><Swatch c={threadByName(k)?.hex || colorHex(k) || "#ccc"} />{k}</span>)}</span></span></span>)}
         {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
@@ -410,14 +420,20 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
 
 /** a garment on the work order (Oct 31): its pieces by size with a box under each to write the count in, its total, a
  *  box for the final count, and its notes and names under it, all in one row */
-function LineRow({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string> }) {
+/** "Maroon and Black", "Maroon, Black and Gold" */
+const andList = (xs: string[]) => { const a = xs.map((x) => x.trim()).filter(Boolean); return a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`; };
+/** a garment's colorway letters on the work order: each split print's colorway on its color (as the order page tags it) */
+function cwLetters(g: Group, l: Group["lines"][number], designs: Record<string, Design>): string[] {
+  return [...new Set(g.imprints.filter((d) => Object.keys(d.colorwayBy || {}).length && d.design_id && designs[d.design_id]).map((d) => { const des = designs[d.design_id!]; return cwLetter(des, colorwayOnColor(d, des, l.color || "")); }).filter(Boolean))];
+}
+function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string>; /** its colorway letters (A, B…), as on the order */ cw?: string[] }) {
   const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
   const q = lineQty(l);
   const pers = persOf(l);
   return (
     <tr>
       <td className="g">
-        <div className="g1"><Swatch c={single ? hex : own || "#c9ced6"} /><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? <span> · {l.color}</span> : null}</div>
+        <div className="g1"><Swatch c={single ? hex : own || "#c9ced6"} /><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? <span> · {l.color}</span> : null}{cw.map((x) => <span key={x} className="w2-cw" title={`Colorway ${x}`}>{x}</span>)}</div>
         {l.garment && <div className="g2">{l.garment}</div>}
         {l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
         {l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
@@ -427,7 +443,7 @@ function LineRow({ l, sizes, hex, single, colorHexes }: { l: Group["lines"][numb
       </td>
       {sizes.map((z) => { const n = l.sizes?.[z as keyof typeof l.sizes]; return <td key={z} className="sz">{n ? <><b>{n}</b><i /></> : null}</td>; })}
       <td className="sz tot"><b>{q}</b><i /></td>
-      <td className="sz fin"><i /></td>
+      <td className="sz fin"><b className="blank">0</b><i /></td>
     </tr>
   );
 }
@@ -439,7 +455,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   // visual only: no guessed size or inks on the press sheet; the press writes what ran
   const sz = d.visualOnly ? { ...sz0, label: "" } : sz0;
   const vc = variant ? variant.color.split(",")[0].trim() : "";
-  const hex = vc ? p.colorHexes?.[ckey(vc)] || guessHex(vc) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
+  const hex = vc ? colorBg(groups[gi]?.lines || [], vc, p.colorHexes) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
@@ -676,7 +692,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const { o } = p;
   const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? printArtUrl(p.designUrls, des.id, d) : "";
   const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
-  const hex = variant ? p.colorHexes?.[ckey(variant.color)] || guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
+  const hex = variant ? colorBg(o.groups[gi]?.lines || [], variant.color, p.colorHexes) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art as big as the panel takes, with room left for its measurements drawn beside and under it (Oct 23, Nick: "the
   // measurements are spilling out over the red box")
   const PW = 5.9, PH = 5.4;
@@ -684,7 +700,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
   // the color change's versions (A as printed, then each change) with the garments each goes on (lib/inkBy.ts)
-  const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).sort((a, b) => (a.colorway && b.colorway && des ? cwLetter(des, { name: a.colorway }).localeCompare(cwLetter(des, { name: b.colorway })) : 0)).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : p.colorHexes?.[ckey(v.colors[0])] || guessHex(v.colors[0]) || "#9aa1ab" }));
+  const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).sort((a, b) => (a.colorway && b.colorway && des ? cwLetter(des, { name: a.colorway }).localeCompare(cwLetter(des, { name: b.colorway })) : 0)).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : colorBg(o.groups[gi]?.lines || [], v.colors[0], p.colorHexes) || "#9aa1ab" }));
   // the tile: the art fit in a 1" square
   const tileW = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.w) / sz.h) : 0.82, tileH = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.h) / sz.w) : 0.82;
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
