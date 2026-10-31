@@ -250,7 +250,7 @@ export default function AccountAreas({ gangPanel, brandPortal = true, onBrandPor
     { id: "payments", label: "Payments", icon: I.payments },
     // only once it's turned on or added (Oct 21, Nick: "I wouldn't show program pricing on every client unless I added
     // or enabled it"); "More" adds them
-    { id: "program", label: "Program", icon: I.program, show: !!programPanel && (!!hasProgram || area === "program") },
+    { id: "program", label: mode === "shop" ? "Program & training" : "Program", icon: I.program, show: !!programPanel && (!!hasProgram || area === "program") },
     { id: "projects", label: "Projects", icon: I.projects, show: !!projectsPanel && ((projectsCount || 0) > 0 || area === "projects") },
     { id: "receive", label: "Customer goods", icon: I.receive, show: area === "receive" },
   ] : [

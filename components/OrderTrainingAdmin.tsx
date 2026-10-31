@@ -84,6 +84,32 @@ export default function OrderTrainingAdmin() {
   );
 }
 
+/** one customer's training in a panel (the customer's Program & training tab, Oct 30, Nick: "think of program pricing and
+ *  training as the same tab under a customer"): the same editor and chat as Settings → Order training */
+export function CustomerTraining({ customerId }: { customerId: string }) {
+  const sb = useMemo(() => createClient(), []);
+  const [row, setRow] = useState<Row | null>(null);
+  const [brands, setBrands] = useState<BrandRow[]>([]);
+  const [ver, setVer] = useState(0);
+  const load = useCallback(async () => {
+    const [{ data: c }, { data: p }, { data: bs }] = await Promise.all([
+      sb.from("customers").select("company, name").eq("id", customerId).maybeSingle(),
+      sb.from("customer_private").select("order_training, order_training_name, order_training_when").eq("customer_id", customerId).maybeSingle(),
+      sb.from("brands").select("id, name, customer_id, rules").eq("customer_id", customerId).is("archived_at", null),
+    ]);
+    const pr = (p || {}) as { order_training?: string; order_training_name?: string; order_training_when?: string };
+    setRow({ customer_id: customerId, company: String(c?.company || c?.name || "Customer"), training: pr.order_training || "", name: pr.order_training_name || "", when: pr.order_training_when || "" });
+    setBrands((bs || []) as BrandRow[]);
+  }, [sb, customerId]);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <section className="panel otr-panel">
+      <div className="panel-h"><h2>Rules in words</h2><span className="faint">What Create order follows for their jobs beyond the prices and mockups above: how to name the job, the PO, personalization, shipping, what to ask about</span></div>
+      <div className="panel-b">{row ? <TrainingEditor key={ver} row={row} brands={brands} onSaved={() => { void load().then(() => setVer((v) => v)); }} /> : <p className="faint">Loading…</p>}</div>
+    </section>
+  );
+}
+
 function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]; onSaved: () => void }) {
   const sb = useMemo(() => createClient(), []);
   const [t, setT] = useState(row.training), [name, setName] = useState(row.name), [when, setWhen] = useState(row.when);

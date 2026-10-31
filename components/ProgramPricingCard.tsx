@@ -7,7 +7,7 @@ import { useSticky } from "@/lib/useSticky";
 import { previewUrls } from "@/lib/designs";
 import { LANES, laneState, type Lane } from "@/lib/brands";
 import type { Design } from "@/lib/pricing";
-import { cardsOf, tiersOf, type Program, type ProgramItem, type RateCard } from "@/lib/programs";
+import { cardsOf, tiersOf, type Program, type ProgramItem, type ProgramMockup, type RateCard } from "@/lib/programs";
 import { programCardStats, type CardStats } from "@/app/shop/program-pricing-actions";
 
 /**
@@ -16,9 +16,16 @@ import { programCardStats, type CardStats } from "@/app/shop/program-pricing-act
  * whose garments, setup, the last 6 months), then each decoration's products with the styles we see on their jobs and
  * the price each, the extras the program prices itself, and what's not on the program. Nothing here is set per customer:
  * any program's items draw their own card. The settings stay in ProgramAdmin, behind "Edit the rules".
+ *
+ * Each price ends with its mockups (Program & training, Oct 30, Nick: "have an item at the end of each line that showed
+ * which mock-up it used… that would be an easy training visual"): the saved mockups that ARE that price. Create order puts
+ * a garment the price covers straight into that mockup's group (lib/masterMockups.ts). "What leads" says how a job finds
+ * the price: by the garment's style (All My Sons) or by the design they name (Peticolas).
  */
 type D = Design & { brand_id?: string | null };
 type Extra = { id: string; name: string; price: number };
+/** a saved mockup of theirs: its newest version (archived = every version is archived) */
+type Mk = { n: number; title: string; thumb: string; colors: string[]; archived: boolean };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 /** one name has the other as whole words ("All My Sons" ~ "all my sons moving"; "AMS" doesn't hit "Williams") */
@@ -30,8 +37,10 @@ const laneLabel = (l: Lane) => LANES.find((x) => x.id === l)?.label || "Screen p
 const plural = (n: number, w: string) => `${n.toLocaleString("en-US")} ${w}${n === 1 ? "" : "s"}`;
 const uniq = (xs: string[]) => { const seen = new Set<string>(); return xs.filter((x) => { const k = norm(x); if (!k || seen.has(k)) return false; seen.add(k); return true; }); };
 
-export default function ProgramPricingCard({ customerId, program, items, ver, editing, onToggleEdit, onEditItem, onAdd }: {
+export default function ProgramPricingCard({ customerId, program, items, ver, editing, onToggleEdit, onEditItem, onAdd, onSaveItem, onSaveProgram }: {
   customerId: string; program: Program; items: ProgramItem[];
+  /** save a price's mockups */ onSaveItem: (id: string, patch: Partial<ProgramItem>) => void;
+  /** save what leads */ onSaveProgram: (patch: Partial<Program>) => void;
   /** bumps when ProgramAdmin reloads: the numbers are counted again */ ver: number;
   editing: boolean; onToggleEdit: () => void;
   /** open the editor on this design price */ onEditItem: (id: string) => void;
@@ -119,6 +128,31 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
     });
   }, [cur, brands, designs]);
 
+  // their saved mockups (newest version of each number), for each price's Mockup column and its picker
+  const design = program.leads === "design";
+  const [mks, setMks] = useState<Map<number, Mk>>(new Map());
+  const [pickFor, setPickFor] = useState<string>("");
+  const [pq, setPq] = useState("");
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const { data } = await sb.from("mockups").select("number, title, file_path, archived_at, created_at, snapshot->lines").eq("customer_id", customerId).not("number", "is", null).order("created_at", { ascending: false }).limit(800);
+      const m = new Map<number, Mk>();
+      for (const r of (data || []) as { number: number; title: string | null; file_path: string; archived_at: string | null; lines: { color?: string }[] | null }[]) {
+        const had = m.get(r.number);
+        if (had && !had.archived) continue;
+        if (had && r.archived_at) continue;
+        m.set(r.number, { n: r.number, title: String(r.title || ""), thumb: (r.file_path || "").replace(/\.png$/i, "-thumb.png"), colors: [...new Set((r.lines || []).map((l) => l.color || "").filter(Boolean))], archived: !!r.archived_at });
+      }
+      const live = [...m.values()].filter((x) => !x.archived && x.thumb);
+      const { data: sg } = live.length ? await sb.storage.from("proofs").createSignedUrls(live.map((x) => x.thumb), 3600) : { data: [] };
+      live.forEach((x, i) => { x.thumb = sg?.[i]?.signedUrl || ""; });
+      if (on) setMks(m);
+    })().catch(() => null);
+    return () => { on = false; };
+  }, [customerId, ver]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setMockups = (it: ProgramItem, list: ProgramMockup[]) => onSaveItem(it.id, { mockups: list });
+
   // sign the pictures of the logos on screen
   const [urls, setUrls] = useState<Record<string, string>>({});
   const shown = useMemo(() => { const m = new Map<string, D>(); sections.forEach((s) => s.logos.slice(0, 4).forEach((d) => m.set(d.id, d))); return [...m.values()]; }, [sections]);
@@ -130,7 +164,14 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
     return () => { on = false; };
   }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!cur) return null;
+  if (!cur) return (
+    <section className="panel prs">
+      <div className="panel-h prs-h"><div className="prs-ht"><h2>Program pricing</h2><span className="faint">no prices yet</span></div><div className="prs-hr"><Leads program={program} onSave={onSaveProgram} /></div></div>
+      <div className="prs-foot prs-noprint"><span className="faint">{design ? "Add each design they order, the words they call it and its mockups." : "Add each product they order, its styles and its mockup."}</span>
+        <button type="button" className="btn" onClick={onToggleEdit}>{editing ? "Hide the rules" : "Edit the rules"}</button>
+        <button type="button" className="btn primary" onClick={() => onAdd([])}>{design ? "+ Design" : "+ Product"}</button></div>
+    </section>
+  );
   const st = stats?.who[cur.key];
   const styleJobs = stats?.styles[cur.key] || {};
   const all = cur.items;
@@ -175,6 +216,7 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
               {clients.map((c) => <button key={c.key || "-"} type="button" role="tab" aria-selected={c.key === cur.key} className={"chip" + (c.key === cur.key ? " on" : "")} title={groupName(c)} onClick={() => setPick(c.key)}>{c.who[0] || program.name || "Program"}<span className="chip-n">{c.items.length}</span></button>)}
             </div>
           )}
+          <Leads program={program} onSave={onSaveProgram} />
           <button type="button" className="btn prs-noprint" onClick={print}>Print rate card</button>
         </div>
       </div>
@@ -204,7 +246,7 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
           </div>
           <div className="tbl-wrap prs-tw">
             <table className="tbl prs-tbl">
-              <thead><tr><th>Product</th><th>Styles we see</th><th className="r">Each</th><th className="prs-noprint" aria-label="Edit" /></tr></thead>
+              <thead><tr><th>{design ? "Design" : "Product"}</th><th>{design ? "They call it" : "Styles on the PO"}</th><th className="r">Each</th><th>Mockup</th><th className="prs-noprint" aria-label="Edit" /></tr></thead>
               <tbody>
                 {s.items.map((it) => {
                   const what = (it.match?.what || []).map((w) => w.trim()).filter(Boolean);
@@ -213,7 +255,8 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
                   const jobs = styles.reduce((a, x) => a + x.n, 0);
                   const tiers = tiersOf(it);
                   const name = (it.garment || "").split(":")[0].trim() || it.name || "Product";
-                  return (
+                  const ml = it.mockups || [];
+                  return [
                     <tr key={it.id} onClick={() => onEditItem(it.id)}>
                       <td className="prs-prod"><b>{name}</b>{jobs > 0 && <span className="sub">{plural(jobs, "job")}</span>}</td>
                       <td className="prs-sty">
@@ -227,9 +270,46 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
                       <td className="r prs-each">
                         {tiers.length ? <>{money(tiers[0].price)}{(tiers.length > 1 || tiers[0].min > 0) && <small>{tiers[0].min > 0 ? `${tiers[0].min}+ pcs` : "any qty"}{tiers.length > 1 ? ` · ${plural(tiers.length - 1, "more break")}` : ""}</small>}</> : <span className="faint">no price</span>}
                       </td>
+                      <td className="prs-mkc" onClick={(e) => e.stopPropagation()}>
+                        <div className="prs-mks">
+                          {ml.map((e, k) => {
+                            const m = mks.get(+e.n);
+                            const cols = (e.colors || []).filter((c) => c.trim() && !/^any$/i.test(c.trim()));
+                            return (
+                              <div key={k} className={"prs-mk" + (!m || m.archived ? " gone" : "")}>
+                                <a className="prs-mk-pic" href={m && !m.archived ? `/shop/customers/${customerId}?area=artwork&mockup=${e.n}` : undefined} title={m?.title || `M-${e.n}`}>{m?.thumb && !m.archived ? <img src={m.thumb} alt="" /> : <span>{m?.archived ? "archived" : "not found"}</span>}</a>
+                                <b data-notranslate>M-{e.n}</b>
+                                <input key={cols.join(",")} className="prs-mk-col prs-noprint" defaultValue={cols.join(", ")} placeholder="any color" aria-label={`Garment colors for M-${e.n}`} title="The garment colors this mockup is for (blank = any color)"
+                                  onBlur={(ev) => { const v = ev.target.value.split(",").map((c) => c.trim()).filter(Boolean); if (v.join(",") !== cols.join(",")) setMockups(it, ml.map((x, j) => (j === k ? { n: x.n, ...(v.length ? { colors: v } : {}) } : x))); }}
+                                  onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }} />
+                                <span className="prs-mk-col prs-onlyprint">{cols.join(", ") || "any color"}</span>
+                                <button type="button" className="prs-mk-x prs-noprint" aria-label={`Take M-${e.n} off ${name}`} title="Take it off this price" onClick={() => setMockups(it, ml.filter((_, j) => j !== k))}>✕</button>
+                              </div>
+                            );
+                          })}
+                          <button type="button" className={"prs-mk-add prs-noprint" + (pickFor === it.id ? " on" : "")} aria-expanded={pickFor === it.id} title="Add the mockup this price uses" onClick={() => { setPickFor(pickFor === it.id ? "" : it.id); setPq(""); }}>+<span>{ml.length ? "Another" : "Mockup"}</span></button>
+                        </div>
+                      </td>
                       <td className="prs-ed prs-noprint"><button type="button" className="btn icon ghost sm" aria-label={`Edit ${name}`} title="Edit" onClick={(e) => { e.stopPropagation(); onEditItem(it.id); }}>✎</button></td>
-                    </tr>
-                  );
+                    </tr>,
+                    pickFor === it.id ? (
+                      <tr key={it.id + "-pick"} className="prs-pick prs-noprint"><td colSpan={5}>
+                        <div className="prs-pick-h"><b>Which mockup is {name}?</b><input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Find by number or name" aria-label="Find a mockup" /><button type="button" className="linkbtn" onClick={() => setPickFor("")}>Done</button></div>
+                        <div className="prs-pick-g">
+                          {[...mks.values()].filter((m) => !m.archived && (!pq.trim() || `M-${m.n} ${m.n} ${m.title}`.toLowerCase().includes(pq.trim().toLowerCase()))).slice(0, 36).map((m) => {
+                            const on = ml.some((x) => +x.n === m.n);
+                            return (
+                              <button key={m.n} type="button" className={"prs-pk" + (on ? " on" : "")} disabled={on} title={m.title} onClick={() => setMockups(it, [...ml, { n: m.n }])}>
+                                <span className="prs-pk-pic">{m.thumb ? <img src={m.thumb} alt="" /> : null}</span>
+                                <b data-notranslate>M-{m.n}</b><span className="faint">{m.title.split(" — ")[0]}</span>
+                              </button>
+                            );
+                          })}
+                          {![...mks.values()].some((m) => !m.archived) && <p className="faint">No saved mockups for this customer yet. Save one in the Mockup Creator, then add it here.</p>}
+                        </div>
+                      </td></tr>
+                    ) : null,
+                  ];
                 })}
               </tbody>
             </table>
@@ -248,8 +328,22 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
       <div className="prs-foot prs-noprint">
         <span className="faint">Matching words, prices, logos, extras and portal settings</span>
         <button type="button" className={"btn" + (editing ? " primary" : "")} aria-expanded={editing} onClick={onToggleEdit}>{editing ? "Hide the rules" : "Edit the rules"}</button>
-        <button type="button" className="btn" onClick={() => onAdd(cur.who)}>+ Product</button>
+        <button type="button" className="btn" onClick={() => onAdd(cur.who)}>{design ? "+ Design" : "+ Product"}</button>
       </div>
     </section>
+  );
+}
+
+/** what picks a price on a job: the garment's style (All My Sons) or the design they name (Peticolas) */
+function Leads({ program, onSave }: { program: Program; onSave: (p: Partial<Program>) => void }) {
+  const design = program.leads === "design";
+  return (
+    <div className="prs-leads prs-noprint" role="radiogroup" aria-label="What leads">
+      <span className="prs-leads-k">What leads</span>
+      <span className="chips">
+        <button type="button" role="radio" aria-checked={!design} className={"chip" + (!design ? " on" : "")} title="The style on their PO picks the price; its mockup is the art" onClick={() => onSave({ leads: "garment" })}>The garment</button>
+        <button type="button" role="radio" aria-checked={design} className={"chip" + (design ? " on" : "")} title="The design they name picks the price; any garment takes its mockup" onClick={() => onSave({ leads: "design" })}>The design</button>
+      </span>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import PrintavoSetup from "@/components/PrintavoSetup";
 import ProgramPricingCard from "@/components/ProgramPricingCard";
+import { CustomerTraining } from "@/components/OrderTrainingAdmin";
 import { useSticky } from "@/lib/useSticky";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -89,15 +90,17 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       <p>Set up program pricing for this customer: their own price for each print (1/1, 2/1, 3/3…) on a base shirt, with a minimum. On an order, pick <b>Program</b> next to Retail / Wholesale and the prices fill in.</p>
       <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set it up by hand</button>
     </div>
+    <CustomerTraining customerId={customerId} />
     </div>
   );
   const hasCard = items.some((i) => i.active && !i.archived_at);
   return (
     <div className="pga">
-      {hasCard && <ProgramPricingCard customerId={customerId} program={program} items={items} ver={ver} editing={editing}
+      <ProgramPricingCard customerId={customerId} program={program} items={items} ver={ver} editing={editing}
+        onSaveItem={(id, patch) => void saveItem(id, patch)} onSaveProgram={(patch) => void saveProgram(patch)}
         onToggleEdit={() => { const on = !editing; setEditing(on); if (on) setGoTo("pga-rules"); }}
         onEditItem={(id) => { setEditing(true); setGoTo(`pga-item-${id}`); }}
-        onAdd={(who) => void addItem(who)} />}
+        onAdd={(who) => void addItem(who)} />
       {(!hasCard || editing) && <>
       <div className="aa-bar" id="pga-rules"><div className="aa-bar-l"><h2>{hasCard ? "The rules" : "Program pricing"}</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
@@ -231,6 +234,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       </div>
       <button type="button" className="btn primary" onClick={() => void addItem()}>+ Add a design price</button>
       </>}
+      <CustomerTraining customerId={customerId} />
     </div>
   );
 }

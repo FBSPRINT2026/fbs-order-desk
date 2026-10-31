@@ -1,6 +1,6 @@
 import { fillFromLogo, logosOnFile, mergeLogoGroups } from "@/lib/ai/logosOnFile";
 import "server-only";
-import { applyMasters, loadCatalog, loadMasters } from "@/lib/masterMockups";
+import { applyMasters, loadMasters } from "@/lib/masterMockups";
 import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -1054,11 +1054,11 @@ ${staffSays}` : ""}`;
   };
   // a reorder of a Printavo job: the inks its notes name go on the prints, for production to confirm
   if (job?.ref.startsWith("a:")) await fillFromOldNotes(admin, settings, draft, by, a.customer_id).catch((e) => console.warn("fillFromOldNotes", e));
-  // the customer's master mockups (lib/masterMockups.ts): a garment whose style one covers goes straight into its group,
-  // with the mockup's prints; only its styles, colors and quantities come from the paperwork
+  // the program's master mockups (lib/masterMockups.ts): a garment or design a program price covers goes straight into
+  // its mockup's group, with the mockup's prints; only the garments, colors and quantities come from the paperwork
   if (a.customer_id && draft.kind === "new") {
-    const [ms, cat] = await Promise.all([loadMasters(admin, a.customer_id as string).catch(() => []), loadCatalog(admin, a.customer_id as string).catch(() => [])]);
-    const did = applyMasters(draft, ms, cat, `${a.subject || ""} ${String(a.body || "").slice(0, 4000)}`);
+    const about = `${a.subject || ""} ${String(a.body || "").slice(0, 4000)} ${draft.nickname || ""}`;
+    const did = applyMasters(draft, await loadMasters(admin, a.customer_id as string, about).catch(() => ({ leads: "garment" as const, masters: [] })), about);
     if (did.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Master mockups: ${did.join(", ")}.`.slice(0, 1200);
   }
   const row = {

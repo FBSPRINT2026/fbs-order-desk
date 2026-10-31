@@ -32,13 +32,19 @@ export type ProgramItem = {
   supplied?: boolean;
   /** taken off the program (kept, not deleted) */
   archived_at?: string | null;
+  /** the saved mockups that ARE this price (Program & training, Oct 30): a garment it covers goes straight into that
+   *  mockup's group with its prints (lib/masterMockups.ts). colors: the garment colors it's for; none = any color */
+  mockups?: ProgramMockup[] | null;
 };
+export type ProgramMockup = { n: number; colors?: string[] };
 /** a design price's breaks, lowest first: its tiers, or its one price at its minimum */
 export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null; price_mode?: string | null }) =>
   (it.price_mode === "flat" ? [{ min: 0, price: +it.price }] : it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
 export type Program = { id: string; customer_id: string; name: string; notes: string; active: boolean; rate_card?: RateCard | null;
   /** the other rate cards (Nine18: one per location or brand); rate_card is the first (migration 168) */ rate_cards?: RateCard[] | null;
-  /** auto: new quotes use program pricing by themselves; ask: an Apply button on the order */ apply_mode?: "auto" | "ask" | null };
+  /** auto: new quotes use program pricing by themselves; ask: an Apply button on the order */ apply_mode?: "auto" | "ask" | null;
+  /** what picks a price on a job (Oct 30, Nick): "garment" = the style on the PO (All My Sons); "design" = the design
+   *  they name, on any garment (Peticolas) */ leads?: "garment" | "design" | null };
 export const PROGRAM_SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 
 /* ───────────────────────── program rate card (Oct 14, Nick) ─────────────────────────

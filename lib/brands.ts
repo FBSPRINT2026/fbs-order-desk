@@ -20,11 +20,7 @@ export type BrandRules = { light?: string; dark?: string; one_light?: string; on
   mockup?: "logo";
   /** the brand's standard mockups by number (Oct 30, Nick: "save the mockup number and reuse those on each line item…
    *  you don't need to make it each time"): a new order's group with the same logos gets that mockup, copied */
-  mockups?: number[];
-  /** what each standard mockup is the master for, by its number (lib/masterMockups.ts, Oct 30, Nick: "once it gets to
-   *  an ST350, it knows that's this mockup. Just plug in the quantities"): the styles whose garments go straight into
-   *  it, and the garment colors ("any" = every color). Unset: the garments on the mockup, in their colors */
-  masterFor?: Record<string, { styles?: string[]; colors?: string[] }> };
+  mockups?: number[] };
 export type BrandEmb = { light?: string[]; dark?: string[]; backing?: string };
 export type Brand = { id: string; customer_id: string; name: string; colors: BrandColor[]; rules: BrandRules; embroidery: BrandEmb; notes: string; sort: number; archived_at?: string | null };
 

@@ -78,7 +78,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   // ?area=details (older links) and a brand new customer open it
   const [detailsOpen, setDetailsOpen] = useState(() => isNew || searchParams.get("area") === "details");
   const [hasProgram, setHasProgram] = useState(false);
-  useEffect(() => { createClient().from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id).then(({ count }) => setHasProgram(!!count)); }, [id]);
+  // a program, or training for Create order: the Program & training tab shows
+  useEffect(() => {
+    const sb = createClient();
+    Promise.all([sb.from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id), sb.from("customer_private").select("order_training").eq("customer_id", id).maybeSingle()])
+      .then(([{ count }, { data: p }]) => setHasProgram(!!count || !!String((p as { order_training?: string } | null)?.order_training || "").trim()));
+  }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
     createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`)
@@ -127,7 +132,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   async function save() {
     if (!latest.current) return;
     // staff-only fields (notes, tags, follow-up, owner) are saved to customer_private; last contact is kept by the database
-    const { id: _id, created_at, ...all } = latest.current;
+    // the training is saved by its own editor on Program & training (a stale copy here would undo a change made there)
+    const { id: _id, created_at, order_training: _t, order_training_name: _tn, order_training_when: _tw, ...all } = latest.current;
     const { pub: rest0, priv } = splitCustomer(all);
     // the move fields belong to the move checklist: never written from here (a stale copy would undo a move)
     // so are the brand fields, each saved by its own section (a stale copy here would undo a label, guide or color added
@@ -264,13 +270,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
             <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} />
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
-              {/* Create order training (Oct 30, Nick: "it's okay to have special training for All My Sons… one of our top 10
-                  clients"): how this customer's orders are made, read in full every time Create order reads one of theirs */}
-              <div className="field"><label htmlFor="cu-training">Create order training</label><textarea id="cu-training" rows={6} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping… Create order reads all of it for every one of their orders." value={c.order_training || ""} onChange={(e) => set("order_training", e.target.value)} /></div>
-              <div className="cu-train-when">
-                <div className="field"><label htmlFor="cu-train-n">Training name</label><input id="cu-train-n" type="text" value={c.order_training_name || ""} placeholder="All My Sons" onChange={(e) => set("order_training_name", e.target.value)} /></div>
-                <div className="field"><label htmlFor="cu-train-w">Use it when the job says</label><input id="cu-train-w" type="text" value={c.order_training_when || ""} placeholder="AMS, All My Sons" onChange={(e) => set("order_training_when", e.target.value)} /></div>
-              </div>
+              {/* Create order training lives on Program & training (Oct 30, Nick: "think of program pricing and training as the
+                  same tab under a customer"), beside the prices and mockups it goes with */}
+              <p className="faint cu-train-link">Create order training{c.order_training_name ? <> (<b>{c.order_training_name}</b>)</> : null}: on <a href={`/shop/customers/${id}?area=program`}>Program &amp; training</a>.</p>
             </div>
           </form>
           <div className="stack">
