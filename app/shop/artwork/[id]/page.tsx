@@ -216,6 +216,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     { at: (d.created_at || "").slice(0, 10), text: `Logo made${src?.printavo ? ` from Printavo #${src.printavo}` : src?.dropbox ? ` from Dropbox ${src.dropbox}` : ""}${d.created_by ? ` · ${d.created_by.split("@")[0]}` : ""}` },
   ].filter((h) => h.text).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   const colors = logoColors(d, brand);
+  // "Last used" only when a sew file has one (a column that's only sometimes needed, house rule)
+  const anyUsed = sews.some((f) => f.lastUsed?.job || f.lastUsed?.dropbox);
   const master = (d.specs as { master?: { at?: string; by?: string } | null } | null)?.master || null;
   // every print of this logo on an order: where it went and how big (a logo's size lives with each use, Oct 31, Nick)
   const uses = orders.flatMap((o) => orderGroups(o).flatMap((g) => g.imprints.filter((im) => im.design_id === d.id).map((im) => ({ o, where: im.location, size: im.size, method: im.method === "embroidery" ? "Embroidery" : im.method === "screen" ? "Screen print" : im.method === "dtf" ? "Heat press" : im.method, colors: im.inks }))));
@@ -331,16 +333,16 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
               <div className="panel-h"><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet, made at one size for one spot" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
                 <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
-                <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th><th>Last used</th><th>Files</th></tr></thead>
+                <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th>{anyUsed && <th>Last used</th>}<th>Files</th></tr></thead>
                 <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (a.f.code || "").localeCompare(b.f.code || "", undefined, { numeric: true })).map(({ f, i }) => (
                   <tr key={i}>
                     <td><b className="ordno">{tajimaName(d.number, Number((f.code || "E1").slice(1)) || i + 1)}</b></td>
                     <td>{cws.filter((c) => c.sew && c.sew === f.code).map((c) => c.name).join(", ") || <span className="faint">—</span>}</td>
                     <td><input type="text" aria-label="Where it goes" defaultValue={f.placement || ""} placeholder="Left chest, Left sleeve…" title="Every place this file sews: one file can go on several spots" onBlur={(e) => { if ((f.placement || "") !== e.target.value.trim()) void setSew(i, { placement: e.target.value.trim() || undefined }); }} /><div className="sub" style={{ whiteSpace: "nowrap" }}>{f.wIn}&quot; × {f.hIn}&quot;</div></td>
-                    <td>{sewThreads(f).join(" + ") || <span className="faint">{f.colors} color{f.colors === 1 ? "" : "s"}</span>}</td>
+                    <td>{sewThreads(f).length ? sewThreads(f).map((t, k) => <div key={k} className="lgx-th">{t}</div>) : <span className="faint">{f.colors} color{f.colors === 1 ? "" : "s"}</span>}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{(f.stitches || 0).toLocaleString()}</td>
                     <td><select className="lg-kind" aria-label="Kind" value={f.kind || "flat"} onChange={(e) => void setSew(i, { kind: e.target.value as Sew["kind"] })}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                    <td>{f.lastUsed?.job ? <span style={{ whiteSpace: "nowrap" }}>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}</div></span> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>
+                    {anyUsed && <td>{f.lastUsed?.job ? <span style={{ whiteSpace: "nowrap" }}>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}</div></span> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>}
                     <td style={{ whiteSpace: "nowrap" }}><a href={fileLink(f.path, f.name)} target="_blank" rel="noreferrer">DST</a>{f.emb && <> · <a href={fileLink(f.emb.path, f.emb.name)} target="_blank" rel="noreferrer">EMB</a></>}{f.sheet && <> · <a href={fileLink(f.sheet.path, f.sheet.name)} target="_blank" rel="noreferrer">Sheet</a></>}</td>
                   </tr>
                 ))}</tbody>
