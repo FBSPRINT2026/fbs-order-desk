@@ -450,7 +450,7 @@ function BringInArt() {
         let f = await file(it.path);
         if (p.cut) { const c = await cutToFile(await f.arrayBuffer(), it.ext, p.cut, p.name || it.name); if (!c) throw new Error(`no vector to pull, not added. ${noVectorWhy(it.ext, p.cut.page)}`); f = c; }
         const onto = p.into ? designs.find((x) => x.id === p.into) : undefined;
-        const d = onto ? (await setLogoArt(sb, onto, f)) as D : (await uploadDesign(sb, { file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: [it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `Pulled from order #${it.job.visual_id} (${it.job.nickname})`, p.cut?.loc ? `Location: ${p.cut.loc}` : "", p.cut?.wIn ? `Prints ${p.cut.wIn}" wide` : ""].filter(Boolean).join(" · ") })) as D;
+        const d = onto ? (await setLogoArt(sb, onto, f)) as D : (await uploadDesign(sb, { saved: true, file: f, customer_id: cust, name: p.name.trim() || it.name, by: u.user?.email || "", notes: [it.job.dbx ? `From Dropbox: ${it.job.dbx}` : `Pulled from order #${it.job.visual_id} (${it.job.nickname})`, p.cut?.loc ? `Location: ${p.cut.loc}` : "", p.cut?.wIn ? `Prints ${p.cut.wIn}" wide` : ""].filter(Boolean).join(" · ") })) as D;
         // the same logo already on file (they picked "Use D-…" or "Add as a colorway"): that logo is left as it is
         const was = !onto ? designs.find((x) => x.id === d.id) : undefined;
         if (was) {

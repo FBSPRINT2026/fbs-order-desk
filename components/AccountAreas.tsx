@@ -849,8 +849,10 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       )}
       </div></>;
   } else if (area === "artwork") {
-    const live = ds.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
-    const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
+    // the shop sees the logos saved to their file (Oct 31, Nick); the rest live with their mockups and orders
+    const lib = mode === "shop" ? ds.filter((d) => d.saved) : ds;
+    const live = lib.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
+    const archived = lib.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
     const dRows = live.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
     const aRows = archived.filter((d) => designMatches(d, q)).sort((a, b) => b.number - a.number);
     const ms = mockups.map((m) => ({ ...m, ...(m.id in mStars ? { starred: mStars[m.id] } : {}), shelved: String(m.mno ?? m.id) in mShelf ? mShelf[String(m.mno ?? m.id)] : !!m.shelved }));

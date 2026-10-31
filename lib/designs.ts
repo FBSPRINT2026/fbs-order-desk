@@ -22,7 +22,9 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
-export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
+export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string;
+  /** saved to the customer's logos (their library: Artwork → Saved logos) because someone chose to (Oct 31, Nick);
+   *  else it lives in the background with the mockups and orders that use it */ saved?: boolean; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
   /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
   // an EMB alone can't be read here (Wilcom's own format): say so, not a blank logo (Oct 28, Nick)
   if (/\.emb$/i.test(opts.file.name)) throw new Error("An EMB file can't be shown here (it's Wilcom's own format). Upload the DST that came with it; the EMB and the worksheet go on the logo on Digitizing.");
@@ -81,7 +83,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     customer_id: opts.customer_id, name: (opts.name || opts.file.name.replace(/\.[^.]+$/, "")).trim(),
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
-    colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "", draft: !!opts.draft,
+    colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "", draft: !!opts.draft, saved: !!opts.saved && !opts.draft,
     ...(artHashV ? { art_hash: artHashV } : {}),
     ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}), ...(opts.distress ? { distress: opts.distress } : {}) } } : {}),
   }).select("*").single();

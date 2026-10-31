@@ -227,7 +227,7 @@ function ArtPanel({ customerId, words, items }: { customerId: string; words: str
     for (const [i, f] of files.entries()) {
       setBusy(`Adding ${i + 1} of ${files.length}…`);
       try {
-        const d = await uploadDesign(sb, { file: f, customer_id: customerId, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "" });
+        const d = await uploadDesign(sb, { file: f, customer_id: customerId, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "", saved: true });
         if (brandId) await sb.from("designs").update({ brand_id: brandId }).eq("id", d.id);
       } catch (e) { setBusy(`${f.name}: ${e instanceof Error ? e.message : "couldn't add it"}`); return; }
     }

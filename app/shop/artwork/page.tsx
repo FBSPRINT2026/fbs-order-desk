@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, type Customer, type Design } from "@/lib/pricing";
-import { custLabel, fmtDateLong } from "@/lib/format";
+import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
 import CustomerPick from "@/components/CustomerPick";
@@ -17,15 +17,17 @@ import { useSticky } from "@/lib/useSticky";
 import { laneState, type Brand } from "@/lib/brands";
 import { allRows } from "@/lib/readAll";
 
-type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[]; group_id?: string | null; /** saved with its setup: can be edited again */ set?: string | null };
-/** which clients: the top 10 by what they spent this year, every client, the newest logos first; or the mockups */
-type Show = "top" | "all" | "recent" | "mockups";
+type Mock = { id: string; number?: number | null; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[]; group_id?: string | null; /** saved with its setup: can be edited again */ set?: string | null };
+/** which clients: the top 10 by what they spent this year, every client, the newest first */
+type Show = "top" | "all" | "recent";
+/** what each client's row shows (Oct 31, Nick: "mockups or saved logos, and you'd select one of those two"): every
+ *  mockup made for them, or only the logos saved to their file */
+type Kind = "mockups" | "logos";
 /** which of a client's logos its shelf shows (Oct 27, Nick: "toggle between active, favorites or most used") */
 type LogoView = "active" | "favorites" | "used";
 type Ord = { id: string; number: number; nickname: string | null; status: string; customer_id: string | null; total: number | null; created_at: string; discarded_at: string | null; draft: boolean | null; groups: { imprints?: { design_id?: string }[] }[] | null; lines?: unknown };
 const ACTIVE = new Set(["request", "quote_sent", "approved", "art", "blanks", "production", "ready"]);
 const SHELF = 12;
-const STEP = 24;
 
 /** Artwork: every customer's logos and mockups in one place, searchable. Each logo upload gets its own number (D-10001). */
 export default function ArtworkPage() {
@@ -39,8 +41,9 @@ export default function ArtworkPage() {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [cust, setCust] = useState("");
-  const [show0, setShow] = useSticky<Show | "logos">("artwork.shelves", "top");
-  const show: Show = show0 === "logos" ? "top" : show0;
+  const [show0, setShow] = useSticky<Show | "logos" | "mockups">("artwork.shelves", "top");
+  const show: Show = show0 === "logos" || show0 === "mockups" ? "top" : show0;
+  const [kind, setKind] = useSticky<Kind>("artwork.kind", "mockups");
   const [view, setView] = useSticky<LogoView>("artwork.logoView", "used");
   const [brandPick, setBrandPick] = useSticky<Record<string, string>>("artwork.brandPick", {});
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -51,7 +54,6 @@ export default function ArtworkPage() {
   const [hot, setHot] = useState<{ c: string; ids: Set<string> } | null>(null);
   const [nC, setNC] = useState(20);
   const [archived, setArchived] = useSticky("artwork.archived", false);
-  const [nM, setNM] = useState(STEP);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<{ customer_id: string; name: string; colors: number; inks: string; notes: string; file: File | null; preview: File | null } | null>(null);
@@ -81,7 +83,7 @@ export default function ArtworkPage() {
     const [d, c, m] = await Promise.all([
       sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }),
       sb.from("customers").select("*"),
-      sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids,group_id,set:snapshot->>set").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
+      sb.from("mockups").select("id,number,title,file_path,customer_id,order_id,created_at,starred,design_ids,group_id,set:snapshot->>set").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
     ]);
     const list = (d.data || []) as Design[];
     const ml = oneOfEach((m.data || []) as Mock[]);
@@ -115,14 +117,15 @@ export default function ArtworkPage() {
     if (!r.ok) { setMsg(r.error || "Couldn't do that."); setDrafts((x) => [d, ...x]); return; }
     if (keep) load();
   }
-  useEffect(() => { setNM(STEP); setNC(20); }, [q, cust, show, archived]);
+  useEffect(() => { setNC(20); }, [q, cust, show, archived, kind]);
 
   const byId = Object.fromEntries(customers.map((c) => [c.id, c]));
   const t = q.trim().toLowerCase().replace(/^d-?(?=\d)/, "").replace(/^#/, "");
   const hit = (...xs: (string | number | null | undefined)[]) => !t || xs.some((x) => String(x ?? "").toLowerCase().includes(t));
-  const logos = designs.filter((d) => !!d.archived_at === archived && (!cust || d.customer_id === cust) && hit(d.number, d.name, d.file_name, d.inks, d.notes, custLabel(byId[d.customer_id || ""])));
+  // only the logos saved to a customer's file (Oct 31): the rest live in the background with their mockups and orders
+  const logos = designs.filter((d) => d.saved && !!d.archived_at === archived && (!cust || d.customer_id === cust) && hit(d.number, d.name, d.file_name, d.inks, d.notes, custLabel(byId[d.customer_id || ""])));
   const mocks = mockups.filter((m) => (!cust || m.customer_id === cust) && hit(m.title, custLabel(byId[m.customer_id || ""]), m.order_id ? orderNo[m.order_id] : "", ...(m.design_ids || []).map((id) => designs.find((d) => d.id === id)?.number)));
-  const liveLogos = designs.filter((d) => !d.archived_at).length;
+  const liveLogos = designs.filter((d) => d.saved && !d.archived_at).length;
 
   // ---- the shelves (Oct 27, Nick: a log of artwork, one row per client; not a task area) ----
   // how many orders each logo has been on, and the logos on each client's active orders
@@ -145,7 +148,7 @@ export default function ArtworkPage() {
     const byCust = new Map<string, Design[]>();
     for (const d of logos) if (d.customer_id) byCust.set(d.customer_id, [...(byCust.get(d.customer_id) || []), d]);
     // a client whose name matches the search shows all its logos
-    if (t) for (const c of customers) if (!byCust.has(c.id) && custLabel(c).toLowerCase().includes(t)) { const all = designs.filter((d) => d.customer_id === c.id && !!d.archived_at === archived); if (all.length) byCust.set(c.id, all); }
+    if (t) for (const c of customers) if (!byCust.has(c.id) && custLabel(c).toLowerCase().includes(t)) { const all = designs.filter((d) => d.saved && d.customer_id === c.id && !!d.archived_at === archived); if (all.length) byCust.set(c.id, all); }
     const last = (ds: Design[]) => ds.reduce((m, d) => (d.created_at > m ? d.created_at : m), "");
     let rows = [...byCust.entries()].map(([id, ds]) => ({ c: byId[id], ds, last: last(ds) })).filter((r) => r.c);
     if (show === "recent") rows.sort((a, b) => b.last.localeCompare(a.last));
@@ -167,7 +170,6 @@ export default function ArtworkPage() {
   // one card per mockup, its colors listed under it (Oct 22, Nick: "they should all be one mock-up with all the different
   // versions and colors underneath it"): the pictures of one save (same setup, or the same name saved in the same minute)
   const mockName = (m: Mock) => m.title.split(" — ")[0];
-  const mockColor = (m: Mock) => m.title.split(" — ").slice(1).join(" — ");
   const mockSets: Mock[][] = [];
   { const at = new Map<string, Mock[]>();
     for (const m of mocks) {
@@ -175,6 +177,19 @@ export default function ArtworkPage() {
       const g = at.get(k); if (g) g.push(m); else { const n = [m]; at.set(k, n); mockSets.push(n); }
     }
     for (const g of mockSets) g.sort((a, b) => a.created_at.localeCompare(b.created_at)); }
+  // each client's mockups in one row, like the logos (Oct 31, Nick: "when you clicked on logotology, you would see all
+  // the used mockups, whether that is a logo mockup or… a full mockup on the garment"), newest first
+  const mockRows = (() => {
+    const by = new Map<string, Mock[][]>();
+    for (const g of mockSets) { const c = g[0].customer_id || ""; if (c && byId[c]) by.set(c, [...(by.get(c) || []), g]); }
+    let rows = [...by.entries()].map(([id, sets]) => ({ c: byId[id], sets, last: sets.reduce((m, g) => (g[0].created_at > m ? g[0].created_at : m), "") }));
+    if (show === "recent") rows.sort((a, b) => b.last.localeCompare(a.last));
+    else if (show === "top") rows.sort((a, b) => (spend.get(b.c.id) || 0) - (spend.get(a.c.id) || 0) || b.sets.length - a.sets.length);
+    else rows.sort((a, b) => custLabel(a.c).localeCompare(custLabel(b.c)));
+    if (show === "top" && !t && !cust) rows = rows.slice(0, 10);
+    return rows;
+  })();
+  const mockHref = (m: Mock) => (m.order_id ? `/shop/orders/${m.order_id}` : m.set ? `/shop/artwork/mockup?mockup=${m.id}` : mUrls[m.id]?.full || "");
 
   /** a logo filed under one of its client's brands (or none), from a drag onto the brand */
   async function fileUnder(id: string, brandId: string | null) {
@@ -193,7 +208,7 @@ export default function ArtworkPage() {
     setBusy(true);
     try {
       const { data: u } = await sb.auth.getUser();
-      const d = await uploadDesign(sb, { ...form, file: form.file, by: u.user?.email || "" });
+      const d = await uploadDesign(sb, { ...form, file: form.file, by: u.user?.email || "", saved: true });
       setMsg(`Saved logo ${designLabel(d)}.`);
       setForm(null);
       load();
@@ -204,7 +219,7 @@ export default function ArtworkPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">{liveLogos} logo{liveLogos === 1 ? "" : "s"} · {mockups.length} mockup{mockups.length === 1 ? "" : "s"}</div><h1>Artwork</h1></div>
+        <div><div className="eyebrow">{liveLogos} saved logo{liveLogos === 1 ? "" : "s"} · {mockSets.length} mockup{mockSets.length === 1 ? "" : "s"}</div><h1>Artwork</h1></div>
         <div className="row">
           <Link className="btn" href="/shop/art-builder">Customer artwork builder</Link>
           <Link className="btn" href="/shop/artwork/mockup">Mockup Creator</Link>
@@ -212,7 +227,7 @@ export default function ArtworkPage() {
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload logo"}</button>
         </div>
       </div>
-      <p className="muted" style={{ marginTop: -8, maxWidth: 760 }}>Every client&apos;s logos and the files each department has for them. Each logo has a number (D-10001) and lives on the client&apos;s account.</p>
+      <p className="muted" style={{ marginTop: -8, maxWidth: 760 }}>Every client&apos;s mockups, and the logos saved to their file with the files each department has for them. A logo is only saved when you choose to; the rest live inside their mockups and orders.</p>
       {msg && <div className="banner" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{msg}</div>}
 
       {form && (
@@ -234,16 +249,60 @@ export default function ArtworkPage() {
       <div className="toolbar art-tools">
         <label className="aa-search"><SearchInput placeholder="Logo, D-number or client" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <CustomerPick compact value={cust || null} options={custOpts} placeholder="All customers: type one" ariaLabel="Filter by customer" onPick={(v) => setCust(v || "")} />
+        {/* one toolbar (Oct 31, Nick: "top 10, all clients, recently added on one side… all the way to the right should be
+            mockups and saved logos"): which clients on the left, what their rows show on the right */}
         <div className="chips">
-          {(["top", "all", "recent", "mockups"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "top" ? "Top 10" : k === "all" ? "All clients" : k === "recent" ? "Recently added" : `Mockups (${mockSets.length})`}</button>)}
+          {(["top", "all", "recent"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "top" ? "Top 10" : k === "all" ? "All clients" : "Recently added"}</button>)}
         </div>
-        {show !== "mockups" && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> Archived logos</label>}
+        <span className="spacer" />
+        {kind === "logos" && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> Archived</label>}
+        <div className="chips" role="group" aria-label="Show">
+          <button type="button" className={"chip" + (kind === "mockups" ? " on" : "")} onClick={() => setKind("mockups")}>Mockups <span className="chip-n">{mockSets.length}</span></button>
+          <button type="button" className={"chip" + (kind === "logos" ? " on" : "")} onClick={() => setKind("logos")}>Saved logos <span className="chip-n">{liveLogos}</span></button>
+        </div>
       </div>
 
-      {show !== "mockups" && (
+      {kind === "mockups" && (
+        <section className="art-sec as">
+          <div className="as-head"><span className="faint">Client</span><span className="faint">Mockups</span></div>
+          {mockRows.length ? mockRows.slice(0, nC).map(({ c, sets, last }) => {
+            const act = (activeOf.get(c.id) || []).sort((a, b) => b.number - a.number);
+            const xs = open.has(c.id) ? sets : sets.slice(0, SHELF);
+            const ordersOpen = openOrders.has(c.id);
+            return (
+              <div key={c.id} className="as-row">
+                <div className="as-who">
+                  <div className="as-box">
+                    <Link href={`/shop/customers/${c.id}`} className="as-name">{custLabel(c)}</Link>
+                    <div className="as-mini"><span><b>{sets.length}</b> mockup{sets.length === 1 ? "" : "s"}</span>{last && <span><b>{shortDate(last)}</b> last made</span>}</div>
+                  </div>
+                  {act.length > 0 && <>
+                    <div className="as-sec">Active orders</div>
+                    {(ordersOpen ? act : act.slice(0, 3)).map((o) => <Link key={o.id} href={`/shop/orders/${o.id}`} className="as-ord"><span className="ordno">#{o.number}</span><span className="as-ord-n">{o.nickname || "Order"}</span></Link>)}
+                    {act.length > 3 && <button type="button" className="linkbtn as-more" onClick={() => setOpenOrders((x) => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}>{ordersOpen ? "Fewer" : `+${act.length - 3} more`}</button>}
+                  </>}
+                </div>
+                <div className="as-logos">
+                  {xs.map((g) => { const m = g[0], logo = / — Logo · /.test(m.title || ""), href = mockHref(m); return (
+                    <a key={m.id} href={href || undefined} className="as-tile as-mk" title={`${m.number ? `M-${m.number} · ` : ""}${mockName(m)}${g.length > 1 ? ` · ${g.length} colors` : ""}`}>
+                      <span className="as-pic">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt="" /> : <span className="as-ext">{logo ? "LOGO" : "MOCKUP"}</span>}{g.some((x) => x.starred) && <span className="as-star" title="Customer favorite">★</span>}{g.length > 1 && <span className="as-mk-n">{g.length}</span>}</span>
+                      <span className="as-lab"><span>{m.number ? `M-${m.number}` : logo ? "Logo mockup" : "Mockup"}</span>{m.order_id && orderNo[m.order_id] ? <b>#{orderNo[m.order_id]}</b> : null}</span>
+                      <span className="as-mk-t">{mockName(m)}</span>
+                    </a>
+                  ); })}
+                  {sets.length > SHELF && <button type="button" className="as-tile as-mk as-plus" onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}>{open.has(c.id) ? "Fewer" : `+${sets.length - SHELF}`}</button>}
+                </div>
+              </div>
+            );
+          }) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the Mockup Creator."}</div>}
+          {mockRows.length > nC && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNC(nC + 20)}>Show more clients ({mockRows.length - nC} more)</button>}
+        </section>
+      )}
+
+      {kind === "logos" && (
         <section className="art-sec as">
           <div className="as-head"><span className="faint">Client</span>
-            <span className="faint">{archived ? "Archived logos" : "Logos"}</span>
+            <span className="faint">{archived ? "Archived saved logos" : "Saved logos"}</span>
             <div className="chips" role="group" aria-label="Which logos">
               {(["active", "favorites", "used"] as LogoView[]).map((k) => <button key={k} type="button" className={"chip" + (view === k ? " on" : "")} onClick={() => setView(k)}>{k === "active" ? "Active" : k === "favorites" ? "Favorites" : "Most used"}</button>)}
             </div>
@@ -296,7 +355,7 @@ export default function ArtworkPage() {
                 </div>
               </div>
             );
-          }) : <div className="aa-empty">{designs.length ? "No logos match." : "No logos yet. Upload a customer's logo to get started."}</div>}
+          }) : <div className="aa-empty">{designs.some((d) => d.saved) ? "No saved logos match." : "No saved logos yet. Upload a customer's logo, or save one from its page."}</div>}
           {shelves.length > nC && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNC(nC + 20)}>Show more clients ({shelves.length - nC} more)</button>}
           <p className="faint as-key">Under each logo, green means that department has its file: SP films / vector, EMB a sew file, HP a print file.</p>
         </section>
@@ -323,28 +382,6 @@ export default function ArtworkPage() {
               })}
             </div>
           )}
-        </section>
-      )}
-      {show === "mockups" && (
-        <section className="art-sec">
-          <div className="aa-sec-h"><h3>Mockups</h3><span className="faint">{mockSets.length} {q || cust ? "match" + (mockSets.length === 1 ? "" : "es") : "total"}</span></div>
-          {mocks.length ? (
-            <div className="design-grid">
-              {mockSets.slice(0, nM).map((g) => { const m = g[0]; return (
-                // the customer page's mockup card (components/AccountAreas.tsx `mk-card`), not the Mockup Creator's saved strip
-                // (`mk-saved`), whose rules framed the picture and cut the text off (Oct 30, Nick: "spilling over and looks weird")
-                <div key={m.id} className={"design-card mk-card" + (g.some((x) => x.starred) ? " starred" : "")}>
-                  <div className="dc-img mock"><a href={mUrls[m.id]?.full} target="_blank" rel="noreferrer" className="dc-open" title="Open the picture">{mUrls[m.id]?.thumb ? <img src={mUrls[m.id].thumb} alt={m.title} /> : <span>MOCKUP</span>}</a>{g.some((x) => x.starred) && <span className="dc-fav" title="Customer favorite">★</span>}{g.length > 1 && <span className="mk-card-n">{g.length} colors</span>}</div>
-                  <div className="dc-b"><b>{mockName(m)}</b><span className="faint">{custLabel(byId[m.customer_id || ""]) || "No customer"}{m.order_id && orderNo[m.order_id] ? ` · Order #${orderNo[m.order_id]}` : ""} · {fmtDateLong(m.created_at.slice(0, 10))}</span>
-                    {g.length > 1 || mockColor(m) ? <ul className="mk-colors-list">{g.map((x) => <li key={x.id}><a href={mUrls[x.id]?.full} target="_blank" rel="noreferrer" title="Open this color's picture">{mockColor(x) || "Picture"}</a></li>)}</ul> : null}
-                    {/* edit it again in the Mockup Creator, like an order's (Oct 22, Nick); an order's mockup is edited from its order */}
-                    <div className="mk-card-acts">{m.order_id ? <a className="btn sm" href={`/shop/artwork/mockup?order=${m.order_id}${m.group_id ? `&group=${m.group_id}` : ""}${/ — Logo · /.test(String(m.title || "")) ? "&logo=1" : ""}`}>Edit on the order</a>
-                      : m.set ? <a className="btn sm" href={`/shop/artwork/mockup?mockup=${m.id}`}>Edit mockup</a> : null}</div></div>
-                </div>
-              ); })}
-            </div>
-          ) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the Mockup Creator."}</div>}
-          {mockSets.length > nM && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNM(nM + STEP)}>Show more mockups ({mockSets.length - nM} more)</button>}
         </section>
       )}
     </>

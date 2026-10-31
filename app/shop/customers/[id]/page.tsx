@@ -365,7 +365,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           const made: Design[] = [], bad: string[] = [];
           for (const [i, f] of files.entries()) {
             try {
-              const d = await uploadDesign(sb, { file: f, customer_id: id, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "" });
+              const d = await uploadDesign(sb, { file: f, customer_id: id, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "", saved: true });
               if (star) { await sb.rpc("set_design_star", { p_design: d.id, p_starred: true }); d.starred = true; }
               made.push(d);
             } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "couldn't upload"}`); }

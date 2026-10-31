@@ -186,6 +186,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   async function setMaster(on: boolean) {
     if (!on && !canUnlock) { setMsg("Only someone allowed in Settings → User Access can unlock a master logo."); return; }
     const { data: u } = await sb.auth.getUser();
+    if (on && !d?.saved) await patch({ saved: true } as Partial<D>);
     await setSpecs({ master: on ? { at: new Date().toISOString(), by: u.user?.email || "" } : undefined });
     setMsg(on ? "Locked as a master logo" : "Unlocked");
   }
@@ -260,6 +261,12 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                   <option value="">No brand</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select></>}
               <span className="lgx-sep" />
+              {/* in the customer's logos (Oct 31, Nick: "this is getting used a lot, let's save this into the customer's
+                  logos"): off = it lives in the background with the mockups and orders that use it. A master logo is saved */}
+              <label className={"lgx-lock lgx-save" + (d.saved || master ? " on" : "")} title={master ? "A master logo is always in their saved logos" : d.saved ? "In the customer's saved logos (Artwork → Saved logos). Turn off to keep it only with its mockups and orders" : "Save it to the customer's logos, so it's easy to pull onto any order"}>
+                <span>Saved to their logos</span>
+                <input type="checkbox" role="switch" checked={!!d.saved || !!master} disabled={!!master} onChange={(e) => void patch({ saved: e.target.checked } as Partial<D>)} /><i aria-hidden />
+              </label>
               <label className={"lgx-lock" + (master ? " on" : "")} title={master ? (canUnlock ? "Locked: it can't be deleted or have its art replaced. Turn off to unlock." : "Locked: only someone allowed in Settings → User Access can unlock a master logo") : "Make it a master logo: set in stone, it can't be deleted or have its art replaced"}>
                 <LockIcon /><span>Master logo</span>
                 <input type="checkbox" role="switch" checked={!!master} disabled={!!master && !canUnlock} onChange={(e) => void setMaster(e.target.checked)} /><i aria-hidden />

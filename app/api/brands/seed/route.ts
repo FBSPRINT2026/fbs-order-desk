@@ -73,7 +73,7 @@ export async function POST(req: Request) {
         if (slug === main) size = pngSize(png);
         colorways.push({ name, inks, preview: await put(`designs/${key}/${slug}.png`, png, "image/png") });
       }
-      const { error } = await admin.from("designs").insert({
+      const { error } = await admin.from("designs").insert({ saved: true,
         customer_id: cid, brand_id: mei, name: L.name, file_path: file, file_name: `${main}.pdf`, file_type: "application/pdf",
         preview_path: colorways[0].preview, width_px: size.w || null, height_px: size.h || null, method: "screen",
         colors: colorways[0].inks.length, inks: colorways[0].inks.join(", "), notes: "", created_by: "Brand standards (MEI guide)", draft: false,
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
         const pl = await put(`designs/${key}/shipstation-oxford-blue.png`, light, "image/png");
         const pd = await put(`designs/${key}/shipstation-white.png`, dark, "image/png");
         const sz = pngSize(light);
-        const { data: d, error } = await admin.from("designs").insert({
+        const { data: d, error } = await admin.from("designs").insert({ saved: true,
           customer_id: cid, brand_id: ship, name: NAME, file_path: pl, file_name: "shipstation-oxford-blue.png", file_type: "image/png",
           preview_path: pl, width_px: sz.w || null, height_px: sz.h || null, method: "embroidery", colors: 1, inks: "Madeira 1743 Oxford Blue",
           notes: "", created_by: "Brand standards (ShipStation)", draft: false,
