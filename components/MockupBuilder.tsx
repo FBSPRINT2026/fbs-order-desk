@@ -1434,6 +1434,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // time I add a color, fit the new graphic to that template"). key: template photo > this photo
   const [regs, setRegs] = useState<Record<string, Reg | null>>({});
   const anchorLine = lines.find((x) => x.style && x.color && !isBag(x));
+  // a photo is laid over the template of its OWN style only (Oct 30, Nick, #40302: the youth 64000B's sleeve sat in a
+  // different place on its front than its back): every color of one style is the same shirt, so it lines up; another
+  // style (a youth, ladies or long sleeve beside a tee) is a different shirt, and laying it over the first style's photo
+  // gave it that shirt's size, a different stretch on each side
+  const styleKey = (l: Line) => `${(l.brand || "").trim().toLowerCase()}|${(l.style || "").trim().toLowerCase()}`;
+  const anchorOf = (l?: Line) => (l ? lines.find((x) => x.style && x.color && !isBag(x) && styleKey(x) === styleKey(l)) : undefined);
   // youth screens (Oct 30, Nick, #40302): a line of kids' sizes only is a youth shirt. With youth and adult shirts in the
   // group it asks once whether youth gets its own screens; then Adult and Youth are tabs, each print's youth size is set
   // under it on the Adult tab, and on the Youth tab only where each print sits is moved (its own placement)
@@ -1447,9 +1453,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const sizedOn = (im: Imprint, l?: Line): Imprint => (l && ySplit(im) && kidOf(l) ? { ...im, size: im.youth!.size!, sizeFrom: "staff" } : im);
   const setYouth = (id: string, y: Imprint["youth"]) => setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, youth: y } : x)));
   useEffect(() => {
-    const a = anchorLine; if (!a) return;
     for (const l of lines) {
-      if (l.id === a.id || !l.style || !l.color || isBag(l)) continue;
+      const a = anchorOf(l);
+      if (!a || l.id === a.id || !l.style || !l.color || isBag(l)) continue;
       for (const v of ["front", "back"] as View[]) {
         const au = photo(a, v), u = photo(l, v), key = `${au}>${u}`;
         const fa = fits[au], fo = fits[u];
@@ -1494,7 +1500,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const u = photo(l, v);
     if (u.startsWith("data:")) return null;
     // laid over the template: the template's reading, moved onto this photo (a good fit only: most of the outline covered)
-    const a = anchorLine;
+    const a = anchorOf(l);
     if (a && a.id !== l.id) {
       const au = photo(a, v), r = regs[`${au}>${u}`], A = au !== u ? baseFit(a, v) : null, own = fits[u] || measured || null;
       if (r && A && own && !own.flat && r.iou >= 0.82) {
@@ -1506,7 +1512,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   /** the line whose print areas (set by hand) a color follows: the template's once it's laid over it */
   const settingsLine = (l: Line | undefined, v: View): Line | undefined => {
-    const a = anchorLine;
+    const a = anchorOf(l);
     if (!l || !a || a.id === l.id) return l;
     const r = regs[`${photo(a, v)}>${photo(l, v)}`];
     return r && r.iou >= 0.82 ? a : l;
@@ -1719,8 +1725,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [shownG?.id, shownG?.specs]); // eslint-disable-line react-hooks/exhaustive-deps
   // one screen prints every size on the order: sizes and limits follow the smallest size ordered (a 2T), while the
   // picture stays on the middle size (a 3T)
-  const capBody = smallestOrdered(shownG, ordered, body);
-  const fitBody = (b: Body) => (!b.cap && capBody && capBody.widthIn < b.widthIn ? capBody : b);
+  // with youth screens, each side has its own screens: the adult prints are sized for the smallest adult size and the
+  // youth prints for the smallest youth size, never the adult for the YS
+  const capAll = smallestOrdered(shownG, ordered, body);
+  const kidSizes: string[] = youthOn ? [...new Set<string>(kidLines.flatMap((l) => orderedBy[l.id] || []))] : [];
+  const kidShown = youthOn ? kidLines[0] : undefined;
+  const capKid = kidShown ? smallestOrdered(garmentFor(kidShown), kidSizes, bodyFor(kidShown)) : null;
+  const capBody = youthOn ? (onYouth ? capKid : null) : capAll;
+  const fitBody = (b: Body) => { const cb = youthOn ? (b.kind === "adult" ? null : capKid) : capAll; return !b.cap && cb && cb.widthIn < b.widthIn ? cb : b; };
   // where a print sits follows the shown size; how big it can be follows the smallest size ordered
   const spotFor = (loc: string, b: Body = body) => {
     const s0 = spotFor0(loc, b), cb = fitBody(b);
@@ -3188,7 +3200,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // a size bigger than the smallest size ordered can take (a 9.5" front on a 2T-4T run) is brought down to the
   // largest that fits, and the print says why (the note goes to the order with the mockup)
   useEffect(() => {
-    if (!capBody || !ready) return;
+    if (!capBody || !ready || youthOn) return; // youth screens: the youth size is its own (warned under each print)
     const fixes: Record<string, { size: string; note: string }> = {};
     for (const im of imprints) {
       const d = designOf(im); if (!d || im.sizeFrom === "customer" || im.sizeFrom === "film") continue; // the customer's own size, or the size printed before (film): not changed
