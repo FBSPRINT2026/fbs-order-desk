@@ -132,6 +132,11 @@ export const PAY_METHODS = ["Credit card", "ACH", "Zelle", "Venmo", "Cash", "Che
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
 export type Imprint = { /** the art exactly as the Mockup Creator shows it on this print (inks painted, background off), saved with the mockup: the order's little print tile is this, so it always matches the blow-up (Oct 24, Nick: "we keep having problems with those little boxes… they're just supposed to be little versions of the blow-ups") */ shownArt?: string; id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
+  /** youth screens (Oct 30, Nick, #40302: "youth screen at 8 inches… left sleeve… print the same on all of them"): in a
+   *  group of youth and adult shirts that has its own youth screens (Group.youthSet), the youth size of this print, or
+   *  `same` when the youth shirts print from the adult screen. Its own youth screens get their own setup and are priced
+   *  at the youth pieces' break; the adult print at the adult pieces' (lib/pricing.ts calcGroup) */
+  youth?: { same?: boolean; size?: string };
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
   /** where the logo is centered, as a share of its picture, when its box's middle isn't its middle (a round badge with a
@@ -315,6 +320,9 @@ export type Group = { id: string; name?: string; /** priced by a program design'
   tagPrice?: number;
   /** the customer's neck label set printed when Private Label is on (customers.neck_labels id; lib/neckLabels.ts) */
   neckLabel?: string; youth?: boolean;
+  /** youth and adult shirts in this group: true = the prints that don't fit youth shirts get their own youth screens
+   *  (each print's Imprint.youth), false = staff said the same screens print all of them; unset = not asked yet (the
+   *  Mockup Creator asks once) */ youthSet?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** the mockup was made in the logo builder (Add logo): Edit mockup opens it there (lib/mockupFresh.ts mockupHref) */ mockupKind?: "logo";
   /** the group is a brand's master mockup (lib/masterMockups.ts): its prints and picture came from M-<number>, and only
@@ -888,9 +896,25 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
   // each print's price break: the pieces carrying its logo across the whole order (never fewer than this group's)
   const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}`) || 0 : 0; return n > qty ? n : qty; };
-  const tiOf = (d: Imprint) => (dq(d) === qty ? ti : tierIndex(dq(d), pl));
-  const ixOf = (d: Imprint) => (dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
-  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[]; /** PMS inks a color change prints in, charged as matches */ pmsChange?: string[]; /** PMS matches charged on this print */ pmsN?: number })[] = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) }));
+  // youth screens (Oct 30, Nick: "two fronts, which both get setups… the quantity discount on the front for one, and…
+  // for the other. Then they both get the same sleeve. They get the full discount on the sleeve. And only one setup"):
+  // a print with its own youth screen is priced at the youth pieces' break on youth shirts and the adult pieces' on
+  // adult shirts; every other print at the whole group's
+  const kidAt = (g.lines || []).map(kidLine);
+  const yQty = (g.lines || []).reduce((a, l, i) => a + (kidAt[i] ? billQty(l) : 0), 0), aQty = qty - yQty;
+  const split = (d: Imprint) => youthSplit(g, d);
+  type Side = "a" | "y" | undefined;
+  const sideQty = (side: Side) => (side === "y" ? yQty : aQty);
+  const tiOf = (d: Imprint, side?: Side) => (side && split(d) ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
+  const ixOf = (d: Imprint, side?: Side) => (side && split(d) ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  const anySplit = (g.imprints || []).some(split);
+  const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[]; /** PMS inks a color change prints in, charged as matches */ pmsChange?: string[]; /** PMS matches charged on this print */ pmsN?: number;
+    /** its own youth screen: the youth print's price each and setup, and the pieces each side is priced at */ youth?: { each: number; setup: number; screens?: number; qty: number; adultQty: number; size: string } })[] =
+    (g.imprints || []).map((d) => {
+      if (!split(d)) return { id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) };
+      const y = imprintPrice(d, tiOf(d, "y"), pl, false, false, ixOf(d, "y"));
+      return { id: d.id, ...imprintPrice(d, tiOf(d, "a"), pl, false, false, ixOf(d, "a")), youth: { each: y.each, setup: y.setup, screens: (y as { screens?: number }).screens, qty: yQty, adultQty: aQty, size: d.youth?.size || "" } };
+    });
   // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
   // another group of the same order) is matched once, so only its first print pays. `seen` is shared by calcOrder.
   // A typed count (inks not named) can't be compared and is charged as typed.
@@ -912,8 +936,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   });
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
-  const printFor = (light: boolean, dtgLight: boolean) => {
-    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, tiOf(d), pl, light, dtgLight, ixOf(d))) : imprints;
+  const printFor = (light: boolean, dtgLight: boolean, side?: Side) => {
+    const imps = light || dtgLight || side === "y" ? (g.imprints || []).map((d) => imprintPrice(d, tiOf(d, side), pl, light, dtgLight, ixOf(d, side))) : imprints;
     const other = imps.filter((_, i) => (g.imprints || [])[i]?.method !== "screen").reduce((a, d) => a + d.each, 0);
     const scr = imps.filter((_, i) => (g.imprints || [])[i]?.method === "screen");
     let screenPart = scr.reduce((a, d) => a + d.each, 0);
@@ -925,10 +949,10 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   };
   const printEach = printFor(false, false);
   const printCache = new Map<string, number>();
-  const printLine = (color: string) => {
+  const printLine = (color: string, side?: Side) => {
     const light = isLightColor(color, pl), dl = isLightColor(color, pl, pl.dtgLightColors);
-    const key = `${light}${dl}`;
-    if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
+    const key = `${light}${dl}${side || ""}`;
+    if (!printCache.has(key)) printCache.set(key, light || dl || side === "y" ? printFor(light, dl, side) : printEach);
     return { light, print: printCache.get(key) as number };
   };
   const finList = finishingList(s, pl, g.customFin);
@@ -948,12 +972,12 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // personalizations: each name its own charge, on top of its line (not in the line's price each)
   const persItems = (g.lines || []).filter((l) => !l.shopUse).flatMap((l) => persOf(l).map((e) => ({ lineId: l.id, text: e.text, size: e.size, qty: num(e.qty) || 1, unit: e.price != null ? num(e.price) : persRate, amount: r2((num(e.qty) || 1) * (e.price != null ? num(e.price) : persRate)) })));
   const persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
-  const lines: LineCalc[] = (g.lines || []).map((l) => {
+  const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
     const garmentRaw = pl.useGarment ? num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj) : 0;
     const garmentEach = r2(garmentRaw);
-    const { light, print: basePrint } = printLine(l.color);
+    const { light, print: basePrint } = printLine(l.color, anySplit ? (kidAt[li] ? "y" : "a") : undefined);
     const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
     const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
@@ -986,8 +1010,15 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (seen.has(k)) return { ...d, setup: 0, shared: true };
     seen.add(k); return d;
   });
+  // a print's own youth screens: a second setup (the same logo at the same spot and size on another order shares it)
+  const youthSetups = (g.imprints || []).map((im, i) => {
+    const y = imprints[i]?.youth; if (!y) return null;
+    const k = im.method === "screen" && im.design_id ? `${im.design_id}|${(im.location || "").toLowerCase()}|y${(y.size || "").replace(/[^\d.]/g, "")}|${num(y.screens)}` : "";
+    if (k && seen) { if (seen.has(k)) return { ...y, setup: 0, shared: true }; seen.add(k); }
+    return { ...y, shared: false };
+  });
   const noSetup = !!o.waive_setup || !!g.allIn;
-  const screens = noSetup ? 0 : setups.reduce((a, d) => a + d.setup, 0);
+  const screens = noSetup ? 0 : setups.reduce((a, d) => a + d.setup, 0) + youthSetups.reduce((a, d) => a + (d?.setup || 0), 0);
   const inkFees = g.allIn ? 0 : imprints.reduce((a, d) => a + d.inkFee, 0);
   const sub = r2(lines.reduce((a, l) => a + l.sub, 0) + persTotal);
   // contract minimum: a job under minQty pieces is charged as minQty pieces (the missing pieces at the average price)
@@ -995,14 +1026,20 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const minCharge = !g.allIn && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
-  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean }[] = [];
+  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean; /** a print's own youth screens / file */ youth?: boolean }[] = [];
   if (!noSetup) setups.forEach((d, i) => {
     const im = (g.imprints || [])[i];
-    if (!im || !d.setup) return;
-    if (im.method === "screen") {
-      const n = Math.min(num((d as { screens?: number }).screens), 15) || 1;
-      setupItems.push({ kind: (im.remake ?? ix.remake) && pl.remakeFee != null ? "remake" : "screens", qty: n, unit: r2(d.setup / n), amount: r2(d.setup) });
-    } else setupItems.push({ kind: "digitize", qty: 1, unit: r2(d.setup), amount: r2(d.setup) });
+    if (!im) return;
+    const one = (amt: number, sc: number | undefined, youth?: boolean) => {
+      if (!amt) return;
+      const y = youth ? { youth: true } : {};
+      if (im.method === "screen") {
+        const n = Math.min(num(sc), 15) || 1;
+        setupItems.push({ kind: (im.remake ?? ix.remake) && pl.remakeFee != null ? "remake" : "screens", qty: n, unit: r2(amt / n), amount: r2(amt), ...y });
+      } else setupItems.push({ kind: "digitize", qty: 1, unit: r2(amt), amount: r2(amt), ...y });
+    };
+    one(d.setup, (d as { screens?: number }).screens);
+    const ys = youthSetups[i]; if (ys) one(ys.setup, ys.screens, true);
   });
   if (!g.allIn) imprints.forEach((_, i) => {
     const im = (g.imprints || [])[i]; if (!im) return;
@@ -1011,7 +1048,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, qty, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
@@ -1065,6 +1102,19 @@ export function newImprint(location = "Full Front"): Imprint {
 }
 export function newGroup(): Group {
   return { id: uid(), lines: [newGLine()], imprints: [newImprint()] };
+}
+/** A garment line of kids' sizes only (youth, toddler, baby): the shirts a youth screen prints on. */
+export const KID_SIZES: readonly string[] = [...YOUTH_SIZES, ...TODDLER_SIZES, ...BABY_SIZES];
+export function kidLine(l: { sizes?: Partial<Record<Size, number>> }) {
+  const z = Object.entries(l.sizes || {}).filter(([, v]) => num(v) > 0).map(([k]) => k);
+  return z.length > 0 && z.every((k) => KID_SIZES.includes(k));
+}
+/** This print has its own youth screens on this group: the group was set for youth screens, the print isn't "same as
+ *  adult" and has a youth size, and the group has both youth and adult pieces. */
+export function youthSplit(g: Pick<Group, "youthSet" | "lines">, d: Pick<Imprint, "youth">) {
+  if (!g.youthSet || !d.youth || d.youth.same || !(d.youth.size || "").trim()) return false;
+  const ls = (g.lines || []).filter((l) => lineQty(l) > 0);
+  return ls.some(kidLine) && ls.some((l) => !kidLine(l));
 }
 /** True when a size is a youth size. */
 export const isYouth = (z: string) => (YOUTH_SIZES as readonly string[]).includes(z);

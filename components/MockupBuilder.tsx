@@ -33,7 +33,7 @@ import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pdfPic
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
-import { PREVIEWABLE_TYPES } from "@/lib/pricing";
+import { PREVIEWABLE_TYPES, KID_SIZES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
@@ -228,6 +228,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [lines, setLines] = useState<Line[]>([{ id: uid(), style: "", brand: "", color: "", garment: "" }]);
   const [imprints, setImprints] = useState<Imprint[]>([]);
   const [groupName, setGroupName] = useState("");
+  /** youth and adult shirts in this group: their own youth screens (true), the same screens (false), not asked yet
+   *  (undefined). Saved as Group.youthSet */
+  const [youthSet, setYouthSet] = useState<boolean | undefined>(undefined);
   /** a logo mockup with no order: the colors it goes on, as typed ("Black, Forest Green"), one square each */
   const [logoCols, setLogoCols] = useState("");
   // a saved logo mockup opened again: its colors fill the field
@@ -601,6 +604,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setOrderedBy(Object.fromEntries(g.lines.map((l) => [l.id, Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)])));
           if (g.mockupSize) setShownSize(g.mockupSize);
           if (g.mockupOffsets) setOffsets(g.mockupOffsets);
+          setYouthSet(g.youthSet);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
             const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
@@ -1430,6 +1434,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // time I add a color, fit the new graphic to that template"). key: template photo > this photo
   const [regs, setRegs] = useState<Record<string, Reg | null>>({});
   const anchorLine = lines.find((x) => x.style && x.color && !isBag(x));
+  // youth screens (Oct 30, Nick, #40302): a line of kids' sizes only is a youth shirt. With youth and adult shirts in the
+  // group it asks once whether youth gets its own screens; then Adult and Youth are tabs, each print's youth size is set
+  // under it on the Adult tab, and on the Youth tab only where each print sits is moved (its own placement)
+  const kidOf = (l?: Line) => { const z = l ? orderedBy[l.id] || [] : []; return z.length > 0 && z.every((k) => KID_SIZES.includes(k)); };
+  const kidLines = lines.filter((l) => kidOf(l)), adultLines = lines.filter((l) => !kidOf(l));
+  const hasKids = !!orderId && !portal && kidLines.length > 0 && adultLines.length > 0;
+  const youthOn = hasKids && youthSet === true;
+  const onYouth = youthOn && kidOf(lines[active] || lines[0]);
+  const ySplit = (im: Imprint) => youthOn && !!im.youth && !im.youth.same && !!(im.youth.size || "").trim();
+  /** the print as it prints on this garment: a youth shirt with its own youth screen takes the youth size */
+  const sizedOn = (im: Imprint, l?: Line): Imprint => (l && ySplit(im) && kidOf(l) ? { ...im, size: im.youth!.size!, sizeFrom: "staff" } : im);
+  const setYouth = (id: string, y: Imprint["youth"]) => setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, youth: y } : x)));
   useEffect(() => {
     const a = anchorLine; if (!a) return;
     for (const l of lines) {
@@ -1814,14 +1830,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const d = designOf(im);
     const r = ratioIm(im) || 0.6;
     const bd = on ? bodyFor(on) : body;
-    const wIn = printWidth(im, im.location, ratioIm(im), bd);
+    const wIn = printWidth(sizedOn(im, on || line), im.location, ratioIm(im), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const vv = view || viewsFor(im.location)[0];
     const b = basePlacement(im.location, wIn, r, drop, zScale(bd, on || line, vv), view, adjusted(fit === undefined ? fitFor(on || line, vv) : fit, settingsLine(on || line, vv), vv), bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
     // a hand drag lines the logo up on the shirt picture only (Oct 22, Nick: "locks in the close-up… then we just drag
     // to visually align it on the mockup… that shouldn't matter for our proofing"): close-ups and the print spec stay put
-    const og = offsets[im.id] || NO_OFF, ol = offsets[`${(on || line)?.id}:${im.id}`] || NO_OFF;
+    // a youth shirt with youth screens on: its own placement, never the adult's
+    const og = (youthOn && kidOf(on || line) ? offsets[`youth:${im.id}`] : offsets[im.id]) || NO_OFF, ol = offsets[`${(on || line)?.id}:${im.id}`] || NO_OFF;
     const cs = b.clip ? { x: 0, y: 0 } : centerShift(im);
     const o0 = { dx: og.dx + ol.dx, dy: og.dy + ol.dy }, o = { dx: o0.dx * b.k + cs.x * b.w, dy: o0.dy * b.k + (vCentered(im) ? cs.y * b.h : 0) };
     if (b.clip) {
@@ -1836,6 +1853,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
+  /** a print's youth size to start from: the biggest a youth shirt takes at that spot when the adult print is bigger
+   *  (10" front → 8"), else the same screen */
+  const youthMax = (im: Imprint) => { const kl = kidLines[0]; return kl ? maxWidthFor(im.location, ratioIm(im) || 0, bodyFor(kl)) : 0; };
+  const youthGuess = (im: Imprint): NonNullable<Imprint["youth"]> => {
+    const al = adultLines[0], max = youthMax(im);
+    if (!al || !max) return { same: true };
+    const adultW = printWidth(im, im.location, ratioIm(im) || 0, bodyFor(al));
+    return adultW <= max + 0.05 ? { same: true } : { size: `${Math.floor(max * 2) / 2}" wide` };
+  };
+  // each print with its logo and no youth answer yet gets the guess (you change it under the print)
+  const youthTodo = youthOn ? imprints.filter((im) => !im.youth && designOf(im)).map((im) => im.id).join(",") : "";
+  useEffect(() => {
+    if (!youthTodo) return;
+    setImprints((xs) => xs.map((x) => (!x.youth && youthTodo.split(",").includes(x.id) ? { ...x, youth: youthGuess(x) } : x)));
+  }, [youthTodo]); // eslint-disable-line react-hooks/exhaustive-deps
   /** a logo dragged on the photo (photo pixels) */
   const moveOn = (v: View, id: string, dx: number, dy: number) => {
     const im = imprints.find((x) => x.id === id);
@@ -1848,7 +1880,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (p) { dx /= p.k; dy /= p.k; }
     // the first color's drag moves the logo on every color; another color's drag is its own fine-tune on top
     // of that, kept for that color only (Oct 22, Nick: "go into each individual one… drag… it just stays there")
-    const key = !line || !anchorLine || line.id === anchorLine.id ? id : `${line.id}:${id}`;
+    const yAnchor = kidLines.find((x) => x.style && x.color && !isBag(x)), aAnchor = youthOn ? adultLines.find((x) => x.style && x.color && !isBag(x)) : anchorLine;
+    const key = youthOn && kidOf(line) ? (!line || !yAnchor || line.id === yAnchor.id ? `youth:${id}` : `${line.id}:${id}`)
+      : !line || !aAnchor || line.id === aAnchor.id ? id : `${line.id}:${id}`;
     setOffsets((o) => ({ ...o, [key]: { dx: (o[key]?.dx || 0) + dx, dy: (o[key]?.dy || 0) + dy } }));
   };
   /**
@@ -1955,7 +1989,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // one shirt-color picker: on the first close-up under the photos only (Oct 24, Nick: "we only need one… keep it on the first one on the bottom left")
   const closeUp = (im: Imprint, size: number, eye = false) => {
                 const d = designOf(im); const r = ratioIm(im) || 0.6;
-                const wIn = printWidth(im, im.location, ratioIm(im));
+                const wIn = printWidth(sizedOn(im, line), im.location, ratioIm(im));
                 const sp = spotFor(im.location);
                 // a badge with a tail: the circle in the middle of the close-up
                 const cs = sp.wrap ? { x: 0, y: 0 } : centerShift(im), ppi0 = PX_PER_IN * scale;
@@ -2890,6 +2924,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
     }
     if (mockupSaved) { g.mockupAt = new Date().toISOString(); delete g.mockupSkipped; }
+    if (youthSet !== undefined) g.youthSet = youthSet;
     g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
     // the hand moves on the shirt pictures, kept for the next time it's opened (only this group's prints)
     const ids = new Set(g.imprints.map((x) => x.id));
@@ -3761,6 +3796,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           <button type="button" className="btn sm ghost" onClick={() => setAskUploaded(false)}>Cancel</button>
         </div>
       )}
+          {/* youth and adult shirts: asked once (Oct 30, Nick: "make the adult screens… then you do a pop-up below and say,
+              okay, what's the youth size?") */}
+          {hasKids && youthSet === undefined && (
+            <div className="mk-ya-ask" role="status">
+              <b>Youth and adult shirts here. Separate youth screens?</b>
+              <span className="faint">Yes adds a Youth tab; you set each print&apos;s youth size under it as you go.</span>
+              <span className="spacer" />
+              <button type="button" className="btn sm" onClick={() => setYouthSet(false)}>No, same screens</button>
+              <button type="button" className="btn sm primary" onClick={() => setYouthSet(true)}>Yes</button>
+            </div>
+          )}
+          {youthOn && (
+            <div className="mk-ya" role="tablist" aria-label="Adult or youth shirts">
+              {([["Adult", adultLines], ["Youth", kidLines]] as const).map(([k, ls]) => {
+                const on = (k === "Youth") === onYouth;
+                return <button key={k} type="button" role="tab" aria-selected={on} className={on ? "on" : ""} onClick={() => setActive(lines.indexOf(ls[0]))}>
+                  {k}<span className="faint">{[...new Set(ls.map((l) => l.style).filter(Boolean))].join(", ")}</span></button>;
+              })}
+              <span className="spacer" />
+              <button type="button" className="linkbtn" title="The youth shirts print from the adult screens" onClick={() => setYouthSet(false)}>Same screens for youth</button>
+            </div>
+          )}
+          {hasKids && youthSet === false && <div className="faint mk-ya-off">Youth shirts print from the adult screens. <button type="button" className="linkbtn" onClick={() => setYouthSet(true)}>Give youth its own screens</button></div>}
           {lines.length > 1 && !!orderId && (
             <div className="chips" style={{ marginBottom: 10, width: "fit-content" }}>
               {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
@@ -4055,7 +4113,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               <button type="button" className={"btn sm" + (adjust ? " primary" : "")} onClick={() => setAdjust((x) => !x)}>{adjust ? "Done adjusting" : "Adjust visual size & placement"}</button>
             </div>
           ) : null; })()}
-          <section className={"panel" + (ready ? "" : " mk-off") + (imprints.some((im) => im.visualOnly && !im.confirmed) ? " mk-vis-lock" : "")} inert={!ready || imprints.some((im) => im.visualOnly && !im.confirmed) || undefined}>
+          {onYouth && (
+            <div className="mk-youth-msg" role="status">
+              <b>Set on the Adult tab.</b> Sizes, inks and colors come from there ({imprints.map((im) => `${im.location} ${ySplit(im) ? `${(im.youth!.size || "").replace(/\s*wide$/, "")} youth` : "same as adult"}`).join(" · ")}). Here you only drag where each print sits on the youth shirt.{" "}
+              <button type="button" className="linkbtn" onClick={() => setActive(lines.indexOf(adultLines[0]))}>Back to Adult to change them</button>
+            </div>
+          )}
+          <section className={"panel" + (ready ? "" : " mk-off") + (onYouth ? " mk-youth-lock" : "") + (imprints.some((im) => im.visualOnly && !im.confirmed) ? " mk-vis-lock" : "")} inert={!ready || onYouth || imprints.some((im) => im.visualOnly && !im.confirmed) || undefined}>
             <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button></div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
@@ -4202,6 +4266,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           );
                         })()}
                       </div>
+                      {youthOn && !onYouth && (() => {
+                        const y = im.youth || youthGuess(im), max = youthMax(im);
+                        const typed = ((y.size || "").match(/^([\d.]+)/) || [])[1] || "";
+                        const big = !y.same && +typed > max + 0.05;
+                        return (
+                          <div className="mk-youth">
+                            <span className="mk-youth-k">Youth size</span>
+                            <label className="mk-youth-in"><input type="text" inputMode="decimal" aria-label={`Youth width of the ${im.location} in inches`} disabled={!!y.same} placeholder={y.same ? "same" : ""} value={y.same ? "" : typed}
+                              onChange={(e) => { const t = e.target.value.replace(/[^\d.]/g, ""); setYouth(im.id, { size: t ? `${t}" wide` : "" }); }} /><span className="faint">in</span></label>
+                            <label className="mk-youth-same"><input type="checkbox" checked={!!y.same} onChange={(e) => setYouth(im.id, e.target.checked ? { same: true } : { size: `${Math.floor(Math.min(max || 99, place(im).wIn || max) * 2) / 2}" wide` })} />Same as adult</label>
+                            {big && <span className="mk-youth-warn">A youth shirt takes up to {Math.round(max * 100) / 100}&quot; here</span>}
+                          </div>
+                        );
+                      })()}
                       {/* "Center on the circle" isn't a checkbox any more (Oct 27, Nick): it's found and asked in a pop-up; once
                           it's on, a note says so with a way back */}
                       {designOf(im) && im.center?.on && im.center.d === im.design_id && (
