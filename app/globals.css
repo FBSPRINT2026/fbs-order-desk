@@ -16717,3 +16717,5 @@ html body .pv-info .pv-dates dd{overflow-wrap:break-word}
    line when there's room, the note drops under the title when there isn't */
 html body .panel-h{flex-wrap:wrap;row-gap:4px}
 html body .panel-h > h2{min-width:min(100%,14ch)}
+/* Create order's review: a linked logo's own small picture in the art tile */
+html body .eo-art.on:has(> .logo-thumb){background:#fff;padding:2px;overflow:hidden}

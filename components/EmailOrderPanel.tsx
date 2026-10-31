@@ -6,6 +6,9 @@ import { SUPPLIERS } from "@/lib/goods";
 import CarryNotes from "@/components/CarryNotes";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
+import LogoThumb from "@/components/LogoThumb";
+import { previewUrls } from "@/lib/designs";
+import type { Design } from "@/lib/pricing";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
@@ -39,6 +42,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
   const [when, setWhen] = useState<WhenDates | null | undefined>(undefined);
   const [data, setData] = useState<Loaded | null>(null);
   const [d, setD] = useState<EODraft | null>(null);
+  const logos = useLogoPics(d);
   const [busy, setBusy] = useState<"" | "read" | "create">(""), [err, setErr] = useState("");
   const [status, setStatus] = useState<"quote" | "approved">("quote");
 
@@ -406,7 +410,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
               const art = d.art[im.id] || "";
               return (
                 <div key={im.id} className="eo-print">
-                  {im.design_id ? <span className="eo-art on" title="Uses the design from the past job">Design</span>
+                  {im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on" title="Uses the design on file">Design</span>)
                     : art && urlOf(art) ? <Thumb className="eo-art" url={urlOf(art)} name={art} /> : <span className="eo-art">No art</span>}
                   <input list="eo-locs" aria-label="Location" value={im.location} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].location = e.target.value; })} />
                   <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -464,7 +468,28 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
 }
 
 /** The AI's order as a short summary to approve: what will be made when Create order is pressed. */
+/** the logos a reading linked to (a brand's logos, a past job's design) with their own small pictures, like everywhere
+ *  else (LogoThumb), never the word "Design" (Oct 31: MEI's cart orders showed "Design" on every print) */
+function useLogoPics(d: EODraft | null) {
+  const [logos, setLogos] = useState<Record<string, { d: Design; url: string }>>({});
+  const logoIds = [...new Set((d?.groups || []).flatMap((g) => g.imprints.map((im) => im.design_id || "")).filter(Boolean))].sort().join(",");
+  useEffect(() => {
+    if (!logoIds) return;
+    const want = logoIds.split(",").filter((id) => !logos[id]);
+    if (!want.length) return;
+    const sb = createClient();
+    void (async () => {
+      const { data } = await sb.from("designs").select("*").in("id", want);
+      const list = (data || []) as Design[];
+      const urls = await previewUrls(sb, list).catch(() => ({} as Record<string, string>));
+      setLogos((x) => ({ ...x, ...Object.fromEntries(list.map((g) => [g.id, { d: g, url: urls[g.id] || "" }])) }));
+    })();
+  }, [logoIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  return logos;
+}
+
 function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; files: EOFile[]; urlOf: (p: string) => string; custName: string; job: string; finishing: Fin[] }) {
+  const logos = useLogoPics(d);
   const docs = files.filter((f) => f.role === "sheet" || (f.role === "other" && !isPicture(f)));
   const mocks = [...new Set(Object.values(d.mockups).flat())].map((p) => files.find((f) => f.path === p)).filter(Boolean) as EOFile[];
   const sig = files.filter((f) => f.role === "signature");
@@ -481,7 +506,7 @@ function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; fil
             <dt>Prints</dt>
             <dd>{g.imprints.length ? g.imprints.map((im) => {
               const art = d.art[im.id] || "";
-              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <Thumb url={urlOf(art)} name={art} /> : im.design_id ? <span className="eo-art on">Design</span> : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
+              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <Thumb url={urlOf(art)} name={art} /> : im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on">Design</span>) : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
             }) : "None"}</dd>
             {(g.finishing || []).length > 0 && <><dt>Finishing</dt><dd>{(g.finishing || []).map((id) => finishing.find((f) => f.id === id)?.name || id).join(", ")}</dd></>}
           </Fragment>
