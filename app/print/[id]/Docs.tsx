@@ -6,7 +6,7 @@ import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, inkChangesText } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -410,6 +410,14 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
     : d.method === "dtf"
       ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
+  // youth screens: the press sees both sizes and their pieces (Oct 31, Nick picked the table, option C)
+  const grp = groups[gi];
+  if (grp && !d.visualOnly && youthSplit(grp, d)) {
+    const ysz = printSize({ ...d, size: d.youth?.size || "" }, des);
+    const pcs = (kid: boolean) => grp.lines.filter((l) => kidLine(l) === kid).reduce((a, l) => a + lineQty(l), 0);
+    const at = specs.findIndex(([k]) => k === "Print size" || k === "Size");
+    if (at >= 0) specs.splice(at, 1, [`Adult (${pcs(false)} pcs)`, sz.label || "—"], [`Youth (${pcs(true)} pcs)`, `${ysz.label || "—"}${d.method === "screen" ? " · own screen" : ""}`]);
+  }
   const inkRows = d.method === "dtf" ? [] : inks.length ? inks : Array.from({ length: d.colors >= FULL_COLOR ? 0 : Math.max(1, d.colors || 1) }, () => "");
   return (
     <Wrap half={half}>

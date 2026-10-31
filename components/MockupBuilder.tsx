@@ -3824,16 +3824,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {([["Adult", adultLines], ["Youth", kidLines]] as const).map(([k, ls]) => {
                 const on = (k === "Youth") === onYouth;
                 return <button key={k} type="button" role="tab" aria-selected={on} className={on ? "on" : ""} onClick={() => setActive(lines.indexOf(ls[0]))}>
-                  {k}<span className="faint">{[...new Set(ls.map((l) => l.style).filter(Boolean))].join(", ")}</span></button>;
+                  {k}<span className="faint">{[...new Set(ls.map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))].join(", ")}</span></button>;
               })}
               <span className="spacer" />
               <button type="button" className="linkbtn" title="The youth shirts print from the adult screens" onClick={() => setYouthSet(false)}>Same screens for youth</button>
             </div>
           )}
           {hasKids && youthSet === false && <div className="faint mk-ya-off">Youth shirts print from the adult screens. <button type="button" className="linkbtn" onClick={() => setYouthSet(true)}>Give youth its own screens</button></div>}
-          {lines.length > 1 && !!orderId && (
+          {/* with Adult / Youth tabs, a side's colors only when it has more than one (the tabs already pick the shirt) */}
+          {(youthOn ? (onYouth ? kidLines : adultLines) : lines).length > 1 && !!orderId && (
             <div className="chips" style={{ marginBottom: 10, width: "fit-content" }}>
-              {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
+              {lines.map((l, i) => (youthOn && kidOf(l) !== onYouth ? null : <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>))}
             </div>
           )}
           {!ready && <div className="confirm-bar" style={{ marginBottom: 8 }}><span>{notReady}</span></div>}

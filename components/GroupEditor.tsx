@@ -2,6 +2,7 @@
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
+import { kidLine } from "@/lib/pricing";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, SPECIALTY_ITEM, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, registerAreas, smallerSpot } from "@/lib/mockup";
@@ -583,13 +584,36 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // setup, and the pieces each side is priced at; a print the youth shirts share says so. Set in the Mockup Creator
   const youthCtl = (d: Group["imprints"][number]) => {
     if (!g.youthSet || !d.youth) return null;
-    const y = gc.imprints[g.imprints.indexOf(d)]?.youth;
+    const ic = gc.imprints[g.imprints.indexOf(d)], y = ic?.youth;
     if (!y) return <div className="pr-scr pr-youth-line"><span className="pr-scr-l">Youth</span><span className="pr-scr-v">Same {d.method === "screen" ? "screen" : "print"} as adult</span></div>;
-    const n = d.method === "screen" ? Math.min(+(y.screens || 0), 15) || 1 : 0;
+    // a little table, a row a side (Oct 31, Nick picked "C": "everything per side in one grid… easiest to check the math")
+    const cur = (designs || []).find((x) => x.id === d.design_id);
+    const wh = (sz: string) => {
+      const m = (sz || "").match(/^([\d.]+)\D*(wide|tall)?/i); if (!m) return "—";
+      const val = +m[1], given: "W" | "H" = /tall/i.test(m[2] || "") ? "H" : "W", other = cur ? designOther(cur, val, given, d.artRatio) : 0;
+      return given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`;
+    };
+    const styles = (kid: boolean) => [...new Set(g.lines.filter((l) => lineQty(l) > 0 && kidLine(l) === kid).map((l) => l.style).filter(Boolean))].join(", ");
+    const scr = d.method === "screen";
+    const an = scr ? screensFor(d, wpl, allLight).n : 0, yn = scr ? Math.min(+(y.screens || 0), 15) || 1 : 0;
+    const rows = [
+      { k: "Adult", st: styles(false), size: wh(d.size), pcs: y.adultQty, n: an, setup: ic.setup, each: ic.each, y: false },
+      { k: "Youth", st: styles(true), size: wh(y.size), pcs: y.qty, n: yn, setup: y.setup, each: y.each, y: true },
+    ];
     return (
-      <div className="pr-scr pr-youth-line"><span className="pr-scr-l">Youth</span>
-        <span className="pr-scr-v"><b>{(y.size || "").replace(/\s*wide$/, "")}</b> · {d.method === "screen" ? `its own ${n} screen${n === 1 ? "" : "s"}` : d.method === "embroidery" ? "its own file" : "its own size"}{!hidePrices && y.setup > 0 && <> · <b className="num">{money(y.setup)}</b></>}
-          <span className="faint"> · priced at {y.qty} youth{!hidePrices && <> ({money(y.each)})</>}, adult at {y.adultQty}</span></span>
+      <div className="yth-wrap">
+        <table className="tbl yth-tbl">
+          <thead><tr><th>{scr ? "Screens by size" : "By size"}</th><th>Size</th><th className="r">Pieces</th>{scr && <th className="r">Screens</th>}{!hidePrices && <><th className="r">Setup</th><th className="r">Each</th></>}</tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.k} className={r.y ? "y" : ""}>
+              <td>{r.k}{r.st && <span className="faint"> · {r.st}</span>}</td>
+              <td className="big">{r.size}</td>
+              <td className="r num">{r.pcs}</td>
+              {scr && <td className="r num">{r.n}</td>}
+              {!hidePrices && <><td className="r num">{money(r.setup)}</td><td className="r num">{money(r.each)}</td></>}
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     );
   };
