@@ -36,9 +36,18 @@ function label(t: HTMLTableElement) {
   if (!heads.length) return;
   const names: string[] = [];
   heads.forEach((h) => { const n = (h.innerText || h.getAttribute("aria-label") || "").trim(); for (let k = 0; k < (h as HTMLTableCellElement).colSpan; k++) names.push(n); });
+  // a cell spanning rows (a customer's name beside all of its jobs) takes its column in the rows under it too
+  let carry: number[] = [];
   t.querySelectorAll<HTMLTableRowElement>("tbody > tr").forEach((tr) => {
     let col = 0;
-    for (const c of [...tr.cells]) { if (!c.hasAttribute("data-label") || c.dataset.autolabel) { c.setAttribute("data-label", c.colSpan > 1 ? "" : names[col] || ""); c.dataset.autolabel = "1"; } col += c.colSpan; }
+    const next = carry.map((n) => Math.max(0, n - 1));
+    for (const c of [...tr.cells]) {
+      while ((carry[col] || 0) > 0) col++;
+      if (!c.hasAttribute("data-label") || c.dataset.autolabel) { c.setAttribute("data-label", c.colSpan > 1 ? "" : names[col] || ""); c.dataset.autolabel = "1"; }
+      if (c.rowSpan > 1) for (let k = 0; k < c.colSpan; k++) next[col + k] = c.rowSpan - 1;
+      col += c.colSpan;
+    }
+    carry = next;
   });
 }
 
