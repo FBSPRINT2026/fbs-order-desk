@@ -16900,3 +16900,9 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 .lgx-sw .lgx-chip{width:100%}
 .cws-split .pr-scr-v{white-space:normal}
 .cws-now .cws-swap + .cws-swap{margin-left:4px}
+/* Add logo · Saved mockup · Saved logo under the mockup (Oct 31): three tiles in a row; two by two with Edit mockup on a phone */
+.mk-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mk-tiles .mk-tile{padding:6px 2px}
+@media (max-width:760px){ html body .ord .imp-mock{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.mk-when .mk-no{color:var(--accent);font-weight:700;margin-right:6px}
+.ca-card .ca-m{color:var(--accent);font-size:14px;font-weight:700}

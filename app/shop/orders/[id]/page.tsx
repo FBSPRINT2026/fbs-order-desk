@@ -178,6 +178,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [discEdit, setDiscEdit] = useState(false); // typing the discount // the customer's address, email and notes shown
   // Customer artwork (Oct 24): which group is bringing in a mockup from another of the customer's orders
   const [custArt, setCustArt] = useState<number | null>(null);
+  // where Customer artwork opens: their saved mockups (Saved mockup) or their brands and logos (Saved logo)
+  const [custArtAt, setCustArtAt] = useState<"mockups" | "brands">("mockups");
   // the program pricing details: folded away until asked for (Oct 21, Nick: "by default mostly hidden… an arrow you click")
   const [progOpen, setProgOpen] = useSticky("order.programOpen", false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
@@ -1647,7 +1649,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 Resolution Center asks, Reorder Details confirms, the print row's stamp says what's waiting */}
           <datalist id="locs">{ALL_LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {custArt !== null && o.customer_id && o.groups[custArt] && (
-            <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} onClose={() => setCustArt(null)}
+            <CustomerArtwork customerId={o.customer_id} orderId={o.id} group={o.groups[custArt]} start={custArtAt} onClose={() => setCustArt(null)}
               onPick={async (p) => {
                 const gi = custArt, gid = o.groups[gi].id;
                 // a logo from their brand: the print goes on, the group's mockup (if any) stays as it is
@@ -1661,6 +1663,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 }
                 if (!p.helperFile || p.open) setGroup(gi, (x) => {
                   x.imprints = p.imprints; x.mockupOffsets = p.offsets; delete x.mockupSkipped;
+                  // the saved mockup it came from (M-1125): its number shows with the picture and on the colorway (M-1125-B)
+                  if (p.mockup) x.fromMockup = p.mockup;
                   if (p.thumbs) { x.mockupThumbs = p.thumbs; x.mockupAt = new Date().toISOString(); } else { delete x.mockupThumbs; delete x.mockupAt; } delete x.mockupArt; // the picture brought in is kept as it is (lib/mockupFresh.ts)
                 });
                 setCustArt(null);
@@ -1676,7 +1680,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           )}
           {o.groups.map((g, gi) => (
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              onCustomerArt={o.customer_id ? () => setCustArt(gi) : undefined}
+              onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}

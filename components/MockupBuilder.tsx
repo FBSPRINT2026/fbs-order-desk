@@ -16,7 +16,7 @@ import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
-import { cwLetter } from "@/lib/brands";
+import { colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
@@ -34,7 +34,7 @@ import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pdfPic
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
-import { PREVIEWABLE_TYPES, KID_SIZES } from "@/lib/pricing";
+import { PREVIEWABLE_TYPES, KID_SIZES, type GLine } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
@@ -1836,6 +1836,43 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (Object.keys(sizes).length || Object.keys(hits).length)
       setImprints((xs) => xs.map((x) => (sizes[x.id] || hits[x.id] ? { ...x, ...(sizes[x.id] ? { size: sizes[x.id], sizeFrom: "brand" as const } : {}), ...(hits[x.id] || {}) } : x)));
   }, [imprints, designs, brandPrint, trims]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a logo put on a print brings its own setup: its colorway for these goods, and for embroidery its sew file, threads,
+  // stitches and size (lib/brands.ts withLogoSetup; Oct 31, Nick: "when you bring in a master logo… it should pull in all
+  // that details"). A print as it came from the order only gets what it's missing (a sew file it doesn't have yet)
+  const [logoBrands, setLogoBrands] = useState<LogoBrand[]>([]);
+  useEffect(() => {
+    if (!customerId || portal) return;
+    let on = true;
+    void sb.from("brands").select("*").eq("customer_id", customerId).then(({ data }) => { if (on) setLogoBrands((data || []) as LogoBrand[]); });
+    return () => { on = false; };
+  }, [customerId, portal]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a logo just put on a print that's set up (colorways, sew files) asks once, shortly (Oct 31, Nick: "hey, you're
+  // bringing this in, do I bring it in with everything I have… or are you trying to do something different with it?")
+  const [setupAsk, setSetupAsk] = useState<{ id: string; d: Design; as: Imprint }[]>([]);
+  const logoBrandOf = (d: Design) => logoBrands.find((b) => b.id === (d as Design & { brand_id?: string | null }).brand_id) || null;
+  useEffect(() => {
+    if (viewId || portal || !designs.length) return;
+    let changed = false;
+    const ask: { id: string; d: Design; as: Imprint }[] = [];
+    const next = imprints.map((im) => {
+      const d = designOf(im);
+      if (!d || im.setupFrom === d.id) return im;
+      const was = loadedIms.current[im.id], fresh = !was || was.design_id !== im.design_id;
+      const y = withLogoSetup(im, d, lines as unknown as GLine[], logoBrandOf(d), fresh);
+      if (fresh && (colorwaysOf(d).length || sewFilesOf(d).length) && y !== im) { if (!setupAsk.some((a) => a.id === im.id && a.d.id === d.id)) ask.push({ id: im.id, d, as: y }); return im; }
+      if (y !== im) changed = true;
+      return y;
+    });
+    if (changed) setImprints(next);
+    if (ask.length) setSetupAsk((a) => [...a.filter((x) => !ask.some((y) => y.id === x.id)), ...ask]);
+  }, [imprints, designs, logoBrands]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** yes: the print as the logo is set up; no: just the logo (asked once: it's marked as taken either way) */
+  const answerSetup = (all: boolean) => {
+    const a = setupAsk;
+    setImprints((xs) => xs.map((x) => { const y = a.find((z) => z.id === x.id && z.d.id === x.design_id); return y ? (all ? y.as : { ...x, setupFrom: y.d.id }) : x; }));
+    setSetupAsk([]);
+  };
 
   /** another logo on a print: the old logo's inks and color count go with it (Oct 22, Nick, #40106: swapped to the
    *  1-color black logo, the print kept "2 colors · Electric Blue, Black, 3 screens"); the new one's are read fresh */
@@ -3640,6 +3677,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       </div>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
+      {setupAsk.length > 0 && !sizeAskB?.length && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Bring the logo in as it's set up">
+          <div className="dla" style={{ maxWidth: 520 }}>
+            <h3>{setupAsk.length === 1 ? `${designLabel(setupAsk[0].d)} is set up` : "These logos are set up"}</h3>
+            <p className="dla-sub">Bring {setupAsk.length === 1 ? "it" : "them"} in with everything set, just on these garments?</p>
+            <ul className="mk-ba-list">{setupAsk.map((a) => (
+              <li key={a.id}><b>{a.as.location}</b>: {[a.as.colorway ? `colorway ${cwLetter(a.d, { name: a.as.colorway })} ${a.as.colorway}` : "", a.as.emb?.file?.name || "", a.as.inks, a.as.method === "embroidery" && a.as.stitches ? `${a.as.stitches.toLocaleString()} stitches` : "", a.as.size].filter(Boolean).join(" · ")}</li>
+            ))}</ul>
+            <div className="dla-acts">
+              <button type="button" className="btn" onClick={() => answerSetup(false)}>Just the logo</button>
+              <button type="button" className="btn primary" autoFocus onClick={() => answerSetup(true)}>Yes, as it&apos;s set</button>
+            </div>
+          </div>
+        </div>
+      )}
       {sizeAskB && sizeAskB.length > 0 && (() => {
         const who = custLabel(customers.find((c) => c.id === customerId)) || "this customer";
         const stds = (brandPrint?.sizes || []).filter((r) => r.width > 0 && imprints.some((im) => im.location === r.location));

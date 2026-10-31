@@ -153,6 +153,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** the version of the logo this print is (one of its colorways by name: "Maroon / Off White"), picked with Swap on the
    *  order (Oct 31, Nick: "M-1240-A, -B, -C, -D… I can use A, B, C, or D, depending on what the order calls for"). Its
    *  inks or threads, sew file and picture come from that colorway (lib/brands.ts applyColorway) */ colorway?: string;
+  /** the logo whose own setup (colorway, sew file, threads, stitches) the print took when the logo was put on it
+   *  (lib/brands.ts withLogoSetup), so it's taken once and what's set by hand after stays */ setupFrom?: string;
   /** a colorway change: by garment color (lowercase), the colorway it gets instead of the print's own. inkBy holds the
    *  same change as inks, so it works like a color change everywhere (lib/brands.ts applyColorwayChange) */ colorwayBy?: Record<string, string>;
   /** embroidery: a digitizing fee set by hand for a complex logo (overrides the base + stitches fee; digitizingFee) */ digitizeFee?: number;

@@ -8,7 +8,7 @@ import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
 import MockupBg from "@/components/MockupBg";
-import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway } from "@/lib/brands";
+import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway, withLogoSetup } from "@/lib/brands";
 import ColorwayChange from "@/components/ColorwayChange";
 import { hasColorwayArt, printArtUrl } from "@/lib/designs";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -83,7 +83,8 @@ type Props = {
   /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
   /** the customer's builder: Tag Print with no tag on file uploads their tag art (shown from thumbUrls) */ onUploadTag?: (f: File) => Promise<{ path: string; name: string } | null>;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
-  /** "Customer artwork": bring a mockup from another of their orders (or a logo) onto this group (Oct 24) */ onCustomerArt?: () => void;
+  /** their saved mockups ("mockups": Saved mockup) or their brands and logos ("brands": Saved logo) onto this group
+   *  (components/CustomerArtwork.tsx; Oct 24, Oct 31) */ onCustomerArt?: (start: "mockups" | "brands") => void;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
    *  the imprints blown up… you shouldn't be able to change anything at that point"): the prints read only like a group with
    *  a mockup, the garments and colors fixed; only the sizes are theirs to fill in */ fixed?: boolean;
@@ -155,6 +156,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const [ccAt, setCcAt] = useState<number | null>(null);
   const [lcAt, setLcAt] = useState<number | null>(null);
   const [cwcAt, setCwcAt] = useState<number | null>(null);
+  // the group's saved mockup's number (M-1125), so it can be picked on the next order (Oct 31, Nick: "I can't see the number")
+  const [mkNo, setMkNo] = useState<number | null>(null);
+  useEffect(() => {
+    if (!orderId || !g.mockupAt) { setMkNo(g.masterMockup || g.fromMockup?.number || null); return; }
+    let on = true;
+    void createClient().from("mockups").select("number").eq("order_id", orderId).eq("group_id", g.id).is("archived_at", null).not("number", "is", null).limit(1)
+      .then(({ data }) => { if (on) setMkNo((data?.[0] as { number?: number } | undefined)?.number || g.masterMockup || g.fromMockup?.number || null); });
+    return () => { on = false; };
+  }, [orderId, g.id, g.mockupAt]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * "+ Add youth" (Oct 21, Nick: "1717… the corresponding youth is the 9018… Gildan 5000 → 5000B… if you don't know,
    * ask me and I can key it in and you can remember it"): the adult garment's youth style goes on a new line in the
@@ -1094,15 +1104,20 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               {onLogo && <button className="mk-tile" type="button" title="The logo, its size, spot and thread on close-ups only: no garment pictures (backpacks, odd garments, many styles)" onClick={() => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onLogo(); }}>
                 <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h11M4 5v14h16v-7M8.5 15.5l3-3 2.5 2.5 2-2 3 3M18 3v6M15 6h6" /></svg>
                 <span>Add logo</span></button>}
-              {onCustomerArt && <button className="mk-tile" type="button" onClick={onCustomerArt} title="Their brands and logos (each department's files), or a mockup from another of their orders">
+              {/* Saved mockup and Saved logo (Oct 31, Nick: "add a pre-existing mock-up, add a pre-existing logo… just like
+                  All My Sons… select that M-1101 on every order"): the customer's mockups by M-number, or their logos */}
+              {onCustomerArt && <button className="mk-tile" type="button" onClick={() => onCustomerArt("mockups")} title="One of their saved mockups (M-number): its logos, spots, sizes, threads and colorways come onto this group">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>
+                <span>Saved mockup</span></button>}
+              {onCustomerArt && <button className="mk-tile" type="button" onClick={() => onCustomerArt("brands")} title="One of their saved logos (by brand), set up as it is: colorways, threads, sew files">
                 <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7.5V18a1 1 0 0 0 1 1h13M6 5h4l2 2h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" /></svg>
-                <span>Customer artwork</span></button>}
+                <span>Saved logo</span></button>}
             </div>
           )}
           {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup and its prints off the order (the mockup is archived, not deleted) and start this group fresh"
             onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup and its prints?" : "Remove mockup"}</button>}
           {mockupExtra}
-          {g.mockupAt && !mockupExtra && <span className="faint mk-when">Saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
+          {g.mockupAt && !mockupExtra && <span className="faint mk-when">{mkNo ? <b className="mk-no">M-{mkNo}</b> : null}Saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
           {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
         </div>
         <div className="imprints">
@@ -1240,6 +1255,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                           // bring the design's ink info along when the imprint doesn't have any yet
                           if (des && !im.inks.trim() && des.inks) im.inks = des.inks;
                           if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
+                          // the logo's own setup: its colorway, sew file, threads, stitches (lib/brands.ts withLogoSetup)
+                          if (des) x.imprints[di] = withLogoSetup(im, des, x.lines);
                         })}
                         onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />}
                       {gc.wholesale && d.method === "embroidery" && settings.wholesale.embPer1k ? (

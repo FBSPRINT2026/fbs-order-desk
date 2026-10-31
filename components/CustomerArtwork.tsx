@@ -3,7 +3,8 @@ import LogoThumb from "@/components/LogoThumb";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, LOCATIONS, newImprint, uid, type Group, type Imprint } from "@/lib/pricing";
-import type { Brand } from "@/lib/brands";
+import { applyColorwayChange, printColorway, type Brand } from "@/lib/brands";
+import { guessHex } from "@/lib/mockup";
 import BrandArtwork from "@/components/BrandArtwork";
 
 /**
@@ -14,12 +15,13 @@ import BrandArtwork from "@/components/BrandArtwork";
  * either used as it is (the same garments) or made again on this group's garments in the Mockup Creator.
  */
 type Snap = { lines?: { brand?: string; style?: string; color?: string }[]; imprints?: Imprint[]; mockupThumbs?: string[] };
-type Row = { id: string; order_id: string | null; group_id: string | null; title: string; file_path: string; snapshot: Snap | null; created_at: string; design_ids: string[] | null; customer_id: string };
-type Save = { key: string; rows: Row[]; snap: Snap; order?: { id: string; number: number; nickname: string; offsets?: Record<string, { dx: number; dy: number }> }; when: string };
+type Row = { id: string; order_id: string | null; group_id: string | null; title: string; file_path: string; snapshot: Snap | null; created_at: string; design_ids: string[] | null; customer_id: string; number: number | null };
+type Save = { key: string; rows: Row[]; snap: Snap; /** its M-number (M-1125) */ num: number | null; order?: { id: string; number: number; nickname: string; offsets?: Record<string, { dx: number; dy: number }> }; when: string };
 export type ArtPick = { imprints: Imprint[]; offsets: Record<string, { dx: number; dy: number }>; thumbs: string[] | null; remake: boolean; label: string;
   /** an old job's mockup PDF to open in the Mockup Creator's Helper (storage path) */ helperFile?: string;
   /** open the Mockup Creator on the group after (to place art brought in) */ open?: boolean;
-  /** a print added from a brand: the group's mockup stays as it is (no mockup needed, Oct 27) */ keepMockup?: boolean };
+  /** a print added from a brand: the group's mockup stays as it is (no mockup needed, Oct 27) */ keepMockup?: boolean;
+  /** the saved mockup it came from (Group.fromMockup: M-1125) */ mockup?: { id: string; number: number | null } };
 type Job = { ref: string; label: string; date: string };
 type JobFile = { name: string; path: string; url: string; pdf: boolean };
 
@@ -27,13 +29,14 @@ const thumbOf = (p: string) => p.replace(/(\.[a-z]+)$/i, "-thumb.png");
 const garments = (s?: Snap) => [...new Set((s?.lines || []).map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))];
 const gkey = (style?: string, color?: string) => `${String(style || "").trim().toLowerCase()}|${String(color || "").trim().toLowerCase()}`;
 
-export default function CustomerArtwork({ customerId, orderId, group, onClose, onPick }: { customerId: string; orderId: string; group: Group; onClose: () => void; onPick: (p: ArtPick) => Promise<void> | void }) {
+export default function CustomerArtwork({ customerId, orderId, group, onClose, onPick, start = "brands" }: { customerId: string; orderId: string; group: Group; onClose: () => void; onPick: (p: ArtPick) => Promise<void> | void;
+  /** where it opens (Oct 31, Nick: "add a pre-existing mock-up, add a pre-existing logo"): their saved mockups, or their brands and logos */ start?: "mockups" | "brands" }) {
   const sb = useMemo(() => createClient(), []);
   // their brands first when they have them (Oct 27, Nick: Cedar Promos' MEI, ShipStation…; "customer artwork… it's going
   // to be more complicated for some people than others. But I also don't want to have to design this for every client")
   const [brands, setBrands] = useState<Brand[] | null>(null);
   // the brands (or their logos) first, then a brand's logos; mockups and old jobs are a card there (Oct 27, option 3)
-  const [tab, setTab] = useState<"brands" | "mockups" | "logos">("brands");
+  const [tab, setTab] = useState<"brands" | "mockups" | "logos">(start);
   const [q, setQ] = useState("");
   const [saves, setSaves] = useState<Save[] | null>(null);
   const [logos, setLogos] = useState<{ id: string; number: number; name: string; preview_path: string | null }[] | null>(null);
@@ -153,17 +156,18 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   useEffect(() => {
     let live = true;
     void (async () => {
-      const { data } = await sb.from("mockups").select("id, order_id, group_id, title, file_path, snapshot, created_at, design_ids, customer_id").eq("customer_id", customerId).is("archived_at", null).order("created_at", { ascending: false }).limit(300);
+      const { data } = await sb.from("mockups").select("id, order_id, group_id, title, file_path, snapshot, created_at, design_ids, customer_id, number").eq("customer_id", customerId).is("archived_at", null).order("created_at", { ascending: false }).limit(300);
       const rows = ((data || []) as Row[]).filter((r) => !(r.order_id === orderId && r.group_id === group.id));
       // one card per save: the mockups of one group (a picture per garment color) together
       const by = new Map<string, Row[]>();
-      for (const r of rows) { const k = r.order_id && r.group_id ? `${r.order_id}:${r.group_id}` : r.id; by.set(k, [...(by.get(k) || []), r]); }
+      // (a mockup's number is the save: M-1125's pictures stay one card even after its order is gone)
+      for (const r of rows) { const k = r.number ? `M${r.number}` : r.order_id && r.group_id ? `${r.order_id}:${r.group_id}` : r.id; by.set(k, [...(by.get(k) || []), r]); }
       const oids = [...new Set(rows.map((r) => r.order_id).filter(Boolean) as string[])];
       const { data: os } = oids.length ? await sb.from("orders").select("id, number, nickname, groups").in("id", oids) : { data: [] };
       const list: Save[] = [...by.entries()].map(([key, rs]) => {
         const r0 = rs[0], o = (os || []).find((x) => x.id === r0.order_id) as { id: string; number: number; nickname: string; groups: Group[] } | undefined;
         const g = o?.groups?.find((x) => x.id === r0.group_id);
-        return { key, rows: rs, snap: r0.snapshot || {}, when: r0.created_at, ...(o ? { order: { id: o.id, number: o.number, nickname: o.nickname || "", offsets: g?.mockupOffsets } } : {}) };
+        return { key, rows: rs, snap: r0.snapshot || {}, num: r0.number ?? null, when: r0.created_at, ...(o ? { order: { id: o.id, number: o.number, nickname: o.nickname || "", offsets: g?.mockupOffsets } } : {}) };
       }).filter((s) => (s.snap.imprints || []).some((im) => im.design_id));
       if (!live) return;
       setSaves(list);
@@ -182,7 +186,9 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   }, [sb, customerId, orderId, group.id]);
 
   const t = q.trim().toLowerCase();
-  const shown = (saves || []).filter((s) => !t || [s.order?.nickname, s.order?.number, s.rows[0].title, ...garments(s.snap)].join(" ").toLowerCase().includes(t));
+  // found by its M-number too ("1125", "M-1125")
+  const tn = t.replace(/^m-?/, "");
+  const shown = (saves || []).filter((s) => !t || (!!s.num && /^\d+$/.test(tn) && String(s.num).startsWith(tn)) || [s.num ? `m-${s.num}` : "", s.order?.nickname, s.order?.number, s.rows[0].title, ...garments(s.snap)].join(" ").toLowerCase().includes(t));
   const shownLogos = (logos || []).filter((d) => !t || `${d.number} ${d.name}`.toLowerCase().includes(t));
   const here = new Set(group.lines.filter((l) => (l.style || "").trim()).map((l) => gkey(l.style, l.color)));
   const diff = (s: Save) => { const there = new Set((s.snap.lines || []).map((l) => gkey(l.style, l.color))); return here.size > 0 && [...here].some((k) => !there.has(k)); };
@@ -198,6 +204,29 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
         const { confirmed: _c, confirm: _f, ...rest } = im as Imprint & { confirmed?: unknown; confirm?: unknown };
         return { ...(JSON.parse(JSON.stringify(rest)) as Imprint), id };
       });
+      // a colorway split goes by garment color (Oct 31): each of this group's colors takes the colorway the mockup's same
+      // color had, else its nearest color's (Grey Steel takes what Charcoal Gray had)
+      const splits = imps.filter((im) => im.design_id && Object.keys(im.colorwayBy || {}).length);
+      if (splits.length) {
+        const { data: ds } = await sb.from("designs").select("id, specs").in("id", [...new Set(splits.map((x) => x.design_id!))]);
+        const ck = (c: string) => (c || "").trim().toLowerCase();
+        const theirs = [...new Set((s.snap.lines || []).map((l) => (l.color || "").trim()).filter(Boolean))];
+        const mine = [...new Set(group.lines.map((l) => (l.color || "").trim()).filter(Boolean))];
+        const rgb = (h: string) => { const v = parseInt((h || "#9aa1ab").replace("#", "").slice(0, 6), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+        const dist = (a: string, b: string) => { const x = rgb(guessHex(a) || "#9aa1ab"), y = rgb(guessHex(b) || "#9aa1ab"); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+        for (let k = 0; k < imps.length; k++) {
+          const im = imps[k], d = (ds || []).find((x) => x.id === im.design_id) as { id: string; specs: Record<string, unknown> } | undefined;
+          if (!d || !Object.keys(im.colorwayBy || {}).length) continue;
+          const base = printColorway(im, d)?.name || "";
+          const on = (c: string) => Object.entries(im.colorwayBy || {}).find(([x]) => ck(x) === ck(c))?.[1] || base;
+          const by: Record<string, string> = {};
+          for (const c of mine) {
+            const near = theirs.find((x) => ck(x) === ck(c)) || [...theirs].sort((a, b) => dist(a, c) - dist(b, c))[0];
+            by[c] = near ? on(near) : base;
+          }
+          imps[k] = applyColorwayChange({ ...im, colorwayBy: undefined, inkBy: undefined }, d, by);
+        }
+      }
       const offsets: Record<string, { dx: number; dy: number }> = {};
       for (const [k, v] of Object.entries(s.order?.offsets || {})) { const n = ids.get(k); if (n) offsets[n] = v; }
       let thumbs: string[] | null = null;
@@ -208,7 +237,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
         for (const r of [...s.rows].reverse()) await sb.from("mockups").insert({ customer_id: r.customer_id, order_id: orderId, group_id: group.id, proof_id: null, title: r.title, file_path: r.file_path, design_ids: r.design_ids || [], created_by: u.user?.email || "", snapshot: { ...(r.snapshot || {}), imprints: imps } });
         thumbs = (s.snap.mockupThumbs || []).length ? s.snap.mockupThumbs! : s.rows.map((r) => thumbOf(r.file_path));
       }
-      await onPick({ imprints: imps, offsets, thumbs, remake, label: s.order ? `#${s.order.number}${s.order.nickname ? ` ${s.order.nickname}` : ""}` : s.rows[0].title });
+      await onPick({ imprints: imps, offsets, thumbs, remake, label: s.num ? `M-${s.num}` : s.order ? `#${s.order.number}${s.order.nickname ? ` ${s.order.nickname}` : ""}` : s.rows[0].title, mockup: { id: s.rows[0].id, number: s.num } });
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't bring it in."); setBusy(false); }
   }
   async function useLogo() {
@@ -221,10 +250,10 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   return (
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Customer artwork" onClick={onClose}>
       <div className="dla ca" onClick={(e) => e.stopPropagation()}>
-        <div className="ca-h"><h3>Customer artwork</h3><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>×</button></div>
+        <div className="ca-h"><h3>{tab === "mockups" ? "Saved mockup" : "Saved logo"}</h3><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>×</button></div>
         {tab === "brands" ? <p className="dla-sub">{brands?.length ? "Pick the brand, then the logo: its size and colors come from the brand's rules." : "Pick a logo, or bring in a mockup or an old job's files."}</p> : (
-          <div className="ba-crumb"><button type="button" className="linkbtn" onClick={() => { setTab("brands"); setPick(null); setLogo(null); }}>← All artwork</button><b>Mockups and old jobs</b>
-            <input type="search" className="ca-q" placeholder="Find: name or order #" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find their mockups" /></div>
+          <div className="ba-crumb"><button type="button" className="linkbtn" onClick={() => { setTab("brands"); setPick(null); setLogo(null); }}>← Their logos</button><b>Mockups and old jobs</b>
+            <input type="search" className="ca-q" placeholder="M-number, order # or name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find their mockups" /></div>
         )}
         {tab === "brands" ? (brands === null ? <p className="faint">Loading their brands…</p> : (
           <BrandArtwork customerId={customerId} group={group} brands={brands} onMockups={() => { setTab("mockups"); setLogo(null); }}
@@ -234,7 +263,8 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
             {shown.slice(0, 60).map((s) => (
               <button key={s.key} type="button" className={"ca-card" + (pick?.key === s.key ? " on" : "")} onClick={() => setPick(s)}>
                 <span className="ca-pic">{pics[thumbOf(s.rows[0].file_path)] ? <img src={pics[thumbOf(s.rows[0].file_path)]} alt="" /> : null}</span>
-                <b>{s.order?.nickname || s.rows[0].title.replace(/^.*? — /, "")}</b>
+                {s.num ? <span className="ca-m">M-{s.num}</span> : null}
+                <b>{s.rows[0].title.replace(/ — .*$/, "") || s.order?.nickname || "Mockup"}</b>
                 <span className="faint">{s.order ? `#${s.order.number} · ` : ""}{garments(s.snap).slice(0, 2).join(", ")}</span>
               </button>
             ))}
@@ -315,12 +345,12 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
         )}
         {pick && tab === "mockups" && (
           <div className="ca-use">
-            <b>Bring in {pick.order?.nickname || "this mockup"}{pick.order ? ` from #${pick.order.number}` : ""}</b>
+            <b>Bring in {pick.num ? `M-${pick.num}` : pick.order?.nickname || "this mockup"}{pick.order ? ` from #${pick.order.number}` : ""}</b>
             <span className="faint">{prints(pick).join("  |  ") || "Its prints"}. They replace this group&apos;s prints.</span>
             {diff(pick) && <span className="ca-warn">That mockup is on {garments(pick.snap).join(", ") || "other garments"}. This group has {[...new Set(group.lines.filter((l) => (l.style || "").trim()).map((l) => [l.style, l.color].filter(Boolean).join(" ")))].join(", ")}.</span>}
             {err && <span className="err">{err}</span>}
             <div className="cba-acts">
-              <button type="button" className={"btn" + (diff(pick) ? "" : " primary")} disabled={busy} onClick={() => void useSave(pick, false)}>Use the picture as it is</button>
+              <button type="button" className={"btn" + (diff(pick) ? "" : " primary")} disabled={busy} onClick={() => void useSave(pick, false)}>{pick.num ? `Use M-${pick.num} as it is` : "Use the picture as it is"}</button>
               <button type="button" className={"btn" + (diff(pick) ? " primary" : "")} disabled={busy} onClick={() => void useSave(pick, true)}>{busy ? "Bringing it in…" : "Remake on this order's garments"}</button>
             </div>
           </div>

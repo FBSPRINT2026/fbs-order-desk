@@ -1,5 +1,5 @@
 import type { DigitizedSet } from "@/lib/digitizedFiles";
-import { garmentHex, guessHex } from "@/lib/mockup";
+import { garmentHex, guessHex, mainLine } from "@/lib/mockup";
 import { needleThreads, sheetThread } from "@/lib/needleThreads";
 import { colorHex } from "@/lib/inkColors";
 import { threadByName } from "@/lib/embroidery";
@@ -303,6 +303,42 @@ export function printOnColor(im: Imprint, d: Pick<Design, "specs"> | null | unde
   const base: Imprint = { ...im };
   delete base.colorwayBy; delete base.inkBy;
   return applyColorway(base, d, cw);
+}
+/**
+ * A logo put on a print brings what the logo already knows (Oct 31, Nick: "when you bring in a master logo that's been
+ * established with the thread, has digitizing… and you add it to the mock-up, it should pull in all that details…
+ * colorways and thread choices… or just do it automatically"): its colorway for these goods (the one the print already
+ * is, else the brand's rule for light or dark goods, else its first), and for embroidery the sew file that colorway
+ * sews (else the one that fits the goods and size) with its threads, stitches and size. Taken once per logo
+ * (Imprint.setupFrom), so nothing set by hand afterwards is changed.
+ * `fresh`: the logo was just put on the print (it all comes); otherwise (a print from before) only what's missing (a sew
+ * file it doesn't have) is filled in, and its size and threads stay.
+ */
+export function withLogoSetup(im: Imprint, d: Pick<Design, "id" | "specs"> | null | undefined, lines: GLine[], brand?: Brand | null, fresh = true): Imprint {
+  if (!d || im.design_id !== d.id || im.setupFrom === d.id || im.supplied || im.visualOnly) return im;
+  const x: Imprint = { ...im, setupFrom: d.id };
+  const cws = colorwaysOf(d);
+  const goods = lines.filter((l) => (l.color || "").trim());
+  const main = mainLine(goods.length ? goods : lines);
+  const cw = printColorway(x, d) || (fresh && cws.length ? colorwayFor(d, brand, main ? isDarkGarment(main) : false) : null);
+  if (im.method === "embroidery") {
+    const files = sewFilesOf(d, brand), linked = cw ? colorwaySew(d, cw, brand) : null;
+    if (fresh && cw && linked) return applyColorway(x, d, cw);
+    if (!files.length || (x.emb?.file?.path && files.some((f) => f.path === x.emb!.file!.path))) { if (cw && !x.colorway && fresh) x.colorway = cw.name; return x; }
+    const w = /(\d+(?:\.\d+)?)/.exec(x.size || "");
+    const f = linked || pickSewFile(files, sewKindOf(lines), w ? +w[1] : undefined);
+    if (!f) return x;
+    x.emb = { ...(x.emb || {}), file: f, stitchesFrom: "file" };
+    if (f.stitches) x.stitches = f.stitches;
+    x.digitized = true;
+    const th = sewThreads(f);
+    if (th.length && (fresh || !(x.inks || "").trim())) { x.inks = th.join(", "); x.colors = th.length; }
+    if (fresh && f.wIn && f.hIn) { x.size = `${f.wIn}" × ${f.hIn}"`; x.artRatio = Math.round((f.hIn / f.wIn) * 1000) / 1000; }
+    if (cw && linked && !x.colorway) x.colorway = cw.name;
+    return x;
+  }
+  if (fresh && cw && im.method === "screen") return applyColorway(x, d, cw);
+  return x;
 }
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
