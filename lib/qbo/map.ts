@@ -300,7 +300,9 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
       const desc = [(g.name?.trim() ? `${g.name.trim()}: ` : "") + title, sizes, ...extra].filter(Boolean).join("\n");
       add(title, desc, key, lc!.qty, lc!.each, lc!.sub);
       // its personalizations, each its own line (they're in the group's total, not the line's price)
-      const its = (gc?.persItems || []).filter((p) => p.lineId === l.id);
+      const all = (gc?.persItems || []).filter((p) => p.lineId === l.id), its = all.filter((p) => !p.label);
+      // names & numbers: "Names" and "Number digits", each its own line
+      for (const x of all.filter((p) => p.label)) add(x.label!, `${x.label}: ${x.text}`, key, x.qty, x.unit, x.amount);
       // a long name list is one line (the names are in the order's Production files)
       if (its.length > PERS_SHOW && its.every((x) => x.unit === its[0].unit)) { const q = its.reduce((a, x) => a + x.qty, 0); add("Personalization", `Personalization: ${q} names`, key, q, its[0].unit, r2(q * its[0].unit)); }
       else for (const x of its) add("Personalization", `Personalization: ${x.text}${x.size ? ` (${sizeLabel(x.size)})` : ""}`, key, x.qty, x.unit, x.amount);

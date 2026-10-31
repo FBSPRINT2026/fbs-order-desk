@@ -847,9 +847,11 @@ export function InvoiceDoc(p: DocData) {
                   {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
                   {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
                   {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
-                  {(() => { const its = (gc.persItems || []).filter((x) => x.lineId === l.id); if (!its.length) return null;
-                    if (its.length > PERS_SHOW) { const q = its.reduce((a, x) => a + x.qty, 0), amt = its.reduce((a, x) => a + x.amount, 0); return <div className="iv2-note"><b>Personalization:</b> {q} names · {money(its[0].unit)} each = {money(amt)}</div>; }
-                    return its.map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>); })()}
+                  {(() => { const all = (gc.persItems || []).filter((x) => x.lineId === l.id), its = all.filter((x) => !x.label), own = all.filter((x) => x.label); if (!all.length) return null;
+                    // names & numbers (their own labels), then the personalizations
+                    const ownRows = own.map((x, k) => <div key={`o${k}`} className="iv2-note"><b>{x.label}:</b> {x.text} · {money(x.unit)} each = {money(x.amount)}</div>);
+                    if (its.length > PERS_SHOW) { const q = its.reduce((a, x) => a + x.qty, 0), amt = its.reduce((a, x) => a + x.amount, 0); return <>{ownRows}<div className="iv2-note"><b>Personalization:</b> {q} names · {money(its[0].unit)} each = {money(amt)}</div></>; }
+                    return <>{ownRows}{its.map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>)}</>; })()}
                   <div className="iv2-det">
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
                     {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}

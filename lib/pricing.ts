@@ -448,6 +448,25 @@ export function brandHitFor(bp: BrandPrint | null | undefined, distressed: boole
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
 export const puffEach = (pl: Pick<PriceList, "puffPrice">) => (pl.puffPrice == null || isNaN(+pl.puffPrice) ? PUFF_PRICE : +pl.puffPrice);
+/**
+ * Names & numbers (Imprint.roster), charged by what each shirt gets (Oct 31, Nick: "the standard price $2 for the name
+ * and then $3 per digit… a name back only will be add $2… a name plus the number 83… 3 times 2, 6, plus the name, 8").
+ * The price list can set its own (PriceList.rosterName / rosterDigit).
+ */
+export const ROSTER_NAME = 2, ROSTER_DIGIT = 3;
+export const rosterRates = (pl: Pick<PriceList, "rosterName" | "rosterDigit">) => ({
+  name: pl.rosterName == null || isNaN(+pl.rosterName) ? ROSTER_NAME : +pl.rosterName,
+  digit: pl.rosterDigit == null || isNaN(+pl.rosterDigit) ? ROSTER_DIGIT : +pl.rosterDigit,
+});
+/** what a roster prints: how many names and how many number digits, over all its shirts (or one shirt) */
+export function rosterCount(r: { show: string; rows: { name?: string; number?: string; size?: string }[] }, rows = r.rows) {
+  let names = 0, digits = 0;
+  for (const x of rows) {
+    if (r.show !== "number" && (x.name || "").trim()) names++;
+    if (r.show !== "name") digits += ((x.number || "").match(/\d/g) || []).length;
+  }
+  return { names, digits };
+}
 /** a screen print as the customer reads it: "3-color screen print", "2-color fashion print (soft, no underbase)", "1-color puff print" */
 export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand" | "puff">): string {
   if (d.method !== "screen") return d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
@@ -508,6 +527,8 @@ export type PriceList = {
   embExtras?: Finishing[];
   /** puff ink on a screen print (Imprint.puff), per puffed location per piece; not set = $1 (Oct 30, Nick) */
   puffPrice?: number;
+  /** names & numbers: each name, and each digit of a number (Imprint.roster); $2 and $3 when not set */
+  rosterName?: number; rosterDigit?: number;
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
   contractNotes?: string;
 };
@@ -1000,7 +1021,31 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
   const persRate = (g.lines || []).some((l) => l.pers || l.persList?.length) ? persEach(s, o.price_type || "retail") : 0;
   // personalizations: each name its own charge, on top of its line (not in the line's price each)
-  const persItems = (g.lines || []).filter((l) => !l.shopUse).flatMap((l) => persOf(l).map((e) => ({ lineId: l.id, text: e.text, size: e.size, qty: num(e.qty) || 1, unit: e.price != null ? num(e.price) : persRate, amount: r2((num(e.qty) || 1) * (e.price != null ? num(e.price) : persRate)) })));
+  const persItems: { lineId: string; text: string; size: Size | ""; qty: number; unit: number; amount: number; /** a charge that isn't a personalization (names & numbers): its own name */ label?: string }[] = (g.lines || []).filter((l) => !l.shopUse).flatMap((l) => persOf(l).map((e) => ({ lineId: l.id, text: e.text, size: e.size, qty: num(e.qty) || 1, unit: e.price != null ? num(e.price) : persRate, amount: r2((num(e.qty) || 1) * (e.price != null ? num(e.price) : persRate)) })));
+  // names & numbers: each shirt's name and number digits, charged on the line its size is on (a size the order doesn't
+  // have, or no size: the first line), as "Names" and "Number digits" under the line, like a personalization
+  const rr = rosterRates(pl);
+  const rosters: { imprintId: string; names: number; digits: number; nameEach: number; digitEach: number; amount: number }[] = [];
+  for (const im of imps) {
+    const r = im.roster; if (!r?.rows?.length) continue;
+    { const c = rosterCount(r); rosters.push({ imprintId: im.id, ...c, nameEach: rr.name, digitEach: rr.digit, amount: r2(c.names * rr.name + c.digits * rr.digit) }); }
+    const ls = (g.lines || []).filter((l) => !l.shopUse && lineQty(l) > 0);
+    if (!ls.length) continue;
+    const left = new Map(ls.map((l) => [l.id, { ...(l.sizes || {}) } as Record<string, number>]));
+    const by = new Map<string, typeof r.rows>();
+    for (const row of r.rows) {
+      const z = (row.size || "").toUpperCase();
+      const hit = (z && ls.find((l) => num(left.get(l.id)![z]) > 0)) || ls.find((l) => Object.values(left.get(l.id)!).some((n) => num(n) > 0)) || ls[0];
+      if (z && num(left.get(hit.id)![z]) > 0) left.get(hit.id)![z] = num(left.get(hit.id)![z]) - 1;
+      else { const k = Object.keys(left.get(hit.id)!).find((x) => num(left.get(hit.id)![x]) > 0); if (k) left.get(hit.id)![k] = num(left.get(hit.id)![k]) - 1; }
+      by.set(hit.id, [...(by.get(hit.id) || []), row]);
+    }
+    for (const [lineId, rows] of by) {
+      const c = rosterCount(r, rows), at = im.location ? ` · ${im.location}` : "";
+      if (c.names && rr.name) persItems.push({ lineId, text: `${c.names} name${c.names === 1 ? "" : "s"}${at}`, size: "" as Size | "", qty: c.names, unit: rr.name, amount: r2(c.names * rr.name), label: "Names" });
+      if (c.digits && rr.digit) persItems.push({ lineId, text: `${c.digits} digit${c.digits === 1 ? "" : "s"}${at}`, size: "" as Size | "", qty: c.digits, unit: rr.digit, amount: r2(c.digits * rr.digit), label: "Number digits" });
+    }
+  }
   const persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
   const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
@@ -1078,7 +1123,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
