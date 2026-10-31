@@ -110,8 +110,9 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
 
   return (
     <div className="ap sra" role="group" aria-label="Which garment and color" ref={rootRef}>
-      <p className="ap-q">{runs.length > 1 ? `We found ${runs.length} size runs in ${sender ? `${sender}'s` : "the"} email.` : "The email doesn't say which garment."}</p>
-      {ranked.length > 0 && (
+      <p className="ap-q">{runs.length > 1 ? `We found ${runs.length} size runs in ${sender ? `${sender}'s` : "the"} email.` : runs.every((r) => r.called) ? "No style number for this garment: type it." : "The email doesn't say which garment."}</p>
+      {/* their brand standards' garments are for a garment they didn't name; one they named isn't swapped for a tee */}
+      {ranked.length > 0 && runs.some((r) => !r.called) && (
         <div className={"sra-bs" + (applied === false ? " off" : "")}>
           <span className="sra-bst"><b>Apply {company}&apos;s brand standards?</b><small>{[...new Set(ranked.map((p) => p.kind))].map((k) => `${k}: ${ranked.filter((p) => p.kind === k).map((p) => p.style).join(", ")}`).join(" · ")}</small></span>
           <span className="sra-yn" role="radiogroup" aria-label="Apply their brand standards?">
@@ -129,7 +130,8 @@ export default function SizeRunsAsk({ runs, prefs, company, sender, onDone, onCa
         return (
           <div key={r.id} className="sra-run">
             <div className="sra-rt"><b>{runs.length > 1 ? `Size run ${i + 1}` : "The garment"}{r.called && runs.some((x) => x.called !== r.called) ? ` · ${r.called}` : ""}</b><span>{sizesLine(r.sizes)}</span></div>
-            <div className="sra-said">They said: <i>&quot;{r.color || "no color given"}&quot;</i></div>
+            {/* what they named, the garment with its color (Oct 31, #97667167: "They said: Black" for a Carhartt jacket) */}
+            <div className="sra-said">They said: <i>&quot;{[r.called, r.color || (r.called ? "" : "no color given")].filter(Boolean).join(" · ")}&quot;</i></div>
             {toggle && (
               <div className="sra-gt" role="radiogroup" aria-label="Garment">
                 {ranked.map((p) => { const fits = colorOn(known(p.style), r.color, p.colors || []).kind; return (
@@ -239,7 +241,7 @@ export async function garmentStep(groups: Group[], o: { customerId?: string | nu
   const prefs = (((cu as { preferred_goods?: PreferredGood[] } | null)?.preferred_goods) || []).filter((x) => x && x.style);
   const company = String((cu as { company?: string } | null)?.company || (cu as { name?: string } | null)?.name || "This customer");
   const sender = (() => { const n = String(((em as { meta?: { from_name?: string } } | null)?.meta?.from_name) || "").replace(/["']/g, "").trim(); const m = /^([^,@]+),\s*([^,@]+)$/.exec(n); return ((m ? m[2] : n).split(/\s+/).find((w) => w && !/@/.test(w)) || ""); })();
-  const runs: Run[] = blank.map((l) => ({ id: l.id, color: l.color || "", called: l.called || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, v]) => [k, +(v || 0)])), pcs: Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0) }));
+  const runs: Run[] = blank.map((l) => ({ id: l.id, color: l.color || "", called: l.called || l.garment || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, v]) => [k, +(v || 0)])), pcs: Object.values(l.sizes || {}).reduce((a, n) => a + (+(n || 0)), 0) }));
   const out = await o.ask({ runs, prefs, company, sender });
   const picks = out?.picks || {};
   const next = groups.map((x) => ({ ...x, lines: x.lines.map((l) => {

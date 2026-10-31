@@ -26,6 +26,8 @@ function norm(s: string) {
     .replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/** the word, or one cut short of it either way (3+ letters): "jac" / "jacket", "swtr" isn't "sweater" */
+const hasWord = (set: Set<string>, w: string) => set.has(w) || (w.length >= 3 && !/\d/.test(w) && [...set].some((x) => x.length >= 3 && !/\d/.test(x) && (x.startsWith(w) || w.startsWith(x))));
 type Known = { style: string; brand: string; name: Set<string>; kind: string; n: number };
 
 export async function stylesFromHistory(admin: SupabaseClient, customerId: string, draft: EODraft): Promise<string[]> {
@@ -74,8 +76,9 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
         // women's, youth and tall only decide the kind (above): they never count as a matching word
         const core = [...want].filter((w) => !KINDS.has(w)), cn = [...c.name].filter((w) => !KINDS.has(w)).length;
         // a number they wrote (3/4 sleeve, 1/4 zip, 28L) names the variant: the product must have it too
-        if (core.some((w) => /\d/.test(w) && !c.name.has(w))) continue;
-        const hit = core.filter((w) => c.name.has(w)).length;
+        if (core.some((w) => /\d/.test(w) && !hasWord(c.name, w))) continue;
+        // a word cut short on one side counts ("Active Jac" in Printavo = "Active Jacket" on the cart, Oct 31, #97667167)
+        const hit = core.filter((w) => hasWord(c.name, w)).length;
         // nearly every word they wrote is in the product's name, and the product's name has little they didn't write
         const score = core.length ? hit / core.length : 0, extra = cn - hit;
         if (hit < 2 || score < (hit >= 3 ? 0.75 : 0.99) || extra > 2) continue;
