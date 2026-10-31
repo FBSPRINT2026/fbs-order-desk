@@ -115,3 +115,47 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
   }
   return done;
 }
+
+/**
+ * A garment's description checked against its own style (Oct 31: a cart read "J325 · MEI Embroidery - Stacked Full
+ * Color", the logo's option name where the shirt's name goes, and "DG446W" with no name at all). When a line has a style
+ * and the style's product name is known (the customer's past orders, our garment list, SanMar's style list), a blank
+ * description gets that name, and a description that shares no word with it (it names a logo, a location, a person, not
+ * this garment) is replaced by it. A description that does describe the product ("Women's Gilliam Jacket") is kept.
+ */
+export async function describeFromStyles(admin: SupabaseClient, customerId: string | null, draft: EODraft): Promise<string[]> {
+  const lines = draft.groups.flatMap((g) => g.lines).filter((l) => (l.style || "").trim());
+  if (!lines.length) return [];
+  const styles = [...new Set(lines.map((l) => l.style!.trim().toUpperCase()))].slice(0, 60);
+  const [{ data: gs }, { data: sm }] = await Promise.all([
+    admin.from("garments").select("style, brand, description").in("style", styles).limit(200),
+    admin.from("sanmar_styles").select("style, brand, title").in("style", styles).limit(200),
+  ]);
+  const nameOf = new Map<string, { name: string; brand: string }>();
+  for (const r of (sm || []) as { style: string; brand: string; title: string }[])
+    nameOf.set(r.style.toUpperCase(), { name: (r.title || "").replace(new RegExp(`\\.?\\s*${r.style.replace(/[^A-Za-z0-9]/g, "")}\\s*$`, "i"), "").replace(new RegExp(`^${(r.brand || "").replace(/[^\w\s&-]/g, "")}\\s+`, "i"), "").trim(), brand: r.brand || "" });
+  // our own garment list wins over SanMar's wording
+  for (const r of (gs || []) as { style: string; brand: string; description: string }[]) if ((r.description || "").trim()) nameOf.set(r.style.toUpperCase(), { name: r.description.split(/\r?\n/)[0].trim(), brand: r.brand || "" });
+  // what the shop called it on this customer's past orders, when neither list has it
+  if (customerId && lines.some((l) => !nameOf.has(l.style!.trim().toUpperCase()))) {
+    const { data: pv } = await admin.from("archived_orders").select("data").eq("customer_id", customerId).order("order_date", { ascending: false }).limit(300);
+    for (const r of (pv || []) as { data?: { groups?: { lines?: { itemNumber?: string; brand?: string; description?: string }[] }[] } }[])
+      for (const g of r.data?.groups || []) for (const x of g.lines || []) {
+        const st = (x.itemNumber || "").trim().toUpperCase();
+        if (st && styles.includes(st) && !nameOf.has(st) && (x.description || "").trim())
+          nameOf.set(st, { name: x.description!.split(/\r?\n/)[0].replace(new RegExp(`\\b${st.replace(/[^A-Z0-9]/g, "")}\\b`, "i"), " ").replace(/^[^-]+ - /, "").replace(/\s+/g, " ").trim(), brand: x.brand || "" });
+      }
+  }
+  const done: string[] = [];
+  for (const l of lines) {
+    const st = l.style!.trim().toUpperCase(), known = nameOf.get(st);
+    if (!known?.name) continue;
+    const said = (l.garment || "").trim();
+    const mine = [...words(said, l.brand || known.brand)].filter((w) => !KINDS.has(w));
+    const theirs = words(known.name, known.brand);
+    if (said && mine.some((w) => theirs.has(w))) continue;
+    l.garment = known.name;
+    done.push(said ? `${st}: "${said}" → "${known.name}"` : `${st}: ${known.name}`);
+  }
+  return done;
+}
