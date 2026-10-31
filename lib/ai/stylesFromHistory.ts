@@ -19,8 +19,11 @@ function words(s: string, brand = ""): Set<string> {
   return new Set(norm(s).split(" ").filter((w) => w && !NOISE.has(w) && !b.has(w)));
 }
 function norm(s: string) {
-  return (s || "").toLowerCase().replace(/[®™]/g, " ").replace(/\bladies\b|\bwomen'?s\b|\bwomens\b|\bwoman's\b/g, "women").replace(/\bmen'?s\b/g, "men")
-    .replace(/\b(\d)\/(\d)\b/g, "$1$2").replace(/[^a-z0-9]+/g, " ").trim();
+  return (s || "").toLowerCase().replace(/[®™’]/g, (c) => (c === "’" ? "'" : " ")).replace(/\bladies\b|\bwomen'?s\b|\bwomens\b|\bwoman's\b/g, "women").replace(/\bmen'?s\b/g, "men")
+    .replace(/'s\b/g, "").replace(/\b(\d)\/(\d)\b/g, "$1$2")
+    // the same thing said two ways: a Backpack is SanMar's "Pack", a Tee a T-Shirt, a Quarter-Zip a 1/4-Zip
+    .replace(/\bback ?packs?\b/g, "pack").replace(/\btees?\b/g, "t").replace(/\bquarter\b/g, "14").replace(/\bhalf\b/g, "12")
+    .replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 type Known = { style: string; brand: string; name: Set<string>; kind: string; n: number };
@@ -65,7 +68,7 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
     if (want.size < 2) continue;
     const kind = KIND(want);
     const pick = (list: Known[]) => {
-      let best: Known | null = null, bestScore = 0;
+      let best: Known | null = null, bestScore = 0, bestExtra = 0, second = 0;
       for (const c of list) {
         if (c.kind !== kind) continue;
         // women's, youth and tall only decide the kind (above): they never count as a matching word
@@ -77,15 +80,25 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
         const score = core.length ? hit / core.length : 0, extra = cn - hit;
         if (hit < 2 || score < (hit >= 3 ? 0.75 : 0.99) || extra > 2) continue;
         const s = score * 10 - extra + Math.min(c.n, 50) / 100;
-        if (s > bestScore) { best = c; bestScore = s; }
+        if (s > bestScore) { if (best && best.style !== c.style) second = bestScore; best = c; bestScore = s; bestExtra = extra; }
+        else if (best && best.style !== c.style && s > second) second = s;
       }
+      // a short name that fits several products about as well ("Dad's Cap": a corduroy dad cap, a twill one…) is a
+      // guess, not a match: it stays for Create order to ask. An exact name always wins.
+      if (best && bestExtra > 0 && second >= bestScore - 1) return null;
       return best;
     };
     let hit: Known | null = named || pick(known), from = "their past orders";
     if (!hit) {
       if (!catalog) {
-        const { data } = await admin.from("garments").select("style, brand, description").limit(5000);
-        catalog = ((data || []) as { style: string; brand: string; description: string }[]).map((g) => { const name = strip(words(g.description || "", g.brand || "")); return { style: (g.style || "").toUpperCase(), brand: g.brand || "", name, kind: KIND(name), n: 1 }; }).filter((g) => g.style && g.name.size >= 2);
+        // our garment list, then SanMar's whole style list (its titles end with the style: "… 1/2-Zip NKDX6720")
+        const [{ data }, { data: sm }] = await Promise.all([
+          admin.from("garments").select("style, brand, description").limit(5000),
+          admin.from("sanmar_styles").select("style, brand, title").eq("sellable", true).limit(6000),
+        ]);
+        const rows = [...((data || []) as { style: string; brand: string; description: string }[]),
+          ...((sm || []) as { style: string; brand: string; title: string }[]).map((r) => ({ style: r.style, brand: r.brand, description: (r.title || "").replace(new RegExp(`\\.?\\s*${(r.style || "").replace(/[^A-Za-z0-9]/g, "")}\\s*$`, "i"), "") }))];
+        catalog = rows.map((g) => { const name = strip(words(g.description || "", g.brand || "")); return { style: (g.style || "").toUpperCase(), brand: g.brand || "", name, kind: KIND(name), n: 1 }; }).filter((g) => g.style && g.name.size >= 2);
       }
       hit = pick(catalog); from = "our garment catalog";
     }
