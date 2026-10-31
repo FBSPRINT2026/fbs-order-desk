@@ -16697,3 +16697,14 @@ html body table.yth-mini td:first-child{color:var(--ink-3);font-size:12px;width:
 html body table.yth-mini tr.y td{color:var(--fbs-blue)}
 html body table.yth-mini tr.y td:first-child{font-weight:700}
 html body .imp-scr .pr-ynote{display:block;font-size:13px;margin-bottom:2px}
+/* Number boxes in a table never cut their number off (Oct 31: 59 of the price list's boxes showed "12.0…" for 12.025):
+   no spinner arrows inside tables (they took ~15px of each box; typing and the arrow keys still work), and the price
+   grid's boxes keep only a little padding */
+html body table input[type=number]{-moz-appearance:textfield;appearance:textfield}
+html body table input[type=number]::-webkit-inner-spin-button,html body table input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+html body .matrix input{padding:6px 4px}
+/* A group's header never squeezes its name (Oct 31: on a phone the group name shrank to 18px and Remove was cut off):
+   the name keeps a readable width, and the description and buttons wrap under it when there isn't room */
+html body .line-h{flex-wrap:wrap;row-gap:4px}
+html body .line-h input.grp-name{min-width:min(220px,100%)}
+html body .ord .line-h .grp-desc-in{min-width:min(160px,100%)}
